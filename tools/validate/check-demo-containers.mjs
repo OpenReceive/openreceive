@@ -65,6 +65,17 @@ const forbidDemoModeSwitch = (relativePath, text) => {
     `${relativePath}: references OPENRECEIVE_DEMO_MODE, which no code reads`,
   );
 };
+/**
+ * DEMO_WALLET=testkit swaps the demo onto in-memory fakes — an E2E harness
+ * switch only. No shipped container may set it, or `npm run demo <x>` would
+ * silently run a shop that cannot receive real payments.
+ */
+const forbidTestkitWalletSwitch = (relativePath, text) => {
+  expect(
+    !/DEMO_WALLET/.test(text),
+    `${relativePath}: must not set DEMO_WALLET — testkit wallet mode is for the E2E harness only`,
+  );
+};
 /** The published-port override exists to publish ports — never to swap in a dev server. */
 const expectPortsOnlyOverride = (relativePath, override, service, port) => {
   const overridden = override.services?.[service] ?? {};
@@ -98,6 +109,7 @@ for (const demo of nodeDemos) {
   forbidSecrets(dockerfilePath, dockerfile);
   forbidOpenReceiveRuntimePersistence(dockerfilePath, dockerfile);
   forbidDemoModeSwitch(dockerfilePath, dockerfile);
+  forbidTestkitWalletSwitch(dockerfilePath, dockerfile);
   expect(/^FROM node:22-bookworm-slim$/m.test(dockerfile), `${dockerfilePath}: must use Node 22`);
   expect(dockerfile.includes("npm ci --no-audit"), `${dockerfilePath}: must use npm ci`);
   expect(
@@ -125,6 +137,7 @@ for (const demo of nodeDemos) {
   forbidSecrets(composePath, composeText);
   forbidOpenReceiveRuntimePersistence(composePath, composeText);
   forbidDemoModeSwitch(composePath, composeText);
+  forbidTestkitWalletSwitch(composePath, composeText);
   expect(
     Object.keys(compose.services ?? {}).length === 1,
     `${composePath}: must define one app service`,
@@ -149,6 +162,7 @@ for (const demo of nodeDemos) {
   forbidSecrets(overridePath, overrideText);
   forbidOpenReceiveRuntimePersistence(overridePath, overrideText);
   forbidDemoModeSwitch(overridePath, overrideText);
+  forbidTestkitWalletSwitch(overridePath, overrideText);
   expectPortsOnlyOverride(overridePath, override, demo.service, demo.port);
 
   const makefilePath = `${demo.dir}/Makefile`;
@@ -179,6 +193,7 @@ for (const demo of nodeDemos) {
   forbidSecrets(dockerfilePath, dockerfile);
   forbidOpenReceiveRuntimePersistence(dockerfilePath, dockerfile, { allowHostPostgres: true });
   forbidDemoModeSwitch(dockerfilePath, dockerfile);
+  forbidTestkitWalletSwitch(dockerfilePath, dockerfile);
   expect(/FROM ruby:/m.test(dockerfile), `${dockerfilePath}: must use a Ruby base image`);
   expect(
     /FROM node:22/m.test(dockerfile),
@@ -275,6 +290,7 @@ for (const demo of nodeDemos) {
   forbidSecrets(composePath, composeText);
   forbidOpenReceiveRuntimePersistence(composePath, composeText, { allowHostPostgres: true });
   forbidDemoModeSwitch(composePath, composeText);
+  forbidTestkitWalletSwitch(composePath, composeText);
   expect(db.image?.includes("postgres"), `${composePath}: must define a host Postgres service`);
   // The NWC-02 listener plus periodic pass is its own process; no web process runs a timer.
   expect(
@@ -315,6 +331,7 @@ for (const demo of nodeDemos) {
   forbidSecrets(overridePath, overrideText);
   forbidOpenReceiveRuntimePersistence(overridePath, overrideText, { allowHostPostgres: true });
   forbidDemoModeSwitch(overridePath, overrideText);
+  forbidTestkitWalletSwitch(overridePath, overrideText);
   expectPortsOnlyOverride(overridePath, override, demo.service, demo.port);
 
   const readmePath = `${demo.dir}/README.md`;

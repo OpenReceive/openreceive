@@ -15,7 +15,14 @@
     // Root workspace: the test suite and repo tools are entry files so that
     // exports used only by tests/tools still count as used.
     ".": {
-      "entry": ["tests/*.test.mjs", "tools/**/*.mjs"],
+      // tests/e2e: the Playwright config and each spec are entries so helpers
+      // consumed only by specs count as used.
+      "entry": [
+        "tests/*.test.mjs",
+        "tools/**/*.mjs",
+        "tests/e2e/playwright.config.ts",
+        "tests/e2e/*.spec.ts"
+      ],
       "project": ["tests/**", "tools/**"]
     },
     // Every package's public surface (src/index.ts) is an *entry* file:

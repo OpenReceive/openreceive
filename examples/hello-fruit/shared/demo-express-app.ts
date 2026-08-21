@@ -6,14 +6,20 @@
  */
 
 import { fileURLToPath } from "node:url";
+import { StaticPriceProvider } from "@openreceive/core";
 import { openReceiveExpress, sendHostRouteError } from "@openreceive/express";
 import { createOpenReceiveHost, type OpenReceiveOrderSettlement } from "@openreceive/http";
-import { createOpenReceive } from "@openreceive/node";
+import { createOpenReceive, type OpenReceive } from "@openreceive/node";
+import { createTestkitReceiveClient, createTestkitSwapProvider } from "@openreceive/testkit";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { openReceiveConfig } from "../../../config/openreceive.ts";
 import { mountHelloFruitDelivery } from "./demo-delivery.ts";
 import { createHelloFruitDemoServerLogger } from "./demo-logging.ts";
-import { readRequiredHelloFruitNwcConnectionString } from "./demo-nwc.ts";
+import { helloFruitDemoWalletMode, readRequiredHelloFruitNwcConnectionString } from "./demo-nwc.ts";
+import {
+  type HelloFruitTestkitFixtures,
+  mountHelloFruitTestkitControls,
+} from "./demo-testkit-controls.ts";
 import { createHelloFruitCreateOrderResult } from "./demo-prepare-checkout.ts";
 import {
   bootHelloFruitHostStore,
@@ -49,10 +55,11 @@ export async function createHelloFruitExpressApp(
   // Catalog thumbnails stay public; purchased downloads go through /delivery (onPaid gate).
   app.use("/stickers", express.static(STICKERS_DIR));
 
-  // Same shape as docs/guides/quickstart-node.md:
+  // The composed form (prebuilt service + createOpenReceiveHost + adapter),
+  // not the all-in-one openReceiveExpress({ nwc, db, ... }) form the
+  // quickstart uses: the demo shares one service with its own /orders routes.
+  // The rules are the same either way:
   // onPaid runs inside the settlement transaction, only for the order's first settled attempt.
-  // Boot refuses missing/invalid NWC; createOpenReceive then loads the NIP-47 info event.
-  const nwc = readRequiredHelloFruitNwcConnectionString();
   const onPaid = async (settlement: OpenReceiveOrderSettlement) => {
     await markHelloFruitOrderPaid(settlement);
     logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
@@ -60,13 +67,41 @@ export async function createHelloFruitExpressApp(
       orderId: settlement.orderId,
     });
   };
-  const service = await createOpenReceive({
-    ...openReceiveConfig,
-    nwc,
-  });
+  // DEMO_WALLET=testkit swaps ONLY the wallet, swap provider, and price feed
+  // for the in-memory @openreceive/testkit fakes (E2E harness mode — no
+  // NWC_URI, no network). Every other code path — host, store, routes,
+  // production wiring — stays identical.
+  let service: OpenReceive;
+  let testkit: HelloFruitTestkitFixtures | undefined;
+  if (helloFruitDemoWalletMode() === "testkit") {
+    testkit = {
+      client: createTestkitReceiveClient(),
+      swap: createTestkitSwapProvider(),
+    };
+    service = await createOpenReceive({
+      ...openReceiveConfig,
+      client: testkit.client,
+      priceProviders: [new StaticPriceProvider()],
+      swap: { providers: [testkit.swap] },
+    });
+    logDemo("openreceive.testkit", "Testkit wallet mode: in-memory fakes, no NWC connection.", {
+      controlPrefix: "/__testkit",
+    });
+  } else {
+    // Boot refuses missing/invalid NWC; createOpenReceive then loads the NIP-47 info event.
+    const nwc = readRequiredHelloFruitNwcConnectionString();
+    service = await createOpenReceive({
+      ...openReceiveConfig,
+      nwc,
+    });
+  }
   logDemo("openreceive.ready", "OpenReceive service ready.", {
     priceCurrencies: service.priceCurrencies,
   });
+
+  // Test-only controls: live routes in testkit mode, a hard 404 on the whole
+  // prefix in every other mode.
+  mountHelloFruitTestkitControls(app, testkit);
 
   mountHelloFruitDelivery(app, {
     stickersDir: STICKERS_DIR,

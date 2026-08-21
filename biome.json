@@ -18,6 +18,7 @@
       "!**/public/packs-test",
       "!examples/*/public/*.html",
       "!examples/*/server/*/public/*.html",
+      "!tests/e2e/test-results",
       "!**/tmp",
       "!**/log",
       "!**/storage",

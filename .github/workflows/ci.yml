@@ -77,6 +77,44 @@ jobs:
       # because nothing ever ran `gem build`).
       - run: ./tools/ci/ruby-gem-build.sh
 
+  # Browser E2E smoke on every push/PR: boots the node-express Hello Fruit
+  # demo against the testkit wallet and drives a real checkout in Chromium.
+  # Independent of v0-1-foundation so the browser lane never blocks the fast
+  # checks; the full cross-framework spec matrix runs weekly in demos.yml.
+  # Flake policy lives in the Playwright config (retries in CI), never here.
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Browser binaries are cached keyed on the locked @playwright/test
+      # version: a Playwright bump re-downloads, everything else reuses.
+      - name: Read Playwright version
+        id: playwright-version
+        run: |
+          echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      # The demo's vite dev server (the Playwright webServer) resolves
+      # @openreceive/* to the packages' built dists; tsx only covers the
+      # demo's own TypeScript, so the dists must exist before the run.
+      - run: npm run build:packages
+      - run: npm run test:e2e:smoke
+
   # Full Rails Hello Fruit example on every push/PR, not only in the weekly
   # demos lane: a schema break in the example once shipped because nothing
   # per-push ever executed it. Mirrors demos.yml's hello-fruit-rails job.

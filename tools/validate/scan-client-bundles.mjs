@@ -40,6 +40,18 @@ const forbiddenPatterns = [
     kind: "secret",
     pattern: /FIXED_FLOAT_SECRET=|FIXED_FLOAT_SECRET["']?\s*[:=]\s*["'][^"']+/,
   },
+  // Testkit demo mode is server-only: the /__testkit control surface and the
+  // @openreceive/testkit fakes must never end up in a shipped client bundle.
+  {
+    name: "testkit control-surface marker",
+    kind: "marker",
+    pattern: /__testkit/,
+  },
+  {
+    name: "@openreceive/testkit marker",
+    kind: "marker",
+    pattern: /@openreceive\/testkit/,
+  },
 ];
 
 function collectClientBundleDirs(dir) {

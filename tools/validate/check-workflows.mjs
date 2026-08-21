@@ -22,6 +22,9 @@ const requiredWorkflows = {
     "npm run check:dead-exports",
     "npm run test:js",
     "npm run test:package-smoke",
+    // Per-push browser smoke: one real checkout through the node-express
+    // demo in Chromium (full spec matrix stays in the weekly demos lane).
+    "npm run test:e2e:smoke",
     "tools/ci/ruby-tests.sh",
     "tools/ci/ruby-gem-build.sh",
     // The Rails example must run per-push, not only in the weekly demos lane
@@ -39,6 +42,8 @@ const requiredWorkflows = {
     "npm run build:packages",
     "npm run build:demo",
     "npm run scan:client-bundles",
+    // Weekly full Playwright matrix (ci.yml runs only the smoke spec).
+    "npm run test:e2e",
     "bin/ci",
   ],
   "provider-registry.yml": [

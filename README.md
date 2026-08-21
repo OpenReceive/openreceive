@@ -366,6 +366,7 @@ Start with the [developer guides](docs/guides/README.md):
 - [Rate limiting](docs/guides/rate-limiting.md)
 - [Payment storage](docs/guides/storage.md)
 - [Deploying OpenReceive](docs/guides/deploying.md)
+- [Testing an OpenReceive host](docs/guides/host-testing.md)
 - [Security](docs/guides/security.md)
 - [API reference](docs/guides/api-reference.md)
 - [React + Material UI recipe](docs/recipes/react-material-ui.md)

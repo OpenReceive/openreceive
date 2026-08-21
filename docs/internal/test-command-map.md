@@ -7,6 +7,8 @@
 | `npm run test:ci:core` | Deterministic source gate: fast local gate, lint, format check, generated-model freshness, public-API surface check, typecheck, Vue and Svelte checks, dead-export check, JS tests, package smoke. | No |
 | `npm run test:ci:release` | Release-shaped gate: build packages, Ruby tests, demo container/release/workflow checks, example-import check, Rails example tests, demo builds, client-bundle scan, docs build. | No |
 | `npm run test:live` | Live NWC smoke against a real wallet (Node + Ruby). Never part of the deterministic gate. | Yes |
+| `npm run test:e2e` | Playwright end-to-end suite: boots the node-express Hello Fruit demo in `DEMO_WALLET=testkit` mode and drives real Chromium through all four framework tabs (lightning, swap + refund, remint, resume/theme). Weekly full run in `demos.yml`. | No |
+| `npm run test:e2e:smoke` | The lightning spec's React tab only — the per-push `e2e-smoke` job in `ci.yml`. | No |
 | `npm run check:public-api` | Diff every publishable package's export surface against the committed snapshot (`tools/validate/public-api.snapshot.json`) — the gate behind the curated adapter/wrapper surfaces. Regenerate a reviewed change with `--update`. | No |
 | `npm run check:vue` | Type-check the Vue wrapper with `vue-tsc`. | No |
 | `npm run check:svelte` | Type-check the Svelte wrapper with `svelte-check`. | No |

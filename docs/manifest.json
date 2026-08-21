@@ -106,6 +106,14 @@
       "public": true
     },
     {
+      "slug": "host-testing",
+      "title": "Testing an OpenReceive Host",
+      "source_path": "docs/guides/host-testing.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "api-reference",
       "title": "API Reference",
       "source_path": "docs/guides/api-reference.md",

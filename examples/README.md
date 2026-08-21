@@ -3,7 +3,10 @@
 One app lives here: [`hello-fruit/`](hello-fruit), the full fruit-sticker shop,
 built four times over four server stacks. Start with it to see a complete
 checkout: catalog, cart, currency picker, Lightning + swap rails,
-resume-after-refresh, post-pay delivery.
+resume-after-refresh, post-pay delivery. The variants are parity showcases:
+they deliberately exercise the composed/advanced integration forms so every
+surface stays covered — for the minimal happy path, follow the quickstarts
+below instead.
 
 For the smallest possible integration, follow the
 [Node quickstart](../docs/guides/quickstart-node.md) or the
@@ -27,6 +30,35 @@ npm run demo rails           # Rails + Postgres                    :3003
 `compose.override.yml.example` each variant ships publishes the port and does
 nothing else. For an edit-reload loop, run the variant's own `npm run dev`
 (or `bin/dev` for Rails) outside Docker.
+
+## Running the demo against fakes (no wallet)
+
+The node-express variant boots against in-process fakes when
+`DEMO_WALLET=testkit` is set — no `NWC_URI`, no network, full checkout:
+
+```sh
+cd hello-fruit/server/node-express
+DEMO_WALLET=testkit npm run dev
+```
+
+A test-only control surface is mounted under `/__testkit` (hard-404 in every
+other mode):
+
+- `POST /__testkit/settle { payment_hash }` — settle an invoice (emits the
+  NWC-02 notification)
+- `POST /__testkit/expire { payment_hash }` — force expiry
+- `POST /__testkit/swap-step { provider_order_id | pay_in_asset, state }` —
+  advance a scripted swap (`refund_required`/`attention` route through the
+  fake's force helpers)
+- `GET /__testkit/state` — current fixtures
+
+Guardrails keep the mode out of production: no compose file may set
+`DEMO_WALLET` (checked by `check:demo-containers`), and the client-bundle
+scanner rejects any testkit marker in shipped demo bundles. The Playwright
+suite (`npm run test:e2e` from the repo root) runs against exactly this mode;
+`OPENRECEIVE_DEMO_DB` relocates the SQLite store for hermetic runs. See the
+[host-testing guide](../docs/guides/host-testing.md) for testing your own
+integration this way.
 
 ## The boundary these examples exist to show
 

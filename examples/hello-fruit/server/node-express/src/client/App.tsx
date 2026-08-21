@@ -3,6 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { CheckoutState } from "@openreceive/browser";
 import { Checkout } from "@openreceive/react";
+// The demo's own Tailwind sheet must load BEFORE the checkout styles: both
+// sheets define shared utilities like `.hidden`, but the demo sheet lacks the
+// responsive variants the checkout markup uses (`sm:block` etc.), so if it
+// loads later its `.hidden` wins the cascade and desktop-only checkout UI
+// (e.g. the swap network selector) disappears at >=640px.
+import "./styles.css";
 // Only the default (React) checkout styles load eagerly so first paint is
 // correct; each other framework's stylesheet loads with its tab (see
 // mountFrameworkCheckout below).
@@ -19,7 +25,6 @@ import {
 } from "../../../../shared/demo-shop-app.tsx";
 import fruitsData from "../../../../shared/fruits.json" with { type: "json" };
 import product from "../../../../shared/product.json" with { type: "json" };
-import "./styles.css";
 
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("node-express");
 const fruits = fruitsData.fruits;

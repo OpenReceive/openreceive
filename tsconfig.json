@@ -45,6 +45,7 @@
     "examples/hello-fruit/server/*/src/**/*.tsx",
     "examples/hello-fruit/server/*/vite.config.ts",
     "examples/hello-fruit/server/rails/app/javascript/**/*.ts",
-    "examples/hello-fruit/server/rails/app/javascript/**/*.tsx"
+    "examples/hello-fruit/server/rails/app/javascript/**/*.tsx",
+    "tests/e2e/**/*.ts"
   ]
 }

@@ -12,6 +12,7 @@
 10. [Lightning Swap Connect (LSC) URI](lightning-swap-connect.md)
 11. [Payment storage](storage.md)
 12. [Deploying OpenReceive](deploying.md)
+13. [Testing an OpenReceive host](host-testing.md)
 13. [API reference](api-reference.md)
 14. [Security](security.md)
 15. [Price feeds](price-feeds.md)

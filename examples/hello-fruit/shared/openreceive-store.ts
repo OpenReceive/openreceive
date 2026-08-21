@@ -35,7 +35,17 @@ interface OrderRow {
 type DemoStoreLogger = (event: string, message: string, fields?: Record<string, unknown>) => void;
 
 const HELLO_FRUIT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const OPENRECEIVE_DIR = path.join(HELLO_FRUIT_ROOT, ".openreceive");
+
+/**
+ * Where the demo SQLite files live. OPENRECEIVE_DEMO_DB (a directory path)
+ * overrides the in-repo default so hermetic runs — the E2E harness — can point
+ * the store at a temp dir instead of examples/hello-fruit/.openreceive.
+ */
+function openReceiveDir(): string {
+  const override = process.env.OPENRECEIVE_DEMO_DB;
+  if (override !== undefined && override.length > 0) return path.resolve(override);
+  return path.join(HELLO_FRUIT_ROOT, ".openreceive");
+}
 
 let db: DatabaseSync | undefined;
 let activeDemoId: string | undefined;
@@ -56,7 +66,7 @@ export async function bootHelloFruitHostStore(input: {
   }
   closeHelloFruitHostStore();
 
-  await mkdir(OPENRECEIVE_DIR, { recursive: true });
+  await mkdir(openReceiveDir(), { recursive: true });
   const dbPath = dbPathFor(input.demoId);
   input.log("host.store.wipe", "Wiping local host SQLite database for a fresh demo boot.", {
     demoId: input.demoId,
@@ -174,7 +184,7 @@ function requireDb(): DatabaseSync {
 }
 
 function dbPathFor(demoId: string): string {
-  return path.join(OPENRECEIVE_DIR, `${demoId}.sqlite`);
+  return path.join(openReceiveDir(), `${demoId}.sqlite`);
 }
 
 async function rmSqliteFiles(dbPath: string): Promise<void> {
