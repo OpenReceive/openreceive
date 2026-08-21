@@ -8,8 +8,8 @@ export type OpenReceiveAuthorizeAction =
   | "swap.refund";
 
 export interface OpenReceiveAuthorizeResource {
-  order_id?: string;
-  payment_hash?: string;
+  orderId?: string;
+  paymentHash?: string;
 }
 
 export interface OpenReceiveAuthorizeContext {

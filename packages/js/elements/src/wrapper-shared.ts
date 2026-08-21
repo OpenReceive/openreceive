@@ -1,7 +1,7 @@
 // The single shared surface behind the vue/svelte/angular wrappers. Each
-// wrapper package re-exports this module and aliases the factories under its
-// framework-prefixed names — the byte-identical ~200-line blocks that used to
-// live in all three packages (and had already drifted) live here once.
+// wrapper package re-exports a curated list from this module — the byte-
+// identical ~200-line blocks that used to live in all three packages (and had
+// already drifted) live here once.
 //
 // Canonical binding contract (identical across frameworks): bindings expose
 // `tagName`, `attributes`, and `listeners`.
@@ -36,60 +36,31 @@ import {
   type OpenReceiveThemeToggleElementAttributes,
 } from "@openreceive/browser/internal";
 
+// Curated re-exports: only the browser/internal names the wrapper factories
+// and components below put in their signatures (E21). The wrappers' curated
+// index files re-export from here; anything not listed stays private
+// element plumbing in @openreceive/browser and @openreceive/elements.
 export type {
   CheckoutController,
   CheckoutControllerOptions,
   CheckoutElementAttributeOptions,
   CheckoutElementAttributes,
-  CheckoutElementDocument,
   CheckoutElementEventHandlers,
   CheckoutElementListeners,
-  CheckoutElementTarget,
-  CheckoutShellCheckoutBinding,
   CheckoutShellElements,
-  CheckoutShellModel,
   CheckoutShellOptions,
-  CheckoutShellThemeToggleBinding,
   CheckoutSnapshot,
-  CreateCheckoutElementOptions,
   CreateCheckoutShellOptions,
-  CreateOpenReceiveThemeToggleElementOptions,
-  OpenReceiveCheckoutProps,
-  OpenReceiveCheckoutShellProps,
-  OpenReceiveReadThemePreferenceOptions,
   OpenReceiveStoredThemeModelOptions,
-  OpenReceiveThemeAttributeTarget,
-  OpenReceiveThemeControlTargets,
-  OpenReceiveThemeLabelTarget,
   OpenReceiveThemeModel,
   OpenReceiveThemeModelOptions,
   OpenReceiveThemePreference,
-  OpenReceiveThemeStorageOptions,
   OpenReceiveThemeToggleElementAttributeOptions,
   OpenReceiveThemeToggleElementAttributes,
 } from "@openreceive/browser/internal";
 export {
-  applyCheckoutThemeAttributes,
-  applyOpenReceiveThemeAttributes,
-  createCheckoutController,
-  createCheckoutElement,
-  createCheckoutElementAttributes,
-  createCheckoutElementListeners,
-  createCheckoutShell,
-  createCheckoutShellModel,
-  createOpenReceiveStoredThemeModel,
-  createOpenReceiveThemeModel,
-  createOpenReceiveThemeToggleElement,
-  createOpenReceiveThemeToggleElementAttributes,
-  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-  OPENRECEIVE_THEME_STORAGE_KEY,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  readOpenReceiveThemePreference,
-  syncOpenReceiveStoredThemeControls,
-  toggleOpenReceiveStoredThemeControls,
-  toggleOpenReceiveStoredThemePreference,
-  writeOpenReceiveThemePreference,
 } from "@openreceive/browser/internal";
 export type { DefineOpenReceiveElementsOptions } from "./index.ts";
 export { defineOpenReceiveElements } from "./index.ts";

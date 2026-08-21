@@ -71,10 +71,13 @@ function fakeExpressResponse() {
   };
 }
 
-// Hosts follow the guides against whatever package they installed, so an
-// adapter (and the umbrella subpath over it) must carry the whole
-// @openreceive/http surface — not a hand-copied subset that drifts.
-test("every adapter and umbrella subpath re-exports the whole @openreceive/http surface", () => {
+// E21: adapters (and the umbrella subpaths over them) re-export the curated
+// host-facing @openreceive/http surface — the factories, error classes, and
+// the notification worker the guides name — but NOT the SQL-repository /
+// reconcile-gate / host-factory internals, which stay importable from
+// @openreceive/http itself. tools/validate/check-public-api.mjs pins the full
+// per-entry surface; this test guards the runtime split.
+test("adapters and umbrella subpaths expose the curated http surface, not internals", () => {
   const surfaces = [
     ["@openreceive/express", expressAdapter],
     ["@openreceive/fastify", fastifyAdapter],
@@ -83,11 +86,36 @@ test("every adapter and umbrella subpath re-exports the whole @openreceive/http 
     ["openreceive/fastify", umbrellaFastify],
     ["openreceive/next", umbrellaNext],
   ];
-  const exported = Object.keys(httpSurface);
-  assert.ok(exported.includes("startOpenReceiveNotificationWorker"));
+  const curated = [
+    "createOpenReceiveHttpHandler",
+    "createOpenReceiveStack",
+    "hostError",
+    "isServiceErrorShape",
+    "mapHostRouteError",
+    "OpenReceiveHostError",
+    "OpenReceiveHttpError",
+    "startOpenReceiveNotificationWorker",
+  ];
+  const internals = [
+    "createOpenReceiveHost",
+    "createOpenReceiveSqlPayments",
+    "maybeReconcileOpenReceivePayments",
+    "openReceivePaymentsSchemaSql",
+    "openReceiveWebRequest",
+    "reconcileOpenReceivePayments",
+    "resolveSqlAdapter",
+    "startOpenReceiveReconciler",
+  ];
+  // The internals stay available where they belong: @openreceive/http.
+  for (const key of [...curated, ...internals]) {
+    assert.ok(key in httpSurface, `@openreceive/http must export ${key}`);
+  }
   for (const [name, surface] of surfaces) {
-    for (const key of exported) {
+    for (const key of curated) {
       assert.ok(key in surface, `${name} must re-export ${key}`);
+    }
+    for (const key of internals) {
+      assert.ok(!(key in surface), `${name} must not re-export the internal ${key}`);
     }
   }
 });
@@ -594,7 +622,7 @@ test("the all-in-one form wires a custom repository instead of a db handle", asy
       // The library owns write-once settlement even for custom repositories.
       recordSettlement: async () => true,
     },
-    onSettlement: async () => undefined,
+    onPaid: async () => undefined,
     loadOrder: () => ({ amount: { sats: 21 } }),
     amountForOrder: (order) => order.amount,
     authorize: () => true,

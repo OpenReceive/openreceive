@@ -1,9 +1,10 @@
 import type { PaymentDetails } from "@openreceive/core";
 import { sanitizeOpenReceiveEvent } from "@openreceive/node";
 import type {
-  CheckoutInvoice,
+  Checkout,
   CreateCheckoutAmount,
   NodeSettlementActionHook,
+  NodeSettlementActionInput,
   OpenReceive,
   PaymentCheck,
   SwapData,
@@ -57,7 +58,7 @@ export interface OpenReceivePaymentRecord {
   /** Unix timestamp used only to choose deterministically between historical attempts. */
   readonly createdAt: number;
   /** Safe, replayable payer response. Contains no wallet or provider credentials. */
-  readonly checkout: CheckoutInvoice;
+  readonly checkout: Checkout;
   readonly swapData?: SwapData | null;
 }
 
@@ -69,7 +70,7 @@ export interface OpenReceivePaymentInsert {
   readonly paymentHash: string;
   readonly expiresAt: number;
   readonly createdAt: number;
-  readonly checkout: CheckoutInvoice;
+  readonly checkout: Checkout;
   readonly swapData?: SwapData;
   /** Client IP captured at invoice creation, when the adapter could attribute one. */
   readonly clientIp?: string;
@@ -218,30 +219,40 @@ export interface CreateOpenReceiveHostDbOptions<Order>
   readonly tableName?: string;
   readonly onPaid: OpenReceiveOrderSettlementHook;
   readonly payments?: never;
-  readonly onSettlement?: never;
 }
+
+/**
+ * Settlement context passed to repository-mode `onPaid`: the raw core
+ * settlement event (`paymentHash`, `paidAt`, `details`). Unlike db-mode's
+ * {@link OpenReceiveOrderSettlement} it carries no `orderId` and no
+ * transactional `query` — the custom repository owns that mapping.
+ */
+export type OpenReceiveSettlementEvent = NodeSettlementActionInput;
+
+export type OpenReceiveSettlementEventHook = (
+  settlement: OpenReceiveSettlementEvent,
+) => void | Promise<void>;
 
 /**
  * Advanced escape hatch: the host implements the full
  * `OpenReceivePaymentRepository` contract, including commit locking, write-once
  * settlement, and reconciliation transitions.
  *
- * The settlement hook here is named `onSettlement` (not `onPaid`) because its
- * contract is different: it receives the raw core settlement event
+ * The settlement hook is `onPaid` in this mode too, but its context type
+ * differs from db mode: it receives the raw {@link OpenReceiveSettlementEvent}
  * (`paymentHash`, `paidAt`, `details`), with no `orderId` and no transactional
  * `query` — unlike db-mode `onPaid`, which runs inside the library's settlement
- * transaction. Write-once is still the library's: `onSettlement` runs only for
- * the settlement whose `payments.recordSettlement` claim was won, so a
- * redelivered settlement never fulfills twice.
+ * transaction. Write-once is still the library's: repository-mode `onPaid`
+ * runs only for the settlement whose `payments.recordSettlement` claim was
+ * won, so a redelivered settlement never fulfills twice.
  */
 export interface CreateOpenReceiveHostRepositoryOptions<Order>
   extends CreateOpenReceiveHostBaseOptions<Order> {
   readonly payments: OpenReceivePaymentRepository;
   /** Host settlement handler; runs once, for the winning first-settlement claim. */
-  readonly onSettlement: NodeSettlementActionHook;
+  readonly onPaid: OpenReceiveSettlementEventHook;
   readonly db?: never;
   readonly tableName?: never;
-  readonly onPaid?: never;
 }
 
 export type CreateOpenReceiveHostOptions<Order> =
@@ -467,19 +478,11 @@ export function createOpenReceiveHost<Order>(
   if (options.amountForOrder === undefined) {
     throw new TypeError("OpenReceive host requires amountForOrder.");
   }
-  if (options.onPaid === undefined && options.onSettlement === undefined) {
+  if (options.onPaid === undefined) {
     throw new TypeError(
-      "OpenReceive host requires onPaid (db mode) or onSettlement (custom repository mode).",
+      "OpenReceive host requires onPaid (per-order settlement context in db mode; the raw " +
+        "settlement event in custom repository mode).",
     );
-  }
-  if (options.payments !== undefined && options.onSettlement === undefined) {
-    throw new TypeError(
-      "OpenReceive host with a custom payments repository requires onSettlement " +
-        "(the raw settlement-event hook; db mode's per-order onPaid does not apply).",
-    );
-  }
-  if (options.db !== undefined && options.onPaid === undefined) {
-    throw new TypeError("OpenReceive host requires onPaid.");
   }
 
   let payments: OpenReceivePaymentRepository;
@@ -514,7 +517,7 @@ export function createOpenReceiveHost<Order>(
     }
     payments = options.payments;
     const custom = options.payments;
-    const notify = options.onSettlement as NodeSettlementActionHook;
+    const notify = options.onPaid as OpenReceiveSettlementEventHook;
     // Write-once stays library-owned in custom-repository mode too: the
     // repository claims the settlement and the host is told only when the claim
     // is won, so a redelivered settlement event fulfills exactly once.

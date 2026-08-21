@@ -70,7 +70,7 @@ app.use(
     authorize: ({ native, resource }) =>
       orders.ownedBy(
         (native as { session?: { userId?: string } }).session?.userId,
-        resource.order_id,
+        resource.orderId,
       ),
   }),
 );

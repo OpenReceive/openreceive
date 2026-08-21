@@ -173,9 +173,9 @@ if (!liveFruit) {
   throw new Error("Hello Fruit live smoke needs at least one fruit.");
 }
 const liveQuote = await quoteLiveFruitAmount(liveFruit.fiat);
-const liveAmountMsats = BigInt(liveQuote.amount_msats);
+const liveAmountMsats = BigInt(liveQuote.amountMsats);
 console.log(
-  `Priced ${liveFruit.fiat.value} ${liveFruit.fiat.currency} at ${liveQuote.btc_fiat_price} BTC/${liveFruit.fiat.currency} (source: ${liveQuote.source}).`,
+  `Priced ${liveFruit.fiat.value} ${liveFruit.fiat.currency} at ${liveQuote.btcFiatPrice} BTC/${liveFruit.fiat.currency} (source: ${liveQuote.source}).`,
 );
 console.log("Checking local NWC metadata size guard...");
 await assertMetadataGuard(client, liveAmountMsats);
@@ -285,8 +285,8 @@ async function quoteLiveFruitAmount(fiat) {
       throw new Error("OPENRECEIVE_LIVE_INVOICE_SATS must be a positive whole number of sats.");
     }
     return {
-      amount_msats: Number(fixedSats) * 1000,
-      btc_fiat_price: "not priced",
+      amountMsats: Number(fixedSats) * 1000,
+      btcFiatPrice: "not priced",
       source: `fixed ${fixedSats} sats (OPENRECEIVE_LIVE_INVOICE_SATS)`,
     };
   }
@@ -307,7 +307,7 @@ async function quoteLiveFruitAmount(fiat) {
 
   return quoteFiatToMsatsWithPrice({
     fiat,
-    btc_fiat_price: rates.rates.bitcoin[fiat.currency.toLowerCase()],
+    btcFiatPrice: rates.rates.bitcoin[fiat.currency.toLowerCase()],
     source: rates.source,
   });
 }

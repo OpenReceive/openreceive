@@ -88,7 +88,7 @@ test("quoting splits payer input from feed data across the same two error types"
       quoteFiatToMsatsWithPrice({
         fiat: { currency: "USD", value: "-1" },
         source: "primary",
-        btc_fiat_price: "68000.00",
+        btcFiatPrice: "68000.00",
       }),
     (error) => {
       assert.ok(error instanceof RangeError);
@@ -100,7 +100,7 @@ test("quoting splits payer input from feed data across the same two error types"
       quoteFiatToMsatsWithPrice({
         fiat: { currency: "USD", value: "10.00" },
         source: "primary",
-        btc_fiat_price: "0",
+        btcFiatPrice: "0",
       }),
     (error) => {
       assert.ok(error instanceof OpenReceivePriceFeedError);
@@ -128,12 +128,12 @@ test("fiat and bitcoin amounts round through one engine", () => {
     { currency: "USD", value: "1.75" },
   );
   assert.deepEqual(quoteBitcoinAmountToMsats({ currency: "BTC", value: "0.00001" }), {
-    amount_sats: 1000,
-    amount_msats: 1_000_000,
+    amountSats: 1000,
+    amountMsats: 1_000_000,
   });
   assert.deepEqual(quoteBitcoinAmountToMsats({ currency: "SAT", value: "1000" }), {
-    amount_sats: 1000,
-    amount_msats: 1_000_000,
+    amountSats: 1000,
+    amountMsats: 1_000_000,
   });
 });
 
@@ -179,6 +179,6 @@ test("convertAmountViaBtcRates compares currency codes case-insensitively", () =
 test("the mock-rate quote is named for what it is and never reads as a live source", () => {
   const quote = quoteFiatToMsatsAtMockRate({ fiat: { currency: "USD", value: "50000.00" } });
   assert.equal(quote.source, "static_mock");
-  assert.equal(quote.btc_fiat_price, "50000.00");
-  assert.equal(quote.amount_sats, 100_000_000);
+  assert.equal(quote.btcFiatPrice, "50000.00");
+  assert.equal(quote.amountSats, 100_000_000);
 });

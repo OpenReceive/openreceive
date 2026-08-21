@@ -38,7 +38,7 @@ export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHan
   return {
     service,
     authorize: ({ resource }) =>
-      resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
+      resource.orderId !== undefined && readHelloFruitHostOrder(resource.orderId) !== null,
     host,
   };
 }

@@ -41,7 +41,7 @@ test("isOpenReceiveStackOptions routes composed and flat forms", () => {
       payments: stubPayments(),
       loadOrder: async () => null,
       amountForOrder: () => ({ sats: 1000 }),
-      onSettlement: async () => {},
+      onPaid: async () => {},
       authorize,
     }),
     true,
@@ -71,7 +71,7 @@ test("stack close() during an in-flight boot waits for the boot to finish", asyn
     payments: stubPayments(),
     loadOrder: async () => null,
     amountForOrder: () => ({ sats: 1000 }),
-    onSettlement: async () => {},
+    onPaid: async () => {},
     authorize,
   });
   let booted = false;
@@ -95,7 +95,7 @@ test("stack close() resolves even when boot fails", async () => {
     payments: stubPayments(),
     loadOrder: async () => null,
     amountForOrder: () => ({ sats: 1000 }),
-    onSettlement: async () => {},
+    onPaid: async () => {},
     authorize,
   });
   await stack.ready.catch(() => {});

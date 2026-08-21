@@ -9,7 +9,7 @@ import { resolveCreateAmount } from "./pricing.ts";
 import { serviceError } from "./core-utils.ts";
 import { emitLog } from "./logging.ts";
 import type {
-  CheckoutInvoice,
+  Checkout,
   CreateCheckoutAmount,
   CreateCheckoutRequest,
   OpenReceiveRateQuote,
@@ -43,15 +43,15 @@ export async function prepareCheckout(
     priceCurrencies: context.priceCurrencies,
   });
   return {
-    amountMsats: resolved.amount_msats,
-    fiatQuote: resolved.fiat_quote,
+    amountMsats: resolved.amountMsats,
+    fiatQuote: resolved.fiatQuote,
   };
 }
 
 export async function createCheckout(
   context: OpenReceiveServiceContext,
   request: CreateCheckoutRequest,
-): Promise<CheckoutInvoice> {
+): Promise<Checkout> {
   const input = normalizeCreateCheckoutRequest(request);
   const now = context.clock();
   const resolved = await resolveCreateAmount({
@@ -60,21 +60,21 @@ export async function createCheckout(
     priceProviders: context.priceProviders,
     priceCurrencies: context.priceCurrencies,
   });
-  const expiry = input.expiry_seconds ?? OPENRECEIVE_INVOICE_EXPIRY_SECONDS;
+  const expiry = input.expirySeconds ?? OPENRECEIVE_INVOICE_EXPIRY_SECONDS;
   // order_id is spread last so caller metadata can never override it
   // (matches the Ruby server's merge precedence).
   const metadata = {
     ...(input.metadata ?? {}),
-    order_id: input.order_id,
+    order_id: input.orderId,
   };
   if (Buffer.byteLength(JSON.stringify(metadata), "utf8") > OPENRECEIVE_NWC_METADATA_MAX_BYTES) {
     throw serviceError(400, "INVALID_REQUEST", "metadata is too large for NIP-47.");
   }
   const walletInvoice = await context.options.client.makeInvoice({
-    amount_msats: BigInt(resolved.amount_msats),
+    amount_msats: BigInt(resolved.amountMsats),
     ...getCreateDescriptionFields({
       memo: input.memo,
-      descriptionHash: input.description_hash,
+      descriptionHash: input.descriptionHash,
     }),
     expiry,
     metadata,
@@ -96,7 +96,7 @@ export async function createCheckout(
       "checkout.invoice_expiry.rejected",
       `The wallet did not honor the requested invoice expiry (requested ${expiry}s, got ${expiresAt - createdAt}s). Use a wallet whose make_invoice honors expiry.`,
       {
-        order_id: input.order_id,
+        order_id: input.orderId,
         payment_hash: walletInvoice.payment_hash.toLowerCase(),
         requested_expiry_seconds: expiry,
         actual_expiry_seconds: expiresAt - createdAt,
@@ -110,13 +110,13 @@ export async function createCheckout(
     );
   }
   return {
-    orderId: input.order_id,
+    orderId: input.orderId,
     paymentHash: walletInvoice.payment_hash.toLowerCase(),
     bolt11: walletInvoice.invoice,
     amountMsats: toSafeInteger(walletInvoice.amount_msats, "amount_msats"),
     createdAt,
     expiresAt,
-    fiatQuote: resolved.fiat_quote,
+    fiatQuote: resolved.fiatQuote,
   };
 }
 

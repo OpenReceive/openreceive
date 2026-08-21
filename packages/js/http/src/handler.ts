@@ -1,6 +1,6 @@
 import type { PaymentDetails } from "@openreceive/core";
 import type {
-  CheckoutInvoice,
+  Checkout,
   CreateCheckoutAmount,
   OpenReceive,
   PaymentCheck,
@@ -37,7 +37,7 @@ import { matchRoute, normalizePrefix } from "./router.ts";
 export interface CheckoutCreatedInput {
   readonly orderId: string;
   readonly paymentHash: string;
-  readonly checkout: CheckoutInvoice;
+  readonly checkout: Checkout;
   /** Sensitive server-only provider state. Persist it on the payment attempt; never send it to a browser. */
   readonly swapData?: SwapData;
   /**
@@ -68,7 +68,7 @@ export interface ResolvedHostCheckout {
   /** Return the selected host payment attempt's hash to reuse or inspect its checkout. */
   readonly paymentHash?: string;
   /** Host-persisted safe checkout snapshot used for retry without a wallet read. */
-  readonly checkout?: CheckoutInvoice;
+  readonly checkout?: Checkout;
   /** Server-only structured provider state loaded from the host database. */
   readonly swapData?: SwapData;
 }
@@ -267,7 +267,7 @@ async function dispatch(
   const orderId = requiredString(body.order_id, "order_id", MAX_ORDER_ID_LENGTH);
 
   if (route.kind === "checkout.prepare") {
-    await guard(runtime, "checkout.prepare", request, { order_id: orderId }, native);
+    await guard(runtime, "checkout.prepare", request, { orderId }, native);
     const resolved = await resolveHost(runtime, "checkout.prepare", request, orderId, body);
     const prepared = await runtime.service.prepareCheckout({
       amount: requiredAmount(resolved),
@@ -288,13 +288,13 @@ async function dispatch(
   }
 
   if (route.kind === "checkout.create") {
-    await enforceAuthorize(runtime, "checkout.create", request, { order_id: orderId }, native);
+    await enforceAuthorize(runtime, "checkout.create", request, { orderId }, native);
     const resolved = await resolveHost(runtime, "checkout.create", request, orderId, body);
     // Rate limits meter minting only: re-serving the order's already-committed
     // attempt costs no wallet call and no row, so a capped payer can still
     // re-fetch instructions they were already given.
     if (resolved.paymentHash === undefined) {
-      await enforceRateLimit(runtime, "checkout.create", request, { order_id: orderId }, native);
+      await enforceRateLimit(runtime, "checkout.create", request, { orderId }, native);
     }
     const checkout =
       resolved.paymentHash === undefined
@@ -308,7 +308,7 @@ async function dispatch(
       const clientIp = runtime.extractClientIp({
         action: "checkout.create",
         request,
-        resource: { order_id: orderId },
+        resource: { orderId },
         native,
       });
       await commit(runtime, {
@@ -329,7 +329,7 @@ async function dispatch(
       runtime,
       "payment.check",
       request,
-      { order_id: orderId, payment_hash: requestedPaymentHash },
+      { orderId, paymentHash: requestedPaymentHash },
       native,
     );
     const resolved = await resolveHost(runtime, "payment.check", request, orderId, body);
@@ -371,7 +371,7 @@ async function dispatch(
 
   if (route.kind === "swap.quote") {
     const payInAsset = requiredString(body.pay_in_asset, "pay_in_asset");
-    await guard(runtime, "swap.quote", request, { order_id: orderId }, native);
+    await guard(runtime, "swap.quote", request, { orderId }, native);
     const resolved = await resolveHost(runtime, "swap.quote", request, orderId, body, payInAsset);
     return jsonResponse(
       200,
@@ -387,10 +387,10 @@ async function dispatch(
 
   if (route.kind === "swap.create") {
     const payInAsset = requiredString(body.pay_in_asset, "pay_in_asset");
-    await enforceAuthorize(runtime, "swap.create", request, { order_id: orderId }, native);
+    await enforceAuthorize(runtime, "swap.create", request, { orderId }, native);
     const resolved = await resolveHost(runtime, "swap.create", request, orderId, body, payInAsset);
     if (resolved.paymentHash === undefined) {
-      await enforceRateLimit(runtime, "swap.create", request, { order_id: orderId }, native);
+      await enforceRateLimit(runtime, "swap.create", request, { orderId }, native);
     }
     const swap =
       resolved.paymentHash === undefined
@@ -405,7 +405,7 @@ async function dispatch(
       const clientIp = runtime.extractClientIp({
         action: "swap.create",
         request,
-        resource: { order_id: orderId },
+        resource: { orderId },
         native,
       });
       await commit(runtime, {
@@ -424,13 +424,7 @@ async function dispatch(
   const requestedPaymentHash = requiredPaymentHash(
     requiredString(body.payment_hash, "payment_hash"),
   );
-  await guard(
-    runtime,
-    action,
-    request,
-    { order_id: orderId, payment_hash: requestedPaymentHash },
-    native,
-  );
+  await guard(runtime, action, request, { orderId, paymentHash: requestedPaymentHash }, native);
   const resolved = await resolveHost(runtime, action, request, orderId, body);
   const swapData = requiredSwapData(resolved.swapData);
   const paymentHash = selectedPaymentHash(resolved, requestedPaymentHash);
@@ -625,7 +619,7 @@ async function rowCheckedBody(
   };
 }
 
-function httpCheckout(checkout: CheckoutInvoice): Record<string, unknown> {
+function httpCheckout(checkout: Checkout): Record<string, unknown> {
   return {
     order_id: checkout.orderId,
     payment_hash: checkout.paymentHash,
@@ -704,7 +698,7 @@ function requiredAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
   return value.amount;
 }
 
-function requiredCheckout(value: ResolvedHostCheckout): CheckoutInvoice {
+function requiredCheckout(value: ResolvedHostCheckout): Checkout {
   if (value.checkout === undefined) {
     throw new OpenReceiveHttpError(
       409,
@@ -722,7 +716,7 @@ function requiredSwapData(value: SwapData | undefined): SwapData {
   return value;
 }
 
-function committedCheckout(orderId: string, resolved: ResolvedHostCheckout): CheckoutInvoice {
+function committedCheckout(orderId: string, resolved: ResolvedHostCheckout): Checkout {
   const paymentHash = hostPaymentHash(resolved.paymentHash);
   const checkout = requiredCheckout(resolved);
   if (checkout.orderId !== orderId || checkout.paymentHash.toLowerCase() !== paymentHash) {

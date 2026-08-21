@@ -19,6 +19,7 @@
       "!examples/*/public/*.html",
       "!examples/*/server/*/public/*.html",
       "!tmp",
+      "!tools/validate/public-api.snapshot.json",
       "!**/building",
       "!**/*.svg",
       "!**/*.css"

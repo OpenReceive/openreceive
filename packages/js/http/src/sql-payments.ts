@@ -4,7 +4,7 @@ import {
   openReceivePaymentsDdlStatements,
   type PaymentDetails,
 } from "@openreceive/core";
-import type { CheckoutInvoice, SwapData } from "@openreceive/node";
+import type { Checkout, SwapData } from "@openreceive/node";
 import type { CheckoutCreatedInput } from "./handler.ts";
 import { hostError } from "./errors.ts";
 import {
@@ -735,7 +735,7 @@ function recordFromRow(row: Record<string, unknown>): OpenReceivePaymentRecord {
       asString(row.checkout_data, "checkout_data"),
       "checkout_data",
       paymentHash,
-    ) as CheckoutInvoice,
+    ) as Checkout,
     swapData:
       swapData === null || swapData === undefined
         ? null

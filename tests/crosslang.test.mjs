@@ -47,12 +47,12 @@ test("fiat-to-msats vectors price through the production quote", () => {
   for (const item of family.cases) {
     const quote = quoteFiatToMsatsWithPrice({
       fiat: { currency: item.fiat.currency, value: item.fiat.value },
-      btc_fiat_price: family.btc_fiat_price,
+      btcFiatPrice: family.btc_fiat_price,
       source: family.source,
-      as_of: 0,
+      asOf: 0,
     });
-    assert.equal(quote.amount_sats, item.expected.amount_sats, item.name);
-    assert.equal(quote.amount_msats, item.expected.amount_msats, item.name);
+    assert.equal(quote.amountSats, item.expected.amount_sats, item.name);
+    assert.equal(quote.amountMsats, item.expected.amount_msats, item.name);
   }
   // Quotes both engines must refuse: zero, negative, and overflow-via-fiat.
   for (const item of family.invalid_cases ?? []) {
@@ -60,9 +60,9 @@ test("fiat-to-msats vectors price through the production quote", () => {
       () =>
         quoteFiatToMsatsWithPrice({
           fiat: { currency: item.fiat.currency, value: item.fiat.value },
-          btc_fiat_price: family.btc_fiat_price,
+          btcFiatPrice: family.btc_fiat_price,
           source: family.source,
-          as_of: 0,
+          asOf: 0,
         }),
       item.name,
     );

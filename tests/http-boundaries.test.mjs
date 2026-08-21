@@ -56,7 +56,7 @@ function testHost({
         })),
       recordReconciliation: async () => undefined,
       // The library owns write-once settlement even for custom repositories:
-      // this claim is what decides whether onSettlement runs.
+      // this claim is what decides whether repository-mode onPaid runs.
       recordSettlement: async () => true,
       claimReconcileGate: async () => true,
     },
@@ -304,7 +304,7 @@ test("host checkout snapshot makes retry independent of wallet reads", async () 
       recordReconciliation: async () => undefined,
       recordSettlement: async () => true,
     },
-    onSettlement: async () => undefined,
+    onPaid: async () => undefined,
   });
   const handler = createOpenReceiveHttpHandler({
     service,

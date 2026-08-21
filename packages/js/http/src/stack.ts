@@ -1,4 +1,3 @@
-import type { NodeSettlementActionHook } from "@openreceive/node";
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
 import type { CreateOpenReceiveHttpHandlerOptions, OpenReceiveHttpHandler } from "./handler.ts";
 import { createOpenReceiveHttpHandler } from "./handler.ts";
@@ -6,6 +5,7 @@ import type {
   CreateOpenReceiveHostDbOptions,
   CreateOpenReceiveHostOptions,
   OpenReceivePaymentRepository,
+  OpenReceiveSettlementEventHook,
 } from "./host-payments.ts";
 import { createOpenReceiveHost } from "./host-payments.ts";
 import { normalizePrefix } from "./router.ts";
@@ -25,7 +25,7 @@ import type { OpenReceiveOrderSettlementHook } from "./sql-payments.ts";
  */
 export interface CreateOpenReceiveStackOptions<Order = unknown>
   extends Omit<CreateOpenReceiveHttpHandlerOptions, "service" | "host">,
-    Omit<CreateOpenReceiveHostDbOptions<Order>, "db" | "onPaid" | "payments" | "onSettlement"> {
+    Omit<CreateOpenReceiveHostDbOptions<Order>, "db" | "onPaid" | "payments"> {
   /** NWC connection string. The stack builds and owns the service (closed by `close()`). */
   readonly nwc?: string;
   /**
@@ -35,13 +35,19 @@ export interface CreateOpenReceiveStackOptions<Order = unknown>
   readonly service?: OpenReceive | Promise<OpenReceive>;
   /** Host database handle (default mode). Pair with `onPaid`. */
   readonly db?: CreateOpenReceiveHostDbOptions<Order>["db"];
-  readonly onPaid?: OpenReceiveOrderSettlementHook;
   /**
-   * Custom payment repository (advanced mode) instead of `db`. Pair with
-   * `onSettlement`; `createOpenReceiveHost` refuses any other combination.
+   * Settlement hook for either mode. With `db` it receives the per-order
+   * `OpenReceiveOrderSettlement` (with `orderId` and the transactional
+   * `query`); with a custom `payments` repository it receives the raw
+   * `OpenReceiveSettlementEvent`.
+   */
+  readonly onPaid?: OpenReceiveOrderSettlementHook | OpenReceiveSettlementEventHook;
+  /**
+   * Custom payment repository (advanced mode) instead of `db`. `onPaid` then
+   * receives the raw settlement event; `createOpenReceiveHost` refuses any
+   * other combination.
    */
   readonly payments?: OpenReceivePaymentRepository;
-  readonly onSettlement?: NodeSettlementActionHook;
 }
 
 export interface OpenReceiveStack {
@@ -71,7 +77,6 @@ export function createOpenReceiveStack<Order = unknown>(
     amountForOrder,
     onPaid,
     payments,
-    onSettlement,
     clock,
     ...handlerOptions
   } = options;
@@ -92,7 +97,7 @@ export function createOpenReceiveStack<Order = unknown>(
           payments,
           loadOrder,
           amountForOrder,
-          onSettlement,
+          onPaid,
           ...(clock === undefined ? {} : { clock }),
         }
   ) as CreateOpenReceiveHostOptions<Order>;
@@ -154,8 +159,7 @@ export function isOpenReceiveStackOptions<Order>(
     flat.payments !== undefined ||
     flat.loadOrder !== undefined ||
     flat.amountForOrder !== undefined ||
-    flat.onPaid !== undefined ||
-    flat.onSettlement !== undefined
+    flat.onPaid !== undefined
   ) {
     return true;
   }

@@ -10,7 +10,7 @@
  */
 export type {
   OpenReceive,
-  CheckoutInvoice,
+  Checkout,
   CreateCheckoutRequest,
   PaymentCheck,
   SwapCheckout,

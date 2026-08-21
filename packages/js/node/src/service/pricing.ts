@@ -56,7 +56,7 @@ export async function quoteRates(
     assertAllowedFiatCurrency(fiat.currency, context.priceCurrencies);
     return await quoteFiatAmount({
       fiat,
-      as_of: context.clock(),
+      asOf: context.clock(),
       priceProviders: context.priceProviders,
     });
   } catch (error) {
@@ -120,9 +120,9 @@ export async function resolveCreateAmount(input: {
     try {
       const quote = quoteBitcoinAmountToMsats(parseBitcoinAmount(body.amount));
       return {
-        amount_msats: quote.amount_msats,
-        amount_source: "amount",
-        fiat_quote: null,
+        amountMsats: quote.amountMsats,
+        amountSource: "amount",
+        fiatQuote: null,
       };
     } catch (error) {
       if (error instanceof OpenReceiveServiceError) throw error;
@@ -135,13 +135,13 @@ export async function resolveCreateAmount(input: {
     assertAllowedFiatCurrency(fiat.currency, input.priceCurrencies);
     const quote = await quoteFiatAmount({
       fiat,
-      as_of: input.now,
+      asOf: input.now,
       priceProviders: input.priceProviders,
     });
     return {
-      amount_msats: quote.amount_msats,
-      amount_source: "fiat",
-      fiat_quote: quote,
+      amountMsats: quote.amountMsats,
+      amountSource: "fiat",
+      fiatQuote: quote,
     };
   } catch (error) {
     if (error instanceof OpenReceiveServiceError) throw error;
@@ -151,7 +151,7 @@ export async function resolveCreateAmount(input: {
 
 export async function quoteFiatAmount(input: {
   fiat: OpenReceiveFiatAmount;
-  as_of: number;
+  asOf: number;
   priceProviders: readonly OpenReceiveSourcedPriceProvider[];
 }): Promise<OpenReceiveRateQuote> {
   const rates = await fetchRatesOrUnavailable({
@@ -170,9 +170,9 @@ export async function quoteFiatAmount(input: {
 
   return quoteFiatToMsatsWithPrice({
     fiat: input.fiat,
-    btc_fiat_price: btcFiatPrice,
+    btcFiatPrice,
     source: rates.source,
-    as_of: input.as_of,
+    asOf: input.asOf,
   });
 }
 

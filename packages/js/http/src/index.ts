@@ -1,11 +1,13 @@
 export type {
-  CheckoutInvoice,
+  Checkout,
   CreateCheckoutAmount,
   OpenReceive,
   PaymentCheck,
   SwapCheckout,
 } from "@openreceive/node";
 export type { OpenReceiveNodeRequestParts } from "./adapter-bridge.ts";
+// Generated snake_case wire body types for the HTTP contract.
+export type * from "./generated/wire.ts";
 export { openReceiveIsUnderPrefix, openReceiveWebRequest } from "./adapter-bridge.ts";
 export type {
   OpenReceiveAuthorize,
@@ -47,6 +49,8 @@ export type {
   OpenReceiveReconcilableAttempt,
   OpenReceiveReconciler,
   OpenReceiveReconciliationTransition,
+  OpenReceiveSettlementEvent,
+  OpenReceiveSettlementEventHook,
   OpenReceiveSettlementRecord,
 } from "./host-payments.ts";
 // The attempt decision machinery (liveAttemptCommitDecision,

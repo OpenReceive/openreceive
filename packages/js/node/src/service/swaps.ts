@@ -87,7 +87,7 @@ export async function quoteSwap(
     priceCurrencies: context.priceCurrencies,
   });
   const provider = await selectProvider(context, payInAsset);
-  const quote = await provider.quote({ payInAsset, invoiceAmountMsats: resolved.amount_msats });
+  const quote = await provider.quote({ payInAsset, invoiceAmountMsats: resolved.amountMsats });
   return {
     provider: quote.provider,
     payAsset: quote.pay_asset,
@@ -121,7 +121,10 @@ export async function createSwap(
   const payInAsset = parsePayInAsset(input.payInAsset);
   const provider = await selectProvider(context, payInAsset);
   const expirySeconds = provider.invoiceExpirySeconds?.({ payInAsset });
-  const checkout = await createCheckout(context, { ...input, expirySeconds });
+  // Strip the swap-only field: the checkout normalizer accepts exactly the
+  // declared CreateCheckoutRequest fields.
+  const { payInAsset: _payInAsset, ...checkoutRequest } = input;
+  const checkout = await createCheckout(context, { ...checkoutRequest, expirySeconds });
   const order = await provider.createSwap({
     payInAsset,
     bolt11: checkout.bolt11,

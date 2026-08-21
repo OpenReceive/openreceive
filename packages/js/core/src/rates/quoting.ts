@@ -84,8 +84,8 @@ export function quoteBitcoinAmountToMsats(
   assertAmountBounds(amountSats, amountMsats);
 
   return {
-    amount_sats: toSafeJsonInteger(amountSats, "amount_sats"),
-    amount_msats: toSafeJsonInteger(amountMsats, "amount_msats"),
+    amountSats: toSafeJsonInteger(amountSats, "amount_sats"),
+    amountMsats: toSafeJsonInteger(amountMsats, "amount_msats"),
   };
 }
 
@@ -115,7 +115,7 @@ export function getStaticBtcFiatPrice(currency: string): string {
  *
  * @throws {OpenReceiveDecimalError} for malformed fiat input or an
  * out-of-range result.
- * @throws {OpenReceivePriceFeedError} when `btc_fiat_price` is unusable.
+ * @throws {OpenReceivePriceFeedError} when `btcFiatPrice` is unusable.
  */
 export function quoteFiatToMsatsWithPrice(
   request: QuoteFiatToMsatsWithPriceRequest,
@@ -129,15 +129,15 @@ export function quoteFiatToMsatsWithPrice(
     throw new OpenReceiveDecimalError("fiat.currency must be an ISO 4217 uppercase code");
   }
 
-  const btcFiatPrice = request.btc_fiat_price;
+  const btcFiatPrice = request.btcFiatPrice;
   const amountSats = fiatValueToSats(fiat.value, btcFiatPrice);
   const amountMsats = amountSats * OPENRECEIVE_MSATS_PER_SAT;
 
   assertAmountBounds(amountSats, amountMsats);
 
-  const asOf = normalizeUnixSeconds(request.as_of ?? currentUnixSeconds(), "as_of");
+  const asOf = normalizeUnixSeconds(request.asOf ?? currentUnixSeconds(), "as_of");
   const ttlSeconds = normalizeUnixSeconds(
-    request.ttl_seconds ?? OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
+    request.ttlSeconds ?? OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
     "ttl_seconds",
   );
   const expiresAt = normalizeUnixSeconds(asOf + ttlSeconds, "expires_at");
@@ -147,12 +147,12 @@ export function quoteFiatToMsatsWithPrice(
       currency: fiat.currency,
       value: fiat.value,
     },
-    btc_fiat_price: btcFiatPrice,
-    amount_sats: toSafeJsonInteger(amountSats, "amount_sats"),
-    amount_msats: toSafeJsonInteger(amountMsats, "amount_msats"),
+    btcFiatPrice,
+    amountSats: toSafeJsonInteger(amountSats, "amount_sats"),
+    amountMsats: toSafeJsonInteger(amountMsats, "amount_msats"),
     source: request.source,
-    as_of: asOf,
-    expires_at: expiresAt,
+    asOf,
+    expiresAt,
   };
 }
 
@@ -166,7 +166,7 @@ export function quoteFiatToMsatsWithPrice(
 export function quoteFiatToMsatsAtMockRate(request: QuoteFiatToMsatsRequest): OpenReceiveRateQuote {
   return quoteFiatToMsatsWithPrice({
     ...request,
-    btc_fiat_price: getStaticBtcFiatPrice(request.fiat.currency),
+    btcFiatPrice: getStaticBtcFiatPrice(request.fiat.currency),
     source: OPENRECEIVE_STATIC_PRICE_SOURCE_ID,
   });
 }

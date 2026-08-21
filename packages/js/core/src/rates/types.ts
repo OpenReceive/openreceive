@@ -7,29 +7,34 @@ export type OpenReceivePriceSourceId = (typeof OPENRECEIVE_PRICE_SOURCE_IDS)[num
 export type OpenReceiveLivePriceSourceId = Exclude<OpenReceivePriceSourceId, "static_mock">;
 
 export interface OpenReceiveDirectAmountQuote {
-  amount_sats: number;
-  amount_msats: number;
+  amountSats: number;
+  amountMsats: number;
 }
 
+/**
+ * A fiat-to-msats quote, camelCase like every other TS surface. On the wire
+ * (`fiat_quote` in checkout bodies) the same object is serialized snake_case
+ * by the HTTP handler.
+ */
 export interface OpenReceiveRateQuote {
   fiat: OpenReceiveFiatAmount;
-  btc_fiat_price: string;
-  amount_sats: number;
-  amount_msats: number;
+  btcFiatPrice: string;
+  amountSats: number;
+  amountMsats: number;
   source: OpenReceivePriceSourceId;
-  as_of: number;
-  expires_at: number;
+  asOf: number;
+  expiresAt: number;
 }
 
 export interface QuoteFiatToMsatsRequest {
   fiat: OpenReceiveFiatAmount;
-  as_of?: number;
+  asOf?: number;
 }
 
 export interface QuoteFiatToMsatsWithPriceRequest extends QuoteFiatToMsatsRequest {
-  btc_fiat_price: string;
+  btcFiatPrice: string;
   source: OpenReceivePriceSourceId;
-  ttl_seconds?: number;
+  ttlSeconds?: number;
 }
 
 export interface OpenReceivePriceProvider {

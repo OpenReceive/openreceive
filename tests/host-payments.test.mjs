@@ -59,7 +59,7 @@ function host(rows) {
     loadOrder: async (orderId) => (orderId === "order-1" ? { total: "10.00" } : null),
     amountForOrder: (order) => ({ currency: "USD", value: order.total }),
     payments: repository(rows),
-    onSettlement: async () => undefined,
+    onPaid: async () => undefined,
   });
 }
 
@@ -250,7 +250,7 @@ test("host pricing runs only when minting or quoting, never on status or refund 
       throw new Error("pricing service down");
     },
     payments: repository([payment("a")]),
-    onSettlement: async () => undefined,
+    onPaid: async () => undefined,
   });
   for (const action of ["payment.check", "swap.read", "swap.refund"]) {
     const selected = await paymentHost.resolveCheckout(
@@ -283,7 +283,6 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
   const loadOrder = async () => null;
   const amountForOrder = () => ({ sats: 1 });
   const onPaid = async () => undefined;
-  const onSettlement = async () => undefined;
   const payments = repository([]);
 
   assert.throws(() => createOpenReceiveHost({}), /requires loadOrder/);
@@ -298,7 +297,7 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
       createOpenReceiveHost({
         loadOrder,
         amountForOrder,
-        onSettlement,
+        onPaid,
         payments: { listForOrder: payments.listForOrder },
       }),
     /requires payments\.commitAttempt/,
@@ -308,7 +307,7 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
       createOpenReceiveHost({
         loadOrder,
         amountForOrder,
-        onSettlement,
+        onPaid,
         payments: {
           listForOrder: payments.listForOrder,
           commitAttempt: payments.commitAttempt,
@@ -321,7 +320,7 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
       createOpenReceiveHost({
         loadOrder,
         amountForOrder,
-        onSettlement,
+        onPaid,
         payments: {
           listForOrder: payments.listForOrder,
           commitAttempt: payments.commitAttempt,
@@ -331,7 +330,7 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
     /requires payments\.recordReconciliation/,
   );
   // A complete custom repository is the documented escape hatch.
-  const built = createOpenReceiveHost({ loadOrder, amountForOrder, onSettlement, payments });
+  const built = createOpenReceiveHost({ loadOrder, amountForOrder, onPaid, payments });
   assert.equal(built.payments, payments);
 });
 
@@ -352,7 +351,7 @@ test("a custom repository drives the library's write-once settlement claim", asy
         return claimResults.shift() ?? false;
       },
     },
-    onSettlement: async (settlement) => notified.push(settlement.paymentHash),
+    onPaid: async (settlement) => notified.push(settlement.paymentHash),
   });
 
   await built.onPaid({ paymentHash, paidAt: 990 });
@@ -375,7 +374,7 @@ test("a custom repository without recordSettlement is refused at construction", 
         loadOrder: async () => ({ total: "1.00" }),
         amountForOrder: () => ({ currency: "USD", value: "1.00" }),
         payments: withoutClaim,
-        onSettlement: async () => assert.fail("settlement must not reach the host unclaimed"),
+        onPaid: async () => assert.fail("settlement must not reach the host unclaimed"),
       }),
     /requires payments\.recordSettlement/,
   );

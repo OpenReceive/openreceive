@@ -23,21 +23,39 @@ export function createAmountRequest(amount: CreateCheckoutAmount): Record<string
   return { fiat: { currency: amount.currency, value: amount.value } };
 }
 
+/** The declared {@link CreateCheckoutRequest} fields — the only accepted keys. */
+const CREATE_CHECKOUT_REQUEST_FIELDS: readonly string[] = [
+  "orderId",
+  "amount",
+  "memo",
+  "descriptionHash",
+  "metadata",
+  "expirySeconds",
+];
+
 export function normalizeCreateCheckoutRequest(
   input: CreateCheckoutRequest,
 ): NormalizedCreateCheckoutRequest {
   const body = asRecord(input);
-  const orderId = optionalString(body.orderId ?? body.order_id);
+  // The service accepts exactly the declared camelCase fields, mirroring how
+  // the HTTP layer accepts exactly the declared snake_case wire fields —
+  // aliases in either casing are rejected, not ignored.
+  for (const key of Object.keys(body)) {
+    if (!CREATE_CHECKOUT_REQUEST_FIELDS.includes(key)) {
+      throw serviceError(400, "INVALID_REQUEST", `Unexpected create checkout field: ${key}.`);
+    }
+  }
+  const orderId = optionalString(body.orderId);
   if (orderId === undefined) throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
   if (orderId.length > 200) {
     throw serviceError(400, "INVALID_REQUEST", "orderId must be 200 characters or fewer.");
   }
   const amount = normalizeCreateCheckoutAmount(body.amount);
   const memo = optionalString(body.memo);
-  const descriptionHash = optionalString(body.descriptionHash ?? body.description_hash);
+  const descriptionHash = optionalString(body.descriptionHash);
   getCreateDescriptionFields({ memo, descriptionHash });
   const metadata = parseOptionalRecord(body.metadata, "metadata");
-  const expirySeconds = body.expirySeconds ?? body.expiry_seconds;
+  const expirySeconds = body.expirySeconds;
   if (
     expirySeconds !== undefined &&
     (!Number.isSafeInteger(expirySeconds) || (expirySeconds as number) <= 0)
@@ -45,12 +63,12 @@ export function normalizeCreateCheckoutRequest(
     throw serviceError(400, "INVALID_REQUEST", "expirySeconds must be a positive safe integer.");
   }
   return {
-    order_id: orderId,
+    orderId,
     amount,
     ...(memo === undefined ? {} : { memo }),
-    ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
+    ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
-    ...(expirySeconds === undefined ? {} : { expiry_seconds: expirySeconds as number }),
+    ...(expirySeconds === undefined ? {} : { expirySeconds: expirySeconds as number }),
   };
 }
 

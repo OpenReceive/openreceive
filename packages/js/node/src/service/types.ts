@@ -101,7 +101,12 @@ export interface CreateCheckoutRequest {
   readonly expirySeconds?: number;
 }
 
-export interface CheckoutInvoice {
+/**
+ * The minted invoice — the service-level view of the OpenAPI `Checkout` object
+ * (the HTTP handler serializes it to the snake_case wire shape,
+ * `OpenReceiveWireCheckout`).
+ */
+export interface Checkout {
   readonly orderId: string;
   readonly paymentHash: string;
   readonly bolt11: string;
@@ -261,7 +266,7 @@ export interface PublicSwap {
 }
 
 export interface SwapCheckout extends PublicSwap {
-  readonly checkout: CheckoutInvoice;
+  readonly checkout: Checkout;
   /** Sensitive host-only state. Never serialize this into a browser response. */
   readonly swapData: SwapData;
 }
@@ -277,7 +282,7 @@ export interface OpenReceive {
     readonly amountMsats: number;
     readonly fiatQuote: OpenReceiveRateQuote | null;
   }>;
-  createCheckout(input: CreateCheckoutRequest): Promise<CheckoutInvoice>;
+  createCheckout(input: CreateCheckoutRequest): Promise<Checkout>;
   checkPayment(input: CheckPaymentRequest): Promise<PaymentCheck>;
   reconcilePayments(input: ReconcilePaymentsRequest): Promise<readonly PaymentCheck[]>;
   /**
@@ -314,18 +319,18 @@ export interface OpenReceiveServiceContext {
 }
 
 export interface ResolvedCreateAmount {
-  readonly amount_msats: number;
-  readonly amount_source: "amount" | "fiat";
-  readonly fiat_quote: OpenReceiveRateQuote | null;
+  readonly amountMsats: number;
+  readonly amountSource: "amount" | "fiat";
+  readonly fiatQuote: OpenReceiveRateQuote | null;
 }
 
 export interface NormalizedCreateCheckoutRequest {
-  readonly order_id: string;
+  readonly orderId: string;
   readonly amount: CreateCheckoutAmount;
   readonly memo?: string;
-  readonly description_hash?: string;
+  readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
-  readonly expiry_seconds?: number;
+  readonly expirySeconds?: number;
 }
 
 export type { NwcTransaction };

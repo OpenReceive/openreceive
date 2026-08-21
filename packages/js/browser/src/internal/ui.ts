@@ -526,6 +526,12 @@ export interface OpenReceiveCheckoutPaymentMethod {
   readonly maximum_invoice_amount_msats?: number;
 }
 
+/**
+ * Client-side snapshot of one Checkout (the server's `Checkout` /
+ * the wire's `OpenReceiveWireCheckout`), aggregated across its payment
+ * attempts as the browser polls. Snake_case because it holds wire data
+ * verbatim.
+ */
 export interface CheckoutSnapshot {
   readonly checkout_id: string;
   readonly order_id: string;

@@ -110,7 +110,7 @@ export async function createHelloFruitExpressApp(
     openReceiveExpress({
       service,
       authorize: ({ resource }) =>
-        resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
+        resource.orderId !== undefined && readHelloFruitHostOrder(resource.orderId) !== null,
       host,
       rateLimiting: options.rateLimiting,
     }),
