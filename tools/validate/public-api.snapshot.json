@@ -2,12 +2,12 @@
   "@openreceive/angular": {
     ".": {
       "values": [
+        "createCheckoutController",
+        "createCheckoutShell",
+        "createOpenReceiveStoredThemeModel",
+        "createOpenReceiveThemeModel",
         "createOpenReceiveWrapperCheckoutBinding",
-        "createOpenReceiveWrapperCheckoutController",
-        "createOpenReceiveWrapperCheckoutShell",
         "createOpenReceiveWrapperCheckoutShellBinding",
-        "createOpenReceiveWrapperStoredThemeBinding",
-        "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
         "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
@@ -627,12 +627,12 @@
     },
     "./wrapper-shared": {
       "values": [
+        "createCheckoutController",
+        "createCheckoutShell",
+        "createOpenReceiveStoredThemeModel",
+        "createOpenReceiveThemeModel",
         "createOpenReceiveWrapperCheckoutBinding",
-        "createOpenReceiveWrapperCheckoutController",
-        "createOpenReceiveWrapperCheckoutShell",
         "createOpenReceiveWrapperCheckoutShellBinding",
-        "createOpenReceiveWrapperStoredThemeBinding",
-        "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
         "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
@@ -1162,12 +1162,12 @@
     },
     "./angular": {
       "values": [
+        "createCheckoutController",
+        "createCheckoutShell",
+        "createOpenReceiveStoredThemeModel",
+        "createOpenReceiveThemeModel",
         "createOpenReceiveWrapperCheckoutBinding",
-        "createOpenReceiveWrapperCheckoutController",
-        "createOpenReceiveWrapperCheckoutShell",
         "createOpenReceiveWrapperCheckoutShellBinding",
-        "createOpenReceiveWrapperStoredThemeBinding",
-        "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
         "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
@@ -1792,12 +1792,12 @@
     },
     "./svelte": {
       "values": [
+        "createCheckoutController",
+        "createCheckoutShell",
+        "createOpenReceiveStoredThemeModel",
+        "createOpenReceiveThemeModel",
         "createOpenReceiveWrapperCheckoutBinding",
-        "createOpenReceiveWrapperCheckoutController",
-        "createOpenReceiveWrapperCheckoutShell",
         "createOpenReceiveWrapperCheckoutShellBinding",
-        "createOpenReceiveWrapperStoredThemeBinding",
-        "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
         "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
@@ -1842,12 +1842,12 @@
     },
     "./vue": {
       "values": [
+        "createCheckoutController",
+        "createCheckoutShell",
+        "createOpenReceiveStoredThemeModel",
+        "createOpenReceiveThemeModel",
         "createOpenReceiveWrapperCheckoutBinding",
-        "createOpenReceiveWrapperCheckoutController",
-        "createOpenReceiveWrapperCheckoutShell",
         "createOpenReceiveWrapperCheckoutShellBinding",
-        "createOpenReceiveWrapperStoredThemeBinding",
-        "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
         "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
@@ -1989,12 +1989,12 @@
   "@openreceive/svelte": {
     ".": {
       "values": [
+        "createCheckoutController",
+        "createCheckoutShell",
+        "createOpenReceiveStoredThemeModel",
+        "createOpenReceiveThemeModel",
         "createOpenReceiveWrapperCheckoutBinding",
-        "createOpenReceiveWrapperCheckoutController",
-        "createOpenReceiveWrapperCheckoutShell",
         "createOpenReceiveWrapperCheckoutShellBinding",
-        "createOpenReceiveWrapperStoredThemeBinding",
-        "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
         "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
@@ -2041,12 +2041,12 @@
   "@openreceive/vue": {
     ".": {
       "values": [
+        "createCheckoutController",
+        "createCheckoutShell",
+        "createOpenReceiveStoredThemeModel",
+        "createOpenReceiveThemeModel",
         "createOpenReceiveWrapperCheckoutBinding",
-        "createOpenReceiveWrapperCheckoutController",
-        "createOpenReceiveWrapperCheckoutShell",
         "createOpenReceiveWrapperCheckoutShellBinding",
-        "createOpenReceiveWrapperStoredThemeBinding",
-        "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
         "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
