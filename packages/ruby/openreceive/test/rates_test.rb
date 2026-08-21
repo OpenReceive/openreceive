@@ -126,6 +126,26 @@ class OpenReceiveRatesTest < Minitest::Test
     assert_equal 2, http.calls.length, "a 60s-old entry must trigger a live refresh"
   end
 
+  def test_cached_feed_treats_future_stamp_beyond_skew_as_stale
+    now = 100
+    feed, http = build_feed(primary: -> { ok_body("usd" => "61234.56") }, clock: -> { now })
+
+    feed.btc_fiat_rates(["USD"])
+    assert_equal 1, http.calls.length
+
+    # Within the 5s skew tolerance a slightly-future stamp still serves.
+    now = 96
+    feed.btc_fiat_rates(["USD"])
+    assert_equal 1, http.calls.length, "a stamp within the skew tolerance must serve from cache"
+
+    # A stamp further in the future means the clock stepped backwards: the
+    # entry is unusable, so the feed must refresh instead of serving it as
+    # fresh until wall-clock catches up.
+    now = 90
+    feed.btc_fiat_rates(["USD"])
+    assert_equal 2, http.calls.length, "a stamp beyond the skew tolerance must trigger a refresh"
+  end
+
   def test_cached_feed_caches_whole_feed_and_selects_strictly
     feed, http = build_feed(primary: -> { ok_body("usd" => 50_000, "eur" => 46_000.5) })
 

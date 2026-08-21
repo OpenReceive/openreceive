@@ -21,6 +21,9 @@ module OpenReceive
     # How long a cached price-feed read stays usable before a live refresh.
     PRICE_FEED_CACHE_SECONDS = 60
     INVOICE_QUOTE_TTL_SECONDS = 600
+    # A cache stamp this far in the future means the clock stepped backwards:
+    # treat the stamp as stale rather than "fresh until wall-clock catches up".
+    PRICE_FEED_CLOCK_SKEW_SECONDS = 5
 
     # The primary feed must answer within this window before the fallback is tried.
     PRICE_FEED_PRIMARY_TIMEOUT_MS = 5000
@@ -373,14 +376,15 @@ module OpenReceive
           state = @state
           entry = state && state["entry"]
 
-          if entry && now - entry.fetch("fetched_at") < @cache_seconds
+          entry_age = entry && stamp_age(entry.fetch("fetched_at"), now)
+          if entry_age && entry_age < @cache_seconds
             return { status: :served, entry: entry }
           end
 
           # Stale-while-revalidate is bounded by the invoice quote TTL: a rate
           # observed longer ago than a quote may live must never price a new
           # invoice — fail closed instead of serving it.
-          quotable = entry if entry && now - entry.fetch("fetched_at") < INVOICE_QUOTE_TTL_SECONDS
+          quotable = entry if entry_age && entry_age < INVOICE_QUOTE_TTL_SECONDS
 
           if state && recent?(state["refresh_failed_at"], now)
             # One failed refresh must not hard-down quoting for the whole
@@ -414,7 +418,19 @@ module OpenReceive
       end
 
       def recent?(timestamp, now)
-        !timestamp.nil? && now - timestamp < @cache_seconds
+        age = stamp_age(timestamp, now)
+        !age.nil? && age < @cache_seconds
+      end
+
+      # Age of a cache stamp, or nil when the stamp is unusable because it sits
+      # beyond the clock-skew tolerance in the future (mirrors the JS cache).
+      def stamp_age(timestamp, now)
+        return nil if timestamp.nil?
+
+        age = now - timestamp
+        return nil if age < -PRICE_FEED_CLOCK_SKEW_SECONDS
+
+        age.negative? ? 0 : age
       end
 
       def tracked_refresh(now, previous_entry, pending)
