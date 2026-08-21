@@ -1,4 +1,4 @@
-import { isReusableLightningInvoice, selectCheckoutDisplayInvoice } from "./checkout.ts";
+import { isReusableLightningInvoice, selectCheckoutDisplayInvoice } from "./checkout-state.ts";
 import type { CheckoutInvoiceSnapshot, CheckoutSnapshot } from "./ui.ts";
 
 /**

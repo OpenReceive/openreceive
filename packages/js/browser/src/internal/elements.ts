@@ -1,9 +1,6 @@
 import { status as deriveStatus } from "../status.ts";
-import {
-  assertOpenReceiveDisplayInvoice,
-  isPaidCheckoutSnapshot,
-  selectCheckoutDisplayInvoice,
-} from "./checkout.ts";
+import { assertOpenReceiveDisplayInvoice } from "./checkout-invoice.ts";
+import { isPaidCheckoutSnapshot, selectCheckoutDisplayInvoice } from "./checkout-state.ts";
 import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
 import {
   type CheckoutElementAttributeOptions,

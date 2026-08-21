@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createCheckoutController,
+  createCheckoutState,
   createCheckoutElementAttributes,
   createOpenReceiveStatusFetcher,
   createOpenReceiveSwapFeeBreakdown,
@@ -242,4 +243,86 @@ test("swap fee breakdown stays exact on the shared decimal engine", () => {
     createOpenReceiveSwapFeeBreakdown({ currency: "USD", pay_in_fiat: "1.00", payout_fiat: "0" }),
     undefined,
   );
+});
+
+/** Every string value in a log entry, at any nesting depth. */
+function logStringValues(value) {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(logStringValues);
+  if (typeof value !== "object" || value === null) return [];
+  return Object.values(value).flatMap(logStringValues);
+}
+
+/** Every key in a log entry, at any nesting depth. */
+function logKeys(value) {
+  if (Array.isArray(value)) return value.flatMap(logKeys);
+  if (typeof value !== "object" || value === null) return [];
+  return Object.entries(value).flatMap(([key, nested]) => [key, ...logKeys(nested)]);
+}
+
+// The browser log-field builders are an allowlist, not a redaction pass:
+// sanitizeBrowserLogEntry only scrubs secret/token/authorization/cookie/nwc, so
+// nothing downstream would stop a raw refund nonce, preimage or bolt11 from
+// reaching a log sink. This is the assertion that stops it.
+test("browser checkout log fields never carry the refund nonce, a preimage or a raw bolt11", () => {
+  const entries = [];
+  const bolt11 = "lnbc1secretinvoicepayload";
+  const preimage = hash("f");
+  const swapInvoice = {
+    invoice_id: hash("b"),
+    rail: "swap",
+    invoice: bolt11,
+    payment_hash: hash("b"),
+    preimage,
+    amount_msats: 21_000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    expires_at: 2_000,
+    swap: {
+      attempt_id: "attempt-1",
+      provider: "fixedfloat",
+      provider_order_id: "ff-1",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TDeposit",
+      deposit_amount: "10.00",
+      provider_state: "refund_required",
+      provider_expires_at: 2_000,
+      refund_address: "TRefund",
+      refund_nonce: "nonce-must-never-be-logged",
+      refund_nonce_expires_at: 3_000,
+      refund_reason: "under_paid",
+      attention: true,
+      attention_reason: "manual_review",
+    },
+  };
+  const options = { logger: (entry) => entries.push(entry), now: 1_000 };
+
+  const created = createCheckoutState(snapshotOf([swapInvoice]), options);
+  createCheckoutState(snapshotOf([swapInvoice]), {
+    ...options,
+    source: "refresh",
+    previousState: { ...created, swap: { ...created.swap, provider_state: "awaiting_deposit" } },
+  });
+
+  assert.ok(entries.length >= 2, "create and refresh must both emit a checkout log entry");
+  for (const entry of entries) {
+    const keys = logKeys(entry);
+    for (const forbidden of ["refund_nonce", "preimage", "invoice", "lightning_uri"]) {
+      assert.ok(
+        !keys.includes(forbidden),
+        `${entry.event} must not log a ${forbidden} field: ${JSON.stringify(entry)}`,
+      );
+    }
+    for (const value of logStringValues(entry)) {
+      assert.ok(!value.includes(bolt11), `${entry.event} leaked the raw bolt11`);
+      assert.ok(!value.includes(preimage), `${entry.event} leaked the preimage`);
+      assert.ok(
+        !value.includes("nonce-must-never-be-logged"),
+        `${entry.event} leaked the refund nonce`,
+      );
+    }
+    // The nonce is reported as presence only — that field is the whole point.
+    assert.equal(entry.refund_nonce_present, true);
+    assert.equal(entry.refund_nonce_expires_at, 3_000);
+  }
 });

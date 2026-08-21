@@ -1,5 +1,4 @@
 import {
-  applyCheckoutElementAttributes,
   buildOpenReceiveMethodGridEntries,
   type CheckoutController,
   type CheckoutInvoiceSnapshot,
@@ -8,7 +7,6 @@ import {
   copyInvoice,
   createCheckoutActionEvent,
   createCheckoutController,
-  createCheckoutElementAttributes,
   createCheckoutErrorEvent,
   createCheckoutProviderCopyEvent,
   createCheckoutSnapshotFromDisplayData,
@@ -21,12 +19,8 @@ import {
   createQrSvg,
   status as deriveStatus,
   enterCheckoutResumePath,
-  findOpenReceiveReusableLightningInvoice,
   findOpenReceiveSwapGridGroup,
   getOpenReceiveSwapRefundFormError,
-  mergeOpenReceiveAttemptIntoCheckout,
-  mergeOpenReceiveAttemptIntoSnapshot,
-  mergeOpenReceiveMintedCheckout,
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
@@ -48,16 +42,14 @@ import {
   parseOpenReceivePaymentMethod,
   parseOpenReceiveResolvedTheme,
   parseOpenReceiveThemePreference,
-  prepareCheckout,
-  requestCheckout,
   requestOpenReceiveSwapRefund,
   resolveOrderUrlFromPrefix,
-  startOpenReceiveSwapRequest,
   syncOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemeControls,
   updateOpenReceivePaymentWizardSelection,
   updateOpenReceiveSelectedSwapNetworks,
 } from "@openreceive/browser/internal";
+import { createElementCheckoutSession } from "./element-checkout-session.ts";
 import {
   parseElementRail,
   readElementFiatQuote,
@@ -145,30 +137,50 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     private refundAddressDraftSelectionEnd: number | null = null;
     /** Tutorial provider whose dialog was last focused, so re-renders don't re-steal focus. */
     private focusedTutorialProviderId: string | null = null;
-    /** Create-mode prepare failure shown inline with a retry button. */
-    private createError: string | undefined;
-    /** Swap-start failure shown inline in the deposit slot with a retry button. */
-    private swapStartError: string | undefined;
-    /** In-flight swap create; a second click must not mint a colliding attempt. */
-    private startingSwapAsset: string | null = null;
-    /** Lightning mint failure shown inline in the wizard. */
-    private wizardError: string | undefined;
-    // Create-mode bookkeeping: `createdKey` is `${prefix}::${orderId}` so prepare runs once
-    // per order/prefix and re-runs when either changes; `creating` guards against overlap.
-    // Keep `createdKey` after prepare failure so theme/error DOM churn cannot storm
-    // `/checkouts/prepare`.
-    private creating = false;
-    private createdKey: string | undefined;
     /**
-     * Depth of the "these attributes are ours" guard. Attributes the element writes
-     * back to itself (the created snapshot, every status/expiry transition) must not
-     * re-enter attributeChangedCallback: that rebuilt the shadow tree, replaced the
-     * controller and fired another status request for a change the element just made.
+     * Create mode's whole request lifecycle — prepare-once, the deferred
+     * Lightning mint, the swap start — plus the guard that keeps attributes the
+     * element writes itself out of attributeChangedCallback. Every one of those
+     * is a double-POST guard, which is why they live together.
      */
-    private applyingOwnAttributes = 0;
-    /** Create-mode: Lightning QR is deferred until the payer selects Bitcoin. */
-    private lightningRequested = false;
-    private mintingLightning = false;
+    private readonly session = createElementCheckoutSession({
+      element: this,
+      logger: options.logger,
+      swapSelection: {
+        started: () => this.startedSwapInvoice,
+        setStarted: (invoice) => {
+          this.startedSwapInvoice = invoice;
+        },
+        dismissedInvoiceId: () => this.dismissedSwapInvoiceId,
+        setDismissedInvoiceId: (invoiceId) => {
+          this.dismissedSwapInvoiceId = invoiceId;
+        },
+        setSelectedAsset: (payInAsset) => {
+          this.selectedSwapAsset = payInAsset;
+        },
+      },
+      isCreateMode: () => this.isCreateMode(),
+      render: () => {
+        this.render();
+      },
+      startCheckoutController: () => {
+        this.startCheckoutController();
+      },
+      handleControllerSnapshot: (snapshot) => {
+        this.handleControllerSnapshot(snapshot);
+      },
+      latestCheckoutSnapshot: () => this.latestCheckoutSnapshot,
+      currentCheckoutSnapshot: () => this.currentCheckoutSnapshot(),
+      currentThemeOption: () => this.currentThemeOption(),
+      createMetadata: () => this.createMetadata(),
+      syncResumePath: (orderId) => {
+        this.syncResumePath(orderId);
+      },
+      resolveOrderUrl: (orderId) => this.resolveOrderUrl(orderId),
+      dispatchError: (error) => {
+        this.dispatchError(error);
+      },
+    });
     /** When `theme` is unset, follow the nearest ancestor `[data-theme]` (e.g. ThemeScope). */
     private themeAncestorObserver: MutationObserver | undefined;
     private observedThemeAncestor: Element | null = null;
@@ -201,14 +213,14 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       this.render();
       this.syncThemeAncestorObserver();
       if (this.isCreateMode()) {
-        void this.createCheckout();
+        void this.session.createCheckout();
         return;
       }
       this.startCheckoutController();
     }
 
     attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
-      if (!this.isConnected || this.applyingOwnAttributes > 0) return;
+      if (!this.isConnected || this.session.applyingOwnAttributes) return;
       if (oldValue === newValue) return;
 
       // Display-only attributes (theme, the resume-path trio) never change what is
@@ -230,7 +242,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice;
       if (createInputChanged) {
-        this.createdKey = undefined;
+        this.session.forgetCreateKey();
       }
 
       if (this.isCreateMode()) {
@@ -238,7 +250,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         this.syncThemeAncestorObserver();
         // Theme/status attrs must not re-prepare; only create inputs may.
         if (createInputChanged) {
-          void this.createCheckout();
+          void this.session.createCheckout();
         }
         return;
       }
@@ -259,92 +271,6 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
       const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
       return (invoice === null || invoice === "") && orderId !== null && orderId.length > 0;
-    }
-
-    /** `${prefix}::${orderId}` the element would prepare right now, or undefined. */
-    private currentCreateKey(): string | undefined {
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      if (orderId === null || orderId.length === 0) return undefined;
-      const prefix =
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
-        OPENRECEIVE_DEFAULT_PREFIX;
-      return `${prefix}::${orderId}`;
-    }
-
-    private async createCheckout(): Promise<void> {
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      if (orderId === null || orderId.length === 0) return;
-      const prefix =
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
-        OPENRECEIVE_DEFAULT_PREFIX;
-      const key = `${prefix}::${orderId}`;
-      if (this.creating || this.createdKey === key) return;
-      this.creating = true;
-      this.createdKey = key;
-      this.lightningRequested = false;
-
-      try {
-        this.createError = undefined;
-        this.syncResumePath(orderId);
-        // Lock amount without minting a payer Lightning invoice. Bitcoin selection mints later.
-        const checkout = await prepareCheckout({
-          prefix,
-          orderId,
-          fetch: globalThis.fetch,
-        });
-        // The host may have re-pointed order-id/prefix while this was in flight;
-        // applying an older order's attributes here would silently show, and poll,
-        // the wrong order. The finally block re-runs for whatever is current.
-        if (this.currentCreateKey() !== key) return;
-        this.handleControllerSnapshot(checkout);
-        const orderUrl = resolveOrderUrlFromPrefix(prefix);
-        // Apply routing attrs only (no invoice) so render stays in deferred wizard mode.
-        // Preserve the host theme attribute so shadow data-theme cannot fall through.
-        this.applyOwnAttributes(
-          createCheckoutElementAttributes(checkout, {
-            orderUrl,
-            prefix,
-            ...this.currentThemeOption(),
-          }),
-        );
-        this.render();
-        this.startCheckoutController();
-      } catch (error) {
-        if (this.currentCreateKey() !== key) return;
-        // Leave createdKey set so theme sync / host error DOM updates cannot retry-storm.
-        // The payer sees an inline error with a retry button instead of an
-        // infinite "Creating checkout…" spinner.
-        this.createError =
-          error instanceof Error && error.message.length > 0
-            ? error.message
-            : "Could not start checkout.";
-        this.dispatchError(error);
-        this.render();
-      } finally {
-        this.creating = false;
-        const current = this.currentCreateKey();
-        if (this.isConnected && current !== undefined && current !== key && this.isCreateMode()) {
-          void this.createCheckout();
-        }
-      }
-    }
-
-    /** Write attributes the element owns without re-entering attributeChangedCallback. */
-    private applyOwnAttributes(attributes: Parameters<typeof applyCheckoutElementAttributes>[1]) {
-      this.applyingOwnAttributes += 1;
-      try {
-        applyCheckoutElementAttributes(this, attributes);
-      } finally {
-        this.applyingOwnAttributes -= 1;
-      }
-    }
-
-    /** Explicit payer retry after a failed prepare. */
-    private retryCreateCheckout(): void {
-      this.createdKey = undefined;
-      this.createError = undefined;
-      this.render();
-      void this.createCheckout();
     }
 
     /** Create-time metadata from the JSON `metadata` attribute, when present and valid. */
@@ -376,72 +302,6 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           pathPrefix: resumePathPrefix,
           ...(routeOrderId === undefined || routeOrderId.length === 0 ? {} : { routeOrderId }),
         });
-      }
-    }
-
-    private async ensureLightning(): Promise<void> {
-      // A second click while the first mint is in flight would POST /checkouts
-      // again; the loser's 409 then surfaced as a wizard error over a perfectly
-      // good invoice. `startSwap` guards the same way.
-      if (this.mintingLightning) return;
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      if (orderId === null || orderId.length === 0) return;
-      const prefix =
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
-        OPENRECEIVE_DEFAULT_PREFIX;
-      const current = this.latestCheckoutSnapshot;
-      if (current !== undefined) {
-        const reusableLightning = findOpenReceiveReusableLightningInvoice(current);
-        if (reusableLightning !== undefined) {
-          const focused = mergeOpenReceiveAttemptIntoSnapshot(reusableLightning, current);
-          this.handleControllerSnapshot(focused);
-          this.lightningRequested = true;
-          this.applyOwnAttributes(
-            createCheckoutElementAttributes(focused, {
-              orderUrl: resolveOrderUrlFromPrefix(prefix),
-              prefix,
-              ...this.currentThemeOption(),
-            }),
-          );
-          this.render();
-          this.startCheckoutController();
-          return;
-        }
-      }
-      this.mintingLightning = true;
-      this.wizardError = undefined;
-      this.render();
-      try {
-        const metadata = this.createMetadata();
-        const checkout = await requestCheckout({
-          prefix,
-          orderId,
-          ...(metadata === undefined ? {} : { metadata }),
-          fetch: globalThis.fetch,
-        });
-        const merged = mergeOpenReceiveMintedCheckout(checkout, this.latestCheckoutSnapshot);
-        this.handleControllerSnapshot(merged);
-        this.lightningRequested = true;
-        this.applyOwnAttributes(
-          createCheckoutElementAttributes(merged, {
-            orderUrl: resolveOrderUrlFromPrefix(prefix),
-            prefix,
-            ...this.currentThemeOption(),
-          }),
-        );
-        this.render();
-        this.startCheckoutController();
-      } catch (error) {
-        // Surface the mint failure inline (the server's message travels on the
-        // thrown error) instead of silently returning to the method picker.
-        this.wizardError =
-          error instanceof Error && error.message.length > 0
-            ? error.message
-            : "Could not create the Lightning invoice. Please try again.";
-        this.dispatchError(error);
-      } finally {
-        this.mintingLightning = false;
-        this.render();
       }
     }
 
@@ -478,14 +338,14 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       if ((invoiceAttr === null || invoiceAttr === "") && !deferredReady) {
         if (this.isCreateMode()) {
           const { root, inlineStyles } = this.prepareShadowRoot();
-          if (this.createError !== undefined) {
-            root.innerHTML = renderCheckoutCreateErrorHtml(this.createError, {
+          if (this.session.createError !== undefined) {
+            root.innerHTML = renderCheckoutCreateErrorHtml(this.session.createError, {
               theme: this.resolveTheme(),
               inlineStyles,
             });
             root
               .querySelector('[part="retry"]')
-              ?.addEventListener("click", () => this.retryCreateCheckout());
+              ?.addEventListener("click", () => this.session.retryCreateCheckout());
             return;
           }
           root.innerHTML = renderCheckoutCreatingHtml({
@@ -500,7 +360,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
 
       const invoice = invoiceAttr ?? "";
       const lightningRequested =
-        !this.isCreateMode() || this.lightningRequested || invoice.length > 0;
+        !this.isCreateMode() || this.session.lightningRequested || invoice.length > 0;
       const decodeLinkUrl =
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl) ?? undefined;
       const { root, inlineStyles } = this.prepareShadowRoot();
@@ -529,7 +389,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         payment_wizard: parseOpenReceiveBooleanAttribute(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard),
         ),
-        lightningRequested: this.mintingLightning ? false : lightningRequested,
+        lightningRequested: this.session.mintingLightning ? false : lightningRequested,
         wizard: {
           selectedMethod: this.selection.selectedMethod,
           selectedBitcoinRoute: this.selection.selectedBitcoinRoute,
@@ -537,7 +397,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           currenciesLoading: !this.swapOptionsLoaded,
           selectedSwapNetworks: this.selectedSwapNetworks,
           selectedPickerKey: this.selectedPickerKey,
-          startingSwapAsset: this.startingSwapAsset,
+          startingSwapAsset: this.session.startingSwapAsset,
           selectedSwapAsset: this.selectedSwapAsset,
           ...(this.latestCheckoutSnapshot?.amount_msats === undefined
             ? {}
@@ -564,8 +424,12 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           activeTutorialProviderId: this.activeTutorialProviderId,
           activeTutorialIndex: this.activeTutorialIndex,
           activeTutorialCopied: this.activeTutorialCopied,
-          ...(this.swapStartError === undefined ? {} : { swapStartError: this.swapStartError }),
-          ...(this.wizardError === undefined ? {} : { wizardError: this.wizardError }),
+          ...(this.session.swapStartError === undefined
+            ? {}
+            : { swapStartError: this.session.swapStartError }),
+          ...(this.session.wizardError === undefined
+            ? {}
+            : { wizardError: this.session.wizardError }),
         },
         ...(this.lastCheckoutState === undefined ? {} : { liveState: this.lastCheckoutState }),
       });
@@ -756,8 +620,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       // unsuppressed, every real transition re-entered attributeChangedCallback
       // and rebuilt the shadow tree, replaced the controller, and fired another
       // POST /payments/check for a change that had just arrived from one.
-      this.applyingOwnAttributes += 1;
-      try {
+      this.session.writeOwnAttributes(() => {
         this.setAttributeIfChanged(
           OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status,
           deriveStatus(state),
@@ -768,9 +631,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
             String(state.expires_at),
           );
         }
-      } finally {
-        this.applyingOwnAttributes -= 1;
-      }
+      });
       // A countdown tick only moves the remaining-time text. Rebuilding the
       // whole shadow DOM every second destroyed focus, collapsed open
       // pickers, wiped "Copied!" feedback, and re-encoded the QR — so ticks
@@ -851,7 +712,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
             method,
           });
           if (method === "bitcoin") {
-            void this.ensureLightning();
+            void this.session.ensureLightning();
           }
           this.render();
         });
@@ -872,7 +733,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
               method,
             });
             if (method === "bitcoin") {
-              void this.ensureLightning();
+              void this.session.ensureLightning();
             }
             this.render();
             return;
@@ -889,7 +750,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
               nextGroup.options.find((entry) => entry.available !== false) ?? nextGroup.options[0];
             if (option === undefined || option.available === false) return;
             this.selectedPickerKey = null;
-            void this.startSwap(option.pay_in_asset);
+            void this.session.startSwap(option.pay_in_asset);
             return;
           }
           this.selectedSwapNetworks = updateOpenReceiveSelectedSwapNetworks({
@@ -921,7 +782,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
             const payInAsset = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart);
             if (payInAsset === null) return;
             markElementConfirmButtonBusy(button);
-            void this.startSwap(payInAsset);
+            void this.session.startSwap(payInAsset);
           });
         });
 
@@ -969,7 +830,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           const payInAsset = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart);
           if (payInAsset === null) return;
           if (button instanceof HTMLButtonElement) markElementConfirmButtonBusy(button);
-          void this.startSwap(payInAsset);
+          void this.session.startSwap(payInAsset);
         });
       });
 
@@ -1002,7 +863,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           this.selectedPickerKey = null;
           this.selectedSwapNetworks = {};
           this.clearRefundAddressDraft();
-          void this.ensureLightning();
+          void this.session.ensureLightning();
           this.render();
         });
 
@@ -1164,69 +1025,6 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       }
       if (this.activeTutorialProviderId === null) {
         this.focusedTutorialProviderId = null;
-      }
-    }
-
-    private async startSwap(payInAsset: string): Promise<void> {
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      const url = this.resolveOrderUrl(orderId ?? undefined);
-      if (url === null || orderId === null || orderId.length === 0) return;
-      if (this.startingSwapAsset !== null) return;
-      if (
-        this.startedSwapInvoice?.swap?.pay_in_asset === payInAsset &&
-        this.startedSwapInvoice.invoice_id !== this.dismissedSwapInvoiceId
-      ) {
-        this.selectedSwapAsset = payInAsset;
-        this.render();
-        return;
-      }
-      this.startingSwapAsset = payInAsset;
-      this.render();
-
-      try {
-        this.swapStartError = undefined;
-        this.startedSwapInvoice = await startOpenReceiveSwapRequest(
-          globalThis.fetch,
-          url,
-          orderId,
-          payInAsset,
-          { logger: options.logger },
-        );
-        this.dismissedSwapInvoiceId = null;
-        // Merge the swap attempt into the snapshot and RE-KEY the controller
-        // onto it: without this the status poller kept the pre-swap snapshot
-        // (create mode never polled at all; snapshot mode polled the old
-        // Lightning hash, which the handler 404s) and a paid swap customer
-        // was told "Invoice expired".
-        const invoice = this.startedSwapInvoice;
-        if (invoice !== undefined) {
-          const previous = this.latestCheckoutSnapshot ?? this.currentCheckoutSnapshot();
-          this.handleControllerSnapshot(
-            mergeOpenReceiveAttemptIntoCheckout(invoice, previous, orderId),
-          );
-          this.startCheckoutController();
-        }
-        this.selectedSwapAsset = payInAsset;
-        this.render();
-      } catch (error) {
-        // A concurrent start that already landed instructions must not replace
-        // the deposit panel with the loser's persist/conflict error.
-        if (this.startedSwapInvoice !== undefined) {
-          this.selectedSwapAsset = this.startedSwapInvoice.swap?.pay_in_asset ?? payInAsset;
-          this.render();
-          return;
-        }
-        // Inline error with retry — never an infinite "Preparing payment
-        // address…" spinner (the retry button re-triggers this swap start).
-        this.selectedSwapAsset = payInAsset;
-        this.swapStartError =
-          error instanceof Error && error.message.length > 0
-            ? error.message
-            : "Could not prepare the payment address. Please try again.";
-        this.dispatchError(error);
-        this.render();
-      } finally {
-        this.startingSwapAsset = null;
       }
     }
 

@@ -45,12 +45,6 @@ export async function copyOpenReceiveText(
   await target.writeText(text);
 }
 
-export function reactRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
 export function getCheckoutLogContext(data: {
   readonly invoice_id?: string;
   readonly payment_hash?: string;

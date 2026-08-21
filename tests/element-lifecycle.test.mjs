@@ -404,3 +404,127 @@ test('polling="false" renders the snapshot without any status requests', async (
     element.remove();
   }
 });
+
+/** Prepare body advertising one payable swap asset, so the wizard offers it directly. */
+function prepareBodyWithSwapAsset(orderId, payInAsset) {
+  return {
+    order_id: orderId,
+    amount_msats: 5_000_000,
+    payment_methods: [
+      {
+        pay_in_asset: payInAsset,
+        label: payInAsset.split("_")[0],
+        network_label: "Solana",
+        provider: "fixedfloat",
+        available: true,
+      },
+    ],
+  };
+}
+
+function swapStartBody(payInAsset, paymentHash) {
+  return {
+    swap: {
+      payment_hash: paymentHash,
+      provider: "fixedfloat",
+      pay_in_asset: payInAsset,
+      deposit_address: "SoLDeposit",
+      deposit_amount: "1.50",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 900,
+      checkout: { payment_hash: paymentHash, amount_msats: 5_000_000 },
+    },
+  };
+}
+
+// The create-mode guards are double-POST guards, not tidiness: a second click
+// while the first request is in flight mints a colliding attempt, and the
+// loser's error then replaces a perfectly good deposit panel. This pins the
+// swap-start half (the Lightning half is the double-click Bitcoin test above)
+// and the prepare-once gate that has to survive the element re-rendering.
+test("double-clicking a swap asset starts exactly one swap", async () => {
+  const start = deferred();
+  const paymentHash = "c".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-1", "SOL_SOL"),
+    "/swaps": () => start.promise,
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-swap-1", prefix: "/openreceive" });
+
+  try {
+    const asset = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    asset.click();
+    // The DOM half of the guard: the clicked button marks itself busy.
+    assert.equal(asset.disabled, true);
+    // The state half: a poll-driven re-render hands the payer a fresh, enabled
+    // button while the first start is still in flight. Clicking that one must
+    // not mint a second attempt — the loser's 409 would then replace a good
+    // deposit panel with an error.
+    asset.disabled = false;
+    asset.click();
+    await flush(2);
+    assert.equal(
+      fetchStub.pathCount("/swaps"),
+      1,
+      "a second click must not POST a second swap start",
+    );
+
+    start.resolve(swapStartBody("SOL_SOL", paymentHash));
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel",
+    });
+    assert.equal(fetchStub.pathCount("/swaps"), 1);
+    assert.doesNotMatch(
+      element.shadowRoot?.innerHTML ?? "",
+      /Could not prepare the payment address/,
+    );
+    // Prepare stays a once-per-order gate across all of that re-rendering.
+    assert.equal(fetchStub.pathCount("/checkouts/prepare"), 1);
+  } finally {
+    element.remove();
+  }
+});
+
+// Attributes the element writes back to itself must not re-enter
+// attributeChangedCallback — the guard is a depth counter, so a nested apply
+// (a status write while a create-mode attribute apply is still unwinding) must
+// not open the gate early.
+test("attributes the element writes never re-enter its own callback", async () => {
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-reentry", 21_000),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-reentry", prefix: "/openreceive" });
+
+  try {
+    await until(() => element.getAttribute("amount-msats") === "21000", {
+      label: "create-mode attributes",
+    });
+    await flush(6);
+    assert.equal(
+      fetchStub.pathCount("/checkouts/prepare"),
+      1,
+      "self-written attributes must not re-run prepare",
+    );
+    const checksAfterCreate = fetchStub.pathCount("/payments/check");
+
+    // A status attribute the element owns, written by hand, is indistinguishable
+    // from one the element wrote: it must re-render without restarting the poll.
+    element.setAttribute("theme", "dark");
+    await flush(6);
+    assert.equal(fetchStub.pathCount("/checkouts/prepare"), 1);
+    assert.equal(
+      fetchStub.pathCount("/payments/check"),
+      checksAfterCreate,
+      "a cosmetic attribute must not fire another status request",
+    );
+  } finally {
+    element.remove();
+  }
+});

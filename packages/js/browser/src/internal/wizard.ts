@@ -9,7 +9,7 @@ import {
   type Provider,
   type ResolvedProviderRef,
 } from "@openreceive/provider-data";
-import { formatOpenReceiveSwapLimit } from "./checkout.ts";
+import { formatOpenReceiveSwapLimit } from "./checkout-format.ts";
 import {
   type CheckoutPhase,
   type OpenReceiveCheckoutPaymentMethod,

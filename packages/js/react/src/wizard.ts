@@ -41,6 +41,7 @@ import {
   startOpenReceiveSwapRequest,
   updateOpenReceiveSelectedSwapNetworks,
 } from "@openreceive/browser/internal";
+import { recordOrEmpty } from "@openreceive/core";
 import * as React from "react";
 import { useOpenReceiveTickingUnixSeconds } from "./hooks.ts";
 import {
@@ -55,7 +56,7 @@ import type {
   OpenReceiveSwapOptionsResult,
   PaymentWizardProps,
 } from "./types.ts";
-import { joinClassNames, reactRecord } from "./utils.ts";
+import { joinClassNames } from "./utils.ts";
 import { ProviderTutorialModal, renderProviderOpenAction } from "./provider-tutorial.ts";
 
 export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
@@ -1124,7 +1125,7 @@ function swapOptionsForRoute(
 // The pay-in asset to auto-advance to a deposit address, or undefined when the payer
 // should still choose (multi-network stablecoins, no swap configured).
 function normalizeSwapQuote(body: unknown): OpenReceiveSwapOptionDisplay | undefined {
-  const quote = reactRecord(reactRecord(body).quote ?? body);
+  const quote = recordOrEmpty(recordOrEmpty(body).quote ?? body);
   const payInAsset = quote.pay_in_asset ?? quote.pay_asset;
   return typeof payInAsset === "string"
     ? ({ ...quote, pay_in_asset: payInAsset } as unknown as OpenReceiveSwapOptionDisplay)

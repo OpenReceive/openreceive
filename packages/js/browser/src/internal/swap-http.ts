@@ -1,4 +1,5 @@
-import { readOpenReceiveJsonResponse } from "./checkout.ts";
+import { nonEmptyString, recordOrEmpty } from "@openreceive/core";
+import { readOpenReceiveJsonResponse } from "./checkout-transport.ts";
 import { resolveOpenReceiveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
 import { openReceiveRoutePrefix as routePrefix } from "./routes.ts";
 import {
@@ -7,16 +8,6 @@ import {
   type OpenReceiveBrowserLoggerOption,
   type OpenReceiveBrowserLogLevel,
 } from "./ui.ts";
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
 
 export interface PostOpenReceiveJsonOptions {
   readonly logger?: OpenReceiveBrowserLoggerOption;
@@ -69,9 +60,9 @@ export async function postOpenReceiveJson(
 }
 
 export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapshot {
-  const outer = asRecord(body);
-  const swap = asRecord(outer.swap ?? body);
-  const checkout = asRecord(swap.checkout);
+  const outer = recordOrEmpty(body);
+  const swap = recordOrEmpty(outer.swap ?? body);
+  const checkout = recordOrEmpty(swap.checkout);
   const paymentHash = nonEmptyString(swap.payment_hash ?? checkout.payment_hash);
   if (
     paymentHash === undefined ||
@@ -185,7 +176,7 @@ async function refundRequest(
   if (paymentHash === undefined) throw new Error("Swap refund requires payment_hash.");
   const prefix = routePrefix(url);
   if (body.confirm === true) {
-    const status = asRecord(
+    const status = recordOrEmpty(
       await requestJson(
         fetcher,
         `${prefix}/swaps/refunds`,
@@ -199,7 +190,7 @@ async function refundRequest(
     );
     return { swap: status };
   }
-  const status = asRecord(
+  const status = recordOrEmpty(
     await requestJson(
       fetcher,
       `${prefix}/swaps/status`,
@@ -314,7 +305,7 @@ function emitSwapActionLog(
 }
 
 function swapActionResultFields(body: unknown): Record<string, unknown> {
-  const swap = asRecord(asRecord(body).swap ?? body);
+  const swap = recordOrEmpty(recordOrEmpty(body).swap ?? body);
   return {
     payment_hash: nonEmptyString(swap.payment_hash),
     provider_state: nonEmptyString(swap.provider_state),

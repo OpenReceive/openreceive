@@ -7,30 +7,20 @@
 // `tagName`, `attributes`, and `listeners`.
 
 import {
-  type CheckoutController,
-  type CheckoutControllerOptions,
   type CheckoutElementAttributeOptions,
   type CheckoutElementAttributes,
   type CheckoutElementEventHandlers,
   type CheckoutElementListeners,
-  type CheckoutShellElements,
   type CheckoutShellModel,
   type CheckoutShellOptions,
   type CheckoutSnapshot,
-  type CreateCheckoutShellOptions,
-  createCheckoutController,
   createCheckoutElementAttributes,
   createCheckoutElementListeners,
-  createCheckoutShell,
   createCheckoutShellModel,
-  createOpenReceiveStoredThemeModel,
-  createOpenReceiveThemeModel,
   createOpenReceiveThemeToggleElementAttributes,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type OpenReceiveStoredThemeModelOptions,
   type OpenReceiveThemeModel,
-  type OpenReceiveThemeModelOptions,
   type OpenReceiveThemePreference,
   type OpenReceiveThemeToggleElementAttributeOptions,
   type OpenReceiveThemeToggleElementAttributes,
@@ -58,7 +48,15 @@ export type {
   OpenReceiveThemeToggleElementAttributeOptions,
   OpenReceiveThemeToggleElementAttributes,
 } from "@openreceive/browser/internal";
+// Re-exported under their own names: a wrapper that needs the controller, the
+// standalone shell, or a theme model gets the browser factory itself. The
+// four `createOpenReceiveWrapper*` aliases that used to wrap these one to one
+// are gone — an alias is a second name for one concept, not a seam.
 export {
+  createCheckoutController,
+  createCheckoutShell,
+  createOpenReceiveStoredThemeModel,
+  createOpenReceiveThemeModel,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
 } from "@openreceive/browser/internal";
@@ -148,19 +146,6 @@ export function createOpenReceiveWrapperCheckoutBinding(
     attributes: createCheckoutElementAttributes(snapshot, options),
     listeners: createCheckoutElementListeners(options),
   };
-}
-
-export function createOpenReceiveWrapperThemeBinding(
-  theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  return createOpenReceiveThemeModel(theme, options);
-}
-
-export function createOpenReceiveWrapperStoredThemeBinding(
-  options: OpenReceiveStoredThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  return createOpenReceiveStoredThemeModel(options);
 }
 
 export function createOpenReceiveWrapperThemeToggleBinding(
@@ -270,17 +255,4 @@ export function validateOpenReceiveWrapperCheckoutProps(
     `${props.framework} Checkout ignores ${ignored.join(", ")} in snapshot mode; ` +
       "those props only apply when the component creates the checkout from an orderId.",
   );
-}
-
-export function createOpenReceiveWrapperCheckoutController(
-  options: CheckoutControllerOptions,
-): CheckoutController {
-  return createCheckoutController(options);
-}
-
-export function createOpenReceiveWrapperCheckoutShell(
-  snapshot: CheckoutSnapshot,
-  options: CreateCheckoutShellOptions = {},
-): CheckoutShellElements {
-  return createCheckoutShell(snapshot, options);
 }
