@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { VALID_NWC } from "./helpers/factories.mjs";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import * as openReceiveNode from "../packages/js/node/src/index.ts";
 import { createNwcReceiveClient, createOpenReceive } from "../packages/js/node/src/index.ts";
@@ -17,8 +18,6 @@ import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
 } from "../packages/js/testkit/src/index.ts";
-
-const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
 
 // The payments repository moved to @openreceive/http; the Node service stays
 // persistence-free: no repository, schema, or SQL adapter surface leaks here.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { hash, memoryPaymentsDb } from "./helpers/factories.mjs";
 import {
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
@@ -15,8 +15,6 @@ import {
 // Internal decision table: imported from the module directly (it is
 // deliberately not on the public package surface).
 import { reconciliationTransition } from "../packages/js/http/src/payment-repository.ts";
-
-const hash = (character) => character.repeat(64);
 
 function swapData(asset, expiresAt = 1_600) {
   return {
@@ -58,8 +56,7 @@ function checkoutInput(
 }
 
 function sqliteRepository({ now = () => 1_000 } = {}) {
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   return { db, payments: createOpenReceiveSqlPayments(db, { clock: now }) };
 }
 
@@ -344,8 +341,7 @@ test("reconciliationTransition matches every attempt-reconciliation spec vector"
 
 test("one reconciliation pass settles, closes, and flags rows so terminal rows leave the scan set", async () => {
   const now = 1_000;
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const settled = [];
   const host = createOpenReceiveHost({
     db,
@@ -410,8 +406,7 @@ test("reconciliation threads the wallet's explicit transaction state into the po
   // All three attempts expired at 50; with the 900-second grace, a scan at
   // 1_000 is past the closure threshold for every one of them.
   const now = 1_000;
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const host = createOpenReceiveHost({
     db,
     clock: () => now,

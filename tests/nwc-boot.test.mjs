@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { VALID_NWC } from "./helpers/factories.mjs";
 import {
   OPENRECEIVE_NWC_CODE_HELP_URL,
   formatOpenReceiveSpendCapabilityWarningMessage,
@@ -11,8 +12,6 @@ import {
   readNwcFromEnvironment,
 } from "../packages/js/node/src/index.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../examples/hello-fruit/shared/demo-nwc.ts";
-
-const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
 
 async function withEnv(overrides, run) {
   const previous = new Map();

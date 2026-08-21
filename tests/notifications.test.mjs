@@ -1,17 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { VALID_NWC, hash, memoryPaymentsDb } from "./helpers/factories.mjs";
 import { until } from "./helpers/lifecycle-harness.mjs";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createNwcReceiveClient, createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
   createOpenReceiveHost,
-  openReceivePaymentsSchemaSql,
   startOpenReceiveNotificationListener,
 } from "../packages/js/http/src/index.ts";
-
-const hash = (character) => character.repeat(64);
-const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
 
 const RECEIVE_ONLY_INFO = {
   capabilities: ["make_invoice", "list_transactions"],
@@ -222,8 +218,7 @@ function scriptedNotifierService(reconcilePayments) {
 }
 
 function sqliteHostWithPendingAttempt({ paymentHash, onPaid }) {
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const host = createOpenReceiveHost({
     db,
     loadOrder: async () => ({ total: "10.00" }),

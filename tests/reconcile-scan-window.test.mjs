@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { reconcilePaymentAttempts } from "../packages/js/core/src/index.ts";
 import {
   createOpenReceiveHost,
-  openReceivePaymentsSchemaSql,
   reconcileOpenReceivePayments,
 } from "../packages/js/http/src/index.ts";
 
 const PAGE = 20;
-const hash = (value) => value.toString(16).padStart(64, "0");
+// Ordered hashes: index 0 < index 1 < ... as hex strings, so scan-window
+// assertions can name a position in the wallet's history. This is NOT the
+// shared `hash()` in ./helpers/factories.mjs, which is the unordered repeat
+// form; the two are not interchangeable.
+const orderedHash = (value) => value.toString(16).padStart(64, "0");
 
 /** A wallet whose history is `count` incoming rows, newest last, plus extras. */
 function walletWith(transactions) {
@@ -42,10 +45,10 @@ function pendingRow(paymentHash, createdAt) {
 }
 
 test("a page-capped walk decides nothing instead of reporting not_found", async () => {
-  const target = hash(0xbeef);
+  const target = orderedHash(0xbeef);
   // A full first page of unrelated rows, with the match only on page two.
   const history = [
-    ...Array.from({ length: PAGE }, (_, index) => pendingRow(hash(index + 1), 100 + index)),
+    ...Array.from({ length: PAGE }, (_, index) => pendingRow(orderedHash(index + 1), 100 + index)),
     settledRow(target, 150),
   ];
   const wallet = walletWith(history);
@@ -73,14 +76,13 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
   // a genuine not_found here would close it as expired. The wallet holds the
   // settlement on page two, out of reach of a one-page walk.
   const now = 1_000;
-  const paymentHash = hash(0xbeef);
+  const paymentHash = orderedHash(0xbeef);
   const history = [
-    ...Array.from({ length: PAGE }, (_, index) => pendingRow(hash(index + 1), 10 + index)),
+    ...Array.from({ length: PAGE }, (_, index) => pendingRow(orderedHash(index + 1), 10 + index)),
     settledRow(paymentHash, 45),
   ];
   const wallet = walletWith(history);
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const settled = [];
   const host = createOpenReceiveHost({
     db,
@@ -134,10 +136,12 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
 });
 
 test("the walk stops once every expected hash is accounted for", async () => {
-  const target = hash(1);
+  const target = orderedHash(1);
   const history = [
     settledRow(target, 100),
-    ...Array.from({ length: PAGE * 3 }, (_, index) => pendingRow(hash(index + 2), 101 + index)),
+    ...Array.from({ length: PAGE * 3 }, (_, index) =>
+      pendingRow(orderedHash(index + 2), 101 + index),
+    ),
   ];
   const wallet = walletWith(history);
 
@@ -151,7 +155,9 @@ test("the walk stops once every expected hash is accounted for", async () => {
 });
 
 test("a wallet that ignores offset is stopped instead of paged to the cap", async () => {
-  const page = Array.from({ length: PAGE }, (_, index) => pendingRow(hash(index + 1), 100 + index));
+  const page = Array.from({ length: PAGE }, (_, index) =>
+    pendingRow(orderedHash(index + 1), 100 + index),
+  );
   const requests = [];
   const client = {
     async listTransactions(request) {
@@ -163,7 +169,7 @@ test("a wallet that ignores offset is stopped instead of paged to the cap", asyn
 
   const checks = await reconcilePaymentAttempts({
     client,
-    attempts: [{ paymentHash: hash(0xbeef), createdAt: 100 }],
+    attempts: [{ paymentHash: orderedHash(0xbeef), createdAt: 100 }],
     clock: () => 1_000,
     maxPages: 500,
   });
@@ -176,7 +182,7 @@ test("a wallet that ignores offset is stopped instead of paged to the cap", asyn
 test("the scan window pads both ends against wallet clock skew", async () => {
   // The wallet stamped the invoice 30 seconds ahead of the host clock. With an
   // unpadded `until` the row would sit outside the window until the host caught up.
-  const paymentHash = hash(7);
+  const paymentHash = orderedHash(7);
   const now = 1_000;
   const requests = [];
   const client = {

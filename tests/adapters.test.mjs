@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import * as expressAdapter from "../packages/js/express/src/index.ts";
 import { openReceiveExpress } from "../packages/js/express/src/index.ts";
 import * as httpSurface from "../packages/js/http/src/index.ts";
-import { openReceivePaymentsSchemaSql } from "../packages/js/http/src/index.ts";
 import * as fastifyAdapter from "../packages/js/fastify/src/index.ts";
 import { openReceiveFastify } from "../packages/js/fastify/src/index.ts";
 import * as nextAdapter from "../packages/js/next/src/index.ts";
@@ -571,8 +570,7 @@ test("next adapter trustProxyIpHeader reads x-forwarded-for for the limiter", as
 // --- All-in-one stack form (T1): order hooks + db handle, no prebuilt service/host ---
 
 function stackFixture() {
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const orders = new Map([["order-stack", { amount: { sats: 21 } }]]);
   const paid = [];
   return {
