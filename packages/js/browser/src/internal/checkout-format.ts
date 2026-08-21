@@ -68,8 +68,13 @@ export function escapeOpenReceiveHtml(value: string): string {
  * two display sites in checkout-details.ts never had it at all). `undefined`
  * answers false, so callers holding an optional amount need no extra check.
  *
- * Module-private on purpose: other modules want {@link optionalMsatsLabel}, the
- * display boundary built on top of it, not a licence to re-implement the rule.
+ * MODULE-PRIVATE, while the boundary built on it is PUBLISHED. The two halves
+ * moved in opposite directions on purpose: {@link optionalMsatsLabel} is
+ * exported through ./internal and ./headless so every caller — in this package
+ * or in someone's own UI — has a safe way to show a server-supplied amount,
+ * while the predicate stays here so the rule has exactly one definition. A
+ * caller reaching for the predicate is about to re-implement the boundary; the
+ * boundary is right there instead.
  */
 function isDisplayableMsats(amountMsats: number | undefined): amountMsats is number {
   return amountMsats !== undefined && Number.isSafeInteger(amountMsats) && amountMsats >= 0;
@@ -80,12 +85,14 @@ function isDisplayableMsats(amountMsats: number | undefined): amountMsats is num
  * {@link formatOpenReceiveMsats}, but `undefined` instead of a throw when the
  * amount is nonsense.
  *
- * EVERY display site formats through this one. The formatter itself keeps
- * throwing on purpose — wire construction and amount validation call it too, and
- * a malformed amount there is a bug that must surface — but a payment screen is
- * not a place to surface it: an amount a server should never have sent must cost
- * the row that would have shown it and nothing more. Sibling of
- * {@link optionalDecimal}, which does the same job for provider decimals.
+ * EVERY display site formats through this one — including sites outside this
+ * package, which is why it is on ./headless next to the formatter. The
+ * formatter itself keeps throwing on purpose — wire construction and amount
+ * validation call it too, and a malformed amount there is a bug that must
+ * surface — but a payment screen is not a place to surface it: an amount a
+ * server should never have sent must cost the row that would have shown it and
+ * nothing more. Sibling of {@link optionalDecimal}, which does the same job for
+ * provider decimals.
  *
  * Callers keep rendering the RAW value next to the blanked label (the
  * "Amount (msats)" rows), so nothing is hidden from whoever has to debug it.
@@ -228,12 +235,25 @@ const MAX_DISPLAYABLE_UNIX_SECONDS = 8.64e15 / 1000;
  * THE unix-timestamp rule, in one place: is this a value a clock can render?
  *
  * Sibling of {@link isDisplayableMsats}, and module-private for the same
- * reason — callers want {@link optionalUnixTimeLabel}, not a licence to
- * re-derive the bound. The upper bound is the half that keeps getting
+ * reason, with {@link optionalUnixTimeLabel} published beside it on ./internal
+ * and ./headless: callers want the boundary, not a licence to re-derive the
+ * bound. The upper bound is the half that keeps getting
  * forgotten: `formatOpenReceiveUnixTime` guarded finite-and-positive but not
  * magnitude, and two display sites in checkout-details.ts called `new Date(...)`
  * with no guard at all, so `1e13` — a `paid_at` sent in MILLISECONDS instead of
  * seconds — took down the whole settled screen.
+ *
+ * RENDERABILITY, and NOT a unit check — the distinction matters because the
+ * bound looks like one and is not. Its ceiling is the `Date` range and nothing
+ * narrower, so a millisecond timestamp passes whenever it lands inside that
+ * range, which today's does with room to spare: 1.787e12 against a 8.64e12
+ * ceiling. For a LABEL that is the correct answer — the row prints a
+ * wrong-but-renderable date, the raw seconds ride alongside it under a
+ * "(unix seconds)" label, and the unit bug is visible instead of fatal. A caller
+ * judging a DEADLINE rather than formatting a label needs its own bound on top
+ * of this one, and gets no help from this one: `readElementExpiresAt` in
+ * @openreceive/elements guarded an `expires-at` with this rule alone and
+ * rendered a countdown of twenty-nine billion minutes.
  */
 function isDisplayableUnixSeconds(seconds: number | undefined): seconds is number {
   return (

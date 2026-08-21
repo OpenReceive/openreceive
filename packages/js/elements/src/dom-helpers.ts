@@ -6,6 +6,7 @@ import {
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_PAYMENT_WIZARD_SELECTORS,
   openReceiveCheckoutLabels,
+  optionalUnixTimeLabel,
   orClasses,
 } from "@openreceive/browser/internal";
 
@@ -29,26 +30,124 @@ export function readElementFiatQuote(element: Element) {
 }
 
 /**
- * Read `amount-msats` WITHOUT judging it.
+ * WHICH ATTRIBUTES MAY BE READ STRICTLY, decided once for the whole element.
  *
- * `parseOpenReceiveOptionalInteger` throws on a negative or non-integer value,
- * which is right for `expires-at` and `poll-interval-ms` — a host writing those
- * by hand should hear about a typo. `amount-msats` is different: the host copies
- * it out of a checkout snapshot (see `createOpenReceiveCheckoutElementAttributes`,
- * which writes `String(snapshot.amount_msats)`), so a server answering with a
- * nonsense amount would throw INSIDE render() and blank the whole payment
- * screen — the one thing the display boundary exists to prevent.
+ * `parseOpenReceiveOptionalInteger` throws on a negative or non-integer value.
+ * That is the right read for an attribute a HOST typed by hand — a typo should
+ * be heard — and exactly the wrong read for one carrying SERVER data, because
+ * `render()` reads these and nothing wraps `render()`: one bad field then blanks
+ * the whole payment screen and every wrapper built on the element.
  *
- * So: parse the number, keep it raw, and let `optionalMsatsLabel` decide whether
- * it can be shown. A malformed amount then costs its label and nothing else, and
- * the raw value still reaches the "Amount (msats)" rows, exactly as it does on
- * the React path. Only a value that is no number at all is dropped.
+ * The test is whether `createCheckoutElementAttributes` can put a server's value
+ * in the attribute, and it is checked PER ATTRIBUTE, not assumed — assuming is
+ * what left `expires-at` behind when `amount-msats` was fixed:
+ *
+ * - `amount-msats`  SERVER. Written as `String(invoice.amount_msats ??
+ *                   snapshot.amount_msats)`. Read leniently, below.
+ * - `expires-at`    SERVER. Written as `String(invoice.expires_at)`, and the
+ *                   only bound on the way in is a TYPE bound (swap-http.ts
+ *                   checks `typeof provider_expires_at !== "number"`;
+ *                   checkout-transport.ts's optional/requiredSafeInteger admit
+ *                   negatives). Read leniently, below.
+ * - `poll-interval-ms` HOST. `createCheckoutElementAttributes` does write it,
+ *                   but only ever from its own caller's `options.pollIntervalMs`
+ *                   — no server field feeds it anywhere in the repo. It stays on
+ *                   the strict parser in `startCheckoutController`.
+ *
+ * The lenient readers parse the number and keep it RAW; only a value that is no
+ * number at all is dropped here. What happens next differs by attribute, and the
+ * difference is the point: `amount-msats` rides on untouched because a display
+ * boundary (`optionalMsatsLabel`) blanks it downstream, so the raw amount still
+ * reaches the detail rows exactly as it does on the React path, while
+ * `expires-at` has no such boundary downstream — nothing judges
+ * `expires_in_seconds` — so {@link readElementExpiresAt} does its own judging
+ * here. Either way a malformed value costs its label or its row and nothing else.
  */
-export function readElementAmountMsats(element: Element): number | undefined {
-  const raw = element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats);
+function readElementNumberAttribute(element: Element, attribute: string): number | undefined {
+  const raw = element.getAttribute(attribute);
   if (raw === null || raw.trim() === "") return undefined;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** Read `amount-msats` WITHOUT judging it. See {@link readElementNumberAttribute}. */
+export function readElementAmountMsats(element: Element): number | undefined {
+  return readElementNumberAttribute(element, OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats);
+}
+
+/**
+ * How far AHEAD OF NOW a value may sit and still be read as a checkout
+ * DEADLINE: one year.
+ *
+ * The number is not delicate — anything from about a week to about a century
+ * does the same job — because the two things it separates are far apart:
+ *
+ * - A real checkout deadline is minutes to hours out. The testkit mints 600s
+ *   invoices; its swap provider quotes 900s deposit windows and 1800s invoices;
+ *   a bolt11's expiry is measured in minutes. A year is four orders of magnitude
+ *   past those and still two orders past a day-long checkout lock, so no honest
+ *   value comes anywhere near this edge.
+ * - A timestamp sent in MILLISECONDS, read as seconds, sits ~1000x further from
+ *   the epoch than now does — 1.787e12 today, roughly fifty-six thousand years
+ *   out. It overshoots a one-year horizon by nearly three orders of magnitude,
+ *   and microseconds overshoot by nearly six.
+ *
+ * Only the FUTURE side is bounded. A deadline in the past is not implausible —
+ * it is the expired screen's entire input, and the age of the order it belongs
+ * to is not ours to guess — and no unit inflation can ever land there, because
+ * multiplying a positive epoch by 1000 always moves it further into the future.
+ * The floor is therefore the renderability bound's own (`> 0`) and nothing more.
+ */
+const MAX_DEADLINE_HORIZON_SECONDS = 365 * 24 * 60 * 60;
+
+/**
+ * Read `expires-at` without throwing, then keep the value only if it is
+ * plausibly a DEADLINE. Two bounds, because a deadline is judged differently
+ * from a label.
+ *
+ * The lenient parse alone is not the whole mirror of `readElementAmountMsats`.
+ * There, the raw value flows on to `optionalMsatsLabel`, which blanks it; here
+ * the raw value flows into `expires_in_seconds`, which no boundary judges — it
+ * is merely floored at zero — so passing everything through would trade a crash
+ * for two different lies. `-1` would read as "expired at the dawn of time" and
+ * blank the QR and the amount off the screen the payer came to pay from, and an
+ * `expires_at` sent in MILLISECONDS would render a countdown of twenty-nine
+ * billion minutes.
+ *
+ * `optionalUnixTimeLabel` catches the first and NOT the second, which is why
+ * there are two bounds here and not one. Its question is renderability — is
+ * this finite, above zero, inside the ECMAScript `Date` range — and that is the
+ * right question for a LABEL and the wrong one for a deadline. The `Date` range
+ * runs to 8.64e12 seconds; today's moment in milliseconds is 1.787e12, well
+ * under that ceiling, so the label bound KEPT it and the countdown measured
+ * "29759354970:54". {@link MAX_DEADLINE_HORIZON_SECONDS} asks the deadline
+ * question instead — is this plausibly a moment a checkout expires — and only
+ * the pair of them is the rule.
+ *
+ * Dropping a value costs the countdown ROW and the client-side expiry
+ * transition that reads it. It does NOT repair the `status` attribute:
+ * `createCheckoutElementAttributes` derives that from the SAME
+ * `invoice.expires_at` (see deriveStatus in @openreceive/browser), so a
+ * deadline that has genuinely passed but was sent in milliseconds is written as
+ * `status="pending"` before this reader ever sees it. This guard keeps the
+ * element rendering; it cannot recover the truth a unit mistake destroyed
+ * upstream. Fixing that means bounding the unit at the wire boundary, which is
+ * a separate change — see docs/internal/display-boundary-findings.md.
+ *
+ * A deadline that has genuinely passed is renderable and inside the horizon, so
+ * it arrives intact. The one exception is exactly `0`, which the renderability
+ * floor (`> 0`) rejects; `status` still carries the expiry for that value.
+ */
+export function readElementExpiresAt(element: Element): number | undefined {
+  const expiresAt = readElementNumberAttribute(
+    element,
+    OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
+  );
+  if (expiresAt === undefined || optionalUnixTimeLabel(expiresAt) === undefined) return undefined;
+  // `unixSeconds()` inlined rather than imported: this package depends on
+  // @openreceive/browser alone, and ./internal does not re-export it.
+  const horizon = Math.floor(Date.now() / 1000) + MAX_DEADLINE_HORIZON_SECONDS;
+  return expiresAt > horizon ? undefined : expiresAt;
 }
 
 export function parseElementRail(value: string | null): "lightning" | "swap" | "checkout_lock" {

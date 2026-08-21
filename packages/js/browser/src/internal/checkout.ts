@@ -9,7 +9,11 @@ export {
   createOpenReceiveTickingValueController,
   createOpenReceiveTransientFeedbackController,
 } from "./checkout-ticker.ts";
-// ./checkout-format.ts — display formatting
+// ./checkout-format.ts — display formatting.
+// FORMATTERS THROW, DISPLAY BOUNDARIES BLANK: `optionalMsatsLabel` and
+// `optionalUnixTimeLabel` ship next to the formatters they wrap so that every
+// consumer of this barrel — and of ./headless, which re-exports both — has the
+// safe option in hand. See their docstrings for which to reach for.
 export type { CheckoutStateLabels } from "./checkout-format.ts";
 export {
   deriveCheckoutStateLabels,
@@ -23,6 +27,8 @@ export {
   formatOpenReceivePaymentHashLabel,
   formatOpenReceiveSwapLimit,
   formatOpenReceiveUnixTime,
+  optionalMsatsLabel,
+  optionalUnixTimeLabel,
 } from "./checkout-format.ts";
 // ./checkout-invoice.ts — bolt11 guards + lightning: URI
 export {

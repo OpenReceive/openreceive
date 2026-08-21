@@ -147,27 +147,46 @@ function styleTag(inlineStyles: boolean | undefined): string {
   return inlineStyles === false ? "" : openReceiveCheckoutStyleTag;
 }
 
-// Minimal "creating checkout" placeholder shown by a create-mode element (`order-id` with no
-// `invoice`) while the checkout is being created, before the invoice/order-url attributes are
-// populated and the normal checkout UI takes over.
-/** Create-mode failure panel: inline message + retry (never an endless spinner). */
+/**
+ * The element's ONE failure panel: inline message, never an endless spinner and
+ * never an empty shadow root.
+ *
+ * It was written for the create-mode prepare failure and it is not limited to
+ * one — a checkout the element cannot identify uses it too. `retry` is what
+ * separates them, and it is not decoration: the button is only honest when
+ * something is actually re-runnable. A prepare failure is (the payer clicks and
+ * the element POSTs again); attributes carrying an unusable `invoice_id` are not
+ * — `applyCheckoutElementAttributes` only ever SETS attributes, so a retry could
+ * not clear the bad one, and the panel would just reappear. Pass `retry: false`
+ * there and the payer gets the reason without a button that does nothing.
+ */
 export function renderCheckoutCreateErrorHtml(
   message: string,
-  options: RenderOpenReceiveStyleOptions & { readonly theme?: "light" | "dark" } = {},
+  options: RenderOpenReceiveStyleOptions & {
+    readonly theme?: "light" | "dark";
+    readonly retry?: boolean;
+  } = {},
 ): string {
   const resolvedTheme = options.theme ?? "light";
+  const retryButton =
+    options.retry === false
+      ? ""
+      : `<button part="retry" class="${orClasses.btn}" type="button">Try again</button>`;
   return `
     ${styleTag(options.inlineStyles)}
     <section part="root" data-theme="${escapeHtml(resolvedTheme)}" class="${orClasses.root}" data-openreceive-create-error>
       <div part="status" role="alert" class="${orClasses.creating}">
         <div><strong>Could not start checkout.</strong></div>
         <p>${escapeHtml(message)}</p>
-        <button part="retry" class="${orClasses.btn}" type="button">Try again</button>
+        ${retryButton}
       </div>
     </section>
   `;
 }
 
+// Minimal "creating checkout" placeholder shown by a create-mode element (`order-id` with no
+// `invoice`) while the checkout is being created, before the invoice/order-url attributes are
+// populated and the normal checkout UI takes over.
 export function renderCheckoutCreatingHtml(
   options: RenderOpenReceiveStyleOptions & { readonly theme?: "light" | "dark" } = {},
 ): string {

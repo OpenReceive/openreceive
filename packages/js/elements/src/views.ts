@@ -97,16 +97,55 @@ export interface DefineOpenReceiveElementsOptions {
 }
 
 /**
+ * `invoice-id` READ AS AN IDENTITY, not as a label — the third server-written
+ * attribute the strictness ruling in ./dom-helpers.ts has to cover.
+ *
+ * `createCheckoutElementAttributes` writes it straight from `invoice.invoice_id`
+ * (browser/src/internal/elements.ts), so a server that answers with `""` puts an
+ * empty string in the attribute. That reached `createCheckoutSnapshotFromInvoice`,
+ * whose `requiredString` threw INSIDE `render()` — and nothing wraps `render()`,
+ * so the shadow root stayed empty: no invoice, no error, no signal.
+ *
+ * `requiredString` is right to throw; it is a parse boundary and other callers
+ * depend on it. The judgement belongs HERE, one hop earlier, where the element
+ * still has somewhere to put the answer.
+ *
+ * The rule differs from the lenient NUMBER readers next door, and deliberately.
+ * A malformed `amount-msats` costs its label because the payment is still
+ * identified; a blank `invoice-id` is not a bad label, it is NO IDENTITY — the
+ * element cannot seed a state for the attempt, cannot build the snapshot the
+ * poll controller needs, and so can never tell the payer their money arrived.
+ * A whitespace-only id is the same nothing wearing a coat (`nonEmptyString` does
+ * not trim, so `" "` sails through the parse boundary and becomes a junk id that
+ * `createCheckoutSnapshotFromInvoice` then also copies into `checkout_id` and
+ * `order_id`), so it is rejected by the same test.
+ *
+ * A usable id is returned RAW, exactly as the number readers keep their value
+ * raw: trimming it here would silently mint an id that matches nothing the
+ * server ever sent.
+ */
+export function parseElementInvoiceId(value: string | null): string | undefined {
+  if (value === null || value.trim() === "") return undefined;
+  return value;
+}
+
+/**
  * The attribute-shaped view as a real checkout state, in the same two hops the
  * element's own snapshot path takes: attempt -> snapshot -> state. Returns
  * undefined in create mode, where no attempt exists yet and the renderer must
  * not show an attempt's status block.
+ *
+ * An unusable `invoice_id` answers undefined for the same reason and by the same
+ * test ({@link parseElementInvoiceId}): the element decides what a view with no
+ * identity looks like, and this exported renderer must not throw at a standalone
+ * caller who passed one through.
  */
 export function createElementCheckoutState(view: CheckoutView): CheckoutState | undefined {
-  if (view.invoice_id === undefined) return undefined;
+  const invoiceId = parseElementInvoiceId(view.invoice_id ?? null);
+  if (invoiceId === undefined) return undefined;
   return createCheckoutState(
     createCheckoutSnapshotFromInvoice({
-      invoice_id: view.invoice_id,
+      invoice_id: invoiceId,
       invoice: view.invoice,
       rail: view.rail ?? "lightning",
       ...(view.payment_hash === undefined ? {} : { payment_hash: view.payment_hash }),
