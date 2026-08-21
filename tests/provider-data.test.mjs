@@ -4,16 +4,10 @@ import path from "node:path";
 import test from "node:test";
 import {
   getAsset,
-  getCountry,
-  getCountryRoutes,
   getPaymentWizardRoutes,
   getProvider,
   getProviderRegistryMetadata,
-  listCountries,
   listCryptoRouteProviders,
-  listFiatProviders,
-  listFiatRailCountries,
-  listFiatRails,
   listProviders,
   openReceivePayTutorialUrls,
   openReceiveProviderIconUrls,
@@ -48,6 +42,9 @@ test("provider-data v4 keeps wizard copy and icons local", () => {
     false,
   );
   assert.equal(providerRegistry.providers.strike.icon_path, "assets/provider-icons/strike.png");
+  // The fiat/country wing was removed: crypto routes are the only route kind.
+  assert.equal("countries" in providerRegistry, false);
+  assert.equal("fiat_rails" in providerRegistry, false);
 });
 
 test("provider-data resolves bundled provider icon URLs", () => {
@@ -101,43 +98,9 @@ test("provider-data resolves crypto route providers without changing route order
   assert.equal(getAsset("btc")?.route, "btc-lightning");
 });
 
-test("provider-data resolves ranked fiat rail providers for a country", () => {
-  const usBank = listFiatProviders({ rail: "bank", country: "US" });
-  const rails = listFiatRails();
-
-  assert.deepEqual(
-    rails.map((rail) => rail.id),
-    ["bank", "card"],
-  );
-  assert.equal(getCountry("US")?.currency, "USD");
-  assert.equal(listFiatRailCountries("bank")[0].code, "US");
-  assert.deepEqual(
-    usBank.map((entry) => [entry.provider.id, entry.rank]),
-    [
-      ["strike", 1],
-      ["river", 2],
-      ["cashapp", 3],
-      ["coinbase", 4],
-      ["kraken", 5],
-    ],
-  );
-});
-
-test("provider-data resolves country routes for payment wizard selection", () => {
-  const usRoutes = getCountryRoutes("us");
-
-  assert.deepEqual(
-    usRoutes.map((route) => route.rail.id),
-    ["bank", "card"],
-  );
-  assert.equal(usRoutes[0].country.code, "US");
-  assert.equal(usRoutes[0].providers[0].provider.id, "strike");
-  assert.equal(usRoutes[0].providers[0].rank, 1);
-});
-
-test("provider-data resolves payment wizard routes from asset and fiat inputs", () => {
+test("provider-data resolves payment wizard routes from asset and route inputs", () => {
   const cryptoRoutes = getPaymentWizardRoutes({ asset: "BTC" });
-  const fiatRoutes = getPaymentWizardRoutes({ rail: "bank", country: "us" });
+  const explicitRoutes = getPaymentWizardRoutes({ route: "BTC-Lightning" });
 
   assert.equal(cryptoRoutes.length, 1);
   assert.equal(cryptoRoutes[0].kind, "crypto");
@@ -145,11 +108,13 @@ test("provider-data resolves payment wizard routes from asset and fiat inputs", 
   assert.equal(cryptoRoutes[0].asset.symbol, "btc");
   assert.equal(cryptoRoutes[0].providers[0].provider.id, "rizful");
 
-  assert.equal(fiatRoutes.length, 1);
-  assert.equal(fiatRoutes[0].kind, "fiat");
-  assert.equal(fiatRoutes[0].rail.id, "bank");
-  assert.equal(fiatRoutes[0].country.code, "US");
-  assert.equal(fiatRoutes[0].providers[0].provider.id, "strike");
+  assert.equal(explicitRoutes.length, 1);
+  assert.equal(explicitRoutes[0].route.id, "btc-lightning");
+  assert.equal(explicitRoutes[0].asset, undefined);
+
+  assert.deepEqual(getPaymentWizardRoutes({}), []);
+  assert.deepEqual(getPaymentWizardRoutes({ asset: "no-such-asset" }), []);
+  assert.deepEqual(getPaymentWizardRoutes({ route: "no-such-route" }), []);
 });
 
 test("provider-data satisfies canonical provider-route vectors", () => {
@@ -163,20 +128,9 @@ test("provider-data satisfies canonical provider-route vectors", () => {
     cryptoRoutes[0].providers.map((entry) => entry.provider.id),
     cryptoVector.expected.provider_ids,
   );
-
-  const fiatVector = readVector("provider-route.fiat-us-card.json");
-  const fiatRoutes = getPaymentWizardRoutes(fiatVector.request);
-  assert.equal(fiatRoutes.length, fiatVector.expected.length);
-  assert.equal(fiatRoutes[0].kind, fiatVector.expected.kind);
-  assert.equal(fiatRoutes[0].rail.id, fiatVector.expected.rail_id);
-  assert.equal(fiatRoutes[0].country.code, fiatVector.expected.country_code);
-  assert.deepEqual(
-    fiatRoutes[0].providers.map((entry) => [entry.provider.id, entry.rank]),
-    fiatVector.expected.provider_ranks,
-  );
 });
 
-test("provider-data filters providers and countries conservatively", () => {
+test("provider-data filters providers conservatively", () => {
   assert.equal(getProvider("strike")?.us, true);
   assert.equal(getProvider("sideshift")?.us, false);
   assert.equal(getProvider("rizful")?.kind, "browser wallet");
@@ -194,10 +148,6 @@ test("provider-data filters providers and countries conservatively", () => {
   );
   assert.equal(
     Object.values(providerRegistry.providers).every((provider) => !("mechanism" in provider)),
-    true,
-  );
-  assert.equal(
-    listCountries({ currency: "USD" }).every((country) => country.currency === "USD"),
     true,
   );
   assert.equal(providerRegistry.providers.coinbase.tutorials.length, 2);
@@ -266,9 +216,7 @@ test("provider-data validates registry references without exiting", () => {
 
 test("provider-data validation rejects duplicate route and provider entries", () => {
   const firstCryptoRoute = providerRegistry.crypto_routes[0];
-  const firstCountry = providerRegistry.countries[0];
   const firstDisqualifiedProvider = providerRegistry.disqualified_providers[0];
-  const firstBankProvider = providerRegistry.fiat_rails.bank.countries.US[0];
 
   const brokenRegistry = {
     ...providerRegistry,
@@ -284,21 +232,6 @@ test("provider-data validation rejects duplicate route and provider entries", ()
       firstCryptoRoute,
       ...providerRegistry.crypto_routes.slice(1),
     ],
-    countries: [firstCountry, ...providerRegistry.countries],
-    fiat_rails: {
-      ...providerRegistry.fiat_rails,
-      bank: {
-        ...providerRegistry.fiat_rails.bank,
-        countries: {
-          ...providerRegistry.fiat_rails.bank.countries,
-          US: [
-            firstBankProvider,
-            firstBankProvider,
-            ...providerRegistry.fiat_rails.bank.countries.US.slice(1),
-          ],
-        },
-      },
-    },
     disqualified_providers: [firstDisqualifiedProvider, ...providerRegistry.disqualified_providers],
   };
 
@@ -306,14 +239,9 @@ test("provider-data validation rejects duplicate route and provider entries", ()
 
   assert.equal(result.valid, false);
   assert.equal(result.errors.includes("crypto route id btc-lightning is duplicated"), true);
-  assert.equal(result.errors.includes("country code US is duplicated"), true);
   assert.equal(result.errors.includes("disqualified provider relai is duplicated"), true);
   assert.equal(
     result.errors.includes("crypto route btc-lightning references provider rizful more than once"),
-    true,
-  );
-  assert.equal(
-    result.errors.includes("fiat rail bank/US references provider strike more than once"),
     true,
   );
 });

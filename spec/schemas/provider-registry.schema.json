@@ -13,8 +13,6 @@
     "assets_index",
     "providers",
     "crypto_routes",
-    "countries",
-    "fiat_rails",
     "disqualified_providers"
   ],
   "properties": {
@@ -147,55 +145,6 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/provider_ref"
-            }
-          }
-        }
-      }
-    },
-    "countries": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["code", "name", "currency", "coverage"],
-        "properties": {
-          "code": {
-            "type": "string",
-            "pattern": "^[A-Z]{2}$"
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "currency": {
-            "type": "string",
-            "pattern": "^[A-Z]{3}$"
-          },
-          "coverage": {
-            "type": "string",
-            "enum": ["deep", "thin", "sparse"]
-          }
-        }
-      }
-    },
-    "fiat_rails": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["label", "countries"],
-        "properties": {
-          "label": {
-            "type": "string",
-            "minLength": 1
-          },
-          "countries": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/provider_ref"
-              }
             }
           }
         }

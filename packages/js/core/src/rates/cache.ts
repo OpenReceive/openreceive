@@ -9,11 +9,7 @@
  *   every concurrent checkout but one.
  */
 
-import {
-  OpenReceiveDecimalError,
-  OpenReceivePriceFeedError,
-  type OpenReceiveBtcFiatRateMap,
-} from "../money/decimal.ts";
+import { type OpenReceiveBtcFiatRateMap, OpenReceivePriceFeedError } from "../money/decimal.ts";
 import {
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
   OPENRECEIVE_PRICE_FEED_CACHE_META_KEY,
@@ -25,12 +21,12 @@ import { parseSimplePriceResponse } from "./parsing.ts";
 import { currentUnixSeconds } from "./quoting.ts";
 import {
   isResolvedPriceProvider,
-  providerHasGetAllBtcFiatRates,
   type OpenReceiveBtcFiatRateMapWithSource,
   type OpenReceiveLivePriceSourceId,
   type OpenReceivePriceFeedHealthCheck,
   type OpenReceiveResolvedPriceProvider,
   type OpenReceiveSourcedPriceProvider,
+  providerHasGetAllBtcFiatRates,
   type SimplePriceFetch,
 } from "./types.ts";
 
@@ -104,17 +100,20 @@ export class CachedPriceFeed
   #inFlight?: Promise<PriceFeedCacheEntry>;
 
   constructor(options: CachedPriceFeedOptions) {
+    // Construction failures are host misconfiguration (a boot bug), never payer
+    // input: throw TypeError — matching the Ruby port's constructor validation —
+    // not the 400-mapped OpenReceiveDecimalError.
     if (options.currencies.length === 0) {
-      throw new OpenReceiveDecimalError("CachedPriceFeed requires at least one currency");
+      throw new TypeError("CachedPriceFeed requires at least one currency");
     }
     const cacheSeconds = options.cacheSeconds ?? OPENRECEIVE_PRICE_FEED_CACHE_SECONDS;
     if (!Number.isSafeInteger(cacheSeconds) || cacheSeconds <= 0) {
-      throw new OpenReceiveDecimalError("CachedPriceFeed cacheSeconds must be a positive integer");
+      throw new TypeError("CachedPriceFeed cacheSeconds must be a positive integer");
     }
     // A cache window wider than the quote TTL would let a read be reported as
     // fresh that is already too old to price an invoice.
     if (cacheSeconds > OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS) {
-      throw new OpenReceiveDecimalError(
+      throw new TypeError(
         `CachedPriceFeed cacheSeconds must not exceed the ${OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS}s invoice quote TTL`,
       );
     }

@@ -7,9 +7,9 @@ import {
   bitcoinAmountToSats,
   fiatValueToSats,
   OPENRECEIVE_MSATS_PER_SAT,
-  OpenReceiveDecimalError,
   type OpenReceiveBitcoinAmount,
   type OpenReceiveBtcFiatRateMap,
+  OpenReceiveDecimalError,
 } from "../money/decimal.ts";
 import {
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,

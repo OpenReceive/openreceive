@@ -40,6 +40,11 @@
       "entry": ["src/index.ts", "src/cli.ts", "bin/*.mjs"],
       "project": ["src/**/*.{ts,tsx,mjs}", "bin/**/*.mjs"]
     },
+    // provider-data's entry (src/index.ts) comes from its tsup.config.ts via
+    // knip's tsup plugin, so an explicit entry pattern would be redundant.
+    "packages/js/provider-data": {
+      "project": ["src/**/*.{ts,tsx,mjs}"]
+    },
     "packages/js/angular": {
       // The component is a published subpath (./checkout-component).
       "entry": ["src/index.ts", "src/openreceive-checkout.component.{ts,mjs}"],

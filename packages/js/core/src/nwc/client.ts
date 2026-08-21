@@ -24,7 +24,9 @@ export class NwcUriParseError extends Error {
   readonly redacted?: string;
 
   constructor(code: NwcUriParseErrorCode, description: string, uri?: string) {
-    super(code);
+    // The human-readable text is the message; the snake_case code stays a
+    // machine-readable field (it is not wire-facing).
+    super(description);
     this.name = "NwcUriParseError";
     this.code = code;
     this.description = description;

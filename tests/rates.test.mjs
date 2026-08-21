@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CachedPriceFeed,
+  createCachedLivePriceFeed,
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
   OPENRECEIVE_PRICE_FEED_FALLBACK_TIMEOUT_MS,
   OPENRECEIVE_PRICE_FEED_PRIMARY_TIMEOUT_MS,
   StaticPriceProvider,
-  createCachedLivePriceFeed,
 } from "../packages/js/core/src/index.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
@@ -267,11 +267,29 @@ test("a cache window wider than the quote TTL is refused at construction", () =>
       cacheSeconds,
     });
 
-  assert.throws(
+  // Host misconfiguration is a boot bug: a TypeError, never the 400-mapped
+  // OpenReceiveDecimalError that would read as payer input.
+  const configError = (run, pattern) =>
+    assert.throws(run, (error) => {
+      assert.ok(error instanceof TypeError);
+      assert.equal(error instanceof RangeError, false);
+      assert.match(error.message, pattern);
+      return true;
+    });
+  configError(
     () => build(OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS + 1),
     /must not exceed the 600s invoice quote TTL/,
   );
-  assert.throws(() => build(0), /must be a positive integer/);
+  configError(() => build(0), /must be a positive integer/);
+  configError(
+    () =>
+      new CachedPriceFeed({
+        currencies: [],
+        primary: provider("primary"),
+        fallback: provider("fallback"),
+      }),
+    /requires at least one currency/,
+  );
   assert.doesNotThrow(() => build(OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS));
 });
 
@@ -385,4 +403,37 @@ test("core rate constants match spec/data/rates/price-sources.json", async () =>
   assert.deepEqual(core.OPENRECEIVE_STATIC_BTC_FIAT_RATES, byId.static_mock.rates);
   assert.equal(byId.primary.env_override, core.OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV);
   assert.equal(byId.fallback.env_override, core.OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV);
+});
+
+test("the default fetch is bound to globalThis, so browsers never see Illegal invocation", async () => {
+  const { HttpSimplePriceProvider } = await import("../packages/js/core/src/rates/http.ts");
+  const originalFetch = globalThis.fetch;
+  const seenReceivers = [];
+  // Browser fetch throws "Illegal invocation" when called with any receiver
+  // other than the global; an unbound `this.#fetch(...)` call passes the
+  // provider instance. Emulate that contract to pin the binding.
+  globalThis.fetch = function fetchProbe() {
+    seenReceivers.push(this);
+    if (this !== globalThis && this !== undefined) {
+      throw new TypeError("Illegal invocation");
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({ bitcoin: { usd: "68000.00" } });
+      },
+    });
+  };
+  try {
+    const provider = new HttpSimplePriceProvider({
+      url: "https://feed.example/simple-price",
+      source: "primary",
+    });
+    const rates = await provider.getBtcFiatRates(["USD"]);
+    assert.equal(rates.bitcoin.usd, "68000.00");
+    assert.equal(seenReceivers.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

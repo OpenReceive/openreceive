@@ -5,10 +5,10 @@
 
 import {
   formatMissingBtcFiatRateMessage,
+  type OpenReceiveBtcFiatRateMap,
   OpenReceiveDecimalError,
   OpenReceivePriceFeedError,
   parseDecimal,
-  type OpenReceiveBtcFiatRateMap,
 } from "../money/decimal.ts";
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;

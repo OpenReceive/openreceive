@@ -1,24 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  OpenReceiveDecimalError,
-  OpenReceivePriceFeedError,
   ceilDiv,
   convertAmountViaBtcRates,
-  convertFiatViaBtcPrices,
   decimalScaleFactor,
-  fiatValueToSats,
-  formatBtcFromSats,
   formatDecimal,
   multiplyAmount,
+  OpenReceiveDecimalError,
+  OpenReceivePriceFeedError,
   parseDecimal,
   quoteBitcoinAmountToMsats,
-  quoteFiatToMsatsAtMockRate,
   quoteFiatToMsatsWithPrice,
-  requiredBtcFiatRate,
-  satsToFiatValue,
   sumAmounts,
 } from "../packages/js/core/src/index.ts";
+// Internal money helpers: consumed by convertAmountViaBtcRates and these tests,
+// deliberately off the public index.
+import {
+  convertFiatViaBtcPrices,
+  fiatValueToSats,
+  formatBtcFromSats,
+  requiredBtcFiatRate,
+  satsToFiatValue,
+} from "../packages/js/core/src/money/decimal.ts";
+// Internal mock-rate quoting fixture, likewise off the public index.
+import { quoteFiatToMsatsAtMockRate } from "../packages/js/core/src/rates/quoting.ts";
 
 const RATES = { bitcoin: { usd: "68000.00", eur: "62000.00" } };
 

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkPayment, reconcilePaymentAttempts } from "../packages/js/core/src/index.ts";
+import {
+  checkPayment,
+  OpenReceiveDecimalError,
+  OpenReceiveError,
+  reconcilePaymentAttempts,
+} from "../packages/js/core/src/index.ts";
 
 const hash = (value) => value.toString(16).padStart(64, "0");
 
@@ -76,4 +81,63 @@ test("state=settled without settled_at uses observed time and identifies its sou
   assert.equal(result.status, "settled");
   assert.equal(result.paidAt, 777);
   assert.equal(result.details.paid_at_source, "observed_at");
+});
+
+test("a truncated scan surfaces as a retryable WALLET_UNAVAILABLE, never a bare Error", async () => {
+  // A wallet that ignores `offset` serves the same full page forever, so the
+  // walk ends truncated without ever proving the invoice present or absent.
+  const page = Array.from({ length: 20 }, (_, index) => ({
+    type: "incoming",
+    payment_hash: hash(index + 1),
+    created_at: 100 + index,
+    transaction_state: "pending",
+  }));
+  const client = {
+    async preflight() {
+      return {};
+    },
+    async makeInvoice() {
+      throw new Error("unused");
+    },
+    async listTransactions() {
+      return { transactions: page };
+    },
+  };
+  await assert.rejects(
+    checkPayment({ client, paymentHash: hash(999), createdAt: 100, clock: () => 1000 }),
+    (error) => {
+      // The HTTP layer maps a retryable core error code to a retryable 5xx
+      // (503), so this must never be a generic Error that reads as a 500.
+      assert.ok(error instanceof OpenReceiveError);
+      assert.equal(error.code, "WALLET_UNAVAILABLE");
+      assert.equal(error.retryable, true);
+      assert.match(error.message, /wallet history walk ended/);
+      return true;
+    },
+  );
+});
+
+test("malformed reconcile inputs throw the 400-mapped OpenReceiveDecimalError", async () => {
+  const client = {
+    async preflight() {
+      return {};
+    },
+    async makeInvoice() {
+      throw new Error("unused");
+    },
+    async listTransactions() {
+      return { transactions: [] };
+    },
+  };
+  const inputError = (options) =>
+    assert.rejects(reconcilePaymentAttempts({ client, ...options }), (error) => {
+      assert.ok(error instanceof OpenReceiveDecimalError);
+      // The Node service maps payer/host input errors to 400 by RangeError.
+      assert.ok(error instanceof RangeError);
+      return true;
+    });
+  await inputError({ attempts: [{ paymentHash: "nope", createdAt: 100 }] });
+  await inputError({ attempts: [{ paymentHash: hash(1), createdAt: -1 }] });
+  await inputError({ attempts: [{ paymentHash: hash(1), createdAt: 100 }], overlapSeconds: -1 });
+  await inputError({ attempts: [{ paymentHash: hash(1), createdAt: 100 }], maxPages: 0 });
 });

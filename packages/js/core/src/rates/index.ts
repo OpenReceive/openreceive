@@ -11,6 +11,12 @@
  */
 
 export {
+  CachedPriceFeed,
+  type CachedPriceFeedOptions,
+  createCachedLivePriceFeed,
+  getBtcFiatRatesWithFallback,
+} from "./cache.ts";
+export {
   OPENRECEIVE_FALLBACK_PRICE_FEED_URL,
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
   OPENRECEIVE_MAX_AMOUNT_MSATS,
@@ -25,15 +31,7 @@ export {
   OPENRECEIVE_STATIC_BTC_FIAT_RATES,
 } from "./constants.ts";
 export {
-  CachedPriceFeed,
-  createCachedLivePriceFeed,
-  getBtcFiatRatesWithFallback,
-  type CachedPriceFeedOptions,
-} from "./cache.ts";
-export {
-  getStaticBtcFiatPrice,
   quoteBitcoinAmountToMsats,
-  quoteFiatToMsatsAtMockRate,
   quoteFiatToMsatsWithPrice,
   StaticPriceProvider,
 } from "./quoting.ts";

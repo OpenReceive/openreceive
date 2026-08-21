@@ -24,7 +24,10 @@ export function sha256(message: Uint8Array): Uint8Array {
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ]);
   const bitLength = message.length * 8;
-  const padded = new Uint8Array((((message.length + 9) / 64) | 0) * 64 + 64);
+  // Smallest multiple of 64 with room for the message, the 0x80 marker, and
+  // the 8-byte length. (`((len+9)/64|0)*64+64` over-allocated a spurious
+  // all-zero block whenever len % 64 == 55, corrupting the digest.)
+  const padded = new Uint8Array(Math.ceil((message.length + 9) / 64) * 64);
   padded.set(message);
   padded[message.length] = 0x80;
   const view = new DataView(padded.buffer);

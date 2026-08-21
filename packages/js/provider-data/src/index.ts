@@ -5,11 +5,8 @@ import { openReceiveProviderIconUrls } from "./provider-icons.ts";
 export { openReceivePayTutorialUrls };
 export { openReceiveProviderIconUrls };
 
-export type CountryCoverage = "deep" | "thin" | "sparse";
 export type ProviderId = string;
 export type CryptoRouteId = string;
-export type FiatRailId = string;
-export type CountryCode = string;
 
 export interface Provider {
   readonly id: ProviderId;
@@ -46,20 +43,6 @@ export interface CryptoRoute {
   readonly providers: readonly ProviderRef[];
 }
 
-export interface Country {
-  readonly code: CountryCode;
-  readonly name: string;
-  readonly currency: string;
-  readonly coverage: CountryCoverage;
-}
-
-export interface FiatRail {
-  readonly label: string;
-  readonly countries: Readonly<Record<CountryCode, readonly ProviderRef[]>>;
-}
-
-export type ResolvedFiatRail = FiatRail & { readonly id: FiatRailId };
-
 export interface DisqualifiedProvider {
   readonly id: string;
   readonly name: string;
@@ -76,8 +59,6 @@ export interface ProviderRegistry {
   readonly assets_index: readonly AssetIndexEntry[];
   readonly providers: Readonly<Record<ProviderId, Provider>>;
   readonly crypto_routes: readonly CryptoRoute[];
-  readonly countries: readonly Country[];
-  readonly fiat_rails: Readonly<Record<FiatRailId, FiatRail>>;
   readonly disqualified_providers: readonly DisqualifiedProvider[];
 }
 
@@ -90,39 +71,17 @@ export interface ProviderFilter {
   readonly us?: boolean | null;
 }
 
-export interface CountryFilter {
-  readonly currency?: string;
-  readonly coverage?: CountryCoverage;
-}
-
-export interface ResolvedCountryRoute {
-  readonly rail: ResolvedFiatRail;
-  readonly country: Country;
-  readonly providers: readonly ResolvedProviderRef[];
-}
-
 export interface PaymentWizardRouteRequest {
   readonly asset?: string;
-  readonly country?: CountryCode;
-  readonly rail?: FiatRailId;
   readonly route?: CryptoRouteId;
 }
 
-export interface PaymentWizardCryptoRoute {
+export interface PaymentWizardRoute {
   readonly kind: "crypto";
   readonly route: CryptoRoute;
   readonly providers: readonly ResolvedProviderRef[];
   readonly asset?: AssetIndexEntry;
 }
-
-export interface PaymentWizardFiatRoute {
-  readonly kind: "fiat";
-  readonly rail: ResolvedFiatRail;
-  readonly country: Country;
-  readonly providers: readonly ResolvedProviderRef[];
-}
-
-export type PaymentWizardRoute = PaymentWizardCryptoRoute | PaymentWizardFiatRoute;
 
 export interface ProviderRegistryValidationResult {
   readonly valid: boolean;
@@ -166,25 +125,8 @@ function normalizeAssetSymbol(symbol: string): string {
   return symbol.trim().toLowerCase();
 }
 
-function normalizeCountryCode(countryCode: CountryCode): CountryCode {
-  return countryCode.trim().toUpperCase();
-}
-
 function normalizeRouteId(routeId: CryptoRouteId): CryptoRouteId {
   return routeId.trim().toLowerCase();
-}
-
-function normalizeRailId(railId: FiatRailId): FiatRailId {
-  return railId.trim().toLowerCase();
-}
-
-function toPaymentWizardFiatRoute(route: ResolvedCountryRoute): PaymentWizardFiatRoute {
-  return {
-    kind: "fiat",
-    rail: route.rail,
-    country: route.country,
-    providers: route.providers,
-  };
 }
 
 export const providerRegistry: ProviderRegistry = registry;
@@ -239,91 +181,24 @@ export function listCryptoRouteProviders(routeId: CryptoRouteId): readonly Resol
   return route ? resolveProviderRefs(route.providers) : [];
 }
 
-export function listCountries(filter: CountryFilter = {}): readonly Country[] {
-  return registry.countries.filter((country) => {
-    if (filter.currency !== undefined && country.currency !== filter.currency) return false;
-    if (filter.coverage !== undefined && country.coverage !== filter.coverage) return false;
-    return true;
-  });
-}
-
-export function getCountry(countryCode: CountryCode): Country | undefined {
-  const normalizedCountryCode = normalizeCountryCode(countryCode);
-  return registry.countries.find((country) => country.code === normalizedCountryCode);
-}
-
-export function listFiatRails(): readonly ResolvedFiatRail[] {
-  return Object.entries(registry.fiat_rails).map(([id, rail]) => ({
-    id,
-    ...rail,
-  }));
-}
-
-export function getFiatRail(railId: FiatRailId): FiatRail | undefined {
-  return registry.fiat_rails[normalizeRailId(railId)];
-}
-
-export function listFiatRailCountries(railId: FiatRailId): readonly Country[] {
-  const rail = getFiatRail(railId);
-  if (!rail) return [];
-
-  const countryCodes = new Set(Object.keys(rail.countries));
-  return registry.countries.filter((country) => countryCodes.has(country.code));
-}
-
-export function getCountryRoutes(countryCode: CountryCode): readonly ResolvedCountryRoute[] {
-  const country = getCountry(countryCode);
-  if (!country) return [];
-
-  return listFiatRails()
-    .filter((rail) => rail.countries[country.code] !== undefined)
-    .map((rail) => ({
-      rail,
-      country,
-      providers: resolveProviderRefs(rail.countries[country.code] ?? []),
-    }));
-}
-
 export function getPaymentWizardRoutes(
   options: PaymentWizardRouteRequest,
 ): readonly PaymentWizardRoute[] {
-  if (options.asset !== undefined || options.route !== undefined) {
-    const asset = options.asset === undefined ? undefined : getAsset(options.asset);
-    const routeId = options.route === undefined ? asset?.route : normalizeRouteId(options.route);
-    if (!routeId) return [];
+  const asset = options.asset === undefined ? undefined : getAsset(options.asset);
+  const routeId = options.route === undefined ? asset?.route : normalizeRouteId(options.route);
+  if (!routeId) return [];
 
-    const route = getCryptoRoute(routeId);
-    if (!route) return [];
+  const route = getCryptoRoute(routeId);
+  if (!route) return [];
 
-    return [
-      {
-        kind: "crypto",
-        route,
-        providers: resolveProviderRefs(route.providers),
-        ...(asset === undefined ? {} : { asset }),
-      },
-    ];
-  }
-
-  if (options.country === undefined) return [];
-
-  const countryRoutes = getCountryRoutes(options.country);
-  if (options.rail === undefined) {
-    return countryRoutes.map(toPaymentWizardFiatRoute);
-  }
-
-  const normalizedRail = normalizeRailId(options.rail);
-  return countryRoutes
-    .filter((route) => route.rail.id === normalizedRail)
-    .map(toPaymentWizardFiatRoute);
-}
-
-export function listFiatProviders(options: {
-  readonly rail: FiatRailId;
-  readonly country: CountryCode;
-}): readonly ResolvedProviderRef[] {
-  const refs = getFiatRail(options.rail)?.countries[normalizeCountryCode(options.country)] ?? [];
-  return resolveProviderRefs(refs);
+  return [
+    {
+      kind: "crypto",
+      route,
+      providers: resolveProviderRefs(route.providers),
+      ...(asset === undefined ? {} : { asset }),
+    },
+  ];
 }
 
 export function listDisqualifiedProviders(): readonly DisqualifiedProvider[] {
@@ -340,13 +215,10 @@ export function validateRegistry(
 
   const providers = input.providers === undefined ? {} : input.providers;
   const cryptoRoutes = input.crypto_routes ?? [];
-  const countries = input.countries ?? [];
-  const fiatRails = input.fiat_rails === undefined ? {} : input.fiat_rails;
   const disqualifiedProviders = input.disqualified_providers ?? [];
   const providerIds = new Set(Object.keys(providers));
   const disqualifiedIds = new Set(disqualifiedProviders.map((provider) => provider.id));
   const routeIds = new Set(cryptoRoutes.map((route) => route.id));
-  const countryCodes = new Set(countries.map((country) => country.code));
 
   check(input.schema_version === "4.0.0", "provider registry schema version mismatch");
   check(
@@ -356,10 +228,6 @@ export function validateRegistry(
 
   for (const duplicate of findDuplicates(cryptoRoutes.map((route) => route.id))) {
     check(false, `crypto route id ${duplicate} is duplicated`);
-  }
-
-  for (const duplicate of findDuplicates(countries.map((country) => country.code))) {
-    check(false, `country code ${duplicate} is duplicated`);
   }
 
   for (const duplicate of findDuplicates(disqualifiedProviders.map((provider) => provider.id))) {
@@ -422,10 +290,13 @@ export function validateRegistry(
       `crypto route ${route.id} needs providers`,
     );
 
+    // Rank rule: ranks are optional per route, but once any provider in a
+    // route carries a rank, every provider in that route must be ranked and
+    // the ranks must run 1..n in listed order.
     let expectedRank = 1;
     const routeHasRanks = route.providers.some((ref) => ref.rank !== undefined);
     const routeProviderIds = new Set<ProviderId>();
-    for (const ref of route.providers ?? []) {
+    for (const ref of route.providers) {
       check(
         providerIds.has(ref.provider),
         `crypto route ${route.id} references missing provider ${ref.provider}`,
@@ -441,61 +312,6 @@ export function validateRegistry(
       routeProviderIds.add(ref.provider);
       if (routeHasRanks) {
         check(ref.rank === expectedRank, `crypto route ${route.id} ranks must be sequential`);
-        expectedRank += 1;
-      }
-    }
-  }
-
-  for (const country of countries) {
-    check(/^[A-Z]{2}$/.test(country.code), `country ${country.code} is not ISO alpha-2 shaped`);
-    check(
-      /^[A-Z]{3}$/.test(country.currency),
-      `country ${country.code} currency is not ISO 4217 shaped`,
-    );
-    check(
-      country.coverage === "deep" || country.coverage === "thin" || country.coverage === "sparse",
-      `country ${country.code} coverage invalid`,
-    );
-  }
-
-  for (const [railId, rail] of Object.entries(fiatRails)) {
-    check(Boolean(rail.label), `fiat rail ${railId} missing label`);
-
-    const countriesByCode = rail.countries === undefined ? {} : rail.countries;
-    for (const [countryCode, refs] of Object.entries(countriesByCode)) {
-      check(
-        /^[A-Z]{2}$/.test(countryCode),
-        `fiat rail ${railId} has invalid country code ${countryCode}`,
-      );
-      check(
-        countryCodes.has(countryCode),
-        `fiat rail ${railId} references unknown country ${countryCode}`,
-      );
-      check(
-        Array.isArray(refs) && refs.length > 0,
-        `fiat rail ${railId}/${countryCode} needs providers`,
-      );
-
-      let expectedRank = 1;
-      const railProviderIds = new Set<ProviderId>();
-      for (const ref of refs ?? []) {
-        check(
-          providerIds.has(ref.provider),
-          `fiat rail ${railId}/${countryCode} references missing provider ${ref.provider}`,
-        );
-        check(
-          !disqualifiedIds.has(ref.provider),
-          `fiat rail ${railId}/${countryCode} references disqualified provider ${ref.provider}`,
-        );
-        check(
-          !railProviderIds.has(ref.provider),
-          `fiat rail ${railId}/${countryCode} references provider ${ref.provider} more than once`,
-        );
-        railProviderIds.add(ref.provider);
-        check(
-          ref.rank === expectedRank,
-          `fiat rail ${railId}/${countryCode} ranks must be sequential`,
-        );
         expectedRank += 1;
       }
     }

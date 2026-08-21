@@ -3,7 +3,7 @@
  * the network lives here; response interpretation stays in `./parsing.ts`.
  */
 
-import { OpenReceivePriceFeedError, type OpenReceiveBtcFiatRateMap } from "../money/decimal.ts";
+import { type OpenReceiveBtcFiatRateMap, OpenReceivePriceFeedError } from "../money/decimal.ts";
 import {
   OPENRECEIVE_FALLBACK_PRICE_FEED_URL,
   OPENRECEIVE_PRICE_FEED_FALLBACK_TIMEOUT_MS,
@@ -46,7 +46,10 @@ export class HttpSimplePriceProvider
     this.url = options.url;
     this.source = options.source;
     this.timeoutMs = options.timeoutMs;
-    this.#fetch = options.fetch ?? (globalThis.fetch as unknown as SimplePriceFetch);
+    // Bound to globalThis: browsers throw "Illegal invocation" when fetch is
+    // called with a receiver other than the global (here it would be `this`).
+    this.#fetch =
+      options.fetch ?? (globalThis.fetch.bind(globalThis) as unknown as SimplePriceFetch);
   }
 
   async getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap> {

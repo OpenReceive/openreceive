@@ -135,15 +135,15 @@ export function createOpenReceiveWizardRouteDisplays(
 }
 
 function getOpenReceiveWizardRouteDisplayKey(route: PaymentWizardRoute): string {
-  return route.kind === "crypto" ? route.route.id : `${route.rail.id}:${route.country.code}`;
+  return route.route.id;
 }
 
 function getOpenReceiveWizardRouteDisplayTitle(route: PaymentWizardRoute): string {
-  return route.kind === "crypto" ? route.route.label : route.rail.label;
+  return route.route.label;
 }
 
 function getOpenReceiveWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
-  return route.kind === "crypto" ? route.route.symbol.toUpperCase() : route.country.currency;
+  return route.route.symbol.toUpperCase();
 }
 
 function createOpenReceiveWizardProviderDisplay(

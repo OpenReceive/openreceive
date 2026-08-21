@@ -23,9 +23,11 @@ export function getSettlementFinalitySignal(
   result: NwcTransaction,
 ): SettlementFinalitySignal | undefined {
   if (!isTransactionSettled(result)) return undefined;
+  // Same field precedence as isTransactionSettled — the rule that actually
+  // decides settlement — so the reported signal is the one that fired.
   if (result.settled_at !== undefined && result.settled_at > 0) return "settled_at";
-  if (isTransactionState(result.state, "settled")) return "state";
   if (isTransactionState(result.transaction_state, "settled")) return "transaction_state";
+  if (isTransactionState(result.state, "settled")) return "state";
   return undefined;
 }
 

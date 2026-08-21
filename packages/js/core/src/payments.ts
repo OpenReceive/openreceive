@@ -1,3 +1,5 @@
+import { OpenReceiveError } from "./errors/index.ts";
+import { OpenReceiveDecimalError } from "./money/decimal.ts";
 import type {
   ListTransactionsRequest,
   NwcTransaction,
@@ -5,7 +7,7 @@ import type {
 } from "./nwc/client.ts";
 import { classifyTransactionSettlement } from "./settlement/index.ts";
 
-export const OPENRECEIVE_TRANSACTION_PAGE_LIMIT = 20 as const;
+const OPENRECEIVE_TRANSACTION_PAGE_LIMIT = 20 as const;
 
 export type PaymentStatus = "pending" | "settled" | "expired" | "failed" | "not_found";
 
@@ -92,10 +94,14 @@ export async function checkPayment(options: CheckPaymentOptions): Promise<Paymen
   if (checked === undefined) {
     // The only way one attempt yields no result: the wallet-history walk ended
     // before it could prove the invoice present or absent. That is a scan
-    // failure, not evidence that the payment never arrived.
-    throw new Error(
-      "payment reconciliation did not complete: the wallet history walk ended before this invoice could be confirmed",
-    );
+    // failure, not evidence that the payment never arrived — surface it as a
+    // retryable wallet outage (503 on the wire), never a generic 500.
+    throw new OpenReceiveError({
+      code: "WALLET_UNAVAILABLE",
+      message:
+        "payment reconciliation did not complete: the wallet history walk ended before this invoice could be confirmed",
+      retryable: true,
+    });
   }
   return checked;
 }
@@ -120,7 +126,7 @@ export async function reconcilePaymentAttempts(
   if (options.attempts.length === 0) return [];
   const overlapSeconds = options.overlapSeconds ?? 60;
   if (!Number.isSafeInteger(overlapSeconds) || overlapSeconds < 0) {
-    throw new RangeError("overlapSeconds must be a non-negative safe integer");
+    throw new OpenReceiveDecimalError("overlapSeconds must be a non-negative safe integer");
   }
   const expected = new Map(
     options.attempts.map((attempt) => [
@@ -251,7 +257,7 @@ function safeTransaction(transaction: NwcTransaction): NwcTransaction {
 function normalizePaymentHash(value: string): string {
   const normalized = value.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(normalized)) {
-    throw new RangeError("paymentHash must be 64 hexadecimal characters");
+    throw new OpenReceiveDecimalError("paymentHash must be 64 hexadecimal characters");
   }
   return normalized;
 }
@@ -259,7 +265,7 @@ function normalizePaymentHash(value: string): string {
 function normalizeMaxPages(value: number | undefined): number {
   if (value === undefined) return 10_000;
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new RangeError("maxPages must be a positive safe integer");
+    throw new OpenReceiveDecimalError("maxPages must be a positive safe integer");
   }
   return value;
 }
@@ -278,7 +284,7 @@ function normalizedTransactionHash(transaction: NwcTransaction): string | undefi
 
 function normalizeUnix(value: number, field: string): number {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new RangeError(`${field} must be a non-negative safe integer`);
+    throw new OpenReceiveDecimalError(`${field} must be a non-negative safe integer`);
   }
   return value;
 }
