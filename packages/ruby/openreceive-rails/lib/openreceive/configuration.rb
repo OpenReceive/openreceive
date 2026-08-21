@@ -305,7 +305,7 @@ module OpenReceive
 
     def engine_settlement_hook
       lambda do |event|
-        data = event.each_pair.to_h { |key, value| [key.to_s, value] }
+        data = OpenReceive.as_string_keys(event)
         OpenReceivePayment.mark_paid_once!(
           payment_hash: data.fetch("payment_hash"),
           paid_at: data.fetch("paid_at")

@@ -17,7 +17,7 @@ module OpenReceive
 
       def summarize(raw_info)
         unwrapped = OpenReceive::Nwc.unwrap(raw_info)
-        info = OpenReceive::Nwc.stringify(unwrapped)
+        info = OpenReceive.stringify(unwrapped)
         raw_methods = %w[methods capabilities supported_methods supportedMethods]
                       .map { |key| info[key] }
                       .find { |value| !value.nil? }

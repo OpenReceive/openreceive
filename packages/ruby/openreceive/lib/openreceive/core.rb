@@ -88,12 +88,12 @@ module OpenReceive
     module_function
 
     def settled?(transaction)
-      data = stringify(transaction)
+      data = OpenReceive.stringify(transaction)
       data["settled_at"].to_i.positive? || state?(data, "settled")
     end
 
     def status(transaction)
-      data = stringify(transaction)
+      data = OpenReceive.stringify(transaction)
       return "settled" if settled?(data)
       return "expired" if state?(data, "expired")
       return "failed" if state?(data, "failed")
@@ -107,11 +107,6 @@ module OpenReceive
         value.is_a?(String) && value.downcase == expected
       end
     end
-
-    def stringify(value)
-      return {} unless value.respond_to?(:each_pair)
-      value.each_pair.to_h { |key, item| [key.to_s, item] }
-    end
   end
 
   module Nwc
@@ -122,7 +117,7 @@ module OpenReceive
     TRANSACTION_STATES = %w[pending settled expired failed accepted].freeze
 
     def make_invoice_request(request)
-      data = stringify(request)
+      data = OpenReceive.stringify(request)
       if present?(data["description"]) && present?(data["description_hash"])
         raise ArgumentError, "description and description_hash cannot both be set"
       end
@@ -141,7 +136,7 @@ module OpenReceive
     end
 
     def normalize_make_invoice_response(response)
-      data = stringify(unwrap(response))
+      data = OpenReceive.stringify(unwrap(response))
       {
         "invoice" => data.fetch("invoice"),
         "payment_hash" => (data["payment_hash"] || data["paymentHash"]).to_s.downcase,
@@ -152,7 +147,7 @@ module OpenReceive
     end
 
     def list_transactions_request(request)
-      data = stringify(request)
+      data = OpenReceive.stringify(request)
       result = {}
       %w[from until offset limit].each { |key| result[key] = Integer(data[key]) if data.key?(key) }
       result["type"] = data["type"] if data.key?("type")
@@ -166,13 +161,13 @@ module OpenReceive
 
     def normalize_list_transactions_response(response)
       unwrapped = unwrap(response)
-      data = stringify(unwrapped)
+      data = OpenReceive.stringify(unwrapped)
       rows = data["transactions"] || (unwrapped.is_a?(Array) ? unwrapped : [])
       { "transactions" => Array(rows).map { |row| normalize_transaction(row) } }
     end
 
     def normalize_transaction(transaction)
-      data = stringify(transaction)
+      data = OpenReceive.stringify(transaction)
       {
         "type" => data["type"],
         "invoice" => data["invoice"],
@@ -383,7 +378,7 @@ module OpenReceive
         records << record
         records.concat(collect_error_records(value.cause, seen)) if value.cause
       elsif value.respond_to?(:each_pair)
-        record = value.each_pair.to_h { |key, item| [key.to_s, item] }
+        record = OpenReceive.as_string_keys(value)
         records << record
         %w[error cause data].each do |key|
           records.concat(collect_error_records(record[key], seen)) if record[key]
@@ -410,13 +405,8 @@ module OpenReceive
       yield
     end
 
-    def stringify(value)
-      return {} unless value.respond_to?(:each_pair)
-      value.each_pair.to_h { |key, item| [key.to_s, item] }
-    end
-
     def unwrap(value)
-      data = stringify(value)
+      data = OpenReceive.stringify(value)
       data.key?("result") ? data["result"] : value
     end
 
@@ -512,6 +502,21 @@ module OpenReceive
   end
 
   module_function
+
+  # Wire payloads reach both engines with string keys, symbol keys, or as a
+  # wallet SDK value object. Both helpers flatten that to string keys; they
+  # differ only in what they do with a non-hash. `stringify` tolerates it and
+  # returns {} — use it on anything a third party supplied. `as_string_keys`
+  # does not — use it where the caller has already proven the value is a hash,
+  # so a missing hash fails loudly at the source instead of as a KeyError later.
+  def stringify(value)
+    return {} unless value.respond_to?(:each_pair)
+    as_string_keys(value)
+  end
+
+  def as_string_keys(hash)
+    hash.each_pair.to_h { |key, item| [key.to_s, item] }
+  end
 
   def quote_fiat_to_msats(fiat_value:, btc_fiat_price:)
     Money.quote_fiat_to_msats(fiat_value: fiat_value, btc_fiat_price: btc_fiat_price)
