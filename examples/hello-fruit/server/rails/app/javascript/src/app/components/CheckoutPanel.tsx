@@ -16,7 +16,7 @@ import { observer } from "mobx-react";
 import type React from "react";
 import { useContext } from "react";
 import { ShopWorkspaceContext } from "../stores/ShopWorkspace.ts";
-import MethodWizard from "./checkout/MethodWizard.tsx";
+import MethodGrid from "./checkout/MethodGrid.tsx";
 
 const rootDataAttribute = { [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "" };
 
@@ -146,7 +146,7 @@ const CheckoutPanel: React.FC = observer(() => {
           </div>
         </div>
       )}
-      {!settled && (!expired || swapFocused) ? <MethodWizard /> : null}
+      {!settled && (!expired || swapFocused) ? <MethodGrid /> : null}
     </section>
   );
 });

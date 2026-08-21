@@ -1,9 +1,13 @@
 /**
- * Payment icons as webpack asset-module imports. The package's own
- * openReceivePaymentIconUrls resolves `new URL(..., import.meta.url)` at
- * runtime, which lands outside the packs output — static imports let webpack
- * emit and fingerprint the SVGs instead (same pattern as an ls-style
- * static icon registry).
+ * Payment icons as webpack asset-module imports, and the three lookups the
+ * method grid needs over them.
+ *
+ * This is the demo's copy of the packaged getOpenReceivePaymentMethodIcon /
+ * getOpenReceiveAssetIcon / getOpenReceiveNetworkIcon, and unlike the other
+ * duplications in this port it is PERMANENT: the packaged versions read
+ * openReceivePaymentIconUrls, which resolves `new URL(..., import.meta.url)`,
+ * and webpack freezes that into a build-machine file:// path that 404s in the
+ * browser. Static imports let webpack emit and fingerprint the SVGs instead.
  */
 
 import bankIcon from "@openreceive/browser/assets/icons/bank.svg";
@@ -58,28 +62,4 @@ export function networkIcon(networkLabel: string): string {
   if (key === "solana" || key === "sol") return solIcon;
   if (key === "ethereum" || key === "eth") return ethIcon;
   return cryptoIcon;
-}
-
-/** Bitcoin route icon: the Lightning bolt for lightning routes, coin marks otherwise. */
-export function routeIcon(asset: { readonly route?: string; readonly symbol: string }): string {
-  const routeId = asset.route ?? asset.symbol;
-  if (asset.symbol === "btc" && routeId.includes("lightning")) return lightningIcon;
-  return assetIcon(asset.symbol);
-}
-
-declare const __webpack_public_path__: string;
-
-/**
- * Rewrite a provider-data runtime asset URL (provider icon / tutorial image)
- * onto the copies webpack emits next to the chunk (see CopyPlugin in
- * config/webpack/webpack.config.js). The packages resolve these against
- * `import.meta.url`, which webpack inlines as a build-machine file:// URL;
- * only the basename is trustworthy.
- */
-export function packagedRuntimeAssetUrl(
-  url: string,
-  kind: "provider-icons" | "pay_tutorials",
-): string {
-  const name = url.split(/[/\\]/).pop() ?? url;
-  return `${__webpack_public_path__}js/assets/${kind}/${name}`;
 }
