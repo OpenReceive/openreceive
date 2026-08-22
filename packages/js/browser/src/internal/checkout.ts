@@ -1,8 +1,10 @@
-// Barrel for the browser checkout engine. This file re-exports EXACTLY the
-// names @openreceive/browser/internal published before the engine was split by
-// concern (G2a) — `../internal.ts` does `export *` from here, so anything added
-// to this list becomes public surface. The modules below export more than this
-// for each other's use; that stays inside the package.
+// Barrel for the browser checkout engine, split by concern in G2a. This list is
+// the engine's cross-module surface: what the twelve modules below let each
+// other, ../headless.ts, ../index.ts and ../internal.ts import. It is NOT the
+// published surface — since D-1 both ../internal.ts and ../headless.ts name
+// their exports one by one, so adding a line here shares a symbol inside the
+// package without publishing it. The modules export more than this for their
+// immediate neighbours; that stays inside the package too.
 
 // ./checkout-ticker.ts — transient feedback + countdown tickers
 export {
@@ -14,7 +16,6 @@ export {
 // `optionalUnixTimeLabel` ship next to the formatters they wrap so that every
 // consumer of this barrel — and of ./headless, which re-exports both — has the
 // safe option in hand. See their docstrings for which to reach for.
-export type { CheckoutStateLabels } from "./checkout-format.ts";
 export {
   deriveCheckoutStateLabels,
   escapeOpenReceiveHtml,
@@ -22,9 +23,7 @@ export {
   formatOpenReceiveCountdown,
   formatOpenReceiveDepositAmount,
   formatOpenReceiveFiatAmount,
-  formatOpenReceiveInvoiceLabel,
   formatOpenReceiveMsats,
-  formatOpenReceivePaymentHashLabel,
   formatOpenReceiveSwapLimit,
   formatOpenReceiveUnixTime,
   optionalMsatsLabel,
@@ -44,7 +43,6 @@ export {
   overlayOpenReceiveSwapRefundStaging,
 } from "./checkout-swap-view.ts";
 // ./checkout-links.ts — outbound explorer / decoder links
-export type { OpenReceiveExplorerNetwork } from "./checkout-links.ts";
 export {
   createOpenReceiveBlockExplorerUrl,
   createOpenReceiveDetailExternalLink,
@@ -53,7 +51,6 @@ export {
 } from "./checkout-links.ts";
 // ./checkout-details.ts — detail rows + payment data entries
 export type {
-  OpenReceivePaymentDataEntry,
   OpenReceivePaymentDataSource,
   OpenReceiveTransactionDetailsSource,
 } from "./checkout-details.ts";
@@ -70,19 +67,18 @@ export {
   prepareCheckout,
   readOpenReceiveJsonResponse,
   requestCheckout,
-  resolveOrderUrlFromPrefix,
 } from "./checkout-transport.ts";
+// ./routes.ts — every route derived from the one `prefix` the caller gives.
+// The modules that build requests import `OpenReceiveRoutes` straight from
+// there; only the derivation itself is shared through this barrel.
+export { openReceiveRoutes } from "./routes.ts";
 // ./checkout-state.ts — snapshot -> checkout state
 export {
-  checkoutInvoiceFromOrderSnapshot,
   createCheckoutSnapshotFromInvoice,
   createCheckoutState,
   createCheckoutStatusModel,
-  isPaidCheckoutSnapshot,
   isReusableLightningInvoice,
-  refreshCheckoutState,
   selectCheckoutDisplayInvoice,
-  shouldCheckoutShowWaiting,
 } from "./checkout-state.ts";
 // ./checkout-actions.ts — QR, copy, open wallet
 export {
@@ -93,8 +89,4 @@ export {
   openWallet,
 } from "./checkout-actions.ts";
 // ./checkout-watcher.ts — polling loop + controller
-export {
-  CheckoutWatcher,
-  createCheckoutController,
-  OpenReceiveBrowserCheckoutController,
-} from "./checkout-watcher.ts";
+export { createCheckoutController } from "./checkout-watcher.ts";

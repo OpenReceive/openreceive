@@ -17,8 +17,11 @@ Part of [OpenReceive](https://openreceive.org). Start with the [Node quickstart]
   [Headless checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/headless-checkout.md);
   the hello-fruit rails example is the flagship demo of this style.
 
-The `./internal` subpath is wrapper plumbing for OpenReceive's own packages —
-unstable, undocumented, and not for end-developer use.
+The `./internal` subpath is wrapper plumbing for OpenReceive's own packages
+(`@openreceive/elements`, `@openreceive/react`, and the vue/svelte/angular
+wrappers) — unstable, undocumented, and not for end-developer use. It is
+curated symbol-by-symbol rather than a re-export of the package, so a name
+that is not on it is package-private and will move without notice.
 
 ## Icon assets
 
