@@ -263,7 +263,6 @@ export interface CheckoutSnapshot {
 }
 
 export interface CheckoutElementAttributeOptions {
-  readonly orderUrl?: string;
   /**
    * Order id for create mode. When no checkout snapshot is supplied, the element is rendered
    * with this as its `order-id` attribute (paired with `prefix`) and owns the whole
@@ -354,17 +353,6 @@ export interface CheckoutShellOptions
   readonly themeToggle?: boolean;
 }
 
-export interface OpenReceiveCheckoutProps extends CheckoutElementEventHandlers {
-  readonly checkout: CheckoutSnapshot;
-  readonly theme?: OpenReceiveThemePreference;
-}
-
-export interface OpenReceiveCheckoutShellProps
-  extends OpenReceiveCheckoutProps,
-    Omit<CheckoutShellOptions, keyof CheckoutElementEventHandlers | "defaultTheme"> {
-  readonly defaultTheme?: OpenReceiveThemePreference;
-}
-
 export interface CheckoutShellCheckoutBinding {
   readonly tagName: typeof OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME;
   readonly attributes: CheckoutElementAttributes;
@@ -389,12 +377,6 @@ export interface CheckoutElementTarget extends OpenReceiveThemeAttributeTarget {
 
 export interface CheckoutElementDocument {
   createElement(tagName: string): HTMLElement;
-}
-
-export interface CreateCheckoutElementOptions
-  extends CheckoutElementAttributeOptions,
-    CheckoutElementEventHandlers {
-  readonly document?: CheckoutElementDocument;
 }
 
 export interface CreateOpenReceiveThemeToggleElementOptions
@@ -466,18 +448,11 @@ export type RequestCheckoutOptions = RequestCheckoutBaseOptions;
 
 export interface RequestCheckoutBaseOptions {
   /**
-   * Absolute or app-relative URL of the checkout-create endpoint. Supports `{orderId}` /
-   * `{order_id}` templating and a `(orderId) => string` builder. Optional when `prefix` is
-   * given; `checkoutUrl` wins when both are set.
+   * Base path the shipped router is mounted at (e.g. `/openreceive`). The create and
+   * prepare routes are derived from it — see {@link openReceiveRoutes}. It is required
+   * because it is the only URL input: there is no per-route override.
    */
-  readonly checkoutUrl?: string | ((orderId: string) => string);
-  /**
-   * Base path the shipped router is mounted at (e.g. `/openreceive`). When set and
-   * `checkoutUrl` is not, the create URL is derived as `${prefix}/checkouts` (a trailing
-   * slash on the prefix is stripped). Lets a developer point the client at a mounted router
-   * without spelling out each route.
-   */
-  readonly prefix?: string;
+  readonly prefix: string;
   readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
@@ -487,12 +462,11 @@ export interface RequestCheckoutBaseOptions {
 
 export interface CreateOpenReceiveStatusFetcherOptions {
   /**
-   * The mounted `${prefix}/payments/check` endpoint. Every other route the
-   * browser calls is derived from it by stripping that suffix (`/swaps`,
-   * `/swaps/quote`, `/swaps/status`, `/swaps/refunds`), so a custom URL that
-   * does not end in `/payments/check` can poll but cannot drive swaps.
+   * Base path the shipped router is mounted at. The fetcher polls
+   * `${prefix}/payments/check` and reads live swap state from
+   * `${prefix}/swaps/status` — see {@link openReceiveRoutes}.
    */
-  readonly orderUrl: string;
+  readonly prefix: string;
   readonly snapshot: CheckoutSnapshot;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
@@ -514,10 +488,11 @@ export interface CheckoutWatcherOptions {
 export interface CheckoutControllerOptions extends Omit<CheckoutWatcherOptions, "onState"> {
   readonly onState?: (state: CheckoutState) => void;
   /**
-   * The mounted `${prefix}/payments/check` endpoint; swap routes are derived
-   * from it (see {@link CreateOpenReceiveStatusFetcherOptions.orderUrl}).
+   * Base path the shipped router is mounted at. Omitted, the controller does no
+   * status polling of its own — pass `refreshStatus` instead, or nothing at all
+   * to render a snapshot without polling.
    */
-  readonly orderUrl?: string;
+  readonly prefix?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly statusHeaders?: Readonly<Record<string, string>>;
   readonly clipboard?: Pick<Clipboard, "writeText">;

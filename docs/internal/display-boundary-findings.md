@@ -466,6 +466,31 @@ the only fix that recovers the truth.
 
 ---
 
+## 5. Prefix-handling edges, open
+
+Two survivors of the prefix-only migration (G5). Neither is a crash; both are a value being
+accepted where it should be questioned.
+
+**`prepareCheckout` accepts options it silently drops — LOW.** It ships
+`prepareCheckout(options: RequestCheckoutOptions)`, the same type `requestCheckout` takes, so
+`memo` and `metadata` type-check on a prepare call. The body posts only
+`JSON.stringify({ order_id: request.orderId })`, so both are dropped without a word.
+`docs/guides/api-reference.md` documents the narrower `{ orderId, prefix, fetch?, headers? }`,
+which is what the function honours — the doc is right and the type is too wide. The fix is a
+narrower options type for prepare, not a doc change.
+
+**An empty `prefix` attribute root-mounts — LOW, and arguably correct.**
+`<openreceive-checkout order-id="x" prefix>` — the ordinary way to write a boolean-looking
+attribute — gives `getAttribute("prefix") === ""`, and `?? OPENRECEIVE_DEFAULT_PREFIX` does not
+fire on an empty string. `""` is a legal prefix by design ("mounted at the root", routes.ts, and
+pinned in tests/browser-checkout-controller.test.mjs), so the element root-mounts instead of
+falling back to `/openreceive`. Whether that is a bug depends on whether a bare `prefix`
+attribute should mean "root" or "unset"; it currently means root, silently. Worth deciding
+deliberately and then saying so at `resolvePollPrefix` and `currentPrefix`, which both use the
+`??` form.
+
+---
+
 ## Already fixed, and where
 
 The pattern is being applied consistently, not ad hoc.

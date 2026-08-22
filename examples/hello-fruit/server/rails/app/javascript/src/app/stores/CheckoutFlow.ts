@@ -40,7 +40,7 @@ import {
   modelFlow,
   prop,
 } from "mobx-keystone";
-import { openReceivePrefix, orderStatusUrl } from "../helpers/constants.ts";
+import { openReceivePrefix } from "../helpers/constants.ts";
 import { logDemo } from "../helpers/logging.ts";
 
 type SwapGroup = OpenReceiveSwapMethodGroup<OpenReceiveCheckoutPaymentMethod>;
@@ -419,13 +419,12 @@ export class CheckoutFlow extends Model({
     this.swapStartError = null;
     try {
       const invoice = yield* _await(
-        startOpenReceiveSwapRequest(
-          globalThis.fetch,
-          orderStatusUrl(),
-          this.orderId,
+        startOpenReceiveSwapRequest({
+          fetch: globalThis.fetch,
+          prefix: openReceivePrefix(),
+          orderId: this.orderId,
           payInAsset,
-          {},
-        ),
+        }),
       );
       this.applyAttempt(invoice);
       this.focusedSwapAsset = payInAsset;
@@ -469,14 +468,18 @@ export class CheckoutFlow extends Model({
         throw new Error("Swap refund requires the original payment hash.");
       }
       const body = yield* _await(
-        postOpenReceiveJson(globalThis.fetch, orderStatusUrl(), {
-          order_id: this.orderId,
-          payment_hash: payment.payment_hash,
-          action: "refund_swap",
-          attempt_id: attemptId,
-          refund_address: refundAddress,
-          refund_nonce: refundNonce,
-          confirm,
+        postOpenReceiveJson({
+          fetch: globalThis.fetch,
+          prefix: openReceivePrefix(),
+          body: {
+            order_id: this.orderId,
+            payment_hash: payment.payment_hash,
+            action: "refund_swap",
+            attempt_id: attemptId,
+            refund_address: refundAddress,
+            refund_nonce: refundNonce,
+            confirm,
+          },
         }),
       );
       const invoice = normalizeSwapStartInvoice(body);
@@ -521,7 +524,7 @@ export class CheckoutFlow extends Model({
     const polledOrderId = this.orderId;
     try {
       const refresh = createOpenReceiveStatusFetcher({
-        orderUrl: orderStatusUrl(),
+        prefix: openReceivePrefix(),
         snapshot,
       });
       const next = yield* _await(refresh(this.orderId));

@@ -16,11 +16,6 @@ export function openReceivePrefix(): string {
   return mountPrefix;
 }
 
-/** The engine's payment-status route; swap routes derive from its prefix. */
-export function orderStatusUrl(): string {
-  return `${openReceivePrefix()}/payments/check`;
-}
-
 /** Host-app routes. */
 export const ORDERS_URL = "/orders";
 export const RATES_URL = "/rates";

@@ -7,8 +7,12 @@ import {
   createOpenReceiveStatusFetcher,
   createOpenReceiveSwapFeeBreakdown,
   normalizeSwapStartInvoice,
+  openReceiveRoutes,
   postOpenReceiveJson,
+  prepareCheckout,
+  requestCheckout,
 } from "../packages/js/browser/src/internal.ts";
+import { startOpenReceiveSwapRequest } from "../packages/js/browser/src/headless.ts";
 
 // The browser checkout attaches a console logger at INFO; these unit tests do not
 // assert that output.
@@ -79,7 +83,7 @@ test("status polling keeps sibling attempts so Lightning can be reused client-si
     },
   };
   const refresh = createOpenReceiveStatusFetcher({
-    orderUrl: "/openreceive/payments/check",
+    prefix: "/openreceive",
     snapshot: snapshotOf([swap, lightning], swap),
     fetch: jsonFetch({ payment_hash: hash("b"), status: "pending" }),
   });
@@ -154,12 +158,16 @@ test("cancel() leaves a settled checkout settled", () => {
   assert.equal(state.phase, "settled");
 });
 
-test("swap routes derive from the checkout status URL and never carry the action key", async () => {
+test("swap routes derive from the mount prefix and never carry the action key", async () => {
   const quoteFetch = jsonFetch({ pay_in_asset: "USDT_TRON" });
-  await postOpenReceiveJson(quoteFetch, "/openreceive/payments/check", {
-    order_id: "order-1",
-    action: "swap_quote",
-    pay_in_asset: "USDT_TRON",
+  await postOpenReceiveJson({
+    fetch: quoteFetch,
+    prefix: "/openreceive",
+    body: {
+      order_id: "order-1",
+      action: "swap_quote",
+      pay_in_asset: "USDT_TRON",
+    },
   });
   assert.equal(quoteFetch.requests[0].url, "/openreceive/swaps/quote");
   assert.deepEqual(quoteFetch.requests[0].body, {
@@ -167,18 +175,74 @@ test("swap routes derive from the checkout status URL and never carry the action
     pay_in_asset: "USDT_TRON",
   });
 
-  // Anything else posts to the status URL itself — still without `action`, which
+  // Anything else posts to the payment-check route — still without `action`, which
   // the shipped schemas reject as an unknown property.
   const plainFetch = jsonFetch({ status: "pending" });
-  await postOpenReceiveJson(plainFetch, "/openreceive/payments/check", {
-    order_id: "order-1",
-    payment_hash: hash("a"),
-    action: "status",
+  await postOpenReceiveJson({
+    fetch: plainFetch,
+    prefix: "/openreceive",
+    body: {
+      order_id: "order-1",
+      payment_hash: hash("a"),
+      action: "status",
+    },
   });
+  assert.equal(plainFetch.requests[0].url, "/openreceive/payments/check");
   assert.deepEqual(plainFetch.requests[0].body, {
     order_id: "order-1",
     payment_hash: hash("a"),
   });
+});
+
+test("a trailing slash on the prefix does not double up in a derived route", () => {
+  assert.deepEqual(openReceiveRoutes("/openreceive/"), openReceiveRoutes("/openreceive"));
+  assert.equal(openReceiveRoutes("").checkouts, "/checkouts");
+  assert.equal(openReceiveRoutes("/openreceive").swapsRefunds, "/openreceive/swaps/refunds");
+});
+
+// THERE IS ONE MOUNT: substituting a default for a `prefix` that never arrived
+// would create a checkout against one deployment and settle it against
+// another. `prefix` is required in the types, so this guard is for the callers
+// the types do not reach — plain JS, and a wrapper handing through a prop that
+// was never set — and it lives in `openReceiveRoutes` so every published entry
+// point inherits it. These cases used to be an opaque TypeError from
+// `.replace` on `undefined`.
+test("a missing or non-string prefix fails loudly, naming the option", () => {
+  for (const bad of [undefined, null, 42, {}]) {
+    assert.throws(
+      () => openReceiveRoutes(bad),
+      (error) =>
+        error instanceof TypeError &&
+        error.message.includes("`prefix`") &&
+        error.message.includes("/openreceive"),
+      `openReceiveRoutes(${String(bad)}) must name the missing option`,
+    );
+  }
+  // `""` is a legal prefix — "mounted at the root" — not a missing one.
+  assert.equal(openReceiveRoutes("").paymentsCheck, "/payments/check");
+});
+
+test("the published entry points inherit the prefix guard", async () => {
+  assert.throws(
+    () =>
+      createOpenReceiveStatusFetcher({
+        snapshot: snapshotOf([lightningInvoice()]),
+        fetch: () => {},
+      }),
+    /OpenReceive requires `prefix`/,
+  );
+  await assert.rejects(
+    requestCheckout({ orderId: "order-1", fetch: () => {} }),
+    /OpenReceive requires `prefix`/,
+  );
+  await assert.rejects(
+    prepareCheckout({ orderId: "order-1", fetch: () => {} }),
+    /OpenReceive requires `prefix`/,
+  );
+  await assert.rejects(
+    startOpenReceiveSwapRequest({ orderId: "order-1", payInAsset: "USDT", fetch: () => {} }),
+    /OpenReceive requires `prefix`/,
+  );
 });
 
 test("deferred-mode element attributes carry the same create-time options as create mode", () => {

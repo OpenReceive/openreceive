@@ -68,16 +68,6 @@ export function selectCheckoutDisplayInvoice(
   return settledSwap ?? nonLock[0];
 }
 
-export function checkoutInvoiceFromOrderSnapshot(
-  snapshot: CheckoutSnapshot,
-): CheckoutInvoiceSnapshot {
-  const invoice = selectCheckoutDisplayInvoice(snapshot);
-  if (invoice === undefined) {
-    throw new TypeError("OpenReceive order snapshot requires active or invoices[0].");
-  }
-  return invoice;
-}
-
 export function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
   return snapshot.status === "paid";
 }

@@ -24,8 +24,8 @@ export const OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS = 60 as const;
 /**
  * Default base path the shipped OpenReceive router is mounted at. When a developer passes
  * only an order id (React `<Checkout orderId>` / `<openreceive-checkout order-id>`), this is
- * the prefix used to derive the create route (`${prefix}/checkouts`) and payment-check
- * route (`${prefix}/payments/check`).
+ * the prefix every route is derived from — see `openReceiveRoutes` in ./routes.ts. It is
+ * the only URL input the checkout components accept.
  */
 export const OPENRECEIVE_DEFAULT_PREFIX = "/openreceive" as const;
 /**
@@ -196,6 +196,12 @@ export function createOpenReceiveThemeChangeEvent(
 
 export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   orderId: "order-id",
+  /**
+   * Base path the shipped router is mounted at (default `/openreceive`). The
+   * element's ONLY URL input: create, prepare, payment-check and the four swap
+   * routes are all derived from it. There is deliberately no per-route
+   * attribute — see `openReceiveRoutes` in ../internal/routes.ts.
+   */
   prefix: "prefix",
   /** JSON-encoded create-time metadata forwarded to the create request. */
   metadata: "metadata",
@@ -208,7 +214,6 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   fiatValue: "fiat-value",
   status: "status",
   expiresAt: "expires-at",
-  orderUrl: "order-url",
   theme: "theme",
   paymentWizard: "payment-wizard",
   /**

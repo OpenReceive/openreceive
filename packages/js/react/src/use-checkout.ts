@@ -12,7 +12,6 @@ import {
 } from "@openreceive/browser/internal";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
 import { getCheckoutLogContext } from "./utils.ts";
-import { resolveCheckoutStatusRefreshUrl } from "./view-model.ts";
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";
 
 export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
@@ -77,10 +76,9 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   const refreshStatusRef = React.useRef(refreshStatus);
   refreshStatusRef.current = refreshStatus;
   const polls = refreshStatus !== undefined;
-  const orderUrl = resolveCheckoutStatusRefreshUrl({
-    orderUrl: options.orderUrl,
-    polling: options.polling,
-  });
+  // `polling: false` and "no prefix to poll" are the same answer to the
+  // controller: don't give it a mount, and it starts no status fetcher.
+  const prefix = options.polling === false ? undefined : options.prefix;
   // The controller owns the poll/countdown timers and pushes every poll result
   // back out through onSnapshot -> setLatestSnapshot. Seed it from the current
   // snapshot via a ref (as with onStateRef below) and recreate it only when the
@@ -100,7 +98,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
               (await refreshStatusRef.current?.(orderId)) ?? null,
           }
         : {}),
-      ...(orderUrl === undefined ? {} : { orderUrl }),
+      ...(prefix === undefined ? {} : { prefix }),
       pollIntervalMs: options.pollIntervalMs,
       // Omit logger when unset so @openreceive/browser attaches its default console sink.
       // Pass `false` through to disable; wrap custom sinks so inline host callbacks stay stable.
@@ -135,7 +133,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       controller.stop();
       if (controllerRef.current === controller) controllerRef.current = null;
     };
-  }, [checkoutIdentity, polls, orderUrl, options.pollIntervalMs]);
+  }, [checkoutIdentity, polls, prefix, options.pollIntervalMs]);
   const publicStatus = deriveStatus(state);
   const richStatus = createCheckoutStatusModel(state);
 

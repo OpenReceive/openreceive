@@ -16,21 +16,40 @@ stability guarantee — never import it. Everything a custom UI legitimately
 needs is curated into `/headless`, symbol by symbol; if you find yourself
 reaching for `/internal`, that is a bug in the curation — file an issue.
 
+## One URL: `prefix`
+
+Every call on this surface that talks to the server takes `prefix` — the base
+path the shipped router is mounted at (default `/openreceive`) — and derives its
+own route from it: `/checkouts`, `/checkouts/prepare`, `/payments/check`,
+`/swaps`, `/swaps/quote`, `/swaps/status`, `/swaps/refunds`. There is no
+per-route override, and no URL templating. A headless host holds one string.
+
+```ts
+const snapshot = await prepareCheckout({ orderId, prefix: "/openreceive" });
+const refresh = createOpenReceiveStatusFetcher({ prefix: "/openreceive", snapshot });
+const started = await startOpenReceiveSwapRequest({
+  fetch: globalThis.fetch,
+  prefix: "/openreceive",
+  orderId,
+  payInAsset: "USDT_TRON",
+});
+```
+
 ## The `@openreceive/browser/headless` surface
 
 Checkout lifecycle:
 
 - `prepareCheckout` / `requestCheckout` — the prepare-then-mint calls (also on
-  the main entry).
+  the main entry). Both take `{ orderId, prefix }`.
 - `createCheckoutState`, `CheckoutState`, `CheckoutSnapshot`,
   `CheckoutInvoiceSnapshot` — engine state and snapshots.
 - `selectCheckoutDisplayInvoice`, `isReusableLightningInvoice` — invoice
   display selection.
 - `status` / `Status`, `createCheckoutStatusModel`, `CheckoutStatusModel`,
-  `createOpenReceiveStatusFetcher`, `OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS` —
-  status derivation and polling.
+  `createOpenReceiveStatusFetcher` (`{ prefix, snapshot }`),
+  `OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS` — status derivation and polling.
 - `postOpenReceiveJson`, `OpenReceiveBrowserRequestError` — the HTTP helper and
-  error type the engine's calls share.
+  error type the engine's calls share. It takes `{ fetch, prefix, body }`.
 
 Payment methods and wizard model:
 
@@ -48,7 +67,8 @@ Payment methods and wizard model:
 
 Swap flows:
 
-- `startOpenReceiveSwapRequest`, `normalizeSwapStartInvoice`.
+- `startOpenReceiveSwapRequest` (`{ fetch, prefix, orderId, payInAsset }`),
+  `normalizeSwapStartInvoice`.
 - `createOpenReceiveSwapDisplayModel` / `OpenReceiveSwapDisplayModel`,
   `openReceiveSwapAssetMatchesRoute`, `openReceiveSwapPickerKey`,
   `formatOpenReceiveSwapLimit`.

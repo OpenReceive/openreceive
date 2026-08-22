@@ -4,4 +4,3 @@ export * from "./checkout-types.ts";
 export * from "./dom-contract.ts";
 export * from "./icons.ts";
 export * from "./labels.ts";
-export { type Status, type StatusInvoiceLike, status } from "../status.ts";

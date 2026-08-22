@@ -22,10 +22,9 @@ Browser & React API surface (full reference in
 [api-reference.md → Browser & React](api-reference.md#browser--react)):
 
 - `prepareCheckout(options)` / `requestCheckout(options)` — direct calls when you build your
-  own UI. Options: `orderId`, `prefix` (or `checkoutUrl`), `fetch`, `headers`, `memo`,
-  `metadata`.
+  own UI. Options: `orderId`, `prefix`, `fetch`, `headers`, `memo`, `metadata`.
 - `<Checkout>` props — `orderId` (create mode) or `checkout` (snapshot mode), `prefix`,
-  `orderUrl`, the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
+  the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
   `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`, `paymentWizard`,
   `themeToggle` (default `true`), `defaultTheme`, `storageKey`, `decodeLinkUrl`,
   `components`, `classNames`, `syncUrl`,
@@ -34,6 +33,12 @@ Browser & React API surface (full reference in
   (`polling`/`pollIntervalMs` ride the `options` escape hatch there).
 - `useCheckout(options)` — the hook behind `<Checkout>` for custom layouts; returns the live
   snapshot, status/countdown labels, and `copyInvoice`/`openWallet`/`retry` actions.
+
+`prefix` is the only URL the browser packages take. Every route — `/checkouts`,
+`/checkouts/prepare`, `/payments/check`, `/swaps`, `/swaps/quote`,
+`/swaps/status`, `/swaps/refunds` — is derived from it, so there is nothing to
+keep in step and no way to point create and settle at different mounts. Pass
+`polling={false}` to render a snapshot without polling.
 
 Order summaries and resume pages are your concern; fetch them from your application API, not
 from OpenReceive. Status polling posts `{ order_id, payment_hash }` to `/payments/check`; the

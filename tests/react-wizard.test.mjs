@@ -65,7 +65,6 @@ test("React payment wizard greys under-minimum swaps with rounded minimum amount
   const html = renderToStaticMarkup(
     React.createElement(PaymentWizard, {
       invoice: undefined,
-      orderUrl: false,
       checkout: {
         checkout_id: "or_chk_min",
         order_id: "order-min",

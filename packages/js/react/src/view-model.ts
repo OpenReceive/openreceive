@@ -36,11 +36,3 @@ export function createCheckoutViewModel(data: CheckoutData): CheckoutViewModel {
     status: deriveCheckoutOrderStatus(data.checkout),
   };
 }
-
-export function resolveCheckoutStatusRefreshUrl(options: {
-  readonly orderUrl?: string | false;
-  readonly polling?: boolean;
-}): string | undefined {
-  if (options.polling === false || options.orderUrl === false) return undefined;
-  return options.orderUrl;
-}

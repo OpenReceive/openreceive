@@ -2,7 +2,7 @@ import { nonEmptyString, recordOrEmpty } from "@openreceive/core";
 import { optionalSafeInteger } from "./checkout-read.ts";
 import { readOpenReceiveJsonResponse } from "./checkout-transport.ts";
 import { resolveOpenReceiveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
-import { openReceiveRoutePrefix as routePrefix } from "./routes.ts";
+import { type OpenReceiveRoutes, openReceiveRoutes } from "./routes.ts";
 import {
   type CheckoutInvoiceSnapshot,
   OPENRECEIVE_REFUND_REVIEW_NONCE,
@@ -10,25 +10,30 @@ import {
   type OpenReceiveBrowserLogLevel,
 } from "./ui.ts";
 
-export interface PostOpenReceiveJsonOptions {
+/**
+ * What every swap call needs: the fetch to use, and the mount `prefix` its
+ * route is derived from (see {@link openReceiveRoutes}). `prefix` is the only
+ * URL input — no call in this module takes a route of its own.
+ */
+export interface OpenReceiveSwapRequestOptions {
+  readonly fetch: typeof globalThis.fetch;
+  readonly prefix: string;
   readonly logger?: OpenReceiveBrowserLoggerOption;
   readonly headers?: Readonly<Record<string, string>>;
 }
 
 /**
- * POST JSON through the mounted swap route set (see {@link openReceiveRoutePrefix}:
- * `url` is the checkout status endpoint every other route is derived from).
+ * POST JSON through the mounted swap route set.
  *
  * `action` selects the route client-side and is never sent: the shipped schemas
- * are `additionalProperties: false`, so an extra key is a 400.
+ * are `additionalProperties: false`, so an extra key is a 400. An action this
+ * function does not route posts to `${prefix}/payments/check`.
  */
 export async function postOpenReceiveJson(
-  fetcher: typeof globalThis.fetch,
-  url: string,
-  body: Record<string, unknown>,
-  headersOrOptions?: Readonly<Record<string, string>> | PostOpenReceiveJsonOptions,
+  options: OpenReceiveSwapRequestOptions & { readonly body: Record<string, unknown> },
 ): Promise<unknown> {
-  const options = normalizePostOptions(headersOrOptions);
+  const { body } = options;
+  const routes = openReceiveRoutes(options.prefix);
   const orderId = nonEmptyString(body.order_id);
   const action = nonEmptyString(body.action);
   emitSwapActionLog(options.logger, "requested", body);
@@ -36,18 +41,13 @@ export async function postOpenReceiveJson(
   try {
     const result =
       action === "swap_quote"
-        ? await requestJson(
-            fetcher,
-            `${routePrefix(url)}/swaps/quote`,
-            {
-              order_id: orderId,
-              pay_in_asset: body.pay_in_asset,
-            },
-            options,
-          )
+        ? await requestJson(options, routes.swapsQuote, {
+            order_id: orderId,
+            pay_in_asset: body.pay_in_asset,
+          })
         : action === "refund_swap"
-          ? await refundRequest(fetcher, url, body, orderId, options)
-          : await requestJson(fetcher, url, withoutAction(body), options);
+          ? await refundRequest(options, routes, body, orderId)
+          : await requestJson(options, routes.paymentsCheck, withoutAction(body));
     if (action === "start_swap" || action === "refund_swap") {
       emitSwapActionLog(options.logger, "succeeded", body, swapActionResultFields(result));
     }
@@ -99,26 +99,16 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
   };
 }
 
-export const OPENRECEIVE_SWAP_ADDRESS_PREPARING_MESSAGE =
-  "Swap payment address is still being prepared. Retry this swap start shortly.";
-
-export function isOpenReceiveSwapAddressPreparingError(error: unknown): boolean {
-  return (error instanceof Error ? error.message : String(error)).includes("still being prepared");
-}
-
 export async function startOpenReceiveSwapRequest(
-  fetcher: typeof globalThis.fetch,
-  url: string,
-  orderId: string,
-  payInAsset: string,
-  options?: PostOpenReceiveJsonOptions,
+  options: OpenReceiveSwapRequestOptions & {
+    readonly orderId: string;
+    readonly payInAsset: string;
+  },
 ): Promise<CheckoutInvoiceSnapshot> {
-  const body = await requestJson(
-    fetcher,
-    `${routePrefix(url)}/swaps`,
-    { order_id: orderId, pay_in_asset: payInAsset },
-    options ?? {},
-  );
+  const body = await requestJson(options, openReceiveRoutes(options.prefix).swaps, {
+    order_id: options.orderId,
+    pay_in_asset: options.payInAsset,
+  });
   return normalizeSwapStartInvoice(body);
 }
 
@@ -128,16 +118,13 @@ export async function startOpenReceiveSwapRequest(
  * the normalized swap invoice (with the staged refund address/nonce on review).
  */
 export async function requestOpenReceiveSwapRefund(
-  fetcher: typeof globalThis.fetch,
-  url: string,
-  options: {
+  options: OpenReceiveSwapRequestOptions & {
     readonly orderId?: string;
     readonly invoices: readonly (CheckoutInvoiceSnapshot | null | undefined)[];
     readonly attemptId: string;
     readonly refundAddress: string;
     readonly refundNonce: string;
     readonly confirm: boolean;
-    readonly logger?: OpenReceiveBrowserLoggerOption;
   },
 ): Promise<CheckoutInvoiceSnapshot> {
   const payment = options.invoices.find(
@@ -147,10 +134,12 @@ export async function requestOpenReceiveSwapRefund(
   if (payment?.payment_hash === undefined) {
     throw new Error("Swap refund requires the original payment hash.");
   }
-  const body = await postOpenReceiveJson(
-    fetcher,
-    url,
-    {
+  const body = await postOpenReceiveJson({
+    fetch: options.fetch,
+    prefix: options.prefix,
+    ...(options.logger === undefined ? {} : { logger: options.logger }),
+    ...(options.headers === undefined ? {} : { headers: options.headers }),
+    body: {
       ...(options.orderId === undefined ? {} : { order_id: options.orderId }),
       payment_hash: payment.payment_hash,
       action: "refund_swap",
@@ -159,49 +148,36 @@ export async function requestOpenReceiveSwapRefund(
       refund_nonce: options.refundNonce,
       confirm: options.confirm,
     },
-    { logger: options.logger },
-  );
+  });
   return normalizeSwapStartInvoice(body);
 }
 
 async function refundRequest(
-  fetcher: typeof globalThis.fetch,
-  url: string,
+  options: OpenReceiveSwapRequestOptions,
+  routes: OpenReceiveRoutes,
   body: Record<string, unknown>,
   orderId: string | undefined,
-  options: PostOpenReceiveJsonOptions,
 ): Promise<unknown> {
   if (orderId === undefined) throw new Error("Swap refund requires order_id.");
   const refundAddress = nonEmptyString(body.refund_address);
   if (refundAddress === undefined) throw new Error("Swap refund requires refund_address.");
   const paymentHash = nonEmptyString(body.payment_hash);
   if (paymentHash === undefined) throw new Error("Swap refund requires payment_hash.");
-  const prefix = routePrefix(url);
   if (body.confirm === true) {
     const status = recordOrEmpty(
-      await requestJson(
-        fetcher,
-        `${prefix}/swaps/refunds`,
-        {
-          order_id: orderId,
-          payment_hash: paymentHash,
-          refund_address: refundAddress,
-        },
-        options,
-      ),
+      await requestJson(options, routes.swapsRefunds, {
+        order_id: orderId,
+        payment_hash: paymentHash,
+        refund_address: refundAddress,
+      }),
     );
     return { swap: status };
   }
   const status = recordOrEmpty(
-    await requestJson(
-      fetcher,
-      `${prefix}/swaps/status`,
-      {
-        order_id: orderId,
-        payment_hash: paymentHash,
-      },
-      options,
-    ),
+    await requestJson(options, routes.swapsStatus, {
+      order_id: orderId,
+      payment_hash: paymentHash,
+    }),
   );
   return {
     swap: {
@@ -220,12 +196,11 @@ function withoutAction(body: Record<string, unknown>): Record<string, unknown> {
 }
 
 async function requestJson(
-  fetcher: typeof globalThis.fetch,
+  options: OpenReceiveSwapRequestOptions,
   url: string,
   body: Record<string, unknown>,
-  options: PostOpenReceiveJsonOptions,
 ): Promise<unknown> {
-  const response = await fetcher(url, {
+  const response = await options.fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -295,20 +270,6 @@ function copyOptionalSwapFields(
     if (swap[key] !== undefined) output[key] = swap[key];
   }
   return output as Partial<NonNullable<CheckoutInvoiceSnapshot["swap"]>>;
-}
-
-function normalizePostOptions(
-  value: Readonly<Record<string, string>> | PostOpenReceiveJsonOptions | undefined,
-): PostOpenReceiveJsonOptions {
-  if (value === undefined) return {};
-  // A bare headers record is all string values, while an options object carries
-  // only `logger`/`headers` keys with non-string values — so a header literally
-  // named "logger" or "headers" still parses as a header.
-  const isOptions = Object.entries(value).every(
-    ([key, entry]) => (key === "logger" || key === "headers") && typeof entry !== "string",
-  );
-  if (isOptions) return value as PostOpenReceiveJsonOptions;
-  return { headers: value as Readonly<Record<string, string>> };
 }
 
 function emitSwapActionLog(

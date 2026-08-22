@@ -308,10 +308,10 @@ export class OpenReceiveBrowserCheckoutController implements CheckoutController 
   private createWatcher(options: CheckoutControllerOptions): CheckoutWatcher {
     const refreshStatus =
       options.refreshStatus ??
-      (options.orderUrl === undefined
+      (options.prefix === undefined
         ? undefined
         : createOpenReceiveStatusFetcher({
-            orderUrl: options.orderUrl,
+            prefix: options.prefix,
             snapshot: options.snapshot,
             fetch: options.fetch,
             headers: options.statusHeaders,

@@ -195,15 +195,17 @@ export function enterCheckoutResumePath(
 export function createGuestOrderFetcher<TOrder>(options: {
   readonly parseOrder: (value: unknown) => TOrder | undefined;
   /**
-   * Build the host application's order URL.
+   * Build the URL of the HOST APPLICATION's own order endpoint (e.g. `/orders/:id`).
+   * Nothing here is an OpenReceive route: the mounted router's routes all come from
+   * `prefix` (see ./routes.ts), and it serves no order-read endpoint at all.
    */
-  readonly orderUrl: (orderId: string) => string;
+  readonly hostOrderUrl: (orderId: string) => string;
   readonly fetch?: typeof globalThis.fetch;
 }): (orderId: string) => Promise<TOrder | undefined> {
   const fetchFn = options.fetch ?? globalThis.fetch;
-  const orderUrl = options.orderUrl;
+  const hostOrderUrl = options.hostOrderUrl;
   return async (orderId: string): Promise<TOrder | undefined> => {
-    const response = await fetchFn(orderUrl(orderId));
+    const response = await fetchFn(hostOrderUrl(orderId));
     if (response.status === 404 || !response.ok) return undefined;
     const body = (await response.json()) as unknown;
     if (typeof body !== "object" || body === null) return undefined;

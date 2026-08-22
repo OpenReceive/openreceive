@@ -1,10 +1,11 @@
 // Everything that talks to the mounted OpenReceive routes: the request error
 // type, the JSON response reader, prepare/create calls, the status fetcher and
-// its polling merge, URL resolution from the route prefix, and the parsers
-// that turn a response body into a CheckoutSnapshot.
+// its polling merge, and the parsers that turn a response body into a
+// CheckoutSnapshot. Every URL comes from ./routes.ts, derived from the caller's
+// `prefix` — this module never accepts a route of its own.
 
 import { isRecord, nonEmptyString } from "@openreceive/core";
-import { openReceiveRoutePrefix } from "./routes.ts";
+import { type OpenReceiveRoutes, openReceiveRoutes } from "./routes.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
@@ -98,7 +99,7 @@ export async function readOpenReceiveJsonResponse(
 }
 
 interface NormalizedRequestCheckoutOptions {
-  readonly checkoutUrl: string | ((orderId: string) => string);
+  readonly routes: OpenReceiveRoutes;
   readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
@@ -113,34 +114,13 @@ function normalizeRequestCheckoutOptions(
   const orderId = nonEmptyString(record.orderId ?? record.order_id);
   const metadata = optionalRecord(record.metadata);
   return {
-    checkoutUrl: resolveRequestCheckoutTarget(options),
+    routes: openReceiveRoutes(options.prefix),
     orderId: orderId ?? "",
     fetch: options.fetch,
     headers: options.headers,
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(metadata === undefined ? {} : { metadata }),
   };
-}
-
-/**
- * Resolve where a checkout is created. An explicit `checkoutUrl` always wins; otherwise a
- * `prefix` (the base path the shipped router is mounted at) derives `${prefix}/checkouts`.
- * This is what lets a developer pass `prefix: "/openreceive"` and never spell out routes.
- */
-function resolveRequestCheckoutTarget(
-  options: RequestCheckoutOptions,
-): string | ((orderId: string) => string) {
-  if (options.checkoutUrl !== undefined) return options.checkoutUrl;
-  const prefix = nonEmptyString(options.prefix);
-  if (prefix !== undefined) {
-    return `${prefix.replace(/\/+$/, "")}/checkouts`;
-  }
-  throw new Error("OpenReceive checkout creation requires checkoutUrl or prefix.");
-}
-
-/** Derive the payment-check URL from the base path the shipped router is mounted at. */
-export function resolveOrderUrlFromPrefix(prefix: string): string {
-  return `${prefix.replace(/\/+$/, "")}/payments/check`;
 }
 
 export async function requestCheckout(options: RequestCheckoutOptions): Promise<CheckoutSnapshot> {
@@ -166,7 +146,7 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
   const headers = request.headers === undefined ? {} : request.headers;
-  const response = await fetcher(resolveCheckoutUrl(request.checkoutUrl, request.orderId), {
+  const response = await fetcher(request.routes.checkouts, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -203,8 +183,7 @@ export async function prepareCheckout(options: RequestCheckoutOptions): Promise<
   }
 
   const headers = request.headers === undefined ? {} : request.headers;
-  const prepareUrl = resolveCheckoutPrepareUrl(request.checkoutUrl, request.orderId);
-  const response = await fetcher(prepareUrl, {
+  const response = await fetcher(request.routes.checkoutsPrepare, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -225,6 +204,7 @@ export function createOpenReceiveStatusFetcher(
   // otherwise the terminal-state guard below never fires and every tick keeps
   // hitting /swaps/status after the provider is already terminal.
   let snapshot = options.snapshot;
+  const routes = openReceiveRoutes(options.prefix);
   return async (order_id) => {
     if (order_id.length === 0) {
       throw new Error("OpenReceive status refresh requires order_id.");
@@ -245,7 +225,7 @@ export function createOpenReceiveStatusFetcher(
     if (activePaymentHash === undefined || !/^[0-9a-f]{64}$/i.test(activePaymentHash)) {
       return snapshot;
     }
-    const response = await fetcher(options.orderUrl, {
+    const response = await fetcher(routes.paymentsCheck, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -292,8 +272,7 @@ export function createOpenReceiveStatusFetcher(
       !isTerminalSwapProviderState(nonEmptyString(active.swap.provider_state))
     ) {
       try {
-        const swapStatusUrl = `${openReceiveRoutePrefix(options.orderUrl)}/swaps/status`;
-        const swapResponse = await fetcher(swapStatusUrl, {
+        const swapResponse = await fetcher(routes.swapsStatus, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -370,36 +349,6 @@ function mergeSwapStatusIntoInvoice<
     swap: merged as unknown as NonNullable<CheckoutInvoiceSnapshot["swap"]>,
     ...(providerExpiresAt === undefined ? {} : { expires_at: providerExpiresAt }),
   };
-}
-
-function resolveCheckoutUrl(
-  checkoutUrl: string | ((orderId: string) => string),
-  orderId: string,
-): string {
-  const url = typeof checkoutUrl === "function" ? checkoutUrl(orderId) : checkoutUrl;
-  if (url.includes("{orderId}")) {
-    return url.replaceAll("{orderId}", encodeURIComponent(orderId));
-  }
-  return url.includes("{order_id}")
-    ? url.replaceAll("{order_id}", encodeURIComponent(orderId))
-    : url;
-}
-
-function resolveCheckoutPrepareUrl(
-  checkoutUrl: string | ((orderId: string) => string),
-  orderId: string,
-): string {
-  const minted = resolveCheckoutUrl(checkoutUrl, orderId);
-  if (minted.endsWith("/checkouts")) return `${minted}/prepare`;
-  if (minted.includes("/checkouts?")) {
-    return minted.replace("/checkouts?", "/checkouts/prepare?");
-  }
-  // Silently falling back to the default prefix would split prepare and
-  // create across DIFFERENT endpoints — fail loudly instead.
-  throw new Error(
-    "OpenReceive cannot derive the prepare URL from this checkoutUrl (it does not end in " +
-      "/checkouts). Pass `prefix` instead, or point checkoutUrl at the mounted /checkouts route.",
-  );
 }
 
 function checkoutLockSnapshotFromPrepareBody(
