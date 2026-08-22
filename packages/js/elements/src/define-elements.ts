@@ -43,7 +43,6 @@ import {
   parseOpenReceiveResolvedTheme,
   parseOpenReceiveThemePreference,
   requestOpenReceiveSwapRefund,
-  resolveOrderUrlFromPrefix,
   syncOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemeControls,
   updateOpenReceivePaymentWizardSelection,
@@ -192,7 +191,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       syncResumePath: (orderId) => {
         this.syncResumePath(orderId);
       },
-      resolveOrderUrl: (orderId) => this.resolveOrderUrl(orderId),
+      resolvePollPrefix: (orderId) => this.resolvePollPrefix(orderId),
       dispatchError: (error) => {
         this.dispatchError(error);
       },
@@ -214,7 +213,6 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl,
@@ -582,7 +580,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       // polling — the attribute snapshot still describes the pre-swap
       // Lightning attempt.
       const snapshot = latest?.active?.rail === "swap" ? latest : (attributeSnapshot ?? latest);
-      const orderUrl = this.resolveOrderUrl(snapshot?.order_id);
+      const prefix = this.resolvePollPrefix(snapshot?.order_id);
       if (snapshot === undefined) {
         this.stopCheckoutController();
         return;
@@ -607,7 +605,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       this.stopCheckoutController();
       this.controller = createCheckoutController({
         snapshot,
-        ...(orderUrl === null || !polling ? {} : { orderUrl }),
+        ...(prefix === undefined || !polling ? {} : { prefix }),
         ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
         logger: options.logger,
         onError: (error) => this.dispatchError(error),
@@ -624,18 +622,17 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     }
 
     /**
-     * Status/swap endpoint resolution, matching React snapshot mode: an explicit
-     * `order-url` wins; otherwise `${prefix}/payments/check` (default `/openreceive`).
+     * The mount every server route is derived from, matching React snapshot
+     * mode: the `prefix` attribute, default `/openreceive`. Answers `undefined`
+     * when there is no order to act on — nothing to poll, nothing to swap.
      */
-    private resolveOrderUrl(orderId?: string): string | null {
-      const attribute = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl);
-      if (attribute !== null && attribute.length > 0) return attribute;
-      const prefix =
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
-        OPENRECEIVE_DEFAULT_PREFIX;
+    private resolvePollPrefix(orderId?: string): string | undefined {
       const id = orderId ?? this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      if (id === null || id === undefined || id.length === 0) return null;
-      return resolveOrderUrlFromPrefix(prefix);
+      if (id === null || id === undefined || id.length === 0) return undefined;
+      return (
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
+        OPENRECEIVE_DEFAULT_PREFIX
+      );
     }
 
     private currentCheckoutSnapshot(): CheckoutSnapshot | undefined {
@@ -1102,11 +1099,13 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       confirm: boolean,
     ): Promise<void> {
       const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      const url = this.resolveOrderUrl(orderId ?? undefined);
-      if (url === null) return;
+      const prefix = this.resolvePollPrefix(orderId ?? undefined);
+      if (prefix === undefined) return;
 
       try {
-        this.startedSwapInvoice = await requestOpenReceiveSwapRefund(globalThis.fetch, url, {
+        this.startedSwapInvoice = await requestOpenReceiveSwapRefund({
+          fetch: globalThis.fetch,
+          prefix,
           ...(orderId === null ? {} : { orderId }),
           invoices: [this.startedSwapInvoice, ...(this.latestCheckoutSnapshot?.invoices ?? [])],
           attemptId,

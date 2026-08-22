@@ -20,7 +20,6 @@ element cannot (component slots, class-name slots, render-prop children).
 | `checkout` | – | yes | yes | snapshot |
 | `orderId` | – | yes | yes | create |
 | `prefix` | `/openreceive` | yes | yes | both |
-| `orderUrl` | derived from `prefix` | yes (`string \| false`) | yes | both |
 | `paymentWizard` | `true` | yes | yes | both |
 | `decodeLinkUrl` | – (no decode link) | yes | yes | both |
 | `themeToggle` | `true` | yes | yes | both |
@@ -36,6 +35,17 @@ element cannot (component slots, class-name slots, render-prop children).
 | `components`, `classNames`, `children` | – | yes | not representable | both |
 | `options` | `{}` | – (props are flat) | yes (escape hatch for the rest of `CheckoutShellOptions`) | both |
 
+`prefix` is the ONLY URL prop, in all four wrappers (G5). The create, prepare,
+payment-check and four swap routes are all derived from it by one function
+(`openReceiveRoutes`, `packages/js/browser/src/internal/routes.ts`), so a
+checkout cannot be created against one mount and settled against another. There
+used to be five more ways to say the same thing — `checkoutUrl` (string or
+`(orderId) => string`), `{orderId}` / `{order_id}` templating, and an `orderUrl`
+prop / `order-url` attribute that was really the mounted `/payments/check`
+route — and all of them are gone. To turn polling off, pass `polling={false}`
+(React) or `polling="false"` (the element); to drop swaps, pass
+`paymentWizard={false}`.
+
 On the element itself the polling knobs are the `polling` / `poll-interval-ms`
 attributes: `polling="false"` renders the snapshot (countdown included)
 without ever POSTing `/payments/check`, matching React's `polling` prop;
@@ -45,18 +55,87 @@ through the `options` escape hatch onto exactly those attributes.
 Mode rules:
 
 - Exactly one of `checkout` (snapshot) or `orderId` (create) is required. Passing
-  neither raises one clear boundary error (`validateOpenReceiveWrapperCheckoutProps`;
-  React validates in `<Checkout>` itself) naming the wrapper and the missing prop —
-  not the shared factory's bare `TypeError`. Where it surfaces follows each
-  framework's prop plumbing: Vue validates inside its `computed` shell binding and
-  Svelte inside its reactive statement, so the throw does come out of that read;
-  Angular validates in `ngOnChanges` — once per input change, never once per
-  change-detection pass.
+  neither raises one clear boundary error naming the framework and the missing prop —
+  not the shared factory's bare `TypeError`. All four call the same
+  `validateOpenReceiveCheckoutProps`, React included (it dispatches on the result in
+  `<Checkout>` itself). Where it surfaces follows each framework's prop plumbing: Vue
+  validates inside its `computed` shell binding and Svelte inside its reactive
+  statement, so the throw does come out of that read; Angular validates in
+  `ngOnChanges` — once per input change, never once per change-detection pass. An
+  `orderId` of `""` counts as absent and is rejected the same way.
 - The create-only props do nothing in snapshot mode. Each wrapper warns once when
   one is passed with a `checkout` present.
 - `themeToggle: false` means the host owns theming: no package toggle is rendered
   and no `data-theme` is stamped. React additionally treats an ancestor
   `ThemeScope` as the owner, because the scope already renders a page toggle.
+
+## Where the prop list lives
+
+One declaration, in `packages/js/browser/src/internal/checkout-props.ts`
+(`OpenReceiveCheckoutComponentProps`). The browser package is the floor React and
+the element wrappers share; `@openreceive/elements` composes the wrapper flavour
+(`OpenReceiveWrapperCheckoutComponentProps` = the shared props + the element's
+event handlers + the `options` escape hatch) and re-exports it.
+
+| Package | How it gets the props |
+| --- | --- |
+| `@openreceive/react` | derived: `CheckoutProps extends OpenReceiveCheckoutComponentProps` plus the React-only slots |
+| `@openreceive/vue` | derived: `defineProps<OpenReceiveWrapperCheckoutComponentProps>()`, with `withDefaults` for the defaults a type cannot carry |
+| `@openreceive/svelte` | restated: `export let` (and `let { … } = $props()` under runes) is a declaration, not a type — every prop name has to be written |
+| `@openreceive/angular` | restated: `@Input()` is a decorator on a declared field; a type cannot generate fields |
+
+The two restatements are forced by those frameworks, not neglect. That is the
+whole reason `tests/wrapper-parity.test.mjs` still exists: it holds the Svelte and
+Angular lists to the table above, and holds React and Vue to *deriving* rather
+than quietly growing a fourth copy.
+
+Deriving the Vue props means the shipped SFC's `defineProps` type is imported, so
+the consuming toolchain must be able to resolve types across packages —
+`@vue/compiler-sfc` does that with TypeScript's resolver, which is why Vue lists
+TypeScript as the peer requirement for imported prop types. An unresolvable type
+is a loud compile error, never a silently dropped prop.
+
+## Where the create-mode flow lives
+
+The deferred Lightning mint and the swap start are ONE implementation, in
+`packages/js/browser/src/internal/checkout-session.ts`
+(`createOpenReceiveCheckoutSession`). React and the custom element each wrap that
+session; nothing about the decision is written twice.
+
+| Host | How it wraps the session |
+| --- | --- |
+| `@openreceive/elements` | `createElementCheckoutSession` keeps the element-only duties (prepare-once bookkeeping, the "these attributes are ours" guard) and delegates the mint and the swap start |
+| `@openreceive/react` | `useOpenReceiveCheckoutSession` holds one session per component: `CheckoutCreate` wires the mint (it owns the snapshot), `PaymentWizard` wires the swap (it owns the pay-in selection), and `onRequestLightning` connects them |
+
+Only two things stay per-host, as injected callbacks, because they are the real
+difference between a custom element and a React tree:
+
+- **Publishing.** `onSnapshot` (a new Lightning snapshot) and `onSwapStarted` (a
+  freshly started swap attempt). The element writes attributes it owns, rebuilds
+  its shadow tree and re-keys the poll controller; React calls `setState` and
+  hands the attempt up to whichever component owns the snapshot.
+- **Error surfacing.** `onError`, plus the `wizardError` / `swapStartError`
+  strings the session holds for whichever host renders them inline.
+
+Two of the session's five fields gate a request — `mintingLightning` and
+`startingSwapAsset`, both read in return-early conditions, both covering only the
+window while the request is in flight. The already-completed window is guarded off
+state that outlives the request: `ensureLightning` reuses a bolt11 with time left
+on it, and `startSwap` re-shows an asset's deposit instructions instead of starting
+a second attempt. The remaining three decide nothing about requests: `wizardError`
+and `swapStartError` are the payer-facing strings the catch paths set, and
+`lightningRequested` is a render flag.
+
+Both renderers are held to all four gates, in `tests/element-lifecycle.test.mjs`
+and `tests/react-checkout-behavior.test.mjs`. The in-flight pair: a second Bitcoin
+selection during a mint POSTs `/checkouts` once, and a second swap start POSTs
+`/swaps` once. The already-completed pair: re-selecting Bitcoin once the mint has
+landed POSTs nothing at all, and neither does re-selecting a swap asset whose
+deposit address the payer is already holding. React's wizard has a gate of its own
+in front of that last one — its auto-start effect skips an asset it can already see
+an attempt for — so React's DOM test pins the two together and a session probe
+("the session refuses a second start for an asset it already holds instructions
+for") pins the shared branch on its own.
 
 ## Events
 
@@ -88,5 +167,5 @@ the server too, since that is the documented way to server-render a chosen theme
 
 `useCheckout` drives a concrete snapshot and takes no create options: create mode
 belongs to `<Checkout>`. It accepts `checkout`, `clipboard`, `open`, `logger`,
-`refreshStatus`, `orderUrl`, `polling`, `pollIntervalMs`, and the `onCopy`,
+`refreshStatus`, `prefix`, `polling`, `pollIntervalMs`, and the `onCopy`,
 `onOpenWallet`, `onState`, `onSettled`, `onError` handlers.

@@ -38,11 +38,11 @@ import {
   overlayOpenReceiveSwapRefundStaging,
   postOpenReceiveJson,
   requestOpenReceiveSwapRefund,
-  startOpenReceiveSwapRequest,
   updateOpenReceiveSelectedSwapNetworks,
 } from "@openreceive/browser/internal";
 import { recordOrEmpty } from "@openreceive/core";
 import * as React from "react";
+import { useOpenReceiveCheckoutSession } from "./checkout-session.ts";
 import { useOpenReceiveTickingUnixSeconds } from "./hooks.ts";
 import {
   renderSwapActions,
@@ -68,9 +68,6 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     readonly index: number;
     readonly copied: boolean;
   } | null>(null);
-  const [swapStartingAsset, setSwapStartingAsset] = React.useState<string | null>(null);
-  const startingSwapRef = React.useRef(false);
-  const [swapStartError, setSwapStartError] = React.useState<string | null>(null);
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
   const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<string | null>(null);
@@ -89,6 +86,33 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   // Compact selector: which asset tile is currently selected (method:… or swap:…).
   const [selectedPickerKey, setSelectedPickerKey] = React.useState<string | null>(null);
   const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
+  const fetcher = props.fetch ?? globalThis.fetch;
+  const checkout = props.checkout;
+  const orderId = checkout?.order_id;
+  // The swap start, shared with the custom element (G6): one in-flight start per
+  // wizard, one error string, and the same "already holding this asset's
+  // instructions" answer. The wizard supplies what is genuinely React's — where
+  // the started attempt is published (up to whichever component owns the
+  // snapshot) and where the failure is surfaced.
+  const session = useOpenReceiveCheckoutSession({
+    snapshot: () => checkout,
+    orderId: () => orderId,
+    swapPrefix: () => props.prefix,
+    fetch: () => fetcher,
+    swapSelection: {
+      started: () => startedSwapInvoice ?? undefined,
+      setStarted: setStartedSwapInvoice,
+      dismissedInvoiceId: () => dismissedSwapInvoiceId,
+      setDismissedInvoiceId: setDismissedSwapInvoiceId,
+      setSelectedAsset: setSelectedSwapAsset,
+    },
+    onSwapStarted: (invoice) => props.onSwapStarted?.(invoice),
+    ...(props.logger === undefined ? {} : { logger: props.logger }),
+    onError: (error) => props.onError?.(error),
+  });
+  // Read once per render: the session's fields are plain values, and its
+  // `onChange` is what turns a change in them into the next render.
+  const { startSwap, swapStartError, startingSwapAsset: swapStartingAsset } = session;
   // Leave the focused swap flow and restore the default method grid (nothing selected).
   // The start failure belongs to the asset being left: keeping it would show the previous
   // coin's message on the next one, with retry wired to the new coin.
@@ -96,8 +120,8 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     setSelectedSwapAsset(null);
     setSelectedPickerKey(null);
     setSelectedSwapNetworks({});
-    setSwapStartError(null);
-  }, []);
+    session.clearSwapStartError();
+  }, [session]);
   // Tell the host (default Checkout) whether the payer is in the focused swap flow, so it
   // can hide the Lightning payment section while the swap deposit panel stands in for it.
   const onSwapFocusChange = props.onSwapFocusChange;
@@ -105,9 +129,6 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     onSwapFocusChange?.(selectedSwapAsset !== null);
     return () => onSwapFocusChange?.(false);
   }, [selectedSwapAsset, onSwapFocusChange]);
-  const fetcher = props.fetch ?? globalThis.fetch;
-  const checkout = props.checkout;
-  const orderId = checkout?.order_id;
   // Payable assets ride on the order object itself (payment_methods), so the
   // wizard lists methods straight from the polled order snapshot — no extra call.
   const swapOptions = React.useMemo<OpenReceiveSwapOptionsResult>(() => {
@@ -120,65 +141,21 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     [checkout, startedSwapInvoice, dismissedSwapInvoiceId],
   );
   const now = useOpenReceiveTickingUnixSeconds(currentSwapInvoice !== undefined);
-  const startSwap = React.useCallback(
-    async (payInAsset: string) => {
-      if (
-        props.orderUrl === undefined ||
-        props.orderUrl === false ||
-        orderId === undefined ||
-        fetcher === undefined
-      ) {
-        return;
-      }
-      if (startingSwapRef.current) return;
-      startingSwapRef.current = true;
-      setSwapStartingAsset(payInAsset);
-      setSwapStartError(null);
-      try {
-        const invoice = await startOpenReceiveSwapRequest(
-          fetcher,
-          props.orderUrl,
-          orderId,
-          payInAsset,
-          { logger: props.logger },
-        );
-        setStartedSwapInvoice(invoice);
-        setDismissedSwapInvoiceId(null);
-        setSelectedSwapAsset(payInAsset);
-        props.onSwapStarted?.(invoice);
-      } catch (error) {
-        // Surface the failure inline (the server's message travels on the
-        // thrown error) and allow re-attempting — without clearing the
-        // attempted set, retry was permanently blocked.
-        setSelectedSwapAsset(payInAsset);
-        setSwapStartError(
-          error instanceof Error && error.message.length > 0
-            ? error.message
-            : "Could not prepare the payment address. Please try again.",
-        );
-        props.onError?.(error);
-      } finally {
-        startingSwapRef.current = false;
-        setSwapStartingAsset(null);
-      }
-    },
-    [props.orderUrl, orderId, fetcher, props.onError, props.logger, props.onSwapStarted],
-  );
   const quoteSwap = React.useCallback(
     async (payInAsset: string): Promise<OpenReceiveSwapOptionDisplay | undefined> => {
-      if (
-        props.orderUrl === undefined ||
-        props.orderUrl === false ||
-        orderId === undefined ||
-        fetcher === undefined
-      ) {
+      const prefix = props.prefix;
+      if (prefix === undefined || orderId === undefined || fetcher === undefined) {
         return undefined;
       }
       try {
-        const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
-          order_id: orderId,
-          action: "swap_quote",
-          pay_in_asset: payInAsset,
+        const body = await postOpenReceiveJson({
+          fetch: fetcher,
+          prefix,
+          body: {
+            order_id: orderId,
+            action: "swap_quote",
+            pay_in_asset: payInAsset,
+          },
         });
         const quote = normalizeSwapQuote(body);
         if (quote !== undefined) {
@@ -189,47 +166,40 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         // A failed quote must not strand the payer on the preparing spinner: it
         // surfaces inline with the retry button, and only that explicit retry —
         // never this effect — may attempt the swap again.
-        setSwapStartError(
-          error instanceof Error && error.message.length > 0
-            ? error.message
-            : "Could not prepare the payment address. Please try again.",
-        );
-        props.onError?.(error);
+        session.failSwapStart(error);
         return undefined;
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError],
+    [props.prefix, orderId, fetcher, session],
   );
   // Enter the focused flow for a pay-in coin. The effect below quotes it first and only
   // starts the swap when the quote confirms the amount is in range.
   const selectSwapAsset = React.useCallback(
     (payInAsset: string) => {
-      if (props.orderUrl === undefined || props.orderUrl === false) return;
+      if (props.prefix === undefined) return;
       autoSwapAttemptedRef.current.delete(payInAsset);
-      setSwapStartError(null);
+      session.clearSwapStartError();
       setSelectedSwapAsset(payInAsset);
     },
-    [props.orderUrl],
+    [props.prefix, session],
   );
   const refundSwap = React.useCallback(
     async (attemptId: string, refundAddress: string, refundNonce: string, confirm: boolean) => {
-      if (
-        props.orderUrl === undefined ||
-        props.orderUrl === false ||
-        orderId === undefined ||
-        fetcher === undefined
-      ) {
+      const prefix = props.prefix;
+      if (prefix === undefined || orderId === undefined || fetcher === undefined) {
         return;
       }
       try {
-        const invoice = await requestOpenReceiveSwapRefund(fetcher, props.orderUrl, {
+        const invoice = await requestOpenReceiveSwapRefund({
+          fetch: fetcher,
+          prefix,
           orderId,
           invoices: [startedSwapInvoice, ...(checkout?.invoices ?? [])],
           attemptId,
           refundAddress,
           refundNonce,
           confirm,
-          logger: props.logger,
+          ...(props.logger === undefined ? {} : { logger: props.logger }),
         });
         setStartedSwapInvoice(invoice);
         setDismissedSwapInvoiceId(null);
@@ -238,7 +208,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       }
     },
     [
-      props.orderUrl,
+      props.prefix,
       orderId,
       fetcher,
       props.onError,
@@ -301,7 +271,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   // /swaps on its own — recovery is the payer's explicit retry button.
   React.useEffect(() => {
     if (selectedSwapAsset === null) return;
-    if (props.orderUrl === undefined || props.orderUrl === false) return;
+    if (props.prefix === undefined) return;
     if (activeSwapForAsset !== undefined) return;
     if (autoSwapAttemptedRef.current.has(selectedSwapAsset)) return;
     autoSwapAttemptedRef.current.add(selectedSwapAsset);
@@ -315,7 +285,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [selectedSwapAsset, activeSwapForAsset, props.orderUrl, quoteSwap, startSwap]);
+  }, [selectedSwapAsset, activeSwapForAsset, props.prefix, quoteSwap, startSwap]);
 
   const selectedSwapOption =
     selectedSwapAsset === null
@@ -345,7 +315,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           {
             className: orClasses.wizardResults,
           },
-          swapStartError !== null && activeSwapForAsset === undefined
+          swapStartError !== undefined && activeSwapForAsset === undefined
             ? renderSwapStartError(
                 swapStartError,
                 selectedSwapAsset === null

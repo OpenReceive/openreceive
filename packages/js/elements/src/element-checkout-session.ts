@@ -1,52 +1,44 @@
 // The create-mode lifecycle of the checkout element, lifted out of the element
-// class: prepare-once bookkeeping, the deferred Lightning mint, the swap start,
-// and the "these attributes are ours" re-entrancy guard.
+// class: prepare-once bookkeeping, the "these attributes are ours" re-entrancy
+// guard, and the element's half of the shared checkout session.
 //
-// Every piece of state here is a DOUBLE-POST GUARD. A second click, a poll-driven
-// re-render or an attribute the element wrote itself must not become a second
-// request; the comments on each field say which bug that was.
+// The mint and the swap start themselves are NOT here — they are the same
+// decision React makes, so they live once in
+// @openreceive/browser/internal's `createOpenReceiveCheckoutSession` and this
+// file supplies the element's answers to the two questions that genuinely
+// differ: how a new snapshot reaches the screen (attributes + a shadow rebuild
+// + a re-keyed poll controller) and where a failure is shown (an inline panel
+// plus an `openreceive:error` event).
+//
+// Every piece of state left here is a DOUBLE-POST GUARD. A second click, a
+// poll-driven re-render or an attribute the element wrote itself must not
+// become a second request; the comments on each field say which bug that was.
 // tests/element-lifecycle.test.mjs pins them.
 //
-// The element passes itself in as `host`: the session owns the request lifecycle
-// and its error strings, the class keeps DOM, attributes and rendering.
+// The element passes itself in as `host`: the session owns the request
+// lifecycle and its error strings, the class keeps DOM, attributes and
+// rendering.
 
 import {
   applyCheckoutElementAttributes,
-  type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   createCheckoutElementAttributes,
-  findOpenReceiveReusableLightningInvoice,
+  createOpenReceiveCheckoutSession,
   mergeOpenReceiveAttemptIntoCheckout,
-  mergeOpenReceiveAttemptIntoSnapshot,
-  mergeOpenReceiveMintedCheckout,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
   type OpenReceiveBrowserLoggerOption,
+  type OpenReceiveSwapSelection,
   prepareCheckout,
   requestCheckout,
-  resolveOrderUrlFromPrefix,
-  startOpenReceiveSwapRequest,
 } from "@openreceive/browser/internal";
-
-/**
- * The swap attempt the wizard is showing. It is element state (the breadcrumb
- * and the deposit panel read it), so the session reads and writes it through
- * the host rather than owning a second copy.
- */
-export interface ElementSwapSelection {
-  started(): CheckoutInvoiceSnapshot | undefined;
-  setStarted(invoice: CheckoutInvoiceSnapshot): void;
-  dismissedInvoiceId(): string | null;
-  setDismissedInvoiceId(invoiceId: string | null): void;
-  setSelectedAsset(payInAsset: string | null): void;
-}
 
 /** What the session needs back from the element it drives. */
 export interface ElementCheckoutSessionHost {
   /** The custom element: its attributes are the create-mode inputs. */
   readonly element: HTMLElement;
   readonly logger: OpenReceiveBrowserLoggerOption | undefined;
-  readonly swapSelection: ElementSwapSelection;
+  readonly swapSelection: OpenReceiveSwapSelection;
   isCreateMode(): boolean;
   render(): void;
   startCheckoutController(): void;
@@ -56,7 +48,8 @@ export interface ElementCheckoutSessionHost {
   currentThemeOption(): { readonly theme?: "light" | "dark" };
   createMetadata(): Record<string, unknown> | undefined;
   syncResumePath(orderId: string): void;
-  resolveOrderUrl(orderId?: string): string | null;
+  /** The mount every server route is derived from, or undefined when there is no order. */
+  resolvePollPrefix(orderId?: string): string | undefined;
   dispatchError(error: unknown): void;
 }
 
@@ -96,11 +89,6 @@ export function createElementCheckoutSession(
   let creating = false;
   let createdKey: string | undefined;
   let createError: string | undefined;
-  let wizardError: string | undefined;
-  let swapStartError: string | undefined;
-  let lightningRequested = false;
-  let mintingLightning = false;
-  let startingSwapAsset: string | null = null;
   /**
    * Depth of the "these attributes are ours" guard. Attributes the element writes
    * back to itself (the created snapshot, every status/expiry transition) must not
@@ -109,14 +97,24 @@ export function createElementCheckoutSession(
    */
   let applyingOwnAttributes = 0;
 
+  /** The prefix the element would act under right now. */
+  function currentPrefix(): string {
+    return (
+      host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
+      OPENRECEIVE_DEFAULT_PREFIX
+    );
+  }
+
+  /** The order the element would act on right now, or undefined. */
+  function currentOrderId(): string | undefined {
+    const orderId = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+    return orderId === null || orderId.length === 0 ? undefined : orderId;
+  }
+
   /** `${prefix}::${orderId}` the element would prepare right now, or undefined. */
   function currentCreateKey(): string | undefined {
-    const orderId = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-    if (orderId === null || orderId.length === 0) return undefined;
-    const prefix =
-      host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
-      OPENRECEIVE_DEFAULT_PREFIX;
-    return `${prefix}::${orderId}`;
+    const orderId = currentOrderId();
+    return orderId === undefined ? undefined : `${currentPrefix()}::${orderId}`;
   }
 
   function writeOwnAttributes(write: () => void): void {
@@ -136,17 +134,66 @@ export function createElementCheckoutSession(
     });
   }
 
+  /**
+   * How a new snapshot reaches the screen in an element: it becomes attributes
+   * the element owns, the shadow tree is rebuilt from them, and the poll
+   * controller is re-keyed onto the attempt they describe.
+   */
+  function publishSnapshot(snapshot: CheckoutSnapshot): void {
+    host.handleControllerSnapshot(snapshot);
+    const prefix = currentPrefix();
+    applyOwnAttributes(
+      createCheckoutElementAttributes(snapshot, {
+        prefix,
+        ...host.currentThemeOption(),
+      }),
+    );
+    host.render();
+    host.startCheckoutController();
+  }
+
+  const session = createOpenReceiveCheckoutSession({
+    snapshot: () => host.latestCheckoutSnapshot(),
+    orderId: currentOrderId,
+    requestCheckout: (orderId) => {
+      const metadata = host.createMetadata();
+      return requestCheckout({
+        prefix: currentPrefix(),
+        orderId,
+        ...(metadata === undefined ? {} : { metadata }),
+        fetch: globalThis.fetch,
+      });
+    },
+    onSnapshot: publishSnapshot,
+    swapPrefix: () => host.resolvePollPrefix(currentOrderId()),
+    fetch: () => globalThis.fetch,
+    swapSelection: host.swapSelection,
+    // A swap attempt is NOT written back as attributes: a bolt11 attribute
+    // would take the element out of create mode. It re-keys the poll
+    // controller onto the merged snapshot and nothing else.
+    onSwapStarted: (invoice) => {
+      const orderId = currentOrderId();
+      if (orderId === undefined) return;
+      const previous = host.latestCheckoutSnapshot() ?? host.currentCheckoutSnapshot();
+      host.handleControllerSnapshot(
+        mergeOpenReceiveAttemptIntoCheckout(invoice, previous, orderId),
+      );
+      host.startCheckoutController();
+    },
+    logger: host.logger,
+    onError: (error) => host.dispatchError(error),
+    onChange: () => host.render(),
+  });
+
   async function createCheckout(): Promise<void> {
-    const orderId = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-    if (orderId === null || orderId.length === 0) return;
-    const prefix =
-      host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
-      OPENRECEIVE_DEFAULT_PREFIX;
+    const orderId = currentOrderId();
+    if (orderId === undefined) return;
+    const prefix = currentPrefix();
     const key = `${prefix}::${orderId}`;
     if (creating || createdKey === key) return;
     creating = true;
     createdKey = key;
-    lightningRequested = false;
+    session.resetLightningRequest();
 
     try {
       createError = undefined;
@@ -162,12 +209,10 @@ export function createElementCheckoutSession(
       // the wrong order. The finally block re-runs for whatever is current.
       if (currentCreateKey() !== key) return;
       host.handleControllerSnapshot(checkout);
-      const orderUrl = resolveOrderUrlFromPrefix(prefix);
       // Apply routing attrs only (no invoice) so render stays in deferred wizard mode.
       // Preserve the host theme attribute so shadow data-theme cannot fall through.
       applyOwnAttributes(
         createCheckoutElementAttributes(checkout, {
-          orderUrl,
           prefix,
           ...host.currentThemeOption(),
         }),
@@ -207,164 +252,32 @@ export function createElementCheckoutSession(
     void createCheckout();
   }
 
-  async function ensureLightning(): Promise<void> {
-    // A second click while the first mint is in flight would POST /checkouts
-    // again; the loser's 409 then surfaced as a wizard error over a perfectly
-    // good invoice. `startSwap` guards the same way.
-    if (mintingLightning) return;
-    const orderId = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-    if (orderId === null || orderId.length === 0) return;
-    const prefix =
-      host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
-      OPENRECEIVE_DEFAULT_PREFIX;
-    const current = host.latestCheckoutSnapshot();
-    if (current !== undefined) {
-      const reusableLightning = findOpenReceiveReusableLightningInvoice(current);
-      if (reusableLightning !== undefined) {
-        const focused = mergeOpenReceiveAttemptIntoSnapshot(reusableLightning, current);
-        host.handleControllerSnapshot(focused);
-        lightningRequested = true;
-        applyOwnAttributes(
-          createCheckoutElementAttributes(focused, {
-            orderUrl: resolveOrderUrlFromPrefix(prefix),
-            prefix,
-            ...host.currentThemeOption(),
-          }),
-        );
-        host.render();
-        host.startCheckoutController();
-        return;
-      }
-    }
-    mintingLightning = true;
-    wizardError = undefined;
-    host.render();
-    try {
-      const metadata = host.createMetadata();
-      const checkout = await requestCheckout({
-        prefix,
-        orderId,
-        ...(metadata === undefined ? {} : { metadata }),
-        fetch: globalThis.fetch,
-      });
-      const merged = mergeOpenReceiveMintedCheckout(checkout, host.latestCheckoutSnapshot());
-      host.handleControllerSnapshot(merged);
-      lightningRequested = true;
-      applyOwnAttributes(
-        createCheckoutElementAttributes(merged, {
-          orderUrl: resolveOrderUrlFromPrefix(prefix),
-          prefix,
-          ...host.currentThemeOption(),
-        }),
-      );
-      host.render();
-      host.startCheckoutController();
-    } catch (error) {
-      // Surface the mint failure inline (the server's message travels on the
-      // thrown error) instead of silently returning to the method picker.
-      wizardError =
-        error instanceof Error && error.message.length > 0
-          ? error.message
-          : "Could not create the Lightning invoice. Please try again.";
-      host.dispatchError(error);
-    } finally {
-      mintingLightning = false;
-      host.render();
-    }
-  }
-
-  async function startSwap(payInAsset: string): Promise<void> {
-    const orderId = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-    const url = host.resolveOrderUrl(orderId ?? undefined);
-    if (url === null || orderId === null || orderId.length === 0) return;
-    if (startingSwapAsset !== null) return;
-    const alreadyStarted = host.swapSelection.started();
-    if (
-      alreadyStarted?.swap?.pay_in_asset === payInAsset &&
-      alreadyStarted.invoice_id !== host.swapSelection.dismissedInvoiceId()
-    ) {
-      host.swapSelection.setSelectedAsset(payInAsset);
-      host.render();
-      return;
-    }
-    startingSwapAsset = payInAsset;
-    host.render();
-
-    try {
-      swapStartError = undefined;
-      const started = await startOpenReceiveSwapRequest(
-        globalThis.fetch,
-        url,
-        orderId,
-        payInAsset,
-        { logger: host.logger },
-      );
-      host.swapSelection.setStarted(started);
-      host.swapSelection.setDismissedInvoiceId(null);
-      // Merge the swap attempt into the snapshot and RE-KEY the controller
-      // onto it: without this the status poller kept the pre-swap snapshot
-      // (create mode never polled at all; snapshot mode polled the old
-      // Lightning hash, which the handler 404s) and a paid swap customer
-      // was told "Invoice expired".
-      const invoice = host.swapSelection.started();
-      if (invoice !== undefined) {
-        const previous = host.latestCheckoutSnapshot() ?? host.currentCheckoutSnapshot();
-        host.handleControllerSnapshot(
-          mergeOpenReceiveAttemptIntoCheckout(invoice, previous, orderId),
-        );
-        host.startCheckoutController();
-      }
-      host.swapSelection.setSelectedAsset(payInAsset);
-      host.render();
-    } catch (error) {
-      // A concurrent start that already landed instructions must not replace
-      // the deposit panel with the loser's persist/conflict error.
-      const landed = host.swapSelection.started();
-      if (landed !== undefined) {
-        host.swapSelection.setSelectedAsset(landed.swap?.pay_in_asset ?? payInAsset);
-        host.render();
-        return;
-      }
-      // Inline error with retry — never an infinite "Preparing payment
-      // address…" spinner (the retry button re-triggers this swap start).
-      host.swapSelection.setSelectedAsset(payInAsset);
-      swapStartError =
-        error instanceof Error && error.message.length > 0
-          ? error.message
-          : "Could not prepare the payment address. Please try again.";
-      host.dispatchError(error);
-      host.render();
-    } finally {
-      startingSwapAsset = null;
-    }
-  }
-
   return {
     get createError() {
       return createError;
     },
     get wizardError() {
-      return wizardError;
+      return session.wizardError;
     },
     get swapStartError() {
-      return swapStartError;
+      return session.swapStartError;
     },
     get lightningRequested() {
-      return lightningRequested;
+      return session.lightningRequested;
     },
     get mintingLightning() {
-      return mintingLightning;
+      return session.mintingLightning;
     },
     get startingSwapAsset() {
-      return startingSwapAsset;
+      return session.startingSwapAsset;
     },
     get applyingOwnAttributes() {
       return applyingOwnAttributes > 0;
     },
     createCheckout,
     retryCreateCheckout,
-    ensureLightning,
-    startSwap,
+    ensureLightning: () => session.ensureLightning(),
+    startSwap: (payInAsset) => session.startSwap(payInAsset),
     applyOwnAttributes,
     writeOwnAttributes,
     forgetCreateKey() {

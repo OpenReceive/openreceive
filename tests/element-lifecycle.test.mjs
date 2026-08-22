@@ -147,6 +147,61 @@ test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => 
   }
 });
 
+// The in-flight guard above is only half of the mint's double-POST story. The
+// other half is the payer whose bolt11 has ALREADY landed: they walk back to
+// the method grid and pick Bitcoin again. `mintingLightning` is false by then,
+// so the only thing standing between that click and a second POST /checkouts
+// is the reuse branch in the shared session (ensureLightning's
+// findOpenReceiveReusableLightningInvoice short-circuit). The pair of this is
+// tests/react-checkout-behavior.test.mjs, "Bitcoin selected again after the
+// mint reuses the bolt11 instead of minting a second one".
+test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting again", async () => {
+  const paymentHash = "d".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-reuse-ln", 21_000),
+    "/checkouts": () => checkoutBody("order-reuse-ln", 21_000, paymentHash),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-reuse-ln", prefix: "/openreceive" });
+
+  try {
+    const bitcoin = await until(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "Bitcoin method tile" },
+    );
+    bitcoin.click();
+    await until(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
+    assert.equal(fetchStub.pathCount("/checkouts"), 1);
+
+    // Back to the grid. This breadcrumb deliberately does not dismiss anything
+    // (only "back to Lightning" out of a swap panel does), so the bolt11 the
+    // payer is holding is still theirs to pay.
+    const breadcrumb = await until(
+      () => element.shadowRoot?.querySelector('[data-or-breadcrumb="method"]'),
+      { label: "method breadcrumb" },
+    );
+    breadcrumb.click();
+    const again = await until(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "method grid again" },
+    );
+    again.click();
+    await flush(4);
+    assert.equal(
+      fetchStub.pathCount("/checkouts"),
+      1,
+      "Bitcoin re-selected with a live bolt11 must not POST a second checkout",
+    );
+    // Reuse means the SAME invoice, not a silently replaced one.
+    assert.equal(element.getAttribute("invoice"), `lnbc-${paymentHash}`);
+    assert.equal(element.getAttribute("payment-hash"), paymentHash);
+    assert.doesNotMatch(element.shadowRoot?.innerHTML ?? "", /Could not create the Lightning/);
+  } finally {
+    element.remove();
+  }
+});
+
 test("an order-id change mid-prepare wins over the request it superseded", async () => {
   const firstPrepare = deferred();
   const fetchStub = createFetchStub({
@@ -490,6 +545,68 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
   }
 });
 
+// The other half of the swap's double-POST story, and the one the in-flight
+// test above cannot reach: the start has COMPLETED, so `startingSwapAsset` is
+// null again. The payer holding SOL's deposit address breadcrumbs back to the
+// grid and picks SOL again. What stops that click from minting a second,
+// colliding attempt — and stranding the coins already sent to the first
+// address — is the "already holding this asset's deposit instructions"
+// short-circuit in the shared session's startSwap. The breadcrumb deliberately
+// does not dismiss the attempt (only "back to Lightning" out of the deposit
+// panel does), so the attempt is still the payer's to pay.
+test("re-selecting a started swap asset re-opens its panel without a second start", async () => {
+  const paymentHash = "e".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-reselect", "SOL_SOL"),
+    "/swaps": () => swapStartBody("SOL_SOL", paymentHash),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-swap-reselect", prefix: "/openreceive" });
+
+  try {
+    const asset = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    asset.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel",
+    });
+    assert.equal(fetchStub.pathCount("/swaps"), 1);
+
+    const breadcrumb = await until(
+      () => element.shadowRoot?.querySelector('[data-or-breadcrumb="swap-asset"]'),
+      { label: "swap breadcrumb" },
+    );
+    breadcrumb.click();
+    const again = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "asset grid again" },
+    );
+    again.click();
+    await flush(4);
+    assert.equal(
+      fetchStub.pathCount("/swaps"),
+      1,
+      "an asset whose deposit instructions the payer already holds must not POST a second start",
+    );
+    // The short-circuit is not a silent no-op: it re-selects the asset, so the
+    // payer lands back on the address they were already given.
+    assert.match(
+      element.shadowRoot?.innerHTML ?? "",
+      /SoLDeposit/,
+      "the payer is shown the instructions they already hold",
+    );
+    assert.doesNotMatch(
+      element.shadowRoot?.innerHTML ?? "",
+      /Could not prepare the payment address/,
+    );
+  } finally {
+    element.remove();
+  }
+});
+
 // Attributes the element writes back to itself must not re-enter
 // attributeChangedCallback — the guard is a depth counter, so a nested apply
 // (a status write while a create-mode attribute apply is still unwinding) must
@@ -822,5 +939,126 @@ test("a hostile invoice-id costs the payment screen, not the shadow root", async
     } finally {
       element.remove();
     }
+  }
+});
+
+function prepareBodyWithSwapAssets(orderId, assets) {
+  return {
+    order_id: orderId,
+    amount_msats: 5_000_000,
+    payment_methods: assets.map(([payInAsset, networkLabel]) => ({
+      pay_in_asset: payInAsset,
+      label: payInAsset.split("_")[0],
+      network_label: networkLabel,
+      provider: "fixedfloat",
+      available: true,
+    })),
+  };
+}
+
+// PRODUCT CHANGE (G6b): the retry button used to leave its own error on screen
+// while the retried request was in flight, because the element cleared
+// `swapStartError` only after the re-render. The payer's click looked ignored.
+// React always cleared it first; the merged flow keeps React's order.
+test("retrying a failed swap start replaces the error with the preparing spinner", async () => {
+  const retry = deferred();
+  let starts = 0;
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-retry", "SOL_SOL"),
+    "/swaps": () => {
+      starts += 1;
+      if (starts === 1) throw new Error("Swap provider is unavailable.");
+      return retry.promise;
+    },
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-swap-retry", prefix: "/openreceive" });
+
+  try {
+    const asset = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    asset.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."), {
+      label: "inline swap-start failure",
+    });
+    const tryAgain = await until(() => element.shadowRoot?.querySelector('[part="swap-retry"]'), {
+      label: "retry button",
+    });
+    tryAgain.click();
+    await flush(2);
+    const html = element.shadowRoot?.innerHTML ?? "";
+    assert.match(html, /Preparing payment address/);
+    assert.doesNotMatch(html, /Could not prepare the payment address/);
+    assert.equal(starts, 2);
+
+    // Settle the retry inside the test: a start that lands after the element is
+    // gone re-keys a poll controller onto a detached element and the process
+    // never exits.
+    retry.resolve(swapStartBody("SOL_SOL", "d".repeat(64)));
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel after retry",
+    });
+  } finally {
+    element.remove();
+  }
+});
+
+// PRODUCT CHANGE (G6b): the "a start that lost a race must not replace a good
+// deposit panel with the loser's error" recovery was not scoped to the asset
+// being started. Any previously started swap satisfied it, so a failed start
+// for a SECOND coin silently reopened the FIRST coin's panel and ate the error.
+// The recovery now only fires for the same, undismissed attempt.
+test("a failed start for a second coin does not reopen the first coin's panel", async () => {
+  let starts = 0;
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () =>
+      prepareBodyWithSwapAssets("order-two-coins", [
+        ["SOL_SOL", "Solana"],
+        ["ETH_ETH", "Ethereum"],
+      ]),
+    "/swaps": (body) => {
+      starts += 1;
+      if (body.pay_in_asset === "SOL_SOL") return swapStartBody("SOL_SOL", "e".repeat(64));
+      throw new Error("Swap provider is unavailable.");
+    },
+    "/checkouts": () => checkoutBody("order-two-coins", 5_000_000, "f".repeat(64)),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-two-coins", prefix: "/openreceive" });
+
+  try {
+    const sol = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    sol.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "SOL deposit panel",
+    });
+    const back = await until(
+      () => element.shadowRoot?.querySelector('[data-or-breadcrumb="swap-asset"]'),
+      { label: "switch-payment-method breadcrumb" },
+    );
+    back.click();
+    const eth = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="ETH_ETH"]'),
+      { label: "ETH swap-start button" },
+    );
+    eth.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."), {
+      label: "ETH swap-start failure",
+    });
+    assert.equal(starts, 2);
+    assert.doesNotMatch(
+      element.shadowRoot?.innerHTML ?? "",
+      /SoLDeposit/,
+      "the first coin's deposit panel must not stand in for the second coin's failure",
+    );
+  } finally {
+    element.remove();
   }
 });

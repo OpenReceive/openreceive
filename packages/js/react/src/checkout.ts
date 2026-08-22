@@ -3,19 +3,18 @@ import {
   type CheckoutSnapshot,
   createOpenReceiveLightningInvoiceDecodeUrl,
   enterCheckoutResumePath,
-  findOpenReceiveReusableLightningInvoice,
   mergeOpenReceiveAttemptIntoCheckout,
   mergeOpenReceiveAttemptIntoSnapshot,
-  mergeOpenReceiveMintedCheckout,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
   openReceiveCheckoutLabels,
   orClasses,
   prepareCheckout,
   requestCheckout,
-  resolveOrderUrlFromPrefix,
+  validateOpenReceiveCheckoutProps,
 } from "@openreceive/browser/internal";
 import * as React from "react";
+import { useOpenReceiveCheckoutSession } from "./checkout-session.ts";
 import {
   CopyInvoiceButton,
   InvoiceSummary,
@@ -34,9 +33,9 @@ import { PaymentWizard } from "./wizard.ts";
 /**
  * Self-contained checkout. Two modes:
  *
- * - Snapshot mode (`checkout` prop): renders that snapshot directly. When `prefix` is passed
- *   (and `orderUrl` is not), the order route is derived
- *   from the prefix and the snapshot's order id so status polling works with just a prefix.
+ * - Snapshot mode (`checkout` prop): renders that snapshot directly. `prefix` (default
+ *   `/openreceive`) is the mount every route is derived from, so status polling works
+ *   with just a prefix — or with nothing at all.
  * - Create mode (`orderId` prop, no `checkout`): the component owns the whole lifecycle — on
  *   mount it prepares amount + payment methods against `${prefix}/checkouts/prepare` (no
  *   Lightning mint). Bitcoin selection mints via `${prefix}/checkouts`. Poll/swap send
@@ -46,40 +45,31 @@ import { PaymentWizard } from "./wizard.ts";
  *   remains owned by the host application.
  */
 export function Checkout(props: CheckoutProps): React.ReactElement {
-  const { checkout, orderId } = props;
-  warnIgnoredCreateModeProps(props);
+  // The mode boundary, shared with the element wrappers (G6a): one error when
+  // neither mode is set, one warning when a create-only prop is passed with a
+  // snapshot. React used to carry its own copy of both, and its own copy of the
+  // create-only prop list.
+  validateOpenReceiveCheckoutProps({
+    framework: "@openreceive/react",
+    checkout: props.checkout,
+    orderId: props.orderId,
+    metadata: props.metadata,
+    syncUrl: props.syncUrl,
+    resumePathPrefix: props.resumePathPrefix,
+    routeOrderId: props.routeOrderId,
+  });
+  const { checkout } = props;
   if (checkout !== undefined) {
-    // Derive the order URL from the prefix (default prefix when none is given),
-    // matching the element's snapshot-mode polling behavior.
-    const orderUrl =
-      props.orderUrl ?? resolveOrderUrlFromPrefix(props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX);
+    // Resolve the prefix once here (default when none is given), matching the
+    // element's snapshot-mode polling behavior.
     return React.createElement(CheckoutSnapshotMode, {
       ...props,
       checkout,
-      orderUrl,
+      prefix: props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX,
     });
   }
-  if (orderId !== undefined) {
-    return React.createElement(CheckoutCreate, props);
-  }
-  throw new Error("<Checkout> requires a checkout snapshot or an orderId.");
-}
-
-/** Create-mode props the snapshot path silently drops (docs/internal/wrapper-parity.md). */
-const CREATE_MODE_ONLY_PROPS = ["metadata", "syncUrl", "resumePathPrefix", "routeOrderId"] as const;
-const warnedCreateModeProps = new Set<string>();
-
-function warnIgnoredCreateModeProps(props: CheckoutProps): void {
-  if (props.checkout === undefined) return;
-  const ignored = CREATE_MODE_ONLY_PROPS.filter((name) => props[name] !== undefined);
-  if (ignored.length === 0) return;
-  const key = ignored.join(",");
-  if (warnedCreateModeProps.has(key)) return;
-  warnedCreateModeProps.add(key);
-  globalThis.console?.warn?.(
-    `<Checkout> ignores ${ignored.join(", ")} in snapshot mode; ` +
-      "those props only apply when the component creates the checkout from an orderId.",
-  );
+  // No snapshot: the validator above already rejected a missing/empty orderId.
+  return React.createElement(CheckoutCreate, props);
 }
 
 /**
@@ -114,7 +104,7 @@ function CheckoutSnapshotMode(
 
 /**
  * Create-mode wrapper: prepares amount + payment methods on mount without minting Lightning.
- * Bitcoin selection calls ensureLightning to mint (or reuse) a bolt11.
+ * Bitcoin selection asks the shared session to mint (or reuse) a bolt11.
  *
  * Syncs the URL only when `syncUrl` is set.
  */
@@ -138,7 +128,6 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     readonly checkout?: CheckoutSnapshot;
     readonly errorMessage?: string;
   }>({ status: "pending" });
-  const [mintingLightning, setMintingLightning] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
 
   const onErrorRef = React.useRef(onError);
@@ -147,9 +136,29 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   metadataRef.current = metadata;
   const createFetchRef = React.useRef(createFetch);
   createFetchRef.current = createFetch;
-  // Ref so ensureLightning always reads the latest checkout without being a dep.
+  // Ref so the session always reads the latest checkout without being a dep.
   const createdCheckoutRef = React.useRef(created.checkout);
   createdCheckoutRef.current = created.checkout;
+
+  // The deferred Lightning mint, shared with the custom element (G6): reuse a
+  // bolt11 with time left on it, otherwise mint one, and never mint twice for
+  // one order. React supplies only the two things that are genuinely its own —
+  // how the new snapshot is published, and where the failure is surfaced.
+  const session = useOpenReceiveCheckoutSession({
+    snapshot: () => createdCheckoutRef.current,
+    orderId: () => orderId,
+    requestCheckout: (id) =>
+      requestCheckout({
+        prefix: resolvedPrefix,
+        orderId: id,
+        ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
+        ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
+      }),
+    // One stable CheckoutView across the mint: swapping the rendered shell
+    // remounted PaymentWizard and wiped the payer's method selection.
+    onSnapshot: (checkout) => setCreated({ status: "ready", checkout }),
+    onError: (error) => onErrorRef.current?.(error),
+  });
 
   // The host owns order resume data; OpenReceive only owns optional URL synchronization.
   React.useEffect(() => {
@@ -166,7 +175,6 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   React.useEffect(() => {
     let cancelled = false;
     setCreated({ status: "pending" });
-    setMintingLightning(false);
     prepareCheckout({
       prefix: resolvedPrefix,
       orderId,
@@ -190,40 +198,6 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     };
   }, [orderId, resolvedPrefix, attempt]);
 
-  // Called by PaymentWizard when Bitcoin is selected or when returning from a swap.
-  // Reuses an existing bolt11 when it has >60 s left; otherwise mints a fresh one.
-  // Keep a single CheckoutView mounted across mint so wizard selection (providers) is preserved.
-  const ensureLightning = React.useCallback(async () => {
-    const current = createdCheckoutRef.current;
-    if (current !== undefined) {
-      const reusableLightning = findOpenReceiveReusableLightningInvoice(current);
-      if (reusableLightning !== undefined) {
-        setCreated({
-          status: "ready",
-          checkout: mergeOpenReceiveAttemptIntoSnapshot(reusableLightning, current),
-        });
-        return;
-      }
-    }
-    setMintingLightning(true);
-    try {
-      const checkout = await requestCheckout({
-        prefix: resolvedPrefix,
-        orderId,
-        ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
-        ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
-      });
-      setCreated({
-        status: "ready",
-        checkout: mergeOpenReceiveMintedCheckout(checkout, createdCheckoutRef.current),
-      });
-    } catch (error) {
-      onErrorRef.current?.(error);
-    } finally {
-      setMintingLightning(false);
-    }
-  }, [resolvedPrefix, orderId]);
-
   const onSwapStarted = React.useCallback(
     (invoice: CheckoutInvoiceSnapshot) => {
       setCreated((current) => {
@@ -238,15 +212,14 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   );
 
   if (created.status === "ready" && created.checkout !== undefined) {
-    const orderUrl = props.orderUrl ?? resolveOrderUrlFromPrefix(resolvedPrefix);
     // One stable shell for deferred + minted Lightning. Switching shells remounted
     // PaymentWizard and wiped selectedMethod (providers vanished when the QR appeared).
     return React.createElement(CheckoutView, {
       ...props,
       checkout: created.checkout,
-      orderUrl,
-      mintingLightning,
-      onRequestLightning: ensureLightning,
+      prefix: resolvedPrefix,
+      mintingLightning: session.mintingLightning,
+      onRequestLightning: session.ensureLightning,
       onSwapStarted,
     });
   }
@@ -314,7 +287,9 @@ function CheckoutView(
     // Create-mode props are consumed by the Checkout dispatcher / CheckoutCreate wrapper; drop
     // them here so they never leak onto the rendered <section>.
     orderId: _orderId,
-    prefix: _prefix,
+    // The dispatcher and CheckoutCreate both resolve this before rendering the
+    // view, so the default below only guards a direct CheckoutView call.
+    prefix = OPENRECEIVE_DEFAULT_PREFIX,
     metadata: _metadata,
     createFetch: _createFetch,
     syncUrl: _syncUrl,
@@ -330,7 +305,6 @@ function CheckoutView(
     onOpenWallet,
     onError,
     refreshStatus,
-    orderUrl,
     onState,
     onSettled,
     onProviderCopy,
@@ -354,7 +328,7 @@ function CheckoutView(
     onOpenWallet,
     onError,
     refreshStatus,
-    orderUrl,
+    prefix,
     onState,
     onSettled,
     polling,
@@ -605,7 +579,7 @@ function CheckoutView(
                 logger,
                 onError,
                 onSwapFocusChange: setSwapFocused,
-                orderUrl,
+                prefix,
                 qrEncoder,
                 decodeLinkUrl,
                 logContext: getCheckoutLogContext({
