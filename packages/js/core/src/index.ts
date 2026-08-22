@@ -65,6 +65,13 @@ export type {
 } from "./payments.ts";
 // Storage-free payment verification and reconciliation.
 export { checkPayment, reconcilePaymentAttempts } from "./payments.ts";
+// The one canonical statement of the order-table boundary and the host's
+// exactly-once fulfillment duty, rendered into every generated file, migration
+// template, and wiring guide so the guidance can never drift.
+export {
+  openReceiveFulfillmentNote,
+  openReceiveFulfillmentNoteMarkdown,
+} from "./fulfillment-note.ts";
 export type {
   OpenReceivePaymentsDdlOptions,
   OpenReceivePaymentsDialect,
@@ -131,3 +138,14 @@ export {
   isValidSwapAddressForPayInAsset,
   openReceiveSwapAddressNetworkForPayInAsset,
 } from "./swap/address.ts";
+// Shared value primitives — the one clock, the two record readers, the
+// non-empty-string reader, and the undefined-field compactor. Public because
+// every package needs them and a published-internal subpath would cost more
+// than these five names do.
+export {
+  compact,
+  isRecord,
+  nonEmptyString,
+  recordOrEmpty,
+  unixSeconds,
+} from "./values.ts";

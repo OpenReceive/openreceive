@@ -148,7 +148,7 @@ module OpenReceive
                    )
                  else
                    # Explicit, validated fields only: the raw payer body must
-                   # never reach the service (an "expirySeconds" key would beat
+                   # never reach the service (an "expiry_seconds" key would beat
                    # the provider-mandated shadow-invoice expiry, and duplicate
                    # order keys would split authorization from minting).
                    @service.create_swap(
@@ -302,7 +302,7 @@ module OpenReceive
       def resolve_host(action, request, order_id, body, pay_in_asset = nil)
         args = { action: action, request: request, order_id: order_id, input: body }
         args[:pay_in_asset] = pay_in_asset unless pay_in_asset.nil?
-        resolved_host_checkout(@resolve_checkout.call(**args))
+        OpenReceive.stringify(@resolve_checkout.call(**args))
       end
 
       def guard(action, request, resource)
@@ -362,11 +362,11 @@ module OpenReceive
       ].freeze
 
       def public_payment_details(details)
-        data = details.respond_to?(:each_pair) ? details.each_pair.to_h { |key, value| [key.to_s, value] } : {}
+        data = OpenReceive.stringify(details)
         result = {}
         transaction = data["transaction"]
         if transaction.respond_to?(:each_pair)
-          rows = transaction.each_pair.to_h { |key, value| [key.to_s, value] }
+          rows = OpenReceive.as_string_keys(transaction)
           result["transaction"] = PUBLIC_TRANSACTION_FIELDS.each_with_object({}) do |field, picked|
             picked[field] = rows[field] unless rows[field].nil?
           end
@@ -487,18 +487,13 @@ module OpenReceive
         raise ValidationError, "This route does not accept a payer-supplied amount; the host resolves its order price."
       end
 
-      def resolved_host_checkout(value)
-        data = value.respond_to?(:each_pair) ? value.each_pair.to_h { |key, item| [key.to_s, item] } : {}
-        data
-      end
-
       def committed_checkout(order_id, resolved)
         checkout = resolved["checkout"]
         unless checkout.is_a?(Hash)
           raise ConflictError, "The host payment attempt has no checkout snapshot."
         end
 
-        data = checkout.each_pair.to_h { |key, value| [key.to_s, value] }
+        data = OpenReceive.as_string_keys(checkout)
         hash = required(data["payment_hash"] || data["paymentHash"], "payment_hash").downcase
         selected = required(resolved["payment_hash"], "payment_hash").downcase
         checkout_order = required(data["order_id"] || data["orderId"], "order_id")

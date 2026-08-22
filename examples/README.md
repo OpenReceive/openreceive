@@ -70,7 +70,9 @@ integration this way.
 - **Demos import the shared `@openreceive/*` UI — they never fork it.** When a
   demo needs different markup, it composes the packaged components and class
   registries rather than copying them. The one hand-written port (the Rails
-  method wizard) is guarded by a drift check; see
+  method grid and swap panel, kept because they are what proves
+  `@openreceive/browser/headless` drives a checkout from a non-React store) is
+  guarded by a drift check; see
   [`hello-fruit/README.md`](hello-fruit/README.md).
 - **Product data has one source.** `hello-fruit/shared/fruits.json` is the
   catalog for all four variants; nothing re-declares fruit ids, prices, or

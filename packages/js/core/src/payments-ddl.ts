@@ -21,13 +21,6 @@ export interface OpenReceivePaymentsDdlOptions {
   readonly tableName?: string;
   /** Durable reconcile-gate key/value table name. Default `openreceive_meta`. */
   readonly metaTableName?: string;
-  /** Raw SQL type for `order_id`, matching the host order key. Default `TEXT`. */
-  readonly orderIdSqlType?: string;
-  /**
-   * SQL appended to the `order_id` column definition, typically a foreign key
-   * such as ` REFERENCES orders (id)`. Default: none.
-   */
-  readonly orderIdReferencesSql?: string;
 }
 
 /** The `status IN (...)` predicate every rendering of the schema must enforce. */
@@ -86,10 +79,12 @@ function paymentsColumns(options: OpenReceivePaymentsDdlOptions): readonly Payme
           ? "BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
           : "INTEGER PRIMARY KEY AUTOINCREMENT",
     },
-    {
-      name: "order_id",
-      definition: `${options.orderIdSqlType ?? "TEXT"} NOT NULL${options.orderIdReferencesSql ?? ""}`,
-    },
+    // Deliberately TEXT with no foreign key: OpenReceive treats the host's
+    // order id as an opaque string and never reads, locks, or joins the host's
+    // order table. A host that wants referential integrity adds the constraint
+    // itself — see `openReceiveFulfillmentNote`, which every generated file
+    // renders next to this schema.
+    { name: "order_id", definition: "TEXT NOT NULL" },
     { name: "payment_hash", definition: "TEXT NOT NULL UNIQUE" },
     { name: "status", definition: "TEXT NOT NULL DEFAULT 'pending'" },
     { name: "status_reason", definition: "TEXT" },
@@ -117,9 +112,9 @@ export function openReceivePaymentsColumnNames(): readonly string[] {
  * The one canonical payment-attempts DDL, as bare statements (no trailing
  * semicolons). `@openreceive/http` renders it for its migration helper and the
  * scaffold CLI renders it into ORM migrations — both from here, so the two can
- * never drift. Hosts may adjust `order_id` typing or add a foreign key (the
- * `orderIdSqlType` / `orderIdReferencesSql` options), but must keep every
- * column and constraint. The sibling `openreceive_meta` key/value/rev table
+ * never drift. Every column and constraint must be kept as rendered; there is
+ * nothing here to tune per host, because `order_id` is an opaque string with
+ * no foreign key. The sibling `openreceive_meta` key/value/rev table
  * backs the durable reconcile gate shared by every worker on this database —
  * same host database, never a second one — and records the installed schema
  * version.

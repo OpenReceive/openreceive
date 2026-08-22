@@ -1,3 +1,5 @@
+import { unixSeconds } from "@openreceive/core";
+
 export type Status = "pending" | "settled" | "expired" | "failed";
 
 export interface StatusInvoiceLike {
@@ -17,7 +19,7 @@ export function status(
   if (invoice.transaction_state === "expired") return "expired";
 
   const expiresAt = readUnixSeconds(invoice.expires_at);
-  if (expiresAt !== undefined && expiresAt <= (options.now ?? currentUnixSeconds())) {
+  if (expiresAt !== undefined && expiresAt <= (options.now ?? unixSeconds())) {
     return "expired";
   }
 
@@ -30,8 +32,4 @@ function readUnixSeconds(value: number | string | null | undefined): number | un
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1000);
 }

@@ -352,7 +352,7 @@ test("React <Checkout orderId> enters create mode and renders the creating place
 
 test("React <Checkout checkout> renders a supplied snapshot", () => {
   const html = renderToStaticMarkup(
-    React.createElement(Checkout, { checkout: invoice(), orderUrl: "/order" }),
+    React.createElement(Checkout, { checkout: invoice(), prefix: "/openreceive" }),
   );
   assert.match(html, /data-openreceive-checkout/);
   assert.match(html, />Copy invoice</);

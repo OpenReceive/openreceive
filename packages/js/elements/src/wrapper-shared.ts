@@ -7,31 +7,21 @@
 // `tagName`, `attributes`, and `listeners`.
 
 import {
-  type CheckoutController,
-  type CheckoutControllerOptions,
   type CheckoutElementAttributeOptions,
   type CheckoutElementAttributes,
   type CheckoutElementEventHandlers,
   type CheckoutElementListeners,
-  type CheckoutShellElements,
   type CheckoutShellModel,
   type CheckoutShellOptions,
   type CheckoutSnapshot,
-  type CreateCheckoutShellOptions,
-  createCheckoutController,
   createCheckoutElementAttributes,
   createCheckoutElementListeners,
-  createCheckoutShell,
   createCheckoutShellModel,
-  createOpenReceiveStoredThemeModel,
-  createOpenReceiveThemeModel,
   createOpenReceiveThemeToggleElementAttributes,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type OpenReceiveStoredThemeModelOptions,
+  type OpenReceiveCheckoutComponentProps,
   type OpenReceiveThemeModel,
-  type OpenReceiveThemeModelOptions,
-  type OpenReceiveThemePreference,
   type OpenReceiveThemeToggleElementAttributeOptions,
   type OpenReceiveThemeToggleElementAttributes,
 } from "@openreceive/browser/internal";
@@ -51,6 +41,8 @@ export type {
   CheckoutShellOptions,
   CheckoutSnapshot,
   CreateCheckoutShellOptions,
+  OpenReceiveCheckoutComponentProps,
+  OpenReceiveCheckoutPropsValidation,
   OpenReceiveStoredThemeModelOptions,
   OpenReceiveThemeModel,
   OpenReceiveThemeModelOptions,
@@ -58,9 +50,20 @@ export type {
   OpenReceiveThemeToggleElementAttributeOptions,
   OpenReceiveThemeToggleElementAttributes,
 } from "@openreceive/browser/internal";
+// Re-exported under their own names: a wrapper that needs the controller, the
+// standalone shell, or a theme model gets the browser factory itself. The
+// four `createOpenReceiveWrapper*` aliases that used to wrap these one to one
+// are gone — an alias is a second name for one concept, not a seam.
 export {
+  createCheckoutController,
+  createCheckoutShell,
+  createOpenReceiveStoredThemeModel,
+  createOpenReceiveThemeModel,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+  // The create/snapshot boundary check: one implementation in the browser floor,
+  // called by these wrappers and by @openreceive/react alike (G6a).
+  validateOpenReceiveCheckoutProps,
 } from "@openreceive/browser/internal";
 export type { DefineOpenReceiveElementsOptions } from "./index.ts";
 export { defineOpenReceiveElements } from "./index.ts";
@@ -107,34 +110,16 @@ export interface OpenReceiveWrapperCheckoutShellBinding {
 }
 
 /**
- * The flat prop surface of every element wrapper component. The shipped SFC
- * `.d.ts` files alias this type, so the props exist in exactly one place; prop
- * names, defaults, and per-mode applicability are the shared contract in
+ * The flat prop surface of every element wrapper component: the shared checkout
+ * props, the element's event handlers, and the shell escape hatch. The shipped
+ * SFC `.d.ts` files alias this type and the Vue SFC derives its `defineProps`
+ * from it, so the surface exists in exactly one place; prop names, defaults,
+ * and per-mode applicability are the shared contract in
  * `docs/internal/wrapper-parity.md`.
  */
 export interface OpenReceiveWrapperCheckoutComponentProps
-  extends OpenReceiveWrapperCheckoutEventHandlers {
-  /** Snapshot mode: render this checkout directly. */
-  readonly checkout?: CheckoutSnapshot;
-  /** Create mode: the element creates the checkout for this order, then renders and polls. */
-  readonly orderId?: string;
-  readonly prefix?: string;
-  readonly orderUrl?: string;
-  readonly paymentWizard?: boolean;
-  /** Base URL of an external bolt11 decoder; omitted, no "Decode" link is rendered. */
-  readonly decodeLinkUrl?: string;
-  /** Default true: the shell owns `data-theme` and renders the package theme toggle. */
-  readonly themeToggle?: boolean;
-  readonly defaultTheme?: OpenReceiveThemePreference;
-  readonly storageKey?: string;
-  /** Create mode only. */
-  readonly metadata?: Record<string, unknown>;
-  /** Create mode only. */
-  readonly syncUrl?: boolean;
-  /** Create mode only. */
-  readonly resumePathPrefix?: string;
-  /** Create mode only. */
-  readonly routeOrderId?: string;
+  extends OpenReceiveCheckoutComponentProps,
+    OpenReceiveWrapperCheckoutEventHandlers {
   /** Escape hatch for the rest of `CheckoutShellOptions`. */
   readonly options?: CheckoutShellOptions;
 }
@@ -148,19 +133,6 @@ export function createOpenReceiveWrapperCheckoutBinding(
     attributes: createCheckoutElementAttributes(snapshot, options),
     listeners: createCheckoutElementListeners(options),
   };
-}
-
-export function createOpenReceiveWrapperThemeBinding(
-  theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  return createOpenReceiveThemeModel(theme, options);
-}
-
-export function createOpenReceiveWrapperStoredThemeBinding(
-  options: OpenReceiveStoredThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  return createOpenReceiveStoredThemeModel(options);
 }
 
 export function createOpenReceiveWrapperThemeToggleBinding(
@@ -227,60 +199,4 @@ export function createOpenReceiveWrapperCheckoutShellBinding(
       : shellOptions,
   );
   return toWrapperShellBinding(shell, createCheckoutElementListeners(options));
-}
-
-/** Which props only do something in create mode (no `checkout` snapshot). */
-const CREATE_MODE_ONLY_PROPS = ["metadata", "syncUrl", "resumePathPrefix", "routeOrderId"] as const;
-
-const warnedSnapshotModeProps = new Set<string>();
-
-export interface OpenReceiveWrapperCheckoutPropsValidation {
-  readonly framework: string;
-  readonly checkout?: CheckoutSnapshot | null;
-  readonly orderId?: string;
-  readonly metadata?: Record<string, unknown>;
-  readonly syncUrl?: boolean;
-  readonly resumePathPrefix?: string;
-  readonly routeOrderId?: string;
-  readonly warn?: (message: string) => void;
-}
-
-/**
- * Boundary check for the wrapper components: without it the missing-mode failure surfaces
- * as a `TypeError` thrown from inside a computed/reactive statement (in Angular, on every
- * change-detection pass) rather than as one clear error where the props are read.
- */
-export function validateOpenReceiveWrapperCheckoutProps(
-  props: OpenReceiveWrapperCheckoutPropsValidation,
-): void {
-  const snapshot = props.checkout ?? null;
-  if (snapshot === null && (props.orderId === undefined || props.orderId.length === 0)) {
-    throw new TypeError(
-      `${props.framework} Checkout requires a checkout snapshot or an orderId (create mode).`,
-    );
-  }
-  if (snapshot === null) return;
-  const ignored = CREATE_MODE_ONLY_PROPS.filter((name) => props[name] !== undefined);
-  if (ignored.length === 0) return;
-  const key = `${props.framework}:${ignored.join(",")}`;
-  if (warnedSnapshotModeProps.has(key)) return;
-  warnedSnapshotModeProps.add(key);
-  const warn = props.warn ?? ((message: string) => globalThis.console?.warn?.(message));
-  warn(
-    `${props.framework} Checkout ignores ${ignored.join(", ")} in snapshot mode; ` +
-      "those props only apply when the component creates the checkout from an orderId.",
-  );
-}
-
-export function createOpenReceiveWrapperCheckoutController(
-  options: CheckoutControllerOptions,
-): CheckoutController {
-  return createCheckoutController(options);
-}
-
-export function createOpenReceiveWrapperCheckoutShell(
-  snapshot: CheckoutSnapshot,
-  options: CreateCheckoutShellOptions = {},
-): CheckoutShellElements {
-  return createCheckoutShell(snapshot, options);
 }

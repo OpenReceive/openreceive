@@ -20,23 +20,19 @@ webpackConfig.plugins.push(
   new webpack.DefinePlugin({
     "import.meta.env.LOG_LEVEL": JSON.stringify(process.env.LOG_LEVEL ?? "INFO"),
   }),
-  // Provider icons and pay-tutorial images resolve at runtime via
+  // Packaged payment icons resolve at runtime via
   // `new URL("./assets/…", import.meta.url)` inside the packaged JS, which
   // lands next to the emitted chunk (/packs/js/…). Copy them there — the same
   // job the Vite demos do with copy-openreceive-payment-icons-plugin.
+  // Provider icons and pay-tutorial images are NOT copied: this demo renders
+  // only the method grid and the swap deposit panel, and neither shows a
+  // provider. Re-add them alongside anything that renders the packaged
+  // route/provider step.
   new CopyPlugin({
     patterns: [
       {
         from: path.join(repoRoot, "packages/js/browser/dist/assets/icons"),
         to: "js/assets/icons",
-      },
-      {
-        from: path.join(repoRoot, "packages/js/provider-data/dist/assets/provider-icons"),
-        to: "js/assets/provider-icons",
-      },
-      {
-        from: path.join(repoRoot, "packages/js/provider-data/dist/assets/pay_tutorials"),
-        to: "js/assets/pay_tutorials",
       },
     ],
   }),

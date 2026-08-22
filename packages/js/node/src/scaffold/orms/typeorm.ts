@@ -1,3 +1,4 @@
+import { openReceiveFulfillmentNote } from "@openreceive/core";
 import { canonicalPaymentsDdlStatements } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
@@ -14,6 +15,8 @@ export function renderTypeOrmFiles(options: ScaffoldPaymentsOptions): ScaffoldFi
 // (createOpenReceiveHost in @openreceive/http), so there is no entity class to
 // register. Keep every column; timestamps are unix-seconds integer columns, on
 // purpose.
+//
+${openReceiveFulfillmentNote("// ", options.tableName)}
 import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateOpenReceiveTables20260101000000 implements MigrationInterface {

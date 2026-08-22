@@ -14,8 +14,18 @@ stays the shared npm packages: components come from `@openreceive/react`
 (`QRCode`, `WaitingState`, `PaymentData`, `renderSwapDepositPanel`,
 `TransactionDetails`, …) and every class string from
 `@openreceive/browser`'s `ui-classes` design registry, so the design is
-identical to the other demos. Only the method-wizard shell (whose selection
-state lives in the store) is demo-owned markup.
+identical to the other demos.
+
+Exactly two pieces of packaged UI are re-implemented here, because they are the
+two that read store state on every render: the **payment method grid**
+([`MethodGrid.tsx`](app/javascript/src/app/components/checkout/MethodGrid.tsx))
+and the shell around the **swap deposit panel**
+([`SwapPanel.tsx`](app/javascript/src/app/components/checkout/SwapPanel.tsx)).
+The packaged wizard's route/provider/tutorial step is deliberately not ported —
+it is presentation with no store involvement, and the node-express and
+nextjs-fullstack demos mount the packaged `<Checkout>`, which is where that flow
+is demonstrated. Selecting Bitcoin here mints (or reuses) the bolt11 and the
+Lightning pane above the grid is the payment target.
 
 Host persistence is **Postgres** (Docker Compose). Fruit rows live in
 `products` (seeded from [`../../shared/fruits.json`](../../shared/fruits.json));
@@ -51,10 +61,11 @@ Shakapacker (webpack + swc) builds `app/javascript/packs/hello_fruit.js` into
 `public/packs` with content-hashed names; `javascript_pack_tag` /
 `stylesheet_pack_tag` read the manifest. Tailwind (v4 + daisyUI) compiles via
 PostCSS, scanning the demo source plus `@openreceive/browser`'s `ui-classes.ts`
-registry. Payment/provider icons and pay-tutorial images are copied next to
-the emitted chunk (`/packs/js/assets/…`) so the packages' runtime
+registry. Packaged payment icons are copied next to the emitted chunk
+(`/packs/js/assets/icons/…`) so the packages' runtime
 `new URL(..., import.meta.url)` resolution works — the same job the Node
-demos do with a Vite copy plugin. The HTML shell is `Cache-Control: no-store`;
+demos do with a Vite copy plugin. Provider icons and pay-tutorial images are
+not copied: nothing this demo renders shows a provider. The HTML shell is `Cache-Control: no-store`;
 content-hashed pack files are immutable.
 
 ## Run with Docker
@@ -109,10 +120,13 @@ npm run typecheck -w @openreceive/example-rails
 npm run test -w @openreceive/example-rails
 ```
 
-`npm run test` runs [`script/check-wizard-drift.mjs`](script/check-wizard-drift.mjs):
-the method wizard here is a hand port of the packaged one onto store state, so
-the check fails when `@openreceive/browser/headless` gains or renames a wizard
-export the port does not mirror. It reads the built `dist`, so run
+`npm run test` runs [`script/check-wizard-drift.mjs`](script/check-wizard-drift.mjs).
+The method grid and swap panel here are copies of packaged UI, so the check
+polices both halves of that copy: it fails when `@openreceive/browser/headless`
+gains or renames a wizard export the port does not mirror, and equally when the
+port's list of deliberately-dropped exports goes stale — an exemption for a name
+the package no longer has, one with no reason written down, or one the port has
+quietly started using again. It reads the built `dist`, so run
 `npm run build:packages` first.
 
 The integration tests stub the NWC wallet and the price feed (static

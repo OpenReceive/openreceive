@@ -586,6 +586,36 @@ class StorageFreeServerTest < Minitest::Test
                  refund.call("T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb").fetch("provider_state")
   end
 
+  # One spelling per input, matching the JS service, whose
+  # normalizeCreateCheckoutRequest rejects aliases in either casing rather than
+  # ignoring them. The Ruby service takes snake_case only: a camelCase key is
+  # not a second accepted spelling, it is simply a missing field.
+  def test_service_input_keys_are_snake_case_only
+    assert_raises(OpenReceive::Server::ValidationError) do
+      @service.create_checkout("orderId" => "ruby-camel", "amount" => { "sats" => 1000 })
+    end
+    assert_raises(OpenReceive::Server::ValidationError) do
+      @service.check_payment("paymentHash" => "1" * 64, "createdAt" => 1000)
+    end
+    service = OpenReceive::Server::Service.new(
+      nwc_client: @wallet,
+      price_provider: nil,
+      swap_providers: [SwapProvider.new],
+      clock: -> { 1000 }
+    )
+    error = assert_raises(OpenReceive::Server::ValidationError) do
+      service.quote_swap("amount" => { "sats" => 20_000 }, "payInAsset" => "USDT_TRON")
+    end
+    assert_equal "payInAsset is not supported.", error.message
+
+    # A payer-supplied "expirySeconds" no longer beats the checkout default:
+    # only the snake_case key the swap path passes can set the invoice window.
+    checkout = @service.create_checkout(
+      "order_id" => "ruby-camel-expiry", "amount" => { "sats" => 1000 }, "expirySeconds" => 60
+    )
+    assert_equal 1000 + 600, checkout.fetch("expires_at")
+  end
+
   # Missing required inputs are payer errors: 400 INVALID_REQUEST, never a
   # bare KeyError surfacing as an opaque 500 (matches prepare_checkout).
   def test_missing_inputs_map_to_validation_errors

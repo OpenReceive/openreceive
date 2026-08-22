@@ -1,4 +1,4 @@
-import type { OpenReceiveErrorBody, OpenReceiveErrorCode } from "@openreceive/core";
+import { isRecord, type OpenReceiveErrorBody, type OpenReceiveErrorCode } from "@openreceive/core";
 
 export class OpenReceiveServiceError extends Error {
   readonly status: number;
@@ -14,20 +14,13 @@ export class OpenReceiveServiceError extends Error {
   }
 }
 
+/** Core's `isRecord`, plus the 400 this service owes a caller that sends a non-object. */
 export function asRecord(value: unknown): Record<string, unknown> {
   if (value === undefined) return {};
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw serviceError(400, "INVALID_REQUEST", "Input must be an object.");
   }
-  return value as Record<string, unknown>;
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-export function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+  return value;
 }
 
 export function parseOptionalRecord(
@@ -35,14 +28,10 @@ export function parseOptionalRecord(
   field: string,
 ): Record<string, unknown> | undefined {
   if (value === undefined) return undefined;
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw serviceError(400, "INVALID_REQUEST", `${field} must be a JSON object.`);
   }
-  return value as Record<string, unknown>;
-}
-
-export function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1000);
+  return value;
 }
 
 export function serviceError(

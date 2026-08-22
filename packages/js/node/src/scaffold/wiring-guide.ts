@@ -1,4 +1,8 @@
-import { openReceivePaymentsColumnNames, openReceivePaymentsSeedSql } from "@openreceive/core";
+import {
+  openReceiveFulfillmentNoteMarkdown,
+  openReceivePaymentsColumnNames,
+  openReceivePaymentsSeedSql,
+} from "@openreceive/core";
 import { isSqlite } from "./shared.ts";
 import type { ScaffoldPaymentsOptions } from "./types.ts";
 
@@ -24,6 +28,11 @@ The OpenReceive library owns the payment-attempt repository at runtime — commi
 locking, settlement write-once, the durable reconcile gate, and reconciliation
 state transitions all run inside \`@openreceive/http\`, never in generated or
 hand-written host code.
+
+Your order table is not part of this. OpenReceive never reads, writes, locks,
+or references it, and never had to be told its name or its primary-key type —
+see [section 3](#3-fulfilling-exactly-once) below, which is the one thing this
+boundary asks of you.
 
 ## 1. Run the migration
 
@@ -63,6 +72,9 @@ const onPaid = async ({ orderId }) => {
   fine: delivery is at-least-once and retried until \`onPaid\` succeeds, so make
   it idempotent.
 
+The one-liner above is deliberately the simplest thing that works — see
+[section 3](#3-fulfilling-exactly-once) before shipping it.
+
 Pass the same \`host\` to your mounted HTTP adapter. No background process is
 needed: every mounted OpenReceive route runs an opportunistic, durably gated
 reconcile pass by default (\`opportunisticReconcile\`), so abandoned checkouts
@@ -82,12 +94,50 @@ process.once("SIGINT", () => void worker.stop());
 process.once("SIGTERM", () => void worker.stop());
 \`\`\`
 
-## 3. What to pass as \`db\`
+## 3. Fulfilling exactly once
+
+${openReceiveFulfillmentNoteMarkdown(options.tableName)}
+
+In this project's terms, the guarded write goes inside \`onPaid\`:
+
+\`\`\`ts
+const onPaid = async ({ orderId, paidAt, query }) => {
+  // \`query\` runs in OpenReceive's settlement transaction, so the order
+  // transition and the payment record commit or roll back together.
+  const claimed = await query(
+    ${guardedUpdateSql(options)},
+    [paidAt, orderId],
+  );
+  if (claimed.length === 0) return; // someone else already fulfilled it
+  await shipOrder(orderId);
+};
+\`\`\`
+
+## 4. What to pass as \`db\`
 
 ${dbSection(options)}
 
 Never expose \`swap_data\` / \`swapData\` from application APIs, logs, or browser bundles.
 `;
+}
+
+/**
+ * The guarded, idempotent order transition, written for this scaffold's
+ * dialect. Postgres and modern SQLite both support RETURNING, so the host can
+ * tell "I won the claim" from "someone already had it" by row count alone
+ * rather than by a driver-specific affected-rows field.
+ */
+function guardedUpdateSql(options: ScaffoldPaymentsOptions): string {
+  const [paidAt, orderId] = isSqlite(options) ? ["?", "?"] : ["$1", "$2"];
+  // Indented to sit under the 4-space `query(` argument in the rendered
+  // snippet, with the SQL keywords right-aligned into one river.
+  return [
+    "`UPDATE orders",
+    `        SET state = 'paid', paid_at = ${paidAt}`,
+    `      WHERE id = ${orderId}`,
+    "        AND state = 'awaiting_payment'",
+    "     RETURNING id`",
+  ].join("\n");
 }
 
 function onPaidUpdateLine(options: ScaffoldPaymentsOptions): string {

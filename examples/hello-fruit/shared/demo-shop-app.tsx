@@ -41,6 +41,7 @@ import type { HelloFruitDemoOrder } from "./demo-order.ts";
 import { isHelloFruitDemoOrder } from "./demo-order.ts";
 import {
   formatHelloFruitDisplayPrice,
+  parseHelloFruitBtcFiatRates,
   toHelloFruitDisplayAmount,
   type HelloFruitBtcFiatRates,
 } from "./demo-pricing.ts";
@@ -268,13 +269,19 @@ export function HelloFruitShopApp(props: HelloFruitShopAppProps): React.ReactEle
       try {
         const response = await fetch("/rates");
         if (!response.ok) throw new Error(`rates request failed: HTTP ${response.status}`);
-        const body = (await response.json()) as {
-          rates?: HelloFruitBtcFiatRates;
-        };
-        if (cancelled || body.rates === undefined) return;
-        setRates(body.rates);
+        const body = (await response.json()) as { rates?: unknown };
+        if (cancelled) return;
+        // Parsed, never cast: these rates are read inside render, so an
+        // unusable body must leave the state alone and the shop priced in its
+        // USD catalog amounts.
+        const rates = parseHelloFruitBtcFiatRates(body.rates);
+        if (rates === undefined) {
+          logDemoRef.current("rates.error", "Rates response carried no usable exchange rates.");
+          return;
+        }
+        setRates(rates);
         logDemoRef.current("rates.loaded", "Loaded display exchange rates.", {
-          rateCurrencies: Object.keys(body.rates.bitcoin),
+          rateCurrencies: Object.keys(rates.bitcoin),
         });
       } catch (cause: unknown) {
         logDemoRef.current("rates.error", "Failed to load display exchange rates.", {

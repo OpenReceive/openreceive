@@ -24,6 +24,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./adapter-surface": {
+      "types": "./dist/adapter-surface.d.ts",
+      "import": "./dist/adapter-surface.js"
     }
   },
   "files": [
@@ -32,7 +36,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist",
+    "build": "tsup src/index.ts src/adapter-surface.ts --format esm --dts --clean --target es2022 --out-dir dist",
     "prepack": "npm run build"
   },
   "license": "MIT",

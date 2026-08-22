@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import path from "node:path";
+import { compact } from "@openreceive/core";
 import { createOpenReceiveConsoleLogger } from "../console-logger.ts";
 import {
   openReceiveLogLevelOrder,
@@ -233,10 +234,12 @@ export function attachOpenReceiveLogging(
   const fileLogger = createOpenReceiveFileLoggerFromConfig(options.logging);
   const consoleEnabled = options.logging?.console ?? options.logger === undefined;
   const consoleLogger = consoleEnabled
-    ? createOpenReceiveConsoleLogger({
-        prefix: options.logging?.prefix ?? "openreceive",
-        ...(options.logging?.level === undefined ? {} : { minLevel: options.logging.level }),
-      })
+    ? createOpenReceiveConsoleLogger(
+        compact({
+          prefix: options.logging?.prefix ?? "openreceive",
+          minLevel: options.logging?.level,
+        }),
+      )
     : undefined;
   const logger = composeOpenReceiveLoggers(options.logger, consoleLogger, fileLogger);
   return logger === undefined ? options : { ...options, logger };

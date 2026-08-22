@@ -1,3 +1,4 @@
+import { openReceiveFulfillmentNote } from "@openreceive/core";
 import { canonicalPaymentsDdlStatements } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
@@ -21,6 +22,8 @@ export function renderKnexFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[
  * are unix-seconds integer columns, on purpose.
  *
  * Dialect: ${options.dialect}
+ *
+${openReceiveFulfillmentNote(" * ", options.tableName)}
  */
 
 /** @param {import("knex").Knex} knex */

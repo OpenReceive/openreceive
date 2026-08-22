@@ -117,8 +117,9 @@ statuses) + `status_reason`, `paid_at`, `expires_at`, exact wallet
 `created_at`, locally-clocked `updated_at`, write-once `inserted_at`,
 `checkout_data`, server-only `swap_data`, and
 nullable `client_ip` (with its `(client_ip, inserted_at)` index — DB-backed
-rate limiting counts on it). Keep every column; adjust `order_id`
-typing or add a foreign key to your order table if you like. See
+rate limiting counts on it). Keep every column. `order_id` is always `TEXT`
+with no foreign key: OpenReceive never reads, writes, locks, or joins your
+order table, so its name and primary-key type never enter the schema. See
 [Payment storage](storage.md).
 
 The same file also creates `openreceive_meta` (`key`, `value`, `rev`) in the
@@ -126,7 +127,7 @@ same database — one migration, both tables — and, where the ORM's migration
 format can seed rows, seeds its `schema_version` marker (see
 [Payment storage](storage.md#schema-version)). The `transaction_scan_gate` row is
 the durable claim that collapses the request-path reconcile passes of every
-instance into one wallet scan per interval, so keep it even though no host code
+instance into one wallet scan per interval, so keep it even though no code of yours
 touches it.
 
 `onPaid({ orderId, paymentHash, paidAt, details?, query })` runs inside the
@@ -134,6 +135,25 @@ library's settlement transaction, only for the order's first settled attempt.
 Use `query` (same `?` placeholders) to update your order or insert an outbox
 row transactionally — do not use your ORM's separate connection there. Never
 map `swap_data` into an API serializer, log, or browser bundle.
+
+That "first settled attempt" guarantee covers every settlement path OpenReceive
+owns; it cannot cover fulfillment your application triggers elsewhere. If an
+admin action, a second processor, or a replayed job can also fulfill an order,
+those race each other — so make the transition itself the guard:
+
+```ts
+const onPaid = async ({ orderId, paidAt, query }) => {
+  const claimed = await query(
+    `UPDATE orders SET state = 'paid', paid_at = $1
+      WHERE id = $2 AND state = 'awaiting_payment' RETURNING id`,
+    [paidAt, orderId],
+  );
+  if (claimed.length === 0) return; // someone else already fulfilled it
+  await shipOrder(orderId);
+};
+```
+
+Every scaffolded file carries the long-form version of this note.
 
 Only if no supported handle or adapter can reach your persistence, implement
 the full `OpenReceivePaymentRepository` interface and pass it as `payments`

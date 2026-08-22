@@ -7,7 +7,7 @@
   risk, the explicit override is `allowSpendCapableWallet: true`
   (Rails: `config.allow_spend_capable_wallet = true`) or
   `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`; OpenReceive still logs a loud warning.
-- Recompute checkout prices from host-owned order/catalog data; reject payer amounts.
+- Recompute checkout prices from your own order/catalog data; reject payer amounts.
 - The attempt row commits before the invoice is exposed; the library serializes concurrent
   creates per order. Custom `OpenReceivePaymentRepository` implementations must keep that
   guarantee.
@@ -21,5 +21,5 @@
 - Closing an unpaid attempt requires a successful wallet scan past expiry plus the 900-second
   grace — never the local clock alone.
 - Treat `swap_data` as a provider credential: never serialize it into HTTP responses or logs.
-  Optional encryption at rest belongs to the host framework/database.
+  Optional encryption at rest belongs to your framework/database.
 - Provider completion alone does not fulfill an order; wallet settlement does.

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
+import { parse as parseYaml } from "yaml";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
@@ -111,6 +112,69 @@ test("@openreceive/http declares no database, Redis, or migration-runner depende
       assert.doesNotMatch(name, banned, `${section} must not include ${name}`);
     }
   }
+});
+
+// B10: handler.ts hand-mirrors each route's `additionalProperties: false` field
+// list from the OpenAPI request schemas. Nothing but review catches a drift
+// between the two, so pin them against each other here: a field added to the
+// contract but not to the handler would be rejected as "unexpected"; a field
+// added to the handler but not to the contract would be silently accepted.
+const SPEC_ROUTE_KINDS = {
+  prepareCheckout: "checkout.prepare",
+  createCheckout: "checkout.create",
+  checkPayment: "payment.check",
+  quoteSwap: "swap.quote",
+  createSwap: "swap.create",
+  getSwap: "swap.read",
+  refundSwap: "swap.refund",
+};
+
+/** The module-private ROUTE_BODY_FIELDS table, read from http-request.ts source. */
+function handlerRouteBodyFields() {
+  const source = readFileSync("packages/js/http/src/http-request.ts", "utf8");
+  const table =
+    /const ROUTE_BODY_FIELDS: Record<string, readonly string\[\]> = \{([\s\S]*?)\n\};/.exec(source);
+  assert.ok(table !== null, "http-request.ts must declare ROUTE_BODY_FIELDS");
+  const fields = {};
+  for (const [, kind, list] of table[1].matchAll(/"([\w.]+)":\s*\[([^\]]*)\]/g)) {
+    fields[kind] = [...list.matchAll(/"([^"]+)"/g)].map(([, name]) => name);
+  }
+  return fields;
+}
+
+test("the handler's per-route field whitelist matches the OpenAPI request schemas", () => {
+  const spec = parseYaml(readFileSync("spec/openapi/openreceive-http.v1.yaml", "utf8"));
+  const fields = handlerRouteBodyFields();
+  const seen = [];
+  for (const operation of Object.values(spec.paths)) {
+    const post = operation.post;
+    if (post === undefined) continue;
+    const routeKind = SPEC_ROUTE_KINDS[post.operationId];
+    assert.ok(
+      routeKind !== undefined,
+      `${post.operationId}: add it to SPEC_ROUTE_KINDS and to http-request.ts's ROUTE_BODY_FIELDS`,
+    );
+    seen.push(routeKind);
+    let schema = post.requestBody.content["application/json"].schema;
+    if (schema.$ref !== undefined) {
+      schema = spec.components.schemas[schema.$ref.replace("#/components/schemas/", "")];
+    }
+    assert.equal(
+      schema.additionalProperties,
+      false,
+      `${post.operationId}: the request schema must close its field list`,
+    );
+    assert.deepEqual(
+      [...(fields[routeKind] ?? [])].sort(),
+      Object.keys(schema.properties).sort(),
+      `${post.operationId}: http-request.ts ROUTE_BODY_FIELDS["${routeKind}"] drifted from the contract`,
+    );
+  }
+  assert.deepEqual(
+    Object.keys(fields).sort(),
+    seen.sort(),
+    "ROUTE_BODY_FIELDS must name exactly the spec's POST routes",
+  );
 });
 
 test("HTTP commits payment hash before returning payer instructions", async () => {

@@ -83,7 +83,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_000001) do
     t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
   end
 
-  add_foreign_key "openreceive_payments", "orders"
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_items", "products"
 end

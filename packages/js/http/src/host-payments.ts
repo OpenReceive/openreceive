@@ -1,169 +1,32 @@
-import type { PaymentDetails } from "@openreceive/core";
+import { unixSeconds } from "@openreceive/core";
 import { sanitizeOpenReceiveEvent } from "@openreceive/node";
 import type {
-  Checkout,
   CreateCheckoutAmount,
   NodeSettlementActionHook,
   NodeSettlementActionInput,
-  OpenReceive,
-  PaymentCheck,
-  SwapData,
 } from "@openreceive/node";
 import { hostError } from "./errors.ts";
 import type {
   CheckoutCreatedHook,
-  CheckoutCreatedInput,
   ResolveCheckoutContext,
   ResolveCheckoutHook,
   ResolvedHostCheckout,
 } from "./handler.ts";
-import { maybeReconcileOpenReceivePayments } from "./reconcile-gate.ts";
+import {
+  isReusablePaymentAttempt,
+  type OpenReceivePaymentRecord,
+  type OpenReceivePaymentRepository,
+} from "./payment-repository.ts";
+import type { OpenReceiveSqlDatabase } from "./sql-adapters.ts";
 import {
   createOpenReceiveSqlPayments,
   type OpenReceiveOrderSettlementHook,
-  type OpenReceiveSqlDatabase,
 } from "./sql-payments.ts";
 
-/** Seconds of remaining life required before a live attempt is reused instead of reminted. */
-export const OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS = 60 as const;
-
-/**
- * Seconds past an attempt's expiry during which reconciliation still scans for a
- * settlement before closing the attempt. Covers clock skew and wallets that
- * accept a payment moments after nominal invoice expiry.
- */
-export const OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS = 900 as const;
-
-/**
- * Lifecycle of one payment attempt. `pending` attempts participate in
- * reconciliation; every other status is terminal for reconciliation purposes.
- * `attention` marks rows that need operator review: the wallet still
- * explicitly reports an in-flight transaction state long after invoice expiry.
- */
-export type OpenReceiveAttemptStatus = "pending" | "settled" | "expired" | "failed" | "attention";
-
-/**
- * The minimal row OpenReceive needs for one invoice or swap attempt.
- * An order may have many of these records. `swapData` must remain server-only.
- */
-export interface OpenReceivePaymentRecord {
-  readonly orderId: string;
-  readonly paymentHash: string;
-  readonly status: OpenReceiveAttemptStatus;
-  /** Optional operator-facing detail for the current status (e.g. "superseded"). */
-  readonly statusReason?: string | null;
-  readonly paidAt: number | null;
-  /** Unix timestamp after which these payer instructions must not be reused. */
-  readonly expiresAt: number;
-  /** Unix timestamp used only to choose deterministically between historical attempts. */
-  readonly createdAt: number;
-  /** Safe, replayable payer response. Contains no wallet or provider credentials. */
-  readonly checkout: Checkout;
-  readonly swapData?: SwapData | null;
-}
-
-/** How `commitAttempt` should treat one existing unpaid live row vs an incoming insert. */
-export type LiveAttemptCommitDecision = "ignore" | "conflict" | "supersede";
-
-export interface OpenReceivePaymentInsert {
-  readonly orderId: string;
-  readonly paymentHash: string;
-  readonly expiresAt: number;
-  readonly createdAt: number;
-  readonly checkout: Checkout;
-  readonly swapData?: SwapData;
-  /** Client IP captured at invoice creation, when the adapter could attribute one. */
-  readonly clientIp?: string;
-}
-
-/** One pending attempt the reconciler should include in its next wallet scan. */
-export interface OpenReceiveReconcilableAttempt {
-  readonly paymentHash: string;
-  /** Exact NIP-47 invoice creation time returned by make_invoice. */
-  readonly createdAt: number;
-  /** Unix timestamp after which the attempt can be closed once a scan confirms no settlement. */
-  readonly expiresAt: number;
-}
-
-/** A terminal (non-settled) state transition observed by reconciliation. */
-export interface OpenReceiveReconciliationTransition {
-  readonly paymentHash: string;
-  readonly status: Exclude<OpenReceiveAttemptStatus, "pending" | "settled">;
-  /** Unix timestamp of the wallet scan that justified this transition. */
-  readonly observedAt: number;
-  /** Operator-facing reason, e.g. "wallet_reported_expired" or "not_found_after_expiry". */
-  readonly reason: string;
-}
-
-/** One observed wallet settlement, as handed to the repository to record. */
-export interface OpenReceiveSettlementRecord {
-  readonly paymentHash: string;
-  /** Unix timestamp the wallet reports (or the scan observed) the payment at. */
-  readonly paidAt: number;
-  readonly details?: PaymentDetails;
-}
-
-/**
- * Persistence boundary for payment attempts. Most applications use the
- * library-provided SQL repository (`createOpenReceiveSqlPayments`); implementing
- * this interface directly is the advanced escape hatch.
- *
- * `commitAttempt` must serialize concurrent creates for one order, reject a
- * settled order or a reusable live attempt on the same rail/asset, supersede a
- * near-expiry same-rail attempt, and commit before it returns. Other rails may
- * remain live so the payer can switch methods. The HTTP handler withholds payer
- * instructions when this method throws.
- *
- * `recordReconciliation` must apply the transition only while the row is still
- * `pending` — it must never overwrite a settled attempt.
- *
- * `recordSettlement` is the write-once settlement claim: the library calls it
- * for every observed settlement and runs the host's own handler only when the
- * call reports the claim won, so a redelivered settlement fulfills once.
- */
-export interface OpenReceivePaymentRepository {
-  listForOrder(orderId: string): Promise<readonly OpenReceivePaymentRecord[]>;
-  /**
-   * The oldest `pending` attempts, terminal rows excluded. A repository with a
-   * large backlog should return an oldest-first batch (the built-in SQL one
-   * caps each pass at OPENRECEIVE_RECONCILE_BATCH_SIZE); the remainder is
-   * covered by later passes.
-   */
-  listReconcilableAttempts(): Promise<readonly OpenReceiveReconcilableAttempt[]>;
-  commitAttempt(input: CheckoutCreatedInput): void | Promise<void>;
-  recordReconciliation(transition: OpenReceiveReconciliationTransition): void | Promise<void>;
-  /**
-   * Claim the order's first settlement for this attempt and persist it.
-   * Returns true only for the call that won the claim — the attempt was still
-   * unsettled AND no sibling attempt on the order had settled. Later calls for
-   * the same or a sibling attempt must record the settlement (a genuine second
-   * payment is not discarded) and return false. A settled attempt is never
-   * overwritten, and an unknown payment hash is a no-op returning false.
-   */
-  recordSettlement(settlement: OpenReceiveSettlementRecord): boolean | Promise<boolean>;
-  /**
-   * Count attempt rows recorded for this client IP at or after `sinceUnixSeconds`.
-   * Backs the handler's opt-in `rateLimiting` option; when a custom repository
-   * omits it, enabling `rateLimiting` fails at construction (there is no
-   * in-memory fallback — use a custom `rateLimitHook` instead).
-   */
-  countAttemptsFromIp?(clientIp: string, sinceUnixSeconds: number): number | Promise<number>;
-  /**
-   * Claim the durable global reconcile gate: return true when this caller may
-   * run a wallet scan now, false when another worker scanned within
-   * `intervalSeconds` (`gate_busy`). The claim MUST be a durable compare-and-set
-   * shared by every process on the host database (the built-in SQL repository
-   * uses the `openreceive_meta` key/value/rev table) — process-local memory
-   * cannot coordinate multiple workers and must never back this. Backs the
-   * handler's default opportunistic reconcile; when a custom repository omits
-   * it, construction throws unless `opportunisticReconcile: false` — the
-   * default settlement path never degrades silently.
-   */
-  claimReconcileGate?(input: {
-    readonly now: number;
-    readonly intervalSeconds: number;
-  }): boolean | Promise<boolean>;
-}
+// The mounted-route host integration: turn a host's order loader plus either a
+// database handle or a custom repository into the `OpenReceiveHost` the handler
+// talks to. The repository contract and its decisions live in
+// payment-repository.ts; the wallet-scan passes live in reconcile-loop.ts.
 
 /**
  * Warn about a background settlement failure through the same redaction every
@@ -175,24 +38,6 @@ export function warnOpenReceiveFailure(event: string, prefix: string, error: unk
   const message = error instanceof Error ? error.message : String(error);
   const sanitized = sanitizeOpenReceiveEvent({ level: "warn", event, message });
   console.warn(`[openreceive] ${prefix}: ${String(sanitized.message)}`);
-}
-
-/** True when an unpaid attempt still has more than the reuse buffer remaining. */
-export function isReusablePaymentAttempt(expiresAt: number, now = currentUnixSeconds()): boolean {
-  return expiresAt - now > OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS;
-}
-
-/**
- * Decide whether an existing unpaid live row blocks, should be expired, or is
- * irrelevant to the incoming payment attempt (different Lightning vs swap asset).
- */
-export function liveAttemptCommitDecision(
-  live: Pick<OpenReceivePaymentRecord, "expiresAt" | "swapData">,
-  incoming: Pick<OpenReceivePaymentInsert, "swapData">,
-  now = currentUnixSeconds(),
-): LiveAttemptCommitDecision {
-  if (!sameRailAndAsset(live, incoming)) return "ignore";
-  return isReusablePaymentAttempt(live.expiresAt, now) ? "conflict" : "supersede";
 }
 
 interface CreateOpenReceiveHostBaseOptions<Order> {
@@ -266,203 +111,6 @@ export interface OpenReceiveHost {
   readonly payments: OpenReceivePaymentRepository;
 }
 
-export interface OpenReceiveReconciler {
-  stop(): void;
-  readonly done: Promise<void>;
-}
-
-/**
- * One bounded reconciliation pass: scan the wallet for every pending attempt,
- * deliver settlements at least once, and persist terminal transitions so closed
- * attempts leave the scan set. Attempt closure requires a successful wallet
- * scan at or after expiry plus grace — a local clock alone never closes a row,
- * because a payment could have settled while the application was offline.
- *
- * A walk cut short by its page cap decides nothing: the core scan omits the
- * hashes it could not reach, so those attempts get no transition this pass and
- * stay pending instead of being closed on an unproven `not_found`.
- *
- * Returns the per-hash `PaymentCheck` results of the pass so callers (notably
- * `payments/check`) can serve a requested hash straight from the pass instead
- * of adding a second per-invoice wallet walk. Results are keyed by hash and
- * may cover fewer hashes than were scanned.
- */
-export async function reconcileOpenReceivePayments(input: {
-  readonly service: OpenReceive;
-  readonly host: OpenReceiveHost;
-  readonly overlapSeconds?: number;
-  readonly maxPages?: number;
-  readonly clock?: () => number;
-}): Promise<readonly PaymentCheck[]> {
-  const clock = input.clock ?? currentUnixSeconds;
-  const attempts = await input.host.payments.listReconcilableAttempts();
-  if (attempts.length === 0) return [];
-  const byHash = new Map(
-    attempts.map((attempt) => [attempt.paymentHash.toLowerCase(), attempt] as const),
-  );
-  const scannedAt = clock();
-  const checks = await input.service.reconcilePayments({
-    attempts,
-    overlapSeconds: input.overlapSeconds,
-    ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
-  });
-  // One failing delivery or transition must not starve the rest of the pass:
-  // each check is isolated, and the failures surface together at the end so
-  // the caller's error path (reconciler warn, opportunistic report) sees them.
-  const failures: unknown[] = [];
-  for (const checked of checks) {
-    try {
-      const attempt = byHash.get(checked.paymentHash.toLowerCase());
-      if (attempt === undefined) continue;
-      if (checked.status === "settled") {
-        // A settled result without paidAt is malformed; retry it next pass.
-        if (checked.paidAt !== undefined) {
-          await input.host.onPaid({
-            paymentHash: checked.paymentHash,
-            paidAt: checked.paidAt,
-            details: checked.details,
-          });
-        }
-        continue;
-      }
-      const walletTransaction = checked.details?.transaction;
-      const transition = reconciliationTransition(
-        attempt,
-        checked.status,
-        scannedAt,
-        walletTransaction?.state ?? walletTransaction?.transaction_state,
-      );
-      if (transition !== null) {
-        await input.host.payments.recordReconciliation(transition);
-      }
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (failures.length > 0) {
-    const first = failures[0];
-    throw new AggregateError(
-      failures,
-      `reconciliation failed for ${failures.length} of ${checks.length} checks: ` +
-        (first instanceof Error ? first.message : String(first)),
-    );
-  }
-  return checks;
-}
-
-/**
- * Decide the terminal transition (if any) for one non-settled reconciliation
- * result. `transactionState` is the explicit state field on the wallet's
- * transaction record, when the scan found one; it decides whether a pending
- * result past expiry plus grace is an operator-attention case or just an
- * abandoned invoice.
- */
-export function reconciliationTransition(
-  attempt: OpenReceiveReconcilableAttempt,
-  status: "pending" | "expired" | "failed" | "not_found",
-  observedAt: number,
-  transactionState?: string,
-): OpenReceiveReconciliationTransition | null {
-  const paymentHash = attempt.paymentHash.toLowerCase();
-  if (status === "failed") {
-    return { paymentHash, status: "failed", observedAt, reason: "wallet_reported_failed" };
-  }
-  if (status === "expired") {
-    return { paymentHash, status: "expired", observedAt, reason: "wallet_reported_expired" };
-  }
-  // The invoice may outlive the requested expiry, so closure waits for a scan
-  // past expiry plus grace instead of trusting the local clock alone.
-  if (observedAt < attempt.expiresAt + OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS) return null;
-  if (status === "not_found") {
-    return { paymentHash, status: "expired", observedAt, reason: "not_found_after_expiry" };
-  }
-  // `attention` requires the wallet's EXPLICIT claim that the transaction is
-  // still in flight long after expiry. NIP-47 state fields are optional and the
-  // unpaid scan lists unpaid invoices, so a state-less record is
-  // indistinguishable from an ordinary abandoned invoice — close it as expired.
-  if (transactionState === "pending" || transactionState === "accepted") {
-    return { paymentHash, status: "attention", observedAt, reason: "unsettled_after_expiry" };
-  }
-  return { paymentHash, status: "expired", observedAt, reason: "no_finality_after_expiry" };
-}
-
-/**
- * Poll and reconcile only the pending attempts in the ledger. Every pass goes
- * through the durable `claimReconcileGate`, so N worker instances — and the
- * request-path opportunistic reconcile — collapse to one real wallet scan per
- * gate interval instead of each running its own.
- */
-export async function startOpenReceiveReconciler(input: {
-  readonly service: OpenReceive;
-  readonly host: OpenReceiveHost;
-  readonly pollIntervalMs?: number;
-  readonly signal?: AbortSignal;
-  readonly overlapSeconds?: number;
-  readonly clock?: () => number;
-  /**
-   * Observes per-pass failures (wallet, repository, or callback errors). The
-   * reconciler always retries from the ledger on the next pass; without this
-   * hook failures are reported once per distinct message via console.warn so a
-   * permanently failing reconciler is never silent.
-   */
-  readonly onError?: (error: unknown) => void;
-}): Promise<OpenReceiveReconciler> {
-  const pollIntervalMs = input.pollIntervalMs ?? 5_000;
-  if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 250) {
-    throw new RangeError("pollIntervalMs must be a safe integer of at least 250");
-  }
-  if (typeof input.host.payments.claimReconcileGate !== "function") {
-    throw new TypeError(
-      "The reconciler requires payments.claimReconcileGate (a durable CAS gate shared by every " +
-        "worker); implement it on the repository so all scan entry points stay within one budget.",
-    );
-  }
-  const overlapSeconds = input.overlapSeconds ?? 60;
-  const controller = new AbortController();
-  const stop = () => controller.abort();
-  input.signal?.addEventListener("abort", stop, { once: true });
-  let lastWarnedMessage: string | undefined;
-  const reportError = (error: unknown): void => {
-    if (input.onError !== undefined) {
-      try {
-        input.onError(error);
-      } catch {
-        // The error observer must never kill the reconciler loop.
-      }
-      return;
-    }
-    // Deduplicate on the message so a persistent outage warns once, not per pass.
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === lastWarnedMessage) return;
-    lastWarnedMessage = message;
-    warnOpenReceiveFailure(
-      "payment.reconcile.failed",
-      "reconciliation pass failed (will retry)",
-      error,
-    );
-  };
-  const done = (async () => {
-    try {
-      while (!controller.signal.aborted) {
-        // The gated pass never throws: wallet, repository, and callback
-        // failures reach reportError and retry from the ledger next pass.
-        const result = await maybeReconcileOpenReceivePayments({
-          service: input.service,
-          host: input.host,
-          overlapSeconds,
-          onError: reportError,
-          ...(input.clock === undefined ? {} : { clock: input.clock }),
-        });
-        if (result.reason === "ran") lastWarnedMessage = undefined;
-        await abortableDelay(pollIntervalMs, controller.signal);
-      }
-    } finally {
-      input.signal?.removeEventListener("abort", stop);
-    }
-  })();
-  return { stop, done };
-}
-
 /**
  * Build the mounted-route host integration around an order loader and either
  * the host database handle (`db`, default) or a custom payment repository
@@ -531,7 +179,7 @@ export function createOpenReceiveHost<Order>(
     };
   }
 
-  const clock = options.clock ?? currentUnixSeconds;
+  const clock = options.clock ?? unixSeconds;
   const resolveCheckout: ResolveCheckoutHook = async (context) => {
     const order = await options.loadOrder(context.orderId, context);
     if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
@@ -617,19 +265,6 @@ export function createOpenReceiveHost<Order>(
   };
 }
 
-/** Convert a checkout callback to the values common ORM create calls persist. */
-export function openReceivePaymentInsert(input: CheckoutCreatedInput): OpenReceivePaymentInsert {
-  return {
-    orderId: input.orderId,
-    paymentHash: input.paymentHash.toLowerCase(),
-    createdAt: input.checkout.createdAt,
-    checkout: structuredClone(input.checkout),
-    expiresAt: input.swapData?.providerOrder.expires_at ?? input.checkout.expiresAt,
-    ...(input.swapData === undefined ? {} : { swapData: input.swapData }),
-    ...(input.clientIp === undefined ? {} : { clientIp: input.clientIp }),
-  };
-}
-
 function resolvedPayment(
   amount: CreateCheckoutAmount | undefined,
   payment: OpenReceivePaymentRecord,
@@ -667,17 +302,6 @@ function matchesCreateAction(
   return payment.swapData?.providerOrder.pay_in_asset === payInAsset;
 }
 
-function sameRailAndAsset(
-  left: Pick<OpenReceivePaymentRecord, "swapData">,
-  right: Pick<OpenReceivePaymentInsert, "swapData">,
-): boolean {
-  const leftSwap = left.swapData ?? null;
-  const rightSwap = right.swapData ?? null;
-  if (leftSwap === null && rightSwap === null) return true;
-  if (leftSwap === null || rightSwap === null) return false;
-  return leftSwap.providerOrder.pay_in_asset === rightSwap.providerOrder.pay_in_asset;
-}
-
 function normalizePayments(
   expectedOrderId: string,
   values: readonly OpenReceivePaymentRecord[],
@@ -713,21 +337,4 @@ function normalizePaymentHash(value: string): string {
     throw hostError("payment_hash must be 64 hexadecimal characters.", 400, "INVALID_REQUEST");
   }
   return normalized;
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
-}
-
-function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve();
-  return new Promise((resolve) => {
-    const timer = setTimeout(done, milliseconds);
-    signal.addEventListener("abort", done, { once: true });
-    function done() {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", done);
-      resolve();
-    }
-  });
 }

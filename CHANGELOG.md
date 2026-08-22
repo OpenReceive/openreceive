@@ -57,6 +57,29 @@ behind.
   unpaid checkout for this payment method is already in progress for this
   order.").
 
+### `prefix` is the only URL the browser takes
+
+- `prefix` — the base path the shipped router is mounted at — is now the
+  single URL input of `@openreceive/browser`, `@openreceive/react`,
+  `@openreceive/elements` and the Vue/Svelte/Angular wrappers. All seven
+  routes are derived from it (`/checkouts`, `/checkouts/prepare`,
+  `/payments/check`, `/swaps`, `/swaps/quote`, `/swaps/status`,
+  `/swaps/refunds`), so create and settle can no longer point at different
+  mounts.
+- Removed: `checkoutUrl` (both the string and the `(orderId) => string`
+  callback) on `prepareCheckout`/`requestCheckout` — pass `prefix`, which is
+  now required, not optional.
+- Removed: `{orderId}` / `{order_id}` templating in checkout URLs. The order
+  id travels in the request body, as it already did for every other route.
+- Removed: the `orderUrl` prop (React `<Checkout>`, `useCheckout`,
+  `PaymentWizard`) and the matching `order-url` element attribute — pass
+  `prefix` instead.
+- Removed: `orderUrl={false}` as the polling switch. Use `polling={false}`
+  (`polling="false"` on the element), which was already the documented knob.
+  Behaviour note: `orderUrl={false}` also cut the payment wizard off from
+  `/swaps*`, so it silently disabled swaps; `polling={false}` stops status
+  polling only and leaves the swap flow working.
+
 ### Frontend
 
 - The fiat/country wing and the crypto method tile are removed: the payment

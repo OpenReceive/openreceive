@@ -1,9 +1,6 @@
 import { status as deriveStatus } from "../status.ts";
-import {
-  assertOpenReceiveDisplayInvoice,
-  isPaidCheckoutSnapshot,
-  selectCheckoutDisplayInvoice,
-} from "./checkout.ts";
+import { assertOpenReceiveDisplayInvoice } from "./checkout-invoice.ts";
+import { isPaidCheckoutSnapshot, selectCheckoutDisplayInvoice } from "./checkout-state.ts";
 import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
 import {
   type CheckoutElementAttributeOptions,
@@ -15,7 +12,6 @@ import {
   type CheckoutShellModel,
   type CheckoutShellOptions,
   type CheckoutSnapshot,
-  type CreateCheckoutElementOptions,
   type CreateCheckoutShellOptions,
   type CreateOpenReceiveThemeToggleElementOptions,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
@@ -55,13 +51,15 @@ function sharedElementAttributes(
   options: CheckoutElementAttributeOptions,
 ): CheckoutElementAttributes {
   const attributes: CheckoutElementAttributes = {};
-  if (options.prefix !== undefined) {
+  // An unbound framework prop arrives as `null` from Vue/Svelte/Angular and as
+  // `undefined` from React; both mean "not set" and must leave the attribute
+  // off entirely, so the element falls back to its own default.
+  const isSet = <T>(value: T | null | undefined): value is T =>
+    value !== undefined && value !== null;
+  if (isSet(options.prefix)) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix] = options.prefix;
   }
-  if (options.orderUrl !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl] = options.orderUrl;
-  }
-  if (options.theme !== undefined) {
+  if (isSet(options.theme)) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;
   }
   if (options.paymentWizard !== undefined) {
@@ -246,7 +244,12 @@ export function applyCheckoutElementAttributes(
   attributes: CheckoutElementAttributes,
 ): void {
   for (const [name, value] of Object.entries(attributes)) {
-    if (value !== undefined) target.setAttribute(name, value);
+    // `null` is skipped as well as `undefined`, and that is not belt-and-braces.
+    // Vue, Svelte and Angular all surface an unbound prop as `null`, not
+    // `undefined`, so a wrapper passing an unset `prefix` or `theme` straight
+    // through would otherwise reach `setAttribute`, which stringifies it — and
+    // the element would derive every route from a mount path of "null".
+    if (value !== undefined && value !== null) target.setAttribute(name, value);
   }
 }
 
@@ -266,21 +269,6 @@ export function applyOpenReceiveThemeToggleElementAttributes(
   for (const [name, value] of Object.entries(attributes)) {
     if (value !== undefined) target.setAttribute(name, value);
   }
-}
-
-export function createCheckoutElement(
-  snapshot: CheckoutSnapshot,
-  options: CreateCheckoutElementOptions = {},
-): HTMLElement {
-  const ownerDocument = options.document ?? globalThis.document;
-  if (ownerDocument === undefined) {
-    throw new Error("OpenReceive checkout element creation requires document.");
-  }
-
-  const element = ownerDocument.createElement(OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
-  applyCheckoutElementAttributes(element, createCheckoutElementAttributes(snapshot, options));
-  applyCheckoutElementListeners(element, createCheckoutElementListeners(options));
-  return element;
 }
 
 export function createOpenReceiveThemeToggleElement(

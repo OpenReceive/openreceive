@@ -5,7 +5,7 @@ provider for deposit instructions. Both values are committed on one `openreceive
 attempt row before those instructions reach the payer. One row holds exactly one provider
 order; a swap retry creates another row with a fresh invoice hash.
 
-Node hosts configure provider credentials with optional `LSC_URI_PRIMARY` and
+Node applications configure provider credentials with optional `LSC_URI_PRIMARY` and
 `LSC_URI_BACKUP` environment variables. Primary is used exclusively while it is
 healthy; backup is only for primary outage. See
 [Lightning Swap Connect](lightning-swap-connect.md) for the URI grammar and
@@ -18,12 +18,12 @@ The two recovery planes are independent:
 - unresolved provider state is queried with the provider details in `swap_data`.
 
 `swap_data` is a JSON-serializable object containing provider order credentials. It lives only
-on the attempt row and stays server-only; never return it to browsers or log it. Hosts may use
+on the attempt row and stays server-only; never return it to browsers or log it. Applications may use
 framework/database field encryption, but OpenReceive does not require a separate encryption
 key. Provider `completed` does not fulfill an order unless the wallet also reports settlement.
 
-Refunds are authorized by the host and pass the row's `orderId`, `paymentHash`, `swapData`, and
-refund address. The service refreshes provider state immediately before requesting the refund
+Refunds are authorized by your application and pass the row's `orderId`, `paymentHash`, `swapData`, and
+refund address. The wallet client refreshes provider state immediately before requesting the refund
 and refuses states other than `refund_required`.
 
 ## Provider state after settlement
@@ -43,6 +43,6 @@ This is by design, not data loss:
 
 The transaction-details UI reflects this by labeling the row **Last provider state** (instead
 of **Provider state**) once the order is settled. Checkout panels ignore the stale snapshot
-entirely and show final payment confirmation. If a host wants the provider's terminal record
+entirely and show final payment confirmation. If an application wants the provider's terminal record
 (e.g. the payout transaction id) for bookkeeping, it can call `getSwap` with the stored
 `swap_data` at any time — provider status remains queryable after settlement.

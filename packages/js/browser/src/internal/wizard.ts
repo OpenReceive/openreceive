@@ -9,7 +9,7 @@ import {
   type Provider,
   type ResolvedProviderRef,
 } from "@openreceive/provider-data";
-import { formatOpenReceiveSwapLimit } from "./checkout.ts";
+import { formatOpenReceiveSwapLimit } from "./checkout-format.ts";
 import {
   type CheckoutPhase,
   type OpenReceiveCheckoutPaymentMethod,
@@ -290,10 +290,6 @@ export function buildOpenReceiveMethodGridEntries<T extends { readonly label: st
 }
 
 export type OpenReceivePaymentAccentId = "bitcoin" | "usdt" | "usdc" | "sol" | "eth" | "default";
-
-export function openReceiveMethodPickerKey(methodId: string): string {
-  return `method:${methodId}`;
-}
 
 export function openReceiveSwapPickerKey(label: string): string {
   return `swap:${label.trim().toUpperCase()}`;

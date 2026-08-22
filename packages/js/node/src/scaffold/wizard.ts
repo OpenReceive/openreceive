@@ -1,11 +1,5 @@
-import { assertOrderModelName, assertOrderTableName, defaultOrderTable } from "./shared.ts";
-import { defaultOrderIdType, finalizeScaffoldOptions } from "./parse-args.ts";
-import {
-  OPENRECEIVE_DIALECTS,
-  OPENRECEIVE_ORMS,
-  ORDER_ID_TYPES,
-  type ScaffoldPaymentsOptions,
-} from "./types.ts";
+import { finalizeScaffoldOptions } from "./parse-args.ts";
+import { OPENRECEIVE_DIALECTS, OPENRECEIVE_ORMS, type ScaffoldPaymentsOptions } from "./types.ts";
 import type { ParsedScaffoldArgv } from "./parse-args.ts";
 
 export type ScaffoldPrompt = (question: string) => Promise<string>;
@@ -34,32 +28,6 @@ export async function resolveScaffoldPaymentsOptions(input: {
     partial.dialect ??
     (await promptChoice(input.prompt, "SQL dialect", OPENRECEIVE_DIALECTS, "postgres"));
 
-  const orderModel = assertOrderModelName(
-    partial.orderModel ?? (await promptText(input.prompt, "Host order model name", "Order")),
-  );
-
-  const orderTable = assertOrderTableName(
-    partial.orderTable ??
-      (await promptText(input.prompt, "Host order table name", defaultOrderTable(orderModel))),
-  );
-
-  const orderIdType =
-    partial.orderIdType ??
-    (await promptChoice(
-      input.prompt,
-      "Order primary key type",
-      ORDER_ID_TYPES,
-      defaultOrderIdType(orm),
-    ));
-
-  const skipForeignKey =
-    partial.skipForeignKey ||
-    !(await promptYesNo(
-      input.prompt,
-      `Add a foreign key from openreceive_payments.order_id to ${orderTable}.id?`,
-      true,
-    ));
-
   const outDir =
     partial.outDir === "."
       ? await promptText(input.prompt, "Output directory", ".")
@@ -68,12 +36,8 @@ export async function resolveScaffoldPaymentsOptions(input: {
   return {
     orm,
     dialect,
-    orderModel,
-    orderTable,
-    orderIdType,
     tableName: partial.tableName ?? "openreceive_payments",
     metaTableName: partial.metaTableName ?? "openreceive_meta",
-    skipForeignKey,
     outDir,
     force: partial.force,
   };
@@ -86,19 +50,6 @@ async function promptText(
 ): Promise<string> {
   const answer = (await prompt(`${label} [${fallback}]: `)).trim();
   return answer.length === 0 ? fallback : answer;
-}
-
-async function promptYesNo(
-  prompt: ScaffoldPrompt,
-  label: string,
-  fallback: boolean,
-): Promise<boolean> {
-  const hint = fallback ? "Y/n" : "y/N";
-  const answer = (await prompt(`${label} (${hint}): `)).trim().toLowerCase();
-  if (answer.length === 0) return fallback;
-  if (["y", "yes"].includes(answer)) return true;
-  if (["n", "no"].includes(answer)) return false;
-  throw new Error(`Please answer yes or no for: ${label}`);
 }
 
 async function promptChoice<T extends string>(

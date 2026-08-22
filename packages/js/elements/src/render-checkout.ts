@@ -1,9 +1,10 @@
 import {
+  assertOpenReceiveDisplayInvoice,
   type CheckoutState,
-  createCheckoutDisplayModel,
   createCheckoutStatusModel,
   createOpenReceiveLightningInvoiceDecodeUrl,
   createOpenReceivePaymentDataEntries,
+  deriveCheckoutStateLabels,
   status as deriveStatus,
   escapeOpenReceiveHtml as escapeHtml,
   formatOpenReceiveAmountCaption,
@@ -25,15 +26,22 @@ import { renderOpenReceivePaymentWizardHtml } from "./render-wizard.ts";
 import { type CheckoutView, createElementCheckoutState } from "./views.ts";
 
 export function renderCheckoutHtml(view: CheckoutView): string {
-  const display = createCheckoutDisplayModel({
-    ...view,
-    rail: view.rail ?? "lightning",
-  });
+  // A wallet connection string must never reach a rendered page: it would land
+  // in the copy button, the decode link and the QR payload. This used to be a
+  // SIDE EFFECT of building the `lightning:` URI inside createCheckoutDisplayModel
+  // — so deleting that call quietly removed the guard for any view without an
+  // invoice-id. It is explicit now, and it is checked before anything is built.
+  if (view.invoice !== "") assertOpenReceiveDisplayInvoice(view.invoice);
   const checkoutState = view.liveState ?? createElementCheckoutState(view);
+  // The caption reads the ATTRIBUTES, not the state: in create mode there is no
+  // state yet, and the amount/fiat attributes are what the host rendered the
+  // element with. Same label rule as the state carries — one derivation, two
+  // sources, and the source stays the one it always was.
+  const labels = deriveCheckoutStateLabels(view);
   const amountCaption = formatOpenReceiveAmountCaption({
-    amountLabel: display.amountLabel,
-    fiatLabel: display.fiatLabel,
-    fiatCurrency: display.fiat_quote?.fiat?.currency,
+    amountLabel: labels.amountLabel,
+    fiatLabel: labels.fiatLabel,
+    fiatCurrency: view.fiat_quote?.fiat?.currency,
   });
   const satsDetail =
     amountCaption === undefined
@@ -97,7 +105,10 @@ export function renderCheckoutHtml(view: CheckoutView): string {
       ? ""
       : `<p part="invoice-title" class="${orClasses.invoiceTitle}">${escapeHtml(openReceiveCheckoutLabels.bitcoinLightningInvoice)}</p>`;
   const actions = settled
-    ? renderElementPaymentDataHtml(checkoutState ?? display)
+    ? // No state means no attempt to derive one from (a standalone caller that
+      // passed `status: "settled"` and no invoice-id), so the panel reads the
+      // attributes directly.
+      renderElementPaymentDataHtml(checkoutState ?? { ...view, rail: view.rail ?? "lightning" })
     : expired
       ? `<div part="actions" class="${orClasses.actions}">${startOverButton}</div>`
       : `<div part="actions" class="${orClasses.actions}">${copyButton}${decodeButton}</div>`;
@@ -136,27 +147,46 @@ function styleTag(inlineStyles: boolean | undefined): string {
   return inlineStyles === false ? "" : openReceiveCheckoutStyleTag;
 }
 
-// Minimal "creating checkout" placeholder shown by a create-mode element (`order-id` with no
-// `invoice`) while the checkout is being created, before the invoice/order-url attributes are
-// populated and the normal checkout UI takes over.
-/** Create-mode failure panel: inline message + retry (never an endless spinner). */
+/**
+ * The element's ONE failure panel: inline message, never an endless spinner and
+ * never an empty shadow root.
+ *
+ * It was written for the create-mode prepare failure and it is not limited to
+ * one — a checkout the element cannot identify uses it too. `retry` is what
+ * separates them, and it is not decoration: the button is only honest when
+ * something is actually re-runnable. A prepare failure is (the payer clicks and
+ * the element POSTs again); attributes carrying an unusable `invoice_id` are not
+ * — `applyCheckoutElementAttributes` only ever SETS attributes, so a retry could
+ * not clear the bad one, and the panel would just reappear. Pass `retry: false`
+ * there and the payer gets the reason without a button that does nothing.
+ */
 export function renderCheckoutCreateErrorHtml(
   message: string,
-  options: RenderOpenReceiveStyleOptions & { readonly theme?: "light" | "dark" } = {},
+  options: RenderOpenReceiveStyleOptions & {
+    readonly theme?: "light" | "dark";
+    readonly retry?: boolean;
+  } = {},
 ): string {
   const resolvedTheme = options.theme ?? "light";
+  const retryButton =
+    options.retry === false
+      ? ""
+      : `<button part="retry" class="${orClasses.btn}" type="button">Try again</button>`;
   return `
     ${styleTag(options.inlineStyles)}
     <section part="root" data-theme="${escapeHtml(resolvedTheme)}" class="${orClasses.root}" data-openreceive-create-error>
       <div part="status" role="alert" class="${orClasses.creating}">
         <div><strong>Could not start checkout.</strong></div>
         <p>${escapeHtml(message)}</p>
-        <button part="retry" class="${orClasses.btn}" type="button">Try again</button>
+        ${retryButton}
       </div>
     </section>
   `;
 }
 
+// Minimal "creating checkout" placeholder shown by a create-mode element (`order-id` with no
+// `invoice`) while the checkout is being created, before the invoice attributes are populated
+// and the normal checkout UI takes over.
 export function renderCheckoutCreatingHtml(
   options: RenderOpenReceiveStyleOptions & { readonly theme?: "light" | "dark" } = {},
 ): string {

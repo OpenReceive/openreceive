@@ -17,6 +17,9 @@ const { renderToStaticMarkup } = await import("react-dom/server");
 const { Checkout, CheckoutProvider, InvoiceSummary, OpenWalletButton, ThemeScope } = await import(
   "../packages/js/react/src/index.ts"
 );
+const { useOpenReceiveCheckoutSession } = await import(
+  "../packages/js/react/src/checkout-session.ts"
+);
 const { OPENRECEIVE_THEME_STORAGE_KEY, openReceiveCheckoutLabels } = await import(
   "../packages/js/browser/src/internal.ts"
 );
@@ -138,9 +141,9 @@ test("polling: false starts no status requests while polling: true does", async 
 
 test("a bare snapshot Checkout polls status via the default prefix", async () => {
   // Parity with the element (docs/internal/wrapper-parity.md): `prefix` defaults to
-  // /openreceive, so <Checkout checkout={snapshot}> with no prefix and no orderUrl
-  // must still poll. It used to derive orderUrl only when a prefix was supplied and
-  // silently never polled.
+  // /openreceive, so <Checkout checkout={snapshot}> with no prefix at all must still
+  // poll. It used to derive its poll URL only when a prefix was supplied and silently
+  // never polled.
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -405,5 +408,336 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
   } finally {
     handle.unmount();
     await stack.close();
+  }
+});
+
+// The create-mode guards are double-POST guards, not tidiness. They live once,
+// in @openreceive/browser/internal's checkout session, and these two tests are
+// the React half of the pair in tests/element-lifecycle.test.mjs ("double-
+// clicking Bitcoin mints exactly one Lightning invoice" / "double-clicking a
+// swap asset starts exactly one swap"). React had NO guard on the mint at all
+// before the flows were merged.
+test("a second Bitcoin selection during the mint does not POST a second checkout", async () => {
+  const stack = await createLifecycleStack();
+  stack.addOrder("order-double-mint", 2000);
+  let mints = 0;
+  let releaseMint = () => {};
+  const heldMint = new Promise((resolve) => {
+    releaseMint = resolve;
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    if (url.pathname === "/openreceive/checkouts") {
+      mints += 1;
+      await heldMint;
+    }
+    return stack.fetchStub(input, init);
+  };
+  const handle = mount(React.createElement(Checkout, { orderId: "order-double-mint" }));
+  try {
+    const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
+    bitcoin.click();
+    await until(() => mints === 1, { label: "first mint in flight" });
+    // React flushes a click synchronously, so the realistic double-mint is the
+    // payer stepping back to the grid and choosing Bitcoin again while the first
+    // POST /checkouts is still open. Unguarded, the second one went out and the
+    // loser's 409 surfaced over a perfectly good invoice.
+    const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
+      label: "wizard breadcrumb",
+    });
+    back.click();
+    const again = await until(() => handle.button("Bitcoin"), { label: "method grid again" });
+    again.click();
+    await flush();
+    assert.equal(mints, 1, "a second Bitcoin selection must not POST a second checkout");
+
+    releaseMint();
+    await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {
+      label: "minted Lightning invoice",
+    });
+    assert.equal(mints, 1);
+  } finally {
+    releaseMint();
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+test("double-clicking a swap asset starts exactly one swap", async () => {
+  const stack = await createLifecycleStack();
+  stack.addOrder("order-swap-guard", 2000);
+  let swapStarts = 0;
+  let releaseStart = () => {};
+  const heldStart = new Promise((resolve) => {
+    releaseStart = resolve;
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    if (url.pathname === "/openreceive/swaps") {
+      swapStarts += 1;
+      await heldStart;
+    }
+    return stack.fetchStub(input, init);
+  };
+  const handle = mount(React.createElement(Checkout, { orderId: "order-swap-guard" }));
+  try {
+    const sol = await until(() => handle.button("SOL"), { label: "SOL tile" });
+    // React's first click replaces the whole method grid with the focused swap
+    // flow, so the DOM half of the guard is that the tile is simply gone. The
+    // state half — one start at a time, whatever the tree looks like — is the
+    // session's, and the next test pins it directly.
+    sol.click();
+    sol.click();
+    await until(() => swapStarts === 1, { label: "swap start in flight" });
+    await flush();
+    assert.equal(swapStarts, 1, "a second click must not POST a second swap start");
+  } finally {
+    releaseStart();
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+// The state half of the swap guard, and the reason React's hook must hold ONE
+// session for the component's lifetime: a poll-driven re-render lands between
+// the two starts, and a session rebuilt on that render would hand the second
+// one a fresh (open) guard and POST /swaps twice.
+test("the checkout session survives a re-render, so a second start is refused", async () => {
+  let swapStarts = 0;
+  let releaseStart = () => {};
+  const heldStart = new Promise((resolve) => {
+    releaseStart = resolve;
+  });
+  const fetchStub = async (_input, _init) => {
+    swapStarts += 1;
+    await heldStart;
+    return new Response(
+      JSON.stringify({ swap: { pay_in_asset: "SOL_SOL", deposit_address: "SoLDeposit" } }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  const probe = {};
+  function SwapProbe() {
+    const [, bump] = React.useState(0);
+    const startedRef = React.useRef(undefined);
+    probe.session = useOpenReceiveCheckoutSession({
+      snapshot: () => undefined,
+      orderId: () => "order-probe",
+      swapPrefix: () => "http://harness.local/openreceive",
+      fetch: () => fetchStub,
+      swapSelection: {
+        started: () => startedRef.current,
+        setStarted: (invoice) => {
+          startedRef.current = invoice;
+        },
+        dismissedInvoiceId: () => null,
+        setDismissedInvoiceId: () => {},
+        setSelectedAsset: () => {},
+      },
+      onError: () => {},
+    });
+    probe.rerender = () => bump((count) => count + 1);
+    return null;
+  }
+  const handle = mount(React.createElement(SwapProbe));
+  try {
+    await until(() => probe.session !== undefined, { label: "mounted probe" });
+    const first = probe.session.startSwap("SOL_SOL");
+    await flush();
+    assert.equal(swapStarts, 1);
+    probe.rerender();
+    await flush();
+    const second = probe.session.startSwap("SOL_SOL");
+    await flush();
+    assert.equal(swapStarts, 1, "a second start while the first is in flight must not POST");
+    releaseStart();
+    await Promise.all([first, second]);
+    assert.equal(swapStarts, 1);
+  } finally {
+    releaseStart();
+    handle.unmount();
+  }
+});
+
+// The two tests above are about a request still IN FLIGHT. These two are about
+// one that already LANDED: `mintingLightning` / `startingSwapAsset` are back to
+// their idle values, so the only thing between the payer's second selection and
+// a second POST is the already-completed short-circuit — a different branch, on
+// a different path, and the reason the in-flight pair could not catch it. Both
+// have an element twin in tests/element-lifecycle.test.mjs.
+test("Bitcoin selected again after the mint reuses the bolt11 instead of minting a second one", async () => {
+  const stack = await createLifecycleStack();
+  stack.addOrder("order-reuse-mint", 2000);
+  let mints = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    if (url.pathname === "/openreceive/checkouts") mints += 1;
+    return stack.fetchStub(input, init);
+  };
+  const handle = mount(React.createElement(Checkout, { orderId: "order-reuse-mint" }));
+  try {
+    const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
+    bitcoin.click();
+    // Unlike the in-flight test, the mint is allowed to finish: the payer is
+    // holding a payable bolt11 before they go anywhere.
+    await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {
+      label: "minted Lightning invoice",
+    });
+    assert.equal(mints, 1);
+
+    const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
+      label: "wizard breadcrumb",
+    });
+    back.click();
+    const again = await until(() => handle.button("Bitcoin"), { label: "method grid again" });
+    again.click();
+    await flush();
+    await flush();
+    assert.equal(
+      mints,
+      1,
+      "Bitcoin re-selected with a live bolt11 must not POST a second checkout",
+    );
+    // Reuse, not a silent no-op: the invoice is still on screen to pay.
+    assert.notEqual(handle.button(openReceiveCheckoutLabels.copyInvoice), undefined);
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+// The payer-facing half of the already-started swap guard: whatever the
+// internals, an asset whose deposit address the payer is already holding must
+// never cost a second POST /swaps — the second attempt would strand whatever
+// was sent to the first address. Two things stand in the way here, and this
+// test is the pin on the pair: React's wizard skips its auto-start effect for
+// an asset it can already see an attempt for, and behind that the shared
+// session short-circuits on the same fact. Disabling EITHER one alone still
+// leaves one POST; disabling both makes this test fail with 2. The test below
+// isolates the shared branch, which is the one that has to hold for the
+// element too.
+test("re-selecting a started swap asset re-opens its panel without a second start", async () => {
+  const stack = await createLifecycleStack();
+  stack.addOrder("order-swap-reselect", 2000);
+  globalThis.fetch = stack.fetchStub;
+  const swapStarts = () =>
+    stack.requests.filter((entry) => entry.path.endsWith("/swaps") && entry.method === "POST")
+      .length;
+  const solDeposit = "So11111111111111111111111111111111111111112";
+  const handle = mount(React.createElement(Checkout, { orderId: "order-swap-reselect" }));
+  try {
+    const sol = await until(() => handle.button("SOL"), { label: "SOL tile" });
+    sol.click();
+    await until(() => handle.container.innerHTML.includes(solDeposit), {
+      label: "SOL deposit panel",
+    });
+    assert.equal(swapStarts(), 1);
+
+    const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
+      label: "back breadcrumb",
+    });
+    back.click();
+    const again = await until(() => handle.button("SOL"), { label: "asset grid again" });
+    again.click();
+    await until(() => handle.container.innerHTML.includes(solDeposit), {
+      label: "deposit panel again",
+    });
+    await flush();
+    await flush();
+    assert.equal(
+      swapStarts(),
+      1,
+      "an asset whose deposit instructions the payer already holds must not POST a second start",
+    );
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
+// The shared branch on its own, through React's host wiring. It matters here
+// even though the wizard has a gate in front of it: it is the same branch the
+// element depends on with nothing in front of it (tests/element-lifecycle.test.mjs,
+// "re-selecting a started swap asset re-opens its panel without a second
+// start"), and reaching it correctly from React is not free — `started()` and
+// `dismissedInvoiceId()` are read back through `optionsRef` on every call, so
+// a session holding the first render's accessors would answer with a stale
+// `undefined` and POST again.
+test("the session refuses a second start for an asset it already holds instructions for", async () => {
+  let swapStarts = 0;
+  const paymentHash = "f".repeat(64);
+  const fetchStub = async (_input, _init) => {
+    swapStarts += 1;
+    return new Response(
+      JSON.stringify({
+        swap: {
+          payment_hash: paymentHash,
+          provider: "fixedfloat",
+          pay_in_asset: "SOL_SOL",
+          deposit_address: "So11111111111111111111111111111111111111112",
+          deposit_amount: "1.50",
+          provider_state: "awaiting_deposit",
+          provider_expires_at: Math.floor(Date.now() / 1000) + 900,
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  const probe = {};
+  function SwapProbe() {
+    // useState, not a ref: this is the wizard's own shape, so the test also
+    // covers the render React has to do before the session can see the attempt.
+    const [started, setStarted] = React.useState(undefined);
+    const [dismissed, setDismissed] = React.useState(null);
+    const [selected, setSelected] = React.useState(null);
+    probe.session = useOpenReceiveCheckoutSession({
+      snapshot: () => undefined,
+      orderId: () => "order-reselect",
+      swapPrefix: () => "http://harness.local/openreceive",
+      fetch: () => fetchStub,
+      swapSelection: {
+        started: () => started,
+        setStarted,
+        dismissedInvoiceId: () => dismissed,
+        setDismissedInvoiceId: setDismissed,
+        setSelectedAsset: setSelected,
+      },
+      onError: () => {},
+    });
+    probe.selected = () => selected;
+    probe.leaveFocus = () => setSelected(null);
+    probe.dismiss = () => setDismissed(started?.invoice_id ?? null);
+    return null;
+  }
+  const handle = mount(React.createElement(SwapProbe));
+  try {
+    await until(() => probe.session !== undefined, { label: "mounted probe" });
+    await probe.session.startSwap("SOL_SOL");
+    await flush();
+    assert.equal(swapStarts, 1);
+    assert.equal(probe.selected(), "SOL_SOL");
+
+    // The payer left the focused flow and came back. Nothing is in flight, so
+    // the in-flight guard is wide open; only the already-started branch is left.
+    probe.leaveFocus();
+    await flush();
+    await probe.session.startSwap("SOL_SOL");
+    await flush();
+    assert.equal(swapStarts, 1, "an asset already holding instructions must not POST again");
+    assert.equal(
+      probe.selected(),
+      "SOL_SOL",
+      "the short-circuit re-selects the asset so the payer lands back on the address",
+    );
+
+    // Scoped, not blanket: once the payer dismisses that attempt (the deposit
+    // panel's "back to Lightning"), the same asset may start a fresh one.
+    probe.dismiss();
+    await flush();
+    await probe.session.startSwap("SOL_SOL");
+    await flush();
+    assert.equal(swapStarts, 2, "a dismissed attempt must not block a fresh start");
+  } finally {
+    handle.unmount();
   }
 });

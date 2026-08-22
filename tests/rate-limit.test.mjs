@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
   OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR,
@@ -9,7 +9,6 @@ import {
   createOpenReceiveSqlPayments,
   openReceiveClientIp,
   openReceiveClientIpBucket,
-  openReceivePaymentsSchemaSql,
 } from "../packages/js/http/src/index.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
@@ -213,8 +212,7 @@ test("rateLimiting and a custom rateLimitHook are mutually exclusive", async () 
 
 test("checkout create stores the client IP on the attempt row", async () => {
   const service = await newService();
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const payments = createOpenReceiveSqlPayments(db, { clock: () => 1000 });
   const handler = createOpenReceiveHttpHandler({
     service,
@@ -278,8 +276,7 @@ test("openReceiveClientIp reads the adapter request IP and tolerates anything el
 });
 
 test("a custom ip extractor both counts and stamps the same IP (SQL counting)", async () => {
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const payments = createOpenReceiveSqlPayments(db, { clock: () => 1000 });
   const service = await newService();
   const handler = createOpenReceiveHttpHandler({

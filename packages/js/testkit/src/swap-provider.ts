@@ -1,3 +1,4 @@
+import { unixSeconds } from "@openreceive/core";
 import {
   type OpenReceiveSwapAddressNetwork,
   openReceiveSwapAddressNetworkForPayInAsset,
@@ -43,10 +44,6 @@ function depositAddressFor(payInAsset: SwapPayInAsset): string {
     throw new Error(`testkit swap provider has no deposit address for ${payInAsset}`);
   }
   return NETWORK_DEPOSIT_ADDRESS[network];
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
 }
 
 export interface TestkitSwapProviderOptions {
@@ -109,7 +106,7 @@ export class TestkitSwapProvider implements SwapProvider {
   constructor(options: TestkitSwapProviderOptions = {}) {
     this.name = options.name ?? "fixedfloat";
     this.#supported = new Set(options.supportedAssets ?? OPENRECEIVE_SWAP_PAY_IN_ASSETS);
-    this.#now = options.now ?? currentUnixSeconds;
+    this.#now = options.now ?? unixSeconds;
     this.#invoiceExpirySeconds = options.invoiceExpirySeconds ?? 1800;
     this.#depositExpirySeconds = options.depositExpirySeconds ?? 900;
     this.#payAmounts = options.payAmounts ?? {};

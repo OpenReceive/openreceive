@@ -57,7 +57,7 @@ module OpenReceive
       return nil unless @client.respond_to?(:get_info) || @client.respond_to?(:getInfo)
 
       response = call_receive_method(:get_info, :getInfo)
-      stringify_keys(response)
+      OpenReceive.stringify(response)
     end
 
     # Opt-in NWC-02 notifications, forwarded from the wrapped client.
@@ -167,7 +167,7 @@ module OpenReceive
 
       {
         "notification_type" => notification.type.to_s,
-        "notification" => stringify_keys(notification.data)
+        "notification" => OpenReceive.stringify(notification.data)
       }
     end
 
@@ -178,14 +178,6 @@ module OpenReceive
       type = payload["notification_type"] || payload[:notification_type] ||
              payload["type"] || payload[:type]
       wanted.include?(type.to_s)
-    end
-
-    def stringify_keys(value)
-      return {} unless value.respond_to?(:each_pair)
-
-      value.each_pair.each_with_object({}) do |(key, item), result|
-        result[key.to_s] = item
-      end
     end
 
     def symbolize_keys(value)

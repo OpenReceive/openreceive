@@ -3,12 +3,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { parse as parseYaml } from "yaml";
+import { root } from "../shared/root.mjs";
 import { walkFiles } from "../shared/walk-files.mjs";
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function readJson(relativePath) {
   try {

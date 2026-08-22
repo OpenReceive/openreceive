@@ -9,6 +9,7 @@ import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   type OpenReceiveReceiveNwcClient,
   type OpenReceiveTransactionState,
+  unixSeconds,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 import type {
@@ -29,10 +30,6 @@ const TESTKIT_RELAY = "wss://relay.test.openreceive.local";
 export const TESTKIT_PREIMAGE = "1".repeat(64);
 
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
-}
 
 export interface TestkitInvoiceFixture extends MakeInvoiceResult {
   readonly state?: OpenReceiveTransactionState;
@@ -99,7 +96,7 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
   #notificationHandlers = new Set<OpenReceiveWalletNotificationHandler>();
 
   constructor(options: TestkitReceiveClientOptions = {}) {
-    this.#now = options.now ?? currentUnixSeconds;
+    this.#now = options.now ?? unixSeconds;
     this.#defaultExpirySeconds = options.defaultExpirySeconds ?? 600;
     this.capabilitySummary = {
       walletPubkey: TESTKIT_WALLET_PUBKEY,

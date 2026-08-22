@@ -1,15 +1,13 @@
 import {
   classifyTransactionSettlement,
   OpenReceiveError,
+  unixSeconds,
   type NwcTransaction,
 } from "@openreceive/core";
 import type { OpenReceive, OpenReceiveWalletNotification } from "@openreceive/node";
-import {
-  type OpenReceiveHost,
-  startOpenReceiveReconciler,
-  warnOpenReceiveFailure,
-} from "./host-payments.ts";
+import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
 import { maybeReconcileOpenReceivePayments } from "./reconcile-gate.ts";
+import { startOpenReceiveReconciler } from "./reconcile-loop.ts";
 
 export interface OpenReceiveNotificationListener {
   /** Unsubscribe from wallet notifications and wait for any in-flight pass. */
@@ -127,7 +125,7 @@ export async function startOpenReceiveNotificationListener(input: {
         wakeReconciliation();
         return;
       }
-      const observedAt = Math.floor(Date.now() / 1_000);
+      const observedAt = unixSeconds();
       await input.host.onPaid({
         paymentHash,
         paidAt: transaction.settled_at ?? observedAt,

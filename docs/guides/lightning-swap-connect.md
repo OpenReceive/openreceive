@@ -97,7 +97,7 @@ LSC_URI_BACKUP=
 ```
 
 Currencies, logging, route prefixes, callbacks, and other ordinary application
-settings do not belong in these variables. Put those in the host framework's
+settings do not belong in these variables. Put those in your framework's
 normal tracked configuration: a Node configuration module or a Rails
 initializer.
 

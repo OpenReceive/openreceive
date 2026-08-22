@@ -1,16 +1,9 @@
-import {
-  assertOrderModelName,
-  assertOrderTableName,
-  assertPaymentsTableName,
-  defaultOrderTable,
-} from "./shared.ts";
+import { assertPaymentsTableName } from "./shared.ts";
 import {
   OPENRECEIVE_DIALECTS,
   OPENRECEIVE_ORMS,
-  ORDER_ID_TYPES,
   type OpenReceiveDialect,
   type OpenReceiveOrm,
-  type OrderIdType,
   type ScaffoldPaymentsOptions,
 } from "./types.ts";
 
@@ -19,7 +12,6 @@ export interface ParsedScaffoldArgv {
   readonly interactive: boolean;
   readonly partial: Partial<ScaffoldPaymentsOptions> & {
     readonly force: boolean;
-    readonly skipForeignKey: boolean;
     readonly outDir: string;
   };
 }
@@ -29,12 +21,8 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
   let interactive = false;
   let orm: OpenReceiveOrm | undefined;
   let dialect: OpenReceiveDialect | undefined;
-  let orderModel: string | undefined;
-  let orderTable: string | undefined;
-  let orderIdType: OrderIdType | undefined;
   let tableName: string | undefined;
   let metaTableName: string | undefined;
-  let skipForeignKey = false;
   let force = false;
   let outDir = ".";
 
@@ -53,10 +41,6 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
       force = true;
       continue;
     }
-    if (arg === "--skip-foreign-key") {
-      skipForeignKey = true;
-      continue;
-    }
     if (arg === "--orm") {
       orm = readEnum(argv[++index], OPENRECEIVE_ORMS, "--orm");
       continue;
@@ -71,34 +55,6 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
     }
     if (arg.startsWith("--dialect=")) {
       dialect = readEnum(arg.slice("--dialect=".length), OPENRECEIVE_DIALECTS, "--dialect");
-      continue;
-    }
-    if (arg === "--order-model") {
-      orderModel = assertOrderModelName(requiredValue(argv[++index], "--order-model"));
-      continue;
-    }
-    if (arg.startsWith("--order-model=")) {
-      orderModel = assertOrderModelName(arg.slice("--order-model=".length));
-      continue;
-    }
-    if (arg === "--order-table") {
-      orderTable = assertOrderTableName(requiredValue(argv[++index], "--order-table"));
-      continue;
-    }
-    if (arg.startsWith("--order-table=")) {
-      orderTable = assertOrderTableName(arg.slice("--order-table=".length));
-      continue;
-    }
-    if (arg === "--order-id-type") {
-      orderIdType = readEnum(argv[++index], ORDER_ID_TYPES, "--order-id-type");
-      continue;
-    }
-    if (arg.startsWith("--order-id-type=")) {
-      orderIdType = readEnum(
-        arg.slice("--order-id-type=".length),
-        ORDER_ID_TYPES,
-        "--order-id-type",
-      );
       continue;
     }
     if (arg === "--table-name") {
@@ -135,7 +91,7 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
       if (!outDir) throw new Error("--out-dir requires a path.");
       continue;
     }
-    throw new Error(`Unexpected option: ${arg}`);
+    throw new Error(removedOrderFlagMessage(arg) ?? `Unexpected option: ${arg}`);
   }
 
   return {
@@ -144,12 +100,8 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
     partial: {
       ...(orm === undefined ? {} : { orm }),
       ...(dialect === undefined ? {} : { dialect }),
-      ...(orderModel === undefined ? {} : { orderModel }),
-      ...(orderTable === undefined ? {} : { orderTable }),
-      ...(orderIdType === undefined ? {} : { orderIdType }),
       ...(tableName === undefined ? {} : { tableName }),
       ...(metaTableName === undefined ? {} : { metaTableName }),
-      skipForeignKey,
       force,
       outDir,
     },
@@ -164,28 +116,41 @@ export function finalizeScaffoldOptions(
       "Missing --orm. Use --orm prisma|drizzle|typeorm|sequelize|knex, or run with --interactive.",
     );
   }
-  const orderModel = assertOrderModelName(partial.orderModel ?? "Order");
-  const orderTable = assertOrderTableName(partial.orderTable ?? defaultOrderTable(orderModel));
-  const orderIdType = partial.orderIdType ?? defaultOrderIdType(partial.orm);
   return {
     orm: partial.orm,
     dialect: partial.dialect ?? "postgres",
-    orderModel,
-    orderTable,
-    orderIdType,
     tableName: assertPaymentsTableName(partial.tableName ?? "openreceive_payments", "--table-name"),
     metaTableName: assertPaymentsTableName(
       partial.metaTableName ?? "openreceive_meta",
       "--meta-table-name",
     ),
-    skipForeignKey: partial.skipForeignKey,
     outDir: partial.outDir,
     force: partial.force,
   };
 }
 
-export function defaultOrderIdType(orm: OpenReceiveOrm): OrderIdType {
-  return orm === "prisma" || orm === "typeorm" ? "string" : "bigint";
+/**
+ * OpenReceive used to render `order_id` to match the host's primary key and
+ * emit a foreign key to the host's order table. It no longer reads, locks, or
+ * references that table at all, so `order_id` is always TEXT and these flags
+ * have nothing left to configure. Name them explicitly instead of reporting a
+ * bare "unexpected option", so a stale scripted invocation says why.
+ */
+const REMOVED_ORDER_FLAGS = [
+  "--order-model",
+  "--order-table",
+  "--order-id-type",
+  "--skip-foreign-key",
+] as const;
+
+function removedOrderFlagMessage(arg: string): string | undefined {
+  const name = arg.split("=", 1)[0] ?? "";
+  if (!(REMOVED_ORDER_FLAGS as readonly string[]).includes(name)) return undefined;
+  return (
+    `${name} was removed: OpenReceive never reads, locks, or references your ` +
+    "order table, so order_id is always TEXT with no foreign key. Drop the flag. " +
+    "The generated files show how to add a foreign key yourself if you want one."
+  );
 }
 
 function requiredValue(value: string | undefined, flag: string): string {

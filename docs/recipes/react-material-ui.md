@@ -38,9 +38,12 @@ export function MaterialOrderCheckout({ orderId }) {
 ## Snapshot variant (custom layout)
 
 For a fully custom layout — here a Material `Dialog` — drive a checkout
-snapshot through `useCheckout`. The hook polls the payment status itself (a
-bare snapshot polls via the default `/openreceive` prefix; tune with
-`orderUrl`, `polling`, and `pollIntervalMs`):
+snapshot through `useCheckout`. Unlike `<Checkout>`, the hook does not default
+`prefix`, so the bare `useCheckout({ checkout })` below renders the snapshot it
+is handed and never polls — the dialog updates only when the parent passes a
+newer snapshot. Add `prefix` to make the hook poll `${prefix}/payments/check`
+itself (`useCheckout({ checkout, prefix: "/openreceive" })`), then tune it with
+`pollIntervalMs`, or stop it again with `polling: false`:
 
 ```tsx
 import Button from "@mui/material/Button";
@@ -98,4 +101,4 @@ Everything above about `components` and `classNames` applies to both modes.
 - Create orders through your backend; the checkout mints from the order ID.
 - Treat client polling as UI state only.
 - Fulfill products only from your backend `onPaid` path.
-- Keep Material UI theme ownership in the host app.
+- Keep Material UI theme ownership in your app.

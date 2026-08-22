@@ -11,6 +11,7 @@ import {
   type OpenReceiveBtcFiatRateMap,
   OpenReceiveDecimalError,
 } from "../money/decimal.ts";
+import { unixSeconds } from "../values.ts";
 import {
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
   OPENRECEIVE_MAX_AMOUNT_MSATS,
@@ -45,10 +46,6 @@ function normalizeUnixSeconds(value: number, fieldName: string): number {
   }
 
   return value;
-}
-
-export function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1000);
 }
 
 function assertAmountBounds(amountSats: bigint, amountMsats: bigint): void {
@@ -135,7 +132,7 @@ export function quoteFiatToMsatsWithPrice(
 
   assertAmountBounds(amountSats, amountMsats);
 
-  const asOf = normalizeUnixSeconds(request.asOf ?? currentUnixSeconds(), "as_of");
+  const asOf = normalizeUnixSeconds(request.asOf ?? unixSeconds(), "as_of");
   const ttlSeconds = normalizeUnixSeconds(
     request.ttlSeconds ?? OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
     "ttl_seconds",

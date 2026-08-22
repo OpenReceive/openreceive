@@ -2,9 +2,74 @@
 
 # Both engine-owned tables, in one migration: the payment attempts and the
 # durable reconcile gate they share. Same host database, never a second one.
+#
+# OpenReceive and your order table
+#
+# OpenReceive stores `order_id` as an opaque string. It never reads, writes,
+# locks, or joins your order table, and it does not need its name or its
+# primary-key type. Pass whatever your ids already are - bigint, uuid, ULID,
+# a Stripe-style prefixed string - stringified. Nothing here has to match.
+#
+# WHAT OPENRECEIVE GUARANTEES
+#
+# Across every settlement path OpenReceive itself owns (wallet notifications,
+# the opportunistic reconcile pass, an explicit reconcile job), the settlement
+# hook runs AT MOST ONCE per order. The library serializes on its own
+# `openreceive_payments` rows, decides the winner there, and runs your hook
+# inside that same transaction. A second payment to a second invoice for the
+# same order is still recorded - with `status_reason = 'duplicate_settlement'`
+# - but never fulfills a second time. You do not need to add a lock for this.
+#
+# WHAT YOU MUST GUARANTEE
+#
+# OpenReceive cannot see fulfillment that happens outside it. If ANY other
+# path can also mark this order fulfilled - an admin action, a second payment
+# processor, a support tool, a replayed webhook, a retried background job -
+# then those paths race each other, not OpenReceive, and you must make
+# fulfillment idempotent yourself.
+#
+# The usual way is to make the transition itself the lock: guard it with a
+# conditional write that only one transaction can win.
+#
+#   -- Idempotent by construction: the WHERE clause is the guard. Whoever
+#   -- flips 'awaiting_payment' -> 'paid' first is the only one who fulfills;
+#   -- every later attempt updates 0 rows and must do nothing.
+#   UPDATE orders
+#      SET state = 'paid', paid_at = :paid_at
+#    WHERE id = :order_id
+#      AND state = 'awaiting_payment';
+#   -- then: if 0 rows were affected, return without shipping anything.
+#
+# If your fulfillment is a read-modify-write that cannot be expressed as one
+# conditional UPDATE, take a row lock for the duration instead:
+#
+#   SELECT * FROM orders WHERE id = :order_id FOR UPDATE;  -- postgres/mysql
+#   -- ...check state, ship, write the new state, all before COMMIT.
+#
+# Run either one inside the transaction OpenReceive hands your settlement
+# hook, so the order transition and the payment record commit together.
+#
+# OPTIONAL: A FOREIGN KEY
+#
+# OpenReceive does not create one and does not want one - it would force
+# `order_id` to match your primary-key type and would couple this table's
+# migrations to yours. If you want the referential integrity anyway, and your
+# order ids really are text, add it yourself:
+#
+#   ALTER TABLE openreceive_payments
+#     ADD CONSTRAINT openreceive_payments_order_fk
+#     FOREIGN KEY (order_id) REFERENCES orders (id)
+#     ON DELETE RESTRICT;
+#
+# Cast in the REFERENCES clause if your key is not text, or add a generated
+# column and point the constraint at that. Use ON DELETE RESTRICT, never
+# CASCADE: deleting an order must not silently delete the record of money
+# that was actually paid.
 class CreateOpenReceiveTables < ActiveRecord::Migration[8.1]
   def change
     create_table :openreceive_payments do |t|
+      # Opaque host order id. Deliberately a string with no foreign key — see
+      # the note above if you want to add one yourself.
       t.string :order_id, null: false
       t.string :payment_hash, null: false, limit: 64
       # Attempt lifecycle: pending | settled | expired | failed | attention.
@@ -31,7 +96,6 @@ class CreateOpenReceiveTables < ActiveRecord::Migration[8.1]
     add_index :openreceive_payments, [:order_id, :created_at]
     add_index :openreceive_payments, [:status, :created_at]
     add_index :openreceive_payments, [:client_ip, :inserted_at]
-    add_foreign_key :openreceive_payments, :orders, column: :order_id
 
     # Engine-owned key/value/rev rows: the durable reconcile gate every worker
     # on this database shares, so settlement scans piggybacking on requests

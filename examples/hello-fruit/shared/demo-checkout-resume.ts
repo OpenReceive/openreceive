@@ -27,7 +27,7 @@ export const helloFruitCheckoutResume = createGuestCheckoutResume<HelloFruitDemo
   parseOrder: parseHelloFruitDemoOrder,
   fetchOrder: createGuestOrderFetcher({
     parseOrder: parseHelloFruitDemoOrder,
-    orderUrl: (orderId) => `/orders/${encodeURIComponent(orderId)}`,
+    hostOrderUrl: (orderId: string) => `/orders/${encodeURIComponent(orderId)}`,
   }),
 });
 

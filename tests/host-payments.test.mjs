@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { hash } from "./helpers/factories.mjs";
 import {
   createOpenReceiveHost,
   openReceivePaymentInsert,
@@ -7,8 +8,6 @@ import {
   startOpenReceiveReconciler,
 } from "../packages/js/http/src/index.ts";
 import { createOpenReceiveStatusFetcher } from "../packages/js/browser/src/internal.ts";
-
-const hash = (character) => character.repeat(64);
 
 function context(action, input = {}, payInAsset) {
   return {
@@ -440,7 +439,7 @@ test("browser status polling carries the displayed payment hash", async () => {
     workflow_state: "invoice_created",
   };
   const refresh = createOpenReceiveStatusFetcher({
-    orderUrl: "/openreceive/payments/check",
+    prefix: "/openreceive",
     snapshot: {
       checkout_id: paymentHash,
       order_id: "order-1",

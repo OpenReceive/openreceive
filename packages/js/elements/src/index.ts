@@ -5,6 +5,7 @@
 // Element plumbing (tag names, attribute/event constants, element factories)
 // is @openreceive/elements surface: these are contracts between independently
 // loaded code, and this package is where custom elements live.
+export type { OpenReceiveTransactionDetailsSource } from "@openreceive/browser/internal";
 export {
   createOpenReceiveThemeToggleElement,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
@@ -25,7 +26,6 @@ export { renderOpenReceivePaymentWizardHtml } from "./render-wizard.ts";
 export {
   createTransactionDetailsElement,
   renderTransactionDetailsHtml,
-  type TransactionDetailsSource,
   wireTransactionDetailsCopy,
 } from "./transaction-details.ts";
 export type {

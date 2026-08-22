@@ -60,15 +60,15 @@ module OpenReceive
       end
 
       def prepare_checkout(input)
-        data = stringify(input)
-        amount_msats, fiat_quote = resolve_amount(data.fetch("amount"))
-        {
-          "amount_msats" => amount_msats,
-          "fiat_quote" => fiat_quote,
-          "payment_methods" => list_swap_options(amount_msats: amount_msats)
-        }
-      rescue KeyError, ArgumentError => e
-        raise ValidationError, e.message
+        validating_input do
+          data = stringify(input)
+          amount_msats, fiat_quote = resolve_amount(data.fetch("amount"))
+          {
+            "amount_msats" => amount_msats,
+            "fiat_quote" => fiat_quote,
+            "payment_methods" => list_swap_options(amount_msats: amount_msats)
+          }
+        end
       end
 
       # Amount-aware swap pay-in options for the shared browser widget
@@ -91,11 +91,13 @@ module OpenReceive
         # failure is the wallet's response violating the receive contract, not
         # a 400 the payer caused — so this rescue must not cover the wallet
         # call or its normalization.
-        begin
+        order_id, expiry, fiat_quote, request = validating_input do
           data = stringify(input)
-          order_id = required_string(data["orderId"] || data["order_id"], "orderId")
+          # The message names the JS service's camelCase field (requests.ts
+          # "orderId is required."); the accepted input key is snake_case.
+          order_id = required_string(data["order_id"], "orderId")
           amount_msats, fiat_quote = resolve_amount(data.fetch("amount"))
-          expiry = Integer(data["expirySeconds"] || data["expiry_seconds"] || INVOICE_EXPIRY_SECONDS)
+          expiry = Integer(data["expiry_seconds"] || INVOICE_EXPIRY_SECONDS)
           metadata = stringify(data["metadata"] || {}).merge("order_id" => order_id)
           # NIP-47 caps invoice metadata; reject before any wallet call with
           # the JS service's exact message instead of surfacing the wallet
@@ -109,9 +111,8 @@ module OpenReceive
             "metadata" => metadata
           }
           request["description"] = data["memo"] if data["memo"]
-          request["description_hash"] = data["descriptionHash"] || data["description_hash"] if data["descriptionHash"] || data["description_hash"]
-        rescue KeyError, ArgumentError => e
-          raise ValidationError, e.message
+          request["description_hash"] = data["description_hash"] if data["description_hash"]
+          [order_id, expiry, fiat_quote, request]
         end
         response = call_nwc(:make_invoice, request)
         begin
@@ -153,12 +154,10 @@ module OpenReceive
 
       def check_payment(input)
         data = stringify(input)
-        begin
-          payment_hash = normalize_payment_hash(data["paymentHash"] || data["payment_hash"])
-          created_at = Integer(data["createdAt"] || data.fetch("created_at"))
-          overlap = Integer(data["overlapSeconds"] || data.fetch("overlap_seconds", 60))
-        rescue KeyError, ArgumentError => e
-          raise ValidationError, e.message
+        payment_hash, created_at, overlap = validating_input do
+          [normalize_payment_hash(data["payment_hash"]),
+           Integer(data.fetch("created_at")),
+           Integer(data.fetch("overlap_seconds", 60))]
         end
         checked = reconcile_payments(
           "attempts" => [{ "payment_hash" => payment_hash, "created_at" => created_at }],
@@ -228,12 +227,8 @@ module OpenReceive
 
       def quote_swap(input)
         data = stringify(input)
-        asset = parse_pay_in_asset(data["payInAsset"] || data["pay_in_asset"])
-        begin
-          amount_msats, = resolve_amount(data.fetch("amount"))
-        rescue KeyError, ArgumentError => e
-          raise ValidationError, e.message
-        end
+        asset = parse_pay_in_asset(data["pay_in_asset"])
+        amount_msats, = validating_input { resolve_amount(data.fetch("amount")) }
         provider = select_provider(asset)
         quote = stringify(call_provider(provider, :quote,
           "pay_in_asset" => asset, "invoice_amount_msats" => amount_msats))
@@ -253,7 +248,7 @@ module OpenReceive
 
       def create_swap(input)
         data = stringify(input)
-        asset = parse_pay_in_asset(data["payInAsset"] || data["pay_in_asset"])
+        asset = parse_pay_in_asset(data["pay_in_asset"])
         amount = begin
           data.fetch("amount")
         rescue KeyError => e
@@ -263,9 +258,9 @@ module OpenReceive
         expiry = provider.respond_to?(:invoice_expiry_seconds) ? provider.invoice_expiry_seconds(pay_in_asset: asset) : SWAP_INVOICE_EXPIRY_SECONDS
         # The shadow-invoice expiry is provider-mandated: build the checkout
         # input explicitly from validated fields so no payer-supplied key (e.g.
-        # "expirySeconds") can override it or smuggle a different order id.
+        # "expiry_seconds") can override it or smuggle a different order id.
         checkout = create_checkout(
-          "order_id" => data["order_id"] || data["orderId"],
+          "order_id" => data["order_id"],
           "amount" => amount,
           "memo" => data["memo"],
           "metadata" => data["metadata"],
@@ -740,8 +735,17 @@ module OpenReceive
       end
 
       def stringify(value)
-        return {} unless value.respond_to?(:each_pair)
-        value.each_pair.to_h { |key, item| [key.to_s, item] }
+        OpenReceive.stringify(value)
+      end
+
+      # The payer-input parse boundary: a missing field (KeyError) or a
+      # malformed one (ArgumentError) inside the block is a 400, not a 500.
+      # Wrap only the parse — a wallet or provider call that raises the same
+      # classes is not the payer's fault and must stay outside the block.
+      def validating_input
+        yield
+      rescue KeyError, ArgumentError => e
+        raise ValidationError, e.message
       end
 
       def required_string(value, field)

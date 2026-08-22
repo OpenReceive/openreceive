@@ -1,17 +1,16 @@
 // P1 harness: real browser components -> real HTTP handler -> real SQL repository
 // on in-memory SQLite -> testkit fake wallet + fake swap provider. No network, no
 // real wallet, no server socket: the components' fetch is the handler itself.
-import { DatabaseSync } from "node:sqlite";
 import {
   createOpenReceiveHost,
   createOpenReceiveHttpHandler,
-  openReceivePaymentsSchemaSql,
 } from "../../packages/js/http/src/index.ts";
 import { createOpenReceive } from "../../packages/js/node/src/index.ts";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
 } from "../../packages/js/testkit/src/index.ts";
+import { memoryPaymentsDb } from "./factories.mjs";
 
 /**
  * Build the full in-memory stack. Clocks default to real unix time because the
@@ -27,8 +26,7 @@ export async function createLifecycleStack(options = {}) {
     clock: now,
     swap: { providers: [swapProvider] },
   });
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const orders = new Map();
   const settlements = [];
   const host = createOpenReceiveHost({

@@ -147,6 +147,61 @@ test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => 
   }
 });
 
+// The in-flight guard above is only half of the mint's double-POST story. The
+// other half is the payer whose bolt11 has ALREADY landed: they walk back to
+// the method grid and pick Bitcoin again. `mintingLightning` is false by then,
+// so the only thing standing between that click and a second POST /checkouts
+// is the reuse branch in the shared session (ensureLightning's
+// findOpenReceiveReusableLightningInvoice short-circuit). The pair of this is
+// tests/react-checkout-behavior.test.mjs, "Bitcoin selected again after the
+// mint reuses the bolt11 instead of minting a second one".
+test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting again", async () => {
+  const paymentHash = "d".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-reuse-ln", 21_000),
+    "/checkouts": () => checkoutBody("order-reuse-ln", 21_000, paymentHash),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-reuse-ln", prefix: "/openreceive" });
+
+  try {
+    const bitcoin = await until(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "Bitcoin method tile" },
+    );
+    bitcoin.click();
+    await until(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
+    assert.equal(fetchStub.pathCount("/checkouts"), 1);
+
+    // Back to the grid. This breadcrumb deliberately does not dismiss anything
+    // (only "back to Lightning" out of a swap panel does), so the bolt11 the
+    // payer is holding is still theirs to pay.
+    const breadcrumb = await until(
+      () => element.shadowRoot?.querySelector('[data-or-breadcrumb="method"]'),
+      { label: "method breadcrumb" },
+    );
+    breadcrumb.click();
+    const again = await until(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "method grid again" },
+    );
+    again.click();
+    await flush(4);
+    assert.equal(
+      fetchStub.pathCount("/checkouts"),
+      1,
+      "Bitcoin re-selected with a live bolt11 must not POST a second checkout",
+    );
+    // Reuse means the SAME invoice, not a silently replaced one.
+    assert.equal(element.getAttribute("invoice"), `lnbc-${paymentHash}`);
+    assert.equal(element.getAttribute("payment-hash"), paymentHash);
+    assert.doesNotMatch(element.shadowRoot?.innerHTML ?? "", /Could not create the Lightning/);
+  } finally {
+    element.remove();
+  }
+});
+
 test("an order-id change mid-prepare wins over the request it superseded", async () => {
   const firstPrepare = deferred();
   const fetchStub = createFetchStub({
@@ -400,6 +455,609 @@ test('polling="false" renders the snapshot without any status requests', async (
     await until(() => fetchStub.pathCount("/payments/check") > 0, {
       label: "status request after enabling polling",
     });
+  } finally {
+    element.remove();
+  }
+});
+
+/** Prepare body advertising one payable swap asset, so the wizard offers it directly. */
+function prepareBodyWithSwapAsset(orderId, payInAsset) {
+  return {
+    order_id: orderId,
+    amount_msats: 5_000_000,
+    payment_methods: [
+      {
+        pay_in_asset: payInAsset,
+        label: payInAsset.split("_")[0],
+        network_label: "Solana",
+        provider: "fixedfloat",
+        available: true,
+      },
+    ],
+  };
+}
+
+function swapStartBody(payInAsset, paymentHash) {
+  return {
+    swap: {
+      payment_hash: paymentHash,
+      provider: "fixedfloat",
+      pay_in_asset: payInAsset,
+      deposit_address: "SoLDeposit",
+      deposit_amount: "1.50",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 900,
+      checkout: { payment_hash: paymentHash, amount_msats: 5_000_000 },
+    },
+  };
+}
+
+// The create-mode guards are double-POST guards, not tidiness: a second click
+// while the first request is in flight mints a colliding attempt, and the
+// loser's error then replaces a perfectly good deposit panel. This pins the
+// swap-start half (the Lightning half is the double-click Bitcoin test above)
+// and the prepare-once gate that has to survive the element re-rendering.
+test("double-clicking a swap asset starts exactly one swap", async () => {
+  const start = deferred();
+  const paymentHash = "c".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-1", "SOL_SOL"),
+    "/swaps": () => start.promise,
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-swap-1", prefix: "/openreceive" });
+
+  try {
+    const asset = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    asset.click();
+    // The DOM half of the guard: the clicked button marks itself busy.
+    assert.equal(asset.disabled, true);
+    // The state half: a poll-driven re-render hands the payer a fresh, enabled
+    // button while the first start is still in flight. Clicking that one must
+    // not mint a second attempt — the loser's 409 would then replace a good
+    // deposit panel with an error.
+    asset.disabled = false;
+    asset.click();
+    await flush(2);
+    assert.equal(
+      fetchStub.pathCount("/swaps"),
+      1,
+      "a second click must not POST a second swap start",
+    );
+
+    start.resolve(swapStartBody("SOL_SOL", paymentHash));
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel",
+    });
+    assert.equal(fetchStub.pathCount("/swaps"), 1);
+    assert.doesNotMatch(
+      element.shadowRoot?.innerHTML ?? "",
+      /Could not prepare the payment address/,
+    );
+    // Prepare stays a once-per-order gate across all of that re-rendering.
+    assert.equal(fetchStub.pathCount("/checkouts/prepare"), 1);
+  } finally {
+    element.remove();
+  }
+});
+
+// The other half of the swap's double-POST story, and the one the in-flight
+// test above cannot reach: the start has COMPLETED, so `startingSwapAsset` is
+// null again. The payer holding SOL's deposit address breadcrumbs back to the
+// grid and picks SOL again. What stops that click from minting a second,
+// colliding attempt — and stranding the coins already sent to the first
+// address — is the "already holding this asset's deposit instructions"
+// short-circuit in the shared session's startSwap. The breadcrumb deliberately
+// does not dismiss the attempt (only "back to Lightning" out of the deposit
+// panel does), so the attempt is still the payer's to pay.
+test("re-selecting a started swap asset re-opens its panel without a second start", async () => {
+  const paymentHash = "e".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-reselect", "SOL_SOL"),
+    "/swaps": () => swapStartBody("SOL_SOL", paymentHash),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-swap-reselect", prefix: "/openreceive" });
+
+  try {
+    const asset = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    asset.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel",
+    });
+    assert.equal(fetchStub.pathCount("/swaps"), 1);
+
+    const breadcrumb = await until(
+      () => element.shadowRoot?.querySelector('[data-or-breadcrumb="swap-asset"]'),
+      { label: "swap breadcrumb" },
+    );
+    breadcrumb.click();
+    const again = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "asset grid again" },
+    );
+    again.click();
+    await flush(4);
+    assert.equal(
+      fetchStub.pathCount("/swaps"),
+      1,
+      "an asset whose deposit instructions the payer already holds must not POST a second start",
+    );
+    // The short-circuit is not a silent no-op: it re-selects the asset, so the
+    // payer lands back on the address they were already given.
+    assert.match(
+      element.shadowRoot?.innerHTML ?? "",
+      /SoLDeposit/,
+      "the payer is shown the instructions they already hold",
+    );
+    assert.doesNotMatch(
+      element.shadowRoot?.innerHTML ?? "",
+      /Could not prepare the payment address/,
+    );
+  } finally {
+    element.remove();
+  }
+});
+
+// Attributes the element writes back to itself must not re-enter
+// attributeChangedCallback — the guard is a depth counter, so a nested apply
+// (a status write while a create-mode attribute apply is still unwinding) must
+// not open the gate early.
+test("attributes the element writes never re-enter its own callback", async () => {
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-reentry", 21_000),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-reentry", prefix: "/openreceive" });
+
+  try {
+    await until(() => element.getAttribute("amount-msats") === "21000", {
+      label: "create-mode attributes",
+    });
+    await flush(6);
+    assert.equal(
+      fetchStub.pathCount("/checkouts/prepare"),
+      1,
+      "self-written attributes must not re-run prepare",
+    );
+    const checksAfterCreate = fetchStub.pathCount("/payments/check");
+
+    // A status attribute the element owns, written by hand, is indistinguishable
+    // from one the element wrote: it must re-render without restarting the poll.
+    element.setAttribute("theme", "dark");
+    await flush(6);
+    assert.equal(fetchStub.pathCount("/checkouts/prepare"), 1);
+    assert.equal(
+      fetchStub.pathCount("/payments/check"),
+      checksAfterCreate,
+      "a cosmetic attribute must not fire another status request",
+    );
+  } finally {
+    element.remove();
+  }
+});
+
+test("a nonsense amount-msats costs the amount label, not the element", async () => {
+  // The host copies `amount-msats` straight out of a checkout snapshot
+  // (createOpenReceiveCheckoutElementAttributes writes String(amount_msats)), so
+  // this attribute carries SERVER data. It used to be read with the strict
+  // integer parser, which threw inside render() and took the whole payment
+  // screen down over a number the payer could do nothing about.
+  const fetchStub = createFetchStub({
+    "/payments/check": () => ({ status: "settled", paid_at: Math.floor(Date.now() / 1000) }),
+  });
+  globalThis.fetch = fetchStub;
+  const paymentHash = "f".repeat(64);
+  const element = mount({
+    "order-id": "order-bad-amount",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "-1",
+    status: "settled",
+  });
+
+  try {
+    await flush(4);
+    const html = element.shadowRoot?.innerHTML ?? "";
+    assert.match(html, /<section part="root"/, "the element must still render");
+    // The formatted amount is gone; the raw value is still reported.
+    assert.doesNotMatch(html, /-1 msats/);
+    assert.match(html, /Amount \(msats\)/);
+    assert.match(html, />-1</);
+
+    // An attribute that is no number at all is dropped rather than shown.
+    element.setAttribute("amount-msats", "not-a-number");
+    await flush(4);
+    const junk = element.shadowRoot?.innerHTML ?? "";
+    assert.match(junk, /<section part="root"/);
+    assert.doesNotMatch(junk, /NaN/);
+  } finally {
+    element.remove();
+  }
+
+  // The rule must not blank a GOOD amount on this rail: same element, same
+  // settled screen, a legitimate value.
+  const good = mount({
+    "order-id": "order-good-amount",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "21000",
+    status: "settled",
+  });
+  try {
+    await flush(4);
+    assert.match(good.shadowRoot?.innerHTML ?? "", /21 sats \(21000 msats\)/);
+  } finally {
+    good.remove();
+  }
+});
+
+test("a hostile expires-at costs the countdown, not the element", async () => {
+  // `expires-at` carries SERVER data, exactly as `amount-msats` does:
+  // createOpenReceiveCheckoutElementAttributes writes String(invoice.expires_at),
+  // and the only bound on the way in is a TYPE bound — swap-http.ts checks
+  // `typeof provider_expires_at !== "number"`, checkout-transport.ts's
+  // optional/requiredSafeInteger admit negatives. Read back with the strict
+  // integer parser it threw RangeError inside render() (and again inside
+  // currentCheckoutSnapshot), and nothing wraps render(), so one bad timestamp
+  // blanked the whole payment screen and every wrapper built on it.
+  const fetchStub = createFetchStub({
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const paymentHash = "c".repeat(64);
+  const element = mount({
+    "order-id": "order-bad-expiry",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "21000",
+    "expires-at": "-1",
+  });
+
+  /** Assert the countdown row is gone and the pay pane the payer needs is not. */
+  const expectCountdownGoneScreenIntact = (html, label) => {
+    assert.match(html, /<section part="root"/, `${label}: the element must still render`);
+    // The rest of the screen is intact — the amount the payer must send is the
+    // whole point of the screen and does not depend on the expiry.
+    assert.match(html, /21 sats/, `${label}: the amount must survive`);
+    assert.doesNotMatch(html, /Invoice expires in/, `${label}: no countdown row`);
+    assert.doesNotMatch(html, /NaN/, `${label}: nothing renders NaN`);
+    // Belt and braces on the one failure this test exists to prevent: an
+    // absurd countdown is worse than no countdown, and it renders as a
+    // five-plus-digit minute figure ("29759354970:54").
+    assert.doesNotMatch(html, /\d{5,}:\d\d/, `${label}: no absurd countdown`);
+  };
+
+  try {
+    await flush(4);
+    // A negative expiry describes no deadline.
+    expectCountdownGoneScreenIntact(element.shadowRoot?.innerHTML ?? "", "-1");
+
+    // currentCheckoutSnapshot() reads the same attribute on the poll path, so a
+    // rendered screen is not proof on its own: polling must survive it too.
+    await until(() => fetchStub.pathCount("/payments/check") > 0, {
+      label: "status request past a hostile expires-at",
+    });
+
+    // An attribute that is no number at all is dropped rather than shown.
+    element.setAttribute("expires-at", "not-a-number");
+    await flush(4);
+    expectCountdownGoneScreenIntact(element.shadowRoot?.innerHTML ?? "", "not-a-number");
+
+    // THE UNIT MISTAKE, in the two shapes it actually arrives in — the reason
+    // this attribute needs a DEADLINE bound and not only the label's
+    // renderability bound. Both of these are inside the ECMAScript `Date`
+    // range (a millisecond timestamp today is ~1.79e12, well under the 8.64e12
+    // ceiling), so `optionalUnixTimeLabel` alone KEEPS them, and the countdown
+    // that came out read "29759354970:54" — twenty-nine billion minutes.
+    const seconds = Math.floor(Date.now() / 1000) + 900;
+    element.setAttribute("expires-at", String(seconds * 1000));
+    await flush(4);
+    expectCountdownGoneScreenIntact(
+      element.shadowRoot?.innerHTML ?? "",
+      "the real expiry sent in milliseconds",
+    );
+
+    element.setAttribute("expires-at", String(Date.now()));
+    await flush(4);
+    expectCountdownGoneScreenIntact(
+      element.shadowRoot?.innerHTML ?? "",
+      "Date.now() handed over verbatim",
+    );
+
+    // Microseconds overshoot far enough to fail the renderability bound too;
+    // asserted here so the two bounds are known to agree, not to compete.
+    element.setAttribute("expires-at", String(seconds * 1_000_000));
+    await flush(4);
+    expectCountdownGoneScreenIntact(element.shadowRoot?.innerHTML ?? "", "microseconds");
+
+    // ...and so is a value past the ECMAScript `Date` range entirely, which is
+    // all the renderability bound was ever able to catch on its own.
+    element.setAttribute("expires-at", "1e15");
+    await flush(4);
+    const outOfRange = element.shadowRoot?.innerHTML ?? "";
+    expectCountdownGoneScreenIntact(outOfRange, "past the Date range");
+
+    // Every hostile value above cost the countdown ROW and nothing else: the
+    // pane the payer actually pays from is still on the screen throughout.
+    assert.match(outOfRange, /part="qr"/);
+    assert.match(outOfRange, /Bitcoin Lightning invoice/);
+    assert.match(outOfRange, /Waiting for payment/);
+  } finally {
+    element.remove();
+  }
+});
+
+test("an expires-at already in the past still reaches the expired screen", async () => {
+  // The edge the deadline bound must not eat. A past deadline is not
+  // implausible — it is the expired screen's whole input — so only the FUTURE
+  // side of the window is bounded. Sibling of the renderCheckoutHtml case in
+  // tests/elements.test.mjs, on the ATTRIBUTE path, which is the one
+  // readElementExpiresAt guards.
+  globalThis.fetch = createFetchStub({
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  const paymentHash = "b".repeat(64);
+  const element = mount({
+    "order-id": "order-past-expiry",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "21000",
+    "expires-at": String(Math.floor(Date.now() / 1000) - 1),
+  });
+
+  try {
+    await flush(4);
+    const html = element.shadowRoot?.innerHTML ?? "";
+    assert.match(html, /Invoice expired/);
+    assert.doesNotMatch(html, /Invoice expires in/);
+    assert.doesNotMatch(html, /Waiting for payment/);
+
+    // A deadline a year old is just as expired: the past side has no horizon.
+    element.setAttribute("expires-at", String(Math.floor(Date.now() / 1000) - 400 * 24 * 60 * 60));
+    await flush(4);
+    assert.match(element.shadowRoot?.innerHTML ?? "", /Invoice expired/);
+  } finally {
+    element.remove();
+  }
+});
+
+test("a legitimate expires-at still drives the countdown", async () => {
+  // The other half of the rule: leniency must not cost the feature. A real
+  // expiry still produces a real countdown, ticking down from ~15:00.
+  const fetchStub = createFetchStub({
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const paymentHash = "d".repeat(64);
+  const element = mount({
+    "order-id": "order-good-expiry",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "21000",
+    "expires-at": String(Math.floor(Date.now() / 1000) + 900),
+  });
+
+  try {
+    const countdown = await until(
+      () => element.shadowRoot?.querySelector('[part="countdown"] strong'),
+      { label: "countdown" },
+    );
+    assert.match(element.shadowRoot?.innerHTML ?? "", /Invoice expires in/);
+    assert.match(countdown.textContent ?? "", /^1[45]:\d\d$/);
+  } finally {
+    element.remove();
+  }
+});
+
+// The third server-written attribute, and the one that is not a label.
+// `createCheckoutElementAttributes` writes `invoice-id` straight from
+// `invoice.invoice_id`, so an empty one threw TypeError from inside render() —
+// after `prepareShadowRoot()` had already cleared it — and the payer was left
+// looking at an empty shadow root while the host heard nothing at all.
+test("a hostile invoice-id costs the payment screen, not the shadow root", async () => {
+  for (const hostile of ["", " ", "\t\n"]) {
+    const fetchStub = createFetchStub({
+      "/payments/check": () => ({ status: "pending" }),
+    });
+    globalThis.fetch = fetchStub;
+    const element = document.createElement("openreceive-checkout");
+    const errors = [];
+    element.addEventListener("openreceive-error", (event) => errors.push(event.detail.error));
+    for (const [name, value] of Object.entries({
+      "order-id": "order-unidentified",
+      prefix: "/openreceive",
+      invoice: `lnbc-${"a".repeat(64)}`,
+      "amount-msats": "21000",
+      "invoice-id": hostile,
+    })) {
+      element.setAttribute(name, value);
+    }
+
+    try {
+      // Mounting must not throw: this is the line that used to.
+      document.body.appendChild(element);
+      await flush(4);
+
+      const label = `invoice-id ${JSON.stringify(hostile)}`;
+      const html = element.shadowRoot?.innerHTML ?? "";
+      assert.notEqual(html, "", `${label} left an empty shadow root`);
+      assert.match(html, /<section part="root"/, `${label} rendered no root section`);
+
+      // The element's own failure panel, not a new one invented for this case.
+      assert.match(html, /data-openreceive-create-error/, `${label} skipped the failure panel`);
+      assert.match(html, /role="alert"/);
+      assert.match(html, /invoice-id is empty/);
+
+      // No QR: an attempt this element cannot identify is one it can never
+      // confirm, so it must not show a payable invoice and then go quiet.
+      assert.doesNotMatch(html, /part="qr"/, `${label} showed an untrackable QR`);
+      // ...and no retry button, because only the host can replace the attribute.
+      assert.doesNotMatch(html, /part="retry"/, `${label} offered a dead retry`);
+
+      // The host's half of the signal, on the channel every other element
+      // failure already uses.
+      assert.equal(errors.length, 1, `${label} dispatched ${errors.length} error events`);
+      assert.match(String(errors[0]?.message), /invoice-id is empty/);
+
+      // And it does not poll an attempt it has no id for.
+      assert.equal(fetchStub.pathCount("/payments/check"), 0, `${label} polled anyway`);
+
+      // Recovery: the panel is a verdict on the attribute, not a latch. A real
+      // id brings back the payment screen AND the poll it suppressed — the
+      // element must not be left permanently silent by one bad render.
+      element.setAttribute("invoice-id", "b".repeat(64));
+      await flush(4);
+      const healed = element.shadowRoot?.innerHTML ?? "";
+      assert.doesNotMatch(healed, /data-openreceive-create-error/, `${label} stayed failed`);
+      assert.match(healed, /part="qr"/);
+      assert.match(healed, /Bitcoin Lightning invoice/);
+      assert.match(healed, /21 sats/);
+      assert.ok(
+        fetchStub.pathCount("/payments/check") > 0,
+        `${label} never resumed polling after recovery`,
+      );
+    } finally {
+      element.remove();
+    }
+  }
+});
+
+function prepareBodyWithSwapAssets(orderId, assets) {
+  return {
+    order_id: orderId,
+    amount_msats: 5_000_000,
+    payment_methods: assets.map(([payInAsset, networkLabel]) => ({
+      pay_in_asset: payInAsset,
+      label: payInAsset.split("_")[0],
+      network_label: networkLabel,
+      provider: "fixedfloat",
+      available: true,
+    })),
+  };
+}
+
+// PRODUCT CHANGE (G6b): the retry button used to leave its own error on screen
+// while the retried request was in flight, because the element cleared
+// `swapStartError` only after the re-render. The payer's click looked ignored.
+// React always cleared it first; the merged flow keeps React's order.
+test("retrying a failed swap start replaces the error with the preparing spinner", async () => {
+  const retry = deferred();
+  let starts = 0;
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-retry", "SOL_SOL"),
+    "/swaps": () => {
+      starts += 1;
+      if (starts === 1) throw new Error("Swap provider is unavailable.");
+      return retry.promise;
+    },
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-swap-retry", prefix: "/openreceive" });
+
+  try {
+    const asset = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    asset.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."), {
+      label: "inline swap-start failure",
+    });
+    const tryAgain = await until(() => element.shadowRoot?.querySelector('[part="swap-retry"]'), {
+      label: "retry button",
+    });
+    tryAgain.click();
+    await flush(2);
+    const html = element.shadowRoot?.innerHTML ?? "";
+    assert.match(html, /Preparing payment address/);
+    assert.doesNotMatch(html, /Could not prepare the payment address/);
+    assert.equal(starts, 2);
+
+    // Settle the retry inside the test: a start that lands after the element is
+    // gone re-keys a poll controller onto a detached element and the process
+    // never exits.
+    retry.resolve(swapStartBody("SOL_SOL", "d".repeat(64)));
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "deposit panel after retry",
+    });
+  } finally {
+    element.remove();
+  }
+});
+
+// PRODUCT CHANGE (G6b): the "a start that lost a race must not replace a good
+// deposit panel with the loser's error" recovery was not scoped to the asset
+// being started. Any previously started swap satisfied it, so a failed start
+// for a SECOND coin silently reopened the FIRST coin's panel and ate the error.
+// The recovery now only fires for the same, undismissed attempt.
+test("a failed start for a second coin does not reopen the first coin's panel", async () => {
+  let starts = 0;
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () =>
+      prepareBodyWithSwapAssets("order-two-coins", [
+        ["SOL_SOL", "Solana"],
+        ["ETH_ETH", "Ethereum"],
+      ]),
+    "/swaps": (body) => {
+      starts += 1;
+      if (body.pay_in_asset === "SOL_SOL") return swapStartBody("SOL_SOL", "e".repeat(64));
+      throw new Error("Swap provider is unavailable.");
+    },
+    "/checkouts": () => checkoutBody("order-two-coins", 5_000_000, "f".repeat(64)),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-two-coins", prefix: "/openreceive" });
+
+  try {
+    const sol = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
+      { label: "SOL swap-start button" },
+    );
+    sol.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+      label: "SOL deposit panel",
+    });
+    const back = await until(
+      () => element.shadowRoot?.querySelector('[data-or-breadcrumb="swap-asset"]'),
+      { label: "switch-payment-method breadcrumb" },
+    );
+    back.click();
+    const eth = await until(
+      () => element.shadowRoot?.querySelector('[data-or-swap-start="ETH_ETH"]'),
+      { label: "ETH swap-start button" },
+    );
+    eth.click();
+    await until(() => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."), {
+      label: "ETH swap-start failure",
+    });
+    assert.equal(starts, 2);
+    assert.doesNotMatch(
+      element.shadowRoot?.innerHTML ?? "",
+      /SoLDeposit/,
+      "the first coin's deposit panel must not stand in for the second coin's failure",
+    );
   } finally {
     element.remove();
   }

@@ -48,9 +48,13 @@ The line these demos exist to draw:
 So: no variant forks library UI. Components come from `@openreceive/react`,
 `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, or
 `@openreceive/elements`; class strings come from `@openreceive/browser`'s
-registry. The Rails variant is the single sanctioned exception — its method
-wizard is a hand port onto MobX Keystone state, because the packaged wizard
-holds selection state internally. That port is checked against the packaged
+registry. The Rails variant is the single sanctioned exception, and it is kept
+as small as the claim allows: two pieces — the **method grid** and the shell
+around the **swap deposit panel** — are hand-written onto MobX Keystone state,
+because the packaged wizard holds that selection state internally and those two
+are where a store has to own it. The packaged wizard's route/provider/tutorial
+step is not ported; it holds no store state, and the React demos mount the
+packaged `<Checkout>` that renders it. The port is checked against the packaged
 surface by:
 
 ```sh
@@ -58,7 +62,8 @@ npm run test -w @openreceive/example-rails
 ```
 
 which fails when `@openreceive/browser/headless` grows or renames a wizard
-export the port does not mirror.
+export the port does not mirror — and equally when the port's list of
+deliberately-dropped exports goes stale.
 
 ## Known simplifications
 

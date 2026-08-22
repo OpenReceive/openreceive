@@ -1,3 +1,4 @@
+import { unixSeconds } from "@openreceive/core";
 import type {
   OpenReceiveAuthorizeAction,
   OpenReceiveAuthorizeContext,
@@ -104,7 +105,7 @@ export function createOpenReceiveIpRateLimit(
   }
   const message = config.message ?? DEFAULT_MESSAGE;
   const extractIp = config.ip ?? openReceiveClientIp;
-  const now = config.now ?? (() => Math.floor(Date.now() / 1_000));
+  const now = config.now ?? unixSeconds;
   let warnedUnattributable = false;
 
   return async (context) => {
@@ -133,6 +134,57 @@ export function createOpenReceiveIpRateLimit(
     }
     return true;
   };
+}
+
+/**
+ * The `rateLimiting` slice of the handler options an adapter passes on when the
+ * host opted into a trusted forwarded IP header. Shared by @openreceive/express,
+ * /fastify and /next so the three adapters cannot drift on a security control.
+ *
+ * `trustProxyIpHeader` is `true` for `x-forwarded-for`, or the name of another
+ * header YOUR reverse proxy sets; the extracted first hop becomes the limiter's
+ * `ip` unless the host supplied its own extractor.
+ *
+ * `requireIpSource` names the adapter for adapters whose native request carries
+ * NO socket IP (Next: a web Request has none). Those must fail loud at
+ * construction rather than build a limiter that can never attribute a request;
+ * adapters that do have a socket-IP fallback (Express/Fastify `req.ip`) leave it
+ * unset and simply keep the default limiter when no header is trusted.
+ */
+export function createProxyRateLimitingConfig(
+  rateLimiting: boolean | OpenReceiveIpRateLimitConfig | undefined,
+  trustProxyIpHeader: boolean | string | undefined,
+  options: { readonly requireIpSource?: string } = {},
+): { readonly rateLimiting?: boolean | OpenReceiveIpRateLimitConfig } {
+  if (rateLimiting === undefined || rateLimiting === false) return {};
+  const headerName =
+    trustProxyIpHeader === true
+      ? "x-forwarded-for"
+      : typeof trustProxyIpHeader === "string"
+        ? trustProxyIpHeader.toLowerCase()
+        : undefined;
+  const headerIp =
+    headerName === undefined
+      ? undefined
+      : (context: OpenReceiveAuthorizeContext): string | undefined => {
+          const value = context.request.headers.get(headerName);
+          const first = value?.split(",")[0]?.trim();
+          return first !== undefined && first.length > 0 ? first : undefined;
+        };
+  const { requireIpSource } = options;
+  if (headerIp === undefined && requireIpSource === undefined) return {};
+  const config = rateLimiting === true ? {} : rateLimiting;
+  if (headerIp === undefined && config.ip === undefined && requireIpSource !== undefined) {
+    // Fail loud at construction: without an IP source every request would be
+    // unattributable and the security control would silently do nothing.
+    throw new TypeError(
+      `rateLimiting on the ${requireIpSource} adapter needs a client IP source: a web Request has no ` +
+        "socket IP. Pass trustProxyIpHeader: true to read x-forwarded-for (only behind " +
+        "your own reverse proxy), name another trusted header, or supply a custom " +
+        "rateLimiting.ip extractor.",
+    );
+  }
+  return { rateLimiting: { ...config, ip: config.ip ?? headerIp } };
 }
 
 /**

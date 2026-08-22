@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { memoryPaymentsDb } from "./helpers/factories.mjs";
+import { until } from "./helpers/lifecycle-harness.mjs";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
   createOpenReceiveHost,
   createOpenReceiveHttpHandler,
   maybeReconcileOpenReceivePayments,
-  openReceivePaymentsSchemaSql,
   openReceiveReconcileIntervalSeconds,
   startOpenReceiveReconciler,
 } from "../packages/js/http/src/index.ts";
@@ -27,8 +27,7 @@ async function fixture() {
     return listTransactions(request);
   };
   const service = await createOpenReceive({ client: wallet, clock });
-  const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  const db = memoryPaymentsDb();
   const orders = new Map();
   const paid = [];
   const host = createOpenReceiveHost({
@@ -190,11 +189,11 @@ test("a worker pass inside the gate interval never touches the wallet", async ()
 
   // Once the interval elapses, the worker wins the gate and scans.
   fix.state.now = 1_013;
-  const startedAt = Date.now();
-  while (fix.walks.length === walksAfterWeb) {
-    if (Date.now() - startedAt > 2_000) assert.fail("worker never scanned after the interval");
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
+  await until(() => fix.walks.length !== walksAfterWeb, {
+    timeoutMs: 2_000,
+    stepMs: 25,
+    label: "the worker to scan after the interval",
+  });
 
   reconciler.stop();
   await reconciler.done;

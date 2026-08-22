@@ -2,15 +2,15 @@
 
 # The committed db/migrate/*_create_openreceive_tables.rb is a snapshot of the
 # openreceive-rails install generator's migration template, rendered for this
-# app (postgres adapter, string order ids referencing the host `orders` table).
+# app (postgres adapter). `order_id` is an opaque string with no foreign key:
+# the engine never reads, writes, locks, or references the host `orders` table.
 # Nothing else notices when the library template changes — the app boots from
 # db/schema.rb — so this check re-renders the template through the generator
 # class it ships in and diffs the result against the committed migration.
 #
 # On drift, regenerate the snapshot the same way it was originally produced:
 #
-#   bin/rails generate openreceive:install --skip-initializer --skip-route \
-#     --order-primary-key-type=string
+#   bin/rails generate openreceive:install --skip-initializer --skip-route
 #
 # keep the original timestamped filename, and re-apply the one local
 # normalization below (the class name).
@@ -33,15 +33,11 @@ committed = File.read(committed_path)
 template_path = File.join(OpenReceive::Generators::InstallGenerator.source_root, "migration.rb")
 template = File.read(template_path)
 
-# Render exactly as `rails generate openreceive:install --order-primary-key-type=string`
-# does for this app. Outside a booted app there is no connection config, so the
+# Render exactly as `rails generate openreceive:install` does for this app. Outside a booted app there is no connection config, so the
 # generator's adapter probe falls back to the non-MySQL rendering — which is the
 # postgres rendering this app committed (postgres and sqlite share it; the
 # adapter branch stays inside the migration and runs at migration time).
-generator = OpenReceive::Generators::InstallGenerator.new(
-  [],
-  { "order_primary_key_type" => "string" }
-)
+generator = OpenReceive::Generators::InstallGenerator.new([], {})
 rendered = ERB.new(template, trim_mode: "-").result(generator.instance_eval { binding })
 
 # The engine registers the `OpenReceive` inflector acronym, so in this app the
@@ -83,8 +79,7 @@ schema = File.read(File.join(app_root, "db/schema.rb"))
   'create_table "openreceive_meta"',
   "openreceive_payments_status_check",
   "openreceive_payments_payment_hash_check",
-  "payment_hash::text ~ '^[0-9a-f]{64}$'",
-  'add_foreign_key "openreceive_payments", "orders"'
+  "payment_hash::text ~ '^[0-9a-f]{64}$'"
 ].each do |needle|
   next if schema.include?(needle)
 

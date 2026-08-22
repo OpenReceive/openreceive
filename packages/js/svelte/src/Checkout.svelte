@@ -3,7 +3,7 @@ import { onMount } from "svelte";
 import {
   createOpenReceiveWrapperCheckoutShellBinding,
   defineOpenReceiveElements,
-  validateOpenReceiveWrapperCheckoutProps,
+  validateOpenReceiveCheckoutProps,
   type CheckoutElementListeners,
   type CheckoutShellOptions,
   type CheckoutSnapshot,
@@ -11,14 +11,18 @@ import {
 } from "./index.js";
 
 // Prop names, defaults, and per-mode applicability are the shared contract in
-// docs/internal/wrapper-parity.md. Keep this list in step with it.
+// docs/internal/wrapper-parity.md. This list RESTATES it because Svelte props
+// are declarations, not a type: `export let` (and `let { … } = $props()` under
+// runes) has to name every prop, so it cannot be derived from
+// OpenReceiveWrapperCheckoutComponentProps the way Vue's defineProps and
+// React's CheckoutProps are. The duplication is forced, not neglected;
+// tests/wrapper-parity.test.mjs is what keeps it in step.
 // Snapshot mode: pass a `checkout` to render it directly.
 // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
 // <openreceive-checkout> element creates the checkout, then renders and polls itself.
 export let checkout: CheckoutSnapshot | undefined = undefined;
 export let orderId: string | undefined = undefined;
 export let prefix: string | undefined = undefined;
-export let orderUrl: string | undefined = undefined;
 export let paymentWizard: boolean | undefined = undefined;
 export let decodeLinkUrl: string | undefined = undefined;
 export let themeToggle: boolean | undefined = undefined;
@@ -47,7 +51,7 @@ onMount(() => {
   mounted = true;
 });
 
-$: validateOpenReceiveWrapperCheckoutProps({
+$: validateOpenReceiveCheckoutProps({
   framework: "@openreceive/svelte",
   checkout,
   orderId,
@@ -63,7 +67,6 @@ $: shell = createOpenReceiveWrapperCheckoutShellBinding(checkout ?? null, {
   deferThemeResolution: !mounted,
   ...(orderId === undefined ? {} : { orderId }),
   ...(prefix === undefined ? {} : { prefix }),
-  ...(orderUrl === undefined ? {} : { orderUrl }),
   ...(paymentWizard === undefined ? {} : { paymentWizard }),
   ...(decodeLinkUrl === undefined ? {} : { decodeLinkUrl }),
   ...(defaultTheme === undefined ? {} : { defaultTheme }),

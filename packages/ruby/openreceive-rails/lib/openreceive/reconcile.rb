@@ -46,58 +46,25 @@ module OpenReceive
       return [] if attempts.empty?
 
       observed_at = Integer(now || Time.now.to_i)
-      results = config.service.reconcile_payments(
-        {
-          "attempts" => attempts,
-          "overlap_seconds" => overlap_seconds,
-          "until" => observed_at + overlap_seconds
-        }.merge(
-          max_pages.nil? ? {} : { "max_pages" => max_pages }
-        ).merge(
-          deadline.nil? ? {} : { "deadline" => deadline }
-        )
-      )
+      request = {
+        "attempts" => attempts,
+        "overlap_seconds" => overlap_seconds,
+        "until" => observed_at + overlap_seconds
+      }
+      request["max_pages"] = max_pages unless max_pages.nil?
+      request["deadline"] = deadline unless deadline.nil?
+      results = config.service.reconcile_payments(request)
       log_reconcile_pass(attempts, results, overlap_seconds, observed_at)
       by_hash = attempts.to_h { |attempt| [attempt.fetch("payment_hash"), attempt] }
-      settle = config.settlement_hook
       results.each do |checked|
         attempt = by_hash[checked.fetch("payment_hash")]
         next if attempt.nil?
 
         if checked["status"] == "settled" && checked["paid_at"]
-          # One failing settlement (a raising on_paid, a host data problem)
-          # must not abort the rest of the pass: every later attempt would
-          # otherwise never settle and never close, on every pass.
-          begin
-            settle.call(
-              "payment_hash" => checked.fetch("payment_hash"),
-              "paid_at" => checked.fetch("paid_at"),
-              "details" => checked["details"]
-            )
-          rescue StandardError => e
-            openreceive_logger&.warn(
-              "[openreceive] settlement for #{checked.fetch('payment_hash')} failed " \
-              "(will retry next pass): #{sanitized_failure_message(e)}"
-            )
-          end
-          next
+          settle_attempt(checked)
+        else
+          record_attempt_transition(attempt, checked, observed_at)
         end
-
-        wallet_transaction = checked.dig("details", "transaction") || {}
-        transition = OpenReceive::Server::Reconciliation.transition(
-          expires_at: attempt.fetch("expires_at"),
-          status: checked.fetch("status"),
-          observed_at: observed_at,
-          transaction_state: wallet_transaction["state"] || wallet_transaction["transaction_state"]
-        )
-        next if transition.nil?
-
-        OpenReceivePayment.record_reconciliation!(
-          payment_hash: checked.fetch("payment_hash"),
-          status: transition.fetch("status"),
-          observed_at: observed_at,
-          reason: transition.fetch("reason")
-        )
       end
       results
     end
@@ -229,6 +196,42 @@ module OpenReceive
       "#{error.class}: #{error.message}"
         .gsub(%r{nostr\+walletconnect://[^\s"'`<>]+}, "[REDACTED_NWC]")
         .gsub(%r{lightning\+swapconnect://[^\s"'`<>]+}, "[REDACTED_LSC]")
+    end
+
+    # One failing settlement (a raising on_paid, a host data problem)
+    # must not abort the rest of the pass: every later attempt would
+    # otherwise never settle and never close, on every pass.
+    def settle_attempt(checked)
+      config.settlement_hook.call(
+        "payment_hash" => checked.fetch("payment_hash"),
+        "paid_at" => checked.fetch("paid_at"),
+        "details" => checked["details"]
+      )
+    rescue StandardError => e
+      openreceive_logger&.warn(
+        "[openreceive] settlement for #{checked.fetch('payment_hash')} failed " \
+        "(will retry next pass): #{sanitized_failure_message(e)}"
+      )
+    end
+
+    # Closure is decided by the shared reconciliation rules from a scan result
+    # the wallet actually returned; a nil transition means keep waiting.
+    def record_attempt_transition(attempt, checked, observed_at)
+      wallet_transaction = checked.dig("details", "transaction") || {}
+      transition = OpenReceive::Server::Reconciliation.transition(
+        expires_at: attempt.fetch("expires_at"),
+        status: checked.fetch("status"),
+        observed_at: observed_at,
+        transaction_state: wallet_transaction["state"] || wallet_transaction["transaction_state"]
+      )
+      return if transition.nil?
+
+      OpenReceivePayment.record_reconciliation!(
+        payment_hash: checked.fetch("payment_hash"),
+        status: transition.fetch("status"),
+        observed_at: observed_at,
+        reason: transition.fetch("reason")
+      )
     end
 
     # Info, not debug: passes are durably gated (min 2s apart, and only while

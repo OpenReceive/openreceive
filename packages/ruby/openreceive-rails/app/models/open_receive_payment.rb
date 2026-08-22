@@ -1,14 +1,17 @@
 # frozen_string_literal: true
 
+require "digest"
+
 # Engine-owned payment attempts. The table lives in the host application's
 # database (the install generator emits the migration), but the schema, locking,
 # settlement write-once, and reconciliation state machine are library-owned.
 #
 # An order may have many historical attempts. Each row is direct Lightning or
 # exactly one provider swap attempt; never attach several provider orders to one
-# invoice. commit_attempt! serializes on the host order row. Same-method
-# reusable lives conflict; other rails may remain live so payers can switch
-# methods. "Already paid" means any settled row; live means status "pending"
+# invoice. commit_attempt! serializes on an OpenReceive-owned per-order lock —
+# never on the host's order table, which the engine does not read, write, lock,
+# or reference. Same-method reusable lives conflict; other rails may remain live
+# so payers can switch methods. "Already paid" means any settled row; live means status "pending"
 # and unexpired — hosts never see the live/supersede/conflict vocabulary.
 class OpenReceivePayment < ActiveRecord::Base
   self.table_name = "openreceive_payments"
@@ -39,15 +42,75 @@ class OpenReceivePayment < ActiveRecord::Base
            .where("status_reason IS NULL OR status_reason != ?", "superseded")
   }
 
-  # The host order model configured through OpenReceive.config.order_model.
-  # Its row is the per-order serialization boundary for commit and settlement.
-  def self.order_class
-    model = OpenReceive.config.order_model
-    model.is_a?(Class) ? model : model.to_s.constantize
+  # Namespacing seed for the postgres per-order advisory lock. Identical to the
+  # JS repository's ADVISORY_LOCK_SEED, and the lock key is computed with the
+  # same expression, so a database served by both engines at once still
+  # serializes one order's commits against each other.
+  ADVISORY_LOCK_SEED = 8_210_223
+  # MySQL's GET_LOCK names are capped at 64 bytes and an order id is arbitrary
+  # host text, so the name is a digest rather than the id itself.
+  MYSQL_LOCK_TIMEOUT_SECONDS = 10
+
+  class LockTimeout < StandardError; end
+
+  # The per-order serialization boundary for commit and settlement, owned
+  # entirely by OpenReceive.
+  #
+  # This used to lock the host's order row (OpenReceive.config.order_model),
+  # which forced every host to register its order model and let a hard-deleted
+  # order stall settlement. Nothing here needs the host's table: every
+  # predicate commit_attempt! and mark_paid_once! evaluate reads only
+  # openreceive_payments rows, so a lock keyed by the order id is exactly as
+  # strong and costs the host nothing.
+  #
+  # Postgres takes a transaction-scoped advisory lock, matching the JS
+  # repository's lockOrder so both engines can serve one database. MySQL has no
+  # transaction-scoped equivalent, so it takes a session-scoped named lock
+  # around the transaction and releases it after commit. SQLite serializes
+  # writers itself, so the transaction is the boundary; the payment_hash UNIQUE
+  # constraint is the backstop on every adapter.
+  def self.with_order_lock(order_id, &block)
+    key = order_id.to_s
+    raise ArgumentError, "order_id is required" if key.empty?
+
+    return with_mysql_order_lock(key, &block) if mysql_connection?
+
+    transaction do
+      if postgres_connection?
+        connection.select_value(
+          sanitize_sql_array(
+            ["SELECT pg_advisory_xact_lock(hashtextextended(?, ?))", key, ADVISORY_LOCK_SEED]
+          )
+        )
+      end
+      yield
+    end
   end
 
-  def order
-    @order ||= self.class.order_class.find(order_id)
+  # GET_LOCK is session-scoped, so it is taken before BEGIN and released after
+  # COMMIT — releasing inside the transaction would leave a window where a
+  # second worker could commit against state this one has already read.
+  def self.with_mysql_order_lock(key)
+    name = "openreceive:#{Digest::SHA256.hexdigest(key)[0, 40]}"
+    acquired = connection.select_value(
+      sanitize_sql_array(["SELECT GET_LOCK(?, ?)", name, MYSQL_LOCK_TIMEOUT_SECONDS])
+    )
+    raise LockTimeout, "Timed out taking the OpenReceive lock for this order." unless acquired.to_i == 1
+
+    begin
+      transaction { yield }
+    ensure
+      connection.select_value(sanitize_sql_array(["SELECT RELEASE_LOCK(?)", name]))
+    end
+  end
+
+  def self.postgres_connection?
+    connection.adapter_name.to_s.downcase.include?("postg")
+  end
+
+  def self.mysql_connection?
+    adapter = connection.adapter_name.to_s.downcase
+    adapter.include?("mysql") || adapter.include?("trilogy")
   end
 
   # Never expose provider recovery credentials through ordinary JSON rendering.
@@ -96,21 +159,24 @@ class OpenReceivePayment < ActiveRecord::Base
     where(client_ip: client_ip).where("inserted_at >= ?", since).count
   end
 
-  def self.commit_attempt!(order:, payment_hash:, checkout:, swap_data: nil, client_ip: nil)
+  def self.commit_attempt!(order_id:, payment_hash:, checkout:, swap_data: nil, client_ip: nil)
     OpenReceiveMeta.assert_supported_schema!
     normalized_hash = payment_hash.to_s.downcase
     raise ArgumentError, "invalid payment_hash" unless normalized_hash.match?(/\A[0-9a-f]{64}\z/)
 
-    order.with_lock do
+    key = order_id.to_s
+    raise ArgumentError, "order_id is required" if key.empty?
+
+    with_order_lock(key) do
       same = find_by(payment_hash: normalized_hash)
       unless same.nil?
-        raise AttemptConflict, "payment hash belongs to another order" if same.order_id.to_s != order.id.to_s
+        raise AttemptConflict, "payment hash belongs to another order" if same.order_id.to_s != key
         return same
       end
-      raise AttemptConflict, "This order is already paid." if where(order_id: order.id).settled.exists?
+      raise AttemptConflict, "This order is already paid." if where(order_id: key).settled.exists?
 
       now = Time.current
-      where(order_id: order.id).live_at(now).find_each do |live|
+      where(order_id: key).live_at(now).find_each do |live|
         decision = live_attempt_commit_decision(live, swap_data, now)
         case decision
         when :conflict
@@ -124,7 +190,7 @@ class OpenReceivePayment < ActiveRecord::Base
       end
 
       create!(
-        order_id: order.id,
+        order_id: key,
         payment_hash: normalized_hash,
         status: "pending",
         expires_at: Time.at(attempt_expires_at(checkout, swap_data)).utc,
@@ -142,20 +208,19 @@ class OpenReceivePayment < ActiveRecord::Base
   # status_reason "duplicate_settlement". The fulfill block runs inside the
   # settlement transaction only for the order's first settled attempt, and a
   # settled row is never overwritten.
+  #
+  # Exactly-once holds across every settlement path OpenReceive owns, because
+  # first_for_order is decided from openreceive_payments rows under the same
+  # per-order lock commit_attempt! takes. It says nothing about fulfillment the
+  # host triggers elsewhere (an admin action, another processor, a replayed
+  # job) — those race each other, and the host guards them. The install
+  # generator writes that guidance next to the generated on_paid.
   def self.mark_paid_once!(payment_hash:, paid_at:)
     OpenReceiveMeta.assert_supported_schema!
     payment = find_by(payment_hash: payment_hash.to_s.downcase)
     return nil if payment.nil?
 
-    # Prefer the order-row lock (the commit-side serialization boundary), but
-    # a host-deleted order must not stall settlement forever: fall back to
-    # locking the payment row itself so the attempt still settles.
-    order = begin
-      payment.order
-    rescue ActiveRecord::RecordNotFound
-      nil
-    end
-    (order || payment).with_lock do
+    with_order_lock(payment.order_id) do
       payment.reload
       return payment if payment.status == "settled"
 
@@ -165,7 +230,7 @@ class OpenReceivePayment < ActiveRecord::Base
         status_reason: first_for_order ? nil : "duplicate_settlement",
         paid_at: Time.at(Integer(paid_at)).utc
       )
-      yield(order, payment) if block_given? && first_for_order
+      yield(payment) if block_given? && first_for_order
       payment
     end
   end

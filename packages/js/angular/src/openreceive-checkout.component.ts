@@ -15,7 +15,7 @@ import {
   type OpenReceiveWrapperCheckoutShellOptions,
   createOpenReceiveWrapperCheckoutShellBinding,
   defineOpenReceiveElements,
-  validateOpenReceiveWrapperCheckoutProps,
+  validateOpenReceiveCheckoutProps,
 } from "@openreceive/angular";
 import type { OpenReceiveElementBindings } from "./element-bindings";
 import { OpenReceiveElementBindingsDirective } from "./openreceive-element-bindings.directive";
@@ -40,14 +40,17 @@ import { OpenReceiveElementBindingsDirective } from "./openreceive-element-bindi
 })
 export class CheckoutComponent implements AfterViewInit, OnChanges {
   // Prop names, defaults, and per-mode applicability are the shared contract in
-  // docs/internal/wrapper-parity.md. Keep these inputs in step with it.
+  // docs/internal/wrapper-parity.md. These inputs RESTATE it because `@Input()`
+  // is a decorator on a declared field: a type cannot generate fields, so they
+  // cannot be derived from OpenReceiveWrapperCheckoutComponentProps the way
+  // Vue's defineProps and React's CheckoutProps are. The duplication is forced,
+  // not neglected; tests/wrapper-parity.test.mjs is what keeps it in step.
   // Snapshot mode: bind a `checkout` to render it directly.
   // Create mode: omit `checkout` and bind `orderId` (+ optional `prefix`); the underlying
   // <openreceive-checkout> element creates the checkout, then renders and polls itself.
   @Input() checkout?: CheckoutSnapshot | null;
   @Input() orderId?: string;
   @Input() prefix?: string;
-  @Input() orderUrl?: string;
   @Input() paymentWizard?: boolean;
   @Input() decodeLinkUrl?: string;
   @Input() themeToggle?: boolean;
@@ -116,7 +119,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   }
 
   private buildShell(): OpenReceiveWrapperCheckoutShellBinding {
-    validateOpenReceiveWrapperCheckoutProps({
+    validateOpenReceiveCheckoutProps({
       framework: "@openreceive/angular",
       checkout: this.checkout,
       orderId: this.orderId,
@@ -133,7 +136,6 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       deferThemeResolution: !this.elementsReady,
       ...(this.orderId === undefined ? {} : { orderId: this.orderId }),
       ...(this.prefix === undefined ? {} : { prefix: this.prefix }),
-      ...(this.orderUrl === undefined ? {} : { orderUrl: this.orderUrl }),
       ...(this.paymentWizard === undefined ? {} : { paymentWizard: this.paymentWizard }),
       ...(this.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: this.decodeLinkUrl }),
       ...(this.defaultTheme === undefined ? {} : { defaultTheme: this.defaultTheme }),

@@ -2,7 +2,7 @@
 
 OpenReceive has no separate deployment storage service and needs no dedicated
 settlement infrastructure. Every web instance needs the same receive-only NWC
-configuration and access to the host database; everything that must be
+configuration and access to your database; everything that must be
 durable — attempt rows, the settlement write-once claim, and the scan gate —
 lives in that database.
 
@@ -10,7 +10,7 @@ lives in that database.
 
 The library serializes attempt insertion per order (Postgres advisory lock or
 SQLite immediate transaction), enforces unique `payment_hash`, and makes
-settlement write-once inside the host database it is handed. Scale web
+settlement write-once inside the database it is handed. Scale web
 instances freely: restarts and overlapping passes repeat bounded, idempotent
 work, and delivery is at-least-once with the write-once settlement transaction
 as the replay guard. Process-local caches (rates, provider weights, the
@@ -24,7 +24,7 @@ The default settlement driver is the request path: every mounted OpenReceive
 payment route runs one opportunistic reconcile pass when attempts are pending.
 Every scan entry point — the request-path pass, the notifications worker's
 periodic pass, and a directly driven reconciler — claims the same durable gate
-first: the `openreceive_meta` row `transaction_scan_gate` in the host
+first: the `openreceive_meta` row `transaction_scan_gate` in your
 database, claimed by optimistic CAS. The gate serializes wallet scans across
 every instance and Puma worker, so rapid calls collapse to one real scan per
 interval. The interval floors at 2 seconds and stretches with pending-invoice
@@ -70,7 +70,7 @@ safe.
 Boot preflight fails closed on a missing or spend-capable NWC connection. On
 Node the adapters boot lazily (the first request awaits preflight); use the
 middleware's `ready` promise in a deploy health check to surface failures at
-rollout. The Rails engine builds the service — and runs preflight — eagerly in
+rollout. The Rails engine builds the wallet client — and runs preflight — eagerly in
 production, so a bad `NWC_URI`, a dead relay, or a spend-capable wallet stops
 the deploy instead of surfacing as customer-facing 500s on the first checkout.
 

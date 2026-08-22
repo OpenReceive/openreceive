@@ -266,7 +266,7 @@ module OpenReceive
         end
 
         def get_status(order)
-          stored = stringify(order)
+          stored = OpenReceive.stringify(order)
           data = post("order",
                       "id" => stored.fetch("provider_order_id"),
                       "token" => stored.fetch("provider_token"))
@@ -276,7 +276,7 @@ module OpenReceive
         end
 
         def request_refund(order, refund_address)
-          stored = stringify(order)
+          stored = OpenReceive.stringify(order)
           post("emergency",
                "id" => stored.fetch("provider_order_id"),
                "token" => stored.fetch("provider_token"),
@@ -498,35 +498,20 @@ module OpenReceive
           record = self.class.as_record(data)
           from = self.class.as_record(record["from"])
           time = self.class.as_record(record["time"])
-          status = self.class.read_string(record["status"]) || fallback["state"] || "NEW"
-          emergency = self.class.as_record(record["emergency"])
-          deposit_memo = self.class.read_string(from["tag"]) || fallback["deposit_memo"]
-          deposit_tx_id = self.class.read_nested_string(record, %w[from tx id]) || fallback["deposit_tx_id"]
-          payout_tx_id = self.class.read_nested_string(record, %w[to tx id]) || fallback["payout_tx_id"]
           refund_tx_id =
             self.class.read_nested_string(record, %w[back tx id]) ||
             self.class.read_nested_string(record, %w[refund tx id]) ||
             fallback["refund_tx_id"]
-          normalized_status = self.class.normalize_status(status, emergency, refund_tx_id)
-          deposit_address =
-            self.class.read_string(from["address"]) ||
-            fallback["deposit_address"] ||
-            self.class.required_string(from["address"], "from.address")
-          unless Assets.valid_swap_address_for_network?(pay_in_asset, deposit_address)
-            raise "FixedFloat deposit address is not valid for this asset."
-          end
-          fee = self.class.read_order_fee(record) || fallback["fee"]
-          emergency_repeat = self.class.read_emergency_repeat(emergency)
-          deposit_received_amount =
-            self.class.read_decimal_amount(self.class.read_nested_string(record, %w[from tx amount])) ||
-            fallback["deposit_received_amount"]
-          refund_amount =
-            self.class.read_decimal_amount(self.class.read_nested_string(record, %w[back amount])) ||
-            fallback["refund_amount"]
-          refund_reason =
-            normalized_status["refund_reason"] ||
-            (self.class.refund_path_state?(normalized_status.fetch("state")) ? fallback["refund_reason"] : nil)
-
+          normalized_status = self.class.normalize_status(
+            self.class.read_string(record["status"]) || fallback["state"] || "NEW",
+            self.class.as_record(record["emergency"]),
+            refund_tx_id
+          )
+          # Read and validate the deposit address BEFORE anything else can
+          # raise: a response that is both missing `id` and carrying a
+          # wrong-network address must still fail with the address error, the
+          # way it did before this method was split.
+          deposit_address = validated_deposit_address(from, pay_in_asset, fallback)
           order = {
             "provider" => @name,
             "provider_order_id" =>
@@ -538,42 +523,67 @@ module OpenReceive
               fallback["provider_token"] ||
               self.class.required_string(record["token"], "token"),
             "pay_in_asset" => pay_in_asset,
-            "deposit_address" => deposit_address
+            "deposit_address" => deposit_address,
+            "deposit_amount" =>
+              self.class.read_string(from["amount"]) ||
+              fallback["deposit_amount"] ||
+              self.class.required_string(from["amount"], "from.amount"),
+            "expires_at" =>
+              self.class.read_unix_seconds(time["expiration"]) ||
+              fallback["expires_at"] ||
+              (@now.call + 600),
+            "state" => normalized_status.fetch("state")
           }
-          order["deposit_memo"] = deposit_memo unless deposit_memo.nil?
-          order["deposit_amount"] =
-            self.class.read_string(from["amount"]) ||
-            fallback["deposit_amount"] ||
-            self.class.required_string(from["amount"], "from.amount")
-          order["expires_at"] =
-            self.class.read_unix_seconds(time["expiration"]) ||
-            fallback["expires_at"] ||
-            (@now.call + 600)
-          order["state"] = normalized_status.fetch("state")
-          order["deposit_tx_id"] = deposit_tx_id unless deposit_tx_id.nil?
-          order["payout_tx_id"] = payout_tx_id unless payout_tx_id.nil?
-          order["refund_tx_id"] = refund_tx_id unless refund_tx_id.nil?
-          order["attention"] = normalized_status["attention"] unless normalized_status["attention"].nil?
-          unless normalized_status["attention_reason"].nil?
-            order["attention_reason"] = normalized_status["attention_reason"]
-          end
-          order["refund_reason"] = refund_reason unless refund_reason.nil?
-          order["deposit_received_amount"] = deposit_received_amount unless deposit_received_amount.nil?
-          order["refund_amount"] = refund_amount unless refund_amount.nil?
-          if emergency_repeat.nil?
-            order["emergency_repeat"] = fallback["emergency_repeat"] unless fallback["emergency_repeat"].nil?
-          else
-            order["emergency_repeat"] = emergency_repeat
-          end
-          order["fee"] = fee unless fee.nil?
+          order.merge!(optional_order_fields(record, normalized_status, refund_tx_id, fallback))
           order["raw"] = data
           order
         end
 
-        def stringify(value)
-          return {} unless value.respond_to?(:each_pair)
+        # The only producer of a deposit address. Reading it and checking it
+        # against the pay-in asset's network must never come apart: an address
+        # accepted for the wrong chain sends the payer's funds somewhere
+        # nobody can recover them from.
+        def validated_deposit_address(from, pay_in_asset, fallback)
+          address =
+            self.class.read_string(from["address"]) ||
+            fallback["deposit_address"] ||
+            self.class.required_string(from["address"], "from.address")
+          unless Assets.valid_swap_address_for_network?(pay_in_asset, address)
+            raise "FixedFloat deposit address is not valid for this asset."
+          end
+          address
+        end
 
-          value.each_pair.to_h { |key, item| [key.to_s, item] }
+        # Every order field that is OMITTED rather than sent as null when the
+        # provider did not report it — on the payer-facing wire body and in the
+        # persisted recovery payload alike. Compacted in one place so a new
+        # optional field cannot accidentally ship as an explicit null.
+        def optional_order_fields(record, normalized_status, refund_tx_id, fallback)
+          from = self.class.as_record(record["from"])
+          emergency_repeat =
+            self.class.read_emergency_repeat(self.class.as_record(record["emergency"]))
+          {
+            "deposit_memo" => self.class.read_string(from["tag"]) || fallback["deposit_memo"],
+            "deposit_tx_id" =>
+              self.class.read_nested_string(record, %w[from tx id]) || fallback["deposit_tx_id"],
+            "payout_tx_id" =>
+              self.class.read_nested_string(record, %w[to tx id]) || fallback["payout_tx_id"],
+            "refund_tx_id" => refund_tx_id,
+            "attention" => normalized_status["attention"],
+            "attention_reason" => normalized_status["attention_reason"],
+            "refund_reason" =>
+              normalized_status["refund_reason"] ||
+              (self.class.refund_path_state?(normalized_status.fetch("state")) ? fallback["refund_reason"] : nil),
+            "deposit_received_amount" =>
+              self.class.read_decimal_amount(self.class.read_nested_string(record, %w[from tx amount])) ||
+              fallback["deposit_received_amount"],
+            "refund_amount" =>
+              self.class.read_decimal_amount(self.class.read_nested_string(record, %w[back amount])) ||
+              fallback["refund_amount"],
+            "emergency_repeat" =>
+              emergency_repeat.nil? ? fallback["emergency_repeat"] : emergency_repeat,
+            "fee" => self.class.read_order_fee(record) || fallback["fee"]
+          }.compact
         end
 
         class << self

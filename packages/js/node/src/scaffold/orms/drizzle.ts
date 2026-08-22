@@ -1,24 +1,17 @@
 import {
+  openReceiveFulfillmentNote,
   openReceivePaymentsHashCheckSql,
   openReceivePaymentsIndexName,
   openReceivePaymentsStatusCheckSql,
 } from "@openreceive/core";
-import { drizzleOrderIdColumn, isSqlite } from "../shared.ts";
+import { isSqlite } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
 
 export function renderDrizzleFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
   const sqlite = isSqlite(options);
   const table = options.tableName;
-  const orderIdColumn = drizzleOrderIdColumn(options.orderIdType, options.dialect);
-  const orderIdLine = options.skipForeignKey
-    ? `orderId: ${orderIdColumn},`
-    : `orderId: ${orderIdColumn}.references(() => ${camel(options.orderTable)}.id, { onDelete: "restrict" }),`;
-  const ordersImportNote = options.skipForeignKey
-    ? ""
-    : `// Adjust the path to wherever your host schema defines \`${camel(options.orderTable)}\`
-// (needed for the foreign key below), e.g.:
-// import { ${camel(options.orderTable)} } from "./schema";\n`;
+  const orderIdLine = `orderId: text("order_id").notNull(),`;
   const indexName = (suffix: string): string => openReceivePaymentsIndexName(table, suffix);
   const constraints = [
     `    uniqueIndex("${indexName("hash_uidx")}").on(table.paymentHash),`,
@@ -38,12 +31,14 @@ export function renderDrizzleFiles(options: ScaffoldPaymentsOptions): ScaffoldFi
 // CHECK constraint. Timestamps are unix-seconds integer columns, on purpose.
 // The schema_version seed row cannot be expressed here — the wiring guide's
 // migration step adds it as a custom migration.
+//
+${openReceiveFulfillmentNote("// ", options.tableName)}
 import { sql } from "drizzle-orm";
 `;
 
   const schema = sqlite
     ? `${header}import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-${ordersImportNote}
+
 export const openReceivePayments = sqliteTable(
   "${table}",
   {
@@ -74,8 +69,8 @@ export const openReceiveMeta = sqliteTable("${options.metaTableName}", {
   rev: integer("rev").notNull().default(0),
 });
 `
-    : `${header}import { ${pgImports(options)} } from "drizzle-orm/pg-core";
-${ordersImportNote}
+    : `${header}import { ${pgImports()} } from "drizzle-orm/pg-core";
+
 export const openReceivePayments = pgTable(
   "${table}",
   {
@@ -113,13 +108,6 @@ export const openReceiveMeta = pgTable("${options.metaTableName}", {
   ];
 }
 
-function pgImports(options: ScaffoldPaymentsOptions): string {
-  const names = new Set(["bigint", "check", "index", "pgTable", "text", "uniqueIndex"]);
-  if (options.orderIdType === "integer") names.add("integer");
-  if (options.orderIdType === "uuid") names.add("uuid");
-  return [...names].sort((left, right) => left.localeCompare(right)).join(", ");
-}
-
-function camel(table: string): string {
-  return table.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+function pgImports(): string {
+  return ["bigint", "check", "index", "pgTable", "text", "uniqueIndex"].join(", ");
 }

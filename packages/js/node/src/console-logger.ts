@@ -1,3 +1,4 @@
+import { compact } from "@openreceive/core";
 import {
   openReceiveLogLevelOrder,
   readOpenReceiveLogLevelFromEnvironment,
@@ -56,7 +57,7 @@ export function createOpenReceiveConsoleLogger(
         event,
         message,
       }),
-      stripUndefinedLogFields(fields),
+      compact(fields),
     );
   };
 }
@@ -110,7 +111,7 @@ export function createHostConsoleLogger(
         event,
         message,
       }),
-      stripUndefinedLogFields(fields),
+      compact(fields),
     );
   };
 }
@@ -130,27 +131,4 @@ function formatConsoleLogLine(input: {
   readonly message: string;
 }): string {
   return `[${input.at}] ${input.level.toUpperCase()} [${input.prefix}] ${input.event}: ${input.message}`;
-}
-
-function stripUndefinedLogFields(fields: Record<string, unknown>): Record<string, unknown> {
-  const clean: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(fields)) {
-    if (value === undefined) continue;
-    if (Array.isArray(value)) {
-      clean[key] = value.map((entry) =>
-        isPlainLogRecord(entry) ? stripUndefinedLogFields(entry as Record<string, unknown>) : entry,
-      );
-      continue;
-    }
-    clean[key] = isPlainLogRecord(value)
-      ? stripUndefinedLogFields(value as Record<string, unknown>)
-      : value;
-  }
-  return clean;
-}
-
-function isPlainLogRecord(value: unknown): boolean {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
