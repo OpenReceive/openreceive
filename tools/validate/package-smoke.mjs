@@ -21,7 +21,7 @@ const localSmokeDependencies = new Set(["@getalby/sdk", "commander", "qrcode", "
 // factory and none of the deleted `createOpenReceiveWrapper*` pass-throughs.
 const importChecks = {
   "@openreceive/angular":
-    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.defineOpenReceiveElements === 'function' && typeof mod.validateOpenReceiveWrapperCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createOpenReceiveThemeToggleElement === undefined && mod.createOpenReceiveWrapperCheckoutController === undefined && mod.createOpenReceiveWrapperCheckoutShell === undefined && mod.createOpenReceiveWrapperThemeBinding === undefined && mod.createOpenReceiveWrapperStoredThemeBinding === undefined",
+    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.defineOpenReceiveElements === 'function' && typeof mod.validateOpenReceiveCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createOpenReceiveThemeToggleElement === undefined && mod.createOpenReceiveWrapperCheckoutController === undefined && mod.createOpenReceiveWrapperCheckoutShell === undefined && mod.createOpenReceiveWrapperThemeBinding === undefined && mod.createOpenReceiveWrapperStoredThemeBinding === undefined",
   "@openreceive/browser":
     "typeof mod.requestCheckout === 'function' && typeof mod.status === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function'",
   "@openreceive/core":
@@ -43,10 +43,10 @@ const importChecks = {
   "@openreceive/react":
     "typeof mod.createCheckoutViewModel === 'function' && typeof mod.ThemeScope === 'function' && typeof mod.ThemeToggle === 'function' && typeof mod.PaymentWizard === 'function' && typeof mod.WaitingState === 'function' && typeof mod.useTheme === 'function' && typeof mod.CheckoutProvider === 'function' && typeof mod.useCheckoutContext === 'function' && mod.OpenReceiveThemeToggle === undefined && mod.OpenReceivePaymentWizard === undefined && mod.OpenReceiveWaitingState === undefined && mod.useOpenReceiveTheme === undefined",
   "@openreceive/svelte":
-    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.defineOpenReceiveElements === 'function' && typeof mod.validateOpenReceiveWrapperCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createOpenReceiveThemeToggleElement === undefined && mod.createOpenReceiveWrapperCheckoutController === undefined && mod.createOpenReceiveWrapperCheckoutShell === undefined && mod.createOpenReceiveWrapperThemeBinding === undefined && mod.createOpenReceiveWrapperStoredThemeBinding === undefined",
+    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.defineOpenReceiveElements === 'function' && typeof mod.validateOpenReceiveCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createOpenReceiveThemeToggleElement === undefined && mod.createOpenReceiveWrapperCheckoutController === undefined && mod.createOpenReceiveWrapperCheckoutShell === undefined && mod.createOpenReceiveWrapperThemeBinding === undefined && mod.createOpenReceiveWrapperStoredThemeBinding === undefined",
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
   "@openreceive/vue":
-    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.defineOpenReceiveElements === 'function' && typeof mod.validateOpenReceiveWrapperCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createOpenReceiveThemeToggleElement === undefined && mod.createOpenReceiveWrapperCheckoutController === undefined && mod.createOpenReceiveWrapperCheckoutShell === undefined && mod.createOpenReceiveWrapperThemeBinding === undefined && mod.createOpenReceiveWrapperStoredThemeBinding === undefined",
+    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.defineOpenReceiveElements === 'function' && typeof mod.validateOpenReceiveCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createOpenReceiveThemeToggleElement === undefined && mod.createOpenReceiveWrapperCheckoutController === undefined && mod.createOpenReceiveWrapperCheckoutShell === undefined && mod.createOpenReceiveWrapperThemeBinding === undefined && mod.createOpenReceiveWrapperStoredThemeBinding === undefined",
   openreceive:
     "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function'",
 };
@@ -128,12 +128,22 @@ import providerRegistryJson from "@openreceive/provider-data/registry.json" with
 const checks = ${JSON.stringify(checks, null, 2)};
 
 assert(
-  typeof browserInternal.CheckoutWatcher === "function" &&
-    typeof browserInternal.createCheckoutElement === "function" &&
+  typeof browserInternal.createCheckoutController === "function" &&
+    typeof browserInternal.createCheckoutElementAttributes === "function" &&
     typeof browserInternal.createCheckoutShell === "function" &&
     typeof browserInternal.createOpenReceiveStatusFetcher === "function" &&
+    typeof browserInternal.validateOpenReceiveCheckoutProps === "function" &&
     typeof browserInternal.openReceiveCheckoutElementStyles === "string",
   "@openreceive/browser/internal: framework adapter internals must be importable"
+);
+// The other half of D-1: ./internal is curated, so names the UI packages do not
+// import must NOT be reachable through it. CheckoutWatcher and refreshCheckoutState
+// are engine internals; readOpenReceiveJsonResponse belongs to the main entry.
+assert(
+  browserInternal.CheckoutWatcher === undefined &&
+    browserInternal.refreshCheckoutState === undefined &&
+    browserInternal.readOpenReceiveJsonResponse === undefined,
+  "@openreceive/browser/internal: package-private engine names must stay off the subpath"
 );
 assert(
   typeof browserHeadless.createCheckoutState === "function" &&

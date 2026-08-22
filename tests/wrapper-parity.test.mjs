@@ -3,24 +3,33 @@
 // event surface. The drift it exists to catch (themeSwitcher vs themeToggle with
 // opposite defaults, two of six handlers promoted to props) was invisible to every
 // other test because no test ever compared the wrappers to each other.
+//
+// Since G7 the prop names live in ONE declaration
+// (packages/js/browser/src/internal/checkout-props.ts). React and Vue derive from
+// it, so for them this file guards the derivation; Svelte and Angular cannot
+// derive it, so for them it still guards a hand-written list.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   createOpenReceiveWrapperCheckoutShellBinding,
-  validateOpenReceiveWrapperCheckoutProps,
+  validateOpenReceiveCheckoutProps,
 } from "../packages/js/elements/src/wrapper-shared.ts";
 import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_DEFAULT_PREFIX,
-  resolveOrderUrlFromPrefix,
+  openReceiveRoutes,
 } from "../packages/js/browser/src/internal.ts";
 import { Checkout } from "../packages/js/react/src/index.ts";
 
 const PARITY_DOC = "docs/internal/wrapper-parity.md";
 const REACT_COMPONENT = "packages/js/react/src/checkout.ts";
+// The one declaration of the shared prop surface (G7). React and Vue derive
+// their props from it; Svelte and Angular restate the names because their prop
+// syntax is a declaration, not a type.
+const SHARED_PROPS_SOURCE = "packages/js/browser/src/internal/checkout-props.ts";
 const SOURCES = {
   react: "packages/js/react/src/types.ts",
   vue: "packages/js/vue/src/Checkout.vue",
@@ -40,7 +49,6 @@ const SHARED_PROPS = [
   "checkout",
   "orderId",
   "prefix",
-  "orderUrl",
   "paymentWizard",
   "decodeLinkUrl",
   "themeToggle",
@@ -56,12 +64,56 @@ function read(file) {
   return readFileSync(file, "utf8");
 }
 
-test("every wrapper declares the shared prop names from the parity table", () => {
+/** The named declaration's own text, so a prop on a neighbouring interface never counts. */
+function declaration(source, header) {
+  const start = source.indexOf(header);
+  assert.notEqual(start, -1, `${header} not found`);
+  const end = source.indexOf("\n}", start);
+  assert.notEqual(end, -1, `${header} is not closed`);
+  return source.slice(start, end);
+}
+
+test("the shared prop surface declares every prop in the parity table", () => {
   const doc = read(PARITY_DOC);
+  const shared = read(SHARED_PROPS_SOURCE);
   for (const prop of SHARED_PROPS) {
     assert.match(doc, new RegExp(`\`${prop}\``), `${prop} is missing from ${PARITY_DOC}`);
-    for (const [name, file] of Object.entries(SOURCES)) {
-      assert.match(read(file), new RegExp(`\\b${prop}\\??[:? ]`), `${name} is missing ${prop}`);
+    assert.match(
+      shared,
+      new RegExp(`readonly ${prop}\\?:`),
+      `${prop} is missing from ${SHARED_PROPS_SOURCE}`,
+    );
+  }
+});
+
+test("React and Vue derive the prop surface instead of restating it", () => {
+  // Two of the four copies this file used to police are gone: React's CheckoutProps
+  // extends the shared type, and Vue's defineProps IS the shared type. A shared prop
+  // re-declared in either is drift waiting to happen, so assert none comes back.
+  const reactProps = declaration(read(SOURCES.react), "export interface CheckoutProps");
+  assert.match(reactProps, /extends OpenReceiveCheckoutComponentProps/);
+  for (const prop of SHARED_PROPS) {
+    assert.doesNotMatch(reactProps, new RegExp(`readonly ${prop}\\?:`), `React restates ${prop}`);
+  }
+
+  const vue = read(SOURCES.vue);
+  assert.match(vue, /defineProps<OpenReceiveWrapperCheckoutComponentProps>\(\)/);
+  assert.doesNotMatch(vue, /defineProps<\{/, "Vue restates the prop surface inline");
+});
+
+test("Svelte and Angular restate the props, because their prop syntax cannot derive them", () => {
+  // `export let` and `@Input()` are declarations, not types: nothing can spread
+  // OpenReceiveWrapperCheckoutComponentProps into either. The duplication is forced
+  // (docs/internal/wrapper-parity.md says so, and both sources say why); this is
+  // what keeps it in step.
+  for (const [name, file] of Object.entries({ svelte: SOURCES.svelte, angular: SOURCES.angular })) {
+    const source = read(file);
+    for (const prop of SHARED_PROPS) {
+      assert.match(
+        source,
+        new RegExp(`(export let|@Input\\(\\)) ${prop}[?:]`),
+        `${name} is missing ${prop}`,
+      );
     }
   }
 });
@@ -124,7 +176,7 @@ test("the shared binding subscribes to every element event, including open-walle
 
 test("missing mode props fail at the boundary with one clear error", () => {
   assert.throws(
-    () => validateOpenReceiveWrapperCheckoutProps({ framework: "@openreceive/test" }),
+    () => validateOpenReceiveCheckoutProps({ framework: "@openreceive/test" }),
     /requires a checkout snapshot or an orderId/,
   );
   // The shared factory used to be the first thing to notice, throwing from inside a
@@ -148,18 +200,51 @@ test("create-mode props warn once per wrapper when passed in snapshot mode", () 
     warn: (message) => warnings.push(message),
   };
 
-  validateOpenReceiveWrapperCheckoutProps(props);
-  validateOpenReceiveWrapperCheckoutProps(props);
+  validateOpenReceiveCheckoutProps(props);
+  validateOpenReceiveCheckoutProps(props);
 
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /syncUrl/);
   assert.match(warnings[0], /snapshot mode/);
 });
 
+test("React runs its mode props through the same boundary check as the wrappers", () => {
+  // G6a: React used to carry its own CREATE_MODE_ONLY_PROPS list and its own warn
+  // function. PRODUCT CHANGE — the missing-mode failure is now the shared TypeError
+  // (it was a plain Error reading "<Checkout> requires ..."), and an empty-string
+  // orderId is rejected instead of quietly starting create mode with no order.
+  assert.throws(
+    () => Checkout({}),
+    (error) =>
+      error instanceof TypeError &&
+      /@openreceive\/react Checkout requires a checkout snapshot or an orderId/.test(error.message),
+  );
+  assert.throws(() => Checkout({ orderId: "" }), TypeError);
+
+  const snapshot = {
+    checkout_id: "or_chk_react_boundary",
+    order_id: "order-react-boundary",
+    status: "open",
+    amount_msats: 1000,
+    invoices: [],
+  };
+  const warnings = [];
+  const realConsole = globalThis.console;
+  globalThis.console = { ...realConsole, warn: (message) => warnings.push(message) };
+  try {
+    Checkout({ checkout: snapshot, syncUrl: true });
+  } finally {
+    globalThis.console = realConsole;
+  }
+
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /@openreceive\/react Checkout ignores syncUrl in snapshot mode/);
+});
+
 test("React snapshot mode with no prefix polls via the default prefix", () => {
   // The element defaults `prefix` to /openreceive in snapshot mode, so a bare
-  // <openreceive-checkout> polls out of the box. React used to derive `orderUrl`
-  // only when the caller supplied a prefix — a bare <Checkout checkout={snapshot}>
+  // <openreceive-checkout> polls out of the box. React used to derive its poll
+  // URL only when the caller supplied a prefix — a bare <Checkout checkout={snapshot}>
   // rendered but never polled. The dispatcher is a plain function, so calling it
   // exposes the props it hands the snapshot-mode wrapper.
   const snapshot = {
@@ -171,20 +256,10 @@ test("React snapshot mode with no prefix polls via the default prefix", () => {
   };
 
   const bare = Checkout({ checkout: snapshot });
-  assert.equal(
-    bare.props.orderUrl,
-    resolveOrderUrlFromPrefix(OPENRECEIVE_DEFAULT_PREFIX, snapshot.order_id),
-  );
+  assert.equal(bare.props.prefix, OPENRECEIVE_DEFAULT_PREFIX);
 
   const prefixed = Checkout({ checkout: snapshot, prefix: "/pay" });
-  assert.equal(prefixed.props.orderUrl, resolveOrderUrlFromPrefix("/pay", snapshot.order_id));
-
-  const explicit = Checkout({ checkout: snapshot, orderUrl: "/custom/payments/check" });
-  assert.equal(explicit.props.orderUrl, "/custom/payments/check");
-
-  // `orderUrl: false` still disables polling entirely (docs/internal/wrapper-parity.md).
-  const disabled = Checkout({ checkout: snapshot, orderUrl: false });
-  assert.equal(disabled.props.orderUrl, false);
+  assert.equal(prefixed.props.prefix, "/pay");
 });
 
 test("snapshot-mode polling defaults and knobs match the parity table", () => {
@@ -193,7 +268,7 @@ test("snapshot-mode polling defaults and knobs match the parity table", () => {
   // with prefix `/openreceive` (docs/internal/wrapper-parity.md `prefix` row).
   assert.equal(OPENRECEIVE_DEFAULT_PREFIX, "/openreceive");
   assert.equal(
-    resolveOrderUrlFromPrefix(OPENRECEIVE_DEFAULT_PREFIX),
+    openReceiveRoutes(OPENRECEIVE_DEFAULT_PREFIX).paymentsCheck,
     "/openreceive/payments/check",
   );
   assert.match(doc, /`\/openreceive`/, "the parity table must pin the /openreceive default");
@@ -206,20 +281,18 @@ test("snapshot-mode polling defaults and knobs match the parity table", () => {
     invoices: [],
   };
 
-  // The shared shell (vue/svelte/angular) emits no prefix/order-url attributes
-  // by default, so the element resolves the same documented /openreceive
-  // default at poll time (tests/wrapper-behavior.test.mjs proves that
-  // behaviorally through a real mount; tests/element-lifecycle.test.mjs covers
-  // the element itself).
+  // The shared shell (vue/svelte/angular) emits no prefix attribute by default,
+  // so the element resolves the same documented /openreceive default at poll
+  // time (tests/wrapper-behavior.test.mjs proves that behaviorally through a
+  // real mount; tests/element-lifecycle.test.mjs covers the element itself).
   const shell = createOpenReceiveWrapperCheckoutShellBinding(snapshot, {});
   assert.equal(
     shell.checkout.attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix],
     undefined,
   );
-  assert.equal(
-    shell.checkout.attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl],
-    undefined,
-  );
+  // `prefix` is the only URL attribute the element has (G5): there is no
+  // per-route override to leak.
+  assert.equal(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl, undefined);
 
   // The polling knobs thread through shell options into the element attributes
   // the parity table names (`polling` / `pollIntervalMs`, wired via `options`

@@ -6,6 +6,7 @@ import type {
   CheckoutStatusRefresh,
   OpenReceiveBrowserLogContext,
   OpenReceiveBrowserLoggerOption,
+  OpenReceiveCheckoutComponentProps,
   OpenReceiveCheckoutPaymentMethod,
   OpenReceiveQrEncoder,
   OpenReceiveResolvedTheme,
@@ -16,34 +17,6 @@ import type {
 
 export interface CheckoutData {
   readonly checkout: CheckoutSnapshot;
-}
-
-/**
- * Create-mode inputs. Pass an `orderId` (and optionally a mount `prefix`, defaulting to
- * `/openreceive`) instead of a `checkout` snapshot and the component owns the whole
- * lifecycle: it creates the checkout against `${prefix}/checkouts`, then polls
- * `${prefix}/payments/check`. Later requests carry `order_id` and the displayed
- * `payment_hash`; the host remains
- * responsible for authorization, order display, and routing.
- */
-export interface CheckoutCreateOptions {
-  readonly orderId?: string;
-  readonly prefix?: string;
-  readonly metadata?: Record<string, unknown>;
-  readonly createFetch?: typeof globalThis.fetch;
-  /**
-   * Opt into History API URL sync to `{resumePathPrefix}/{orderId}` (default `/checkout/:id`).
-   * Off by default — many hosts own routing or other state themselves. Skipped when
-   * `routeOrderId` is set.
-   */
-  readonly syncUrl?: boolean;
-  /** History API path prefix when `syncUrl` is set. Default `/checkout`. */
-  readonly resumePathPrefix?: string;
-  /**
-   * Order id from the app router (e.g. Next.js). When set, Checkout does not push/replace
-   * the URL via the History API.
-   */
-  readonly routeOrderId?: string;
 }
 
 /**
@@ -85,7 +58,12 @@ export interface UseCheckoutOptions
   readonly open?: (uri: string) => void;
   readonly logger?: OpenReceiveBrowserLoggerOption;
   readonly refreshStatus?: CheckoutStatusRefresh;
-  readonly orderUrl?: string | false;
+  /**
+   * Base path the shipped router is mounted at; the hook polls
+   * `${prefix}/payments/check`. Omitted, the hook renders the snapshot without
+   * polling — there is nowhere to poll.
+   */
+  readonly prefix?: string;
   readonly polling?: boolean;
   readonly pollIntervalMs?: number;
 }
@@ -190,28 +168,29 @@ export interface CheckoutComponents {
 export type CheckoutChildren = React.ReactNode | ((model: UseCheckoutResult) => React.ReactNode);
 
 export interface CheckoutProps
-  extends Partial<CheckoutData>,
-    CheckoutCreateOptions,
+  // The shared checkout prop surface, DERIVED not restated: prop names, types,
+  // and per-mode applicability live once in @openreceive/browser
+  // (docs/internal/wrapper-parity.md). Everything after it is React doing what
+  // the element cannot — component slots, class-name slots, render-prop
+  // children.
+  extends OpenReceiveCheckoutComponentProps,
     CheckoutEventHandlers,
     // Omit the RDFa `prefix` attribute from HTMLAttributes so our create-mode `prefix` wins.
     // The DOM copy/error handlers are replaced by the OpenReceive ones above.
     Omit<React.HTMLAttributes<HTMLElement>, "children" | "prefix" | "onCopy" | "onError"> {
-  readonly qrEncoder?: OpenReceiveQrEncoder;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
   /**
-   * Base URL of an external bolt11 decoder. Omitted (the default), no "Decode" link is
-   * rendered and the invoice is never sent to a third party.
+   * Create mode (`orderId`, no `checkout`): the component creates the checkout against
+   * `${prefix}/checkouts`, then polls `${prefix}/payments/check`. Later requests carry
+   * `order_id` and the displayed `payment_hash`; the host remains responsible for
+   * authorization, order display, and routing. This fetch makes those create calls.
    */
-  readonly decodeLinkUrl?: string;
-  readonly refreshStatus?: CheckoutStatusRefresh;
-  readonly orderUrl?: string | false;
+  readonly createFetch?: typeof globalThis.fetch;
+  /** `false` turns status polling off entirely. */
   readonly polling?: boolean;
   readonly pollIntervalMs?: number;
-  readonly paymentWizard?: boolean;
-  /** Default true: the checkout owns `data-theme` and renders the package theme toggle. */
-  readonly themeToggle?: boolean;
-  readonly defaultTheme?: OpenReceiveThemePreference;
-  readonly storageKey?: string;
+  readonly qrEncoder?: OpenReceiveQrEncoder;
+  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly refreshStatus?: CheckoutStatusRefresh;
   readonly components?: CheckoutComponents;
   readonly classNames?: CheckoutClassNames;
   readonly children?: CheckoutChildren;
@@ -269,7 +248,12 @@ export interface PaymentWizardProps {
   readonly className?: string;
   readonly logger?: OpenReceiveBrowserLoggerOption;
   readonly logContext?: OpenReceiveBrowserLogContext;
-  readonly orderUrl?: string | false;
+  /**
+   * Base path the shipped router is mounted at; the swap quote, start and refund
+   * routes are derived from it. Omitted, the wizard has no swap backend and
+   * shows the method grid only — which is what a standalone wizard wants.
+   */
+  readonly prefix?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly qrEncoder?: OpenReceiveQrEncoder;

@@ -3,56 +3,29 @@ import { computed, onMounted, ref } from "vue";
 import {
   createOpenReceiveWrapperCheckoutShellBinding,
   defineOpenReceiveElements,
-  validateOpenReceiveWrapperCheckoutProps,
-  type CheckoutShellOptions,
-  type CheckoutSnapshot,
-  type OpenReceiveThemePreference,
+  validateOpenReceiveCheckoutProps,
+  type OpenReceiveWrapperCheckoutComponentProps,
 } from "./index.js";
 
 defineOptions({
   name: "Checkout",
 });
 
-// Prop names, defaults, and per-mode applicability are the shared contract in
-// docs/internal/wrapper-parity.md. Keep this list in step with it.
-const props = withDefaults(
-  defineProps<{
-    // Snapshot mode: pass a `checkout` to render it directly.
-    // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
-    // <openreceive-checkout> element creates the checkout, then renders and polls itself.
-    checkout?: CheckoutSnapshot;
-    orderId?: string;
-    prefix?: string;
-    orderUrl?: string;
-    paymentWizard?: boolean;
-    decodeLinkUrl?: string;
-    themeToggle?: boolean;
-    defaultTheme?: OpenReceiveThemePreference;
-    storageKey?: string;
-    // Create mode only.
-    metadata?: Record<string, unknown>;
-    syncUrl?: boolean;
-    resumePathPrefix?: string;
-    routeOrderId?: string;
-    onCopy?: (event: Event) => void;
-    onOpenWallet?: (event: Event) => void;
-    onState?: (event: Event) => void;
-    onSettled?: (event: Event) => void;
-    onProviderCopy?: (event: Event) => void;
-    onStartOver?: (event: Event) => void;
-    onError?: (event: Event) => void;
-    options?: CheckoutShellOptions;
-  }>(),
-  {
-    options: () => ({}),
-    // Explicit undefined defaults suppress Vue's absent-Boolean-prop-to-false
-    // coercion: an unbound boolean prop must stay undefined so the
-    // `?? options.* ?? default` chains below see "not set", not "false".
-    paymentWizard: undefined,
-    themeToggle: undefined,
-    syncUrl: undefined,
-  },
-);
+// The props are DERIVED from the shared wrapper surface, not restated: prop
+// names, types, and per-mode applicability live once in
+// @openreceive/elements/wrapper-shared (snapshot mode = `checkout`, create mode
+// = `orderId` + optional `prefix`), and docs/internal/wrapper-parity.md is the
+// human-readable contract. `withDefaults` still spells the defaults out — a
+// type carries none.
+const props = withDefaults(defineProps<OpenReceiveWrapperCheckoutComponentProps>(), {
+  options: () => ({}),
+  // Explicit undefined defaults suppress Vue's absent-Boolean-prop-to-false
+  // coercion: an unbound boolean prop must stay undefined so the
+  // `?? options.* ?? default` chains below see "not set", not "false".
+  paymentWizard: undefined,
+  themeToggle: undefined,
+  syncUrl: undefined,
+});
 
 // Storage and matchMedia only exist in the browser: resolving the theme before mount
 // would make a server-rendered shell disagree with the first client render.
@@ -63,7 +36,7 @@ onMounted(() => {
 });
 
 const shell = computed(() => {
-  validateOpenReceiveWrapperCheckoutProps({
+  validateOpenReceiveCheckoutProps({
     framework: "@openreceive/vue",
     checkout: props.checkout,
     orderId: props.orderId,
@@ -78,7 +51,6 @@ const shell = computed(() => {
     deferThemeResolution: !mounted.value,
     ...(props.orderId === undefined ? {} : { orderId: props.orderId }),
     ...(props.prefix === undefined ? {} : { prefix: props.prefix }),
-    ...(props.orderUrl === undefined ? {} : { orderUrl: props.orderUrl }),
     ...(props.paymentWizard === undefined ? {} : { paymentWizard: props.paymentWizard }),
     ...(props.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: props.decodeLinkUrl }),
     ...(props.defaultTheme === undefined ? {} : { defaultTheme: props.defaultTheme }),
