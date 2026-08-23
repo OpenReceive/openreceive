@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/http",
-  "version": "0.1.1",
+  "version": "0.2.0-alpha.0",
   "description": "Framework-neutral HTTP handler for OpenReceive checkout: Web Request/Response routing, host integration, and payment-attempt persistence.",
   "keywords": [
     "bitcoin",
@@ -17,8 +17,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/core": "0.1.1",
-    "@openreceive/node": "0.1.1"
+    "@openreceive/core": "0.2.0-alpha.0",
+    "@openreceive/node": "0.2.0-alpha.0"
   },
   "exports": {
     ".": {

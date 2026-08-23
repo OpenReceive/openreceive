@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.2.0-alpha.0 - Unreleased
+
 The Ruby gems release in lockstep with the npm workspace version. The full
 release narrative lives in the repository-root
 [CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md);

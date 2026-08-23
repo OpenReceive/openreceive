@@ -14,17 +14,18 @@ closed when the code can spend. Custody, freezing, and reversal are properties
 of the [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments)
 and swap provider you choose — not of this library.
 
-**Optionally Swap In Payments From Other Currencies:**
-
-<img src="packages/js/browser/src/assets/icons/usdt.svg" alt="USDT" width="36">
-<img src="packages/js/browser/src/assets/icons/usdc.svg" alt="USDC" width="36">
-<img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="36">
-<img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="36">
+**Optionally swap in payments from other currencies.**
 
 Not every customer holds Bitcoin. Configure any swap provider that implements
-the [FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs), and
-your customers can pay in USDT, USDC, ETH, SOL, and more — each is instantly converted into
-Bitcoin on the way in.
+the [FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs) and
+checkout offers these pay-in routes, each converted into Bitcoin on the way in:
+
+| Pay with | On network |
+| --- | --- |
+| <img src="packages/js/browser/src/assets/icons/usdt.svg" alt="USDT" width="28"> &nbsp;**USDT** (Tether) | <img src="packages/js/browser/src/assets/icons/trx.svg" alt="Tron" width="18"> Tron &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
+| <img src="packages/js/browser/src/assets/icons/usdc.svg" alt="USDC" width="28"> &nbsp;**USDC** (USD Coin) | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
+| <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana) | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana |
+| <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether) | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
 
 OpenReceive does not transmit money or hold customer funds. It helps your
 backend create invoices and verify settlement — nothing more.
@@ -49,10 +50,8 @@ Every checkout ends at the same settlement primitive: a Lightning invoice paid
 into the merchant wallet.
 
 - **Bitcoin Lightning** — direct BOLT11 payment with no swap provider.
-- **USDT** — automated pay-in routes on Tron, Solana, and Ethereum.
-- **USDC** — automated pay-in routes on Solana and Ethereum.
-- **SOL** — automated pay-in on Solana.
-- **ETH** — automated pay-in on Ethereum.
+- **Swap routes** — every coin/network pair in the table above, quoted and
+  converted to Lightning by the configured swap provider.
 
 Swap options appear only when a compatible provider is configured and returns
 a usable quote. Actual availability, minimums, fees, liquidity, and regional
