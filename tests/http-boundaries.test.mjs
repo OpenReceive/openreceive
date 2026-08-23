@@ -4,7 +4,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
-import { createHttpHandler, createHost, hostError } from "../packages/js/http/src/index.ts";
+import {
+  createHttpHandler,
+  createHost,
+  hostError,
+} from "../packages/js/http/src/index.ts";
 import { paymentInsert } from "../packages/js/http/src/payment-repository.ts";
 import {
   createTestkitReceiveClient,
@@ -42,7 +46,9 @@ function testHost({
             expiresAt: input.checkout.expiresAt,
             createdAt: input.checkout.createdAt,
             checkout: input.checkout,
-            ...(input.swapData === undefined ? {} : { swapData: input.swapData }),
+            ...(input.swapData === undefined
+              ? {}
+              : { swapData: input.swapData }),
           })),
       commitAttempt: record,
       listReconcilableAttempts: async () =>
@@ -65,7 +71,9 @@ function testHost({
 // runner, and no bundled driver — the pg / SQLite adapters are duck-typed.
 test("@openreceive/http never opens its own database connection or reads storage env", () => {
   const sourceDir = "packages/js/http/src";
-  for (const filename of readdirSync(sourceDir).filter((name) => name.endsWith(".ts"))) {
+  for (const filename of readdirSync(sourceDir).filter((name) =>
+    name.endsWith(".ts"),
+  )) {
     const source = readFileSync(`${sourceDir}/${filename}`, "utf8");
     assert.doesNotMatch(
       source,
@@ -96,8 +104,11 @@ test("@openreceive/http never opens its own database connection or reads storage
 });
 
 test("@openreceive/http declares no database, Redis, or migration-runner dependency", () => {
-  const manifest = JSON.parse(readFileSync("packages/js/http/package.json", "utf8"));
-  const banned = /^(pg|pg-.*|better-sqlite3|sqlite3|redis|ioredis|knex|typeorm|prisma|.*-migrate)$/;
+  const manifest = JSON.parse(
+    readFileSync("packages/js/http/package.json", "utf8"),
+  );
+  const banned =
+    /^(pg|pg-.*|better-sqlite3|sqlite3|redis|ioredis|knex|typeorm|prisma|.*-migrate)$/;
   for (const section of [
     "dependencies",
     "devDependencies",
@@ -129,17 +140,23 @@ const SPEC_ROUTE_KINDS = {
 function handlerRouteBodyFields() {
   const source = readFileSync("packages/js/http/src/http-request.ts", "utf8");
   const table =
-    /const ROUTE_BODY_FIELDS: Record<string, readonly string\[\]> = \{([\s\S]*?)\n\};/.exec(source);
+    /const ROUTE_BODY_FIELDS: Record<string, readonly string\[\]> = \{([\s\S]*?)\n\};/.exec(
+      source,
+    );
   assert.ok(table !== null, "http-request.ts must declare ROUTE_BODY_FIELDS");
   const fields = {};
-  for (const [, kind, list] of table[1].matchAll(/"([\w.]+)":\s*\[([^\]]*)\]/g)) {
+  for (const [, kind, list] of table[1].matchAll(
+    /"([\w.]+)":\s*\[([^\]]*)\]/g,
+  )) {
     fields[kind] = [...list.matchAll(/"([^"]+)"/g)].map(([, name]) => name);
   }
   return fields;
 }
 
 test("the handler's per-route field whitelist matches the OpenAPI request schemas", () => {
-  const spec = parseYaml(readFileSync("spec/openapi/openreceive-http.v1.yaml", "utf8"));
+  const spec = parseYaml(
+    readFileSync("spec/openapi/openreceive-http.v1.yaml", "utf8"),
+  );
   const fields = handlerRouteBodyFields();
   const seen = [];
   for (const operation of Object.values(spec.paths)) {
@@ -153,7 +170,10 @@ test("the handler's per-route field whitelist matches the OpenAPI request schema
     seen.push(routeKind);
     let schema = post.requestBody.content["application/json"].schema;
     if (schema.$ref !== undefined) {
-      schema = spec.components.schemas[schema.$ref.replace("#/components/schemas/", "")];
+      schema =
+        spec.components.schemas[
+          schema.$ref.replace("#/components/schemas/", "")
+        ];
     }
     assert.equal(
       schema.additionalProperties,
@@ -210,7 +230,10 @@ test("HTTP commits payment hash before returning payer instructions", async () =
   assert.equal(committed[0].paymentHash, body.checkout.payment_hash);
   assert.equal(body.order_access_token, undefined);
 
-  wallet.settleInvoice({ payment_hash: body.checkout.payment_hash }, { settled_at: 1010 });
+  wallet.settleInvoice(
+    { payment_hash: body.checkout.payment_hash },
+    { settled_at: 1010 },
+  );
   const checked = await handler(
     new Request("http://test/openreceive/payments/check", {
       method: "POST",
@@ -319,7 +342,10 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
         amount: { sats: 10 },
         ...(committed === undefined
           ? {}
-          : { paymentHash: committed.paymentHash, checkout: committed.checkout }),
+          : {
+              paymentHash: committed.paymentHash,
+              checkout: committed.checkout,
+            }),
       }),
       onCheckoutCreated: (payment) => {
         committed = payment;
@@ -340,8 +366,13 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
     (await second.json()).checkout.payment_hash,
   );
   assert.equal(
-    (await wallet.listTransactions({ type: "incoming", unpaid: true, limit: 20 })).transactions
-      .length,
+    (
+      await wallet.listTransactions({
+        type: "incoming",
+        unpaid: true,
+        limit: 20,
+      })
+    ).transactions.length,
     1,
   );
 });
@@ -425,8 +456,13 @@ test("concurrent host-row loser receives no payer instructions", async () => {
       ),
     ),
   );
-  assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
-  const loser = await responses.find((response) => response.status === 409).json();
+  assert.deepEqual(
+    responses.map((response) => response.status).sort(),
+    [201, 409],
+  );
+  const loser = await responses
+    .find((response) => response.status === 409)
+    .json();
   assert.equal(loser.checkout, undefined);
   assert.match(loser.message, /live payment attempt/);
 });
@@ -483,7 +519,8 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
   assert.ok(checkedBody.payment_methods.length > 0);
   assert.ok(
     checkedBody.payment_methods.some(
-      (method) => method.pay_in_asset === "USDT_TRON" && method.provider === "fixedfloat",
+      (method) =>
+        method.pay_in_asset === "USDT_TRON" && method.provider === "fixedfloat",
     ),
   );
   assert.equal(provider.catalogCalls, 1);
@@ -502,8 +539,15 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
   );
   assert.equal(polled.status, 200);
   const polledBody = await polled.json();
-  assert.ok(polledBody.payment_methods.length > 0, "cached payment_methods stay present");
-  assert.equal(provider.catalogCalls, 1, "a repeat poll must not re-walk the catalog");
+  assert.ok(
+    polledBody.payment_methods.length > 0,
+    "cached payment_methods stay present",
+  );
+  assert.equal(
+    provider.catalogCalls,
+    1,
+    "a repeat poll must not re-walk the catalog",
+  );
 });
 
 test("HTTP swap retry reuses host-committed hash/data without exposing provider state", async () => {
@@ -543,7 +587,10 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   const request = () =>
     new Request("http://test/openreceive/swaps", {
       method: "POST",
-      body: JSON.stringify({ reference: "swap-http", pay_in_asset: "USDT_TRON" }),
+      body: JSON.stringify({
+        reference: "swap-http",
+        pay_in_asset: "USDT_TRON",
+      }),
     });
   const first = await handler(request());
   const second = await handler(request());
@@ -557,8 +604,13 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   assert.equal(secondBody.swap.payment_hash, hostPaymentHash);
   assert.equal(commits, 1);
   assert.equal(
-    (await wallet.listTransactions({ type: "incoming", unpaid: true, limit: 20 })).transactions
-      .length,
+    (
+      await wallet.listTransactions({
+        type: "incoming",
+        unpaid: true,
+        limit: 20,
+      })
+    ).transactions.length,
     1,
   );
 
@@ -566,7 +618,10 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   const statusResponse = await handler(
     new Request("http://test/openreceive/swaps/status", {
       method: "POST",
-      body: JSON.stringify({ reference: "swap-http", payment_hash: hostPaymentHash }),
+      body: JSON.stringify({
+        reference: "swap-http",
+        payment_hash: hostPaymentHash,
+      }),
     }),
   );
   assert.equal(statusResponse.status, 200);
@@ -596,8 +651,11 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
 const GOLDEN_PLACEHOLDERS = {
   "<request_id>": (value) =>
     typeof value === "string" &&
-    /^req_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value),
-  "<payment_hash>": (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value),
+    /^req_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      value,
+    ),
+  "<payment_hash>": (value) =>
+    typeof value === "string" && /^[0-9a-f]{64}$/.test(value),
   "<bolt11>": (value) => typeof value === "string" && value.startsWith("ln"),
   "<unix_seconds>": (value) => Number.isInteger(value) && value >= 0,
 };
@@ -684,7 +742,9 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       makeInvoice: async () => {
         throw new Error("the settled_check golden handler mints nothing");
       },
-      listTransactions: async () => ({ transactions: [SETTLED_GOLDEN_TRANSACTION] }),
+      listTransactions: async () => ({
+        transactions: [SETTLED_GOLDEN_TRANSACTION],
+      }),
     },
     clock: () => 1000,
   });
@@ -720,34 +780,56 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
     }),
   };
   for (const filename of readdirSync("spec/test-vectors/http-golden").sort()) {
-    const vector = JSON.parse(readFileSync(`spec/test-vectors/http-golden/${filename}`, "utf8"));
+    const vector = JSON.parse(
+      readFileSync(`spec/test-vectors/http-golden/${filename}`, "utf8"),
+    );
     assert.equal(vector.schema_version, 2, `${filename}: schema_version`);
     const handlerName = vector.handler ?? "default";
     const handler = handlers[handlerName];
-    assert.ok(handler !== undefined, `${filename}: no golden handler named "${handlerName}"`);
+    assert.ok(
+      handler !== undefined,
+      `${filename}: no golden handler named "${handlerName}"`,
+    );
     const response = await handler(
       new Request(`http://test${vector.request.path}`, {
         method: vector.request.method,
+        // The content-type gate is the CSRF-equivalent on body-bearing routes;
+        // vectors default to the contract type and opt out to test the refusal.
+        headers: {
+          "content-type": vector.request.content_type ?? "application/json",
+        },
         // `body_bytes` synthesizes an oversized raw body so the vector does not
         // have to inline 64KB of JSON.
         ...(vector.request.body_bytes === undefined
           ? {}
           : { body: "x".repeat(vector.request.body_bytes) }),
-        ...(vector.request.body === undefined ? {} : { body: JSON.stringify(vector.request.body) }),
+        ...(vector.request.body === undefined
+          ? {}
+          : { body: JSON.stringify(vector.request.body) }),
       }),
     );
     assert.equal(response.status, vector.expected.status, vector.name);
     for (const [name, value] of Object.entries(vector.expected.headers ?? {})) {
-      assertGoldenValue(response.headers.get(name), value, `${vector.name}: header ${name}`);
+      assertGoldenValue(
+        response.headers.get(name),
+        value,
+        `${vector.name}: header ${name}`,
+      );
     }
     // The whole wire body, not a code sample: an extra or missing field in
     // either engine fails the run.
-    assertGoldenValue(await response.json(), vector.expected.body, `${vector.name}: body`);
+    assertGoldenValue(
+      await response.json(),
+      vector.expected.body,
+      `${vector.name}: body`,
+    );
   }
 });
 
 test("a host resolver returning a malformed payment hash is a 500 host bug, not a payer 400", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   for (const hostHash of [undefined, "not-a-hash"]) {
     const handler = createHttpHandler({
       service,
@@ -763,7 +845,10 @@ test("a host resolver returning a malformed payment hash is a 500 host bug, not 
     const response = await handler(
       new Request("http://test/openreceive/payments/check", {
         method: "POST",
-        body: JSON.stringify({ reference: "order-host-bug", payment_hash: "c".repeat(64) }),
+        body: JSON.stringify({
+          reference: "order-host-bug",
+          payment_hash: "c".repeat(64),
+        }),
       }),
     );
     assert.equal(response.status, 500);
@@ -831,7 +916,9 @@ test("handler called without extras leaves the authorize context native undefine
 });
 
 test("the wire contract is snake_case only: camelCase aliases are rejected", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   const handler = createHttpHandler({
     service,
     authorize: () => true,
@@ -843,17 +930,25 @@ test("the wire contract is snake_case only: camelCase aliases are rejected", asy
   const response = await handler(
     new Request("http://test/openreceive/payments/check", {
       method: "POST",
-      body: JSON.stringify({ reference: "order-camel", paymentHash: "a".repeat(64) }),
+      body: JSON.stringify({
+        reference: "order-camel",
+        paymentHash: "a".repeat(64),
+      }),
     }),
   );
   assert.equal(response.status, 400);
   const body = await response.json();
   assert.equal(body.code, "INVALID_REQUEST");
-  assert.match(body.message, /Unexpected request field|payment_hash is required/);
+  assert.match(
+    body.message,
+    /Unexpected request field|payment_hash is required/,
+  );
 });
 
 test("undeclared request fields are rejected, including payment_hash on create", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   const handler = createHttpHandler({
     service,
     authorize: () => true,
@@ -867,21 +962,29 @@ test("undeclared request fields are rejected, including payment_hash on create",
   const hinted = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ reference: "order-hint", payment_hash: "a".repeat(64) }),
+      body: JSON.stringify({
+        reference: "order-hint",
+        payment_hash: "a".repeat(64),
+      }),
     }),
   );
   assert.equal(hinted.status, 400);
   const stray = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ reference: "order-stray", description_hash: "b".repeat(64) }),
+      body: JSON.stringify({
+        reference: "order-stray",
+        description_hash: "b".repeat(64),
+      }),
     }),
   );
   assert.equal(stray.status, 400);
 });
 
 test("declared length caps are enforced (reference 200, memo 500)", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   const handler = createHttpHandler({
     service,
     authorize: () => true,
@@ -907,7 +1010,9 @@ test("declared length caps are enforced (reference 200, memo 500)", async () => 
 });
 
 test("oversized request bodies are rejected 413 before authorize runs", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   let authorized = 0;
   const handler = createHttpHandler({
     service,
@@ -923,7 +1028,10 @@ test("oversized request bodies are rejected 413 before authorize runs", async ()
   const response = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ reference: "order-big", metadata: { pad: "x".repeat(70_000) } }),
+      body: JSON.stringify({
+        reference: "order-big",
+        metadata: { pad: "x".repeat(70_000) },
+      }),
     }),
   );
   assert.equal(response.status, 413);
@@ -931,7 +1039,9 @@ test("oversized request bodies are rejected 413 before authorize runs", async ()
 });
 
 test("create routes reject payer-supplied amounts", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   const handler = createHttpHandler({
     service,
     authorize: () => true,
@@ -960,8 +1070,72 @@ test("create routes reject payer-supplied amounts", async () => {
   }
 });
 
+test("a forged form body is refused before authorize, the CSRF-equivalent on cookie mounts", async () => {
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
+  let authorized = 0;
+  const handler = createHttpHandler({
+    service,
+    authorize: () => {
+      authorized += 1;
+      return true;
+    },
+    host: testHost({
+      resolveCheckout: () => ({ amount: { sats: 1 } }),
+      onCheckoutCreated: () => {},
+    }),
+  });
+  // A cross-site HTML form cannot set application/json; the field names/values
+  // are crafted so the concatenation parses as JSON if read raw. The gate must
+  // refuse on the header alone, before authorize ever sees the victim's cookies.
+  const forged = 'reference={"x":"1"&amount_msats=1&pad="}';
+  for (const contentType of [
+    "application/x-www-form-urlencoded",
+    "text/plain",
+    "multipart/form-data; boundary=x",
+    undefined,
+  ]) {
+    const response = await handler(
+      new Request("http://test/openreceive/checkouts", {
+        method: "POST",
+        headers:
+          contentType === undefined ? {} : { "content-type": contentType },
+        body: forged,
+      }),
+    );
+    assert.equal(
+      response.status,
+      415,
+      `content-type: ${contentType ?? "(absent)"}`,
+    );
+    assert.equal(
+      (await response.json()).message,
+      "Request content type must be application/json.",
+    );
+  }
+  assert.equal(
+    authorized,
+    0,
+    "authorize must not run for a non-JSON content type",
+  );
+
+  // A real browser checkout client sends the contract type (charset tolerated).
+  const ok = await handler(
+    new Request("http://test/openreceive/checkouts", {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ reference: "order-json" }),
+    }),
+  );
+  assert.equal(ok.status, 201);
+  assert.equal(authorized, 1);
+});
+
 test("a chunked body is capped mid-stream, before authorize and before it is buffered", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   let authorized = 0;
   const handler = createHttpHandler({
     service,
@@ -998,7 +1172,10 @@ test("a chunked body is capped mid-stream, before authorize and before it is buf
   );
   assert.equal(response.status, 413);
   assert.equal(authorized, 0);
-  assert.ok(produced <= 16, `expected the read to stop at the cap, got ${produced} chunks`);
+  assert.ok(
+    produced <= 16,
+    `expected the read to stop at the cap, got ${produced} chunks`,
+  );
 });
 
 test("wallet failures keep their code and map to 502/503, never a generic 500", async () => {
@@ -1008,7 +1185,10 @@ test("wallet failures keep their code and map to 502/503, never a generic 500", 
   ];
   for (const expected of cases) {
     const wallet = createTestkitReceiveClient({ now: () => 1000 });
-    const service = await createOpenReceive({ client: wallet, clock: () => 1000 });
+    const service = await createOpenReceive({
+      client: wallet,
+      clock: () => 1000,
+    });
     wallet.makeInvoice = async () => {
       throw new OpenReceiveError({
         code: expected.code,
@@ -1038,7 +1218,9 @@ test("wallet failures keep their code and map to 502/503, never a generic 500", 
 });
 
 test("GET /rates rejects malformed currencies as input, not as a rates outage", async () => {
-  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient(),
+  });
   const handler = createHttpHandler({
     service,
     authorize: () => true,
@@ -1047,8 +1229,14 @@ test("GET /rates rejects malformed currencies as input, not as a rates outage", 
       onCheckoutCreated: () => {},
     }),
   });
-  for (const query of ["?currencies=", "?currencies=,,", "?currencies=US%20Dollar"]) {
-    const response = await handler(new Request(`http://test/openreceive/rates${query}`));
+  for (const query of [
+    "?currencies=",
+    "?currencies=,,",
+    "?currencies=US%20Dollar",
+  ]) {
+    const response = await handler(
+      new Request(`http://test/openreceive/rates${query}`),
+    );
     assert.equal(response.status, 400, query);
     const body = await response.json();
     assert.equal(body.code, "INVALID_REQUEST");
@@ -1099,7 +1287,11 @@ test("a wallet that ignores unpaid:true never flaps a live attempt to not_found"
       }),
       onCheckoutCreated: () => {},
       seededAttempts: [
-        { reference: checkout.reference, paymentHash: checkout.paymentHash, checkout },
+        {
+          reference: checkout.reference,
+          paymentHash: checkout.paymentHash,
+          checkout,
+        },
       ],
     }),
   });

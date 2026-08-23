@@ -715,6 +715,49 @@ class StorageFreeServerTest < Minitest::Test
     assert_empty calls, "host hooks must not run for a malformed payment_hash"
   end
 
+  # A cross-site HTML form cannot set application/json, so its body is refused
+  # on the content-type header alone, before authorize runs — the
+  # CSRF-equivalent on cookie-authenticated mounts (mirrors the JS handler).
+  def test_forged_form_body_is_refused_before_authorize
+    authorized = 0
+    handler = OpenReceive::Server::RequestHandler.new(
+      service: @service,
+      authorize: lambda do |_context|
+        authorized += 1
+        true
+      end,
+      resolve_checkout: ->(**_context) { { "amount" => { "sats" => 1 } } },
+      on_checkout_created: ->(**_payment) {},
+      on_paid: ->(_payment) {}
+    )
+    # Field names/values crafted so the urlencoded concatenation parses as JSON
+    # if the raw body were read without checking the declared content type.
+    forged = 'reference={"x":"1"&amount_msats=1&pad="}'
+    [
+      "application/x-www-form-urlencoded",
+      "text/plain",
+      "multipart/form-data; boundary=x",
+      nil
+    ].each do |content_type|
+      request = content_type.nil? ? {} : { "CONTENT_TYPE" => content_type }
+      status, _headers, body = handler.create_checkout(
+        raw_body: forged, request: request, request_id: "req-forged"
+      )
+      assert_equal 415, status, "content-type: #{content_type || '(absent)'}"
+      assert_equal "Request content type must be application/json.", body.fetch("message")
+    end
+    assert_equal 0, authorized, "authorize must not run for a non-JSON content type"
+
+    # A real checkout client sends the contract type (charset tolerated).
+    status, = handler.create_checkout(
+      raw_body: JSON.generate("reference" => "ruby-json"),
+      request: { "CONTENT_TYPE" => "application/json; charset=utf-8" },
+      request_id: "req-json"
+    )
+    assert_equal 201, status
+    assert_equal 1, authorized
+  end
+
   def build_rack_app
     OpenReceive::Server::RackApp.new(
       service: @service,
@@ -1141,6 +1184,9 @@ class StorageFreeServerTest < Minitest::Test
         "REQUEST_METHOD" => request.fetch("method"),
         "PATH_INFO" => request.fetch("path"),
         "QUERY_STRING" => "",
+        # The content-type gate is the CSRF-equivalent on body-bearing routes;
+        # vectors default to the contract type and opt out to test the refusal.
+        "CONTENT_TYPE" => request.fetch("content_type", "application/json"),
         # `body_bytes` synthesizes an oversized raw body so the vector does not
         # have to inline 64KB of JSON.
         "rack.input" => StringIO.new(golden_request_body(request))

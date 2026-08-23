@@ -20,7 +20,9 @@ app.use(
       },
     },
     amountFor: (reference) => orders.find(reference)?.amount ?? null, // null → 404
-    authorize: ({ native, resource }) =>
+    // Same Authorize callback everywhere: (context) => boolean | Promise<boolean>.
+    // `native` is the Express req (req.session); `request` is the Web Request.
+    authorize: ({ action, request, resource, native }) =>
       orders.ownedBy(
         (native as { session?: { userId?: string } }).session?.userId,
         resource.reference,

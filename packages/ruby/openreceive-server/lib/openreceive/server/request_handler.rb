@@ -45,7 +45,7 @@ module OpenReceive
 
       def prepare_checkout(raw_body:, request:, request_id:)
         handle(request_id) do
-          body = parse(raw_body, "checkout.prepare")
+          body = parse(raw_body, "checkout.prepare", request: request)
           reference = required_reference(body)
           reject_payer_amount(body)
           guard("checkout.prepare", request, { reference: reference })
@@ -57,7 +57,7 @@ module OpenReceive
 
       def create_checkout(raw_body:, request:, request_id:)
         handle(request_id) do
-          body = parse(raw_body, "checkout.create")
+          body = parse(raw_body, "checkout.create", request: request)
           reference = required_reference(body)
           reject_payer_amount(body)
           authorize!("checkout.create", request, { reference: reference })
@@ -92,7 +92,7 @@ module OpenReceive
       # wallet check.
       def check_payment(raw_body:, request:, request_id:, reconcile_pass: nil, attempt_status: nil)
         handle(request_id) do
-          body = parse(raw_body, "payment.check")
+          body = parse(raw_body, "payment.check", request: request)
           reference = required_reference(body)
           # Payer input is shape-validated BEFORE any host hook runs (mirrors
           # JS): guard/resolve never see an un-vetted selector.
@@ -118,7 +118,7 @@ module OpenReceive
 
       def quote_swap(raw_body:, request:, request_id:)
         handle(request_id) do
-          body = parse(raw_body, "swap.quote")
+          body = parse(raw_body, "swap.quote", request: request)
           reference = required_reference(body)
           reject_payer_amount(body)
           asset = required(body["pay_in_asset"], "pay_in_asset")
@@ -130,7 +130,7 @@ module OpenReceive
 
       def create_swap(raw_body:, request:, request_id:)
         handle(request_id) do
-          body = parse(raw_body, "swap.create")
+          body = parse(raw_body, "swap.create", request: request)
           reference = required_reference(body)
           reject_payer_amount(body)
           asset = required(body["pay_in_asset"], "pay_in_asset")
@@ -287,7 +287,7 @@ module OpenReceive
 
       def swap_action(action, raw_body, request, request_id)
         handle(request_id) do
-          body = parse(raw_body, action)
+          body = parse(raw_body, action, request: request)
           reference = required_reference(body)
           # Shape-validated before guard/resolve, matching JS: host hooks
           # never receive an un-vetted payer selector.
@@ -402,7 +402,8 @@ module OpenReceive
         nil
       end
 
-      def parse(raw, route = nil)
+      def parse(raw, route = nil, request: nil)
+        assert_json_content_type!(request)
         text = raw.to_s
         raise PayloadTooLargeError if text.bytesize > MAX_BODY_BYTES
         value = text.strip.empty? ? {} : JSON.parse(text)
@@ -411,6 +412,29 @@ module OpenReceive
         value
       rescue JSON::ParserError
         raise ValidationError, "Request body must be a JSON object."
+      end
+
+      # The body-bearing routes accept `application/json` only, checked before
+      # authorize or any host hook. This is the CSRF-equivalent on
+      # cookie-authenticated mounts: a cross-site HTML form cannot set a JSON
+      # content type (only urlencoded, multipart, or text/plain), and a
+      # cross-origin fetch that does is non-simple and CORS-preflighted — which
+      # the library never answers — so a forged request with the victim's
+      # session can never carry a JSON body here. Reads the content type from a
+      # Rack env hash (CONTENT_TYPE) or a framework request object (Rails
+      # #content_type). Parameters and charset are ignored.
+      def assert_json_content_type!(request)
+        content_type =
+          if request.is_a?(Hash)
+            request["CONTENT_TYPE"]
+          elsif request.respond_to?(:content_type)
+            request.content_type
+          elsif request.respond_to?(:get_header)
+            request.get_header("CONTENT_TYPE")
+          end
+        return if content_type.to_s.split(";").first.to_s.strip.downcase == "application/json"
+
+        raise UnsupportedMediaTypeError
       end
 
       def assert_declared_fields!(body, route)

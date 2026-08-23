@@ -506,17 +506,22 @@ authorized, and the durably-gated opportunistic reconcile pass runs before
 authorization — it reads only OpenReceive's own attempt rows and the wallet, and
 the gate is what bounds it.
 
+One callback: `(context: AuthorizeContext) => boolean | Promise<boolean>`.
+Snippets that destructure `{ native, resource }` or
+`{ action, request, resource }` are not other signatures — they name only the
+fields they read. Sync and async returns are both this type.
+
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `action` | `AuthorizeAction` | One of `checkout.prepare`, `checkout.create`, `payment.check`, `swap.quote`, `swap.create`, `swap.read`, `swap.refund`. |
-| `request` | `Request` | The Web-standard request (headers, URL). |
-| `resource` | `{ reference?, paymentHash? }` | **Untrusted payer-supplied selectors.** Use them only to look up your own data; the library separately verifies a requested payment hash belongs to the order. |
-| `native` | `unknown?` | The untouched framework request (Express `req`, Fastify request, `NextRequest`) for middleware-attached state. |
+| `request` | `Request` | The Web-standard request OpenReceive built (headers, URL, cookies). |
+| `resource` | `{ reference?, paymentHash? }` | Copied from the payer's JSON **before** any host lookup. `reference` is on every order-scoped route; `paymentHash` is also set on `payment.check`, `swap.read`, and `swap.refund`. They identify a row; they do not prove this caller owns it. After `authorize` returns true, the library still checks that a requested hash belongs to that reference. See [Authorization and the host](authorization.md#resource-is-a-claim-not-proof). |
+| `native` | `unknown?` | The untouched framework request (Express `req`, Fastify request, `NextRequest`) when an adapter provides one. Use it for middleware-attached state such as `req.session`. |
 
-Express session example:
+Express session — same callback, reading `native` instead of `request`:
 
 ```ts
-authorize: ({ resource, native }) => {
+authorize: ({ action, request, resource, native }) => {
   const userId = (native as { session?: { userId?: string } }).session?.userId;
   return userId !== undefined && orders.belongsTo(resource.reference, userId);
 },

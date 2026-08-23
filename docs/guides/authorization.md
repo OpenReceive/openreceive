@@ -2,63 +2,128 @@
 
 OpenReceive never inspects your session. The happy path is the all-in-one
 adapter factory: your hooks plus a database handle, and your authorization
-policy. The adapter builds the wallet client and the host itself:
+policy. The adapter builds the wallet client and the host itself.
 
 ```ts
 import { openReceiveExpress } from "@openreceive/express";
+import { db, orders, sessions } from "./app.ts"; // your existing handle and models
 
-app.use(openReceiveExpress({
-  wallet: { nwc: process.env.NWC_URI! }, // receive-only; your app refuses to start otherwise
-  storage: {
-    db, // your existing database handle
-    onPaid: async ({ reference, query }) => {
-      // Settlement transaction; runs only for the first settled attempt for a reference.
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
-    },
-  },
-  amountFor: (reference) => orders.priceOf(reference), // { currency, value } or null → 404
-  authorize: async ({ action, request, resource }) =>
-    orders.viewerMay(await sessions.currentUser(request), resource.reference, action),
-}));
+// `reference` is a string you choose — your order id, a cart id, a UUID.
+// OpenReceive stores it only to group payment attempts and to hand it back
+// to these hooks. It never looks inside it.
+
+async function amountFor(reference: string) {
+  // The price for this reference, from YOUR catalog/orders — never from the
+  // payer. Return `{ currency, value }` (decimal string) or `{ sats }`.
+  // `null` means there is nothing to pay for → 404.
+  return orders.priceOf(reference);
+}
+
+async function onPaid({ reference, query }) {
+  // Inside OpenReceive's settlement transaction, and only for the first
+  // settled attempt for this reference.
+  //
+  // `query(sql, params?)` runs on that same transaction and returns rows.
+  // The SQL is yours: OpenReceive does not know about `orders` or `state`.
+  // This UPDATE is an example of what *you* might write, not a required
+  // shape. Use `?` on sqlite, `$1` on postgres; the string is not rewritten.
+  await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
+}
+
+async function authorize({ action, request, resource, native }) {
+  // One function, one argument (`AuthorizeContext`). Return `true` to allow
+  // or `false` for 403. Sync or async — both are this same type.
+  //
+  // action   — which route: checkout.prepare | checkout.create | payment.check
+  //            | swap.quote | swap.create | swap.read | swap.refund
+  // request  — the Web-standard Request OpenReceive built (headers, URL, cookies)
+  // native   — the Express `req`, when you need middleware-attached state
+  //            (req.session). Omit it from the destructure if you don't.
+  // resource — { reference?, paymentHash? } copied from the payer's JSON.
+  //            A claim, not proof; see below.
+  const user = await sessions.currentUser(request);
+  return orders.viewerMay(user, resource.reference, action);
+}
+
+const openreceive = openReceiveExpress({
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only; refuses to start otherwise
+  storage: { db, onPaid },
+  amountFor,
+  authorize,
+  // Public shops: 60 invoices / client IP / hour. Leave this off for POS,
+  // where many payers share one IP. See Rate limiting.
+  rateLimiting: true,
+});
+
+app.use(openreceive);
 ```
 
-`authorize(context)` is your authentication/ownership policy and runs on every
-order-scoped request. OpenReceive does not ship a permissive authorization
-default. Supply your application's normal session, account, or guest-order
-ownership policy; return false when the authenticated caller does not own the
-requested order. The optional `rateLimitHook` receives the same context; for
-the common per-IP invoice cap prefer the one-line `rateLimiting` option
-instead — see [Rate limiting](rate-limiting.md).
+`authorize` is always `(context: AuthorizeContext) => boolean | Promise<boolean>`.
+Guides that write `({ native, resource }) =>` or
+`async ({ action, request, resource }) =>` are not other overloads — they are
+this same callback, naming only the fields they read. TypeScript lets you
+destructure a subset; the object still has all four. Returning a boolean and
+returning a Promise of one are both allowed because lookups are often async.
 
-The context object:
+`rateLimitHook`, if you supply one, receives that same context (`false` → 429).
+For the common per-IP invoice cap, the one-line `rateLimiting` option above is
+enough — see [Rate limiting](rate-limiting.md).
 
-- `action`: one of `checkout.prepare`, `checkout.create`, `payment.check`, `swap.quote`,
-  `swap.create`, `swap.read`, `swap.refund`.
-- `request`: the web-standard `Request`.
-- `resource`: `{ reference?, paymentHash? }` — untrusted payer-supplied selectors; possession
-  is not ownership.
-- `native`: the untouched framework-native request when an adapter provides one — use it for
-  middleware-attached session/user state. Express:
+## resource is a claim, not proof
 
-  ```ts
-  authorize: ({ native, resource }) =>
-    orders.ownedBy((native as { session?: { userId?: string } }).session?.userId, resource.reference)
-  ```
+Every order-scoped body includes a `reference` the payer chose to send —
+usually because the checkout UI put your order id there.
+`payment.check`, `swap.read`, and `swap.refund` also send `payment_hash`.
+OpenReceive copies those strings into `resource` and calls `authorize`
+**before** it looks anything up.
+
+They identify a row. They do not prove the caller may touch it.
+
+- Anyone who can observe or guess an order id can put it in the body. A
+  checkout URL like `/checkout/ord_123`, a receipt, or a shared tab leaks
+  `reference`.
+- `paymentHash` is printed on the invoice (the QR the payer scans). Knowing
+  the hash does not mean you own the order.
+
+If `authorize` returns true whenever `resource.reference` is present, or
+whenever an order with that id exists, any caller can mint invoices, poll
+status, or request a refund for someone else's order. Look the order up in
+**your** data and check that **this caller** — session cookie, signed guest
+token, logged-in user — may perform **this `action`** on it. OpenReceive does
+not ship a permissive default.
+
+After you return true, the library still verifies that a requested
+`paymentHash` belongs to that `reference` before loading server-only
+`swap_data`. That check is "does this attempt sit on this order?", not "does
+this caller own the order?" The hash is never an authorization capability.
+
+`reference` and `paymentHash` are optional on the TypeScript type because not
+every action sends both. On the shipped routes `reference` is always set;
+`paymentHash` is set on the three attempt-scoped actions above.
+
+## Reading a framework session
+
+`request` is always a Fetch API `Request`. Express session middleware attaches
+to Express's `req`, which that object is not. The adapter therefore also
+passes the untouched `req` as `native`. Same `authorize`, extra field:
+
+```ts
+const userId = (native as { session?: { userId?: string } }).session?.userId;
+```
+
+You still write the same `authorize` function. You do not register a second
+one. If your user lives on `req.session`, read `native`; if you look the
+session up from cookies on the Web Request, read `request`.
 
 Rails applications mount the engine and keep their own authentication and
 `current_user` logic. The engine's JSON checkout routes skip Rails form CSRF
 protection, so `authorize` is the auth boundary there too.
 
-`amountFor` returns the authoritative `{ sats }` or `{ currency, value }` price
-for an order id, or `null` → 404. The create body cannot
-contain `amount` or `amount_msats` — your application resolves the price, so a payer-supplied amount
-could only ever be an attempt to pay less (or trick support with an overpaid receipt); the
-route rejects it outright. A
-failed attempt commit withholds invoice and swap payer instructions.
-
-Payment checks, swap status, and refunds send `reference` plus the displayed `payment_hash`.
-After authorization, the library verifies that hash belongs to the order before loading optional
-server-only `swap_data`. The hash is an attempt selector, not an authorization capability.
+`amountFor` is the other half of that boundary: the create body cannot contain
+`amount` or `amount_msats`. A payer-supplied amount could only ever be an
+attempt to pay less (or trick support with an overpaid receipt); the route
+rejects it outright. A failed attempt commit withholds invoice and swap payer
+instructions.
 
 ## Advanced: composing the pieces
 
@@ -72,8 +137,8 @@ import { createHost } from "@openreceive/http";
 
 const service = await createOpenReceive();
 const host = createHost({ db, amountFor, onPaid });
-
-app.use(openReceiveExpress({ service, host, authorize }));
+const openreceive = openReceiveExpress({ service, host, authorize });
+app.use(openreceive);
 ```
 
 The mounted routes still commit the attempt row before any payer instructions

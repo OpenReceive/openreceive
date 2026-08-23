@@ -118,6 +118,22 @@ module OpenReceive
       end
     end
 
+    # 415 — the body-bearing routes accept `application/json` only. This is the
+    # CSRF-equivalent on cookie-authenticated mounts: a cross-site HTML form
+    # cannot set a JSON content type, and a cross-origin fetch that does is
+    # non-simple (CORS-preflighted, which the library never grants), so a
+    # forgery can never reach `authorize` with the victim's session. Rejected
+    # before authorize, like the body cap. Mirrors the JS handler.
+    class UnsupportedMediaTypeError < StandardError
+      attr_reader :status, :code
+
+      def initialize(message = "Request content type must be application/json.")
+        super(message)
+        @status = 415
+        @code = "INVALID_REQUEST"
+      end
+    end
+
     # 429 — the payer exceeded the configured invoice-creation budget. Mirrors
     # the JS handler: RATE_LIMITED with retryable: true so clients back off
     # and retry instead of treating it as a permanent failure, plus a

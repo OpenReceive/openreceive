@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "name": "form-encoded body is refused before authorize",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "content_type": "application/x-www-form-urlencoded",
+    "body": { "reference": "ord-1" }
+  },
+  "expected": {
+    "status": 415,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "Request content type must be application/json.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "The JSON content-type gate is the CSRF-equivalent on cookie-authenticated mounts: a cross-site HTML form can only send urlencoded/multipart/text-plain, and a cross-origin fetch that sets application/json is CORS-preflighted (never granted by the library). Runners serialize `body` as JSON but MUST send the declared `content_type` header; the handler rejects on the header, not the bytes."
+}
