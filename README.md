@@ -10,7 +10,7 @@ approves delivery of the purchase.
 
 **Deposit-only by design.** Funds move in one direction — toward you.
 OpenReceive never takes custody of your money and never holds a key that can
-spend it, so your inbound funds are never at risk. You can use [any backing NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments) to hold your funds.
+spend it. You can use [any backing NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments) to hold your funds.
 
 **Optionally Swap In Payments From Other Currencies:**
 
@@ -94,12 +94,12 @@ OpenReceive hinges on three ideas:
 OpenReceive is three server objects plus an optional browser package. Each one
 talks to a different side of your app, and each has an obvious home:
 
-| Piece                        | You build it with                                                                                                                                                                                                                                   | It talks to                                                                 | It lives                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
-| **Wallet client**            | [`createOpenReceive()`][api-createopenreceive]                                                                                                                                                                             | **your wallet** — mints invoices, reads settlement, holds the NWC code      | server-only, one per process                     |
-| **Order bridge**             | [`createOpenReceiveHost()`][api-createopenreceivehost]                                                                                                                                                                     | **your database** — your order hooks, plus the `openreceive_payments` table | server-only, next to your models                 |
+| Piece                        | You build it with                                                                                                               | It talks to                                                                 | It lives                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
+| **Wallet client**            | [`createOpenReceive()`][api-createopenreceive]                                                                                  | **your wallet** — mints invoices, reads settlement, holds the NWC code      | server-only, one per process                     |
+| **Order bridge**             | [`createOpenReceiveHost()`][api-createopenreceivehost]                                                                          | **your database** — your order hooks, plus the `openreceive_payments` table | server-only, next to your models                 |
 | **HTTP routes**              | [`openReceiveExpress()`][api-express] (or [Fastify][api-fastify] / [Next][api-next] / [Rails](docs/guides/quickstart-rails.md)) | **the browser** — the endpoints the checkout UI calls                       | mounted on your app by default at `/openreceive` |
-| **Checkout UI** *(optional)* | [`@openreceive/react`][api-browser] (or vue/svelte/angular/elements)                                                                                                                                                | **the HTTP routes above** — creates the checkout, polls until paid          | your browser bundle                              |
+| **Checkout UI** _(optional)_ | [`@openreceive/react`][api-browser] (or vue/svelte/angular/elements)                                                            | **the HTTP routes above** — creates the checkout, polls until paid          | your browser bundle                              |
 
 Only that last row is genuinely optional. Take the drop-in components, build
 your own on the semver-stable `@openreceive/browser/headless` engine, or skip
@@ -180,7 +180,6 @@ Implementing a custom [`OpenReceivePaymentRepository`][api-sqlpayments] is the
 documented advanced escape hatch, not the quickstart. See
 [Payment storage](docs/guides/storage.md).
 
-
 ### What the wallet client needs
 
 [`createOpenReceive()`][api-createopenreceive] reads the receive-only wallet
@@ -196,10 +195,9 @@ Boot preflight fails closed when the wallet advertises spend methods such as
 `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. See
 [Security](docs/guides/security.md).
 
-
 ### Writing your own checkout route
 
-Most applications should not do this. Mounting the adapter gives you the routes *and*
+Most applications should not do this. Mounting the adapter gives you the routes _and_
 lets the shipped checkout components (`@openreceive/react` and friends) work
 against them with no glue — hand-writing the endpoint opts you out of both, UI
 included. Reach for it when you need a flow the routes do not offer. You then
@@ -282,7 +280,6 @@ take whatever shape it likes. It then polls for settlement — OpenReceive's
 `POST …/payments/check`, or your own route over
 [`service.checkPayment`][api-checkpayment] — until the order flips to paid.
 
-
 ### Who checks the wallet, and when
 
 The wallet client's `checkPayment({ paymentHash, createdAt })` is a pure wallet
@@ -296,7 +293,6 @@ runs one gated pass over `pending` attempts — the durable `openreceive_meta`
 gate collapses all instances to one wallet scan per interval, and `GET …/rates`
 never triggers a scan — delivering verified settlements at least once. No
 background process required.
-
 
 ## Ship the routes, keep your auth
 
@@ -323,7 +319,6 @@ infrastructure failure a retryable `503` — with no payer instructions either
 way. Rails applications mount the engine and retain their own authentication
 and `current_user` logic. JSON checkout routes skip Rails form CSRF; your
 `authorize` is the auth boundary.
-
 
 ## Settlement and swaps
 
@@ -357,7 +352,6 @@ before acting.
 
 Provider completion by itself never fulfills an order. The receiving wallet's
 settled transaction remains authoritative.
-
 
 ## Repository map
 
