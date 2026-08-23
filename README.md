@@ -14,10 +14,9 @@ closed when the code can spend. Custody, freezing, and reversal are properties
 of the [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments)
 and swap provider you choose — not of this library.
 
-**Optionally swap in payments from other currencies.**
-
-Not every customer holds Bitcoin. Configure any swap provider that implements
-the [FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs) and
+**Optionally swap in other currencies.** Not every customer holds Bitcoin.
+Configure any swap provider that implements the
+[FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs) and
 checkout offers these pay-in routes, each converted into Bitcoin on the way in:
 
 | Pay with | On network |
