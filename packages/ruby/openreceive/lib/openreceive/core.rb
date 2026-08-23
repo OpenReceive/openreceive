@@ -262,8 +262,8 @@ module OpenReceive
 
     # Canonical OpenReceive error codes (mirrors the JS generated contract).
     ERROR_CODES = %w[
-      NOT_IMPLEMENTED RESTRICTED UNAUTHORIZED RATE_LIMITED QUOTA_EXCEEDED
-      INTERNAL UNSUPPORTED_ENCRYPTION INSUFFICIENT_BALANCE PAYMENT_FAILED
+      NOT_IMPLEMENTED RESTRICTED UNAUTHORIZED FORBIDDEN RATE_LIMITED QUOTA_EXCEEDED
+      INTERNAL UNSUPPORTED_ENCRYPTION
       OTHER NOT_FOUND TIMEOUT INVALID_REQUEST WALLET_UNAVAILABLE
       INVOICE_EXPIRED UNSUPPORTED_METHOD CONFLICT
     ].freeze
@@ -304,12 +304,11 @@ module OpenReceive
       "NOT_IMPLEMENTED" => "NWC wallet service does not implement this method.",
       "RESTRICTED" => "NWC wallet service restricted this request.",
       "UNAUTHORIZED" => "NWC wallet service rejected authorization.",
+      "FORBIDDEN" => "The host application did not authorize this request.",
       "RATE_LIMITED" => "NWC wallet service rate limited this request.",
       "QUOTA_EXCEEDED" => "NWC wallet service quota was exceeded.",
       "INTERNAL" => "NWC wallet service returned an internal error.",
       "UNSUPPORTED_ENCRYPTION" => "NWC wallet service does not support the required encryption mode.",
-      "INSUFFICIENT_BALANCE" => "NWC wallet reported insufficient balance.",
-      "PAYMENT_FAILED" => "NWC wallet reported payment failure.",
       "OTHER" => "NWC wallet service returned an unknown error.",
       "NOT_FOUND" => "NWC wallet service could not find the requested resource.",
       "TIMEOUT" => "NWC wallet service request timed out.",
@@ -344,8 +343,9 @@ module OpenReceive
                         .gsub(/[^a-zA-Z0-9]+/, "_")
                         .gsub(/\A_+|_+\z/, "")
                         .upcase
-      return normalized if ERROR_CODES.include?(normalized)
-      ERROR_CODE_ALIASES[normalized]
+      # Aliases first (mirrors JS): a wallet's own "FORBIDDEN" is a wallet
+      # restriction (RESTRICTED), never the host application's FORBIDDEN.
+      ERROR_CODE_ALIASES[normalized] || (normalized if ERROR_CODES.include?(normalized))
     end
 
     def error_code_from_records(records)

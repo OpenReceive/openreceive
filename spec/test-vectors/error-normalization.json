@@ -3,7 +3,7 @@
   "rule": "wallet and library errors normalize to canonical OpenReceive error codes",
   "cases": [
     {
-      "name": "nested wallet insufficient balance",
+      "name": "send-side wallet code (insufficient balance) is OTHER on a receive-only client",
       "raw_error": {
         "error": {
           "code": "insufficient-balance",
@@ -12,7 +12,7 @@
         }
       },
       "expected": {
-        "code": "INSUFFICIENT_BALANCE",
+        "code": "OTHER",
         "message": "Wallet lacks spendable sats",
         "retryable": false,
         "request_id": "req_balance"
@@ -31,13 +31,13 @@
       }
     },
     {
-      "name": "receive-only path still normalizes send payment failure",
+      "name": "send-side wallet code (payment failed) is OTHER on a receive-only client",
       "raw_error": {
         "code": "PAYMENT_FAILED",
         "message": "Payment route failed"
       },
       "expected": {
-        "code": "PAYMENT_FAILED",
+        "code": "OTHER",
         "message": "Payment route failed",
         "retryable": false
       }
@@ -53,6 +53,18 @@
         "code": "WALLET_UNAVAILABLE",
         "message": "Failed to connect to relay",
         "retryable": true
+      }
+    },
+    {
+      "name": "a wallet's own FORBIDDEN is a wallet restriction, never the host's FORBIDDEN",
+      "raw_error": {
+        "code": "FORBIDDEN",
+        "message": "Method not permitted for this connection"
+      },
+      "expected": {
+        "code": "RESTRICTED",
+        "message": "Method not permitted for this connection",
+        "retryable": false
       }
     }
   ]

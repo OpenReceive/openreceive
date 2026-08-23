@@ -495,7 +495,7 @@ withheld in both cases.
 ### The authorize context
 
 Every order-scoped route calls `authorize(context)` before any wallet or
-database work; returning `false` produces `403 UNAUTHORIZED`. The same shape is
+database work; returning `false` produces `403 FORBIDDEN`. The same shape is
 used by the optional `rateLimitHook` (`false` → `429`).
 
 Two deliberate exceptions: `GET …/rates` has no order to authorize and is never
@@ -792,7 +792,7 @@ Every error status above returns the OpenReceive error body `{ code, message, re
 (normative: [`spec/schemas/error.schema.json`](../../spec/schemas/error.schema.json)).
 `code` is one of:
 
-`NOT_IMPLEMENTED`, `RESTRICTED`, `UNAUTHORIZED`, `RATE_LIMITED`, `QUOTA_EXCEEDED`, `INTERNAL`, `UNSUPPORTED_ENCRYPTION`, `INSUFFICIENT_BALANCE`, `PAYMENT_FAILED`, `OTHER`, `NOT_FOUND`, `TIMEOUT`, `INVALID_REQUEST`, `WALLET_UNAVAILABLE`, `INVOICE_EXPIRED`, `UNSUPPORTED_METHOD`, `CONFLICT`
+`NOT_IMPLEMENTED`, `RESTRICTED`, `UNAUTHORIZED`, `FORBIDDEN`, `RATE_LIMITED`, `QUOTA_EXCEEDED`, `INTERNAL`, `UNSUPPORTED_ENCRYPTION`, `OTHER`, `NOT_FOUND`, `TIMEOUT`, `INVALID_REQUEST`, `WALLET_UNAVAILABLE`, `INVOICE_EXPIRED`, `UNSUPPORTED_METHOD`, `CONFLICT`
 <!-- /generated:error-codes -->
 
 <!-- generated:route-errors -->

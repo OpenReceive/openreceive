@@ -5,12 +5,16 @@ import type {
   NwcTransaction,
   OpenReceiveReceiveNwcClient,
 } from "./nwc/client.ts";
-import { classifyTransactionSettlement } from "./settlement/index.ts";
+import {
+  type TransactionSettlementStatus,
+  classifyTransactionSettlement,
+} from "./settlement/index.ts";
 import { unixSeconds } from "./values.ts";
 
 const OPENRECEIVE_TRANSACTION_PAGE_LIMIT = 20 as const;
 
-export type PaymentStatus = "pending" | "settled" | "expired" | "failed" | "not_found";
+/** {@link TransactionSettlementStatus} plus `not_found`: the hash was not in the scanned window. */
+export type PaymentStatus = TransactionSettlementStatus | "not_found";
 
 export interface PaymentDetails {
   readonly transaction: NwcTransaction;

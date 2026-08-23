@@ -321,7 +321,7 @@ module OpenReceive
 
       def authorize!(action, request, resource)
         context = { action: action, request: request, resource: resource }
-        raise UnauthorizedError, "Not authorized for this action." unless @authorize.call(context)
+        raise ForbiddenError, "Not authorized for this action." unless @authorize.call(context)
       end
 
       def commit(checkout, swap_data = nil, request = nil)

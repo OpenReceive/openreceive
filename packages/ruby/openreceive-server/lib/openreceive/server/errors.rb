@@ -32,14 +32,15 @@ module OpenReceive
       end
     end
 
-    # 403 — the host application did not authorize this request.
-    class UnauthorizedError < StandardError
+    # 403 — the host application did not authorize this request. FORBIDDEN,
+    # not UNAUTHORIZED: that name belongs to the NIP-47 wallet layer.
+    class ForbiddenError < StandardError
       attr_reader :status, :code
 
-      def initialize(message = "Unauthorized.")
+      def initialize(message = "Forbidden.")
         super(message)
         @status = 403
-        @code = "UNAUTHORIZED"
+        @code = "FORBIDDEN"
       end
     end
 

@@ -506,12 +506,11 @@ components:
             - NOT_IMPLEMENTED
             - RESTRICTED
             - UNAUTHORIZED
+            - FORBIDDEN
             - RATE_LIMITED
             - QUOTA_EXCEEDED
             - INTERNAL
             - UNSUPPORTED_ENCRYPTION
-            - INSUFFICIENT_BALANCE
-            - PAYMENT_FAILED
             - OTHER
             - NOT_FOUND
             - TIMEOUT

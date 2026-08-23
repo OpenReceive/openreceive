@@ -1,4 +1,8 @@
-import { unixSeconds, type PaymentDetails } from "@openreceive/core";
+import {
+  type TransactionSettlementStatus,
+  unixSeconds,
+  type PaymentDetails,
+} from "@openreceive/core";
 import type { Checkout, SwapData } from "@openreceive/node";
 import type { CheckoutCreatedInput } from "./handler.ts";
 
@@ -30,7 +34,8 @@ export const OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS = 900 as const;
  * `attention` marks rows that need operator review: the wallet still
  * explicitly reports an in-flight transaction state long after invoice expiry.
  */
-export type OpenReceiveAttemptStatus = "pending" | "settled" | "expired" | "failed" | "attention";
+/** {@link TransactionSettlementStatus} plus `attention`: an operator must look before the attempt moves on. */
+export type OpenReceiveAttemptStatus = TransactionSettlementStatus | "attention";
 
 /**
  * The minimal row OpenReceive needs for one invoice or swap attempt.

@@ -1,6 +1,7 @@
-import { unixSeconds } from "@openreceive/core";
+import { type TransactionSettlementStatus, unixSeconds } from "@openreceive/core";
 
-export type Status = "pending" | "settled" | "expired" | "failed";
+/** The payer-facing status: exactly {@link TransactionSettlementStatus}, derived from the server's verdict and the expiry clock. */
+export type Status = TransactionSettlementStatus;
 
 export interface StatusInvoiceLike {
   readonly transaction_state?: string;

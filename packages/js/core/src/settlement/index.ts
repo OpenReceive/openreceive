@@ -7,16 +7,22 @@ import {
 
 export type SettlementFinalitySignal = "settled_at" | "state" | "transaction_state";
 
+/**
+ * The one status vocabulary. Every other status in OpenReceive is this union
+ * plus one documented extension: `PaymentStatus` adds `not_found` (a scan
+ * result), the HTTP repository's `OpenReceiveAttemptStatus` adds `attention`
+ * (an operator state), and the browser's `Status` is exactly this.
+ */
 export type TransactionSettlementStatus = "pending" | "settled" | "expired" | "failed";
 
 export interface TransactionSettlementDetection {
-  settled: boolean;
-  status: TransactionSettlementStatus;
-  finality_signal?: SettlementFinalitySignal;
-  transaction_state?: OpenReceiveTransactionState;
-  state?: OpenReceiveTransactionState;
-  settled_at?: number;
-  preimage_present: boolean;
+  readonly settled: boolean;
+  readonly status: TransactionSettlementStatus;
+  readonly finality_signal?: SettlementFinalitySignal;
+  readonly transaction_state?: OpenReceiveTransactionState;
+  readonly state?: OpenReceiveTransactionState;
+  readonly settled_at?: number;
+  readonly preimage_present: boolean;
 }
 
 export function getSettlementFinalitySignal(
@@ -70,27 +76,15 @@ function transactionSettlementDetection(
   status: TransactionSettlementStatus,
   finalitySignal?: SettlementFinalitySignal,
 ): TransactionSettlementDetection {
-  const detection: TransactionSettlementDetection = {
+  return {
     settled: status === "settled",
     status,
+    ...(finalitySignal === undefined ? {} : { finality_signal: finalitySignal }),
+    ...(result.transaction_state === undefined
+      ? {}
+      : { transaction_state: result.transaction_state }),
+    ...(result.state === undefined ? {} : { state: result.state }),
+    ...(result.settled_at === undefined ? {} : { settled_at: result.settled_at }),
     preimage_present: result.preimage !== undefined,
   };
-
-  if (finalitySignal !== undefined) {
-    detection.finality_signal = finalitySignal;
-  }
-
-  if (result.transaction_state !== undefined) {
-    detection.transaction_state = result.transaction_state;
-  }
-
-  if (result.state !== undefined) {
-    detection.state = result.state;
-  }
-
-  if (result.settled_at !== undefined) {
-    detection.settled_at = result.settled_at;
-  }
-
-  return detection;
 }

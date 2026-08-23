@@ -19,6 +19,20 @@ behind.
   moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
   rest of that document was history.
 
+### One status vocabulary; one error vocabulary per layer
+
+- `TransactionSettlementStatus` (`pending | settled | expired | failed`) is
+  the base every status extends: `PaymentStatus` adds `not_found`,
+  `OpenReceiveAttemptStatus` adds `attention`, the browser's `Status` is
+  exactly the base. The relationship is now in the types, not only the prose.
+  `TransactionSettlementDetection` is readonly like everything else.
+- The host's `authorize()` returning `false` is `403 FORBIDDEN` (was
+  `UNAUTHORIZED`, which in NIP-47 means the key has no wallet). The HTTP
+  error vocabulary drops `INSUFFICIENT_BALANCE` and `PAYMENT_FAILED` — a
+  receive-only library can never send them — and a wallet's own `FORBIDDEN`
+  still normalizes to `RESTRICTED`. Both engines and the vectors move
+  together; Ruby's `UnauthorizedError` is `ForbiddenError`.
+
 ### Maintenance
 
 - `fixedfloat.ts` (1,134 lines, nine jobs) is six modules along the seams

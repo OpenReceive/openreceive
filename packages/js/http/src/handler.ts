@@ -611,7 +611,7 @@ async function enforceAuthorize(
   native?: unknown,
 ): Promise<void> {
   if (!(await runtime.authorize({ action, request, resource, native }))) {
-    throw new OpenReceiveHttpError(403, "UNAUTHORIZED", "Not authorized for this action.");
+    throw new OpenReceiveHttpError(403, "FORBIDDEN", "Not authorized for this action.");
   }
 }
 
