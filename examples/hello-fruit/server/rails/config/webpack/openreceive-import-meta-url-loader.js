@@ -11,8 +11,7 @@
 // webpack.config.js's CopyPlugin puts them. The Vite demos copy the same files
 // with copy-openreceive-payment-icons-plugin; Vite resolves `import.meta.url`
 // on its own.
-const RUNNING_SCRIPT_URL =
-  "(document.currentScript ? document.currentScript.src : location.href)";
+const RUNNING_SCRIPT_URL = "(document.currentScript ? document.currentScript.src : location.href)";
 
 module.exports = function openReceiveImportMetaUrlLoader(source) {
   return source.replaceAll("import.meta.url", RUNNING_SCRIPT_URL);

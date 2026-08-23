@@ -9,11 +9,8 @@ default: &default
   webpack_compile_output: true
   shakapacker_precompile: true
   # shared/: the Hello Fruit demo helpers imported by app/javascript.
-  # packages/js/browser/dist/assets: the payment SVG icons imported as webpack
-  # asset modules (see src/app/helpers/icons.ts).
   additional_paths:
     - "../../shared"
-    - "../../../../packages/js/browser/dist/assets"
   cache_manifest: false
   ensure_consistent_versioning: true
   compiler_strategy: digest
