@@ -58,7 +58,7 @@ client; it never changes what OpenReceive can do.
 ### What preflight proves
 
 Boot reads the connection's **own** method list from NIP-47 `get_info` — what
-*this* connection may call — not the wallet service's kind-13194 info event,
+_this_ connection may call — not the wallet service's kind-13194 info event,
 which advertises the service at large (a service that also serves
 spend-capable apps still hands out receive-only connections). The event only
 supplies encryption modes, and stands in for the method list when a client has
@@ -88,8 +88,7 @@ engine runs the same preflight eagerly in production
   gates look for `nostr+walletconnect://…secret=` and `NWC_URI` markers in
   tracked files and built browser bundles; the library redacts the secret from
   every log line and error it emits.
-- Custody is the wallet service's. Freezing, reversal, and loss of the funds
-  themselves are properties of the NWC service you chose, not of this library.
+- Custody is the wallet service's.
 - The relay is a transport, not a trust anchor. A hostile or dead relay can
   delay or drop traffic; it cannot forge settlement, because responses are
   encrypted between the client key and the wallet pubkey, and direct

@@ -32,12 +32,7 @@ export function readNwcFromEnvironment(options: RequireNwcFromEnvironmentOptions
 
   return value;
 }
-
-/**
- * CLI/boot gate: require a valid NWC connection string from the environment, otherwise
- * print the error and `process.exit(1)`.
- */
-export function requireNwcFromEnvironment(options: RequireNwcFromEnvironmentOptions = {}): string {
+): string {
   try {
     return readNwcFromEnvironment(options);
   } catch (error) {
