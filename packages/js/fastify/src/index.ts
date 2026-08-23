@@ -81,13 +81,13 @@ export interface OpenReceiveFastifyHandlerOptions
   extends CreateOpenReceiveHttpHandlerOptions,
     OpenReceiveFastifyAdapterExtras {}
 
-/** All-in-one form: order hooks + db handle; the plugin builds service and host. */
+/** All-in-one form: order hooks + `wallet` + `storage`; the plugin builds service and host. */
 export interface OpenReceiveFastifyStackOptions
   extends CreateOpenReceiveStackOptions,
     OpenReceiveFastifyAdapterExtras {}
 
 /**
- * Two forms: the all-in-one happy path (order hooks + db handle + `nwc`; the
+ * Two forms: the all-in-one happy path (order hooks + `wallet` + `storage`; the
  * plugin builds the service and host and closes the owned service on app close
  * — no background process, settlement is opportunistic) or the composed
  * `{ service, host, authorize }` form.

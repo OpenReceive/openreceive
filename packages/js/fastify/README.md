@@ -11,13 +11,15 @@ hooks and a database handle, and it builds the service and host itself.
 import { openReceiveFastify } from "@openreceive/fastify";
 
 await fastify.register(openReceiveFastify, {
-  nwc: process.env.NWC_URI!, // receive-only; boot fails closed otherwise
-  db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only; boot fails closed otherwise
+  storage: {
+    db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+    onPaid: async ({ orderId, query }) => {
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    },
+  },
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => order.amount,
-  onPaid: async ({ orderId, query }) => {
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
-  },
   authorize: ({ resource }) => orders.viewerOwns(resource.orderId),
   prefix: "/openreceive",
 });

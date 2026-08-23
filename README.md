@@ -58,8 +58,8 @@ transaction.
 - **Paranoid security defaults.**
   1. An attacker who gains control of your server has no way to spend your funds:
      all your server holds is a receive-only NWC code.
-  2. Every payment settles as an immutable Bitcoin Lightning payment, swapped from other
-     currencies as necessary.
+  2. Every payment settles as a private, immutable Bitcoin Lightning payment, swapped from other
+     currencies as necessary. No funds are held in centrally-controlled, censorable currencies like SOL, USDT, OR USDC.
 - **Your app owns business state.** Your application owns orders; the library
   owns the `openreceive_payments` rows (they live in your database) — see
   [Payment storage](docs/guides/storage.md). OpenReceive never owns orders,
@@ -126,9 +126,11 @@ names every adapter expects.
 
 ### The order bridge owns one table
 
-Keep your order model unchanged. The order bridge owns `openreceive_payments`
-inside your database — you run its migration
-([`npx openreceive scaffold payments`][api-scaffold] emits it for your ORM) and
+The order bridge is the server object between your orders and OpenReceive's
+payment attempts: it calls the three hooks you hand it — `loadOrder`,
+`amountForOrder`, `onPaid` — and owns one table, `openreceive_payments`, inside
+your database. Keep your order model unchanged. You run that table's migration
+([`npx openreceive scaffold payments`][api-scaffold] emits it for your ORM);
 the library owns everything else: schema, per-order locking, write-once
 settlement, reconciliation. Each row is one invoice or swap attempt. The only
 link back to your app is the opaque `order_id` string handed to your hooks: no

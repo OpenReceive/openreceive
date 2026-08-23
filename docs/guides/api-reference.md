@@ -704,7 +704,7 @@ reconcile gate, `createOpenReceiveHost`, rate-limit internals) live only on
 `@openreceive/http`; import them from there when composing your own integration
 (`npm run check:public-api` pins these surfaces).
 
-**All-in-one form** (the happy path): order hooks plus a db handle. The
+**All-in-one form** (the happy path): order hooks plus `wallet` and `storage`. The
 adapter builds the wallet client and order bridge itself; boot is lazy (the first request
 awaits wallet preflight). The Express middleware and the Next handler expose
 `ready` (a promise) and `close()` (closes the owned wallet client); the Fastify plugin
@@ -713,10 +713,9 @@ down with the app:
 
 | Parameter | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `nwc` | `string` | one of `nwc`/`service` | Receive-only NWC connection string; the adapter builds and owns the wallet client. |
-| `service` | `OpenReceive \| Promise<OpenReceive>` | one of `nwc`/`service` | Prebuilt wallet client for custom options; you own its lifecycle. |
-| `db` | `OpenReceiveSqlDatabase` | yes | Same handle [createOpenReceiveHost](#createopenreceivehost) takes. |
-| `loadOrder` / `amountForOrder` / `onPaid` | | yes | Same hooks as [createOpenReceiveHost](#createopenreceivehost). |
+| `wallet` | `{ nwc }` \| `{ service }` | yes | The wallet: a receive-only NWC connection string (the adapter builds and owns the client) or a prebuilt `OpenReceive` / `Promise<OpenReceive>` (you own its lifecycle). |
+| `storage` | `{ db, onPaid, tableName? }` \| `{ payments, onPaid }` | yes | Where attempts live, which decides what `onPaid` receives: the host database handle [createOpenReceiveHost](#createopenreceivehost) takes, with the per-order `OpenReceiveOrderSettlement`; or a custom [OpenReceivePaymentRepository](#openreceivepaymentrepository), with the raw `OpenReceiveSettlementEvent`. |
+| `loadOrder` / `amountForOrder` | | yes | Same hooks as [createOpenReceiveHost](#createopenreceivehost). |
 | `authorize` | `OpenReceiveAuthorize` | yes | Your policy; see [the authorize context](#the-authorize-context). |
 | `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | Request-path settlement pass on every mounted payment route (`GET …/rates` never triggers it); on by default through the durable `openreceive_meta` gate. `false` disables; `{ minIntervalSeconds }` tunes. |
 | `clock` | `() => number` | no | Unix-seconds clock override. |

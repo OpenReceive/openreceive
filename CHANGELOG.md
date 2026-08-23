@@ -19,6 +19,16 @@ behind.
   moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
   rest of that document was history.
 
+### The all-in-one options say which mode they are
+
+- `createOpenReceiveStack` and the adapters' all-in-one form take
+  `wallet: { nwc } | { service }` and `storage: { db, onPaid, tableName? } |
+  { payments, onPaid }` instead of five optional, mutually-constrained
+  top-level keys. `onPaid`'s parameter type follows the storage branch, the
+  "exactly one of nwc or service" runtime check is gone (the type says so),
+  and the cast that once landed a custom repository in db mode is gone with
+  it.
+
 ### The spec's own response shapes are closed
 
 - `PaymentMethod`, `FiatQuote`, and `PaymentDetails` are named, closed

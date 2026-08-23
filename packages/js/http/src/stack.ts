@@ -4,13 +4,10 @@ import type { CreateOpenReceiveHttpHandlerOptions, OpenReceiveHttpHandler } from
 import { createOpenReceiveHttpHandler } from "./handler.ts";
 import type {
   CreateOpenReceiveHostDbOptions,
-  CreateOpenReceiveHostOptions,
-  OpenReceiveSettlementEventHook,
+  CreateOpenReceiveHostRepositoryOptions,
 } from "./host-payments.ts";
 import { createOpenReceiveHost } from "./host-payments.ts";
-import type { OpenReceivePaymentRepository } from "./payment-repository.ts";
 import { normalizePrefix } from "./router.ts";
-import type { OpenReceiveOrderSettlementHook } from "./sql-payments.ts";
 
 /**
  * The one-factory happy path (T1): five callbacks plus a db handle. The stack
@@ -24,31 +21,35 @@ import type { OpenReceiveOrderSettlementHook } from "./sql-payments.ts";
  * want push notifications or a poll loop run the optional worker —
  * `startOpenReceiveNotificationWorker` — in a separate process.
  */
+/**
+ * The wallet the stack talks to: a receive-only NWC connection string — the
+ * stack builds and owns the client, and `close()` closes it — or a prebuilt
+ * (or promised) service for custom options, whose lifecycle stays yours.
+ */
+export type OpenReceiveStackWallet =
+  | { readonly nwc: string; readonly service?: never }
+  | { readonly service: OpenReceive | Promise<OpenReceive>; readonly nwc?: never };
+
+/**
+ * Where attempts live, which decides what `onPaid` receives. With the host
+ * database handle (`db`, the default mode) it is the per-order
+ * `OpenReceiveOrderSettlement`, with `orderId` and the transactional `query`;
+ * with a custom repository (`payments`, advanced) it is the raw
+ * `OpenReceiveSettlementEvent`. The branch carries the hook's type, so the
+ * wrong signature is a type error rather than a runtime surprise.
+ */
+export type OpenReceiveStackStorage =
+  | Pick<CreateOpenReceiveHostDbOptions<unknown>, "db" | "tableName" | "onPaid" | "payments">
+  | Pick<
+      CreateOpenReceiveHostRepositoryOptions<unknown>,
+      "payments" | "onPaid" | "db" | "tableName"
+    >;
+
 export interface CreateOpenReceiveStackOptions<Order = unknown>
   extends Omit<CreateOpenReceiveHttpHandlerOptions, "service" | "host">,
-    Omit<CreateOpenReceiveHostDbOptions<Order>, "db" | "onPaid" | "payments"> {
-  /** NWC connection string. The stack builds and owns the service (closed by `close()`). */
-  readonly nwc?: string;
-  /**
-   * Prebuilt (or promised) service, for custom service options. The host owns
-   * its lifecycle; `close()` will not close it.
-   */
-  readonly service?: OpenReceive | Promise<OpenReceive>;
-  /** Host database handle (default mode). Pair with `onPaid`. */
-  readonly db?: CreateOpenReceiveHostDbOptions<Order>["db"];
-  /**
-   * Settlement hook for either mode. With `db` it receives the per-order
-   * `OpenReceiveOrderSettlement` (with `orderId` and the transactional
-   * `query`); with a custom `payments` repository it receives the raw
-   * `OpenReceiveSettlementEvent`.
-   */
-  readonly onPaid?: OpenReceiveOrderSettlementHook | OpenReceiveSettlementEventHook;
-  /**
-   * Custom payment repository (advanced mode) instead of `db`. `onPaid` then
-   * receives the raw settlement event; `createOpenReceiveHost` refuses any
-   * other combination.
-   */
-  readonly payments?: OpenReceivePaymentRepository;
+    Omit<CreateOpenReceiveHostDbOptions<Order>, "db" | "tableName" | "onPaid" | "payments"> {
+  readonly wallet: OpenReceiveStackWallet;
+  readonly storage: OpenReceiveStackStorage;
 }
 
 export interface OpenReceiveStack {
@@ -66,38 +67,25 @@ export interface OpenReceiveStack {
 export function createOpenReceiveStack<Order = unknown>(
   options: CreateOpenReceiveStackOptions<Order>,
 ): OpenReceiveStack {
-  if ((options.nwc === undefined) === (options.service === undefined)) {
-    throw new TypeError("OpenReceive stack requires exactly one of nwc or service.");
-  }
-  const {
-    nwc,
-    service,
-    db,
-    tableName,
+  const { wallet, storage, loadOrder, amountForOrder, clock, ...handlerOptions } = options;
+  // The storage branch reaches the host factory as the mode it is — a
+  // repository stays repository mode, a database handle stays db mode — and
+  // its `onPaid` already has the type of that branch.
+  const host = createOpenReceiveHost<Order>({
+    ...storage,
     loadOrder,
     amountForOrder,
-    onPaid,
-    payments,
-    clock,
-    ...handlerOptions
-  } = options;
-  // A custom repository reaches the host factory as the repository mode it is;
-  // dropping it here used to land in db mode and blame the caller for omitting
-  // the very thing they passed.
-  // `db`/`payments` stay outside compact: it is recursive, and a repository or
-  // database handle must reach the host factory as the object the caller passed.
-  const hostOptions = (
-    payments === undefined
-      ? { db, loadOrder, amountForOrder, onPaid, ...compact({ tableName, clock }) }
-      : { payments, loadOrder, amountForOrder, onPaid, ...compact({ clock }) }
-  ) as CreateOpenReceiveHostOptions<Order>;
-  const host = createOpenReceiveHost<Order>(hostOptions);
+    ...compact({ clock }),
+  });
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
 
   let ownedService: OpenReceive | undefined;
   const boot: Promise<OpenReceiveHttpHandler> = (async () => {
-    const resolved = service !== undefined ? await service : await createOpenReceive({ nwc });
-    if (service === undefined) ownedService = resolved;
+    const resolved =
+      wallet.service !== undefined
+        ? await wallet.service
+        : await createOpenReceive({ nwc: wallet.nwc });
+    if (wallet.service === undefined) ownedService = resolved;
     return createOpenReceiveHttpHandler({
       ...handlerOptions,
       ...compact({ clock }),
@@ -144,16 +132,14 @@ export function isOpenReceiveStackOptions<Order>(
   if ((options as { host?: unknown }).host !== undefined) return false;
   const flat = options as CreateOpenReceiveStackOptions<Order>;
   if (
-    flat.nwc !== undefined ||
-    flat.db !== undefined ||
-    flat.payments !== undefined ||
+    flat.wallet !== undefined ||
+    flat.storage !== undefined ||
     flat.loadOrder !== undefined ||
-    flat.amountForOrder !== undefined ||
-    flat.onPaid !== undefined
+    flat.amountForOrder !== undefined
   ) {
     return true;
   }
   throw new TypeError(
-    "OpenReceive composed options require host: pass { service, host, authorize }, or use the all-in-one form with db/loadOrder/amountForOrder/onPaid.",
+    "OpenReceive composed options require host: pass { service, host, authorize }, or use the all-in-one form with wallet/storage/loadOrder/amountForOrder.",
   );
 }

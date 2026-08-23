@@ -71,16 +71,18 @@ import { db, orders, sessions } from "./app.ts"; // your existing database handl
 const app = express();
 app.use(express.json());
 const openreceive = openReceiveExpress({
-  nwc: process.env.NWC_URI!, // receive-only NWC code; boot fails closed otherwise
-  db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; boot fails closed otherwise
+  storage: {
+    db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+    onPaid: async ({ orderId, query }) => {
+      // Settlement transaction; runs only for the order's first settled attempt.
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    },
+  },
   // Look up one of your orders by id; return null when there is no such order.
   loadOrder: (orderId) => orders.find(orderId),
   // Price that order; OpenReceive converts this into the Lightning invoice.
   amountForOrder: (order) => ({ currency: "USD", value: order.total.toString() }),
-  onPaid: async ({ orderId, query }) => {
-    // Settlement transaction; runs only for the order's first settled attempt.
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
-  },
   // Your own access check: may this caller do this action to this order?
   authorize: async ({ action, request, resource }) =>
     orders.viewerMay(await sessions.currentUser(request), resource.orderId, action),

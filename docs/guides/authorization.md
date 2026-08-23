@@ -9,14 +9,16 @@ bridge itself:
 import { openReceiveExpress } from "@openreceive/express";
 
 app.use(openReceiveExpress({
-  nwc: process.env.NWC_URI!, // receive-only; boot fails closed otherwise
-  db, // your existing database handle
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only; boot fails closed otherwise
+  storage: {
+    db, // your existing database handle
+    onPaid: async ({ orderId, query }) => {
+      // Settlement transaction; runs only for the order's first settled attempt.
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    },
+  },
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => ({ currency: "USD", value: order.total.toString() }),
-  onPaid: async ({ orderId, query }) => {
-    // Settlement transaction; runs only for the order's first settled attempt.
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
-  },
   authorize: async ({ action, request, resource }) =>
     orders.viewerMay(await sessions.currentUser(request), resource.orderId, action),
 }));

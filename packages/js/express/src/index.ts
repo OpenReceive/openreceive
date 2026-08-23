@@ -65,7 +65,7 @@ export interface OpenReceiveExpressOptions
   extends CreateOpenReceiveHttpHandlerOptions,
     OpenReceiveExpressAdapterExtras {}
 
-/** All-in-one form: order hooks + db handle; the middleware builds service and host. */
+/** All-in-one form: order hooks + `wallet` + `storage`; the middleware builds service and host. */
 export interface OpenReceiveExpressStackOptions<Order = unknown>
   extends CreateOpenReceiveStackOptions<Order>,
     OpenReceiveExpressAdapterExtras {}
@@ -75,7 +75,7 @@ export interface OpenReceiveExpressStackOptions<Order = unknown>
  *
  * Two forms:
  * - All-in-one (the happy path): pass the order hooks and a db handle directly —
- *   `openReceiveExpress({ nwc, db, loadOrder, amountForOrder, onPaid, authorize })`.
+ *   `openReceiveExpress({ wallet: { nwc }, storage: { db, onPaid }, loadOrder, amountForOrder, authorize })`.
  *   The middleware builds the service and host itself (first request awaits
  *   boot) and exposes `ready`/`close`. It starts no background process:
  *   settlement of abandoned checkouts happens opportunistically through the

@@ -11,13 +11,15 @@ handle, and the handlers build the service and host themselves.
 import { openReceiveNextHandlers } from "@openreceive/next";
 
 export const { GET, POST } = openReceiveNextHandlers({
-  nwc: process.env.NWC_URI!, // receive-only; boot fails closed otherwise
-  db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only; boot fails closed otherwise
+  storage: {
+    db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+    onPaid: async ({ orderId, query }) => {
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    },
+  },
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => order.amount,
-  onPaid: async ({ orderId, query }) => {
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
-  },
   authorize: ({ resource }) => orders.viewerOwns(resource.orderId),
 });
 ```
