@@ -6,10 +6,10 @@ import {
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   OPENRECEIVE_RECONCILE_BATCH_SIZE,
-  createOpenReceiveHost,
-  createOpenReceiveSqlPayments,
-  openReceivePaymentsSchemaSql,
-  reconcileOpenReceivePayments,
+  createHost,
+  createSqlPayments,
+  paymentsSchemaSql,
+  reconcileHostPayments,
 } from "../packages/js/http/src/index.ts";
 import { resolveSqlAdapter } from "../packages/js/http/src/sql-adapters.ts";
 // Internal decision table: imported from the module directly (it is
@@ -57,7 +57,7 @@ function checkoutInput(
 
 function sqliteRepository({ now = () => 1_000 } = {}) {
   const db = memoryPaymentsDb();
-  return { db, payments: createOpenReceiveSqlPayments(db, { clock: now }) };
+  return { db, payments: createSqlPayments(db, { clock: now }) };
 }
 
 test("commitAttempt is idempotent for a repeated payment hash", async () => {
@@ -343,7 +343,7 @@ test("one reconciliation pass settles, closes, and flags rows so terminal rows l
   const now = 1_000;
   const db = memoryPaymentsDb();
   const settled = [];
-  const host = createOpenReceiveHost({
+  const host = createHost({
     db,
     clock: () => now,
     loadOrder: async (orderId) => ({ orderId }),
@@ -375,7 +375,7 @@ test("one reconciliation pass settles, closes, and flags rows so terminal rows l
     },
   };
 
-  await reconcileOpenReceivePayments({ service, host, clock: () => now });
+  await reconcileHostPayments({ service, host, clock: () => now });
 
   assert.equal(scanned.length, 1);
   assert.equal(scanned[0].attempts.length, 4);
@@ -395,7 +395,7 @@ test("one reconciliation pass settles, closes, and flags rows so terminal rows l
   ]);
 
   // A second pass rescans only the pending attempt and never re-fulfills.
-  await reconcileOpenReceivePayments({ service, host, clock: () => now });
+  await reconcileHostPayments({ service, host, clock: () => now });
   assert.deepEqual(scanned[1].attempts, [
     { paymentHash: hash("d"), createdAt: 900, expiresAt: 1_600 },
   ]);
@@ -407,7 +407,7 @@ test("reconciliation threads the wallet's explicit transaction state into the po
   // 1_000 is past the closure threshold for every one of them.
   const now = 1_000;
   const db = memoryPaymentsDb();
-  const host = createOpenReceiveHost({
+  const host = createHost({
     db,
     clock: () => now,
     loadOrder: async (orderId) => ({ orderId }),
@@ -434,7 +434,7 @@ test("reconciliation threads the wallet's explicit transaction state into the po
       ];
     },
   };
-  await reconcileOpenReceivePayments({ service, host, clock: () => now });
+  await reconcileHostPayments({ service, host, clock: () => now });
 
   const row = async (orderId) => (await host.payments.listForOrder(orderId))[0];
   assert.deepEqual(
@@ -473,7 +473,7 @@ test("pg adapter converts placeholders and serializes commits behind the advisor
       return client;
     },
   };
-  const payments = createOpenReceiveSqlPayments(pool, { clock: () => 1_000 });
+  const payments = createSqlPayments(pool, { clock: () => 1_000 });
 
   await payments.commitAttempt(checkoutInput("order-pg", "e"));
 
@@ -549,7 +549,7 @@ test("host SQL inside the settlement transaction reaches a pg driver untouched",
       return client;
     },
   };
-  const payments = createOpenReceiveSqlPayments(pool, { clock: () => 1_000 });
+  const payments = createSqlPayments(pool, { clock: () => 1_000 });
 
   const hostSql =
     "UPDATE orders SET note = 'paid? yes' WHERE data ? 'field' AND tags ?| ARRAY['a'] AND id = $1 -- why?";
@@ -611,7 +611,7 @@ test("pg Client that is already connected commits on its own connection", async 
       throw new Error("Client has already been connected. You cannot reuse a client.");
     },
   };
-  const payments = createOpenReceiveSqlPayments(client, { clock: () => 1_000 });
+  const payments = createSqlPayments(client, { clock: () => 1_000 });
   await payments.commitAttempt(checkoutInput("order-pgc-1", "a"));
   await payments.commitAttempt(checkoutInput("order-pgc-2", "b"));
   assert.equal(connectCalls, 1, "connect() must be probed at most once");
@@ -633,7 +633,7 @@ test("pg Client that is not yet connected is connected exactly once", async () =
       return undefined;
     },
   };
-  const payments = createOpenReceiveSqlPayments(client, { clock: () => 1_000 });
+  const payments = createSqlPayments(client, { clock: () => 1_000 });
   await payments.commitAttempt(checkoutInput("order-pgu-1", "a"));
   await payments.commitAttempt(checkoutInput("order-pgu-2", "b"));
   assert.equal(connectCalls, 1);
@@ -649,7 +649,7 @@ test("query-only pg handles serialize concurrent transactions in-process", async
       return { rows: [] };
     },
   };
-  const payments = createOpenReceiveSqlPayments(db, { clock: () => 1_000 });
+  const payments = createSqlPayments(db, { clock: () => 1_000 });
   await Promise.all([
     payments.commitAttempt(checkoutInput("order-q-1", "a")),
     payments.commitAttempt(checkoutInput("order-q-2", "b")),
@@ -691,7 +691,7 @@ test("the schema records its version and keeps generated index names inside 63 b
   // A long custom table name must not produce an identifier postgres would
   // truncate (silently colliding two indexes onto one name).
   const longTable = `openreceive_payments_${"x".repeat(45)}`;
-  const sql = openReceivePaymentsSchemaSql("postgres", longTable);
+  const sql = paymentsSchemaSql("postgres", longTable);
   const indexNames = [...sql.matchAll(/CREATE INDEX IF NOT EXISTS (\S+)/g)].map(
     (match) => match[1],
   );
@@ -701,7 +701,7 @@ test("the schema records its version and keeps generated index names inside 63 b
     assert.ok(Buffer.byteLength(name, "utf8") <= 63, `${name} exceeds the identifier limit`);
   }
   // Default table names are short enough to keep their readable index names.
-  assert.match(openReceivePaymentsSchemaSql("postgres"), /openreceive_payments_order_created_idx/);
+  assert.match(paymentsSchemaSql("postgres"), /openreceive_payments_order_created_idx/);
 });
 
 test("a repository refuses to serve a database written by a newer library", async () => {
@@ -712,14 +712,14 @@ test("a repository refuses to serve a database written by a newer library", asyn
   db.prepare("UPDATE openreceive_meta SET value = ? WHERE key = 'schema_version'").run(
     String(OPENRECEIVE_PAYMENTS_SCHEMA_VERSION + 1),
   );
-  const newer = createOpenReceiveSqlPayments(db, { clock: () => 1_000 });
+  const newer = createSqlPayments(db, { clock: () => 1_000 });
   await assert.rejects(newer.listReconcilableAttempts(), /newer than this library/);
   await assert.rejects(newer.commitAttempt(checkoutInput("order-newer", "a")), /newer than this/);
 
   // No marker at all (a migration template that cannot seed rows) is treated
   // as unversioned, never as a refusal.
   db.prepare("DELETE FROM openreceive_meta WHERE key = 'schema_version'").run();
-  const unversioned = createOpenReceiveSqlPayments(db, { clock: () => 1_000 });
+  const unversioned = createSqlPayments(db, { clock: () => 1_000 });
   assert.deepEqual(await unversioned.listReconcilableAttempts(), []);
 });
 

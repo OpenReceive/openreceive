@@ -1,5 +1,5 @@
 import {
-  buildOpenReceiveMethodGridEntries,
+  buildMethodGridEntries,
   type CheckoutController,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
@@ -12,15 +12,15 @@ import {
   createCheckoutSnapshotFromInvoice,
   createCheckoutStateEvent,
   createCheckoutStatusModel,
-  createOpenReceivePaymentWizardSelection,
-  createOpenReceiveSwapDisplayModel,
-  createOpenReceiveThemeChangeEvent,
+  createPaymentWizardSelection,
+  createSwapDisplayModel,
+  createThemeChangeEvent,
   createQrPayloadSvg,
   createQrSvg,
-  status as deriveStatus,
+  deriveStatus,
   enterCheckoutResumePath,
-  findOpenReceiveSwapGridGroup,
-  getOpenReceiveSwapRefundFormError,
+  findSwapGridGroup,
+  getSwapRefundFormError,
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
@@ -31,22 +31,22 @@ import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type OpenReceiveBrowserLoggerOption,
-  openReceivePaymentMethods,
+  type BrowserLoggerOption,
+  paymentMethods,
   openWallet,
   orClasses,
-  overlayOpenReceiveSwapRefundStaging,
-  parseOpenReceiveBooleanAttribute,
-  parseOpenReceiveMethodPickerKey,
-  parseOpenReceiveOptionalInteger,
-  parseOpenReceivePaymentMethod,
-  parseOpenReceiveResolvedTheme,
-  parseOpenReceiveThemePreference,
-  requestOpenReceiveSwapRefund,
-  syncOpenReceiveStoredThemeControls,
-  toggleOpenReceiveStoredThemeControls,
-  updateOpenReceivePaymentWizardSelection,
-  updateOpenReceiveSelectedSwapNetworks,
+  overlaySwapRefundStaging,
+  parseBooleanAttribute,
+  parseMethodPickerKey,
+  parseOptionalInteger,
+  parsePaymentMethod,
+  parseResolvedTheme,
+  parseThemePreference,
+  requestSwapRefund,
+  syncStoredThemeControls,
+  toggleStoredThemeControls,
+  updatePaymentWizardSelection,
+  updateSelectedSwapNetworks,
 } from "@openreceive/browser/headless";
 import { createElementCheckoutSession } from "./element-checkout-session.ts";
 import {
@@ -57,16 +57,16 @@ import {
   showElementCopyFeedback,
   wireSwapSelectAllInputs,
 } from "./dom-helpers.ts";
-import { adoptOpenReceiveCheckoutStyles } from "./element-styles.ts";
+import { adoptCheckoutStyles } from "./element-styles.ts";
 import {
   renderCheckoutCreateErrorHtml,
   renderCheckoutCreatingHtml,
   renderCheckoutHtml,
-  renderOpenReceiveThemeToggleHtml,
+  renderThemeToggleHtml,
 } from "./render-checkout.ts";
 import {
   type DefineOpenReceiveElementsOptions,
-  type OpenReceiveElementsSwapOption,
+  type ElementsSwapOption,
   parseElementInvoiceId,
   parseElementStatus,
   transactionStateFromStatus,
@@ -109,7 +109,7 @@ function checkoutSnapshotDisplayKey(snapshot: CheckoutSnapshot): string {
   });
 }
 
-export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOptions = {}): void {
+export function defineElements(options: DefineOpenReceiveElementsOptions = {}): void {
   const registry = options.registry ?? globalThis.customElements;
   const HTMLElementCtor = globalThis.HTMLElement;
   const tagName = options.tagName ?? DEFAULT_TAG_NAME;
@@ -121,11 +121,11 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
   }
 
   class CheckoutElement extends HTMLElementCtor {
-    private selection = createOpenReceivePaymentWizardSelection();
+    private selection = createPaymentWizardSelection();
     private activeTutorialProviderId: string | null = null;
     private activeTutorialIndex = 0;
     private activeTutorialCopied = false;
-    private swapOptions: readonly OpenReceiveElementsSwapOption[] = [];
+    private swapOptions: readonly ElementsSwapOption[] = [];
     private swapOptionsLoaded = false;
     private selectedSwapNetworks: Record<string, string> = {};
     private selectedPickerKey: string | null = null;
@@ -303,7 +303,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
 
     /** Order data belongs to the host; this only performs optional History API sync. */
     private syncResumePath(orderId: string): void {
-      const syncUrl = parseOpenReceiveBooleanAttribute(
+      const syncUrl = parseBooleanAttribute(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
       );
       if (syncUrl) {
@@ -331,10 +331,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         (invoice) => invoice.rail === "swap" && invoice.swap !== undefined,
       );
       if (swapInvoice !== undefined) {
-        this.startedSwapInvoice = overlayOpenReceiveSwapRefundStaging(
-          swapInvoice,
-          this.startedSwapInvoice,
-        );
+        this.startedSwapInvoice = overlaySwapRefundStaging(swapInvoice, this.startedSwapInvoice);
       }
       const displayKey = checkoutSnapshotDisplayKey(snapshot);
       if (this.lastSnapshotDisplayKey === displayKey) return;
@@ -439,7 +436,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         ),
         expires_at: readElementExpiresAt(this),
         theme: this.resolveTheme(),
-        payment_wizard: parseOpenReceiveBooleanAttribute(
+        payment_wizard: parseBooleanAttribute(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard),
         ),
         lightningRequested: this.session.mintingLightning ? false : lightningRequested,
@@ -552,7 +549,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
      */
     private prepareShadowRoot(): { root: ShadowRoot; inlineStyles: boolean } {
       const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
-      return { root, inlineStyles: !adoptOpenReceiveCheckoutStyles(root) };
+      return { root, inlineStyles: !adoptCheckoutStyles(root) };
     }
 
     private captureRefundAddressDraft(): void {
@@ -589,7 +586,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       // `polling="false"` renders the snapshot (countdown included) without ever
       // POSTing /payments/check, matching React's `polling` prop.
       const polling =
-        parseOpenReceiveBooleanAttribute(
+        parseBooleanAttribute(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling),
         ) !== false;
       // The one attribute still read STRICTLY, and the only one left that may
@@ -598,7 +595,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       // is not a poll interval is a host typo and must be heard. See
       // `readElementNumberAttribute` in ./dom-helpers.ts for the per-attribute
       // ruling.
-      const pollIntervalMs = parseOpenReceiveOptionalInteger(
+      const pollIntervalMs = parseOptionalInteger(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs),
         { label: "poll-interval-ms" },
       );
@@ -745,7 +742,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       }
       const swapInvoice = this.currentSwapInvoice();
       if (swapInvoice !== undefined) {
-        const display = createOpenReceiveSwapDisplayModel(swapInvoice, {});
+        const display = createSwapDisplayModel(swapInvoice, {});
         const swapCountdown = root.querySelector('[part="swap-countdown"]');
         if (swapCountdown !== null && display !== undefined) {
           swapCountdown.textContent = display.countdownLabel;
@@ -760,18 +757,18 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     private bindWizard(
       root: ShadowRoot,
       invoice: string,
-      logger: OpenReceiveBrowserLoggerOption | undefined,
+      logger: BrowserLoggerOption | undefined,
     ): void {
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.method).forEach((button) => {
         button.addEventListener("click", () => {
           if (button.hasAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerContinue)) return;
           if (button.hasAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerSelect)) return;
-          const method = parseOpenReceivePaymentMethod(
+          const method = parsePaymentMethod(
             button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method),
           );
           if (method === null) return;
           this.selectedPickerKey = null;
-          this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+          this.selection = updatePaymentWizardSelection(this.selection, {
             type: "select_method",
             method,
           });
@@ -787,12 +784,12 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           if (!(button instanceof HTMLButtonElement) || button.disabled) return;
           const key = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerSelect);
           if (key === null || key.length === 0) return;
-          const methodPick = parseOpenReceiveMethodPickerKey(key);
+          const methodPick = parseMethodPickerKey(key);
           if (methodPick !== null) {
-            const method = parseOpenReceivePaymentMethod(methodPick.methodId);
+            const method = parsePaymentMethod(methodPick.methodId);
             if (method === null) return;
             this.selectedPickerKey = null;
-            this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+            this.selection = updatePaymentWizardSelection(this.selection, {
               type: "select_method",
               method,
             });
@@ -804,11 +801,8 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           }
           const previousKey = this.selectedPickerKey;
           this.selectedPickerKey = key;
-          const entries = buildOpenReceiveMethodGridEntries(
-            openReceivePaymentMethods,
-            this.swapOptions,
-          );
-          const nextGroup = findOpenReceiveSwapGridGroup(entries, key);
+          const entries = buildMethodGridEntries(paymentMethods, this.swapOptions);
+          const nextGroup = findSwapGridGroup(entries, key);
           if (nextGroup !== undefined && nextGroup.options.length === 1) {
             const option =
               nextGroup.options.find((entry) => entry.available !== false) ?? nextGroup.options[0];
@@ -817,7 +811,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
             void this.session.startSwap(option.pay_in_asset);
             return;
           }
-          this.selectedSwapNetworks = updateOpenReceiveSelectedSwapNetworks({
+          this.selectedSwapNetworks = updateSelectedSwapNetworks({
             entries,
             nextKey: key,
             previousKey,
@@ -832,11 +826,11 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         .forEach((button) => {
           button.addEventListener("click", () => {
             if (!(button instanceof HTMLButtonElement) || button.disabled) return;
-            const method = parseOpenReceivePaymentMethod(
+            const method = parsePaymentMethod(
               button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method),
             );
             if (method !== null) {
-              this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+              this.selection = updatePaymentWizardSelection(this.selection, {
                 type: "select_method",
                 method,
               });
@@ -861,14 +855,14 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
             return;
           }
           if (target === "method") {
-            this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+            this.selection = updatePaymentWizardSelection(this.selection, {
               type: "change_method",
             });
             this.render();
             return;
           }
           if (target === "route") {
-            this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+            this.selection = updatePaymentWizardSelection(this.selection, {
               type: "change_route",
             });
             this.render();
@@ -880,7 +874,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         button.addEventListener("click", () => {
           const route = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.route);
           if (route === null) return;
-          this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+          this.selection = updatePaymentWizardSelection(this.selection, {
             type: "select_route",
             route,
           });
@@ -970,7 +964,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         };
         const validateRefundAddress = (address: string, showEmpty: boolean): string | undefined => {
           if (address.length === 0 && !showEmpty) return undefined;
-          return getOpenReceiveSwapRefundFormError(payInAsset, address, networkLabel);
+          return getSwapRefundFormError(payInAsset, address, networkLabel);
         };
         if (input instanceof HTMLInputElement && input.type !== "hidden") {
           if (this.refundAddressDraft.length > 0) {
@@ -1103,7 +1097,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       if (prefix === undefined) return;
 
       try {
-        this.startedSwapInvoice = await requestOpenReceiveSwapRefund({
+        this.startedSwapInvoice = await requestSwapRefund({
           fetch: globalThis.fetch,
           prefix,
           ...(orderId === null ? {} : { orderId }),
@@ -1138,7 +1132,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         this.latestCheckoutSnapshot?.invoices.find(
           (invoice) => invoice.invoice_id === this.startedSwapInvoice?.invoice_id,
         ) ?? this.startedSwapInvoice;
-      return overlayOpenReceiveSwapRefundStaging(matched, this.startedSwapInvoice);
+      return overlaySwapRefundStaging(matched, this.startedSwapInvoice);
     }
 
     private renderSwapQrCodes(root: ShadowRoot): void {
@@ -1157,7 +1151,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     }
 
     private currentThemeOption(): { readonly theme?: "light" | "dark" } {
-      const theme = parseOpenReceiveResolvedTheme(
+      const theme = parseResolvedTheme(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme),
       );
       return theme === undefined ? {} : { theme };
@@ -1165,21 +1159,20 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
 
     /** Explicit `theme` attr wins; otherwise inherit nearest ancestor `[data-theme]`. */
     private resolveTheme(): "light" | "dark" {
-      const attr = parseOpenReceiveResolvedTheme(
+      const attr = parseResolvedTheme(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme),
       );
       if (attr !== undefined) return attr;
       const ancestor = this.closest("[data-theme]");
-      const inherited = parseOpenReceiveResolvedTheme(ancestor?.getAttribute("data-theme"));
+      const inherited = parseResolvedTheme(ancestor?.getAttribute("data-theme"));
       if (inherited !== undefined) return inherited;
       return "light";
     }
 
     private syncThemeAncestorObserver(): void {
       const hasOwnTheme =
-        parseOpenReceiveResolvedTheme(
-          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme),
-        ) !== undefined;
+        parseResolvedTheme(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme)) !==
+        undefined;
       if (hasOwnTheme) {
         this.stopThemeAncestorObserver();
         return;
@@ -1214,7 +1207,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     }
   }
 
-  class OpenReceiveThemeToggleElement extends HTMLElementCtor {
+  class ThemeToggleElement extends HTMLElementCtor {
     private observer: MutationObserver | undefined;
     private observedTarget: Element | null = null;
 
@@ -1244,23 +1237,20 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
 
     render() {
       const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
-      const inlineStyles = !adoptOpenReceiveCheckoutStyles(root);
+      const inlineStyles = !adoptCheckoutStyles(root);
       const theme = this.syncTheme();
-      root.innerHTML = renderOpenReceiveThemeToggleHtml(theme.toggleLabel, { inlineStyles });
+      root.innerHTML = renderThemeToggleHtml(theme.toggleLabel, { inlineStyles });
       root
         .querySelector(OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS.button)
         ?.addEventListener("click", () => {
-          const nextTheme = toggleOpenReceiveStoredThemeControls(
-            this.themeTargets(),
-            this.themeOptions(),
-          );
-          this.dispatchEvent(createOpenReceiveThemeChangeEvent(nextTheme));
+          const nextTheme = toggleStoredThemeControls(this.themeTargets(), this.themeOptions());
+          this.dispatchEvent(createThemeChangeEvent(nextTheme));
           this.render();
         });
     }
 
     private syncTheme() {
-      return syncOpenReceiveStoredThemeControls(this.themeTargets(), this.themeOptions());
+      return syncStoredThemeControls(this.themeTargets(), this.themeOptions());
     }
 
     /**
@@ -1324,7 +1314,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     }
 
     private themeOptions() {
-      const defaultTheme = parseOpenReceiveThemePreference(
+      const defaultTheme = parseThemePreference(
         this.getAttribute(OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES.defaultTheme),
       );
       return {
@@ -1344,6 +1334,6 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     registry.define(tagName, CheckoutElement);
   }
   if (registry.get(themeToggleTagName) === undefined) {
-    registry.define(themeToggleTagName, OpenReceiveThemeToggleElement);
+    registry.define(themeToggleTagName, ThemeToggleElement);
   }
 }

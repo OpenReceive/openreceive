@@ -1,4 +1,4 @@
-import { openReceivePaymentsDdlStatements } from "@openreceive/core";
+import { paymentsDdlStatements } from "@openreceive/core";
 import type { ScaffoldPaymentsOptions } from "./types.ts";
 
 export function assertPaymentsTableName(value: string, flag: string): string {
@@ -15,7 +15,7 @@ export function isSqlite(options: ScaffoldPaymentsOptions): boolean {
 
 /**
  * The canonical `openreceive_payments` DDL — the same statements
- * `openReceivePaymentsSchemaSql` in `@openreceive/http` renders — with only the
+ * `paymentsSchemaSql` in `@openreceive/http` renders — with only the
  * table names threaded through. `order_id` is always TEXT and carries no
  * foreign key: OpenReceive never reads or locks the host's order table.
  * Timestamps are unix-seconds integers. Every column must be kept.
@@ -23,7 +23,7 @@ export function isSqlite(options: ScaffoldPaymentsOptions): boolean {
 export function canonicalPaymentsDdlStatements(
   options: ScaffoldPaymentsOptions,
 ): readonly string[] {
-  return openReceivePaymentsDdlStatements({
+  return paymentsDdlStatements({
     dialect: options.dialect,
     tableName: options.tableName,
     metaTableName: options.metaTableName,

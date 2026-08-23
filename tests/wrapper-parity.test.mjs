@@ -13,15 +13,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  createOpenReceiveWrapperCheckoutShellBinding,
-  validateOpenReceiveCheckoutProps,
+  createWrapperCheckoutShellBinding,
+  validateCheckoutProps,
 } from "../packages/js/elements/src/wrapper-shared.ts";
 import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_DEFAULT_PREFIX,
 } from "../packages/js/browser/src/headless.ts";
-import { openReceiveRoutes } from "../packages/js/browser/src/internal/checkout.ts";
+import { checkoutRoutes } from "../packages/js/browser/src/internal/checkout.ts";
 import { Checkout } from "../packages/js/react/src/index.ts";
 
 const PARITY_DOC = "docs/internal/wrapper-parity.md";
@@ -91,19 +91,19 @@ test("React and Vue derive the prop surface instead of restating it", () => {
   // extends the shared type, and Vue's defineProps IS the shared type. A shared prop
   // re-declared in either is drift waiting to happen, so assert none comes back.
   const reactProps = declaration(read(SOURCES.react), "export interface CheckoutProps");
-  assert.match(reactProps, /extends OpenReceiveCheckoutComponentProps/);
+  assert.match(reactProps, /extends CheckoutComponentProps/);
   for (const prop of SHARED_PROPS) {
     assert.doesNotMatch(reactProps, new RegExp(`readonly ${prop}\\?:`), `React restates ${prop}`);
   }
 
   const vue = read(SOURCES.vue);
-  assert.match(vue, /defineProps<OpenReceiveWrapperCheckoutComponentProps>\(\)/);
+  assert.match(vue, /defineProps<WrapperCheckoutComponentProps>\(\)/);
   assert.doesNotMatch(vue, /defineProps<\{/, "Vue restates the prop surface inline");
 });
 
 test("Svelte and Angular restate the props, because their prop syntax cannot derive them", () => {
   // `export let` and `@Input()` are declarations, not types: nothing can spread
-  // OpenReceiveWrapperCheckoutComponentProps into either. The duplication is forced
+  // WrapperCheckoutComponentProps into either. The duplication is forced
   // (docs/internal/wrapper-parity.md says so, and both sources say why); this is
   // what keeps it in step.
   for (const [name, file] of Object.entries({ svelte: SOURCES.svelte, angular: SOURCES.angular })) {
@@ -162,7 +162,7 @@ test("every wrapper exposes all seven event handlers as first-class props", () =
 
 test("the shared binding subscribes to every element event, including open-wallet", () => {
   const handlers = Object.fromEntries(HANDLERS.map((handler) => [handler, () => undefined]));
-  const shell = createOpenReceiveWrapperCheckoutShellBinding(null, {
+  const shell = createWrapperCheckoutShellBinding(null, {
     orderId: "order-parity",
     ...handlers,
   });
@@ -176,12 +176,12 @@ test("the shared binding subscribes to every element event, including open-walle
 
 test("missing mode props fail at the boundary with one clear error", () => {
   assert.throws(
-    () => validateOpenReceiveCheckoutProps({ framework: "@openreceive/test" }),
+    () => validateCheckoutProps({ framework: "@openreceive/test" }),
     /requires a checkout snapshot or an orderId/,
   );
   // The shared factory used to be the first thing to notice, throwing from inside a
   // computed/reactive read (in Angular, once per change-detection pass).
-  assert.throws(() => createOpenReceiveWrapperCheckoutShellBinding(null, {}), TypeError);
+  assert.throws(() => createWrapperCheckoutShellBinding(null, {}), TypeError);
 });
 
 test("create-mode props warn once per wrapper when passed in snapshot mode", () => {
@@ -200,8 +200,8 @@ test("create-mode props warn once per wrapper when passed in snapshot mode", () 
     warn: (message) => warnings.push(message),
   };
 
-  validateOpenReceiveCheckoutProps(props);
-  validateOpenReceiveCheckoutProps(props);
+  validateCheckoutProps(props);
+  validateCheckoutProps(props);
 
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /syncUrl/);
@@ -268,7 +268,7 @@ test("snapshot-mode polling defaults and knobs match the parity table", () => {
   // with prefix `/openreceive` (docs/internal/wrapper-parity.md `prefix` row).
   assert.equal(OPENRECEIVE_DEFAULT_PREFIX, "/openreceive");
   assert.equal(
-    openReceiveRoutes(OPENRECEIVE_DEFAULT_PREFIX).paymentsCheck,
+    checkoutRoutes(OPENRECEIVE_DEFAULT_PREFIX).paymentsCheck,
     "/openreceive/payments/check",
   );
   assert.match(doc, /`\/openreceive`/, "the parity table must pin the /openreceive default");
@@ -285,7 +285,7 @@ test("snapshot-mode polling defaults and knobs match the parity table", () => {
   // so the element resolves the same documented /openreceive default at poll
   // time (tests/wrapper-behavior.test.mjs proves that behaviorally through a
   // real mount; tests/element-lifecycle.test.mjs covers the element itself).
-  const shell = createOpenReceiveWrapperCheckoutShellBinding(snapshot, {});
+  const shell = createWrapperCheckoutShellBinding(snapshot, {});
   assert.equal(
     shell.checkout.attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix],
     undefined,
@@ -297,7 +297,7 @@ test("snapshot-mode polling defaults and knobs match the parity table", () => {
   // The polling knobs thread through shell options into the element attributes
   // the parity table names (`polling` / `pollIntervalMs`, wired via `options`
   // in the element wrappers, first-class props in React).
-  const tuned = createOpenReceiveWrapperCheckoutShellBinding(snapshot, {
+  const tuned = createWrapperCheckoutShellBinding(snapshot, {
     polling: false,
     pollIntervalMs: 1234,
   });
@@ -324,16 +324,16 @@ test("the theme is resolved from the default until the wrapper mounts", () => {
     removeItem: () => undefined,
     setItem: () => undefined,
   };
-  const deferred = createOpenReceiveWrapperCheckoutShellBinding(null, {
+  const deferred = createWrapperCheckoutShellBinding(null, {
     orderId: "order-parity",
     deferThemeResolution: true,
   });
-  const deferredWithHostStorage = createOpenReceiveWrapperCheckoutShellBinding(null, {
+  const deferredWithHostStorage = createWrapperCheckoutShellBinding(null, {
     orderId: "order-parity",
     storage,
     deferThemeResolution: true,
   });
-  const mounted = createOpenReceiveWrapperCheckoutShellBinding(null, {
+  const mounted = createWrapperCheckoutShellBinding(null, {
     orderId: "order-parity",
     storage,
   });

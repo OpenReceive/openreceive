@@ -5,7 +5,7 @@ import {
   getSwapRefundAddressError,
   isValidAddressForSwapNetwork,
   isValidSwapAddressForPayInAsset,
-  openReceiveSwapAddressNetworkForPayInAsset,
+  swapAddressNetworkForPayInAsset,
 } from "@openreceive/core/swap-address";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import { isValidSwapAddressForNetwork } from "../packages/js/node/src/swap/assets.ts";
@@ -30,15 +30,15 @@ const TRX_OTHER = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 // Same shape, last character changed: the checksum no longer matches.
 const TRX_BAD_CHECKSUM = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6u";
 
-test("openReceiveSwapAddressNetworkForPayInAsset maps every shipped pay-in asset", () => {
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("ETH_ETH"), "ETH");
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("USDT_ETH"), "ETH");
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("USDC_ETH"), "ETH");
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("SOL_SOL"), "SOL");
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("USDT_SOL"), "SOL");
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("USDC_SOL"), "SOL");
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("USDT_TRON"), "TRX");
-  assert.equal(openReceiveSwapAddressNetworkForPayInAsset("UNKNOWN"), undefined);
+test("swapAddressNetworkForPayInAsset maps every shipped pay-in asset", () => {
+  assert.equal(swapAddressNetworkForPayInAsset("ETH_ETH"), "ETH");
+  assert.equal(swapAddressNetworkForPayInAsset("USDT_ETH"), "ETH");
+  assert.equal(swapAddressNetworkForPayInAsset("USDC_ETH"), "ETH");
+  assert.equal(swapAddressNetworkForPayInAsset("SOL_SOL"), "SOL");
+  assert.equal(swapAddressNetworkForPayInAsset("USDT_SOL"), "SOL");
+  assert.equal(swapAddressNetworkForPayInAsset("USDC_SOL"), "SOL");
+  assert.equal(swapAddressNetworkForPayInAsset("USDT_TRON"), "TRX");
+  assert.equal(swapAddressNetworkForPayInAsset("UNKNOWN"), undefined);
 });
 
 test("isValidAddressForSwapNetwork accepts well-formed ETH / SOL / TRX addresses", () => {

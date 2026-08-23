@@ -5,18 +5,18 @@ import type {
   EventHandler,
   Logger,
   NodeOptions,
-  OpenReceiveLogEvent,
-  OpenReceiveLogLevel,
+  LogEvent,
+  LogLevel,
 } from "./types.ts";
 
 export function emitLog(
   options: NodeOptions,
-  level: OpenReceiveLogLevel,
+  level: LogLevel,
   event: string,
   message: string,
   fields: Record<string, unknown> = {},
 ): void {
-  emitOpenReceiveEvent(options, {
+  emitEvent(options, {
     level,
     event,
     message,
@@ -24,16 +24,16 @@ export function emitLog(
   });
 }
 
-export function emitOpenReceiveEvent(
+export function emitEvent(
   options: {
     readonly onEvent?: EventHandler;
     readonly logger?: Logger;
   },
-  event: OpenReceiveLogEvent,
+  event: LogEvent,
 ): void {
   if (options.onEvent === undefined && options.logger === undefined) return;
 
-  const sanitized = sanitizeOpenReceiveEvent(event);
+  const sanitized = sanitizeEvent(event);
 
   try {
     options.onEvent?.(sanitized);
@@ -56,10 +56,10 @@ export function createNwcEndpointLogger(
   options: CreateOpenReceiveOptions,
 ): NwcEndpointLogger | undefined {
   if (options.onEvent === undefined && options.logger === undefined) return undefined;
-  return (entry) => emitOpenReceiveEvent(options, entry);
+  return (entry) => emitEvent(options, entry);
 }
 
-export function sanitizeOpenReceiveEvent(entry: OpenReceiveLogEvent): OpenReceiveLogEvent {
+export function sanitizeEvent(entry: LogEvent): LogEvent {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
     if (isSensitiveLogKey(key)) {
@@ -68,7 +68,7 @@ export function sanitizeOpenReceiveEvent(entry: OpenReceiveLogEvent): OpenReceiv
       clean[key] = sanitizeLogValue(value);
     }
   }
-  return clean as OpenReceiveLogEvent;
+  return clean as LogEvent;
 }
 
 export function sanitizeLogValue(value: unknown): unknown {

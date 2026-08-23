@@ -7,12 +7,12 @@ import {
   finalizeScaffoldOptions,
   parseScaffoldPaymentsArgv,
   renderScaffoldPaymentsFiles,
-  runOpenReceiveCli,
+  runCli,
 } from "../packages/js/node/src/cli.ts";
 import { OPENRECEIVE_DIALECTS, OPENRECEIVE_ORMS } from "../packages/js/node/src/scaffold/types.ts";
 import { canonicalPaymentsDdlStatements } from "../packages/js/node/src/scaffold/shared.ts";
-import { openReceiveFulfillmentNote } from "../packages/js/core/src/index.ts";
-import { openReceivePaymentsSchemaSql } from "../packages/js/http/src/sql-payments.ts";
+import { fulfillmentNote } from "../packages/js/core/src/index.ts";
+import { paymentsSchemaSql } from "../packages/js/http/src/sql-payments.ts";
 
 const SCHEMA_PATHS = {
   prisma: "prisma/schema.openreceive.prisma",
@@ -57,7 +57,7 @@ function renderFor(orm, dialect, extra = {}) {
  */
 function withoutFulfillmentNote(text, tableName = "openreceive_payments") {
   const noteLines = new Set(
-    openReceiveFulfillmentNote("", tableName)
+    fulfillmentNote("", tableName)
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line !== ""),
@@ -82,7 +82,7 @@ function guideFile(files) {
 
 test("scaffold payments help is advertised from the root CLI", async () => {
   const lines = [];
-  const code = await runOpenReceiveCli({
+  const code = await runCli({
     argv: ["help"],
     cwd: process.cwd(),
     stdout: { write: (message) => lines.push(message) },
@@ -95,7 +95,7 @@ test("scaffold payments help is advertised from the root CLI", async () => {
 
 test("scaffold payments help documents flags and the schema-plus-guide contract", async () => {
   const lines = [];
-  const code = await runOpenReceiveCli({
+  const code = await runCli({
     argv: ["scaffold", "payments", "--help"],
     cwd: process.cwd(),
     stdout: { write: (message) => lines.push(message) },
@@ -113,7 +113,7 @@ test("scaffold payments help documents flags and the schema-plus-guide contract"
 
 test("scaffold payments requires --orm when not interactive", async () => {
   const errors = [];
-  const code = await runOpenReceiveCli({
+  const code = await runCli({
     argv: ["scaffold", "payments"],
     cwd: process.cwd(),
     stdout: { write: () => {} },
@@ -245,8 +245,8 @@ test("scaffold DDL matches the repository's canonical schema, per dialect", () =
     }).join("\n");
     assert.equal(
       normalize(scaffold),
-      normalize(openReceivePaymentsSchemaSql(dialect)),
-      `${dialect} scaffold DDL drifted from openReceivePaymentsSchemaSql`,
+      normalize(paymentsSchemaSql(dialect)),
+      `${dialect} scaffold DDL drifted from paymentsSchemaSql`,
     );
   }
 });
@@ -335,7 +335,7 @@ test("no repository, settlement, or locking logic is emitted", () => {
       );
       assert.doesNotMatch(
         joined,
-        /commitAttempt|markPaidOnce|markOpenReceivePaidOnce|listUnsettledAttempts|listReconcilableAttempts|OpenReceiveHostRepository|payments-repository|host\.stub|OpenReceiveAttemptConflict|onFirstSettlement|liveAttemptCommitDecision|openReceivePaymentInsert/,
+        /commitAttempt|markPaidOnce|markOpenReceivePaidOnce|listUnsettledAttempts|listReconcilableAttempts|HostRepository|payments-repository|host\.stub|AttemptConflict|onFirstSettlement|liveAttemptCommitDecision|paymentInsert/,
         `${orm}/${dialect} must not emit repository/settlement logic`,
       );
       assert.doesNotMatch(
@@ -351,13 +351,13 @@ test("wiring guide shows the library host wiring and the optional worker", () =>
   for (const orm of OPENRECEIVE_ORMS) {
     for (const dialect of OPENRECEIVE_DIALECTS) {
       const guide = guideFile(renderFor(orm, dialect)).contents;
-      assert.match(guide, /import \{ createOpenReceiveHost \} from "@openreceive\/http";/);
-      assert.match(guide, /createOpenReceiveHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
+      assert.match(guide, /import \{ createHost \} from "@openreceive\/http";/);
+      assert.match(guide, /createHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
       // Default settlement is opportunistic (no boot-time loop); the worker is
       // an optional separate process wired by a host script.
       assert.match(guide, /opportunisticReconcile/);
-      assert.match(guide, /startOpenReceiveNotificationWorker\(\{ service, host \}\)/);
-      assert.doesNotMatch(guide, /startOpenReceiveReconciler/);
+      assert.match(guide, /startNotificationWorker\(\{ service, host \}\)/);
+      assert.doesNotMatch(guide, /startReconciler/);
       assert.match(guide, /unix-seconds integers/);
       assert.match(guide, /status_reason/);
       assert.match(guide, /openreceive_meta/);
@@ -468,7 +468,7 @@ test("scaffold logs plan details including dialect", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "openreceive-scaffold-"));
   try {
     const output = [];
-    const code = await runOpenReceiveCli({
+    const code = await runCli({
       argv: ["scaffold", "payments", "--orm", "knex", "--dialect", "sqlite"],
       cwd: dir,
       stdout: { write: (message) => output.push(message) },
@@ -483,7 +483,7 @@ test("scaffold logs plan details including dialect", async () => {
     assert.match(text, /wrote /);
     assert.match(text, /Done\./);
     assert.match(text, /single-writer/);
-    assert.match(text, /createOpenReceiveHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
+    assert.match(text, /createHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -494,7 +494,7 @@ test("interactive wizard fills missing options and writes files", async () => {
   const answers = ["prisma", "sqlite", "."];
   try {
     const output = [];
-    const code = await runOpenReceiveCli({
+    const code = await runCli({
       argv: ["scaffold", "payments", "--interactive"],
       cwd: dir,
       stdout: { write: (message) => output.push(message) },
@@ -508,7 +508,7 @@ test("interactive wizard fills missing options and writes files", async () => {
     assert.match(schema, /@@map\("openreceive_payments"\)/);
     assert.match(schema, /Dialect: sqlite/);
     const guide = await readFile(path.join(dir, "OPENRECEIVE_PAYMENTS.md"), "utf8");
-    assert.match(guide, /createOpenReceiveHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
+    assert.match(guide, /createHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
     assert.match(output.join(""), /wrote /);
     assert.match(output.join(""), /dialect:\s+sqlite/);
   } finally {
@@ -519,7 +519,7 @@ test("interactive wizard fills missing options and writes files", async () => {
 test("scaffold refuses to overwrite without --force", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "openreceive-scaffold-"));
   try {
-    const first = await runOpenReceiveCli({
+    const first = await runCli({
       argv: ["scaffold", "payments", "--orm", "knex"],
       cwd: dir,
       stdout: { write: () => {} },
@@ -529,7 +529,7 @@ test("scaffold refuses to overwrite without --force", async () => {
     assert.equal(first, 0);
 
     const errors = [];
-    const second = await runOpenReceiveCli({
+    const second = await runCli({
       argv: ["scaffold", "payments", "--orm", "knex"],
       cwd: dir,
       stdout: { write: () => {} },

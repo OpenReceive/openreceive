@@ -4,7 +4,7 @@ export const OPENRECEIVE_HTTP_CONTRACT_VERSION = "0.4.0" as const;
 export const OPENRECEIVE_EVENT_CONTRACT_VERSION = "0.2.0" as const;
 
 export const OPENRECEIVE_EVENT_NAMES = ["payment.settled"] as const;
-export type OpenReceiveGeneratedEventName = (typeof OPENRECEIVE_EVENT_NAMES)[number];
+export type GeneratedEventName = (typeof OPENRECEIVE_EVENT_NAMES)[number];
 
 export const OPENRECEIVE_ERROR_CODES = [
   "NOT_IMPLEMENTED",
@@ -24,7 +24,7 @@ export const OPENRECEIVE_ERROR_CODES = [
   "UNSUPPORTED_METHOD",
   "CONFLICT",
 ] as const;
-export type OpenReceiveGeneratedErrorCode = (typeof OPENRECEIVE_ERROR_CODES)[number];
+export type GeneratedErrorCode = (typeof OPENRECEIVE_ERROR_CODES)[number];
 
 export const OPENRECEIVE_PAYMENT_STATUSES = [
   "pending",
@@ -33,7 +33,7 @@ export const OPENRECEIVE_PAYMENT_STATUSES = [
   "failed",
   "not_found",
 ] as const;
-export type OpenReceiveGeneratedPaymentStatus = (typeof OPENRECEIVE_PAYMENT_STATUSES)[number];
+export type GeneratedPaymentStatus = (typeof OPENRECEIVE_PAYMENT_STATUSES)[number];
 
 export const OPENRECEIVE_PAYMENT_HASH_PATTERN = "^[0-9a-f]{64}$" as const;
 

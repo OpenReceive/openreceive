@@ -145,9 +145,9 @@ stylesheet link can serve):
 
 ```js
 // In your JS bundle (importmap/esbuild/webpacker):
-import { defineOpenReceiveElements } from "@openreceive/elements";
+import { defineElements } from "@openreceive/elements";
 import "@openreceive/elements/styles.css"; // or link the compiled styles.css
-defineOpenReceiveElements();
+defineElements();
 ```
 
 The element creates the checkout for `order-id`, then renders and polls

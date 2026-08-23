@@ -1,18 +1,18 @@
 import { unixSeconds } from "@openreceive/core";
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
-import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
+import { type Host, warnFailure } from "./host-payments.ts";
 import { reconciliationTransition } from "./payment-repository.ts";
-import { maybeReconcileOpenReceivePayments } from "./reconcile-gate.ts";
+import { maybeReconcilePayments } from "./reconcile-gate.ts";
 
 // The wallet-scan side of settlement: one bounded pass over the pending attempts
-// (reconcileOpenReceivePayments) and the optional background poller that keeps
-// running it (startOpenReceiveReconciler). Both go through the durable gate in
+// (reconcileHostPayments) and the optional background poller that keeps
+// running it (startReconciler). Both go through the durable gate in
 // reconcile-gate.ts, which is what collapses N workers to one real wallet scan
 // per interval. The repository contract they act on lives in
 // payment-repository.ts; the host integration that owns the repository lives in
 // host-payments.ts.
 
-export interface OpenReceiveReconciler {
+export interface Reconciler {
   stop(): void;
   readonly done: Promise<void>;
 }
@@ -33,9 +33,9 @@ export interface OpenReceiveReconciler {
  * of adding a second per-invoice wallet walk. Results are keyed by hash and
  * may cover fewer hashes than were scanned.
  */
-export async function reconcileOpenReceivePayments(input: {
+export async function reconcileHostPayments(input: {
   readonly service: OpenReceive;
-  readonly host: OpenReceiveHost;
+  readonly host: Host;
   readonly overlapSeconds?: number;
   readonly maxPages?: number;
   readonly clock?: () => number;
@@ -102,9 +102,9 @@ export async function reconcileOpenReceivePayments(input: {
  * request-path opportunistic reconcile — collapse to one real wallet scan per
  * gate interval instead of each running its own.
  */
-export async function startOpenReceiveReconciler(input: {
+export async function startReconciler(input: {
   readonly service: OpenReceive;
-  readonly host: OpenReceiveHost;
+  readonly host: Host;
   readonly pollIntervalMs?: number;
   readonly signal?: AbortSignal;
   readonly overlapSeconds?: number;
@@ -116,7 +116,7 @@ export async function startOpenReceiveReconciler(input: {
    * permanently failing reconciler is never silent.
    */
   readonly onError?: (error: unknown) => void;
-}): Promise<OpenReceiveReconciler> {
+}): Promise<Reconciler> {
   const pollIntervalMs = input.pollIntervalMs ?? 5_000;
   if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 250) {
     throw new RangeError("pollIntervalMs must be a safe integer of at least 250");
@@ -145,18 +145,14 @@ export async function startOpenReceiveReconciler(input: {
     const message = error instanceof Error ? error.message : String(error);
     if (message === lastWarnedMessage) return;
     lastWarnedMessage = message;
-    warnOpenReceiveFailure(
-      "payment.reconcile.failed",
-      "reconciliation pass failed (will retry)",
-      error,
-    );
+    warnFailure("payment.reconcile.failed", "reconciliation pass failed (will retry)", error);
   };
   const done = (async () => {
     try {
       while (!controller.signal.aborted) {
         // The gated pass never throws: wallet, repository, and callback
         // failures reach reportError and retry from the ledger next pass.
-        const result = await maybeReconcileOpenReceivePayments({
+        const result = await maybeReconcilePayments({
           service: input.service,
           host: input.host,
           overlapSeconds,

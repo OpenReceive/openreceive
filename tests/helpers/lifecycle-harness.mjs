@@ -1,10 +1,7 @@
 // P1 harness: real browser components -> real HTTP handler -> real SQL repository
 // on in-memory SQLite -> testkit fake wallet + fake swap provider. No network, no
 // real wallet, no server socket: the components' fetch is the handler itself.
-import {
-  createOpenReceiveHost,
-  createOpenReceiveHttpHandler,
-} from "../../packages/js/http/src/index.ts";
+import { createHost, createHttpHandler } from "../../packages/js/http/src/index.ts";
 import { createOpenReceive } from "../../packages/js/node/src/index.ts";
 import {
   createTestkitReceiveClient,
@@ -29,7 +26,7 @@ export async function createLifecycleStack(options = {}) {
   const db = memoryPaymentsDb();
   const orders = new Map();
   const settlements = [];
-  const host = createOpenReceiveHost({
+  const host = createHost({
     db,
     loadOrder: (orderId) => orders.get(orderId) ?? null,
     amountForOrder: (order) => order.amount,
@@ -37,7 +34,7 @@ export async function createLifecycleStack(options = {}) {
       settlements.push(settlement);
     },
   });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host,

@@ -21,8 +21,8 @@ export function unixSeconds(): number {
  * Narrowing predicate for a JSON object: not null, not an array.
  *
  * There is no throwing variant here: callers that must REJECT a non-record
- * wrap this and throw their own error type (OpenReceivePriceFeedError, the node
- * service error, OpenReceiveHttpError), and that error identity is the whole
+ * wrap this and throw their own error type (PriceFeedError, the node
+ * service error, HttpError), and that error identity is the whole
  * point of those wrappers.
  */
 export function isRecord(value: unknown): value is Record<string, unknown> {

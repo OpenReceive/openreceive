@@ -6,22 +6,19 @@ import type {
   CheckoutInvoiceSnapshot,
   CheckoutInvoiceSwapSnapshot,
   CheckoutState,
-  OpenReceiveTransactionDetailRow,
-  OpenReceiveTransactionDetailsInput,
+  TransactionDetailRow,
+  TransactionDetailsInput,
 } from "./ui.ts";
 import {
-  formatOpenReceiveDepositAmount,
-  formatOpenReceiveFiatAmount,
-  formatOpenReceiveInvoiceLabel,
-  formatOpenReceivePaymentHashLabel,
+  formatDepositAmount,
+  formatFiatAmount,
+  formatInvoiceLabel,
+  formatPaymentHashLabel,
   optionalMsatsLabel,
   optionalUnixTimeLabel,
 } from "./checkout-format.ts";
-import { createOpenReceiveDetailExternalLink } from "./checkout-links.ts";
-import {
-  createOpenReceiveSwapFeeBreakdown,
-  getOpenReceiveSwapAssetDisplay,
-} from "./checkout-swap-view.ts";
+import { createDetailExternalLink } from "./checkout-links.ts";
+import { createSwapFeeBreakdown, getSwapAssetDisplay } from "./checkout-swap-view.ts";
 
 /**
  * A timestamp row for either panel: the ISO label when the value is a date, and
@@ -53,15 +50,13 @@ function addTimestampRow(
  * Build display rows for settled checkout / swap state from public OpenReceive
  * fields only. Omits undefined values; never surfaces NWC or send-payment secrets.
  */
-export function createOpenReceiveTransactionDetails(
-  input: OpenReceiveTransactionDetailsInput,
-): OpenReceiveTransactionDetailRow[] {
-  const rows: OpenReceiveTransactionDetailRow[] = [];
+export function createTransactionDetails(input: TransactionDetailsInput): TransactionDetailRow[] {
+  const rows: TransactionDetailRow[] = [];
   const payInAsset = input.swap?.pay_in_asset;
   const push = (label: string, value: string | undefined, copyValue?: string) => {
     if (value === undefined || value === "") return;
     const linkValue = copyValue ?? value;
-    const link = createOpenReceiveDetailExternalLink({
+    const link = createDetailExternalLink({
       label,
       value: linkValue,
       ...(payInAsset === undefined ? {} : { payInAsset }),
@@ -88,14 +83,14 @@ export function createOpenReceiveTransactionDetails(
     push("Amount", optionalMsatsLabel(input.amount_msats));
     push("Amount (msats)", String(input.amount_msats));
   }
-  const fiat = formatOpenReceiveFiatAmount(input.fiat_quote?.fiat);
+  const fiat = formatFiatAmount(input.fiat_quote?.fiat);
   push("Fiat", fiat);
 
   if (typeof input.invoice === "string" && input.invoice.length > 0) {
-    push("Lightning invoice", formatOpenReceiveInvoiceLabel(input.invoice), input.invoice);
+    push("Lightning invoice", formatInvoiceLabel(input.invoice), input.invoice);
   }
   if (input.payment_hash !== undefined) {
-    push("Payment hash", formatOpenReceivePaymentHashLabel(input.payment_hash), input.payment_hash);
+    push("Payment hash", formatPaymentHashLabel(input.payment_hash), input.payment_hash);
   }
 
   if (input.settled_at !== undefined) {
@@ -113,7 +108,7 @@ export function createOpenReceiveTransactionDetails(
     // inside one poll interval). Label it as a last-known value, not a live one.
     // See docs/guides/automated-swaps.md, "Provider state after settlement".
     const settled = input.transaction_state === "settled";
-    const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
+    const asset = getSwapAssetDisplay(swap.pay_in_asset);
     push("Swap provider", swap.provider);
     push("Provider order", swap.provider_order_id);
     push("Swap attempt", swap.attempt_id);
@@ -122,16 +117,16 @@ export function createOpenReceiveTransactionDetails(
     push("Network", asset.networkLabel);
     push("Deposit address", swap.deposit_address);
     push("Deposit memo", swap.deposit_memo);
-    push("Deposit amount", formatOpenReceiveDepositAmount(swap.deposit_amount));
+    push("Deposit amount", formatDepositAmount(swap.deposit_amount));
     if (swap.deposit_received_amount !== undefined) {
-      push("Amount received", formatOpenReceiveDepositAmount(swap.deposit_received_amount));
+      push("Amount received", formatDepositAmount(swap.deposit_received_amount));
     }
     push(settled ? "Last provider state" : "Provider state", swap.provider_state);
     if (swap.refund_reason !== undefined) {
       push("Refund reason", swap.refund_reason);
     }
     if (swap.refund_amount !== undefined) {
-      push("Estimated refund", formatOpenReceiveDepositAmount(swap.refund_amount));
+      push("Estimated refund", formatDepositAmount(swap.refund_amount));
     }
     if (swap.provider_expires_at !== undefined) {
       addTimestampRow(push, "Provider expires at", swap.provider_expires_at);
@@ -140,7 +135,7 @@ export function createOpenReceiveTransactionDetails(
     push("Lightning payout", swap.payout_tx_id);
     push("Refund address", swap.refund_address);
     push("Refund transaction", swap.refund_tx_id);
-    const feeBreakdown = createOpenReceiveSwapFeeBreakdown(swap.fee);
+    const feeBreakdown = createSwapFeeBreakdown(swap.fee);
     if (feeBreakdown !== undefined) {
       push("Cart total", feeBreakdown.cartTotal);
       push("You send", feeBreakdown.youSend);
@@ -160,7 +155,7 @@ export function createOpenReceiveTransactionDetails(
   return rows;
 }
 
-export function createOpenReceiveTransactionDetailsFromState(
+export function createTransactionDetailsFromState(
   state: Pick<
     CheckoutState,
     | "order_id"
@@ -177,8 +172,8 @@ export function createOpenReceiveTransactionDetailsFromState(
     | "settled_at"
     | "swap"
   >,
-): OpenReceiveTransactionDetailRow[] {
-  return createOpenReceiveTransactionDetails({
+): TransactionDetailRow[] {
+  return createTransactionDetails({
     order_id: state.order_id,
     checkout_id: state.checkout_id,
     invoice_id: state.invoice_id,
@@ -204,22 +199,22 @@ export function createOpenReceiveTransactionDetailsFromState(
  * legitimately differs between them (React.createElement vs an HTML string);
  * which rows a source yields is one rule and lives here.
  */
-export type OpenReceiveTransactionDetailsSource =
+export type TransactionDetailsSource =
   | CheckoutState
-  | OpenReceiveTransactionDetailsInput
-  | readonly OpenReceiveTransactionDetailRow[]
+  | TransactionDetailsInput
+  | readonly TransactionDetailRow[]
   | null
   | undefined;
 
-export function resolveOpenReceiveTransactionDetailRows(
-  source: OpenReceiveTransactionDetailsSource,
-): OpenReceiveTransactionDetailRow[] {
+export function resolveTransactionDetailRows(
+  source: TransactionDetailsSource,
+): TransactionDetailRow[] {
   if (source === null || source === undefined) return [];
   if (Array.isArray(source)) return [...source];
   if (isCheckoutStateSource(source)) {
-    return createOpenReceiveTransactionDetailsFromState(source);
+    return createTransactionDetailsFromState(source);
   }
-  return createOpenReceiveTransactionDetails(source as OpenReceiveTransactionDetailsInput);
+  return createTransactionDetails(source as TransactionDetailsInput);
 }
 
 /**
@@ -238,13 +233,13 @@ function isCheckoutStateSource(value: object): value is CheckoutState {
   );
 }
 
-export interface OpenReceivePaymentDataEntry {
+export interface PaymentDataEntry {
   readonly label: string;
   readonly value: string;
 }
 
 /** Structural subset of {@link CheckoutState} / display data a payment-data panel needs. */
-export interface OpenReceivePaymentDataSource {
+export interface PaymentDataSource {
   readonly order_id?: string;
   readonly checkout_id?: string;
   readonly invoice_id?: string;
@@ -264,10 +259,8 @@ export interface OpenReceivePaymentDataSource {
  * Everything the client knows about a payment, as ordered label/value rows for the
  * post-settlement "payment data" panel. Undefined fields are skipped.
  */
-export function createOpenReceivePaymentDataEntries(
-  source: OpenReceivePaymentDataSource,
-): readonly OpenReceivePaymentDataEntry[] {
-  const entries: OpenReceivePaymentDataEntry[] = [];
+export function createPaymentDataEntries(source: PaymentDataSource): readonly PaymentDataEntry[] {
+  const entries: PaymentDataEntry[] = [];
   const add = (label: string, value: string | undefined): void => {
     if (value !== undefined && value !== "") entries.push({ label, value });
   };

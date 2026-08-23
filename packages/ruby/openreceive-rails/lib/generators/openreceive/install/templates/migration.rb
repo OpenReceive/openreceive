@@ -47,7 +47,7 @@ class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>
     end
 
     # Database-level backstops for the two invariants the engines enforce in
-    # code, mirroring the JS openReceivePaymentsSchemaSql. There is deliberately
+    # code, mirroring the JS paymentsSchemaSql. There is deliberately
     # NO uniqueness constraint over live attempts: liveness is time-dependent
     # (a superseded row stays pending with a future expires_at, and an expired
     # row stays pending until a wallet scan closes it), so any such index would

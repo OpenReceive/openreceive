@@ -7,9 +7,9 @@ import {
   bitcoinAmountToSats,
   fiatValueToSats,
   OPENRECEIVE_MSATS_PER_SAT,
-  type OpenReceiveBitcoinAmount,
-  type OpenReceiveBtcFiatRateMap,
-  OpenReceiveDecimalError,
+  type BitcoinAmount,
+  type BtcFiatRateMap,
+  DecimalError,
 } from "../money/decimal.ts";
 import { unixSeconds } from "../values.ts";
 import {
@@ -23,9 +23,9 @@ import {
 } from "./constants.ts";
 import { isFiatCurrencyCode, normalizeFiatCurrency } from "./parsing.ts";
 import type {
-  OpenReceiveDirectAmountQuote,
-  OpenReceiveRateQuote,
-  OpenReceiveSourcedPriceProvider,
+  DirectAmountQuote,
+  RateQuote,
+  SourcedPriceProvider,
   QuoteFiatToMsatsRequest,
   QuoteFiatToMsatsWithPriceRequest,
 } from "./types.ts";
@@ -34,7 +34,7 @@ function toSafeJsonInteger(value: bigint, fieldName: string): number {
   const maximum = BigInt(Number.MAX_SAFE_INTEGER);
 
   if (value > maximum) {
-    throw new OpenReceiveDecimalError(`${fieldName} exceeds JSON safe integer boundary`);
+    throw new DecimalError(`${fieldName} exceeds JSON safe integer boundary`);
   }
 
   return Number(value);
@@ -42,7 +42,7 @@ function toSafeJsonInteger(value: bigint, fieldName: string): number {
 
 function normalizeUnixSeconds(value: number, fieldName: string): number {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new OpenReceiveDecimalError(`${fieldName} must be a non-negative safe integer`);
+    throw new DecimalError(`${fieldName} must be a non-negative safe integer`);
   }
 
   return value;
@@ -50,31 +50,29 @@ function normalizeUnixSeconds(value: number, fieldName: string): number {
 
 function assertAmountBounds(amountSats: bigint, amountMsats: bigint): void {
   if (amountSats < OPENRECEIVE_MIN_AMOUNT_SATS) {
-    throw new OpenReceiveDecimalError("amount_sats must be at least 1");
+    throw new DecimalError("amount_sats must be at least 1");
   }
 
   if (amountSats > OPENRECEIVE_MAX_AMOUNT_SATS) {
-    throw new OpenReceiveDecimalError("amount_sats exceeds JSON safe integer boundary");
+    throw new DecimalError("amount_sats exceeds JSON safe integer boundary");
   }
 
   if (amountMsats < OPENRECEIVE_MIN_AMOUNT_MSATS) {
-    throw new OpenReceiveDecimalError("amount_msats must be at least 1000");
+    throw new DecimalError("amount_msats must be at least 1000");
   }
 
   if (amountMsats > OPENRECEIVE_MAX_AMOUNT_MSATS) {
-    throw new OpenReceiveDecimalError("amount_msats exceeds JSON safe integer boundary");
+    throw new DecimalError("amount_msats exceeds JSON safe integer boundary");
   }
 }
 
 /**
  * Convert a BTC/SAT/SATS amount straight to msats — no price feed involved.
  *
- * @throws {OpenReceiveDecimalError} for a malformed, sub-satoshi, or
+ * @throws {DecimalError} for a malformed, sub-satoshi, or
  * out-of-range amount.
  */
-export function quoteBitcoinAmountToMsats(
-  amount: OpenReceiveBitcoinAmount,
-): OpenReceiveDirectAmountQuote {
+export function quoteBitcoinAmountToMsats(amount: BitcoinAmount): DirectAmountQuote {
   const amountSats = bitcoinAmountToSats(amount);
   const amountMsats = amountSats * OPENRECEIVE_MSATS_PER_SAT;
 
@@ -91,7 +89,7 @@ export function quoteBitcoinAmountToMsats(
  * {@link quoteFiatToMsatsAtMockRate}. Not a market rate — tests, docs, and
  * screenshots only.
  *
- * @throws {OpenReceiveDecimalError} for a currency the static table lacks.
+ * @throws {DecimalError} for a currency the static table lacks.
  */
 export function getStaticBtcFiatPrice(currency: string): string {
   const rateKey = normalizeFiatCurrency(
@@ -100,7 +98,7 @@ export function getStaticBtcFiatPrice(currency: string): string {
   const rate = OPENRECEIVE_STATIC_BTC_FIAT_RATES.bitcoin[rateKey];
 
   if (rate === undefined) {
-    throw new OpenReceiveDecimalError(`unsupported static fiat currency: ${currency}`);
+    throw new DecimalError(`unsupported static fiat currency: ${currency}`);
   }
 
   return rate;
@@ -110,20 +108,18 @@ export function getStaticBtcFiatPrice(currency: string): string {
  * Quote a fiat amount at a caller-supplied BTC price, rounding up to a whole
  * satoshi.
  *
- * @throws {OpenReceiveDecimalError} for malformed fiat input or an
+ * @throws {DecimalError} for malformed fiat input or an
  * out-of-range result.
- * @throws {OpenReceivePriceFeedError} when `btcFiatPrice` is unusable.
+ * @throws {PriceFeedError} when `btcFiatPrice` is unusable.
  */
-export function quoteFiatToMsatsWithPrice(
-  request: QuoteFiatToMsatsWithPriceRequest,
-): OpenReceiveRateQuote {
+export function quoteFiatToMsatsWithPrice(request: QuoteFiatToMsatsWithPriceRequest): RateQuote {
   if (request.fiat === undefined) {
-    throw new OpenReceiveDecimalError("fiat is required");
+    throw new DecimalError("fiat is required");
   }
 
   const fiat = request.fiat;
   if (!isFiatCurrencyCode(fiat.currency)) {
-    throw new OpenReceiveDecimalError("fiat.currency must be an ISO 4217 uppercase code");
+    throw new DecimalError("fiat.currency must be an ISO 4217 uppercase code");
   }
 
   const btcFiatPrice = request.btcFiatPrice;
@@ -158,9 +154,9 @@ export function quoteFiatToMsatsWithPrice(
  * price. Never use it to price a real invoice: the quote is marked
  * `source: "static_mock"` precisely so a caller cannot mistake it for one.
  *
- * @throws {OpenReceiveDecimalError} for a currency the static table lacks.
+ * @throws {DecimalError} for a currency the static table lacks.
  */
-export function quoteFiatToMsatsAtMockRate(request: QuoteFiatToMsatsRequest): OpenReceiveRateQuote {
+export function quoteFiatToMsatsAtMockRate(request: QuoteFiatToMsatsRequest): RateQuote {
   return quoteFiatToMsatsWithPrice({
     ...request,
     btcFiatPrice: getStaticBtcFiatPrice(request.fiat.currency),
@@ -169,10 +165,10 @@ export function quoteFiatToMsatsAtMockRate(request: QuoteFiatToMsatsRequest): Op
 }
 
 /** Offline/test provider serving {@link OPENRECEIVE_STATIC_BTC_FIAT_RATES}. */
-export class StaticPriceProvider implements OpenReceiveSourcedPriceProvider {
+export class StaticPriceProvider implements SourcedPriceProvider {
   readonly source = OPENRECEIVE_STATIC_PRICE_SOURCE_ID;
 
-  async getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap> {
+  async getBtcFiatRates(currencies: readonly string[]): Promise<BtcFiatRateMap> {
     const rates: Record<string, string> = {};
 
     for (const currency of currencies) {

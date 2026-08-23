@@ -1,7 +1,7 @@
 import {
-  createOpenReceiveLightningInvoiceDecodeUrl,
+  createLightningInvoiceDecodeUrl,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
-  openReceiveCheckoutLabels,
+  checkoutLabels,
   orClasses,
 } from "@openreceive/browser/headless";
 import {
@@ -71,14 +71,14 @@ const CheckoutPanel: React.FC = observer(() => {
   const hideLightning = !showLightning && !expired && !settled;
   const showSummaryMeta = settled || expired;
   const fiatCurrency = state.fiat_quote?.fiat?.currency;
-  const decodeInvoiceHref = createOpenReceiveLightningInvoiceDecodeUrl(state.invoice);
+  const decodeInvoiceHref = createLightningInvoiceDecodeUrl(state.invoice);
 
   return (
     <section className={`demo-checkout ${orClasses.root}`} {...rootDataAttribute}>
       {checkout.mintingLightning ? (
         <div className={orClasses.creating}>
           <span className={orClasses.spinner} aria-hidden="true" />
-          <p>{openReceiveCheckoutLabels.preparingPayment}</p>
+          <p>{checkoutLabels.preparingPayment}</p>
         </div>
       ) : null}
       {hideLightning ? null : (
@@ -97,9 +97,7 @@ const CheckoutPanel: React.FC = observer(() => {
           )}
           <div className={orClasses.paymentInfo}>
             {expired || settled ? null : (
-              <p className={orClasses.invoiceTitle}>
-                {openReceiveCheckoutLabels.bitcoinLightningInvoice}
-              </p>
+              <p className={orClasses.invoiceTitle}>{checkoutLabels.bitcoinLightningInvoice}</p>
             )}
             <WaitingState status={statusModel} settled={settled} />
             {statusModel.countdownLabel === undefined ? null : (
@@ -121,7 +119,7 @@ const CheckoutPanel: React.FC = observer(() => {
                   className={orClasses.btn}
                   onClick={() => workspace.startOver()}
                 >
-                  {openReceiveCheckoutLabels.startOver}
+                  {checkoutLabels.startOver}
                 </button>
               </div>
             ) : (
@@ -140,7 +138,7 @@ const CheckoutPanel: React.FC = observer(() => {
                     rel="noreferrer"
                     target="_blank"
                   >
-                    {openReceiveCheckoutLabels.decodeInvoice}
+                    {checkoutLabels.decodeInvoice}
                   </a>
                 )}
               </div>

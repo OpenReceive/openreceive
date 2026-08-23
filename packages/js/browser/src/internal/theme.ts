@@ -1,19 +1,17 @@
 import {
   OPENRECEIVE_THEME_STORAGE_KEY,
-  type OpenReceiveReadThemePreferenceOptions,
-  type OpenReceiveResolvedTheme,
-  type OpenReceiveStoredThemeModelOptions,
-  type OpenReceiveThemeAttributeTarget,
-  type OpenReceiveThemeControlTargets,
-  type OpenReceiveThemeModel,
-  type OpenReceiveThemeModelOptions,
-  type OpenReceiveThemePreference,
-  type OpenReceiveThemeStorageOptions,
+  type ReadThemePreferenceOptions,
+  type ResolvedTheme,
+  type StoredThemeModelOptions,
+  type ThemeAttributeTarget,
+  type ThemeControlTargets,
+  type ThemeModel,
+  type ThemeModelOptions,
+  type ThemePreference,
+  type ThemeStorageOptions,
 } from "./ui.ts";
 
-export function readOpenReceiveThemePreference(
-  options: OpenReceiveReadThemePreferenceOptions = {},
-): OpenReceiveThemePreference {
+export function readThemePreference(options: ReadThemePreferenceOptions = {}): ThemePreference {
   const value = readStorageValue(
     options.storage ?? getBrowserStorage(),
     options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY,
@@ -23,9 +21,9 @@ export function readOpenReceiveThemePreference(
     : (options.defaultTheme ?? "system");
 }
 
-export function writeOpenReceiveThemePreference(
-  theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeStorageOptions = {},
+export function writeThemePreference(
+  theme: ThemePreference,
+  options: ThemeStorageOptions = {},
 ): void {
   writeStorageValue(
     options.storage ?? getBrowserStorage(),
@@ -34,38 +32,38 @@ export function writeOpenReceiveThemePreference(
   );
 }
 
-export function resolveOpenReceiveTheme(
-  theme: OpenReceiveThemePreference,
+export function resolveTheme(
+  theme: ThemePreference,
   options: {
     readonly systemDark?: boolean;
   } = {},
-): OpenReceiveResolvedTheme {
+): ResolvedTheme {
   if (theme === "light" || theme === "dark") return theme;
   if (options.systemDark !== undefined) return options.systemDark ? "dark" : "light";
   return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function getOpenReceiveNextThemePreference(
-  theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeModelOptions = {},
-): OpenReceiveThemePreference {
-  return resolveOpenReceiveTheme(theme, options) === "dark" ? "light" : "dark";
+export function getNextThemePreference(
+  theme: ThemePreference,
+  options: ThemeModelOptions = {},
+): ThemePreference {
+  return resolveTheme(theme, options) === "dark" ? "light" : "dark";
 }
 
-export function getOpenReceiveThemeToggleLabel(resolvedTheme: OpenReceiveResolvedTheme): string {
+export function getThemeToggleLabel(resolvedTheme: ResolvedTheme): string {
   return `${resolvedTheme} mode`;
 }
 
-export function createOpenReceiveThemeModel(
-  theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  const resolvedTheme = resolveOpenReceiveTheme(theme, options);
+export function createThemeModel(
+  theme: ThemePreference,
+  options: ThemeModelOptions = {},
+): ThemeModel {
+  const resolvedTheme = resolveTheme(theme, options);
   return {
     theme,
     resolvedTheme,
-    nextTheme: getOpenReceiveNextThemePreference(theme, options),
-    toggleLabel: getOpenReceiveThemeToggleLabel(resolvedTheme),
+    nextTheme: getNextThemePreference(theme, options),
+    toggleLabel: getThemeToggleLabel(resolvedTheme),
     attributes: {
       "data-theme": resolvedTheme,
       "data-openreceive-theme": resolvedTheme,
@@ -76,24 +74,20 @@ export function createOpenReceiveThemeModel(
   };
 }
 
-export function createOpenReceiveStoredThemeModel(
-  options: OpenReceiveStoredThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  const theme = readOpenReceiveThemePreference(options);
-  return createOpenReceiveThemeModel(theme, { systemDark: options.systemDark });
+export function createStoredThemeModel(options: StoredThemeModelOptions = {}): ThemeModel {
+  const theme = readThemePreference(options);
+  return createThemeModel(theme, { systemDark: options.systemDark });
 }
 
-export function toggleOpenReceiveStoredThemePreference(
-  options: OpenReceiveStoredThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  const currentTheme = createOpenReceiveStoredThemeModel(options);
-  writeOpenReceiveThemePreference(currentTheme.nextTheme, options);
-  return createOpenReceiveStoredThemeModel(options);
+export function toggleStoredThemePreference(options: StoredThemeModelOptions = {}): ThemeModel {
+  const currentTheme = createStoredThemeModel(options);
+  writeThemePreference(currentTheme.nextTheme, options);
+  return createStoredThemeModel(options);
 }
 
-export function applyOpenReceiveThemeAttributes(
-  target: OpenReceiveThemeAttributeTarget | null | undefined,
-  theme: OpenReceiveThemeModel,
+export function applyThemeAttributes(
+  target: ThemeAttributeTarget | null | undefined,
+  theme: ThemeModel,
 ): void {
   if (target === null || target === undefined) return;
   for (const [name, value] of Object.entries(theme.attributes)) {
@@ -102,8 +96,8 @@ export function applyOpenReceiveThemeAttributes(
 }
 
 export function applyCheckoutThemeAttributes(
-  target: OpenReceiveThemeAttributeTarget | null | undefined,
-  theme: OpenReceiveThemeModel,
+  target: ThemeAttributeTarget | null | undefined,
+  theme: ThemeModel,
 ): void {
   if (target === null || target === undefined) return;
   for (const [name, value] of Object.entries(theme.checkoutElementAttributes)) {
@@ -111,32 +105,29 @@ export function applyCheckoutThemeAttributes(
   }
 }
 
-export function applyOpenReceiveThemeControls(
-  targets: OpenReceiveThemeControlTargets,
-  theme: OpenReceiveThemeModel,
-): void {
-  applyOpenReceiveThemeAttributes(targets.root, theme);
+export function applyThemeControls(targets: ThemeControlTargets, theme: ThemeModel): void {
+  applyThemeAttributes(targets.root, theme);
   applyCheckoutThemeAttributes(targets.checkout, theme);
   if (targets.toggle !== null && targets.toggle !== undefined) {
     targets.toggle.textContent = theme.toggleLabel;
   }
 }
 
-export function syncOpenReceiveStoredThemeControls(
-  targets: OpenReceiveThemeControlTargets,
-  options: OpenReceiveStoredThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  const theme = createOpenReceiveStoredThemeModel(options);
-  applyOpenReceiveThemeControls(targets, theme);
+export function syncStoredThemeControls(
+  targets: ThemeControlTargets,
+  options: StoredThemeModelOptions = {},
+): ThemeModel {
+  const theme = createStoredThemeModel(options);
+  applyThemeControls(targets, theme);
   return theme;
 }
 
-export function toggleOpenReceiveStoredThemeControls(
-  targets: OpenReceiveThemeControlTargets,
-  options: OpenReceiveStoredThemeModelOptions = {},
-): OpenReceiveThemeModel {
-  const theme = toggleOpenReceiveStoredThemePreference(options);
-  applyOpenReceiveThemeControls(targets, theme);
+export function toggleStoredThemeControls(
+  targets: ThemeControlTargets,
+  options: StoredThemeModelOptions = {},
+): ThemeModel {
+  const theme = toggleStoredThemePreference(options);
+  applyThemeControls(targets, theme);
   return theme;
 }
 

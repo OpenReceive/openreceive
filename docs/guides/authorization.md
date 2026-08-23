@@ -70,10 +70,10 @@ same adapter:
 
 ```ts
 import { createOpenReceive } from "@openreceive/node";
-import { createOpenReceiveHost } from "@openreceive/http";
+import { createHost } from "@openreceive/http";
 
 const service = await createOpenReceive();
-const host = createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db, loadOrder, amountForOrder, onPaid });
 
 app.use(openReceiveExpress({ service, host, authorize }));
 ```
@@ -93,5 +93,5 @@ await host.payments.commitAttempt({
 }); // commit BEFORE the payer sees the invoice
 ```
 
-See [createOpenReceiveHost](api-reference.md#createopenreceivehost) and
+See [createHost](api-reference.md#createhost) and
 [Payment storage](storage.md) for the repository escape hatch.

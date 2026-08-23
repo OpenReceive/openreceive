@@ -1,7 +1,7 @@
 import { unixSeconds } from "@openreceive/core";
 import {
-  type OpenReceiveSwapAddressNetwork,
-  openReceiveSwapAddressNetworkForPayInAsset,
+  type SwapAddressNetwork,
+  swapAddressNetworkForPayInAsset,
 } from "@openreceive/core/swap-address";
 import {
   OPENRECEIVE_SWAP_PAY_IN_ASSETS,
@@ -32,14 +32,14 @@ import {
  * ```
  */
 
-const NETWORK_DEPOSIT_ADDRESS: Readonly<Record<OpenReceiveSwapAddressNetwork, string>> = {
+const NETWORK_DEPOSIT_ADDRESS: Readonly<Record<SwapAddressNetwork, string>> = {
   TRX: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
   SOL: "So11111111111111111111111111111111111111112",
   ETH: "0x1111111111111111111111111111111111111111",
 };
 
 function depositAddressFor(payInAsset: SwapPayInAsset): string {
-  const network = openReceiveSwapAddressNetworkForPayInAsset(payInAsset);
+  const network = swapAddressNetworkForPayInAsset(payInAsset);
   if (network === undefined) {
     throw new Error(`testkit swap provider has no deposit address for ${payInAsset}`);
   }

@@ -4,29 +4,29 @@
 // counterpart is react/src/swap.ts.
 import {
   type CheckoutInvoiceSnapshot,
-  createOpenReceiveSwapDisplayModel,
-  escapeOpenReceiveHtml as escapeHtml,
+  createSwapDisplayModel,
+  escapeHtml,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
-  openReceiveCheckoutLabels,
-  openReceiveSwapAssetMatchesRoute,
-  type OpenReceiveSwapDisplayModel,
-  openReceiveSwapOptionLimitMessage,
+  checkoutLabels,
+  swapAssetMatchesRoute,
+  type SwapDisplayModel,
+  swapOptionLimitMessage,
   orClasses,
 } from "@openreceive/browser/headless";
 import { renderElementSwapCopyDetailHtml } from "./dom-helpers.ts";
 import { renderTransactionDetailsHtml } from "./transaction-details.ts";
-import type { OpenReceiveElementsSwapOption, OpenReceiveElementsWizardView } from "./views.ts";
+import type { ElementsSwapOption, ElementsWizardView } from "./views.ts";
 
 export function renderElementSwapActionsHtml(
   routeKey: string,
-  options: readonly OpenReceiveElementsSwapOption[],
-  view: OpenReceiveElementsWizardView,
+  options: readonly ElementsSwapOption[],
+  view: ElementsWizardView,
 ): string {
   // Out-of-range assets stay in the list but render as a disabled button with
   // the limit reason, instead of being hidden.
   const shown = options
     .filter((option) => option.provider.length > 0)
-    .filter((option) => openReceiveSwapAssetMatchesRoute(routeKey, option.pay_in_asset));
+    .filter((option) => swapAssetMatchesRoute(routeKey, option.pay_in_asset));
   if (shown.length === 0) return "";
 
   return `
@@ -63,8 +63,8 @@ export function renderElementSwapActionsHtml(
 // Short reason for an out-of-range swap asset in the web-component surface,
 // sharing the React wizard's canonical message via the browser helper.
 export function elementsSwapLimitMessage(
-  option: OpenReceiveElementsSwapOption,
-  view: OpenReceiveElementsWizardView,
+  option: ElementsSwapOption,
+  view: ElementsWizardView,
 ): string | undefined {
   const checkout =
     view.amountMsats === undefined
@@ -75,14 +75,14 @@ export function elementsSwapLimitMessage(
             ? {}
             : { fiat: { currency: view.fiat.currency, value: view.fiat.value } }),
         };
-  return openReceiveSwapOptionLimitMessage(option, checkout);
+  return swapOptionLimitMessage(option, checkout);
 }
 
 export function renderElementSwapPanelHtml(
   invoice: CheckoutInvoiceSnapshot,
-  view: OpenReceiveElementsWizardView = {},
+  view: ElementsWizardView = {},
 ): string {
-  const display = createOpenReceiveSwapDisplayModel(invoice);
+  const display = createSwapDisplayModel(invoice);
   if (display === undefined) return "";
   const backButton = `
     <button part="swap-back" class="${orClasses.swapBack}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">Pay with Lightning instead</button>
@@ -280,11 +280,11 @@ export function renderElementSwapPanelHtml(
 
 function renderElementSwapRefundReturnWarningHtml(): string {
   return `
-    <p part="swap-refund-return" class="${orClasses.swapWarning}">${escapeHtml(openReceiveCheckoutLabels.refundReturnWarning)}</p>
+    <p part="swap-refund-return" class="${orClasses.swapWarning}">${escapeHtml(checkoutLabels.refundReturnWarning)}</p>
   `;
 }
 
-function renderElementSwapRefundFactsHtml(display: OpenReceiveSwapDisplayModel): string {
+function renderElementSwapRefundFactsHtml(display: SwapDisplayModel): string {
   const rows = [
     display.depositReceivedAmount === undefined
       ? ""
@@ -311,7 +311,7 @@ function renderElementSwapRefundFactsHtml(display: OpenReceiveSwapDisplayModel):
 
 function renderElementSwapNetworkWarningHtml(
   display: Pick<
-    NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>,
+    NonNullable<ReturnType<typeof createSwapDisplayModel>>,
     "networkWarningTitle" | "networkWarningEmphasis" | "networkWarning"
   >,
 ): string {
@@ -345,7 +345,7 @@ function renderElementSwapNetworkWarningHtml(
 
 function renderElementTransactionDetailsHtml(
   invoice: CheckoutInvoiceSnapshot,
-  view: OpenReceiveElementsWizardView,
+  view: ElementsWizardView,
 ): string {
   const bolt11 = typeof invoice.invoice === "string" ? invoice.invoice : view.lightningInvoice;
   return renderTransactionDetailsHtml({
@@ -380,7 +380,7 @@ function renderElementTransactionDetailsHtml(
 }
 
 function renderElementSwapFeeBreakdownHtml(
-  breakdown: NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>["feeBreakdown"],
+  breakdown: NonNullable<ReturnType<typeof createSwapDisplayModel>>["feeBreakdown"],
 ): string {
   if (breakdown === undefined) return "";
   const feeValue =
@@ -403,7 +403,7 @@ function renderElementSwapFeeBreakdownHtml(
 }
 
 function renderElementSwapSupportDetailsHtml(
-  display: NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>,
+  display: NonNullable<ReturnType<typeof createSwapDisplayModel>>,
 ): string {
   if (
     display.depositTxId === undefined &&

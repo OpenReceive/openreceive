@@ -2,7 +2,7 @@ import {
   isTransactionSettled,
   isTransactionState,
   type NwcTransaction,
-  type OpenReceiveTransactionState,
+  type TransactionState,
 } from "../nwc/client.ts";
 
 export type SettlementFinalitySignal = "settled_at" | "state" | "transaction_state";
@@ -10,7 +10,7 @@ export type SettlementFinalitySignal = "settled_at" | "state" | "transaction_sta
 /**
  * The one status vocabulary. Every other status in OpenReceive is this union
  * plus one documented extension: `PaymentStatus` adds `not_found` (a scan
- * result), the HTTP repository's `OpenReceiveAttemptStatus` adds `attention`
+ * result), the HTTP repository's `AttemptStatus` adds `attention`
  * (an operator state), and the browser's `Status` is exactly this.
  */
 export type TransactionSettlementStatus = "pending" | "settled" | "expired" | "failed";
@@ -19,8 +19,8 @@ export interface TransactionSettlementDetection {
   readonly settled: boolean;
   readonly status: TransactionSettlementStatus;
   readonly finality_signal?: SettlementFinalitySignal;
-  readonly transaction_state?: OpenReceiveTransactionState;
-  readonly state?: OpenReceiveTransactionState;
+  readonly transaction_state?: TransactionState;
+  readonly state?: TransactionState;
   readonly settled_at?: number;
   readonly preimage_present: boolean;
 }

@@ -1,19 +1,14 @@
 import {
-  openReceiveBrowserLogLevelOrder,
-  readOpenReceiveBrowserLogLevelFromEnvironment,
-  resolveOpenReceiveBrowserLogLevel,
+  browserLogLevelOrder,
+  readBrowserLogLevelFromEnvironment,
+  resolveBrowserLogLevel,
 } from "./log-level.ts";
-import type {
-  OpenReceiveBrowserLogEntry,
-  OpenReceiveBrowserLogger,
-  OpenReceiveBrowserLoggerOption,
-  OpenReceiveBrowserLogLevel,
-} from "./ui.ts";
+import type { BrowserLogEntry, BrowserLogger, BrowserLoggerOption, BrowserLogLevel } from "./ui.ts";
 
 type ConsoleTarget = Pick<Console, "debug" | "info" | "warn" | "error" | "log">;
 
 interface ConsoleWriterOptions {
-  readonly minLevel?: OpenReceiveBrowserLogLevel | string;
+  readonly minLevel?: BrowserLogLevel | string;
   readonly console?: ConsoleTarget;
   readonly now?: () => Date;
 }
@@ -26,7 +21,7 @@ interface ConsoleWriterOptions {
 function createConsoleWriter(
   options: ConsoleWriterOptions,
 ): (
-  level: OpenReceiveBrowserLogLevel,
+  level: BrowserLogLevel,
   prefix: string,
   event: string,
   message: string,
@@ -40,9 +35,9 @@ function createConsoleWriter(
     // changes are honored without rebuilding the client bundle.
     const minLevel =
       options.minLevel === undefined
-        ? readOpenReceiveBrowserLogLevelFromEnvironment()
-        : resolveOpenReceiveBrowserLogLevel(options.minLevel);
-    if (openReceiveBrowserLogLevelOrder(level) < openReceiveBrowserLogLevelOrder(minLevel)) {
+        ? readBrowserLogLevelFromEnvironment()
+        : resolveBrowserLogLevel(options.minLevel);
+    if (browserLogLevelOrder(level) < browserLogLevelOrder(minLevel)) {
       return;
     }
     const method =
@@ -75,9 +70,7 @@ function createConsoleWriter(
  * and `token=`/`secret=` query params. Exported so callers that log a request (including its
  * headers) can guarantee ordinary application secrets never leak.
  */
-export function sanitizeBrowserLogEntry(
-  entry: OpenReceiveBrowserLogEntry,
-): OpenReceiveBrowserLogEntry {
+export function sanitizeBrowserLogEntry(entry: BrowserLogEntry): BrowserLogEntry {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
     if (/secret|token|authorization|cookie|nwc/i.test(key)) {
@@ -86,7 +79,7 @@ export function sanitizeBrowserLogEntry(
       clean[key] = sanitizeBrowserLogValue(value);
     }
   }
-  return clean as OpenReceiveBrowserLogEntry;
+  return clean as BrowserLogEntry;
 }
 
 function sanitizeBrowserLogValue(value: unknown): unknown {
@@ -118,7 +111,7 @@ export interface CreateOpenReceiveBrowserConsoleLoggerOptions {
    * Minimum level to emit. Default: `LOG_LEVEL` from the environment, or `info`.
    * Accepts the same values as `LOG_LEVEL` (`DEBUG` | `INFO` | `WARN` | `ERROR`).
    */
-  readonly minLevel?: OpenReceiveBrowserLogLevel | string;
+  readonly minLevel?: BrowserLogLevel | string;
   readonly console?: ConsoleTarget;
   /** Clock for the leading ISO timestamp. Default `() => new Date()`. */
   readonly now?: () => Date;
@@ -131,13 +124,13 @@ export interface CreateOpenReceiveBrowserConsoleLoggerOptions {
  *
  * Format: `[ISO8601] LEVEL [prefix] event: message { fields }`
  */
-export function createOpenReceiveBrowserConsoleLogger(
+export function createBrowserConsoleLogger(
   options: CreateOpenReceiveBrowserConsoleLoggerOptions = {},
-): OpenReceiveBrowserLogger {
+): BrowserLogger {
   const prefix = options.prefix ?? "openreceive";
   const write = createConsoleWriter(options);
 
-  return (entry: OpenReceiveBrowserLogEntry) => {
+  return (entry: BrowserLogEntry) => {
     const { level, event, message, ...fields } = entry;
     write(level, prefix, event, message, fields);
   };
@@ -147,7 +140,7 @@ export type HostBrowserConsoleLogger = (
   event: string,
   message: string,
   fields?: Record<string, unknown>,
-  level?: OpenReceiveBrowserLogLevel,
+  level?: BrowserLogLevel,
 ) => void;
 
 export interface CreateHostBrowserConsoleLoggerOptions {
@@ -155,7 +148,7 @@ export interface CreateHostBrowserConsoleLoggerOptions {
   /**
    * Minimum level to emit. Default: `LOG_LEVEL` from the environment, or `info`.
    */
-  readonly minLevel?: OpenReceiveBrowserLogLevel | string;
+  readonly minLevel?: BrowserLogLevel | string;
   readonly console?: ConsoleTarget;
   readonly now?: () => Date;
 }
@@ -171,14 +164,14 @@ export function createHostBrowserConsoleLogger(
   };
 }
 
-let defaultBrowserConsoleLogger: OpenReceiveBrowserLogger | undefined;
+let defaultBrowserConsoleLogger: BrowserLogger | undefined;
 
 /**
  * Built-in console logger used when hosts omit `logger`.
  * Honors `LOG_LEVEL` / `globalThis.__OPENRECEIVE_LOG_LEVEL__` on each emit.
  */
-export function getDefaultOpenReceiveBrowserConsoleLogger(): OpenReceiveBrowserLogger {
-  defaultBrowserConsoleLogger ??= createOpenReceiveBrowserConsoleLogger();
+export function getDefaultBrowserConsoleLogger(): BrowserLogger {
+  defaultBrowserConsoleLogger ??= createBrowserConsoleLogger();
   return defaultBrowserConsoleLogger;
 }
 
@@ -188,10 +181,8 @@ export function getDefaultOpenReceiveBrowserConsoleLogger(): OpenReceiveBrowserL
  * - a function uses that sink
  * - `undefined` attaches the built-in console logger
  */
-export function resolveOpenReceiveBrowserLogger(
-  logger?: OpenReceiveBrowserLoggerOption,
-): OpenReceiveBrowserLogger | undefined {
+export function resolveBrowserLogger(logger?: BrowserLoggerOption): BrowserLogger | undefined {
   if (logger === false) return undefined;
   if (logger !== undefined) return logger;
-  return getDefaultOpenReceiveBrowserConsoleLogger();
+  return getDefaultBrowserConsoleLogger();
 }

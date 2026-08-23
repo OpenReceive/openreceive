@@ -4,9 +4,9 @@
 // source of truth; the matching selector maps are derived from them.
 import type {
   CheckoutState,
-  OpenReceiveResolvedTheme,
-  OpenReceiveThemeModel,
-  OpenReceiveThemePreference,
+  ResolvedTheme,
+  ThemeModel,
+  ThemePreference,
 } from "./checkout-types.ts";
 
 export const OPENRECEIVE_QR_QUIET_ZONE_MODULES = 4 as const;
@@ -24,7 +24,7 @@ export const OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS = 60 as const;
 /**
  * Default base path the shipped OpenReceive router is mounted at. When a developer passes
  * only an order id (React `<Checkout orderId>` / `<openreceive-checkout order-id>`), this is
- * the prefix every route is derived from — see `openReceiveRoutes` in ./routes.ts. It is
+ * the prefix every route is derived from — see `checkoutRoutes` in ./routes.ts. It is
  * the only URL input the checkout components accept.
  */
 export const OPENRECEIVE_DEFAULT_PREFIX = "/openreceive" as const;
@@ -132,9 +132,9 @@ export interface CheckoutStateEventDetail {
 export interface CheckoutErrorEventDetail {
   readonly error: unknown;
 }
-export interface OpenReceiveThemeChangeEventDetail {
-  readonly theme: OpenReceiveThemePreference;
-  readonly resolvedTheme: OpenReceiveResolvedTheme;
+export interface ThemeChangeEventDetail {
+  readonly theme: ThemePreference;
+  readonly resolvedTheme: ResolvedTheme;
 }
 
 export function createCheckoutProviderCopyEvent(
@@ -180,18 +180,13 @@ export function createCheckoutErrorEvent(error: unknown): CustomEvent<CheckoutEr
   });
 }
 
-export function createOpenReceiveThemeChangeEvent(
-  theme: OpenReceiveThemeModel,
-): CustomEvent<OpenReceiveThemeChangeEventDetail> {
-  return new CustomEvent<OpenReceiveThemeChangeEventDetail>(
-    OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS.change,
-    {
-      detail: {
-        theme: theme.theme,
-        resolvedTheme: theme.resolvedTheme,
-      },
+export function createThemeChangeEvent(theme: ThemeModel): CustomEvent<ThemeChangeEventDetail> {
+  return new CustomEvent<ThemeChangeEventDetail>(OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS.change, {
+    detail: {
+      theme: theme.theme,
+      resolvedTheme: theme.resolvedTheme,
     },
-  );
+  });
 }
 
 export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
@@ -200,7 +195,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * Base path the shipped router is mounted at (default `/openreceive`). The
    * element's ONLY URL input: create, prepare, payment-check and the four swap
    * routes are all derived from it. There is deliberately no per-route
-   * attribute — see `openReceiveRoutes` in ../internal/routes.ts.
+   * attribute — see `checkoutRoutes` in ../internal/routes.ts.
    */
   prefix: "prefix",
   /** JSON-encoded create-time metadata forwarded to the create request. */

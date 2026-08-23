@@ -2,11 +2,11 @@ import * as React from "react";
 import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_THEME_STORAGE_KEY,
-  createOpenReceiveThemeModel,
+  createThemeModel,
   orClasses,
-  readOpenReceiveThemePreference,
-  writeOpenReceiveThemePreference,
-  type OpenReceiveThemePreference,
+  readThemePreference,
+  writeThemePreference,
+  type ThemePreference,
 } from "@openreceive/browser/headless";
 import { joinClassNames } from "./utils.ts";
 import type {
@@ -16,7 +16,7 @@ import type {
   UseThemeResult,
 } from "./types.ts";
 
-const OpenReceiveThemeContext = React.createContext<UseThemeResult | null>(null);
+const ThemeContext = React.createContext<UseThemeResult | null>(null);
 
 /**
  * Local theme writes are not observable through `storage` events (those only fire in other
@@ -24,7 +24,7 @@ const OpenReceiveThemeContext = React.createContext<UseThemeResult | null>(null)
  */
 const storedThemeListeners = new Set<() => void>();
 /** Last explicit choice per storage key, so the toggle still works without usable storage. */
-const lastSetTheme = new Map<string, OpenReceiveThemePreference>();
+const lastSetTheme = new Map<string, ThemePreference>();
 
 function notifyStoredThemeChange(): void {
   for (const listener of storedThemeListeners) listener();
@@ -65,7 +65,7 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
     subscribeStoredTheme,
     React.useCallback(
       () =>
-        readOpenReceiveThemePreference({
+        readThemePreference({
           storage,
           storageKey,
           defaultTheme: lastSetTheme.get(storageKey) ?? defaultTheme,
@@ -78,7 +78,7 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
         // wired); the implicit browser localStorage is not, so fall back to the default.
         storage === undefined
           ? (defaultTheme ?? "system")
-          : readOpenReceiveThemePreference({ storage, storageKey, defaultTheme }),
+          : readThemePreference({ storage, storageKey, defaultTheme }),
       [storage, storageKey, defaultTheme],
     ),
   );
@@ -88,12 +88,12 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
     getServerSystemDark,
   );
 
-  const themeModel = createOpenReceiveThemeModel(theme, { systemDark });
+  const themeModel = createThemeModel(theme, { systemDark });
 
   const setTheme = React.useCallback(
-    (nextTheme: OpenReceiveThemePreference) => {
+    (nextTheme: ThemePreference) => {
       lastSetTheme.set(storageKey, nextTheme);
-      writeOpenReceiveThemePreference(nextTheme, {
+      writeThemePreference(nextTheme, {
         storage,
         storageKey,
       });
@@ -121,7 +121,7 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
 }
 
 export function useTheme(options: UseThemeOptions = {}): UseThemeResult {
-  const scoped = React.useContext(OpenReceiveThemeContext);
+  const scoped = React.useContext(ThemeContext);
   const local = useLocalTheme(options);
   const storageKey = options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY;
   // Prefer an ancestor ThemeScope so nested Checkout stays in sync with the page toggle.
@@ -151,7 +151,7 @@ export function ThemeToggle(props: ThemeToggleProps): React.ReactElement {
     defaultTheme: theme,
   });
   const activeTheme = resolvedTheme ?? fallback.resolvedTheme;
-  const themeModel = createOpenReceiveThemeModel(activeTheme);
+  const themeModel = createThemeModel(activeTheme);
 
   const componentProps: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, unknown> = {
     ...buttonProps,
@@ -192,7 +192,7 @@ export function ThemeScope(props: ThemeScopeProps): React.ReactElement {
   const scopedChildren = typeof children === "function" ? children(theme) : children;
 
   return React.createElement(
-    OpenReceiveThemeContext.Provider,
+    ThemeContext.Provider,
     { value: theme },
     // Variadic children, not an array: an array child needs a key on every entry.
     React.createElement(

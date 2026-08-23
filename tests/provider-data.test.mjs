@@ -9,8 +9,8 @@ import {
   getProviderRegistryMetadata,
   listCryptoRouteProviders,
   listProviders,
-  openReceivePayTutorialUrls,
-  openReceiveProviderIconUrls,
+  payTutorialUrls,
+  providerIconUrls,
   providerTutorialUrl,
   providerIconUrl,
   providerRegistry,
@@ -62,7 +62,7 @@ test("provider-data v4 keeps wizard copy and icons local", () => {
 test("provider-data resolves bundled provider icon URLs", () => {
   const strike = providerRegistry.providers.strike;
 
-  assert.equal(openReceiveProviderIconUrls[strike.icon_path], providerIconUrl(strike));
+  assert.equal(providerIconUrls[strike.icon_path], providerIconUrl(strike));
   assert.equal(providerIconUrl(strike).endsWith("/assets/provider-icons/strike.png"), true);
 });
 
@@ -70,10 +70,7 @@ test("provider-data resolves bundled provider tutorial URLs", () => {
   const coinbaseTutorial = providerRegistry.providers.coinbase.tutorials[0];
   const krakenTutorial = providerRegistry.providers.kraken.tutorials[3];
 
-  assert.equal(
-    openReceivePayTutorialUrls[coinbaseTutorial.path],
-    providerTutorialUrl(coinbaseTutorial),
-  );
+  assert.equal(payTutorialUrls[coinbaseTutorial.path], providerTutorialUrl(coinbaseTutorial));
   assert.equal(
     providerTutorialUrl(coinbaseTutorial).endsWith("/assets/pay_tutorials/coinbase-1.webp"),
     true,
@@ -202,13 +199,13 @@ test("every provider tutorial is well-formed and resolvable", () => {
         `${label}: path names this provider's bundled webp`,
       );
       assert.ok(
-        openReceivePayTutorialUrls[tutorial.path] !== undefined,
+        payTutorialUrls[tutorial.path] !== undefined,
         `${label}: ${tutorial.path} must resolve in the bundled tutorial map`,
       );
     });
     if (provider.icon_path !== undefined) {
       assert.ok(
-        openReceiveProviderIconUrls[provider.icon_path] !== undefined,
+        providerIconUrls[provider.icon_path] !== undefined,
         `${provider.id}: icon_path must resolve in the bundled icon map`,
       );
     }
@@ -278,26 +275,24 @@ test("provider-data validation rejects duplicate route and provider entries", ()
 });
 
 test("provider-data does not double /assets when inlined into a host /assets/*.js chunk", async () => {
-  const { resolveOpenReceiveAssetPath } = await import(
-    "../packages/js/provider-data/src/asset-url.ts"
-  );
+  const { resolveAssetPath } = await import("../packages/js/provider-data/src/asset-url.ts");
 
   assert.equal(
-    resolveOpenReceiveAssetPath(
+    resolveAssetPath(
       "./assets/provider-icons/phoenix.png",
       "https://demo.example/assets/index-abc123.js",
     ),
     "./provider-icons/phoenix.png",
   );
   assert.equal(
-    resolveOpenReceiveAssetPath(
+    resolveAssetPath(
       "./assets/pay_tutorials/strike-1.webp",
       "https://demo.example/assets/index-abc123.js",
     ),
     "./pay_tutorials/strike-1.webp",
   );
   assert.equal(
-    resolveOpenReceiveAssetPath(
+    resolveAssetPath(
       "./assets/provider-icons/phoenix.png",
       "file:///repo/packages/js/provider-data/dist/asset-url.js",
     ),

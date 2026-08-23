@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
-import { reconcileOpenReceivePayments } from "../packages/js/http/src/index.ts";
+import { reconcileHostPayments } from "../packages/js/http/src/index.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
 test("the testkit wallet clock defaults to the real clock", async () => {
@@ -24,7 +24,7 @@ test("a default-clock testkit invoice stays pending through a reconcile pass", a
       amount: { sats: 10 },
     });
     const transitions = [];
-    const checks = await reconcileOpenReceivePayments({
+    const checks = await reconcileHostPayments({
       service,
       host: {
         onPaid: async () => undefined,

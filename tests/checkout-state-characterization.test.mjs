@@ -69,9 +69,9 @@ process.env.LOG_LEVEL ??= "error";
 import {
   createCheckoutState,
   createCheckoutStatusModel,
-  createOpenReceivePaymentDataEntries,
-  createOpenReceiveTransactionDetailsFromState,
-  formatOpenReceiveUnixTime,
+  createPaymentDataEntries,
+  createTransactionDetailsFromState,
+  formatUnixTime,
 } from "@openreceive/browser/headless";
 import { renderCheckoutHtml } from "@openreceive/elements";
 import { Checkout, createCheckoutViewModel } from "@openreceive/react";
@@ -366,7 +366,7 @@ test("characterization: lightning pending", () => {
     countdownLabel: "10:00",
   });
 
-  assert.deepStrictEqual(createOpenReceivePaymentDataEntries(state), [
+  assert.deepStrictEqual(createPaymentDataEntries(state), [
     { label: "Order", value: "order-ln-pending" },
     { label: "Checkout", value: "or_chk_ln_pending" },
     { label: "Invoice ID", value: "or_inv_ln_pending" },
@@ -492,7 +492,7 @@ test("characterization: swap pending", () => {
   });
   assertReactModelMatches(swapPending, state, "pending");
 
-  assert.deepStrictEqual(createOpenReceivePaymentDataEntries(state), [
+  assert.deepStrictEqual(createPaymentDataEntries(state), [
     { label: "Order", value: "order-swap-pending" },
     { label: "Checkout", value: "or_chk_swap_pending" },
     { label: "Invoice ID", value: "or_inv_swap_pending" },
@@ -542,7 +542,7 @@ test("characterization: swap settled", () => {
   });
   assertReactModelMatches(swapSettled, state, "settled");
 
-  assert.deepStrictEqual(createOpenReceivePaymentDataEntries(state), [
+  assert.deepStrictEqual(createPaymentDataEntries(state), [
     { label: "Order", value: "order-swap-settled" },
     { label: "Checkout", value: "or_chk_swap_settled" },
     { label: "Invoice ID", value: "or_inv_swap_settled" },
@@ -623,7 +623,7 @@ test("characterization: checkout_lock deferred", () => {
   });
   assertReactModelMatches(checkoutLockDeferred, state, "pending");
 
-  assert.deepStrictEqual(createOpenReceivePaymentDataEntries(state), [
+  assert.deepStrictEqual(createPaymentDataEntries(state), [
     { label: "Order", value: "order-lock" },
     { label: "Checkout", value: "or_chk_lock" },
     { label: "Amount", value: "750 sats (750000 msats)" },
@@ -778,7 +778,7 @@ test("divergence (d) RECONCILED: no lightning_uri on a swap attempt", () => {
 
 // --------------------------------------------- a malformed amount is one row --
 
-// `formatOpenReceiveMsats` throws on a negative, fractional or unsafe amount —
+// `formatMsats` throws on a negative, fractional or unsafe amount —
 // correctly, because it is the FORMATTER the wire builders and the amount
 // validators share. Every DISPLAY site therefore goes through the optional
 // wrapper instead, so a server answering with a nonsense `amount_msats` costs
@@ -854,13 +854,13 @@ test("a nonsense amount costs the label, not the payment screen", () => {
         // 2. The payment-data panel (`<PaymentData source={checkoutModel}>` and
         //    the element's payment-data block) — settled-screen only, and the
         //    site the reviewer found throwing.
-        const entries = createOpenReceivePaymentDataEntries(state);
+        const entries = createPaymentDataEntries(state);
         assert.equal(rowValue(entries, "Amount"), undefined, where);
         assert.equal(rowValue(entries, "Amount (msats)"), String(amountMsats), where);
 
         // 3. The transaction-details rows (`<TransactionDetails>` / the element
         //    renderer), which take the same state.
-        const rows = createOpenReceiveTransactionDetailsFromState(state);
+        const rows = createTransactionDetailsFromState(state);
         assert.equal(rowValue(rows, "Amount"), undefined, where);
         assert.equal(rowValue(rows, "Amount (msats)"), String(amountMsats), where);
 
@@ -912,11 +912,11 @@ test("a good amount still formats on every rail and both screens", () => {
         const expected = amountMsats === 1_000 ? "1 sat" : `${amountMsats / 1000} sats`;
         assert.equal(state.amountLabel, expected, where);
         assert.equal(
-          rowValue(createOpenReceivePaymentDataEntries(state), "Amount"),
+          rowValue(createPaymentDataEntries(state), "Amount"),
           `${expected} (${amountMsats} msats)`,
           where,
         );
-        const rows = createOpenReceiveTransactionDetailsFromState(state);
+        const rows = createTransactionDetailsFromState(state);
         assert.equal(rowValue(rows, "Amount"), expected, where);
         assert.equal(rowValue(rows, "Amount (msats)"), String(amountMsats), where);
       }
@@ -1008,7 +1008,7 @@ test("a malformed timestamp costs the row, not the payment screen", () => {
 
         // 2. The payment-data panel — the settled-screen projection the
         //    reviewer found throwing out of its `isoDate` helper.
-        const entries = createOpenReceivePaymentDataEntries(state);
+        const entries = createPaymentDataEntries(state);
         if (state.expires_at !== undefined) {
           assert.equal(rowValue(entries, "Invoice expires at"), undefined, where);
           assert.equal(
@@ -1023,8 +1023,8 @@ test("a malformed timestamp costs the row, not the payment screen", () => {
         }
 
         // 3. The transaction-details rows, which throw one level down in
-        //    `formatOpenReceiveUnixTime` instead.
-        const rows = createOpenReceiveTransactionDetailsFromState(state);
+        //    `formatUnixTime` instead.
+        const rows = createTransactionDetailsFromState(state);
         if (state.expires_at !== undefined) {
           assert.equal(rowValue(rows, "Expires at"), undefined, where);
           assert.equal(rowValue(rows, "Expires at (unix seconds)"), String(seconds), where);
@@ -1086,8 +1086,8 @@ test("a legitimate timestamp still formats on every rail and both panels", () =>
         timestampSnapshot({ rail, settled, settledAt: NOW - 10, expiresAt: NOW + 600 }),
       );
 
-      const entries = createOpenReceivePaymentDataEntries(state);
-      const rows = createOpenReceiveTransactionDetailsFromState(state);
+      const entries = createPaymentDataEntries(state);
+      const rows = createTransactionDetailsFromState(state);
       // Deferred checkout_lock has no timestamps to render at all (see above);
       // pinning that here keeps the guard from being credited for a row the
       // state never carried.
@@ -1114,10 +1114,10 @@ test("a legitimate timestamp still formats on every rail and both panels", () =>
   }
 
   // The bound itself, at both ends, straight through the barrel formatter.
-  assert.equal(formatOpenReceiveUnixTime(MAX_DISPLAYABLE), "+275760-09-13T00:00:00Z");
-  assert.equal(formatOpenReceiveUnixTime(1), "1970-01-01T00:00:01Z");
+  assert.equal(formatUnixTime(MAX_DISPLAYABLE), "+275760-09-13T00:00:00Z");
+  assert.equal(formatUnixTime(1), "1970-01-01T00:00:01Z");
   // One second past the range is not a date any more, so the formatter answers
   // with the raw value instead of throwing — see the note on its guard.
-  assert.equal(formatOpenReceiveUnixTime(MAX_DISPLAYABLE + 1), String(MAX_DISPLAYABLE + 1));
-  assert.equal(formatOpenReceiveUnixTime(0), "0");
+  assert.equal(formatUnixTime(MAX_DISPLAYABLE + 1), String(MAX_DISPLAYABLE + 1));
+  assert.equal(formatUnixTime(0), "0");
 });

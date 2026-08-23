@@ -69,7 +69,7 @@ talks to a different side of your app, and each has an obvious home:
 | Piece                        | You build it with                                                                                                               | It talks to                                                                 | It lives                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
 | **Wallet client**            | [`createOpenReceive()`][api-createopenreceive]                                                                                  | **your wallet** — mints invoices, reads settlement, holds the NWC code      | server-only, one per process                     |
-| **Order bridge**             | [`createOpenReceiveHost()`][api-createopenreceivehost]                                                                          | **your database** — your order hooks, plus the `openreceive_payments` table | server-only, next to your models                 |
+| **Order bridge**             | [`createHost()`][api-createopenreceivehost]                                                                          | **your database** — your order hooks, plus the `openreceive_payments` table | server-only, next to your models                 |
 | **HTTP routes**              | [`openReceiveExpress()`][api-express] (or [Fastify][api-fastify] / [Next][api-next] / [Rails](docs/guides/quickstart-rails.md)) | **the browser** — the endpoints the checkout UI calls                       | mounted on your app by default at `/openreceive` |
 | **Checkout UI** _(optional)_ | [`@openreceive/react`][api-browser] (or vue/svelte/angular/elements)                                                            | **the HTTP routes above** — creates the checkout, polls until paid          | your browser bundle                              |
 
@@ -83,14 +83,14 @@ The three server pieces:
 
 ```ts
 import { openReceiveExpress } from "@openreceive/express";
-import { createOpenReceiveHost } from "@openreceive/http";
+import { createHost } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 
 // 1. The wallet client. Reads NWC_URI; never let this reach client code.
 const service = await createOpenReceive();
 
 // 2. The order bridge: your database and your order model.
-const host = createOpenReceiveHost({
+const host = createHost({
   db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
   loadOrder: (orderId) => orders.find(orderId),
   // The authoritative price for that order — never taken from payer input.
@@ -245,11 +245,11 @@ Start with the [developer guides](docs/guides/README.md):
 [api-browser]: docs/guides/api-reference.md#browser--react
 [api-createopenreceive]: docs/guides/api-reference.md#createopenreceive
 [api-createcheckout]: docs/guides/api-reference.md#servicecreatecheckout
-[api-createopenreceivehost]: docs/guides/api-reference.md#createopenreceivehost
+[api-createopenreceivehost]: docs/guides/api-reference.md#createhost
 [api-errors]: docs/guides/api-reference.md#errors
 [api-express]: docs/guides/api-reference.md#openreceiveexpress
 [api-fastify]: docs/guides/api-reference.md#openreceivefastify
-[api-next]: docs/guides/api-reference.md#openreceivenexthandlers
-[api-notifworker]: docs/guides/api-reference.md#startopenreceivenotificationworker
+[api-next]: docs/guides/api-reference.md#nexthandlers
+[api-notifworker]: docs/guides/api-reference.md#startnotificationworker
 [api-rake-notifications]: docs/guides/api-reference.md#rake-openreceivenotifications
 [api-scaffold]: docs/guides/api-reference.md#openreceive-scaffold-payments

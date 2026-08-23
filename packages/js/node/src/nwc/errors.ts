@@ -5,11 +5,11 @@
  */
 
 import {
-  isOpenReceiveErrorCode,
-  isRetryableOpenReceiveErrorCode,
+  isErrorCode,
+  isRetryableErrorCode,
   OpenReceiveError,
-  type OpenReceiveErrorBody,
-  type OpenReceiveErrorCode,
+  type ErrorBody,
+  type ErrorCode,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 
@@ -38,7 +38,7 @@ export class ReceiveCheckoutValidationError extends Error {
   }
 }
 
-const NWC_ERROR_CODE_ALIASES: Readonly<Record<string, OpenReceiveErrorCode>> = {
+const NWC_ERROR_CODE_ALIASES: Readonly<Record<string, ErrorCode>> = {
   ABORT_ERROR: "TIMEOUT",
   BAD_REQUEST: "INVALID_REQUEST",
   CONNECTION_ERROR: "WALLET_UNAVAILABLE",
@@ -86,23 +86,22 @@ const OPENRECEIVE_ERROR_MESSAGES = {
   INVOICE_EXPIRED: "NWC wallet reported that the invoice is expired.",
   UNSUPPORTED_METHOD: "NWC wallet service does not support the requested method.",
   CONFLICT: "NWC wallet service reported a conflicting request.",
-} satisfies Record<OpenReceiveErrorCode, string>;
+} satisfies Record<ErrorCode, string>;
 
 export function normalizeNwcWalletError(error: unknown): OpenReceiveError {
   if (error instanceof OpenReceiveError) return error;
 
   const records = collectErrorRecords(error);
   const code =
-    knownOpenReceiveErrorCode(error) ??
+    knownErrorCode(error) ??
     errorCodeFromRecords(records) ??
     (typeof error === "string" ? normalizeNwcErrorCode(error) : undefined) ??
     "OTHER";
   const message = errorMessageFromRecords(records, error, code);
-  const retryable =
-    firstBooleanField(records, ["retryable"]) ?? isRetryableOpenReceiveErrorCode(code);
+  const retryable = firstBooleanField(records, ["retryable"]) ?? isRetryableErrorCode(code);
   const requestId = firstStringField(records, ["request_id", "requestId"]);
   const details = firstRecordField(records, ["details"]);
-  const body: OpenReceiveErrorBody = {
+  const body: ErrorBody = {
     code,
     message,
     retryable,
@@ -113,7 +112,7 @@ export function normalizeNwcWalletError(error: unknown): OpenReceiveError {
   return new OpenReceiveError(body, { cause: error });
 }
 
-function knownOpenReceiveErrorCode(error: unknown): OpenReceiveErrorCode | undefined {
+function knownErrorCode(error: unknown): ErrorCode | undefined {
   if (error instanceof ReceiveCheckoutValidationError) {
     return "INVALID_REQUEST";
   }
@@ -128,9 +127,7 @@ function knownOpenReceiveErrorCode(error: unknown): OpenReceiveErrorCode | undef
   return undefined;
 }
 
-function errorCodeFromRecords(
-  records: readonly Record<string, unknown>[],
-): OpenReceiveErrorCode | undefined {
+function errorCodeFromRecords(records: readonly Record<string, unknown>[]): ErrorCode | undefined {
   for (const record of records) {
     const directCode =
       normalizeNwcErrorCode(record.code) ??
@@ -147,16 +144,13 @@ function errorCodeFromRecords(
   return undefined;
 }
 
-function normalizeNwcErrorCode(value: unknown): OpenReceiveErrorCode | undefined {
+function normalizeNwcErrorCode(value: unknown): ErrorCode | undefined {
   if (typeof value !== "string" || value.trim().length === 0) return undefined;
 
   const normalized = normalizeNwcErrorCodeText(value);
   // Aliases first: a wallet's own "FORBIDDEN" is a wallet restriction
   // (RESTRICTED), never the host application's FORBIDDEN.
-  return (
-    NWC_ERROR_CODE_ALIASES[normalized] ??
-    (isOpenReceiveErrorCode(normalized) ? normalized : undefined)
-  );
+  return NWC_ERROR_CODE_ALIASES[normalized] ?? (isErrorCode(normalized) ? normalized : undefined);
 }
 
 function normalizeNwcErrorCodeText(value: string): string {
@@ -171,7 +165,7 @@ function normalizeNwcErrorCodeText(value: string): string {
 function errorMessageFromRecords(
   records: readonly Record<string, unknown>[],
   error: unknown,
-  code: OpenReceiveErrorCode,
+  code: ErrorCode,
 ): string {
   const message = firstStringField(records, ["message", "description", "reason"]);
   if (message !== undefined && normalizeNwcErrorCode(message) !== code) {

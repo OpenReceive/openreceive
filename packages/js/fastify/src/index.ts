@@ -1,16 +1,16 @@
 import {
   type CreateOpenReceiveHttpHandlerOptions,
   type CreateOpenReceiveStackOptions,
-  createOpenReceiveHttpHandler,
-  createOpenReceiveStack,
+  createHttpHandler,
+  createStack,
   createProxyRateLimitingConfig,
   createRequestId,
   errorResponse,
-  isOpenReceiveStackOptions,
+  isStackOptions,
   mapHostRouteError,
-  OpenReceiveHttpError,
-  openReceiveIsUnderPrefix,
-  openReceiveWebRequest,
+  HttpError,
+  isUnderPrefix,
+  webRequest,
 } from "@openreceive/http";
 
 // @openreceive/fastify — a Fastify plugin over @openreceive/http. Fastify is not a build-time
@@ -65,7 +65,7 @@ export interface FastifyInstanceLike {
   readonly prefix?: string;
 }
 
-interface OpenReceiveFastifyAdapterExtras {
+interface FastifyAdapterExtras {
   /**
    * Opt-in client-IP attribution for `rateLimiting` behind a reverse proxy:
    * by default the limiter reads `request.ip`, which is the proxy's address
@@ -77,14 +77,12 @@ interface OpenReceiveFastifyAdapterExtras {
   readonly trustProxyIpHeader?: boolean | string;
 }
 
-export interface OpenReceiveFastifyHandlerOptions
+export interface FastifyHandlerOptions
   extends CreateOpenReceiveHttpHandlerOptions,
-    OpenReceiveFastifyAdapterExtras {}
+    FastifyAdapterExtras {}
 
 /** All-in-one form: order hooks + `wallet` + `storage`; the plugin builds service and host. */
-export interface OpenReceiveFastifyStackOptions
-  extends CreateOpenReceiveStackOptions,
-    OpenReceiveFastifyAdapterExtras {}
+export interface FastifyStackOptions extends CreateOpenReceiveStackOptions, FastifyAdapterExtras {}
 
 /**
  * Two forms: the all-in-one happy path (order hooks + `wallet` + `storage`; the
@@ -92,22 +90,20 @@ export interface OpenReceiveFastifyStackOptions
  * — no background process, settlement is opportunistic) or the composed
  * `{ service, host, authorize }` form.
  */
-export type OpenReceiveFastifyOptions =
-  | OpenReceiveFastifyHandlerOptions
-  | OpenReceiveFastifyStackOptions;
+export type FastifyOptions = FastifyHandlerOptions | FastifyStackOptions;
 
 /** Fastify plugin serving the OpenReceive routes. Register it with a `prefix`. */
 export function openReceiveFastify(
   fastify: FastifyInstanceLike,
-  options: OpenReceiveFastifyOptions,
+  options: FastifyOptions,
   done?: (error?: Error) => void,
 ): void {
   const instancePrefix = normalizeFastifyPrefix(fastify.prefix);
   const effectivePrefix = resolveHandlerPrefix(instancePrefix, options.prefix);
-  let handler: ReturnType<typeof createOpenReceiveHttpHandler>;
-  if (isOpenReceiveStackOptions(options)) {
+  let handler: ReturnType<typeof createHttpHandler>;
+  if (isStackOptions(options)) {
     const { trustProxyIpHeader, ...stackOptions } = options;
-    const stack = createOpenReceiveStack({
+    const stack = createStack({
       ...stackOptions,
       ...effectivePrefix,
       ...createProxyRateLimitingConfig(stackOptions.rateLimiting, trustProxyIpHeader),
@@ -116,7 +112,7 @@ export function openReceiveFastify(
     fastify.addHook?.("onClose", () => stack.close());
   } else {
     const { trustProxyIpHeader, ...handlerOptions } = options;
-    handler = createOpenReceiveHttpHandler({
+    handler = createHttpHandler({
       ...handlerOptions,
       ...effectivePrefix,
       ...createProxyRateLimitingConfig(handlerOptions.rateLimiting, trustProxyIpHeader),
@@ -129,7 +125,7 @@ export function openReceiveFastify(
     // they get the app's own not-found handling instead of an OpenReceive JSON 404.
     const relativeUrl = stripInstancePrefix(request.raw.url ?? "/", instancePrefix);
     const pathname = relativeUrl.split("?")[0] as string;
-    if (!openReceiveIsUnderPrefix(pathname, handler.prefix) && reply.callNotFound !== undefined) {
+    if (!isUnderPrefix(pathname, handler.prefix) && reply.callNotFound !== undefined) {
       return reply.callNotFound();
     }
     const response = await respond(handler, request, relativeUrl);
@@ -203,7 +199,7 @@ function normalizeFastifyPrefix(prefix: string | undefined): string {
 }
 
 async function respond(
-  handler: ReturnType<typeof createOpenReceiveHttpHandler>,
+  handler: ReturnType<typeof createHttpHandler>,
   request: FastifyRequestLike,
   url: string,
 ): Promise<Response> {
@@ -212,13 +208,13 @@ async function respond(
   } catch (error) {
     // Bridge-level refusals (a JSON body no parser read) are OpenReceive's own
     // error responses, not the app's to render.
-    if (error instanceof OpenReceiveHttpError) return errorResponse(error, createRequestId());
+    if (error instanceof HttpError) return errorResponse(error, createRequestId());
     throw error;
   }
 }
 
 function toWebRequest(request: FastifyRequestLike, url: string): Request {
-  return openReceiveWebRequest({
+  return webRequest({
     method: request.method,
     headers: request.headers,
     url,

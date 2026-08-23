@@ -5,12 +5,12 @@ import {
   createCheckoutState,
   createCheckoutStatusModel,
   openWallet as openWalletHelper,
-  status as deriveStatus,
+  deriveStatus,
   type CheckoutController,
   type CheckoutSnapshot,
   type CheckoutState,
 } from "@openreceive/browser/headless";
-import { useOpenReceiveTransientValue } from "./hooks.ts";
+import { useTransientValue } from "./hooks.ts";
 import { getCheckoutLogContext } from "./utils.ts";
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";
 
@@ -24,7 +24,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       "useCheckout requires a checkout snapshot. Pass orderId to <Checkout> for create mode.",
     );
   }
-  const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
+  const [copied, showCopied] = useTransientValue<boolean>(false);
   const [latestSnapshot, setLatestSnapshot] = React.useState<CheckoutSnapshot>(checkout);
   // Reset ONLY when the snapshot's identity changes. Keying on object identity
   // would discard polled state (merged swap invoices, payment_methods,

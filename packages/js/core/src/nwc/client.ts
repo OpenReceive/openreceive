@@ -34,9 +34,7 @@ export class NwcUriParseError extends Error {
   }
 }
 
-export function formatOpenReceiveMissingNwcMessage(
-  input: { readonly subject?: string } = {},
-): string {
+export function formatMissingNwcMessage(input: { readonly subject?: string } = {}): string {
   const subject = input.subject ?? "OpenReceive";
   return [
     `${subject} needs a receive-only NWC code to receive payments.`,
@@ -50,7 +48,7 @@ export function formatOpenReceiveMissingNwcMessage(
  * `subject` names where the value came from so the operator knows what to fix;
  * it defaults to the environment variable every bundled entry point reads.
  */
-export function formatOpenReceiveInvalidNwcMessage(
+export function formatInvalidNwcMessage(
   input: { readonly reason?: string; readonly subject?: string } = {},
 ): string {
   const subject = input.subject ?? "NWC_URI";
@@ -73,7 +71,7 @@ function normalizedSpendMethods(spendMethods: readonly string[] | undefined): st
  * Boot refusal message when the NIP-47 info event advertises send-payment methods
  * such as `pay_invoice`. OpenReceive fails closed on spend-capable connections.
  */
-export function formatOpenReceiveSpendCapabilityRefusedMessage(
+export function formatSpendCapabilityRefusedMessage(
   input: { readonly spendMethods?: readonly string[] } = {},
 ): string {
   return [
@@ -89,7 +87,7 @@ export function formatOpenReceiveSpendCapabilityRefusedMessage(
  * Loud console warning when the host explicitly overrides the spend-capability
  * refusal. OpenReceive boots after this message only because the override is set.
  */
-export function formatOpenReceiveSpendCapabilityWarningMessage(
+export function formatSpendCapabilityWarningMessage(
   input: { readonly spendMethods?: readonly string[] } = {},
 ): string {
   return [
@@ -103,7 +101,7 @@ export function formatOpenReceiveSpendCapabilityWarningMessage(
   ].join("\n");
 }
 
-export type OpenReceiveTransactionState = "pending" | "settled" | "expired" | "failed" | "accepted";
+export type TransactionState = "pending" | "settled" | "expired" | "failed" | "accepted";
 
 export interface ParsedNwcConnection {
   walletPubkey: string;
@@ -161,12 +159,12 @@ export interface ListTransactionsRequest {
  * One wallet transaction row, normalized at the client boundary.
  *
  * Field invariants the settlement rules rely on — a custom
- * {@link OpenReceiveReceiveNwcClient} must produce rows that honor them:
+ * {@link ReceiveNwcClient} must produce rows that honor them:
  * - `payment_hash` / `invoice` / `preimage`: non-empty when present; a wallet's
  *   empty string means "absent", not "empty value".
  * - `amount_msats` / `fees_paid_msats`: whole millisatoshis as `bigint`.
  * - `created_at` / `expires_at` / `settled_at`: whole non-negative Unix seconds.
- * - `transaction_state` / `state`: an {@link OpenReceiveTransactionState}. The
+ * - `transaction_state` / `state`: an {@link TransactionState}. The
  *   settlement classifiers compare case-insensitively, so a wallet spelling of
  *   `"SETTLED"` still settles, but the canonical value is lowercase.
  */
@@ -175,8 +173,8 @@ export interface NwcTransaction {
   invoice?: string;
   payment_hash?: string;
   amount_msats?: bigint;
-  transaction_state?: OpenReceiveTransactionState;
-  state?: OpenReceiveTransactionState;
+  transaction_state?: TransactionState;
+  state?: TransactionState;
   created_at?: number;
   expires_at?: number;
   settled_at?: number;
@@ -190,7 +188,7 @@ export interface ListTransactionsResult {
   transactions: NwcTransaction[];
 }
 
-export interface OpenReceiveReceiveNwcClient {
+export interface ReceiveNwcClient {
   preflight(): Promise<WalletCapabilitySummary>;
   makeInvoice(request: MakeInvoiceRequest): Promise<MakeInvoiceResult>;
   listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult>;
@@ -204,8 +202,8 @@ export interface OpenReceiveReceiveNwcClient {
  * custom client handing back a raw `"SETTLED"` still settles its attempt.
  */
 export function isTransactionState(
-  value: OpenReceiveTransactionState | undefined,
-  expected: OpenReceiveTransactionState,
+  value: TransactionState | undefined,
+  expected: TransactionState,
 ): boolean {
   return typeof value === "string" && value.toLowerCase() === expected;
 }

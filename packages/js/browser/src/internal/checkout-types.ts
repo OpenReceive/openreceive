@@ -12,7 +12,7 @@ import type {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
 } from "./dom-contract.ts";
 
-export interface OpenReceiveTransientFeedbackOptions<T> {
+export interface TransientFeedbackOptions<T> {
   readonly resetValue: T;
   readonly delayMs?: number;
   readonly setTimeout?: typeof globalThis.setTimeout;
@@ -20,12 +20,12 @@ export interface OpenReceiveTransientFeedbackOptions<T> {
   readonly onValue: (value: T) => void;
 }
 
-export interface OpenReceiveTransientFeedbackController<T> {
+export interface TransientFeedbackController<T> {
   show(value: T): void;
   clear(): void;
 }
 
-export interface OpenReceiveTickingValueOptions {
+export interface TickingValueOptions {
   readonly active?: boolean;
   readonly intervalMs?: number;
   readonly now?: () => number;
@@ -34,54 +34,54 @@ export interface OpenReceiveTickingValueOptions {
   readonly onValue: (value: number) => void;
 }
 
-export interface OpenReceiveTickingValueController {
+export interface TickingValueController {
   start(): void;
   stop(): void;
   refresh(): void;
 }
 
-export interface OpenReceiveQrEncoder {
+export interface QrEncoder {
   toString(payload: string, options: Record<string, unknown>): Promise<string> | string;
   toDataURL?(payload: string, options: Record<string, unknown>): Promise<string> | string;
 }
 
-export interface OpenReceiveQrOptions {
-  encoder?: OpenReceiveQrEncoder;
+export interface QrOptions {
+  encoder?: QrEncoder;
   width?: number;
 }
 
 export interface CopyInvoiceOptions {
   invoice: string;
   clipboard?: Pick<Clipboard, "writeText">;
-  logger?: OpenReceiveBrowserLoggerOption;
-  logContext?: OpenReceiveBrowserLogContext;
+  logger?: BrowserLoggerOption;
+  logContext?: BrowserLogContext;
 }
 
 export interface OpenWalletOptions {
   invoice: string;
   open?: (uri: string) => void;
-  logger?: OpenReceiveBrowserLoggerOption;
-  logContext?: OpenReceiveBrowserLogContext;
+  logger?: BrowserLoggerOption;
+  logContext?: BrowserLogContext;
 }
 
-export type OpenReceiveBrowserLogLevel = "debug" | "info" | "warn" | "error";
+export type BrowserLogLevel = "debug" | "info" | "warn" | "error";
 
-export interface OpenReceiveBrowserLogEntry {
-  readonly level: OpenReceiveBrowserLogLevel;
+export interface BrowserLogEntry {
+  readonly level: BrowserLogLevel;
   readonly event: string;
   readonly message: string;
   readonly [key: string]: unknown;
 }
 
-export type OpenReceiveBrowserLogger = (entry: OpenReceiveBrowserLogEntry) => void;
+export type BrowserLogger = (entry: BrowserLogEntry) => void;
 
 /**
  * Browser logger option. Omit/`undefined` attaches the built-in console logger
  * (honoring `LOG_LEVEL`). Pass `false` to disable OpenReceive browser logs.
  */
-export type OpenReceiveBrowserLoggerOption = OpenReceiveBrowserLogger | false;
+export type BrowserLoggerOption = BrowserLogger | false;
 
-export interface OpenReceiveBrowserLogContext {
+export interface BrowserLogContext {
   readonly order_id?: string;
   readonly invoice_id?: string;
   readonly payment_hash?: string;
@@ -152,7 +152,7 @@ export interface CheckoutInvoiceSwapSnapshot {
  * Formatted fee breakout for the deposit panel, explaining why the payer sends more
  * than the cart total. All figures are display-ready fiat strings.
  */
-export interface OpenReceiveSwapFeeBreakdown {
+export interface SwapFeeBreakdown {
   /** Cart total delivered to the merchant, e.g. "$10.00". */
   readonly cartTotal: string;
   /** Fiat value of the crypto the payer sends, e.g. "$10.59". */
@@ -163,7 +163,7 @@ export interface OpenReceiveSwapFeeBreakdown {
   readonly feePercent?: string;
 }
 
-export interface OpenReceiveSwapDisplayModel {
+export interface SwapDisplayModel {
   readonly provider: string;
   readonly attemptId: string;
   readonly payInAsset: string;
@@ -195,7 +195,7 @@ export interface OpenReceiveSwapDisplayModel {
   readonly countdownLabel: string;
   readonly qrPayload: string;
   /** Ready-to-render fee breakout, present when the provider reported fiat equivalents. */
-  readonly feeBreakdown?: OpenReceiveSwapFeeBreakdown;
+  readonly feeBreakdown?: SwapFeeBreakdown;
   readonly depositTxId?: string;
   readonly payoutTxId?: string;
   readonly refundAddress?: string;
@@ -226,7 +226,7 @@ export interface CheckoutInvoiceSnapshot {
   readonly swap?: CheckoutInvoiceSwapSnapshot;
 }
 
-export interface OpenReceiveCheckoutPaymentMethod {
+export interface CheckoutPaymentMethod {
   readonly pay_in_asset: string;
   readonly label: string;
   readonly network_label: string;
@@ -243,7 +243,7 @@ export interface OpenReceiveCheckoutPaymentMethod {
 
 /**
  * Client-side snapshot of one Checkout (the server's `Checkout` /
- * the wire's `OpenReceiveWireCheckout`), aggregated across its payment
+ * the wire's `WireCheckout`), aggregated across its payment
  * attempts as the browser polls. Snake_case because it holds wire data
  * verbatim.
  */
@@ -259,7 +259,7 @@ export interface CheckoutSnapshot {
   };
   readonly active?: CheckoutInvoiceSnapshot;
   readonly invoices: readonly CheckoutInvoiceSnapshot[];
-  readonly payment_methods?: readonly OpenReceiveCheckoutPaymentMethod[];
+  readonly payment_methods?: readonly CheckoutPaymentMethod[];
 }
 
 export interface CheckoutElementAttributeOptions {
@@ -282,7 +282,7 @@ export interface CheckoutElementAttributeOptions {
    * the Lightning mint request.
    */
   readonly metadata?: Record<string, unknown>;
-  readonly theme?: OpenReceiveResolvedTheme;
+  readonly theme?: ResolvedTheme;
   readonly paymentWizard?: boolean;
   /**
    * Opt into History API URL sync to `{resumePathPrefix}/{orderId}` (default `/checkout/:id`).
@@ -306,10 +306,10 @@ export interface CheckoutElementAttributeOptions {
   readonly pollIntervalMs?: number;
 }
 
-export interface OpenReceiveThemeToggleElementAttributeOptions {
+export interface ThemeToggleElementAttributeOptions {
   readonly rootSelector?: string;
   readonly checkoutSelector?: string;
-  readonly defaultTheme?: OpenReceiveThemePreference;
+  readonly defaultTheme?: ThemePreference;
   readonly storageKey?: string;
 }
 
@@ -318,12 +318,10 @@ export type CheckoutElementAttributeName =
 
 export type CheckoutElementAttributes = Partial<Record<CheckoutElementAttributeName, string>>;
 
-export type OpenReceiveThemeToggleElementAttributeName =
+export type ThemeToggleElementAttributeName =
   (typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES)[keyof typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES];
 
-export type OpenReceiveThemeToggleElementAttributes = Partial<
-  Record<OpenReceiveThemeToggleElementAttributeName, string>
->;
+export type ThemeToggleElementAttributes = Partial<Record<ThemeToggleElementAttributeName, string>>;
 
 export interface CheckoutElementEventHandlers {
   readonly onCopy?: (event: Event) => void;
@@ -342,7 +340,7 @@ export type CheckoutElementListeners = Partial<
 export interface CheckoutShellOptions
   extends Omit<CheckoutElementAttributeOptions, "theme">,
     CheckoutElementEventHandlers,
-    OpenReceiveStoredThemeModelOptions {
+    StoredThemeModelOptions {
   readonly rootSelector?: string;
   readonly checkoutSelector?: string;
   /**
@@ -361,17 +359,17 @@ export interface CheckoutShellCheckoutBinding {
 
 export interface CheckoutShellThemeToggleBinding {
   readonly tagName: typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME;
-  readonly attributes: OpenReceiveThemeToggleElementAttributes;
+  readonly attributes: ThemeToggleElementAttributes;
 }
 
 export interface CheckoutShellModel {
-  readonly theme: OpenReceiveThemeModel;
-  readonly rootAttributes: Partial<OpenReceiveThemeModel["attributes"]>;
+  readonly theme: ThemeModel;
+  readonly rootAttributes: Partial<ThemeModel["attributes"]>;
   readonly checkout: CheckoutShellCheckoutBinding;
   readonly themeToggle: CheckoutShellThemeToggleBinding | null;
 }
 
-export interface CheckoutElementTarget extends OpenReceiveThemeAttributeTarget {
+export interface CheckoutElementTarget extends ThemeAttributeTarget {
   addEventListener(name: string, listener: (event: Event) => void): void;
 }
 
@@ -380,18 +378,18 @@ export interface CheckoutElementDocument {
 }
 
 export interface CreateOpenReceiveThemeToggleElementOptions
-  extends OpenReceiveThemeToggleElementAttributeOptions {
+  extends ThemeToggleElementAttributeOptions {
   readonly document?: CheckoutElementDocument;
 }
 
 export interface CreateCheckoutShellOptions extends CheckoutShellOptions {
   readonly document?: CheckoutElementDocument;
-  readonly root?: OpenReceiveThemeAttributeTarget | null;
+  readonly root?: ThemeAttributeTarget | null;
 }
 
 export interface CheckoutShellElements {
-  readonly theme: OpenReceiveThemeModel;
-  readonly rootAttributes: Partial<OpenReceiveThemeModel["attributes"]>;
+  readonly theme: ThemeModel;
+  readonly rootAttributes: Partial<ThemeModel["attributes"]>;
   readonly checkout: HTMLElement;
   readonly themeToggle: HTMLElement | null;
 }
@@ -458,7 +456,7 @@ export type PrepareCheckoutOptions = Pick<
 export interface RequestCheckoutBaseOptions {
   /**
    * Base path the shipped router is mounted at (e.g. `/openreceive`). The create and
-   * prepare routes are derived from it — see {@link openReceiveRoutes}. It is required
+   * prepare routes are derived from it — see {@link checkoutRoutes}. It is required
    * because it is the only URL input: there is no per-route override.
    */
   readonly prefix: string;
@@ -473,7 +471,7 @@ export interface CreateOpenReceiveStatusFetcherOptions {
   /**
    * Base path the shipped router is mounted at. The fetcher polls
    * `${prefix}/payments/check` and reads live swap state from
-   * `${prefix}/swaps/status` — see {@link openReceiveRoutes}.
+   * `${prefix}/swaps/status` — see {@link checkoutRoutes}.
    */
   readonly prefix: string;
   readonly snapshot: CheckoutSnapshot;
@@ -488,7 +486,7 @@ export interface CheckoutWatcherOptions {
   readonly now?: () => number;
   readonly setInterval?: typeof globalThis.setInterval;
   readonly clearInterval?: typeof globalThis.clearInterval;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly logger?: BrowserLoggerOption;
   readonly onState: (state: CheckoutState) => void;
   readonly onSnapshot?: (snapshot: CheckoutSnapshot) => void;
   readonly onError?: (error: unknown) => void;
@@ -524,7 +522,7 @@ export interface CheckoutController {
 
 export interface CreateCheckoutStateOptions {
   readonly now?: number;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly logger?: BrowserLoggerOption;
   /**
    * How this state was produced. Controls which browser log events fire:
    * - `create` (default): `checkout.state.created`
@@ -536,12 +534,12 @@ export interface CreateCheckoutStateOptions {
   readonly previousState?: CheckoutState;
 }
 
-export type OpenReceivePaymentMethod = "bitcoin";
-export type OpenReceiveThemePreference = "light" | "dark" | "system";
-export type OpenReceiveResolvedTheme = "light" | "dark";
+export type PaymentMethod = "bitcoin";
+export type ThemePreference = "light" | "dark" | "system";
+export type ResolvedTheme = "light" | "dark";
 
-export interface OpenReceivePaymentMethodOption {
-  readonly id: OpenReceivePaymentMethod;
+export interface PaymentMethodOption {
+  readonly id: PaymentMethod;
   readonly title: string;
   readonly detail: string;
 }
@@ -550,66 +548,64 @@ export interface ParseOpenReceiveOptionalIntegerOptions {
   readonly label?: string;
 }
 
-export interface OpenReceiveThemeModelOptions {
+export interface ThemeModelOptions {
   readonly systemDark?: boolean;
 }
 
-export interface OpenReceiveThemeStorageOptions {
+export interface ThemeStorageOptions {
   readonly storage?: Storage;
   readonly storageKey?: string;
 }
 
-export interface OpenReceiveReadThemePreferenceOptions extends OpenReceiveThemeStorageOptions {
-  readonly defaultTheme?: OpenReceiveThemePreference;
+export interface ReadThemePreferenceOptions extends ThemeStorageOptions {
+  readonly defaultTheme?: ThemePreference;
 }
 
-export interface OpenReceiveStoredThemeModelOptions
-  extends OpenReceiveReadThemePreferenceOptions,
-    OpenReceiveThemeModelOptions {}
+export interface StoredThemeModelOptions extends ReadThemePreferenceOptions, ThemeModelOptions {}
 
-export interface OpenReceiveThemeAttributeTarget {
+export interface ThemeAttributeTarget {
   getAttribute(name: string): string | null;
   setAttribute(name: string, value: string): void;
 }
 
-export interface OpenReceiveThemeLabelTarget {
+export interface ThemeLabelTarget {
   textContent: string | null;
 }
 
-export interface OpenReceiveThemeControlTargets {
-  readonly root?: OpenReceiveThemeAttributeTarget | null;
-  readonly checkout?: OpenReceiveThemeAttributeTarget | null;
-  readonly toggle?: OpenReceiveThemeLabelTarget | null;
+export interface ThemeControlTargets {
+  readonly root?: ThemeAttributeTarget | null;
+  readonly checkout?: ThemeAttributeTarget | null;
+  readonly toggle?: ThemeLabelTarget | null;
 }
 
-export interface OpenReceiveThemeModel {
-  readonly theme: OpenReceiveThemePreference;
-  readonly resolvedTheme: OpenReceiveResolvedTheme;
-  readonly nextTheme: OpenReceiveThemePreference;
+export interface ThemeModel {
+  readonly theme: ThemePreference;
+  readonly resolvedTheme: ResolvedTheme;
+  readonly nextTheme: ThemePreference;
   readonly toggleLabel: string;
   readonly attributes: {
-    readonly "data-theme": OpenReceiveResolvedTheme;
-    readonly "data-openreceive-theme": OpenReceiveResolvedTheme;
+    readonly "data-theme": ResolvedTheme;
+    readonly "data-openreceive-theme": ResolvedTheme;
   };
   readonly checkoutElementAttributes: {
-    readonly theme: OpenReceiveResolvedTheme;
+    readonly theme: ResolvedTheme;
   };
 }
 
-export interface OpenReceivePaymentWizardRequest {
-  readonly selectedMethod: OpenReceivePaymentMethod | null;
+export interface PaymentWizardRequest {
+  readonly selectedMethod: PaymentMethod | null;
   readonly selectedBitcoinRoute?: string | null;
 }
 
-export interface OpenReceivePaymentWizardSelection {
-  readonly selectedMethod: OpenReceivePaymentMethod | null;
+export interface PaymentWizardSelection {
+  readonly selectedMethod: PaymentMethod | null;
   readonly selectedBitcoinRoute: string | null;
 }
 
-export type OpenReceivePaymentWizardSelectionAction =
+export type PaymentWizardSelectionAction =
   | {
       readonly type: "select_method";
-      readonly method: OpenReceivePaymentMethod;
+      readonly method: PaymentMethod;
     }
   | {
       readonly type: "change_method";
@@ -622,33 +618,33 @@ export type OpenReceivePaymentWizardSelectionAction =
       readonly route: string;
     };
 
-export interface OpenReceivePaymentWizardState {
+export interface PaymentWizardState {
   readonly selectedRouteId: string | null;
   readonly routes: readonly PaymentWizardRoute[];
 }
 
-export interface OpenReceivePaymentWizardModel {
-  readonly selection: OpenReceivePaymentWizardSelection;
-  readonly wizard: OpenReceivePaymentWizardState;
+export interface PaymentWizardModel {
+  readonly selection: PaymentWizardSelection;
+  readonly wizard: PaymentWizardState;
   readonly routeAssets: readonly AssetIndexEntry[];
   readonly selectedRoute: string | null;
 }
 
-export interface OpenReceivePaymentWizardControllerOptions {
-  readonly selection?: OpenReceivePaymentWizardSelection;
-  readonly onSelection?: (selection: OpenReceivePaymentWizardSelection) => void;
+export interface PaymentWizardControllerOptions {
+  readonly selection?: PaymentWizardSelection;
+  readonly onSelection?: (selection: PaymentWizardSelection) => void;
 }
 
-export interface OpenReceivePaymentWizardController {
-  getSelection(): OpenReceivePaymentWizardSelection;
-  getModel(): OpenReceivePaymentWizardModel;
-  update(action: OpenReceivePaymentWizardSelectionAction): OpenReceivePaymentWizardSelection;
-  selectMethod(method: OpenReceivePaymentMethod): OpenReceivePaymentWizardSelection;
-  changeMethod(): OpenReceivePaymentWizardSelection;
-  selectRoute(route: string): OpenReceivePaymentWizardSelection;
+export interface PaymentWizardController {
+  getSelection(): PaymentWizardSelection;
+  getModel(): PaymentWizardModel;
+  update(action: PaymentWizardSelectionAction): PaymentWizardSelection;
+  selectMethod(method: PaymentMethod): PaymentWizardSelection;
+  changeMethod(): PaymentWizardSelection;
+  selectRoute(route: string): PaymentWizardSelection;
 }
 
-export interface OpenReceiveWizardRouteAssetDisplay {
+export interface WizardRouteAssetDisplay {
   readonly id: string;
   readonly label: string;
   readonly subtitle: string;
@@ -656,30 +652,30 @@ export interface OpenReceiveWizardRouteAssetDisplay {
   readonly selected: boolean;
 }
 
-export interface OpenReceiveWizardProviderTutorialDisplay {
+export interface WizardProviderTutorialDisplay {
   readonly index: number;
   readonly path: string;
   readonly image: string;
   readonly caption: string;
 }
 
-export interface OpenReceiveWizardProviderDisplay {
+export interface WizardProviderDisplay {
   readonly id: string;
   readonly name: string;
   readonly kind: string;
   readonly url: string;
   readonly icon: string;
-  readonly tutorials: readonly OpenReceiveWizardProviderTutorialDisplay[];
+  readonly tutorials: readonly WizardProviderTutorialDisplay[];
   readonly copyLabel: string;
   readonly copiedLabel: string;
   readonly openLabel: string;
 }
 
-export interface OpenReceiveWizardRouteDisplay {
+export interface WizardRouteDisplay {
   readonly key: string;
   readonly title: string;
   readonly subtitle: string;
-  readonly providers: readonly OpenReceiveWizardProviderDisplay[];
+  readonly providers: readonly WizardProviderDisplay[];
 }
 
 /**
@@ -688,7 +684,7 @@ export interface OpenReceiveWizardRouteDisplay {
  * Never includes NWC secrets — those are not part of checkout public state.
  * Optional `href` is a block-explorer or Lightning invoice decode link.
  */
-export interface OpenReceiveTransactionDetailRow {
+export interface TransactionDetailRow {
   readonly label: string;
   readonly value: string;
   readonly copyValue?: string;
@@ -696,7 +692,7 @@ export interface OpenReceiveTransactionDetailRow {
   readonly hrefLabel?: string;
 }
 
-export interface OpenReceiveTransactionDetailsInput {
+export interface TransactionDetailsInput {
   readonly order_id?: string;
   readonly checkout_id?: string;
   readonly invoice_id?: string;

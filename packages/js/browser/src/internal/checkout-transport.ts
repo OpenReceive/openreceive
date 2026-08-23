@@ -5,21 +5,18 @@
 // `prefix` — this module never accepts a route of its own.
 
 import { isRecord, nonEmptyString } from "@openreceive/core";
-import { type OpenReceiveRoutes, openReceiveRoutes } from "./routes.ts";
+import { type Routes, checkoutRoutes } from "./routes.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutStatusRefresh,
   type CreateOpenReceiveStatusFetcherOptions,
   OPENRECEIVE_REFUND_REVIEW_NONCE,
-  type OpenReceiveCheckoutPaymentMethod,
+  type CheckoutPaymentMethod,
   type PrepareCheckoutOptions,
   type RequestCheckoutOptions,
 } from "./ui.ts";
-import {
-  assertOpenReceiveBrowserPayloadSafe,
-  assertOpenReceiveDisplayInvoice,
-} from "./checkout-invoice.ts";
+import { assertBrowserPayloadSafe, assertDisplayInvoice } from "./checkout-invoice.ts";
 import {
   asRecord,
   optionalRecord,
@@ -35,7 +32,7 @@ import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
  * callers can back off instead of blind fixed-interval retries — and so hosts
  * can distinguish "retry" from "bug".
  */
-export class OpenReceiveBrowserRequestError extends Error {
+export class BrowserRequestError extends Error {
   readonly status: number;
   readonly code?: string;
   readonly retryable?: boolean;
@@ -51,7 +48,7 @@ export class OpenReceiveBrowserRequestError extends Error {
     },
   ) {
     super(message);
-    this.name = "OpenReceiveBrowserRequestError";
+    this.name = "BrowserRequestError";
     this.status = options.status;
     if (options.code !== undefined) this.code = options.code;
     if (options.retryable !== undefined) this.retryable = options.retryable;
@@ -61,11 +58,11 @@ export class OpenReceiveBrowserRequestError extends Error {
 
 /**
  * Read a fetch Response as JSON with error semantics preserved: non-OK
- * responses throw OpenReceiveBrowserRequestError (even when the body is not
+ * responses throw BrowserRequestError (even when the body is not
  * JSON — a proxy's HTML 502 must not surface as a SyntaxError), and the
  * Retry-After header is captured when present.
  */
-export async function readOpenReceiveJsonResponse(
+export async function readJsonResponse(
   response: {
     readonly ok: boolean;
     readonly status: number;
@@ -84,7 +81,7 @@ export async function readOpenReceiveJsonResponse(
     const record =
       body !== null && typeof body === "object" ? (body as Record<string, unknown>) : undefined;
     const retryAfterRaw = Number(response.headers?.get?.("retry-after") ?? Number.NaN);
-    throw new OpenReceiveBrowserRequestError(
+    throw new BrowserRequestError(
       typeof record?.message === "string" ? record.message : fallbackMessage,
       {
         status: response.status,
@@ -100,7 +97,7 @@ export async function readOpenReceiveJsonResponse(
 }
 
 interface NormalizedRequestCheckoutOptions {
-  readonly routes: OpenReceiveRoutes;
+  readonly routes: Routes;
   readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
@@ -115,7 +112,7 @@ function normalizeRequestCheckoutOptions(
   const orderId = nonEmptyString(record.orderId ?? record.order_id);
   const metadata = optionalRecord(record.metadata);
   return {
-    routes: openReceiveRoutes(options.prefix),
+    routes: checkoutRoutes(options.prefix),
     orderId: orderId ?? "",
     fetch: options.fetch,
     headers: options.headers,
@@ -144,7 +141,7 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     ...(request.memo === undefined ? {} : { memo: request.memo }),
     ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
   };
-  assertOpenReceiveBrowserPayloadSafe(requestBody);
+  assertBrowserPayloadSafe(requestBody);
 
   const headers = request.headers === undefined ? {} : request.headers;
   const response = await fetcher(request.routes.checkouts, {
@@ -155,14 +152,14 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     },
     body: JSON.stringify(requestBody),
   });
-  const body = (await readOpenReceiveJsonResponse(response, "Could not create checkout.")) as
+  const body = (await readJsonResponse(response, "Could not create checkout.")) as
     | Record<string, unknown>
     | undefined;
 
   const snapshot = checkoutSnapshotFromResponseBody(body);
   const responseInvoice = snapshot.active;
   if (isRecord(responseInvoice) && typeof responseInvoice.invoice === "string") {
-    assertOpenReceiveDisplayInvoice(responseInvoice.invoice);
+    assertDisplayInvoice(responseInvoice.invoice);
   }
 
   return snapshot;
@@ -192,12 +189,12 @@ export async function prepareCheckout(options: PrepareCheckoutOptions): Promise<
     },
     body: JSON.stringify({ order_id: request.orderId }),
   });
-  const body = await readOpenReceiveJsonResponse(response, "Could not prepare checkout.");
+  const body = await readJsonResponse(response, "Could not prepare checkout.");
 
   return checkoutLockSnapshotFromPrepareBody(body, request.orderId);
 }
 
-export function createOpenReceiveStatusFetcher(
+export function createStatusFetcher(
   options: CreateOpenReceiveStatusFetcherOptions,
 ): CheckoutStatusRefresh {
   // Track the latest refreshed snapshot so repeated calls on the same fetcher
@@ -205,7 +202,7 @@ export function createOpenReceiveStatusFetcher(
   // otherwise the terminal-state guard below never fires and every tick keeps
   // hitting /swaps/status after the provider is already terminal.
   let snapshot = options.snapshot;
-  const routes = openReceiveRoutes(options.prefix);
+  const routes = checkoutRoutes(options.prefix);
   return async (order_id) => {
     if (order_id.length === 0) {
       throw new Error("OpenReceive status refresh requires order_id.");
@@ -237,7 +234,7 @@ export function createOpenReceiveStatusFetcher(
         payment_hash: activePaymentHash,
       }),
     });
-    const body = await readOpenReceiveJsonResponse(response, "Could not refresh invoice status.");
+    const body = await readJsonResponse(response, "Could not refresh invoice status.");
 
     const payment = asRecord(body);
     const next = structuredClone(snapshot);
@@ -282,7 +279,7 @@ export function createOpenReceiveStatusFetcher(
           body: JSON.stringify({ order_id, payment_hash: activePaymentHash }),
         });
         const swapBody = asRecord(
-          await readOpenReceiveJsonResponse(swapResponse, "Could not refresh swap status."),
+          await readJsonResponse(swapResponse, "Could not refresh swap status."),
         );
         active = mergeSwapStatusIntoInvoice(active, swapBody);
       } catch {
@@ -423,16 +420,14 @@ function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
   };
 }
 
-function normalizePaymentMethods(
-  value: unknown,
-): readonly OpenReceiveCheckoutPaymentMethod[] | undefined {
+function normalizePaymentMethods(value: unknown): readonly CheckoutPaymentMethod[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value
     .map(normalizePaymentMethod)
-    .filter((method): method is OpenReceiveCheckoutPaymentMethod => method !== undefined);
+    .filter((method): method is CheckoutPaymentMethod => method !== undefined);
 }
 
-function normalizePaymentMethod(input: unknown): OpenReceiveCheckoutPaymentMethod | undefined {
+function normalizePaymentMethod(input: unknown): CheckoutPaymentMethod | undefined {
   const record = asRecord(input);
   const payInAsset = nonEmptyString(record.pay_in_asset);
   const label = nonEmptyString(record.label);

@@ -1,16 +1,16 @@
 // The provider tutorial modal and the "open provider" action the wizard links
 // it from. React's counterpart is react/src/provider-tutorial.ts.
 import {
-  createOpenReceiveLightningInvoiceDecodeUrl,
-  escapeOpenReceiveHtml as escapeHtml,
+  createLightningInvoiceDecodeUrl,
+  escapeHtml,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
-  openReceiveCheckoutLabels,
-  type OpenReceiveWizardProviderDisplay,
-  type OpenReceiveWizardRouteDisplay,
+  checkoutLabels,
+  type WizardProviderDisplay,
+  type WizardRouteDisplay,
   orClasses,
 } from "@openreceive/browser/headless";
 
-export function renderProviderOpenActionHtml(provider: OpenReceiveWizardProviderDisplay): string {
+export function renderProviderOpenActionHtml(provider: WizardProviderDisplay): string {
   if (provider.tutorials.length === 0) {
     return `<a class="${orClasses.providerOpen}" href="${escapeHtml(provider.url)}" rel="noreferrer" target="_blank">${escapeHtml(provider.openLabel)}</a>`;
   }
@@ -27,7 +27,7 @@ export function renderProviderOpenActionHtml(provider: OpenReceiveWizardProvider
 }
 
 export function renderTutorialModalHtml(
-  routes: readonly OpenReceiveWizardRouteDisplay[],
+  routes: readonly WizardRouteDisplay[],
   activeProviderId: string | null,
   activeTutorialIndex: number,
   copied: boolean,
@@ -49,23 +49,23 @@ export function renderTutorialModalHtml(
   const decodeHref =
     lightningInvoice === undefined || lightningInvoice.trim() === ""
       ? undefined
-      : createOpenReceiveLightningInvoiceDecodeUrl(lightningInvoice, decodeLinkUrl);
+      : createLightningInvoiceDecodeUrl(lightningInvoice, decodeLinkUrl);
   const decodeButton =
     decodeHref === undefined
       ? ""
-      : `<a part="tutorial-decode" class="${orClasses.tutorialCopy}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(openReceiveCheckoutLabels.decodeInvoice)}</a>`;
+      : `<a part="tutorial-decode" class="${orClasses.tutorialCopy}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(checkoutLabels.decodeInvoice)}</a>`;
   const body =
     stepIndex === 0
       ? `
         <div part="tutorial-intro" class="${orClasses.tutorialIntro}">
           <img part="tutorial-provider-logo" alt="" src="${escapeHtml(provider.icon)}" class="${orClasses.tutorialProviderLogo}">
-          <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroPrefix)} ${escapeHtml(provider.name)}.</p>
-          <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroCopy)}</p>
-          <button part="tutorial-copy" class="${orClasses.tutorialCopy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
+          <p>${escapeHtml(checkoutLabels.tutorialIntroPrefix)} ${escapeHtml(provider.name)}.</p>
+          <p>${escapeHtml(checkoutLabels.tutorialIntroCopy)}</p>
+          <button part="tutorial-copy" class="${orClasses.tutorialCopy}" type="button">${escapeHtml(checkoutLabels.copyInvoice)}</button>
           ${decodeButton}
           ${
             copied
-              ? `<p part="tutorial-copy-message" class="${orClasses.tutorialCopyMessage}">${escapeHtml(openReceiveCheckoutLabels.tutorialCopiedContinue)}</p>`
+              ? `<p part="tutorial-copy-message" class="${orClasses.tutorialCopyMessage}">${escapeHtml(checkoutLabels.tutorialCopiedContinue)}</p>`
               : ""
           }
         </div>
@@ -78,12 +78,12 @@ export function renderTutorialModalHtml(
       `;
 
   return `
-    <div part="tutorial" class="${orClasses.tutorialModal}" role="dialog" aria-modal="true" aria-label="${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
+    <div part="tutorial" class="${orClasses.tutorialModal}" role="dialog" aria-modal="true" aria-label="${escapeHtml(checkoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
       <div part="tutorial-dialog" class="${orClasses.tutorialBox}">
         <div part="tutorial-header" class="${orClasses.tutorialHeader}">
           <div part="tutorial-title" class="${orClasses.tutorialTitle}">
             <img part="tutorial-header-logo" alt="" src="${escapeHtml(provider.icon)}" class="${orClasses.tutorialHeaderLogo}">
-            <h3>${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}</h3>
+            <h3>${escapeHtml(checkoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}</h3>
           </div>
           <button
             part="tutorial-close"
@@ -118,7 +118,7 @@ export function renderTutorialModalHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${isFinalStep ? "" : escapeHtml(provider.id)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${nextIndex}"
             type="button"
-          >${escapeHtml(isFinalStep ? openReceiveCheckoutLabels.tutorialExit : "Next")}</button>
+          >${escapeHtml(isFinalStep ? checkoutLabels.tutorialExit : "Next")}</button>
         </div>
       </div>
     </div>

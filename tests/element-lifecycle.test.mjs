@@ -10,7 +10,7 @@ const assert = (await import("node:assert/strict")).default;
 const test = (await import("node:test")).default;
 // Imported after DOM registration: the package touches window/document when the
 // element classes are defined.
-const { defineOpenReceiveElements } = await import("../packages/js/elements/src/index.ts");
+const { defineElements } = await import("../packages/js/elements/src/index.ts");
 
 const qrRequests = [];
 const qrEncoder = {
@@ -21,7 +21,7 @@ const qrEncoder = {
   },
 };
 
-defineOpenReceiveElements({ qrEncoder, logger: false });
+defineElements({ qrEncoder, logger: false });
 
 // Every test stubs globalThis.fetch; restore the real one so the stub cannot
 // leak into other files sharing this process.
@@ -152,7 +152,7 @@ test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => 
 // the method grid and pick Bitcoin again. `mintingLightning` is false by then,
 // so the only thing standing between that click and a second POST /checkouts
 // is the reuse branch in the shared session (ensureLightning's
-// findOpenReceiveReusableLightningInvoice short-circuit). The pair of this is
+// findReusableLightningInvoice short-circuit). The pair of this is
 // tests/react-checkout-behavior.test.mjs, "Bitcoin selected again after the
 // mint reuses the bolt11 instead of minting a second one".
 test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting again", async () => {

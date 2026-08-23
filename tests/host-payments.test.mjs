@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { hash } from "./helpers/factories.mjs";
 import {
-  createOpenReceiveHost,
-  reconcileOpenReceivePayments,
-  startOpenReceiveReconciler,
+  createHost,
+  reconcileHostPayments,
+  startReconciler,
 } from "../packages/js/http/src/index.ts";
-import { openReceivePaymentInsert } from "../packages/js/http/src/payment-repository.ts";
-import { createOpenReceiveStatusFetcher } from "../packages/js/browser/src/headless.ts";
+import { paymentInsert } from "../packages/js/http/src/payment-repository.ts";
+import { createStatusFetcher } from "../packages/js/browser/src/headless.ts";
 
 function context(action, input = {}, payInAsset) {
   return {
@@ -53,7 +53,7 @@ function repository(rows) {
 }
 
 function host(rows) {
-  return createOpenReceiveHost({
+  return createHost({
     clock: () => 1_000,
     loadOrder: async (orderId) => (orderId === "order-1" ? { total: "10.00" } : null),
     amountForOrder: (order) => ({ currency: "USD", value: order.total }),
@@ -241,7 +241,7 @@ test("status and refund actions require a payment hash", async () => {
 
 test("host pricing runs only when minting or quoting, never on status or refund reads", async () => {
   let priced = 0;
-  const paymentHost = createOpenReceiveHost({
+  const paymentHost = createHost({
     clock: () => 1_000,
     loadOrder: async () => ({ total: "10.00" }),
     amountForOrder: () => {
@@ -278,22 +278,22 @@ test("host integration remints when the matching attempt is near expiry", async 
   });
 });
 
-test("createOpenReceiveHost requires the order hooks and a db or full payments repository", () => {
+test("createHost requires the order hooks and a db or full payments repository", () => {
   const loadOrder = async () => null;
   const amountForOrder = () => ({ sats: 1 });
   const onPaid = async () => undefined;
   const payments = repository([]);
 
-  assert.throws(() => createOpenReceiveHost({}), /requires loadOrder/);
-  assert.throws(() => createOpenReceiveHost({ loadOrder }), /requires amountForOrder/);
-  assert.throws(() => createOpenReceiveHost({ loadOrder, amountForOrder }), /requires onPaid/);
+  assert.throws(() => createHost({}), /requires loadOrder/);
+  assert.throws(() => createHost({ loadOrder }), /requires amountForOrder/);
+  assert.throws(() => createHost({ loadOrder, amountForOrder }), /requires onPaid/);
   assert.throws(
-    () => createOpenReceiveHost({ loadOrder, amountForOrder, onPaid }),
+    () => createHost({ loadOrder, amountForOrder, onPaid }),
     /requires db or payments\.listForOrder/,
   );
   assert.throws(
     () =>
-      createOpenReceiveHost({
+      createHost({
         loadOrder,
         amountForOrder,
         onPaid,
@@ -303,7 +303,7 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
   );
   assert.throws(
     () =>
-      createOpenReceiveHost({
+      createHost({
         loadOrder,
         amountForOrder,
         onPaid,
@@ -316,7 +316,7 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
   );
   assert.throws(
     () =>
-      createOpenReceiveHost({
+      createHost({
         loadOrder,
         amountForOrder,
         onPaid,
@@ -329,7 +329,7 @@ test("createOpenReceiveHost requires the order hooks and a db or full payments r
     /requires payments\.recordReconciliation/,
   );
   // A complete custom repository is the documented escape hatch.
-  const built = createOpenReceiveHost({ loadOrder, amountForOrder, onPaid, payments });
+  const built = createHost({ loadOrder, amountForOrder, onPaid, payments });
   assert.equal(built.payments, payments);
 });
 
@@ -340,7 +340,7 @@ test("a custom repository drives the library's write-once settlement claim", asy
   // The repository owns storage; the LIBRARY owns the state machine: it asks
   // for the first-settlement claim and calls the host only when it is won.
   const claimResults = [true, false];
-  const built = createOpenReceiveHost({
+  const built = createHost({
     loadOrder: async () => ({ total: "1.00" }),
     amountForOrder: () => ({ currency: "USD", value: "1.00" }),
     payments: {
@@ -369,7 +369,7 @@ test("a custom repository without recordSettlement is refused at construction", 
   // first settlement: a host must not discover this once money has arrived.
   assert.throws(
     () =>
-      createOpenReceiveHost({
+      createHost({
         loadOrder: async () => ({ total: "1.00" }),
         amountForOrder: () => ({ currency: "USD", value: "1.00" }),
         payments: withoutClaim,
@@ -394,7 +394,7 @@ test("payment insert uses provider expiry and keeps swap data server-side", () =
     },
   };
   assert.deepEqual(
-    openReceivePaymentInsert({
+    paymentInsert({
       orderId: "order-1",
       paymentHash: hash("a").toUpperCase(),
       checkout: {
@@ -438,7 +438,7 @@ test("browser status polling carries the displayed payment hash", async () => {
     transaction_state: "pending",
     workflow_state: "invoice_created",
   };
-  const refresh = createOpenReceiveStatusFetcher({
+  const refresh = createStatusFetcher({
     prefix: "/openreceive",
     snapshot: {
       checkout_id: paymentHash,
@@ -475,7 +475,7 @@ test("reconciler retries from the pending-attempt ledger without a cursor", asyn
   const inputs = [];
   const delivered = [];
   const gateClaims = [];
-  const returned = await startOpenReceiveReconciler({
+  const returned = await startReconciler({
     service: {
       async reconcilePayments(input) {
         inputs.push(input);
@@ -518,7 +518,7 @@ test("reconciler retries from the pending-attempt ledger without a cursor", asyn
 
 test("reconciler refuses a repository without the durable scan gate", async () => {
   await assert.rejects(
-    startOpenReceiveReconciler({
+    startReconciler({
       service: { reconcilePayments: async () => [] },
       host: {
         onPaid: async () => undefined,
@@ -553,7 +553,7 @@ test("one failing settlement delivery does not starve the rest of the pass", asy
       recordReconciliation: async () => undefined,
     },
   };
-  await assert.rejects(reconcileOpenReceivePayments({ service, host: failingHost }), (error) => {
+  await assert.rejects(reconcileHostPayments({ service, host: failingHost }), (error) => {
     assert.ok(error instanceof AggregateError);
     assert.equal(error.errors.length, 1);
     assert.match(error.errors[0].message, /host transaction rolled back/);

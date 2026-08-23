@@ -1,13 +1,13 @@
-import type { OpenReceiveBrowserLogLevel } from "./ui.ts";
+import type { BrowserLogLevel } from "./ui.ts";
 
-const BROWSER_LOG_LEVEL_ORDER: Record<OpenReceiveBrowserLogLevel, number> = {
+const BROWSER_LOG_LEVEL_ORDER: Record<BrowserLogLevel, number> = {
   debug: 10,
   info: 20,
   warn: 30,
   error: 40,
 };
 
-const BROWSER_LOG_LEVEL_ALIASES: Record<string, OpenReceiveBrowserLogLevel> = {
+const BROWSER_LOG_LEVEL_ALIASES: Record<string, BrowserLogLevel> = {
   debug: "debug",
   info: "info",
   warn: "warn",
@@ -16,7 +16,7 @@ const BROWSER_LOG_LEVEL_ALIASES: Record<string, OpenReceiveBrowserLogLevel> = {
 };
 
 /** Compare browser log levels (`debug` < `info` < `warn` < `error`). */
-export function openReceiveBrowserLogLevelOrder(level: OpenReceiveBrowserLogLevel): number {
+export function browserLogLevelOrder(level: BrowserLogLevel): number {
   return BROWSER_LOG_LEVEL_ORDER[level];
 }
 
@@ -24,9 +24,9 @@ export function openReceiveBrowserLogLevelOrder(level: OpenReceiveBrowserLogLeve
  * Parse `LOG_LEVEL` values such as `DEBUG`, `info`, or `Warning`.
  * Returns `undefined` when the value is missing or unrecognized.
  */
-export function parseOpenReceiveBrowserLogLevel(
+export function parseBrowserLogLevel(
   value: string | undefined | null,
-): OpenReceiveBrowserLogLevel | undefined {
+): BrowserLogLevel | undefined {
   if (value === undefined || value === null) return undefined;
   const normalized = value.trim().toLowerCase();
   if (normalized.length === 0) return undefined;
@@ -34,11 +34,11 @@ export function parseOpenReceiveBrowserLogLevel(
 }
 
 /** Resolve a log level string, falling back to `info` when unset/invalid. */
-export function resolveOpenReceiveBrowserLogLevel(
+export function resolveBrowserLogLevel(
   value?: string | null,
-  fallback: OpenReceiveBrowserLogLevel = "info",
-): OpenReceiveBrowserLogLevel {
-  return parseOpenReceiveBrowserLogLevel(value) ?? fallback;
+  fallback: BrowserLogLevel = "info",
+): BrowserLogLevel {
+  return parseBrowserLogLevel(value) ?? fallback;
 }
 
 type BrowserEnvSource = Readonly<Record<string, string | undefined>>;
@@ -54,27 +54,25 @@ type BrowserEnvSource = Readonly<Record<string, string | undefined>>;
  *
  * Default `info`.
  */
-export function readOpenReceiveBrowserLogLevelFromEnvironment(
-  source?: BrowserEnvSource,
-): OpenReceiveBrowserLogLevel {
+export function readBrowserLogLevelFromEnvironment(source?: BrowserEnvSource): BrowserLogLevel {
   if (source !== undefined) {
-    return resolveOpenReceiveBrowserLogLevel(
+    return resolveBrowserLogLevel(
       source.LOG_LEVEL ?? source.VITE_LOG_LEVEL ?? source.NEXT_PUBLIC_LOG_LEVEL,
     );
   }
 
-  const fromGlobal = parseOpenReceiveBrowserLogLevel(readGlobalLogLevel());
+  const fromGlobal = parseBrowserLogLevel(readGlobalLogLevel());
   if (fromGlobal !== undefined) return fromGlobal;
 
   const metaEnv = readImportMetaEnv();
-  const parsedMeta = parseOpenReceiveBrowserLogLevel(
+  const parsedMeta = parseBrowserLogLevel(
     metaEnv?.LOG_LEVEL ?? metaEnv?.VITE_LOG_LEVEL ?? metaEnv?.NEXT_PUBLIC_LOG_LEVEL,
   );
   if (parsedMeta !== undefined) return parsedMeta;
 
   const processEnv =
     typeof process !== "undefined" ? (process.env as BrowserEnvSource | undefined) : undefined;
-  return resolveOpenReceiveBrowserLogLevel(processEnv?.LOG_LEVEL);
+  return resolveBrowserLogLevel(processEnv?.LOG_LEVEL);
 }
 
 function readGlobalLogLevel(): string | undefined {

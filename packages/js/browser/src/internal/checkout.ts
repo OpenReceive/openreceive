@@ -8,8 +8,8 @@
 
 // ./checkout-ticker.ts — transient feedback + countdown tickers
 export {
-  createOpenReceiveTickingValueController,
-  createOpenReceiveTransientFeedbackController,
+  createTickingValueController,
+  createTransientFeedbackController,
 } from "./checkout-ticker.ts";
 // ./checkout-format.ts — display formatting.
 // FORMATTERS THROW, DISPLAY BOUNDARIES BLANK: `optionalMsatsLabel` and
@@ -18,58 +18,58 @@ export {
 // safe option in hand. See their docstrings for which to reach for.
 export {
   deriveCheckoutStateLabels,
-  escapeOpenReceiveHtml,
-  formatOpenReceiveAmountCaption,
-  formatOpenReceiveDepositAmount,
-  formatOpenReceiveFiatAmount,
-  formatOpenReceiveMsats,
-  formatOpenReceiveSwapLimit,
-  formatOpenReceiveUnixTime,
+  escapeHtml,
+  formatAmountCaption,
+  formatDepositAmount,
+  formatFiatAmount,
+  formatMsats,
+  formatSwapLimit,
+  formatUnixTime,
   optionalMsatsLabel,
   optionalUnixTimeLabel,
 } from "./checkout-format.ts";
 // ./checkout-invoice.ts — bolt11 guards + lightning: URI
 export {
-  assertOpenReceiveDisplayInvoice,
+  assertDisplayInvoice,
   createLightningUri,
 } from "./checkout-invoice.ts";
 // ./checkout-swap-view.ts — the swap attempt as the payer sees it
 export {
-  createOpenReceiveSwapDisplayModel,
-  createOpenReceiveSwapFeeBreakdown,
-  openReceiveSwapAssetMatchesRoute,
-  overlayOpenReceiveSwapRefundStaging,
+  createSwapDisplayModel,
+  createSwapFeeBreakdown,
+  swapAssetMatchesRoute,
+  overlaySwapRefundStaging,
 } from "./checkout-swap-view.ts";
 // ./checkout-links.ts — outbound explorer / decoder links
 export {
-  createOpenReceiveBlockExplorerUrl,
-  createOpenReceiveDetailExternalLink,
-  createOpenReceiveLightningInvoiceDecodeUrl,
-  getOpenReceiveExplorerNetwork,
+  createBlockExplorerUrl,
+  createDetailExternalLink,
+  createLightningInvoiceDecodeUrl,
+  getExplorerNetwork,
 } from "./checkout-links.ts";
 // ./checkout-details.ts — detail rows + payment data entries
 export type {
-  OpenReceivePaymentDataSource,
-  OpenReceiveTransactionDetailsSource,
+  PaymentDataSource,
+  TransactionDetailsSource,
 } from "./checkout-details.ts";
 export {
-  createOpenReceivePaymentDataEntries,
-  createOpenReceiveTransactionDetails,
-  createOpenReceiveTransactionDetailsFromState,
-  resolveOpenReceiveTransactionDetailRows,
+  createPaymentDataEntries,
+  createTransactionDetails,
+  createTransactionDetailsFromState,
+  resolveTransactionDetailRows,
 } from "./checkout-details.ts";
 // ./checkout-transport.ts — talking to the mounted routes
 export {
-  createOpenReceiveStatusFetcher,
-  OpenReceiveBrowserRequestError,
+  createStatusFetcher,
+  BrowserRequestError,
   prepareCheckout,
-  readOpenReceiveJsonResponse,
+  readJsonResponse,
   requestCheckout,
 } from "./checkout-transport.ts";
 // ./routes.ts — every route derived from the one `prefix` the caller gives.
-// The modules that build requests import `OpenReceiveRoutes` straight from
+// The modules that build requests import `Routes` straight from
 // there; only the derivation itself is shared through this barrel.
-export { openReceiveRoutes } from "./routes.ts";
+export { checkoutRoutes } from "./routes.ts";
 // ./checkout-state.ts — snapshot -> checkout state
 export {
   createCheckoutSnapshotFromInvoice,

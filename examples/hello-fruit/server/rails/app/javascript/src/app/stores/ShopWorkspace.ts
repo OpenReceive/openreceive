@@ -33,7 +33,7 @@ import {
   type HelloFruitBtcFiatRates,
 } from "../../../../../../../shared/demo-pricing.ts";
 import { getJsonFromRails, sendToRailsController } from "../../helpers/requests.ts";
-import { ORDERS_URL, RATES_URL, setOpenReceivePrefix } from "../helpers/constants.ts";
+import { ORDERS_URL, RATES_URL, setPrefix } from "../helpers/constants.ts";
 import { logDemo } from "../helpers/logging.ts";
 import type {
   HelloFruitDemoOrder,
@@ -104,7 +104,7 @@ export class ShopWorkspace extends Model({
     const element = document.getElementById("__app_bootstrap");
     if (element?.textContent) {
       const bootstrap = JSON.parse(element.textContent) as ShopBootstrap;
-      setOpenReceivePrefix(bootstrap.openreceive_prefix);
+      setPrefix(bootstrap.openreceive_prefix);
       this.fruits = frozen(bootstrap.fruits);
       this.productInfo = frozen(bootstrap.product);
       this.currencyOptions = frozen(bootstrap.currencies);

@@ -4,9 +4,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  attachOpenReceiveLogging,
-  createOpenReceiveFileLogger,
-  createOpenReceiveFileLoggerFromConfig,
+  attachLogging,
+  createFileLogger,
+  createFileLoggerFromConfig,
   OPENRECEIVE_LOGGING_DEFAULTS,
 } from "../packages/js/node/src/service/file-logger.ts";
 
@@ -20,15 +20,15 @@ function scratchDirectory(t) {
 // happens to run from; file logging is a deliberate host decision.
 test("file logging is off until the host opts in", () => {
   assert.equal(OPENRECEIVE_LOGGING_DEFAULTS.enabled, false);
-  assert.equal(createOpenReceiveFileLoggerFromConfig(undefined), undefined);
-  assert.equal(createOpenReceiveFileLoggerFromConfig({}), undefined);
-  assert.equal(createOpenReceiveFileLoggerFromConfig({ enabled: false }), undefined);
-  assert.equal(createOpenReceiveFileLoggerFromConfig({ directory: "./nope" }), undefined);
+  assert.equal(createFileLoggerFromConfig(undefined), undefined);
+  assert.equal(createFileLoggerFromConfig({}), undefined);
+  assert.equal(createFileLoggerFromConfig({ enabled: false }), undefined);
+  assert.equal(createFileLoggerFromConfig({ directory: "./nope" }), undefined);
 });
 
-test("attachOpenReceiveLogging creates no log directory by default", () => {
+test("attachLogging creates no log directory by default", () => {
   const before = existsSync("logs");
-  const options = attachOpenReceiveLogging({});
+  const options = attachLogging({});
   assert.equal(typeof options.logger, "function");
   // Below the console minimum, so this only exercises the sink composition.
   options.logger({ level: "debug", event: "boot", message: "no file sink attached" });
@@ -37,7 +37,7 @@ test("attachOpenReceiveLogging creates no log directory by default", () => {
 
 test("an opted-in file logger buffers, then flushes every line to disk", async (t) => {
   const directory = scratchDirectory(t);
-  const logger = createOpenReceiveFileLoggerFromConfig({
+  const logger = createFileLoggerFromConfig({
     enabled: true,
     directory,
     filename: "openreceive.log",
@@ -65,7 +65,7 @@ test("an opted-in file logger buffers, then flushes every line to disk", async (
 test("the file logger rotates by size and keeps the configured archive count", async (t) => {
   const directory = scratchDirectory(t);
   const logPath = path.join(directory, "rotate.log");
-  const logger = createOpenReceiveFileLogger({
+  const logger = createFileLogger({
     directory,
     filename: "rotate.log",
     maxFileSizeBytes: 1024,

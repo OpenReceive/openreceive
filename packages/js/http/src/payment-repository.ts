@@ -35,16 +35,16 @@ export const OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS = 900 as const;
  * operator must review before the attempt moves on: the wallet still
  * explicitly reports an in-flight transaction state long after invoice expiry.
  */
-export type OpenReceiveAttemptStatus = TransactionSettlementStatus | "attention";
+export type AttemptStatus = TransactionSettlementStatus | "attention";
 
 /**
  * The minimal row OpenReceive needs for one invoice or swap attempt.
  * An order may have many of these records. `swapData` must remain server-only.
  */
-export interface OpenReceivePaymentRecord {
+export interface PaymentRecord {
   readonly orderId: string;
   readonly paymentHash: string;
-  readonly status: OpenReceiveAttemptStatus;
+  readonly status: AttemptStatus;
   /** Optional operator-facing detail for the current status (e.g. "superseded"). */
   readonly statusReason?: string | null;
   readonly paidAt: number | null;
@@ -60,7 +60,7 @@ export interface OpenReceivePaymentRecord {
 /** How `commitAttempt` should treat one existing unpaid live row vs an incoming insert. */
 export type LiveAttemptCommitDecision = "ignore" | "conflict" | "supersede";
 
-export interface OpenReceivePaymentInsert {
+export interface PaymentInsert {
   readonly orderId: string;
   readonly paymentHash: string;
   readonly expiresAt: number;
@@ -72,7 +72,7 @@ export interface OpenReceivePaymentInsert {
 }
 
 /** One pending attempt the reconciler should include in its next wallet scan. */
-export interface OpenReceiveReconcilableAttempt {
+export interface ReconcilableAttempt {
   readonly paymentHash: string;
   /** Exact NIP-47 invoice creation time returned by make_invoice. */
   readonly createdAt: number;
@@ -81,9 +81,9 @@ export interface OpenReceiveReconcilableAttempt {
 }
 
 /** A terminal (non-settled) state transition observed by reconciliation. */
-export interface OpenReceiveReconciliationTransition {
+export interface ReconciliationTransition {
   readonly paymentHash: string;
-  readonly status: Exclude<OpenReceiveAttemptStatus, "pending" | "settled">;
+  readonly status: Exclude<AttemptStatus, "pending" | "settled">;
   /** Unix timestamp of the wallet scan that justified this transition. */
   readonly observedAt: number;
   /** Operator-facing reason, e.g. "wallet_reported_expired" or "not_found_after_expiry". */
@@ -91,7 +91,7 @@ export interface OpenReceiveReconciliationTransition {
 }
 
 /** One observed wallet settlement, as handed to the repository to record. */
-export interface OpenReceiveSettlementRecord {
+export interface SettlementRecord {
   readonly paymentHash: string;
   /** Unix timestamp the wallet reports (or the scan observed) the payment at. */
   readonly paidAt: number;
@@ -100,7 +100,7 @@ export interface OpenReceiveSettlementRecord {
 
 /**
  * Persistence boundary for payment attempts. Most applications use the
- * library-provided SQL repository (`createOpenReceiveSqlPayments`); implementing
+ * library-provided SQL repository (`createSqlPayments`); implementing
  * this interface directly is the advanced escape hatch.
  *
  * `commitAttempt` must serialize concurrent creates for one order, reject a
@@ -116,17 +116,17 @@ export interface OpenReceiveSettlementRecord {
  * for every observed settlement and runs the host's own handler only when the
  * call reports the claim won, so a redelivered settlement fulfills once.
  */
-export interface OpenReceivePaymentRepository {
-  listForOrder(orderId: string): Promise<readonly OpenReceivePaymentRecord[]>;
+export interface PaymentRepository {
+  listForOrder(orderId: string): Promise<readonly PaymentRecord[]>;
   /**
    * The oldest `pending` attempts, terminal rows excluded. A repository with a
    * large backlog should return an oldest-first batch (the built-in SQL one
    * caps each pass at OPENRECEIVE_RECONCILE_BATCH_SIZE); the remainder is
    * covered by later passes.
    */
-  listReconcilableAttempts(): Promise<readonly OpenReceiveReconcilableAttempt[]>;
+  listReconcilableAttempts(): Promise<readonly ReconcilableAttempt[]>;
   commitAttempt(input: CheckoutCreatedInput): void | Promise<void>;
-  recordReconciliation(transition: OpenReceiveReconciliationTransition): void | Promise<void>;
+  recordReconciliation(transition: ReconciliationTransition): void | Promise<void>;
   /**
    * Claim the order's first settlement for this attempt and persist it.
    * Returns true only for the call that won the claim — the attempt was still
@@ -135,7 +135,7 @@ export interface OpenReceivePaymentRepository {
    * payment is not discarded) and return false. A settled attempt is never
    * overwritten, and an unknown payment hash is a no-op returning false.
    */
-  recordSettlement(settlement: OpenReceiveSettlementRecord): boolean | Promise<boolean>;
+  recordSettlement(settlement: SettlementRecord): boolean | Promise<boolean>;
   /**
    * Count attempt rows recorded for this client IP at or after `sinceUnixSeconds`.
    * Backs the handler's opt-in `rateLimiting` option; when a custom repository
@@ -170,8 +170,8 @@ export function isReusablePaymentAttempt(expiresAt: number, now = unixSeconds())
  * irrelevant to the incoming payment attempt (different Lightning vs swap asset).
  */
 export function liveAttemptCommitDecision(
-  live: Pick<OpenReceivePaymentRecord, "expiresAt" | "swapData">,
-  incoming: Pick<OpenReceivePaymentInsert, "swapData">,
+  live: Pick<PaymentRecord, "expiresAt" | "swapData">,
+  incoming: Pick<PaymentInsert, "swapData">,
   now = unixSeconds(),
 ): LiveAttemptCommitDecision {
   if (!sameRailAndAsset(live, incoming)) return "ignore";
@@ -179,8 +179,8 @@ export function liveAttemptCommitDecision(
 }
 
 function sameRailAndAsset(
-  left: Pick<OpenReceivePaymentRecord, "swapData">,
-  right: Pick<OpenReceivePaymentInsert, "swapData">,
+  left: Pick<PaymentRecord, "swapData">,
+  right: Pick<PaymentInsert, "swapData">,
 ): boolean {
   const leftSwap = left.swapData ?? null;
   const rightSwap = right.swapData ?? null;
@@ -197,11 +197,11 @@ function sameRailAndAsset(
  * abandoned invoice.
  */
 export function reconciliationTransition(
-  attempt: OpenReceiveReconcilableAttempt,
+  attempt: ReconcilableAttempt,
   status: "pending" | "expired" | "failed" | "not_found",
   observedAt: number,
   transactionState?: string,
-): OpenReceiveReconciliationTransition | null {
+): ReconciliationTransition | null {
   const paymentHash = attempt.paymentHash.toLowerCase();
   if (status === "failed") {
     return { paymentHash, status: "failed", observedAt, reason: "wallet_reported_failed" };
@@ -226,7 +226,7 @@ export function reconciliationTransition(
 }
 
 /** Convert a checkout callback to the values common ORM create calls persist. */
-export function openReceivePaymentInsert(input: CheckoutCreatedInput): OpenReceivePaymentInsert {
+export function paymentInsert(input: CheckoutCreatedInput): PaymentInsert {
   return {
     orderId: input.orderId,
     paymentHash: input.paymentHash.toLowerCase(),

@@ -5,57 +5,52 @@
 // shapes at the HTTP serialization boundary.
 
 /** Wire shape of the OpenAPI `PrepareCheckoutRequest` schema (snake_case JSON body). */
-export type OpenReceiveWirePrepareCheckoutRequest = {
+export type WirePrepareCheckoutRequest = {
   readonly order_id: string;
 };
 
 /** Wire shape of the OpenAPI `PrepareCheckoutResponse` schema (snake_case JSON body). */
-export type OpenReceiveWirePrepareCheckoutResponse = {
+export type WirePrepareCheckoutResponse = {
   readonly order_id: string;
   readonly amount_msats: number;
-  readonly fiat_quote?: null | OpenReceiveWireFiatQuote;
-  readonly payment_methods: readonly OpenReceiveWirePaymentMethod[];
+  readonly fiat_quote?: null | WireFiatQuote;
+  readonly payment_methods: readonly WirePaymentMethod[];
 };
 
 /** Wire shape of the OpenAPI `CreateCheckoutRequest` schema (snake_case JSON body). */
-export type OpenReceiveWireCreateCheckoutRequest = {
+export type WireCreateCheckoutRequest = {
   readonly order_id: string;
   readonly memo?: string;
   readonly metadata?: Record<string, unknown>;
 };
 
 /** Wire shape of the OpenAPI `Checkout` schema (snake_case JSON body). */
-export type OpenReceiveWireCheckout = {
+export type WireCheckout = {
   readonly order_id: string;
   readonly payment_hash: string;
   readonly bolt11: string;
   readonly amount_msats: number;
   readonly created_at: number;
   readonly expires_at: number;
-  readonly fiat_quote?: null | OpenReceiveWireFiatQuote;
+  readonly fiat_quote?: null | WireFiatQuote;
 };
 
 /** Wire shape of the OpenAPI `CreateCheckoutResponse` schema (snake_case JSON body). */
-export type OpenReceiveWireCreateCheckoutResponse = {
-  readonly checkout: OpenReceiveWireCheckout;
+export type WireCreateCheckoutResponse = {
+  readonly checkout: WireCheckout;
 };
 
 /** Wire shape of the OpenAPI `PaymentCheckRequest` schema (snake_case JSON body). */
-export type OpenReceiveWirePaymentCheckRequest = {
+export type WirePaymentCheckRequest = {
   readonly order_id: string;
   readonly payment_hash: string;
 };
 
 /** Wire shape of the OpenAPI `PaymentStatus` schema (snake_case JSON body). */
-export type OpenReceiveWirePaymentStatus =
-  | "pending"
-  | "settled"
-  | "expired"
-  | "failed"
-  | "not_found";
+export type WirePaymentStatus = "pending" | "settled" | "expired" | "failed" | "not_found";
 
 /** Wire shape of the OpenAPI `PaymentMethod` schema (snake_case JSON body). */
-export type OpenReceiveWirePaymentMethod = {
+export type WirePaymentMethod = {
   readonly pay_in_asset: string;
   readonly label: string;
   readonly network_label: string;
@@ -71,7 +66,7 @@ export type OpenReceiveWirePaymentMethod = {
 };
 
 /** Wire shape of the OpenAPI `FiatQuote` schema (snake_case JSON body). */
-export type OpenReceiveWireFiatQuote = {
+export type WireFiatQuote = {
   readonly fiat: {
     readonly currency: string;
     readonly value: string;
@@ -85,7 +80,7 @@ export type OpenReceiveWireFiatQuote = {
 };
 
 /** Wire shape of the OpenAPI `PaymentDetails` schema (snake_case JSON body). */
-export type OpenReceiveWirePaymentDetails = {
+export type WirePaymentDetails = {
   readonly transaction?: {
     readonly payment_hash?: string;
     readonly state?: string;
@@ -101,22 +96,22 @@ export type OpenReceiveWirePaymentDetails = {
 };
 
 /** Wire shape of the OpenAPI `PaymentCheck` schema (snake_case JSON body). */
-export type OpenReceiveWirePaymentCheck = {
+export type WirePaymentCheck = {
   readonly payment_hash: string;
-  readonly status: OpenReceiveWirePaymentStatus;
+  readonly status: WirePaymentStatus;
   readonly paid_at?: number;
-  readonly details?: OpenReceiveWirePaymentDetails;
-  readonly payment_methods: readonly OpenReceiveWirePaymentMethod[];
+  readonly details?: WirePaymentDetails;
+  readonly payment_methods: readonly WirePaymentMethod[];
 };
 
 /** Wire shape of the OpenAPI `SwapQuoteRequest` schema (snake_case JSON body). */
-export type OpenReceiveWireSwapQuoteRequest = {
+export type WireSwapQuoteRequest = {
   readonly order_id: string;
   readonly pay_in_asset: string;
 };
 
 /** Wire shape of the OpenAPI `CreateSwapRequest` schema (snake_case JSON body). */
-export type OpenReceiveWireCreateSwapRequest = {
+export type WireCreateSwapRequest = {
   readonly order_id: string;
   readonly pay_in_asset: string;
   readonly memo?: string;
@@ -124,7 +119,7 @@ export type OpenReceiveWireCreateSwapRequest = {
 };
 
 /** Wire shape of the OpenAPI `SwapPayInAsset` schema (snake_case JSON body). */
-export type OpenReceiveWireSwapPayInAsset =
+export type WireSwapPayInAsset =
   | "SOL_SOL"
   | "USDT_TRON"
   | "USDT_SOL"
@@ -134,7 +129,7 @@ export type OpenReceiveWireSwapPayInAsset =
   | "USDC_ETH";
 
 /** Wire shape of the OpenAPI `SwapProviderState` schema (snake_case JSON body). */
-export type OpenReceiveWireSwapProviderState =
+export type WireSwapProviderState =
   | "creating_provider_order"
   | "awaiting_deposit"
   | "confirming"
@@ -149,16 +144,16 @@ export type OpenReceiveWireSwapProviderState =
   | "failed";
 
 /** Wire shape of the OpenAPI `SwapFee` schema (snake_case JSON body). */
-export type OpenReceiveWireSwapFee = {
+export type WireSwapFee = {
   readonly currency: string;
   readonly pay_in_fiat: string;
   readonly payout_fiat: string;
 };
 
 /** Wire shape of the OpenAPI `SwapQuote` schema (snake_case JSON body). */
-export type OpenReceiveWireSwapQuote = {
+export type WireSwapQuote = {
   readonly provider: string;
-  readonly pay_asset: OpenReceiveWireSwapPayInAsset;
+  readonly pay_asset: WireSwapPayInAsset;
   readonly available: boolean;
   readonly pay_amount?: string;
   readonly minimum_pay_amount?: string;
@@ -170,15 +165,15 @@ export type OpenReceiveWireSwapQuote = {
 };
 
 /** Wire shape of the OpenAPI `Swap` schema (snake_case JSON body). */
-export type OpenReceiveWireSwap = {
+export type WireSwap = {
   readonly payment_hash: string;
   readonly order_id: string;
   readonly provider: string;
-  readonly pay_in_asset: OpenReceiveWireSwapPayInAsset;
+  readonly pay_in_asset: WireSwapPayInAsset;
   readonly deposit_address: string;
   readonly deposit_memo?: string;
   readonly deposit_amount: string;
-  readonly provider_state: OpenReceiveWireSwapProviderState;
+  readonly provider_state: WireSwapProviderState;
   readonly provider_expires_at: number;
   readonly deposit_tx_id?: string;
   readonly payout_tx_id?: string;
@@ -190,19 +185,19 @@ export type OpenReceiveWireSwap = {
   readonly deposit_received_amount?: string;
   readonly emergency_repeat?: boolean;
   readonly provider_order_id?: string;
-  readonly fee?: OpenReceiveWireSwapFee;
+  readonly fee?: WireSwapFee;
 };
 
 /** Wire shape of the OpenAPI `SwapCheckout` schema (snake_case JSON body). */
-export type OpenReceiveWireSwapCheckout = {
+export type WireSwapCheckout = {
   readonly payment_hash: string;
   readonly order_id: string;
   readonly provider: string;
-  readonly pay_in_asset: OpenReceiveWireSwapPayInAsset;
+  readonly pay_in_asset: WireSwapPayInAsset;
   readonly deposit_address: string;
   readonly deposit_memo?: string;
   readonly deposit_amount: string;
-  readonly provider_state: OpenReceiveWireSwapProviderState;
+  readonly provider_state: WireSwapProviderState;
   readonly provider_expires_at: number;
   readonly deposit_tx_id?: string;
   readonly payout_tx_id?: string;
@@ -214,29 +209,29 @@ export type OpenReceiveWireSwapCheckout = {
   readonly deposit_received_amount?: string;
   readonly emergency_repeat?: boolean;
   readonly provider_order_id?: string;
-  readonly fee?: OpenReceiveWireSwapFee;
+  readonly fee?: WireSwapFee;
 } & {
-  readonly checkout: OpenReceiveWireCheckout;
+  readonly checkout: WireCheckout;
 };
 
 /** Wire shape of the OpenAPI `CreateSwapResponse` schema (snake_case JSON body). */
-export type OpenReceiveWireCreateSwapResponse = {
-  readonly swap: OpenReceiveWireSwapCheckout;
+export type WireCreateSwapResponse = {
+  readonly swap: WireSwapCheckout;
 };
 
 /** Wire shape of the OpenAPI `RatesResponse` schema (snake_case JSON body). */
-export type OpenReceiveWireRatesResponse = {
+export type WireRatesResponse = {
   readonly bitcoin: Record<string, string>;
 };
 
 /** Wire shape of the OpenAPI `OrderRequest` schema (snake_case JSON body). */
-export type OpenReceiveWireOrderRequest = {
+export type WireOrderRequest = {
   readonly order_id: string;
   readonly payment_hash: string;
 };
 
 /** Wire shape of the OpenAPI `Error` schema (snake_case JSON body). */
-export type OpenReceiveWireError = {
+export type WireError = {
   readonly code:
     | "NOT_IMPLEMENTED"
     | "RESTRICTED"
@@ -261,7 +256,7 @@ export type OpenReceiveWireError = {
 };
 
 /** Wire shape of the `POST /swaps/refunds` request body (snake_case JSON body). */
-export type OpenReceiveWireRefundSwapRequest = {
+export type WireRefundSwapRequest = {
   readonly order_id: string;
   readonly payment_hash: string;
   readonly refund_address: string;

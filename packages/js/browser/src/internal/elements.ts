@@ -1,7 +1,7 @@
-import { status as deriveStatus } from "../status.ts";
-import { assertOpenReceiveDisplayInvoice } from "./checkout-invoice.ts";
+import { deriveStatus } from "../status.ts";
+import { assertDisplayInvoice } from "./checkout-invoice.ts";
 import { isPaidCheckoutSnapshot, selectCheckoutDisplayInvoice } from "./checkout-state.ts";
-import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
+import { applyThemeAttributes, createStoredThemeModel } from "./theme.ts";
 import {
   type CheckoutElementAttributeOptions,
   type CheckoutElementAttributes,
@@ -19,9 +19,9 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type OpenReceiveThemeAttributeTarget,
-  type OpenReceiveThemeToggleElementAttributeOptions,
-  type OpenReceiveThemeToggleElementAttributes,
+  type ThemeAttributeTarget,
+  type ThemeToggleElementAttributeOptions,
+  type ThemeToggleElementAttributes,
 } from "./ui.ts";
 
 /**
@@ -124,7 +124,7 @@ export function createCheckoutElementAttributes(
     return deferred;
   }
   const invoice = displayInvoice;
-  assertOpenReceiveDisplayInvoice(bolt11);
+  assertDisplayInvoice(bolt11);
   const attributes: CheckoutElementAttributes = {
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId]: invoice.invoice_id,
@@ -158,9 +158,9 @@ export function createCheckoutElementAttributes(
   return { ...attributes, ...sharedElementAttributes(options) };
 }
 
-export function createOpenReceiveThemeToggleElementAttributes(
-  options: OpenReceiveThemeToggleElementAttributeOptions = {},
-): OpenReceiveThemeToggleElementAttributes {
+export function createThemeToggleElementAttributes(
+  options: ThemeToggleElementAttributeOptions = {},
+): ThemeToggleElementAttributes {
   return {
     ...(options.rootSelector === undefined
       ? {}
@@ -211,7 +211,7 @@ export function createCheckoutShellModel(
   snapshot: CheckoutSnapshot | null,
   options: CheckoutShellOptions = {},
 ): CheckoutShellModel {
-  const theme = createOpenReceiveStoredThemeModel(options);
+  const theme = createStoredThemeModel(options);
   // themeToggle: false → host (e.g. ThemeScope) owns theming; don't stamp a conflicting theme.
   const ownTheme = options.themeToggle !== false;
   return {
@@ -228,7 +228,7 @@ export function createCheckoutShellModel(
     themeToggle: ownTheme
       ? {
           tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-          attributes: createOpenReceiveThemeToggleElementAttributes({
+          attributes: createThemeToggleElementAttributes({
             rootSelector: options.rootSelector,
             checkoutSelector: options.checkoutSelector ?? OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
             defaultTheme: options.defaultTheme,
@@ -240,7 +240,7 @@ export function createCheckoutShellModel(
 }
 
 export function applyCheckoutElementAttributes(
-  target: OpenReceiveThemeAttributeTarget,
+  target: ThemeAttributeTarget,
   attributes: CheckoutElementAttributes,
 ): void {
   for (const [name, value] of Object.entries(attributes)) {
@@ -262,16 +262,16 @@ export function applyCheckoutElementListeners(
   }
 }
 
-export function applyOpenReceiveThemeToggleElementAttributes(
-  target: OpenReceiveThemeAttributeTarget,
-  attributes: OpenReceiveThemeToggleElementAttributes,
+export function applyThemeToggleElementAttributes(
+  target: ThemeAttributeTarget,
+  attributes: ThemeToggleElementAttributes,
 ): void {
   for (const [name, value] of Object.entries(attributes)) {
     if (value !== undefined) target.setAttribute(name, value);
   }
 }
 
-export function createOpenReceiveThemeToggleElement(
+export function createThemeToggleElement(
   options: CreateOpenReceiveThemeToggleElementOptions = {},
 ): HTMLElement {
   const ownerDocument = options.document ?? globalThis.document;
@@ -280,10 +280,7 @@ export function createOpenReceiveThemeToggleElement(
   }
 
   const element = ownerDocument.createElement(OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
-  applyOpenReceiveThemeToggleElementAttributes(
-    element,
-    createOpenReceiveThemeToggleElementAttributes(options),
-  );
+  applyThemeToggleElementAttributes(element, createThemeToggleElementAttributes(options));
   return element;
 }
 
@@ -298,7 +295,7 @@ export function createCheckoutShell(
 
   const shell = createCheckoutShellModel(snapshot, options);
   if (shell.themeToggle !== null) {
-    applyOpenReceiveThemeAttributes(options.root, shell.theme);
+    applyThemeAttributes(options.root, shell.theme);
   }
 
   const checkout = ownerDocument.createElement(shell.checkout.tagName);
@@ -308,7 +305,7 @@ export function createCheckoutShell(
   let themeToggle: HTMLElement | null = null;
   if (shell.themeToggle !== null) {
     themeToggle = ownerDocument.createElement(shell.themeToggle.tagName);
-    applyOpenReceiveThemeToggleElementAttributes(themeToggle, shell.themeToggle.attributes);
+    applyThemeToggleElementAttributes(themeToggle, shell.themeToggle.attributes);
   }
 
   return {

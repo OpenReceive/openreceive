@@ -1,39 +1,39 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHostConsoleLogger } from "../packages/js/node/src/index.ts";
-import { createOpenReceiveConsoleLogger } from "../packages/js/node/src/console-logger.ts";
+import { createConsoleLogger } from "../packages/js/node/src/console-logger.ts";
 import {
-  parseOpenReceiveLogLevel,
-  readOpenReceiveLogLevelFromEnvironment,
-  resolveOpenReceiveLogLevel,
+  parseLogLevel,
+  readLogLevelFromEnvironment,
+  resolveLogLevel,
 } from "../packages/js/node/src/log-level.ts";
-import { createOpenReceiveBrowserConsoleLogger } from "../packages/js/browser/src/internal/console-logger.ts";
+import { createBrowserConsoleLogger } from "../packages/js/browser/src/internal/console-logger.ts";
 import {
-  parseOpenReceiveBrowserLogLevel,
-  readOpenReceiveBrowserLogLevelFromEnvironment,
+  parseBrowserLogLevel,
+  readBrowserLogLevelFromEnvironment,
 } from "../packages/js/browser/src/internal/log-level.ts";
 
-test("parseOpenReceiveLogLevel accepts DEBUG/INFO/WARN/ERROR case-insensitively", () => {
-  assert.equal(parseOpenReceiveLogLevel("DEBUG"), "debug");
-  assert.equal(parseOpenReceiveLogLevel("info"), "info");
-  assert.equal(parseOpenReceiveLogLevel("Warn"), "warn");
-  assert.equal(parseOpenReceiveLogLevel("WARNING"), "warn");
-  assert.equal(parseOpenReceiveLogLevel("ERROR"), "error");
-  assert.equal(parseOpenReceiveLogLevel(""), undefined);
-  assert.equal(parseOpenReceiveLogLevel("trace"), undefined);
-  assert.equal(resolveOpenReceiveLogLevel(undefined), "info");
-  assert.equal(resolveOpenReceiveLogLevel("nope"), "info");
+test("parseLogLevel accepts DEBUG/INFO/WARN/ERROR case-insensitively", () => {
+  assert.equal(parseLogLevel("DEBUG"), "debug");
+  assert.equal(parseLogLevel("info"), "info");
+  assert.equal(parseLogLevel("Warn"), "warn");
+  assert.equal(parseLogLevel("WARNING"), "warn");
+  assert.equal(parseLogLevel("ERROR"), "error");
+  assert.equal(parseLogLevel(""), undefined);
+  assert.equal(parseLogLevel("trace"), undefined);
+  assert.equal(resolveLogLevel(undefined), "info");
+  assert.equal(resolveLogLevel("nope"), "info");
 });
 
-test("readOpenReceiveLogLevelFromEnvironment defaults to info", () => {
-  assert.equal(readOpenReceiveLogLevelFromEnvironment({}), "info");
-  assert.equal(readOpenReceiveLogLevelFromEnvironment({ LOG_LEVEL: "DEBUG" }), "debug");
-  assert.equal(readOpenReceiveLogLevelFromEnvironment({ LOG_LEVEL: " warn " }), "warn");
+test("readLogLevelFromEnvironment defaults to info", () => {
+  assert.equal(readLogLevelFromEnvironment({}), "info");
+  assert.equal(readLogLevelFromEnvironment({ LOG_LEVEL: "DEBUG" }), "debug");
+  assert.equal(readLogLevelFromEnvironment({ LOG_LEVEL: " warn " }), "warn");
 });
 
-test("createOpenReceiveConsoleLogger emits timestamped LEVEL-prefixed lines and filters by minLevel", () => {
+test("createConsoleLogger emits timestamped LEVEL-prefixed lines and filters by minLevel", () => {
   const lines = [];
-  const logger = createOpenReceiveConsoleLogger({
+  const logger = createConsoleLogger({
     prefix: "openreceive:test",
     minLevel: "info",
     now: () => new Date("2026-07-30T00:01:58.332Z"),
@@ -140,10 +140,10 @@ test("browser console logger reads runtime __OPENRECEIVE_LOG_LEVEL__ and formats
   const lines = [];
   try {
     globalThis.__OPENRECEIVE_LOG_LEVEL__ = "DEBUG";
-    assert.equal(parseOpenReceiveBrowserLogLevel("ERROR"), "error");
-    assert.equal(readOpenReceiveBrowserLogLevelFromEnvironment(), "debug");
+    assert.equal(parseBrowserLogLevel("ERROR"), "error");
+    assert.equal(readBrowserLogLevelFromEnvironment(), "debug");
 
-    const logger = createOpenReceiveBrowserConsoleLogger({
+    const logger = createBrowserConsoleLogger({
       prefix: "openreceive:test:client",
       now: () => new Date("2026-07-30T00:01:58.332Z"),
       console: {

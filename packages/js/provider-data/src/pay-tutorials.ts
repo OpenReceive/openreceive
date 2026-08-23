@@ -21,7 +21,7 @@ const strikeTutorial2 = assetUrl("./assets/pay_tutorials/strike-2.webp");
 const strikeTutorial3 = assetUrl("./assets/pay_tutorials/strike-3.webp");
 const strikeTutorial4 = assetUrl("./assets/pay_tutorials/strike-4.webp");
 
-export const openReceivePayTutorialUrls: Readonly<Record<string, string>> = {
+export const payTutorialUrls: Readonly<Record<string, string>> = {
   "assets/pay_tutorials/cashapp-1.webp": cashappTutorial1,
   "assets/pay_tutorials/cashapp-2.webp": cashappTutorial2,
   "assets/pay_tutorials/cashapp-3.webp": cashappTutorial3,

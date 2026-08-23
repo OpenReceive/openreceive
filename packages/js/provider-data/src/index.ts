@@ -1,9 +1,9 @@
 import providerRegistryJson from "./data/openreceive-providers.v4.json" with { type: "json" };
-import { openReceivePayTutorialUrls } from "./pay-tutorials.ts";
-import { openReceiveProviderIconUrls } from "./provider-icons.ts";
+import { payTutorialUrls } from "./pay-tutorials.ts";
+import { providerIconUrls } from "./provider-icons.ts";
 
-export { openReceivePayTutorialUrls };
-export { openReceiveProviderIconUrls };
+export { payTutorialUrls };
+export { providerIconUrls };
 
 export type ProviderId = string;
 export type CryptoRouteId = string;
@@ -151,11 +151,11 @@ export function getProvider(providerId: ProviderId): Provider | undefined {
 }
 
 export function providerIconUrl(provider: Pick<Provider, "icon_path">): string {
-  return openReceiveProviderIconUrls[provider.icon_path] ?? provider.icon_path;
+  return providerIconUrls[provider.icon_path] ?? provider.icon_path;
 }
 
 export function providerTutorialUrl(tutorial: Pick<ProviderTutorial, "path">): string {
-  return openReceivePayTutorialUrls[tutorial.path] ?? tutorial.path;
+  return payTutorialUrls[tutorial.path] ?? tutorial.path;
 }
 
 export function listAssets(): readonly AssetIndexEntry[] {

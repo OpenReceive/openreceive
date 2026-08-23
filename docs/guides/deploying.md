@@ -52,7 +52,7 @@ expiry plus the 900-second grace — never the local clock alone.
 
 No background process is required. The optional additions:
 
-- **Node** — one `startOpenReceiveNotificationWorker({ service, host })`
+- **Node** — one `startNotificationWorker({ service, host })`
   process total (not per instance): it listens for NWC-02 `payment_received`
   notifications and runs the periodic safety-net pass in the same process.
 - **Rails** — the equivalent single worker is

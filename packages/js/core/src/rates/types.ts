@@ -1,12 +1,12 @@
-import type { OpenReceiveBtcFiatRateMap, OpenReceiveFiatAmount } from "../money/decimal.ts";
+import type { BtcFiatRateMap, MoneyAmount } from "../money/decimal.ts";
 
 const OPENRECEIVE_PRICE_SOURCE_IDS = ["static_mock", "primary", "fallback"] as const;
 
-export type OpenReceivePriceSourceId = (typeof OPENRECEIVE_PRICE_SOURCE_IDS)[number];
+export type PriceSourceId = (typeof OPENRECEIVE_PRICE_SOURCE_IDS)[number];
 
-export type OpenReceiveLivePriceSourceId = Exclude<OpenReceivePriceSourceId, "static_mock">;
+export type LivePriceSourceId = Exclude<PriceSourceId, "static_mock">;
 
-export interface OpenReceiveDirectAmountQuote {
+export interface DirectAmountQuote {
   amountSats: number;
   amountMsats: number;
 }
@@ -16,56 +16,54 @@ export interface OpenReceiveDirectAmountQuote {
  * (`fiat_quote` in checkout bodies) the same object is serialized snake_case
  * by the HTTP handler.
  */
-export interface OpenReceiveRateQuote {
-  fiat: OpenReceiveFiatAmount;
+export interface RateQuote {
+  fiat: MoneyAmount;
   btcFiatPrice: string;
   amountSats: number;
   amountMsats: number;
-  source: OpenReceivePriceSourceId;
+  source: PriceSourceId;
   asOf: number;
   expiresAt: number;
 }
 
 export interface QuoteFiatToMsatsRequest {
-  fiat: OpenReceiveFiatAmount;
+  fiat: MoneyAmount;
   asOf?: number;
 }
 
 export interface QuoteFiatToMsatsWithPriceRequest extends QuoteFiatToMsatsRequest {
   btcFiatPrice: string;
-  source: OpenReceivePriceSourceId;
+  source: PriceSourceId;
   ttlSeconds?: number;
 }
 
-export interface OpenReceivePriceProvider {
-  getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap>;
+export interface PriceProvider {
+  getBtcFiatRates(currencies: readonly string[]): Promise<BtcFiatRateMap>;
 }
 
-export interface OpenReceiveSourcedPriceProvider extends OpenReceivePriceProvider {
-  readonly source: OpenReceivePriceSourceId;
+export interface SourcedPriceProvider extends PriceProvider {
+  readonly source: PriceSourceId;
 }
 
-export interface OpenReceiveBtcFiatRateMapWithSource {
-  readonly source: OpenReceivePriceSourceId;
-  readonly rates: OpenReceiveBtcFiatRateMap;
+export interface BtcFiatRateMapWithSource {
+  readonly source: PriceSourceId;
+  readonly rates: BtcFiatRateMap;
 }
 
 // A price provider that can also report which source actually answered, so a
 // cached or multi-URL feed can attribute each rate to its real origin.
-export interface OpenReceiveResolvedPriceProvider extends OpenReceiveSourcedPriceProvider {
-  getBtcFiatRatesWithSource(
-    currencies: readonly string[],
-  ): Promise<OpenReceiveBtcFiatRateMapWithSource>;
+export interface ResolvedPriceProvider extends SourcedPriceProvider {
+  getBtcFiatRatesWithSource(currencies: readonly string[]): Promise<BtcFiatRateMapWithSource>;
 }
 
 // A live feed that can be probed explicitly to confirm it answers correctly.
-export interface OpenReceivePriceFeedHealthCheck {
-  healthCheck(currencies?: readonly string[]): Promise<OpenReceiveBtcFiatRateMapWithSource>;
+export interface PriceFeedHealthCheck {
+  healthCheck(currencies?: readonly string[]): Promise<BtcFiatRateMapWithSource>;
 }
 
 /** A provider that can hand back every currency it carries in one read. */
-export interface OpenReceiveAvailableRatesProvider {
-  getAllBtcFiatRates(): Promise<OpenReceiveBtcFiatRateMap>;
+export interface AvailableRatesProvider {
+  getAllBtcFiatRates(): Promise<BtcFiatRateMap>;
 }
 
 export interface SimplePriceHttpResponse {
@@ -83,19 +81,15 @@ export type SimplePriceFetch = (
 ) => Promise<SimplePriceHttpResponse>;
 
 export function isResolvedPriceProvider(
-  provider: OpenReceiveSourcedPriceProvider,
-): provider is OpenReceiveResolvedPriceProvider {
+  provider: SourcedPriceProvider,
+): provider is ResolvedPriceProvider {
   return (
-    typeof (provider as Partial<OpenReceiveResolvedPriceProvider>).getBtcFiatRatesWithSource ===
-    "function"
+    typeof (provider as Partial<ResolvedPriceProvider>).getBtcFiatRatesWithSource === "function"
   );
 }
 
 export function providerHasGetAllBtcFiatRates(
-  provider: OpenReceiveSourcedPriceProvider,
-): provider is OpenReceiveSourcedPriceProvider & OpenReceiveAvailableRatesProvider {
-  return (
-    typeof (provider as Partial<OpenReceiveAvailableRatesProvider>).getAllBtcFiatRates ===
-    "function"
-  );
+  provider: SourcedPriceProvider,
+): provider is SourcedPriceProvider & AvailableRatesProvider {
+  return typeof (provider as Partial<AvailableRatesProvider>).getAllBtcFiatRates === "function";
 }

@@ -1,6 +1,6 @@
 // Payment icon URLs, resolved against this module's own URL so the same code
 // works from source, from the packaged dist, and from a host bundler's chunk.
-import type { OpenReceivePaymentMethod } from "./checkout-types.ts";
+import type { PaymentMethod } from "./checkout-types.ts";
 
 const OPENRECEIVE_PAYMENT_ICON_IDS = [
   "btc",
@@ -15,7 +15,7 @@ const OPENRECEIVE_PAYMENT_ICON_IDS = [
   "xmr",
   "xrp",
 ] as const;
-export type OpenReceivePaymentIconId = (typeof OPENRECEIVE_PAYMENT_ICON_IDS)[number];
+export type PaymentIconId = (typeof OPENRECEIVE_PAYMENT_ICON_IDS)[number];
 
 declare const __filename: string | undefined;
 
@@ -55,18 +55,15 @@ function paymentIconUrl(file: string): string {
   return new URL(`${paymentIconRoot()}${file}`, moduleUrl).href;
 }
 
-export const openReceivePaymentIconUrls: Readonly<Record<OpenReceivePaymentIconId, string>> =
-  Object.fromEntries(
-    OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, paymentIconUrl(`${id}.svg`)]),
-  ) as Readonly<Record<OpenReceivePaymentIconId, string>>;
+export const paymentIconUrls: Readonly<Record<PaymentIconId, string>> = Object.fromEntries(
+  OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, paymentIconUrl(`${id}.svg`)]),
+) as Readonly<Record<PaymentIconId, string>>;
 
-export const openReceivePaymentMethodIconIds: Readonly<
-  Record<OpenReceivePaymentMethod, OpenReceivePaymentIconId>
-> = {
+export const paymentMethodIconIds: Readonly<Record<PaymentMethod, PaymentIconId>> = {
   bitcoin: "btc",
 } as const;
 
-export const openReceiveAssetIconIds: Readonly<Record<string, OpenReceivePaymentIconId>> = {
+export const assetIconIds: Readonly<Record<string, PaymentIconId>> = {
   btc: "btc",
   eth: "eth",
   ltc: "ltc",

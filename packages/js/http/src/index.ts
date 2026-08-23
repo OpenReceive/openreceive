@@ -5,16 +5,16 @@ export type {
   PaymentCheck,
   SwapCheckout,
 } from "@openreceive/node";
-export type { OpenReceiveNodeRequestParts } from "./adapter-bridge.ts";
+export type { NodeRequestParts } from "./adapter-bridge.ts";
 // Generated snake_case wire body types for the HTTP contract.
 export type * from "./generated/wire.ts";
-export { openReceiveIsUnderPrefix, openReceiveWebRequest } from "./adapter-bridge.ts";
+export { isUnderPrefix, webRequest } from "./adapter-bridge.ts";
 export type {
-  OpenReceiveAuthorize,
-  OpenReceiveAuthorizeAction,
-  OpenReceiveAuthorizeContext,
-  OpenReceiveAuthorizeResource,
-  OpenReceiveRateLimit,
+  Authorize,
+  AuthorizeAction,
+  AuthorizeContext,
+  AuthorizeResource,
+  RateLimit,
 } from "./authorize.ts";
 export type { ServiceErrorShape } from "./errors.ts";
 export {
@@ -24,36 +24,36 @@ export {
   isServiceErrorShape,
   jsonResponse,
   mapHostRouteError,
-  OpenReceiveHostError,
-  OpenReceiveHttpError,
+  HostError,
+  HttpError,
 } from "./errors.ts";
 export type {
   CheckoutCreatedHook,
   CheckoutCreatedInput,
   CreateOpenReceiveHttpHandlerOptions,
-  OpenReceiveHttpHandler,
+  HttpHandler,
   ResolveCheckoutContext,
   ResolveCheckoutHook,
   ResolvedHostCheckout,
 } from "./handler.ts";
-export { createOpenReceiveHttpHandler } from "./handler.ts";
+export { createHttpHandler } from "./handler.ts";
 export type {
   CreateOpenReceiveHostDbOptions,
   CreateOpenReceiveHostOptions,
   CreateOpenReceiveHostRepositoryOptions,
-  OpenReceiveHost,
-  OpenReceiveSettlementEvent,
-  OpenReceiveSettlementEventHook,
+  Host,
+  SettlementEvent,
+  SettlementEventHook,
 } from "./host-payments.ts";
-export { createOpenReceiveHost } from "./host-payments.ts";
+export { createHost } from "./host-payments.ts";
 export type {
-  OpenReceiveAttemptStatus,
-  OpenReceivePaymentInsert,
-  OpenReceivePaymentRecord,
-  OpenReceivePaymentRepository,
-  OpenReceiveReconcilableAttempt,
-  OpenReceiveReconciliationTransition,
-  OpenReceiveSettlementRecord,
+  AttemptStatus,
+  PaymentInsert,
+  PaymentRecord,
+  PaymentRepository,
+  ReconcilableAttempt,
+  ReconciliationTransition,
+  SettlementRecord,
 } from "./payment-repository.ts";
 // The attempt decision machinery (liveAttemptCommitDecision,
 // isReusablePaymentAttempt, reconciliationTransition) is deliberately NOT
@@ -61,55 +61,55 @@ export type {
 // Custom repositories import the contract types below and implement against
 // the documented invariants instead.
 export { OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS } from "./payment-repository.ts";
-export type { OpenReceiveReconciler } from "./reconcile-loop.ts";
-export { reconcileOpenReceivePayments, startOpenReceiveReconciler } from "./reconcile-loop.ts";
+export type { Reconciler } from "./reconcile-loop.ts";
+export { reconcileHostPayments, startReconciler } from "./reconcile-loop.ts";
 export type {
-  OpenReceiveNotificationListener,
-  OpenReceiveNotificationWorker,
+  NotificationListener,
+  NotificationWorker,
 } from "./notifications.ts";
 export {
-  startOpenReceiveNotificationListener,
-  startOpenReceiveNotificationWorker,
+  startNotificationListener,
+  startNotificationWorker,
 } from "./notifications.ts";
 export type {
   MaybeReconcileOpenReceivePaymentsOptions,
-  OpenReceiveOpportunisticReconcileResult,
+  OpportunisticReconcileResult,
 } from "./reconcile-gate.ts";
 export {
-  maybeReconcileOpenReceivePayments,
+  maybeReconcilePayments,
   OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS,
   OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
   OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
-  openReceiveReconcileIntervalSeconds,
+  reconcileIntervalSeconds,
 } from "./reconcile-gate.ts";
-export type { OpenReceiveIpRateLimitConfig } from "./rate-limit.ts";
+export type { IpRateLimitConfig } from "./rate-limit.ts";
 export {
-  createOpenReceiveIpRateLimit,
+  createIpRateLimit,
   createProxyRateLimitingConfig,
-  openReceiveClientIp,
+  resolveClientIp,
 } from "./rate-limit.ts";
 export type {
-  OpenReceiveSqlAdapter,
-  OpenReceiveSqlClient,
-  OpenReceiveSqlDatabase,
-  OpenReceiveSqlQuery,
+  SqlAdapter,
+  SqlClient,
+  SqlDatabase,
+  SqlQuery,
 } from "./sql-adapters.ts";
 export type {
-  OpenReceiveOrderSettlement,
-  OpenReceiveOrderSettlementHook,
-  OpenReceiveSqlPaymentRepository,
-  OpenReceiveSqlPaymentsOptions,
+  OrderSettlement,
+  OrderSettlementHook,
+  SqlPaymentRepository,
+  SqlPaymentsOptions,
 } from "./sql-payments.ts";
 export {
-  createOpenReceiveSqlPayments,
+  createSqlPayments,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   OPENRECEIVE_RECONCILE_BATCH_SIZE,
-  openReceivePaymentsSchemaSql,
+  paymentsSchemaSql,
 } from "./sql-payments.ts";
 export type {
   CreateOpenReceiveStackOptions,
-  OpenReceiveStack,
-  OpenReceiveStackStorage,
-  OpenReceiveStackWallet,
+  Stack,
+  StackStorage,
+  StackWallet,
 } from "./stack.ts";
-export { createOpenReceiveStack, isOpenReceiveStackOptions } from "./stack.ts";
+export { createStack, isStackOptions } from "./stack.ts";

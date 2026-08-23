@@ -10,20 +10,20 @@ import {
 } from "@angular/core";
 import {
   type CheckoutSnapshot,
-  type OpenReceiveThemePreference,
-  type OpenReceiveWrapperCheckoutShellBinding,
-  type OpenReceiveWrapperCheckoutShellOptions,
-  createOpenReceiveWrapperCheckoutShellBinding,
-  defineOpenReceiveElements,
-  validateOpenReceiveCheckoutProps,
+  type ThemePreference,
+  type WrapperCheckoutShellBinding,
+  type WrapperCheckoutShellOptions,
+  createWrapperCheckoutShellBinding,
+  defineElements,
+  validateCheckoutProps,
 } from "@openreceive/angular";
-import type { OpenReceiveElementBindings } from "./element-bindings";
-import { OpenReceiveElementBindingsDirective } from "./openreceive-element-bindings.directive";
+import type { ElementBindings } from "./element-bindings";
+import { ElementBindingsDirective } from "./openreceive-element-bindings.directive";
 
 @Component({
   selector: "openreceive-angular-checkout",
   standalone: true,
-  imports: [OpenReceiveElementBindingsDirective],
+  imports: [ElementBindingsDirective],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <section [openreceiveElementBindings]="rootBindings">
@@ -42,7 +42,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   // Prop names, defaults, and per-mode applicability are the shared contract in
   // docs/internal/wrapper-parity.md. These inputs RESTATE it because `@Input()`
   // is a decorator on a declared field: a type cannot generate fields, so they
-  // cannot be derived from OpenReceiveWrapperCheckoutComponentProps the way
+  // cannot be derived from WrapperCheckoutComponentProps the way
   // Vue's defineProps and React's CheckoutProps are. The duplication is forced,
   // not neglected; tests/wrapper-parity.test.mjs is what keeps it in step.
   // Snapshot mode: bind a `checkout` to render it directly.
@@ -54,7 +54,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() paymentWizard?: boolean;
   @Input() decodeLinkUrl?: string;
   @Input() themeToggle?: boolean;
-  @Input() defaultTheme?: OpenReceiveThemePreference;
+  @Input() defaultTheme?: ThemePreference;
   @Input() storageKey?: string;
   // Create mode only.
   @Input() metadata?: Record<string, unknown>;
@@ -68,7 +68,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() onProviderCopy?: (event: Event) => void;
   @Input() onStartOver?: (event: Event) => void;
   @Input() onError?: (event: Event) => void;
-  @Input() options: OpenReceiveWrapperCheckoutShellOptions = {};
+  @Input() options: WrapperCheckoutShellOptions = {};
 
   /**
    * The custom elements render only once this flips, and it flips inside
@@ -85,19 +85,19 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   // (storage reads, matchMedia, fresh objects) on every change-detection pass.
   // Null until the first `ngOnChanges`: inputs are not set yet at construction,
   // so building (and validating) here would reject every instantiation.
-  protected shellBinding: OpenReceiveWrapperCheckoutShellBinding | null = null;
+  protected shellBinding: WrapperCheckoutShellBinding | null = null;
 
   // The shell root's attributes, driven by the same directive as the custom
   // elements: a hand-transcribed [attr.*] list would silently drop any root
   // attribute the shared factory later adds.
-  protected rootBindings: OpenReceiveElementBindings = {};
+  protected rootBindings: ElementBindings = {};
 
   ngAfterViewInit(): void {
     // No-op during Angular Universal SSR: custom elements only exist in the
     // browser, and the element renders itself after hydration.
     if (globalThis.customElements === undefined || globalThis.HTMLElement === undefined) return;
     this.zone.runOutsideAngular(() => {
-      defineOpenReceiveElements();
+      defineElements();
       this.elementsReady = true;
       // Rebuild so the mounted shell carries the stored theme, not the deferred default.
       this.applyShell();
@@ -109,7 +109,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
     this.applyShell();
   }
 
-  get shell(): OpenReceiveWrapperCheckoutShellBinding | null {
+  get shell(): WrapperCheckoutShellBinding | null {
     return this.shellBinding;
   }
 
@@ -118,8 +118,8 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
     this.rootBindings = { attributes: this.shellBinding.rootAttributes };
   }
 
-  private buildShell(): OpenReceiveWrapperCheckoutShellBinding {
-    validateOpenReceiveCheckoutProps({
+  private buildShell(): WrapperCheckoutShellBinding {
+    validateCheckoutProps({
       framework: "@openreceive/angular",
       checkout: this.checkout,
       orderId: this.orderId,
@@ -128,7 +128,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       resumePathPrefix: this.resumePathPrefix,
       routeOrderId: this.routeOrderId,
     });
-    const options: OpenReceiveWrapperCheckoutShellOptions = {
+    const options: WrapperCheckoutShellOptions = {
       ...this.options,
       themeToggle: this.themeToggle ?? this.options.themeToggle ?? true,
       // Storage and matchMedia only exist in the browser: resolving the theme before
@@ -152,6 +152,6 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       ...(this.onStartOver === undefined ? {} : { onStartOver: this.onStartOver }),
       ...(this.onError === undefined ? {} : { onError: this.onError }),
     };
-    return createOpenReceiveWrapperCheckoutShellBinding(this.checkout ?? null, options);
+    return createWrapperCheckoutShellBinding(this.checkout ?? null, options);
   }
 }

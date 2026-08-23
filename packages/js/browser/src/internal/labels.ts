@@ -1,16 +1,16 @@
 // User-facing checkout copy, the compiled stylesheet the element adopts, and
 // the attribute coercers that turn raw DOM strings into the typed values
 // declared in ./checkout-types.ts.
-import { openReceiveCompiledStyles } from "../generated/compiled-styles.ts";
+import { compiledStyles } from "../generated/compiled-styles.ts";
 import type {
-  OpenReceivePaymentMethod,
-  OpenReceivePaymentMethodOption,
-  OpenReceiveResolvedTheme,
-  OpenReceiveThemePreference,
+  PaymentMethod,
+  PaymentMethodOption,
+  ResolvedTheme,
+  ThemePreference,
   ParseOpenReceiveOptionalIntegerOptions,
 } from "./checkout-types.ts";
 
-export const openReceiveCheckoutLabels = {
+export const checkoutLabels = {
   copyInvoice: "Copy invoice",
   copied: "Copied!",
   openWallet: "Open Wallet",
@@ -57,11 +57,11 @@ export const openReceiveCheckoutLabels = {
 } as const;
 
 export { orClasses } from "../ui-classes.ts";
-export { openReceiveCompiledStyles };
+export { compiledStyles };
 
-export const openReceiveCheckoutElementStyles = `:host{display:block}${openReceiveCompiledStyles}`;
+export const checkoutElementStyles = `:host{display:block}${compiledStyles}`;
 
-export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[] = [
+export const paymentMethods: readonly PaymentMethodOption[] = [
   {
     id: "bitcoin",
     title: "Bitcoin",
@@ -69,7 +69,7 @@ export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[
   },
 ];
 
-export function parseOpenReceiveOptionalInteger(
+export function parseOptionalInteger(
   value: string | null | undefined,
   options: ParseOpenReceiveOptionalIntegerOptions = {},
 ): number | undefined {
@@ -81,27 +81,21 @@ export function parseOpenReceiveOptionalInteger(
   return parsed;
 }
 
-export function parseOpenReceiveBooleanAttribute(
-  value: string | null | undefined,
-): boolean | undefined {
+export function parseBooleanAttribute(value: string | null | undefined): boolean | undefined {
   if (value === null || value === undefined) return undefined;
   return value !== "false";
 }
 
-export function parseOpenReceiveResolvedTheme(
-  value: string | null | undefined,
-): OpenReceiveResolvedTheme | undefined {
+export function parseResolvedTheme(value: string | null | undefined): ResolvedTheme | undefined {
   return value === "light" || value === "dark" ? value : undefined;
 }
 
-export function parseOpenReceiveThemePreference(
+export function parseThemePreference(
   value: string | null | undefined,
-): OpenReceiveThemePreference | undefined {
+): ThemePreference | undefined {
   return value === "light" || value === "dark" || value === "system" ? value : undefined;
 }
 
-export function parseOpenReceivePaymentMethod(
-  value: string | null,
-): OpenReceivePaymentMethod | null {
+export function parsePaymentMethod(value: string | null): PaymentMethod | null {
   return value === "bitcoin" ? value : null;
 }

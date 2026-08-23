@@ -3,10 +3,10 @@ import test from "node:test";
 import { VALID_NWC } from "./helpers/factories.mjs";
 import {
   OPENRECEIVE_NWC_CODE_HELP_URL,
-  formatOpenReceiveSpendCapabilityWarningMessage,
+  formatSpendCapabilityWarningMessage,
 } from "../packages/js/core/src/index.ts";
 import {
-  OpenReceiveConfigError,
+  ConfigError,
   createNwcReceiveClient,
   createOpenReceive,
   readNwcFromEnvironment,
@@ -35,7 +35,7 @@ test("createOpenReceive refuses a missing NWC_URI with the help URL", async () =
     await assert.rejects(
       () => createOpenReceive({}),
       (error) => {
-        assert.ok(error instanceof OpenReceiveConfigError);
+        assert.ok(error instanceof ConfigError);
         assert.equal(error.code, "MISSING_NWC");
         assert.match(error.message, /needs a receive-only NWC code/);
         assert.match(
@@ -53,7 +53,7 @@ test("createOpenReceive refuses an invalid NWC URI with the help URL", async () 
     await assert.rejects(
       () => createOpenReceive({}),
       (error) => {
-        assert.ok(error instanceof OpenReceiveConfigError);
+        assert.ok(error instanceof ConfigError);
         assert.equal(error.code, "INVALID_NWC");
         assert.match(error.message, /not a valid NWC code/);
         assert.match(error.message, /nostr\+walletconnect/);
@@ -136,10 +136,7 @@ test("preflight warns and continues only with the explicit spend-capable overrid
   assert.match(warnings[0], /pay_invoice/);
   assert.match(warnings[0], /override is explicitly set/);
   assert.match(warnings[0], new RegExp(OPENRECEIVE_NWC_CODE_HELP_URL.replace(/\./g, "\\.")));
-  assert.equal(
-    warnings[0],
-    formatOpenReceiveSpendCapabilityWarningMessage({ spendMethods: ["pay_invoice"] }),
-  );
+  assert.equal(warnings[0], formatSpendCapabilityWarningMessage({ spendMethods: ["pay_invoice"] }));
 });
 
 // NIP-47 keeps the kind-13194 info event (what the wallet SERVICE offers) apart
@@ -208,7 +205,7 @@ test("createOpenReceive wraps a spend-capable refusal in WALLET_PREFLIGHT_FAILED
             logging: { enabled: false, console: false },
           }),
         (error) => {
-          assert.ok(error instanceof OpenReceiveConfigError);
+          assert.ok(error instanceof ConfigError);
           assert.equal(error.code, "WALLET_PREFLIGHT_FAILED");
           assert.equal(error.cause?.code, "spend_capability_advertised");
           return true;

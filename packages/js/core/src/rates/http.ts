@@ -3,7 +3,7 @@
  * the network lives here; response interpretation stays in `./parsing.ts`.
  */
 
-import { type OpenReceiveBtcFiatRateMap, OpenReceivePriceFeedError } from "../money/decimal.ts";
+import { type BtcFiatRateMap, PriceFeedError } from "../money/decimal.ts";
 import {
   OPENRECEIVE_FALLBACK_PRICE_FEED_URL,
   OPENRECEIVE_PRICE_FEED_FALLBACK_TIMEOUT_MS,
@@ -12,16 +12,16 @@ import {
 } from "./constants.ts";
 import { parseAvailableSimplePriceResponse, parseSimplePriceResponse } from "./parsing.ts";
 import type {
-  OpenReceiveAvailableRatesProvider,
-  OpenReceiveLivePriceSourceId,
-  OpenReceiveSourcedPriceProvider,
+  AvailableRatesProvider,
+  LivePriceSourceId,
+  SourcedPriceProvider,
   SimplePriceFetch,
   SimplePriceHttpResponse,
 } from "./types.ts";
 
 export interface HttpSimplePriceProviderOptions {
   url: string;
-  source: OpenReceiveLivePriceSourceId;
+  source: LivePriceSourceId;
   fetch?: SimplePriceFetch;
   timeoutMs?: number;
 }
@@ -31,14 +31,12 @@ export interface HttpSimplePriceProviderOptions {
  * fiat currencies. When `timeoutMs` is set, a slow endpoint is aborted so the
  * caller can fall through to another feed.
  *
- * @throws {OpenReceivePriceFeedError} for any transport, status, or body
+ * @throws {PriceFeedError} for any transport, status, or body
  * failure — never a `RangeError`, which would read as payer input upstream.
  */
-export class HttpSimplePriceProvider
-  implements OpenReceiveSourcedPriceProvider, OpenReceiveAvailableRatesProvider
-{
+export class HttpSimplePriceProvider implements SourcedPriceProvider, AvailableRatesProvider {
   readonly url: string;
-  readonly source: OpenReceiveLivePriceSourceId;
+  readonly source: LivePriceSourceId;
   readonly timeoutMs?: number;
   #fetch: SimplePriceFetch;
 
@@ -52,13 +50,13 @@ export class HttpSimplePriceProvider
       options.fetch ?? (globalThis.fetch.bind(globalThis) as unknown as SimplePriceFetch);
   }
 
-  async getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap> {
+  async getBtcFiatRates(currencies: readonly string[]): Promise<BtcFiatRateMap> {
     return parseSimplePriceResponse(await this.#fetchJson(), currencies, this.source);
   }
 
   // Returns every well-formed currency the endpoint carries, for caching the
   // whole feed in one read.
-  async getAllBtcFiatRates(): Promise<OpenReceiveBtcFiatRateMap> {
+  async getAllBtcFiatRates(): Promise<BtcFiatRateMap> {
     return parseAvailableSimplePriceResponse(await this.#fetchJson());
   }
 
@@ -66,15 +64,13 @@ export class HttpSimplePriceProvider
     const response = await this.#fetchWithTimeout();
 
     if (!response.ok) {
-      throw new OpenReceivePriceFeedError(
-        `price source ${this.source} returned HTTP ${response.status}`,
-      );
+      throw new PriceFeedError(`price source ${this.source} returned HTTP ${response.status}`);
     }
 
     try {
       return JSON.parse(await response.text());
     } catch (error) {
-      throw new OpenReceivePriceFeedError(
+      throw new PriceFeedError(
         `price source ${this.source} returned a body that is not JSON: ${
           error instanceof Error ? error.message : String(error)
         }`,
@@ -94,7 +90,7 @@ export class HttpSimplePriceProvider
       timer = setTimeout(() => {
         controller.abort();
         reject(
-          new OpenReceivePriceFeedError(
+          new PriceFeedError(
             `price source ${this.source} did not respond within ${this.timeoutMs}ms`,
           ),
         );
@@ -112,7 +108,7 @@ export class HttpSimplePriceProvider
   }
 }
 
-export interface OpenReceiveLivePriceFeedProviders {
+export interface LivePriceFeedProviders {
   readonly primary: HttpSimplePriceProvider;
   readonly fallback: HttpSimplePriceProvider;
 }
@@ -128,7 +124,7 @@ export function createLivePriceFeedProviders(
     primaryTimeoutMs?: number;
     fallbackTimeoutMs?: number;
   } = {},
-): OpenReceiveLivePriceFeedProviders {
+): LivePriceFeedProviders {
   return {
     primary: new HttpSimplePriceProvider({
       url: options.primaryUrl ?? OPENRECEIVE_PRIMARY_PRICE_FEED_URL,

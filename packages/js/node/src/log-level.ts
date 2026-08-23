@@ -1,13 +1,13 @@
-import type { OpenReceiveLogLevel } from "./service/types.ts";
+import type { LogLevel } from "./service/types.ts";
 
-const LOG_LEVEL_ORDER: Record<OpenReceiveLogLevel, number> = {
+const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
   debug: 10,
   info: 20,
   warn: 30,
   error: 40,
 };
 
-const LOG_LEVEL_ALIASES: Record<string, OpenReceiveLogLevel> = {
+const LOG_LEVEL_ALIASES: Record<string, LogLevel> = {
   debug: "debug",
   info: "info",
   warn: "warn",
@@ -16,7 +16,7 @@ const LOG_LEVEL_ALIASES: Record<string, OpenReceiveLogLevel> = {
 };
 
 /** Compare OpenReceive log levels (`debug` < `info` < `warn` < `error`). */
-export function openReceiveLogLevelOrder(level: OpenReceiveLogLevel): number {
+export function logLevelOrder(level: LogLevel): number {
   return LOG_LEVEL_ORDER[level];
 }
 
@@ -24,9 +24,7 @@ export function openReceiveLogLevelOrder(level: OpenReceiveLogLevel): number {
  * Parse `LOG_LEVEL` values such as `DEBUG`, `info`, or `Warning`.
  * Returns `undefined` when the value is missing or unrecognized.
  */
-export function parseOpenReceiveLogLevel(
-  value: string | undefined | null,
-): OpenReceiveLogLevel | undefined {
+export function parseLogLevel(value: string | undefined | null): LogLevel | undefined {
   if (value === undefined || value === null) return undefined;
   const normalized = value.trim().toLowerCase();
   if (normalized.length === 0) return undefined;
@@ -34,19 +32,16 @@ export function parseOpenReceiveLogLevel(
 }
 
 /** Resolve a log level string, falling back to `info` when unset/invalid. */
-export function resolveOpenReceiveLogLevel(
-  value?: string | null,
-  fallback: OpenReceiveLogLevel = "info",
-): OpenReceiveLogLevel {
-  return parseOpenReceiveLogLevel(value) ?? fallback;
+export function resolveLogLevel(value?: string | null, fallback: LogLevel = "info"): LogLevel {
+  return parseLogLevel(value) ?? fallback;
 }
 
 /**
  * Read `LOG_LEVEL` from an environment map (default `process.env`).
  * Accepts `DEBUG` | `INFO` | `WARN` | `ERROR` (case-insensitive). Default `info`.
  */
-export function readOpenReceiveLogLevelFromEnvironment(
+export function readLogLevelFromEnvironment(
   env: Readonly<Record<string, string | undefined>> = process.env,
-): OpenReceiveLogLevel {
-  return resolveOpenReceiveLogLevel(env.LOG_LEVEL);
+): LogLevel {
+  return resolveLogLevel(env.LOG_LEVEL);
 }

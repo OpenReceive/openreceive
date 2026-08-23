@@ -3,152 +3,148 @@ import {
   type AssetIndexEntry,
   getPaymentWizardRoutes,
   listAssets,
-  openReceivePayTutorialUrls,
-  openReceiveProviderIconUrls,
+  payTutorialUrls,
+  providerIconUrls,
   type PaymentWizardRoute,
   type Provider,
   type ResolvedProviderRef,
 } from "@openreceive/provider-data";
-import { formatOpenReceiveSwapLimit } from "./checkout-format.ts";
+import { formatSwapLimit } from "./checkout-format.ts";
 import {
   type CheckoutPhase,
-  type OpenReceiveCheckoutPaymentMethod,
-  type OpenReceivePaymentMethod,
-  type OpenReceivePaymentMethodOption,
-  type OpenReceivePaymentWizardController,
-  type OpenReceivePaymentWizardControllerOptions,
-  type OpenReceivePaymentWizardModel,
-  type OpenReceivePaymentWizardRequest,
-  type OpenReceivePaymentWizardSelection,
-  type OpenReceivePaymentWizardSelectionAction,
-  type OpenReceivePaymentWizardState,
-  type OpenReceiveWizardProviderDisplay,
-  type OpenReceiveWizardProviderTutorialDisplay,
-  type OpenReceiveWizardRouteAssetDisplay,
-  type OpenReceiveWizardRouteDisplay,
-  openReceiveAssetIconIds,
-  openReceiveCheckoutLabels,
-  openReceivePaymentIconUrls,
-  openReceivePaymentMethodIconIds,
+  type CheckoutPaymentMethod,
+  type PaymentMethod,
+  type PaymentMethodOption,
+  type PaymentWizardController,
+  type PaymentWizardControllerOptions,
+  type PaymentWizardModel,
+  type PaymentWizardRequest,
+  type PaymentWizardSelection,
+  type PaymentWizardSelectionAction,
+  type PaymentWizardState,
+  type WizardProviderDisplay,
+  type WizardProviderTutorialDisplay,
+  type WizardRouteAssetDisplay,
+  type WizardRouteDisplay,
+  assetIconIds,
+  checkoutLabels,
+  paymentIconUrls,
+  paymentMethodIconIds,
   orClasses,
 } from "./ui.ts";
 
-export function getOpenReceiveBitcoinAssets(): readonly AssetIndexEntry[] {
+export function getBitcoinAssets(): readonly AssetIndexEntry[] {
   return listAssets().filter((asset) => asset.symbol === "btc" && asset.route !== undefined);
 }
 
-function getOpenReceiveDefaultBitcoinRoute(): string | null {
+function getDefaultBitcoinRoute(): string | null {
   const routes = [
     ...new Set(
-      getOpenReceiveBitcoinAssets().flatMap((asset) =>
-        asset.route === undefined ? [] : [asset.route],
-      ),
+      getBitcoinAssets().flatMap((asset) => (asset.route === undefined ? [] : [asset.route])),
     ),
   ];
   return routes.length === 1 ? (routes[0] ?? null) : null;
 }
 
-export function getOpenReceivePaymentStatusText(phase: CheckoutPhase): {
+export function getPaymentStatusText(phase: CheckoutPhase): {
   readonly title: string;
   readonly detail: string;
 } {
   if (phase === "settled") {
     return {
-      title: openReceiveCheckoutLabels.paymentStatus.settledTitle,
-      detail: openReceiveCheckoutLabels.paymentStatus.settledDetail,
+      title: checkoutLabels.paymentStatus.settledTitle,
+      detail: checkoutLabels.paymentStatus.settledDetail,
     };
   }
   if (phase === "expired") {
     return {
-      title: openReceiveCheckoutLabels.paymentStatus.expiredTitle,
-      detail: openReceiveCheckoutLabels.paymentStatus.expiredDetail,
+      title: checkoutLabels.paymentStatus.expiredTitle,
+      detail: checkoutLabels.paymentStatus.expiredDetail,
     };
   }
   return {
-    title: openReceiveCheckoutLabels.paymentStatus.waitingTitle,
-    detail: openReceiveCheckoutLabels.paymentStatus.waitingDetail,
+    title: checkoutLabels.paymentStatus.waitingTitle,
+    detail: checkoutLabels.paymentStatus.waitingDetail,
   };
 }
 
-export function getOpenReceiveWizardEmptyMessage(): string {
-  return openReceiveCheckoutLabels.emptyBitcoin;
+export function getWizardEmptyMessage(): string {
+  return checkoutLabels.emptyBitcoin;
 }
 
 export function getCheckoutProviderOpenLabel(): string {
-  return openReceiveCheckoutLabels.openProvider;
+  return checkoutLabels.openProvider;
 }
 
 export function getCheckoutProviderIcon(provider: Pick<Provider, "icon_path">): string {
-  return openReceiveProviderIconUrls[provider.icon_path] ?? openReceivePaymentIconUrls.crypto;
+  return providerIconUrls[provider.icon_path] ?? paymentIconUrls.crypto;
 }
 
 export function getCheckoutProviderTutorials(
   provider: Pick<Provider, "tutorials">,
-): readonly OpenReceiveWizardProviderTutorialDisplay[] {
+): readonly WizardProviderTutorialDisplay[] {
   return (provider.tutorials ?? []).map((tutorial) => ({
     index: tutorial.index,
     path: tutorial.path,
-    image: openReceivePayTutorialUrls[tutorial.path] ?? tutorial.path,
+    image: payTutorialUrls[tutorial.path] ?? tutorial.path,
     caption: tutorial.caption,
   }));
 }
 
-export function getOpenReceiveRouteNetworkLabel(routeId: string): string {
+export function getRouteNetworkLabel(routeId: string): string {
   return routeId === "lightning" || routeId === "btc-lightning"
-    ? openReceiveCheckoutLabels.lightningNetwork
+    ? checkoutLabels.lightningNetwork
     : routeId;
 }
 
-export function createOpenReceiveWizardRouteAssetDisplays(
+export function createWizardRouteAssetDisplays(
   assets: readonly AssetIndexEntry[],
   options: {
     readonly selectedRoute?: string | null;
   } = {},
-): readonly OpenReceiveWizardRouteAssetDisplay[] {
+): readonly WizardRouteAssetDisplay[] {
   return assets.map((asset) => {
     const id = asset.route ?? asset.symbol;
     return {
       id,
       label: asset.label,
-      subtitle: getOpenReceiveRouteNetworkLabel(id),
-      icon: getOpenReceiveRouteIcon(asset),
+      subtitle: getRouteNetworkLabel(id),
+      icon: getRouteIcon(asset),
       selected: options.selectedRoute === id,
     };
   });
 }
 
-export function createOpenReceiveWizardRouteDisplays(
+export function createWizardRouteDisplays(
   routes: readonly PaymentWizardRoute[],
   options: {
     readonly providerPreviewLimit?: number;
   } = {},
-): readonly OpenReceiveWizardRouteDisplay[] {
+): readonly WizardRouteDisplay[] {
   return routes.map((route) => ({
-    key: getOpenReceiveWizardRouteDisplayKey(route),
-    title: getOpenReceiveWizardRouteDisplayTitle(route),
-    subtitle: getOpenReceiveWizardRouteDisplaySubtitle(route),
+    key: getWizardRouteDisplayKey(route),
+    title: getWizardRouteDisplayTitle(route),
+    subtitle: getWizardRouteDisplaySubtitle(route),
     providers: (options.providerPreviewLimit === undefined
       ? route.providers
       : route.providers.slice(0, options.providerPreviewLimit)
-    ).map((entry) => createOpenReceiveWizardProviderDisplay(entry)),
+    ).map((entry) => createWizardProviderDisplay(entry)),
   }));
 }
 
-function getOpenReceiveWizardRouteDisplayKey(route: PaymentWizardRoute): string {
+function getWizardRouteDisplayKey(route: PaymentWizardRoute): string {
   return route.route.id;
 }
 
-function getOpenReceiveWizardRouteDisplayTitle(route: PaymentWizardRoute): string {
+function getWizardRouteDisplayTitle(route: PaymentWizardRoute): string {
   return route.route.label;
 }
 
-function getOpenReceiveWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
+function getWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
   return route.route.symbol.toUpperCase();
 }
 
-function createOpenReceiveWizardProviderDisplay(
-  entry: ResolvedProviderRef,
-): OpenReceiveWizardProviderDisplay {
+function createWizardProviderDisplay(entry: ResolvedProviderRef): WizardProviderDisplay {
   return {
     id: entry.provider.id,
     name: entry.provider.name,
@@ -156,42 +152,42 @@ function createOpenReceiveWizardProviderDisplay(
     url: entry.provider.lightning_docs_url ?? entry.provider.url,
     icon: getCheckoutProviderIcon(entry.provider),
     tutorials: getCheckoutProviderTutorials(entry.provider),
-    copyLabel: openReceiveCheckoutLabels.copyInvoice,
-    copiedLabel: openReceiveCheckoutLabels.copied,
+    copyLabel: checkoutLabels.copyInvoice,
+    copiedLabel: checkoutLabels.copied,
     openLabel: getCheckoutProviderOpenLabel(),
   };
 }
 
-export function getOpenReceivePaymentMethodIcon(method: OpenReceivePaymentMethod): string {
-  return openReceivePaymentIconUrls[openReceivePaymentMethodIconIds[method]];
+export function getPaymentMethodIcon(method: PaymentMethod): string {
+  return paymentIconUrls[paymentMethodIconIds[method]];
 }
 
-export function getOpenReceiveAssetIcon(symbol: string): string {
-  return openReceivePaymentIconUrls[openReceiveAssetIconIds[symbol] ?? "crypto"];
+export function getAssetIcon(symbol: string): string {
+  return paymentIconUrls[assetIconIds[symbol] ?? "crypto"];
 }
 
 /** Icon for a swap network label (Tron → trx, Solana → sol, Ethereum → eth). */
-export function getOpenReceiveNetworkIcon(networkLabel: string): string {
+export function getNetworkIcon(networkLabel: string): string {
   const key = networkLabel.trim().toLowerCase();
-  if (key === "tron" || key === "trx") return openReceivePaymentIconUrls.trx;
-  if (key === "solana" || key === "sol") return openReceivePaymentIconUrls.sol;
-  if (key === "ethereum" || key === "eth") return openReceivePaymentIconUrls.eth;
-  return openReceivePaymentIconUrls.crypto;
+  if (key === "tron" || key === "trx") return paymentIconUrls.trx;
+  if (key === "solana" || key === "sol") return paymentIconUrls.sol;
+  if (key === "ethereum" || key === "eth") return paymentIconUrls.eth;
+  return paymentIconUrls.crypto;
 }
 
 /**
  * Icon for a swap pay-in option card. Always the token/coin mark (USDT, USDC, SOL, …).
  * Network marks (Tron/Solana/Ethereum) belong only in the network reveal via
- * {@link getOpenReceiveNetworkIcon}.
+ * {@link getNetworkIcon}.
  */
-export function getOpenReceiveSwapOptionIcon(option: {
+export function getSwapOptionIcon(option: {
   readonly label: string;
   readonly network_label?: string;
 }): string {
-  return getOpenReceiveAssetIcon(option.label.trim().toLowerCase());
+  return getAssetIcon(option.label.trim().toLowerCase());
 }
 
-export interface OpenReceiveSwapMethodGroup<T extends { readonly label: string }> {
+export interface SwapMethodGroup<T extends { readonly label: string }> {
   readonly label: string;
   readonly options: readonly T[];
 }
@@ -200,10 +196,10 @@ export interface OpenReceiveSwapMethodGroup<T extends { readonly label: string }
  * Collapse multi-network coins (e.g. USDT on Tron/Solana/Ethereum) into one method entry
  * with several network choices. Single-network coins stay as one-option groups.
  */
-export function groupOpenReceiveSwapOptionsByLabel<T extends { readonly label: string }>(
+export function groupSwapOptionsByLabel<T extends { readonly label: string }>(
   options: readonly T[],
-): readonly OpenReceiveSwapMethodGroup<T>[] {
-  const groups: OpenReceiveSwapMethodGroup<T>[] = [];
+): readonly SwapMethodGroup<T>[] {
+  const groups: SwapMethodGroup<T>[] = [];
   const indexByLabel = new Map<string, number>();
   for (const option of options) {
     const key = option.label.trim().toUpperCase();
@@ -232,25 +228,25 @@ export const OPENRECEIVE_METHOD_GRID_ORDER = [
   { kind: "swap", label: "ETH" },
 ] as const;
 
-export type OpenReceiveMethodGridEntry<T extends { readonly label: string }> =
+export type MethodGridEntry<T extends { readonly label: string }> =
   | {
       readonly kind: "method";
-      readonly method: OpenReceivePaymentMethodOption;
+      readonly method: PaymentMethodOption;
     }
   | {
       readonly kind: "swap";
-      readonly group: OpenReceiveSwapMethodGroup<T>;
+      readonly group: SwapMethodGroup<T>;
     };
 
 /**
  * Interleave payment methods with grouped swap coins in the preferred grid order.
  * When no swap options are present yet, returns the payment methods only.
  */
-export function buildOpenReceiveMethodGridEntries<T extends { readonly label: string }>(
-  paymentMethods: readonly OpenReceivePaymentMethodOption[],
+export function buildMethodGridEntries<T extends { readonly label: string }>(
+  paymentMethods: readonly PaymentMethodOption[],
   swapOptions: readonly T[],
-): readonly OpenReceiveMethodGridEntry<T>[] {
-  const swapGroups = groupOpenReceiveSwapOptionsByLabel(swapOptions);
+): readonly MethodGridEntry<T>[] {
+  const swapGroups = groupSwapOptionsByLabel(swapOptions);
   if (swapGroups.length === 0) {
     return paymentMethods.map((method) => ({ kind: "method" as const, method }));
   }
@@ -261,7 +257,7 @@ export function buildOpenReceiveMethodGridEntries<T extends { readonly label: st
   );
   const usedMethodIds = new Set<string>();
   const usedSwapLabels = new Set<string>();
-  const entries: OpenReceiveMethodGridEntry<T>[] = [];
+  const entries: MethodGridEntry<T>[] = [];
 
   for (const slot of OPENRECEIVE_METHOD_GRID_ORDER) {
     if (slot.kind === "method") {
@@ -289,27 +285,27 @@ export function buildOpenReceiveMethodGridEntries<T extends { readonly label: st
   return entries;
 }
 
-export type OpenReceivePaymentAccentId = "bitcoin" | "usdt" | "usdc" | "sol" | "eth" | "default";
+export type PaymentAccentId = "bitcoin" | "usdt" | "usdc" | "sol" | "eth" | "default";
 
-export function openReceiveSwapPickerKey(label: string): string {
+export function swapPickerKey(label: string): string {
   return `swap:${label.trim().toUpperCase()}`;
 }
 
-export function parseOpenReceiveMethodPickerKey(
+export function parseMethodPickerKey(
   key: string,
 ): { readonly kind: "method"; readonly methodId: string } | null {
   if (!key.startsWith("method:")) return null;
   return { kind: "method", methodId: key.slice("method:".length) };
 }
 
-export function parseOpenReceiveSwapPickerKey(
+export function parseSwapPickerKey(
   key: string,
 ): { readonly kind: "swap"; readonly label: string } | null {
   if (!key.startsWith("swap:")) return null;
   return { kind: "swap", label: key.slice("swap:".length) };
 }
 
-export function openReceivePaymentAccentId(labelOrMethodId: string): OpenReceivePaymentAccentId {
+export function paymentAccentId(labelOrMethodId: string): PaymentAccentId {
   const key = labelOrMethodId.trim().toLowerCase();
   if (key === "bitcoin" || key === "btc") return "bitcoin";
   if (key === "usdt") return "usdt";
@@ -319,7 +315,7 @@ export function openReceivePaymentAccentId(labelOrMethodId: string): OpenReceive
   return "default";
 }
 
-const assetActiveClassByAccent: Readonly<Record<OpenReceivePaymentAccentId, string>> = {
+const assetActiveClassByAccent: Readonly<Record<PaymentAccentId, string>> = {
   bitcoin: orClasses.methodCardActiveBitcoin,
   usdt: orClasses.methodCardActiveUsdt,
   usdc: orClasses.methodCardActiveUsdc,
@@ -334,8 +330,8 @@ const networkActiveClassByAccent: Readonly<Record<"usdt" | "usdc" | "default", s
   default: orClasses.methodNetworkButtonActiveDefault,
 };
 
-export function openReceiveAssetButtonClasses(options: {
-  readonly accent: OpenReceivePaymentAccentId;
+export function assetButtonClasses(options: {
+  readonly accent: PaymentAccentId;
   readonly selected: boolean;
   readonly disabled?: boolean;
 }): string {
@@ -344,8 +340,8 @@ export function openReceiveAssetButtonClasses(options: {
   return `${base} ${assetActiveClassByAccent[options.accent]}`;
 }
 
-export function openReceiveNetworkButtonClasses(options: {
-  readonly accent: OpenReceivePaymentAccentId;
+export function networkButtonClasses(options: {
+  readonly accent: PaymentAccentId;
   readonly selected: boolean;
   readonly disabled?: boolean;
 }): string {
@@ -356,37 +352,37 @@ export function openReceiveNetworkButtonClasses(options: {
   return `${orClasses.methodNetworkButton} ${networkActiveClassByAccent[accent]}`;
 }
 
-export function openReceiveNetworkMobileRevealClasses(accent: OpenReceivePaymentAccentId): string {
+export function networkMobileRevealClasses(accent: PaymentAccentId): string {
   if (accent === "usdt") return orClasses.methodNetworkRevealMobileUsdt;
   if (accent === "usdc") return orClasses.methodNetworkRevealMobileUsdc;
   return orClasses.methodNetworkRevealMobile;
 }
 
-export function openReceiveNetworkCheckClasses(accent: OpenReceivePaymentAccentId): string {
+export function networkCheckClasses(accent: PaymentAccentId): string {
   return accent === "usdc" ? orClasses.methodNetworkCheckUsdc : orClasses.methodNetworkCheck;
 }
 
-export function openReceiveNetworkSummaryIconClasses(accent: OpenReceivePaymentAccentId): string {
+export function networkSummaryIconClasses(accent: PaymentAccentId): string {
   return accent === "usdc"
     ? orClasses.methodNetworkSummaryIconUsdc
     : orClasses.methodNetworkSummaryIcon;
 }
 
-export function formatOpenReceiveNetworkSummary(assetLabel: string, networkLabel: string): string {
-  return openReceiveCheckoutLabels.networkSummary
+export function formatNetworkSummary(assetLabel: string, networkLabel: string): string {
+  return checkoutLabels.networkSummary
     .replace("{asset}", assetLabel)
     .replace("{network}", networkLabel);
 }
 
-export function formatOpenReceiveChooseNetworkHeading(assetLabel: string): string {
-  return openReceiveCheckoutLabels.chooseAssetNetwork.replace("{asset}", assetLabel);
+export function formatChooseNetworkHeading(assetLabel: string): string {
+  return checkoutLabels.chooseAssetNetwork.replace("{asset}", assetLabel);
 }
 
 /**
  * When switching between multi-network coins, reuse the prior network label if the
  * newly selected coin supports it. Otherwise clear that coin's network selection.
  */
-export function resolveOpenReceivePreservedNetworkSelection<
+export function resolvePreservedNetworkSelection<
   T extends {
     readonly pay_in_asset: string;
     readonly network_label: string;
@@ -422,12 +418,12 @@ export function resolveOpenReceivePreservedNetworkSelection<
 }
 
 /** The swap group a compact-selector picker key points at, when it is a swap key. */
-export function findOpenReceiveSwapGridGroup<T extends { readonly label: string }>(
-  entries: readonly OpenReceiveMethodGridEntry<T>[],
+export function findSwapGridGroup<T extends { readonly label: string }>(
+  entries: readonly MethodGridEntry<T>[],
   pickerKey: string | null | undefined,
-): OpenReceiveSwapMethodGroup<T> | undefined {
+): SwapMethodGroup<T> | undefined {
   if (pickerKey === null || pickerKey === undefined) return undefined;
-  const parsed = parseOpenReceiveSwapPickerKey(pickerKey);
+  const parsed = parseSwapPickerKey(pickerKey);
   if (parsed === null) return undefined;
   const entry = entries.find(
     (entry) => entry.kind === "swap" && entry.group.label.trim().toUpperCase() === parsed.label,
@@ -439,11 +435,11 @@ export function findOpenReceiveSwapGridGroup<T extends { readonly label: string 
  * Per-coin network selection after a picker tile is selected: keeps the coin's
  * own prior pick when still available, otherwise carries the previously
  * selected coin's network over when the new coin supports it (see
- * {@link resolveOpenReceivePreservedNetworkSelection}), otherwise clears the
+ * {@link resolvePreservedNetworkSelection}), otherwise clears the
  * coin's entry. Returns the map unchanged for non-swap keys and single-network
  * groups.
  */
-export function updateOpenReceiveSelectedSwapNetworks<
+export function updateSelectedSwapNetworks<
   T extends {
     readonly label: string;
     readonly pay_in_asset: string;
@@ -451,17 +447,17 @@ export function updateOpenReceiveSelectedSwapNetworks<
     readonly available?: boolean;
   },
 >(options: {
-  readonly entries: readonly OpenReceiveMethodGridEntry<T>[];
+  readonly entries: readonly MethodGridEntry<T>[];
   readonly nextKey: string;
   readonly previousKey: string | null;
   readonly selectedNetworks: Readonly<Record<string, string>>;
 }): Record<string, string> {
-  const nextGroup = findOpenReceiveSwapGridGroup(options.entries, options.nextKey);
+  const nextGroup = findSwapGridGroup(options.entries, options.nextKey);
   if (nextGroup === undefined || nextGroup.options.length <= 1) {
     return options.selectedNetworks;
   }
-  const previousGroup = findOpenReceiveSwapGridGroup(options.entries, options.previousKey);
-  const preserved = resolveOpenReceivePreservedNetworkSelection({
+  const previousGroup = findSwapGridGroup(options.entries, options.previousKey);
+  const preserved = resolvePreservedNetworkSelection({
     previousGroup,
     nextGroup,
     selectedNetworks: options.selectedNetworks,
@@ -475,7 +471,7 @@ export function updateOpenReceiveSelectedSwapNetworks<
 }
 
 /** Invoice-side amount context for fiat swap-limit notes. */
-export interface OpenReceiveSwapLimitContext {
+export interface SwapLimitContext {
   readonly amount_msats: number;
   readonly fiat?: { readonly currency: string; readonly value: string };
 }
@@ -487,9 +483,9 @@ export interface OpenReceiveSwapLimitContext {
  * ("Minimum 5 USDT") when the provider only reports pay-side limits, then to
  * the provider's generic message.
  */
-export function openReceiveSwapOptionLimitMessage(
+export function swapOptionLimitMessage(
   option: Pick<
-    OpenReceiveCheckoutPaymentMethod,
+    CheckoutPaymentMethod,
     | "label"
     | "available"
     | "unavailable_reason"
@@ -499,14 +495,14 @@ export function openReceiveSwapOptionLimitMessage(
     | "minimum_pay_amount"
     | "maximum_pay_amount"
   >,
-  checkout: OpenReceiveSwapLimitContext | undefined,
+  checkout: SwapLimitContext | undefined,
 ): string | undefined {
   if (option.available !== false) return undefined;
   if (option.unavailable_reason === "amount_too_small") {
     const fiat =
       checkout === undefined
         ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats, "ceil");
+        : formatSwapLimit(checkout, option.minimum_invoice_amount_msats, "ceil");
     if (fiat !== undefined) return `Minimum amount ${fiat}`;
     if (option.minimum_pay_amount !== undefined) {
       return `Minimum ${option.minimum_pay_amount} ${option.label}`;
@@ -516,7 +512,7 @@ export function openReceiveSwapOptionLimitMessage(
     const fiat =
       checkout === undefined
         ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats, "floor");
+        : formatSwapLimit(checkout, option.maximum_invoice_amount_msats, "floor");
     if (fiat !== undefined) return `Maximum amount ${fiat}`;
     if (option.maximum_pay_amount !== undefined) {
       return `Maximum ${option.maximum_pay_amount} ${option.label}`;
@@ -526,7 +522,7 @@ export function openReceiveSwapOptionLimitMessage(
 }
 
 /** Prefer the lowest invoice-side floor when every network in a group is unavailable. */
-export function openReceiveSwapGroupLimitOption<
+export function swapGroupLimitOption<
   T extends {
     readonly available?: boolean;
     readonly unavailable_reason?: string;
@@ -557,7 +553,7 @@ export function openReceiveSwapGroupLimitOption<
  * form: an empty address prompts for one, anything else is checked against the
  * pay-in asset's address format.
  */
-export function getOpenReceiveSwapRefundFormError(
+export function getSwapRefundFormError(
   payInAsset: string,
   address: string,
   networkLabel: string,
@@ -566,20 +562,18 @@ export function getOpenReceiveSwapRefundFormError(
   return getSwapRefundAddressError(payInAsset, address, networkLabel);
 }
 
-export function getOpenReceiveRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
+export function getRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
   const routeId = asset.route ?? asset.symbol;
   if (asset.symbol === "btc" && routeId.includes("lightning")) {
-    return openReceivePaymentIconUrls.lightning;
+    return paymentIconUrls.lightning;
   }
-  return getOpenReceiveAssetIcon(asset.symbol);
+  return getAssetIcon(asset.symbol);
 }
 
-export function createOpenReceivePaymentWizardState(
-  request: OpenReceivePaymentWizardRequest,
-): OpenReceivePaymentWizardState {
+export function createPaymentWizardState(request: PaymentWizardRequest): PaymentWizardState {
   const selectedRouteId =
     request.selectedMethod === "bitcoin"
-      ? (request.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
+      ? (request.selectedBitcoinRoute ?? getDefaultBitcoinRoute())
       : null;
   const routes = selectedRouteId === null ? [] : getPaymentWizardRoutes({ route: selectedRouteId });
 
@@ -589,21 +583,19 @@ export function createOpenReceivePaymentWizardState(
   };
 }
 
-export function createOpenReceivePaymentWizardSelection(): OpenReceivePaymentWizardSelection {
+export function createPaymentWizardSelection(): PaymentWizardSelection {
   return {
     selectedMethod: null,
     selectedBitcoinRoute: null,
   };
 }
 
-export function createOpenReceivePaymentWizardModel(
-  selection: OpenReceivePaymentWizardSelection,
-): OpenReceivePaymentWizardModel {
-  const wizard = createOpenReceivePaymentWizardState({
+export function createPaymentWizardModel(selection: PaymentWizardSelection): PaymentWizardModel {
+  const wizard = createPaymentWizardState({
     selectedMethod: selection.selectedMethod,
     selectedBitcoinRoute: selection.selectedBitcoinRoute,
   });
-  const routeAssets = selection.selectedMethod === "bitcoin" ? getOpenReceiveBitcoinAssets() : [];
+  const routeAssets = selection.selectedMethod === "bitcoin" ? getBitcoinAssets() : [];
   const selectedRoute = wizard.selectedRouteId;
 
   return {
@@ -614,10 +606,10 @@ export function createOpenReceivePaymentWizardModel(
   };
 }
 
-export function updateOpenReceivePaymentWizardSelection(
-  selection: OpenReceivePaymentWizardSelection,
-  action: OpenReceivePaymentWizardSelectionAction,
-): OpenReceivePaymentWizardSelection {
+export function updatePaymentWizardSelection(
+  selection: PaymentWizardSelection,
+  action: PaymentWizardSelectionAction,
+): PaymentWizardSelection {
   switch (action.type) {
     case "select_method": {
       return {
@@ -625,7 +617,7 @@ export function updateOpenReceivePaymentWizardSelection(
         selectedMethod: action.method,
         selectedBitcoinRoute:
           action.method === "bitcoin"
-            ? (selection.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
+            ? (selection.selectedBitcoinRoute ?? getDefaultBitcoinRoute())
             : selection.selectedBitcoinRoute,
       };
     }
@@ -657,46 +649,44 @@ export function updateOpenReceivePaymentWizardSelection(
   }
 }
 
-export class OpenReceiveBrowserPaymentWizardController
-  implements OpenReceivePaymentWizardController
-{
-  private readonly options: OpenReceivePaymentWizardControllerOptions;
-  private selection: OpenReceivePaymentWizardSelection;
+export class BrowserPaymentWizardController implements PaymentWizardController {
+  private readonly options: PaymentWizardControllerOptions;
+  private selection: PaymentWizardSelection;
 
-  constructor(options: OpenReceivePaymentWizardControllerOptions = {}) {
+  constructor(options: PaymentWizardControllerOptions = {}) {
     this.options = options;
-    this.selection = options.selection ?? createOpenReceivePaymentWizardSelection();
+    this.selection = options.selection ?? createPaymentWizardSelection();
   }
 
-  getSelection(): OpenReceivePaymentWizardSelection {
+  getSelection(): PaymentWizardSelection {
     return this.selection;
   }
 
-  getModel(): OpenReceivePaymentWizardModel {
-    return createOpenReceivePaymentWizardModel(this.selection);
+  getModel(): PaymentWizardModel {
+    return createPaymentWizardModel(this.selection);
   }
 
-  update(action: OpenReceivePaymentWizardSelectionAction): OpenReceivePaymentWizardSelection {
-    const next = updateOpenReceivePaymentWizardSelection(this.selection, action);
+  update(action: PaymentWizardSelectionAction): PaymentWizardSelection {
+    const next = updatePaymentWizardSelection(this.selection, action);
     this.selection = next;
     this.options.onSelection?.(next);
     return next;
   }
 
-  selectMethod(method: OpenReceivePaymentMethod): OpenReceivePaymentWizardSelection {
+  selectMethod(method: PaymentMethod): PaymentWizardSelection {
     return this.update({
       type: "select_method",
       method,
     });
   }
 
-  changeMethod(): OpenReceivePaymentWizardSelection {
+  changeMethod(): PaymentWizardSelection {
     return this.update({
       type: "change_method",
     });
   }
 
-  selectRoute(route: string): OpenReceivePaymentWizardSelection {
+  selectRoute(route: string): PaymentWizardSelection {
     return this.update({
       type: "select_route",
       route,
@@ -704,8 +694,8 @@ export class OpenReceiveBrowserPaymentWizardController
   }
 }
 
-export function createOpenReceivePaymentWizardController(
-  options: OpenReceivePaymentWizardControllerOptions = {},
-): OpenReceivePaymentWizardController {
-  return new OpenReceiveBrowserPaymentWizardController(options);
+export function createPaymentWizardController(
+  options: PaymentWizardControllerOptions = {},
+): PaymentWizardController {
+  return new BrowserPaymentWizardController(options);
 }

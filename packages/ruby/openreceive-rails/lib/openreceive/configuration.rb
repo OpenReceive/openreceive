@@ -7,7 +7,7 @@ module OpenReceive
 
   # Passed to the quickstart `config.on_paid` inside the settlement transaction,
   # only for the order's first settled attempt. (Named to avoid the core gem's
-  # OpenReceive::Settlement rules module; mirrors JS OpenReceiveOrderSettlement.)
+  # OpenReceive::Settlement rules module; mirrors JS OrderSettlement.)
   # `details` carries the wallet-observed settlement details JS delivers to
   # onPaid (transaction snapshot, observed_at, paid_at_source); may be nil for
   # settlements recorded without wallet details.

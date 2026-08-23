@@ -13,7 +13,7 @@ import {
 } from "@openreceive/core";
 import {
   createNwcReceiveClient,
-  createOpenReceivePriceFeed,
+  createPriceFeed,
   ReceiveCheckoutValidationError,
 } from "@openreceive/node";
 
@@ -291,7 +291,7 @@ async function quoteLiveFruitAmount(fiat) {
     };
   }
 
-  const feed = createOpenReceivePriceFeed({ currencies: [fiat.currency] });
+  const feed = createPriceFeed({ currencies: [fiat.currency] });
   let rates;
   try {
     rates = await feed.getBtcFiatRatesWithSource([fiat.currency]);

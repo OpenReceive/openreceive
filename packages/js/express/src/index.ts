@@ -1,17 +1,17 @@
 import {
   type CreateOpenReceiveHttpHandlerOptions,
   type CreateOpenReceiveStackOptions,
-  createOpenReceiveHttpHandler,
-  createOpenReceiveStack,
+  createHttpHandler,
+  createStack,
   createProxyRateLimitingConfig,
   createRequestId,
   errorResponse,
-  isOpenReceiveStackOptions,
+  isStackOptions,
   mapHostRouteError,
-  OpenReceiveHttpError,
-  type OpenReceiveHttpHandler,
-  openReceiveIsUnderPrefix,
-  openReceiveWebRequest,
+  HttpError,
+  type HttpHandler,
+  isUnderPrefix,
+  webRequest,
 } from "@openreceive/http";
 import type {
   Request as ExpressRequest,
@@ -40,7 +40,7 @@ import type {
 
 export * from "@openreceive/http/adapter-surface";
 
-export interface OpenReceiveExpressMiddleware extends RequestHandler {
+export interface ExpressMiddleware extends RequestHandler {
   /** The normalized mount prefix the middleware handles. */
   readonly prefix: string;
   /** All-in-one form only: resolves when the owned service and handler are up. */
@@ -49,7 +49,7 @@ export interface OpenReceiveExpressMiddleware extends RequestHandler {
   readonly close?: () => Promise<void>;
 }
 
-interface OpenReceiveExpressAdapterExtras {
+interface ExpressAdapterExtras {
   /**
    * Opt-in client-IP attribution for `rateLimiting` behind a reverse proxy:
    * by default the limiter reads `req.ip`, which is the proxy's address when
@@ -61,14 +61,12 @@ interface OpenReceiveExpressAdapterExtras {
   readonly trustProxyIpHeader?: boolean | string;
 }
 
-export interface OpenReceiveExpressOptions
-  extends CreateOpenReceiveHttpHandlerOptions,
-    OpenReceiveExpressAdapterExtras {}
+export interface ExpressOptions extends CreateOpenReceiveHttpHandlerOptions, ExpressAdapterExtras {}
 
 /** All-in-one form: order hooks + `wallet` + `storage`; the middleware builds service and host. */
-export interface OpenReceiveExpressStackOptions<Order = unknown>
+export interface ExpressStackOptions<Order = unknown>
   extends CreateOpenReceiveStackOptions<Order>,
-    OpenReceiveExpressAdapterExtras {}
+    ExpressAdapterExtras {}
 
 /**
  * Build an Express middleware that serves the OpenReceive routes under its prefix.
@@ -80,16 +78,16 @@ export interface OpenReceiveExpressStackOptions<Order = unknown>
  *   boot) and exposes `ready`/`close`. It starts no background process:
  *   settlement of abandoned checkouts happens opportunistically through the
  *   durable reconcile gate, and hosts that want push notifications or a poll
- *   loop run the optional `startOpenReceiveNotificationWorker` separately.
+ *   loop run the optional `startNotificationWorker` separately.
  * - Composed: pass a prebuilt `{ service, host, authorize }` when you construct
  *   the pieces yourself (custom repositories, tests, shared services).
  */
 export function openReceiveExpress<Order = unknown>(
-  options: OpenReceiveExpressOptions | OpenReceiveExpressStackOptions<Order>,
-): OpenReceiveExpressMiddleware {
-  if (isOpenReceiveStackOptions(options)) {
+  options: ExpressOptions | ExpressStackOptions<Order>,
+): ExpressMiddleware {
+  if (isStackOptions(options)) {
     const { trustProxyIpHeader, ...stackOptions } = options;
-    const stack = createOpenReceiveStack({
+    const stack = createStack({
       ...stackOptions,
       ...createProxyRateLimitingConfig(stackOptions.rateLimiting, trustProxyIpHeader),
     });
@@ -102,17 +100,17 @@ export function openReceiveExpress<Order = unknown>(
   }
   const { trustProxyIpHeader, ...handlerOptions } = options;
   return buildMiddleware(
-    createOpenReceiveHttpHandler({
+    createHttpHandler({
       ...handlerOptions,
       ...createProxyRateLimitingConfig(handlerOptions.rateLimiting, trustProxyIpHeader),
     }),
   );
 }
 
-function buildMiddleware(handler: OpenReceiveHttpHandler): OpenReceiveExpressMiddleware {
+function buildMiddleware(handler: HttpHandler): ExpressMiddleware {
   const middleware = (async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
     const pathname = mountRelativeUrl(req).split("?")[0] as string;
-    if (!openReceiveIsUnderPrefix(pathname, handler.prefix)) {
+    if (!isUnderPrefix(pathname, handler.prefix)) {
       next();
       return;
     }
@@ -122,13 +120,13 @@ function buildMiddleware(handler: OpenReceiveHttpHandler): OpenReceiveExpressMid
     } catch (error) {
       // Bridge-level refusals (a JSON body no parser read) are OpenReceive's
       // own error responses, not the app's to render.
-      if (error instanceof OpenReceiveHttpError) {
+      if (error instanceof HttpError) {
         await writeWebResponse(res, errorResponse(error, createRequestId()));
         return;
       }
       next(error);
     }
-  }) as OpenReceiveExpressMiddleware;
+  }) as ExpressMiddleware;
   Object.defineProperty(middleware, "prefix", { value: handler.prefix, enumerable: true });
   return middleware;
 }
@@ -161,7 +159,7 @@ function mountRelativeUrl(req: ExpressRequest): string {
 function toWebRequest(req: ExpressRequest): Request {
   // req.protocol honors Express's trust-proxy setting, so HTTPS deployments
   // behind a proxy produce correct absolute URLs.
-  return openReceiveWebRequest({
+  return webRequest({
     method: req.method,
     headers: req.headers,
     url: mountRelativeUrl(req),

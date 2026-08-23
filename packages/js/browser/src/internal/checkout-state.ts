@@ -20,10 +20,10 @@ import {
   type CheckoutStatusModelInput,
   type CreateCheckoutStateOptions,
   OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS,
-  openReceiveCheckoutLabels,
+  checkoutLabels,
 } from "./ui.ts";
-import { getOpenReceivePaymentStatusText } from "./wizard.ts";
-import { deriveCheckoutStateLabels, formatOpenReceiveCountdown } from "./checkout-format.ts";
+import { getPaymentStatusText } from "./wizard.ts";
+import { deriveCheckoutStateLabels, formatCountdown } from "./checkout-format.ts";
 import { createLightningUri } from "./checkout-invoice.ts";
 import { requiredInvoiceRail, requiredString } from "./checkout-read.ts";
 import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
@@ -270,7 +270,7 @@ export function createCheckoutStatusModel(
     phase !== "settled" && phase !== "failed" && phase !== "cancelled" && expiresInSeconds === 0
       ? "expired"
       : phase;
-  const statusText = getOpenReceivePaymentStatusText(displayPhase);
+  const statusText = getPaymentStatusText(displayPhase);
 
   return {
     phase: displayPhase,
@@ -284,14 +284,14 @@ export function createCheckoutStatusModel(
             : (source.waiting ?? false),
     title: statusText.title,
     detail: statusText.detail,
-    countdownPrefix: openReceiveCheckoutLabels.countdownPrefix,
+    countdownPrefix: checkoutLabels.countdownPrefix,
     // No countdown once settled — the invoice's remaining lifetime is meaningless
     // to a payer whose payment already landed.
     ...(expiresInSeconds === undefined || displayPhase === "expired" || displayPhase === "settled"
       ? {}
       : {
           expires_in_seconds: expiresInSeconds,
-          countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
+          countdownLabel: formatCountdown(expiresInSeconds),
         }),
   };
 }

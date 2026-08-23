@@ -6,7 +6,7 @@ import type { CheckoutInvoiceSnapshot, CheckoutSnapshot } from "./ui.ts";
  * fresh bolt11: a lightning-rail invoice with a payable bolt11 and enough time
  * left on the clock (see {@link isReusableLightningInvoice}).
  */
-export function findOpenReceiveReusableLightningInvoice(
+export function findReusableLightningInvoice(
   snapshot: CheckoutSnapshot,
   now?: number,
 ): CheckoutInvoiceSnapshot | undefined {
@@ -25,7 +25,7 @@ export function findOpenReceiveReusableLightningInvoice(
  * attempt becomes the active invoice, its predecessor entry and any
  * checkout_lock placeholder drop out, and polling re-keys onto it.
  */
-export function mergeOpenReceiveAttemptIntoSnapshot(
+export function mergeAttemptIntoSnapshot(
   invoice: CheckoutInvoiceSnapshot,
   base: CheckoutSnapshot,
 ): CheckoutSnapshot {
@@ -42,10 +42,10 @@ export function mergeOpenReceiveAttemptIntoSnapshot(
 }
 
 /**
- * {@link mergeOpenReceiveAttemptIntoSnapshot} with a minimal fallback snapshot
+ * {@link mergeAttemptIntoSnapshot} with a minimal fallback snapshot
  * for hosts that started an attempt before any checkout snapshot existed.
  */
-export function mergeOpenReceiveAttemptIntoCheckout(
+export function mergeAttemptIntoCheckout(
   invoice: CheckoutInvoiceSnapshot,
   previous: CheckoutSnapshot | undefined,
   orderId: string,
@@ -59,7 +59,7 @@ export function mergeOpenReceiveAttemptIntoCheckout(
       amount_msats: invoice.amount_msats ?? 0,
       invoices: [],
     } satisfies CheckoutSnapshot);
-  return mergeOpenReceiveAttemptIntoSnapshot(invoice, base);
+  return mergeAttemptIntoSnapshot(invoice, base);
 }
 
 /**
@@ -68,7 +68,7 @@ export function mergeOpenReceiveAttemptIntoCheckout(
  * previously started attempts) from the prior snapshot are preserved — the
  * mint response does not carry the warmed method catalog.
  */
-export function mergeOpenReceiveMintedCheckout(
+export function mergeMintedCheckout(
   checkout: CheckoutSnapshot,
   previous: CheckoutSnapshot | undefined,
 ): CheckoutSnapshot {
@@ -81,8 +81,8 @@ export function mergeOpenReceiveMintedCheckout(
         : { payment_methods: previous.payment_methods }),
     };
   }
-  if (previous === undefined) return mergeOpenReceiveAttemptIntoSnapshot(minted, checkout);
-  return mergeOpenReceiveAttemptIntoSnapshot(minted, {
+  if (previous === undefined) return mergeAttemptIntoSnapshot(minted, checkout);
+  return mergeAttemptIntoSnapshot(minted, {
     ...previous,
     ...checkout,
     invoices: previous.invoices,

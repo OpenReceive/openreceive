@@ -11,15 +11,15 @@ skips NWC entirely when one is supplied:
 
 ```ts
 import { createOpenReceive } from "@openreceive/node";
-import type { OpenReceiveReceiveNwcClient } from "@openreceive/node";
+import type { ReceiveNwcClient } from "@openreceive/node";
 
 const service = await createOpenReceive({
-  client: myFakeClient, // implements OpenReceiveReceiveNwcClient
+  client: myFakeClient, // implements ReceiveNwcClient
   priceProviders: [new StaticPriceProvider()],
 });
 ```
 
-Any object implementing `OpenReceiveReceiveNwcClient` works: mint
+Any object implementing `ReceiveNwcClient` works: mint
 deterministic invoices from `makeInvoice`, report settlement from
 `lookupInvoice`/`listTransactions`, and your whole integration — HTTP routes,
 persistence, reconcile, `onPaid` — runs the production code paths against it.

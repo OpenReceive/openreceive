@@ -115,8 +115,8 @@ test("a usable /rates payload prices the shop in the selected bitcoin unit", asy
 });
 
 test("a malformed /rates payload leaves the shop rendering at its base prices", async () => {
-  // A rate the money engine cannot parse: `OpenReceivePriceFeedError` from
-  // `parseBtcFiatPrice`, which is deliberately NOT an `OpenReceiveDecimalError`.
+  // A rate the money engine cannot parse: `PriceFeedError` from
+  // `parseBtcFiatPrice`, which is deliberately NOT an `DecimalError`.
   const shop = mountShop({ rates: { bitcoin: { usd: "unavailable" } } });
   try {
     await shop.selectCurrency("SATS");

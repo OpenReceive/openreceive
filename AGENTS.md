@@ -10,7 +10,7 @@ small, honest API and a good developer experience.
   inside the host application's existing database: the host passes its database handle and runs
   the migration through its own workflow; the library owns the schema, locking, settlement
   write-once, and reconciliation state machine. Implementing a custom
-  `OpenReceivePaymentRepository` is the documented escape hatch, never the quickstart.
+  `PaymentRepository` is the documented escape hatch, never the quickstart.
 - The host owns orders and prices. Direct server code passes `{ orderId, amount }`; mounted
   HTTP handlers resolve the amount from host-owned data and reject payer-supplied amounts.
 - One `openreceive_payments` row per attempt is committed before payer instructions are
@@ -117,7 +117,7 @@ throw takes the whole panel — frequently the screen the payer reaches after pa
 boundary is right to be permissive (the panel's job is to report what arrived) and the formatter
 is right to throw (wire construction and validation share it). The join is what must not exist.
 
-FORMATTERS THROW: `formatOpenReceiveMsats` throws `RangeError` on an unusable amount and keeps
+FORMATTERS THROW: `formatMsats` throws `RangeError` on an unusable amount and keeps
 throwing on purpose. DISPLAY BOUNDARIES BLANK: `optionalMsatsLabel` and `optionalUnixTimeLabel`
 (`packages/js/browser/src/internal/checkout-format.ts`) wrap those formatters and return
 `undefined`, so a malformed server value costs one label or one row, never the screen; callers
@@ -127,7 +127,7 @@ about to re-implement the boundary.
 
 For a new instance: if the formatter's throw is load-bearing elsewhere, leave it throwing and add
 a boundary; if nothing constructs or validates through it, let the formatter degrade (as
-`formatOpenReceiveUnixTime` does). Express the predicate once, module-private, next to the
+`formatUnixTime` does). Express the predicate once, module-private, next to the
 formatter. Keep the raw value visible under a relabelled row.
 
 ## Private boundary

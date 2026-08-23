@@ -120,7 +120,7 @@ function printSummary(
   stdout.write("  1. Read OPENRECEIVE_PAYMENTS.md\n");
   stdout.write(`  2. Run the schema/migration through your normal ${options.orm} workflow\n`);
   stdout.write(
-    "  3. Wire createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid }) —\n" +
+    "  3. Wire createHost({ db, loadOrder, amountForOrder, onPaid }) —\n" +
       "     OpenReceive owns the repository logic at runtime; settlement piggybacks\n" +
       "     on mounted routes by default (no background process needed)\n",
   );

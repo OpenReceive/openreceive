@@ -17,13 +17,13 @@ import {
   createCheckoutElementAttributes,
   createCheckoutElementListeners,
   createCheckoutShellModel,
-  createOpenReceiveThemeToggleElementAttributes,
+  createThemeToggleElementAttributes,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type OpenReceiveCheckoutComponentProps,
-  type OpenReceiveThemeModel,
-  type OpenReceiveThemeToggleElementAttributeOptions,
-  type OpenReceiveThemeToggleElementAttributes,
+  type CheckoutComponentProps,
+  type ThemeModel,
+  type ThemeToggleElementAttributeOptions,
+  type ThemeToggleElementAttributes,
 } from "@openreceive/browser/headless";
 
 // Curated re-exports: only the browser/headless names the wrapper factories
@@ -41,32 +41,32 @@ export type {
   CheckoutShellOptions,
   CheckoutSnapshot,
   CreateCheckoutShellOptions,
-  OpenReceiveCheckoutComponentProps,
-  OpenReceiveCheckoutPropsValidation,
-  OpenReceiveStoredThemeModelOptions,
-  OpenReceiveThemeModel,
-  OpenReceiveThemeModelOptions,
-  OpenReceiveThemePreference,
-  OpenReceiveThemeToggleElementAttributeOptions,
-  OpenReceiveThemeToggleElementAttributes,
+  CheckoutComponentProps,
+  CheckoutPropsValidation,
+  StoredThemeModelOptions,
+  ThemeModel,
+  ThemeModelOptions,
+  ThemePreference,
+  ThemeToggleElementAttributeOptions,
+  ThemeToggleElementAttributes,
 } from "@openreceive/browser/headless";
 // Re-exported under their own names: a wrapper that needs the controller, the
 // standalone shell, or a theme model gets the browser factory itself. The
-// four `createOpenReceiveWrapper*` aliases that used to wrap these one to one
+// four `createWrapper*` aliases that used to wrap these one to one
 // are gone — an alias is a second name for one concept, not a seam.
 export {
   createCheckoutController,
   createCheckoutShell,
-  createOpenReceiveStoredThemeModel,
-  createOpenReceiveThemeModel,
+  createStoredThemeModel,
+  createThemeModel,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   // The create/snapshot boundary check: one implementation in the browser floor,
   // called by these wrappers and by @openreceive/react alike (G6a).
-  validateOpenReceiveCheckoutProps,
+  validateCheckoutProps,
 } from "@openreceive/browser/headless";
 export type { DefineOpenReceiveElementsOptions } from "./index.ts";
-export { defineOpenReceiveElements } from "./index.ts";
+export { defineElements } from "./index.ts";
 
 /**
  * Every event the checkout element dispatches, in one place. `docs/internal/wrapper-parity.md`
@@ -74,15 +74,15 @@ export { defineOpenReceiveElements } from "./index.ts";
  * The browser listener factory covers the full set (including `openreceive-open-wallet`),
  * so this is the base handler surface under a wrapper-facing name.
  */
-export type OpenReceiveWrapperCheckoutEventHandlers = CheckoutElementEventHandlers;
+export type WrapperCheckoutEventHandlers = CheckoutElementEventHandlers;
 
-export interface OpenReceiveWrapperCheckoutBindingOptions
+export interface WrapperCheckoutBindingOptions
   extends CheckoutElementAttributeOptions,
-    OpenReceiveWrapperCheckoutEventHandlers {}
+    WrapperCheckoutEventHandlers {}
 
-export interface OpenReceiveWrapperCheckoutShellOptions
+export interface WrapperCheckoutShellOptions
   extends CheckoutShellOptions,
-    OpenReceiveWrapperCheckoutEventHandlers {
+    WrapperCheckoutEventHandlers {
   /**
    * Resolve the theme from the deterministic default instead of reading storage and
    * `matchMedia`. Wrappers pass this until they are mounted so a server-rendered shell
@@ -91,22 +91,22 @@ export interface OpenReceiveWrapperCheckoutShellOptions
   readonly deferThemeResolution?: boolean;
 }
 
-export interface OpenReceiveWrapperCheckoutBinding {
+export interface WrapperCheckoutBinding {
   readonly tagName: typeof OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME;
   readonly attributes: CheckoutElementAttributes;
   readonly listeners: CheckoutElementListeners;
 }
 
-export interface OpenReceiveWrapperThemeToggleBinding {
+export interface WrapperThemeToggleBinding {
   readonly tagName: typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME;
-  readonly attributes: OpenReceiveThemeToggleElementAttributes;
+  readonly attributes: ThemeToggleElementAttributes;
 }
 
-export interface OpenReceiveWrapperCheckoutShellBinding {
-  readonly theme: OpenReceiveThemeModel;
-  readonly rootAttributes: Partial<OpenReceiveThemeModel["attributes"]>;
-  readonly checkout: OpenReceiveWrapperCheckoutBinding;
-  readonly themeToggle: OpenReceiveWrapperThemeToggleBinding | null;
+export interface WrapperCheckoutShellBinding {
+  readonly theme: ThemeModel;
+  readonly rootAttributes: Partial<ThemeModel["attributes"]>;
+  readonly checkout: WrapperCheckoutBinding;
+  readonly themeToggle: WrapperThemeToggleBinding | null;
 }
 
 /**
@@ -117,17 +117,17 @@ export interface OpenReceiveWrapperCheckoutShellBinding {
  * and per-mode applicability are the shared contract in
  * `docs/internal/wrapper-parity.md`.
  */
-export interface OpenReceiveWrapperCheckoutComponentProps
-  extends OpenReceiveCheckoutComponentProps,
-    OpenReceiveWrapperCheckoutEventHandlers {
+export interface WrapperCheckoutComponentProps
+  extends CheckoutComponentProps,
+    WrapperCheckoutEventHandlers {
   /** Escape hatch for the rest of `CheckoutShellOptions`. */
   readonly options?: CheckoutShellOptions;
 }
 
-export function createOpenReceiveWrapperCheckoutBinding(
+export function createWrapperCheckoutBinding(
   snapshot: CheckoutSnapshot,
-  options: OpenReceiveWrapperCheckoutBindingOptions = {},
-): OpenReceiveWrapperCheckoutBinding {
+  options: WrapperCheckoutBindingOptions = {},
+): WrapperCheckoutBinding {
   return {
     tagName: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
     attributes: createCheckoutElementAttributes(snapshot, options),
@@ -135,12 +135,12 @@ export function createOpenReceiveWrapperCheckoutBinding(
   };
 }
 
-export function createOpenReceiveWrapperThemeToggleBinding(
-  options: OpenReceiveThemeToggleElementAttributeOptions = {},
-): OpenReceiveWrapperThemeToggleBinding {
+export function createWrapperThemeToggleBinding(
+  options: ThemeToggleElementAttributeOptions = {},
+): WrapperThemeToggleBinding {
   return {
     tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-    attributes: createOpenReceiveThemeToggleElementAttributes(options),
+    attributes: createThemeToggleElementAttributes(options),
   };
 }
 
@@ -160,7 +160,7 @@ const NO_THEME_STORAGE: Storage = {
 function toWrapperShellBinding(
   shell: CheckoutShellModel,
   listeners: CheckoutElementListeners,
-): OpenReceiveWrapperCheckoutShellBinding {
+): WrapperCheckoutShellBinding {
   return {
     theme: shell.theme,
     rootAttributes: shell.rootAttributes,
@@ -179,10 +179,10 @@ function toWrapperShellBinding(
   };
 }
 
-export function createOpenReceiveWrapperCheckoutShellBinding(
+export function createWrapperCheckoutShellBinding(
   snapshot: CheckoutSnapshot | null,
-  options: OpenReceiveWrapperCheckoutShellOptions = {},
-): OpenReceiveWrapperCheckoutShellBinding {
+  options: WrapperCheckoutShellOptions = {},
+): WrapperCheckoutShellBinding {
   const { deferThemeResolution, ...shellOptions } = options;
   // A host-supplied storage stays in place: it is readable on the server too, and
   // reading it is the documented way to server-render a chosen theme

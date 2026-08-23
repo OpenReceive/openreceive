@@ -12,10 +12,10 @@ import {
   decimalScaleFactor,
   formatDecimal,
   OPENRECEIVE_SATS_PER_BTC,
-  type OpenReceiveDecimal,
+  type Decimal,
   parseDecimal,
 } from "@openreceive/core";
-import { isOpenReceiveLightningNetwork } from "./assets.ts";
+import { isLightningNetwork } from "./assets.ts";
 import type { SwapRateType } from "./rates-cache.ts";
 
 export interface FixedFloatRatePair {
@@ -104,7 +104,7 @@ export function retainFixedFloatLightningPayoutPairs(
 ): Readonly<Record<string, FixedFloatRatePair>> {
   const retained: Record<string, FixedFloatRatePair> = {};
   for (const [key, pair] of Object.entries(pairs)) {
-    if (isOpenReceiveLightningNetwork(pair.to)) retained[key] = pair;
+    if (isLightningNetwork(pair.to)) retained[key] = pair;
   }
   return retained;
 }
@@ -327,8 +327,8 @@ function parseToFeeBtcSats(tofee: string | undefined): bigint | undefined {
  * "cannot quote this pair" (undefined) rather than a thrown error, because a
  * single malformed XML row must not fail the whole rates refresh.
  */
-function parsePositiveDecimal(value: string): OpenReceiveDecimal | undefined {
-  let parsed: OpenReceiveDecimal;
+function parsePositiveDecimal(value: string): Decimal | undefined {
+  let parsed: Decimal;
   try {
     parsed = parseDecimal(value);
   } catch {

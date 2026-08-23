@@ -1,20 +1,20 @@
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
-  createOpenReceiveLightningInvoiceDecodeUrl,
+  createLightningInvoiceDecodeUrl,
   enterCheckoutResumePath,
-  mergeOpenReceiveAttemptIntoCheckout,
-  mergeOpenReceiveAttemptIntoSnapshot,
+  mergeAttemptIntoCheckout,
+  mergeAttemptIntoSnapshot,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
-  openReceiveCheckoutLabels,
+  checkoutLabels,
   orClasses,
   prepareCheckout,
   requestCheckout,
-  validateOpenReceiveCheckoutProps,
+  validateCheckoutProps,
 } from "@openreceive/browser/headless";
 import * as React from "react";
-import { useOpenReceiveCheckoutSession } from "./checkout-session.ts";
+import { useCheckoutSession } from "./checkout-session.ts";
 import {
   CopyInvoiceButton,
   InvoiceSummary,
@@ -49,7 +49,7 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
   // neither mode is set, one warning when a create-only prop is passed with a
   // snapshot. React used to carry its own copy of both, and its own copy of the
   // create-only prop list.
-  validateOpenReceiveCheckoutProps({
+  validateCheckoutProps({
     framework: "@openreceive/react",
     checkout: props.checkout,
     orderId: props.orderId,
@@ -93,7 +93,7 @@ function CheckoutSnapshotMode(
     }
   }, [identity, checkout]);
   const onSwapStarted = React.useCallback((invoice: CheckoutInvoiceSnapshot) => {
-    setCurrent((previous) => mergeOpenReceiveAttemptIntoSnapshot(invoice, previous));
+    setCurrent((previous) => mergeAttemptIntoSnapshot(invoice, previous));
   }, []);
   return React.createElement(CheckoutView, {
     ...props,
@@ -144,7 +144,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // bolt11 with time left on it, otherwise mint one, and never mint twice for
   // one order. React supplies only the two things that are genuinely its own —
   // how the new snapshot is published, and where the failure is surfaced.
-  const session = useOpenReceiveCheckoutSession({
+  const session = useCheckoutSession({
     snapshot: () => createdCheckoutRef.current,
     orderId: () => orderId,
     requestCheckout: (id) =>
@@ -204,7 +204,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         if (current.status !== "ready") return current;
         return {
           status: "ready",
-          checkout: mergeOpenReceiveAttemptIntoCheckout(invoice, current.checkout, orderId),
+          checkout: mergeAttemptIntoCheckout(invoice, current.checkout, orderId),
         };
       });
     },
@@ -364,10 +364,7 @@ function CheckoutView(
   // Keep the meta row only for terminal states that need a compact badge.
   const showSummaryMeta = checkoutModel.status === "settled" || checkoutModel.status === "expired";
   const fiatCurrency = checkoutModel.fiat_quote?.fiat?.currency;
-  const decodeInvoiceHref = createOpenReceiveLightningInvoiceDecodeUrl(
-    checkoutModel.invoice,
-    decodeLinkUrl,
-  );
+  const decodeInvoiceHref = createLightningInvoiceDecodeUrl(checkoutModel.invoice, decodeLinkUrl);
   const startOver = () => {
     onStartOver?.();
   };
@@ -429,7 +426,7 @@ function CheckoutView(
                   className: orClasses.spinner,
                   "aria-hidden": "true",
                 }),
-                React.createElement("p", null, openReceiveCheckoutLabels.preparingPayment),
+                React.createElement("p", null, checkoutLabels.preparingPayment),
               )
             : null,
           hideLightning
@@ -459,7 +456,7 @@ function CheckoutView(
                             classNames?.invoiceTitle,
                           ),
                         },
-                        openReceiveCheckoutLabels.bitcoinLightningInvoice,
+                        checkoutLabels.bitcoinLightningInvoice,
                       ),
                   React.createElement(WaitingState, {
                     key: "waiting",
@@ -521,7 +518,7 @@ function CheckoutView(
                               className: orClasses.btn,
                               onClick: startOver,
                             },
-                            openReceiveCheckoutLabels.startOver,
+                            checkoutLabels.startOver,
                           ),
                         )
                       : React.createElement(
@@ -564,7 +561,7 @@ function CheckoutView(
                                   rel: "noreferrer",
                                   target: "_blank",
                                 },
-                                openReceiveCheckoutLabels.decodeInvoice,
+                                checkoutLabels.decodeInvoice,
                               ),
                         ),
                 ),

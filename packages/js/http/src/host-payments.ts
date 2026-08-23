@@ -1,5 +1,5 @@
 import { unixSeconds } from "@openreceive/core";
-import { sanitizeOpenReceiveEvent } from "@openreceive/node";
+import { sanitizeEvent } from "@openreceive/node";
 import type {
   CreateCheckoutAmount,
   NodeSettlementActionHook,
@@ -14,17 +14,14 @@ import type {
 } from "./handler.ts";
 import {
   isReusablePaymentAttempt,
-  type OpenReceivePaymentRecord,
-  type OpenReceivePaymentRepository,
+  type PaymentRecord,
+  type PaymentRepository,
 } from "./payment-repository.ts";
-import type { OpenReceiveSqlDatabase } from "./sql-adapters.ts";
-import {
-  createOpenReceiveSqlPayments,
-  type OpenReceiveOrderSettlementHook,
-} from "./sql-payments.ts";
+import type { SqlDatabase } from "./sql-adapters.ts";
+import { createSqlPayments, type OrderSettlementHook } from "./sql-payments.ts";
 
 // The mounted-route host integration: turn a host's order loader plus either a
-// database handle or a custom repository into the `OpenReceiveHost` the handler
+// database handle or a custom repository into the `Host` the handler
 // talks to. The repository contract and its decisions live in
 // payment-repository.ts; the wallet-scan passes live in reconcile-loop.ts.
 
@@ -34,9 +31,9 @@ import {
  * carry an NWC code or a provider token; the default sink must not be the one
  * place that prints it.
  */
-export function warnOpenReceiveFailure(event: string, prefix: string, error: unknown): void {
+export function warnFailure(event: string, prefix: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
-  const sanitized = sanitizeOpenReceiveEvent({ level: "warn", event, message });
+  const sanitized = sanitizeEvent({ level: "warn", event, message });
   console.warn(`[openreceive] ${prefix}: ${String(sanitized.message)}`);
 }
 
@@ -59,32 +56,30 @@ interface CreateOpenReceiveHostBaseOptions<Order> {
  */
 export interface CreateOpenReceiveHostDbOptions<Order>
   extends CreateOpenReceiveHostBaseOptions<Order> {
-  readonly db: OpenReceiveSqlDatabase;
+  readonly db: SqlDatabase;
   /** Payment attempts table name. Default `openreceive_payments`. */
   readonly tableName?: string;
-  readonly onPaid: OpenReceiveOrderSettlementHook;
+  readonly onPaid: OrderSettlementHook;
   readonly payments?: never;
 }
 
 /**
  * Settlement context passed to repository-mode `onPaid`: the raw core
  * settlement event (`paymentHash`, `paidAt`, `details`). Unlike db-mode's
- * {@link OpenReceiveOrderSettlement} it carries no `orderId` and no
+ * {@link OrderSettlement} it carries no `orderId` and no
  * transactional `query` — the custom repository owns that mapping.
  */
-export type OpenReceiveSettlementEvent = NodeSettlementActionInput;
+export type SettlementEvent = NodeSettlementActionInput;
 
-export type OpenReceiveSettlementEventHook = (
-  settlement: OpenReceiveSettlementEvent,
-) => void | Promise<void>;
+export type SettlementEventHook = (settlement: SettlementEvent) => void | Promise<void>;
 
 /**
  * Advanced escape hatch: the host implements the full
- * `OpenReceivePaymentRepository` contract, including commit locking, write-once
+ * `PaymentRepository` contract, including commit locking, write-once
  * settlement, and reconciliation transitions.
  *
  * The settlement hook is `onPaid` in this mode too, but its context type
- * differs from db mode: it receives the raw {@link OpenReceiveSettlementEvent}
+ * differs from db mode: it receives the raw {@link SettlementEvent}
  * (`paymentHash`, `paidAt`, `details`), with no `orderId` and no transactional
  * `query` — unlike db-mode `onPaid`, which runs inside the library's settlement
  * transaction. Write-once is still the library's: repository-mode `onPaid`
@@ -93,9 +88,9 @@ export type OpenReceiveSettlementEventHook = (
  */
 export interface CreateOpenReceiveHostRepositoryOptions<Order>
   extends CreateOpenReceiveHostBaseOptions<Order> {
-  readonly payments: OpenReceivePaymentRepository;
+  readonly payments: PaymentRepository;
   /** Host settlement handler; runs once, for the winning first-settlement claim. */
-  readonly onPaid: OpenReceiveSettlementEventHook;
+  readonly onPaid: SettlementEventHook;
   readonly db?: never;
   readonly tableName?: never;
 }
@@ -104,11 +99,11 @@ export type CreateOpenReceiveHostOptions<Order> =
   | CreateOpenReceiveHostDbOptions<Order>
   | CreateOpenReceiveHostRepositoryOptions<Order>;
 
-export interface OpenReceiveHost {
+export interface Host {
   readonly resolveCheckout: ResolveCheckoutHook;
   readonly onCheckoutCreated: CheckoutCreatedHook;
   readonly onPaid: NodeSettlementActionHook;
-  readonly payments: OpenReceivePaymentRepository;
+  readonly payments: PaymentRepository;
 }
 
 /**
@@ -117,9 +112,7 @@ export interface OpenReceiveHost {
  * (`payments`, advanced). Attempt selection, commit locking, settlement
  * write-once, and reconciliation transitions are library-owned in `db` mode.
  */
-export function createOpenReceiveHost<Order>(
-  options: CreateOpenReceiveHostOptions<Order>,
-): OpenReceiveHost {
+export function createHost<Order>(options: CreateOpenReceiveHostOptions<Order>): Host {
   if (options?.loadOrder === undefined) {
     throw new TypeError("OpenReceive host requires loadOrder.");
   }
@@ -133,15 +126,15 @@ export function createOpenReceiveHost<Order>(
     );
   }
 
-  let payments: OpenReceivePaymentRepository;
+  let payments: PaymentRepository;
   let onPaid: NodeSettlementActionHook;
   if (options.db !== undefined) {
-    const repository = createOpenReceiveSqlPayments(options.db, {
+    const repository = createSqlPayments(options.db, {
       ...(options.tableName === undefined ? {} : { tableName: options.tableName }),
       ...(options.clock === undefined ? {} : { clock: options.clock }),
     });
     payments = repository;
-    const fulfill = options.onPaid as OpenReceiveOrderSettlementHook;
+    const fulfill = options.onPaid as OrderSettlementHook;
     onPaid = async (input) => {
       await repository.markPaidOnce(input, fulfill);
     };
@@ -165,7 +158,7 @@ export function createOpenReceiveHost<Order>(
     }
     payments = options.payments;
     const custom = options.payments;
-    const notify = options.onPaid as OpenReceiveSettlementEventHook;
+    const notify = options.onPaid as SettlementEventHook;
     // Write-once stays library-owned in custom-repository mode too: the
     // repository claims the settlement and the host is told only when the claim
     // is won, so a redelivered settlement event fulfills exactly once.
@@ -267,7 +260,7 @@ export function createOpenReceiveHost<Order>(
 
 function resolvedPayment(
   amount: CreateCheckoutAmount | undefined,
-  payment: OpenReceivePaymentRecord,
+  payment: PaymentRecord,
 ): ResolvedHostCheckout {
   return {
     ...(amount === undefined ? {} : { amount }),
@@ -281,7 +274,7 @@ function resolvedPayment(
 
 /** The Ruby `live_at` model: pending, not superseded, and not yet expired. */
 function isLivePaymentAttempt(
-  payment: Pick<OpenReceivePaymentRecord, "status" | "statusReason" | "expiresAt">,
+  payment: Pick<PaymentRecord, "status" | "statusReason" | "expiresAt">,
   now: number,
 ): boolean {
   return (
@@ -290,7 +283,7 @@ function isLivePaymentAttempt(
 }
 
 function matchesCreateAction(
-  payment: OpenReceivePaymentRecord,
+  payment: PaymentRecord,
   action: ResolveCheckoutContext["action"],
   payInAsset: string | undefined,
 ): boolean {
@@ -304,8 +297,8 @@ function matchesCreateAction(
 
 function normalizePayments(
   expectedOrderId: string,
-  values: readonly OpenReceivePaymentRecord[],
-): readonly OpenReceivePaymentRecord[] {
+  values: readonly PaymentRecord[],
+): readonly PaymentRecord[] {
   return values
     .map((payment) => {
       if (payment.orderId !== expectedOrderId) {

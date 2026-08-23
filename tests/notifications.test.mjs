@@ -4,10 +4,7 @@ import { VALID_NWC, hash, memoryPaymentsDb } from "./helpers/factories.mjs";
 import { until } from "./helpers/lifecycle-harness.mjs";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createNwcReceiveClient, createOpenReceive } from "../packages/js/node/src/index.ts";
-import {
-  createOpenReceiveHost,
-  startOpenReceiveNotificationListener,
-} from "../packages/js/http/src/index.ts";
+import { createHost, startNotificationListener } from "../packages/js/http/src/index.ts";
 
 const RECEIVE_ONLY_INFO = {
   capabilities: ["make_invoice", "list_transactions"],
@@ -219,7 +216,7 @@ function scriptedNotifierService(reconcilePayments) {
 
 function sqliteHostWithPendingAttempt({ paymentHash, onPaid }) {
   const db = memoryPaymentsDb();
-  const host = createOpenReceiveHost({
+  const host = createHost({
     db,
     loadOrder: async () => ({ total: "10.00" }),
     amountForOrder: () => ({ sats: 100 }),
@@ -266,7 +263,7 @@ test("a settled notification payload settles the pending attempt directly with z
   const { service, notifier } = scriptedNotifierService(async () => {
     throw new Error("direct settlement must never trigger a wallet scan");
   });
-  const listener = await startOpenReceiveNotificationListener({ service, host });
+  const listener = await startNotificationListener({ service, host });
 
   notifier.handler({
     type: "payment_received",
@@ -313,7 +310,7 @@ test("a payload without a finality signal only wakes a reconcile pass", async ()
       paidAt: 990,
     })),
   );
-  const listener = await startOpenReceiveNotificationListener({ service, host });
+  const listener = await startNotificationListener({ service, host });
 
   // A preimage alone is corroborating evidence, never finality.
   notifier.handler({
@@ -343,7 +340,7 @@ test("a settled payload for an unknown hash settles nothing and wakes a reconcil
   const { service, notifier } = scriptedNotifierService(async ({ attempts }) =>
     attempts.map((attempt) => ({ paymentHash: attempt.paymentHash, status: "pending" })),
   );
-  const listener = await startOpenReceiveNotificationListener({ service, host });
+  const listener = await startNotificationListener({ service, host });
 
   const unknownHash = hash("e");
   notifier.handler({
@@ -383,7 +380,7 @@ test("a direct-settlement failure reports to onError and falls back to a scan", 
     scanned.push(attempts.map((attempt) => attempt.paymentHash));
     return attempts.map((attempt) => ({ paymentHash: attempt.paymentHash, status: "pending" }));
   });
-  const listener = await startOpenReceiveNotificationListener({
+  const listener = await startNotificationListener({
     service,
     host,
     onError: (error) => errors.push(error),
@@ -420,7 +417,7 @@ test("notification listener wakes one reconcile pass that settles a pending sqli
       paidAt: 990,
     })),
   );
-  const listener = await startOpenReceiveNotificationListener({ service, host });
+  const listener = await startNotificationListener({ service, host });
 
   // Without a payload the notification is only a wake-up hint; the scan settles.
   notifier.handler({ type: "payment_received", payment_hash: paymentHash });
@@ -459,7 +456,7 @@ test("notification listener coalesces bursts and stop() unsubscribes", async () 
     return attempts.map((attempt) => ({ paymentHash: attempt.paymentHash, status: "pending" }));
   });
 
-  const listener = await startOpenReceiveNotificationListener({ service, host });
+  const listener = await startNotificationListener({ service, host });
   notifier.handler({ type: "payment_received" });
   await until(() => passes.length === 1, { label: "the first reconcile pass" });
   // A burst while a pass runs queues at most one follow-up pass.
@@ -504,7 +501,7 @@ test("notification listener routes reconcile failures to onError and keeps liste
   const { service, notifier } = scriptedNotifierService(async () => {
     throw new Error("relay down");
   });
-  const listener = await startOpenReceiveNotificationListener({
+  const listener = await startNotificationListener({
     service,
     host,
     onError: (error) => errors.push(error),
@@ -541,7 +538,7 @@ test("notification listener defaults its error sink to the sanitized warn", asyn
   console.warn = (...args) => warnings.push(args.join(" "));
   try {
     // No onError: this is the DEFAULT sink, the one a host never configures.
-    const listener = await startOpenReceiveNotificationListener({ service, host });
+    const listener = await startNotificationListener({ service, host });
     notifier.handler({ type: "payment_received" });
     await until(() => warnings.length >= 1, { label: "the default console.warn sink" });
     await listener.stop();
@@ -574,7 +571,7 @@ test("a wake while another worker holds the gate never touches the wallet", asyn
   const { service, notifier } = scriptedNotifierService(async () => {
     throw new Error("a gate_busy wake must not scan the wallet");
   });
-  const listener = await startOpenReceiveNotificationListener({ service, host });
+  const listener = await startNotificationListener({ service, host });
   notifier.handler({ type: "payment_received" });
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
@@ -585,7 +582,7 @@ test("a wake while another worker holds the gate never touches the wallet", asyn
 test("notification listener refuses a repository without the durable scan gate", async () => {
   const { service } = scriptedNotifierService(async () => []);
   await assert.rejects(
-    startOpenReceiveNotificationListener({
+    startNotificationListener({
       service,
       host: {
         payments: {
@@ -606,7 +603,7 @@ test("notification listener refuses a repository without the durable scan gate",
 test("notification listener rejects UNSUPPORTED_METHOD for a service without notifications", async () => {
   await assert.rejects(
     () =>
-      startOpenReceiveNotificationListener({
+      startNotificationListener({
         service: { reconcilePayments: async () => [] },
         host: {
           payments: {

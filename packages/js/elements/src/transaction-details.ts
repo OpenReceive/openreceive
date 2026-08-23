@@ -1,11 +1,11 @@
 import {
-  escapeOpenReceiveHtml as escapeHtml,
+  escapeHtml,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_PAYMENT_WIZARD_SELECTORS,
-  type OpenReceiveTransactionDetailsSource,
-  openReceiveCheckoutLabels,
+  type TransactionDetailsSource,
+  checkoutLabels,
   orClasses,
-  resolveOpenReceiveTransactionDetailRows,
+  resolveTransactionDetailRows,
 } from "@openreceive/browser/headless";
 
 import {
@@ -19,19 +19,19 @@ import {
  * Uses the same row builder as React `<TransactionDetails>`.
  */
 export function renderTransactionDetailsHtml(
-  source: OpenReceiveTransactionDetailsSource,
+  source: TransactionDetailsSource,
   options: {
     readonly open?: boolean;
     readonly className?: string;
   } = {},
 ): string {
-  const rows = resolveOpenReceiveTransactionDetailRows(source);
+  const rows = resolveTransactionDetailRows(source);
   if (rows.length === 0) return "";
   const openAttr = options.open === true ? " open" : "";
   const className = options.className ?? orClasses.transactionDetails;
   return `
     <details part="transaction-details" class="${escapeHtml(className)}"${openAttr}>
-      <summary class="${orClasses.transactionDetailsTitle}">${escapeHtml(openReceiveCheckoutLabels.transactionDetails)}</summary>
+      <summary class="${orClasses.transactionDetailsTitle}">${escapeHtml(checkoutLabels.transactionDetails)}</summary>
       <div class="${orClasses.transactionDetailsContent}">
         <dl part="swap-details" class="${orClasses.swapDetails}">
           ${rows
@@ -53,7 +53,7 @@ export function renderTransactionDetailsHtml(
 }
 
 export function createTransactionDetailsElement(
-  source: OpenReceiveTransactionDetailsSource,
+  source: TransactionDetailsSource,
   options: {
     readonly open?: boolean;
     readonly className?: string;

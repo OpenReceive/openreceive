@@ -1,7 +1,7 @@
 import type { PaymentDetails } from "@openreceive/core";
 import type { Checkout, PaymentCheck, SwapCheckout } from "@openreceive/node";
-import { bigintToJsonNumber, OpenReceiveHttpError } from "./errors.ts";
-import type { OpenReceivePaymentRepository } from "./payment-repository.ts";
+import { bigintToJsonNumber, HttpError } from "./errors.ts";
+import type { PaymentRepository } from "./payment-repository.ts";
 
 // The response half of the HTTP wire boundary: the internal camelCase shapes
 // turned into the published snake_case bodies, and the deliberate narrowing
@@ -57,7 +57,7 @@ export function paymentCheckFromReconcilePass(checked: PaymentCheck): Record<str
  * there is no persisted wallet snapshot, only the pass provides it.
  */
 export async function paymentCheckFromStoredAttempt(
-  payments: OpenReceivePaymentRepository,
+  payments: PaymentRepository,
   orderId: string,
   paymentHash: string,
 ): Promise<Record<string, unknown>> {
@@ -65,7 +65,7 @@ export async function paymentCheckFromStoredAttempt(
   const record = rows.find((row) => row.paymentHash.toLowerCase() === paymentHash.toLowerCase());
   if (record === undefined) {
     // resolveHostCheckout selected this hash from the same repository moments ago.
-    throw new OpenReceiveHttpError(404, "NOT_FOUND", "Payment attempt not found for this order.");
+    throw new HttpError(404, "NOT_FOUND", "Payment attempt not found for this order.");
   }
   return {
     payment_hash: record.paymentHash.toLowerCase(),

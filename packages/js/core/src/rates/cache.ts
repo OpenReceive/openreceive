@@ -9,7 +9,7 @@
  *   every concurrent checkout but one.
  */
 
-import { type OpenReceiveBtcFiatRateMap, OpenReceivePriceFeedError } from "../money/decimal.ts";
+import { type BtcFiatRateMap, PriceFeedError } from "../money/decimal.ts";
 import { nonEmptyString, unixSeconds } from "../values.ts";
 import {
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
@@ -21,11 +21,11 @@ import { createLivePriceFeedProviders } from "./http.ts";
 import { parseSimplePriceResponse } from "./parsing.ts";
 import {
   isResolvedPriceProvider,
-  type OpenReceiveBtcFiatRateMapWithSource,
-  type OpenReceiveLivePriceSourceId,
-  type OpenReceivePriceFeedHealthCheck,
-  type OpenReceiveResolvedPriceProvider,
-  type OpenReceiveSourcedPriceProvider,
+  type BtcFiatRateMapWithSource,
+  type LivePriceSourceId,
+  type PriceFeedHealthCheck,
+  type ResolvedPriceProvider,
+  type SourcedPriceProvider,
   providerHasGetAllBtcFiatRates,
   type SimplePriceFetch,
 } from "./types.ts";
@@ -40,7 +40,7 @@ interface MetaRow {
 
 // Process-local cache surface. This is intentionally not injectable: price
 // caching is disposable and OpenReceive has no storage configuration.
-interface OpenReceivePriceFeedCacheMap {
+interface PriceFeedCacheMap {
   getMeta(key: string): MaybePromise<MetaRow | undefined>;
   casMeta(
     key: string,
@@ -50,8 +50,8 @@ interface OpenReceivePriceFeedCacheMap {
 }
 
 interface PriceFeedCacheEntry {
-  rates: OpenReceiveBtcFiatRateMap;
-  source: OpenReceiveLivePriceSourceId;
+  rates: BtcFiatRateMap;
+  source: LivePriceSourceId;
   fetched_at: number;
 }
 
@@ -74,8 +74,8 @@ type PriceFeedRefreshClaim =
 
 export interface CachedPriceFeedOptions {
   currencies: readonly string[];
-  primary: OpenReceiveSourcedPriceProvider;
-  fallback: OpenReceiveSourcedPriceProvider;
+  primary: SourcedPriceProvider;
+  fallback: SourcedPriceProvider;
   cacheSeconds?: number;
   clock?: () => number;
 }
@@ -84,16 +84,14 @@ export interface CachedPriceFeedOptions {
  * Serves BTC fiat rates from a disposable process-local cache, refreshing from
  * the primary feed first and the fallback second.
  */
-export class CachedPriceFeed
-  implements OpenReceiveResolvedPriceProvider, OpenReceivePriceFeedHealthCheck
-{
-  // Representative source for the bare OpenReceiveSourcedPriceProvider view;
+export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCheck {
+  // Representative source for the bare SourcedPriceProvider view;
   // the true origin is reported per-call by getBtcFiatRatesWithSource.
-  readonly source: OpenReceiveLivePriceSourceId = "primary";
-  readonly #cache: OpenReceivePriceFeedCacheMap;
+  readonly source: LivePriceSourceId = "primary";
+  readonly #cache: PriceFeedCacheMap;
   readonly #currencies: readonly string[];
-  readonly #primary: OpenReceiveSourcedPriceProvider;
-  readonly #fallback: OpenReceiveSourcedPriceProvider;
+  readonly #primary: SourcedPriceProvider;
+  readonly #fallback: SourcedPriceProvider;
   readonly #cacheSeconds: number;
   readonly #cacheKey: string;
   readonly #clock: () => number;
@@ -102,7 +100,7 @@ export class CachedPriceFeed
   constructor(options: CachedPriceFeedOptions) {
     // Construction failures are host misconfiguration (a boot bug), never payer
     // input: throw TypeError — matching the Ruby port's constructor validation —
-    // not the 400-mapped OpenReceiveDecimalError.
+    // not the 400-mapped DecimalError.
     if (options.currencies.length === 0) {
       throw new TypeError("CachedPriceFeed requires at least one currency");
     }
@@ -126,17 +124,17 @@ export class CachedPriceFeed
     this.#clock = options.clock ?? unixSeconds;
   }
 
-  async getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap> {
+  async getBtcFiatRates(currencies: readonly string[]): Promise<BtcFiatRateMap> {
     return (await this.getBtcFiatRatesWithSource(currencies)).rates;
   }
 
   /**
-   * @throws {OpenReceivePriceFeedError} when no rate recent enough to price a
+   * @throws {PriceFeedError} when no rate recent enough to price a
    * quote can be served — always retryable, never payer input.
    */
   async getBtcFiatRatesWithSource(
     currencies: readonly string[],
-  ): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+  ): Promise<BtcFiatRateMapWithSource> {
     const now = this.#clock();
     const claimed = await this.#readOrClaimRefresh(now);
     const resolved = claimed.status === "served" ? claimed.entry : await claimed.pending;
@@ -149,7 +147,7 @@ export class CachedPriceFeed
   // Forces a live refresh, ignoring the cache, for explicit operational probes.
   // Throws if both feeds fail. Tolerant of an upstream that drops an individual
   // currency.
-  async healthCheck(currencies?: readonly string[]): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+  async healthCheck(currencies?: readonly string[]): Promise<BtcFiatRateMapWithSource> {
     const now = this.#clock();
     const meta = await this.#cache.getMeta(this.#cacheKey);
     const previousEntry = parsePriceFeedCacheState(meta?.value)?.entry;
@@ -191,7 +189,7 @@ export class CachedPriceFeed
         if (usableEntry !== undefined) {
           return { status: "served", entry: usableEntry };
         }
-        throw new OpenReceivePriceFeedError(
+        throw new PriceFeedError(
           `price feed refresh already failed within ${this.#cacheSeconds}s${
             state?.refresh_error === undefined ? "" : `: ${state.refresh_error}`
           }`,
@@ -208,7 +206,7 @@ export class CachedPriceFeed
         if (pending !== undefined) {
           return { status: "pending", pending };
         }
-        throw new OpenReceivePriceFeedError(
+        throw new PriceFeedError(
           `price feed refresh already started within ${this.#cacheSeconds}s`,
         );
       }
@@ -234,9 +232,7 @@ export class CachedPriceFeed
       meta = claim.row.rev < 0 ? undefined : claim.row;
     }
 
-    throw new OpenReceivePriceFeedError(
-      "price feed cache changed too often while claiming refresh",
-    );
+    throw new PriceFeedError("price feed cache changed too often while claiming refresh");
   }
 
   /**
@@ -300,7 +296,7 @@ export class CachedPriceFeed
     for (const provider of [this.#primary, this.#fallback]) {
       try {
         const rates = await this.#fetchProviderRates(provider);
-        const source = provider.source as OpenReceiveLivePriceSourceId;
+        const source = provider.source as LivePriceSourceId;
         const entry: PriceFeedCacheEntry = { rates, source, fetched_at: now };
         await this.#writeCacheState({ entry }, expectedRev);
         return entry;
@@ -311,7 +307,7 @@ export class CachedPriceFeed
       }
     }
 
-    const error = new OpenReceivePriceFeedError(`all price feeds failed: ${failures.join("; ")}`);
+    const error = new PriceFeedError(`all price feeds failed: ${failures.join("; ")}`);
     await this.#writeCacheState(
       {
         entry: previousEntry,
@@ -326,9 +322,7 @@ export class CachedPriceFeed
 
   // Cache the whole feed when the provider can serve it tolerantly; otherwise
   // request just the configured currencies.
-  #fetchProviderRates(
-    provider: OpenReceiveSourcedPriceProvider,
-  ): Promise<OpenReceiveBtcFiatRateMap> {
+  #fetchProviderRates(provider: SourcedPriceProvider): Promise<BtcFiatRateMap> {
     if (providerHasGetAllBtcFiatRates(provider)) {
       return provider.getAllBtcFiatRates();
     }
@@ -389,7 +383,7 @@ function parsePriceFeedCacheEntry(
   }
 
   return {
-    rates: rates as OpenReceiveBtcFiatRateMap,
+    rates: rates as BtcFiatRateMap,
     source,
     fetched_at: fetchedAt as number,
   };
@@ -450,7 +444,7 @@ export function createCachedLivePriceFeed(options: {
   });
 }
 
-function createTransientPriceFeedCache(): OpenReceivePriceFeedCacheMap {
+function createTransientPriceFeedCache(): PriceFeedCacheMap {
   let row: MetaRow | undefined;
   return {
     getMeta(key) {
@@ -473,14 +467,14 @@ function createTransientPriceFeedCache(): OpenReceivePriceFeedCacheMap {
 /**
  * Try each provider in order and report which one answered.
  *
- * @throws {OpenReceivePriceFeedError} when no provider answers usably.
+ * @throws {PriceFeedError} when no provider answers usably.
  */
 export async function getBtcFiatRatesWithFallback(input: {
   currencies: readonly string[];
-  providers: readonly OpenReceiveSourcedPriceProvider[];
-}): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+  providers: readonly SourcedPriceProvider[];
+}): Promise<BtcFiatRateMapWithSource> {
   if (input.providers.length === 0) {
-    throw new OpenReceivePriceFeedError("at least one price provider is required");
+    throw new PriceFeedError("at least one price provider is required");
   }
 
   const failures: string[] = [];
@@ -500,5 +494,5 @@ export async function getBtcFiatRatesWithFallback(input: {
     }
   }
 
-  throw new OpenReceivePriceFeedError(`all price providers failed: ${failures.join("; ")}`);
+  throw new PriceFeedError(`all price providers failed: ${failures.join("; ")}`);
 }

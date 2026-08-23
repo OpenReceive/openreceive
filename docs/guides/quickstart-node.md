@@ -111,21 +111,21 @@ Limits, custom messages, and how counting works: → [Rate limiting](rate-limiti
 
 Composing the pieces yourself — a shared wallet client, a custom payments
 repository, or direct handler tests — is fully supported: build them with
-`createOpenReceive` and `createOpenReceiveHost`, and pass
+`createOpenReceive` and `createHost`, and pass
 `{ service, host, authorize }` to the same adapter.
-`maybeReconcileOpenReceivePayments` exposes the same gated settlement pass for
+`maybeReconcilePayments` exposes the same gated settlement pass for
 your own routes or middleware.
 → [createOpenReceive](api-reference.md#createopenreceive) ·
-[createOpenReceiveHost](api-reference.md#createopenreceivehost) ·
-[maybeReconcileOpenReceivePayments](api-reference.md#maybereconcileopenreceivepayments)
+[createHost](api-reference.md#createhost) ·
+[maybeReconcilePayments](api-reference.md#maybereconcilepayments)
 
 Optionally, run one separate worker process with
-`startOpenReceiveNotificationWorker({ service, host })`: it subscribes to NWC-02
+`startNotificationWorker({ service, host })`: it subscribes to NWC-02
 `payment_received` notifications — authenticated wallet data — and runs a periodic reconcile
 pass in the same process. A settled payload settles the matching pending attempt directly
 (same finality rule as scans; never a preimage alone); anything less only wakes a scan, and
 the worker's own periodic pass is the safety net for notifications missed while it was down.
-→ [startOpenReceiveNotificationWorker](api-reference.md#startopenreceivenotificationworker)
+→ [startNotificationWorker](api-reference.md#startnotificationworker)
 
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns `{ order_id }`. OpenReceive never

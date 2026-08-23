@@ -1,4 +1,4 @@
-import { openReceiveFulfillmentNote } from "@openreceive/core";
+import { fulfillmentNote } from "@openreceive/core";
 import { canonicalPaymentsDdlStatements } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
@@ -12,11 +12,11 @@ export function renderTypeOrmFiles(options: ScaffoldPaymentsOptions): ScaffoldFi
 // Executes the canonical OpenReceive DDL: \`${options.tableName}\` and the
 // \`${options.metaTableName}\` reconcile gate, both tables in this one migration.
 // OpenReceive owns the payment-attempt repository at runtime
-// (createOpenReceiveHost in @openreceive/http), so there is no entity class to
+// (createHost in @openreceive/http), so there is no entity class to
 // register. Keep every column; timestamps are unix-seconds integer columns, on
 // purpose.
 //
-${openReceiveFulfillmentNote("// ", options.tableName)}
+${fulfillmentNote("// ", options.tableName)}
 import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateOpenReceiveTables20260101000000 implements MigrationInterface {

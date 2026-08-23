@@ -1,4 +1,4 @@
-export type OpenReceiveAuthorizeAction =
+export type AuthorizeAction =
   | "checkout.prepare"
   | "checkout.create"
   | "payment.check"
@@ -7,15 +7,15 @@ export type OpenReceiveAuthorizeAction =
   | "swap.read"
   | "swap.refund";
 
-export interface OpenReceiveAuthorizeResource {
+export interface AuthorizeResource {
   orderId?: string;
   paymentHash?: string;
 }
 
-export interface OpenReceiveAuthorizeContext {
-  readonly action: OpenReceiveAuthorizeAction;
+export interface AuthorizeContext {
+  readonly action: AuthorizeAction;
   readonly request: Request;
-  readonly resource: OpenReceiveAuthorizeResource;
+  readonly resource: AuthorizeResource;
   /**
    * The untouched framework-native request (Express req, Fastify request), when
    * an adapter provides one. Use it for middleware-attached state like
@@ -24,8 +24,6 @@ export interface OpenReceiveAuthorizeContext {
   readonly native?: unknown;
 }
 
-export type OpenReceiveAuthorize = (
-  context: OpenReceiveAuthorizeContext,
-) => boolean | Promise<boolean>;
+export type Authorize = (context: AuthorizeContext) => boolean | Promise<boolean>;
 
-export type OpenReceiveRateLimit = OpenReceiveAuthorize;
+export type RateLimit = Authorize;

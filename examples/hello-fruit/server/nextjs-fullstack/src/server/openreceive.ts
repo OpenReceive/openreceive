@@ -1,12 +1,12 @@
 import {
-  createOpenReceiveHost,
+  createHost,
   mapHostRouteError,
   type CreateOpenReceiveHttpHandlerOptions,
-  type OpenReceiveHost,
-  type OpenReceiveOrderSettlement,
+  type Host,
+  type OrderSettlement,
 } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
-import { openReceiveConfig } from "../../../../shared/openreceive-config.ts";
+import { config } from "../../../../shared/openreceive-config.ts";
 import { helloFruitDeliveryFetchResponse } from "../../../../shared/demo-delivery.ts";
 import { createHelloFruitDemoServerLogger } from "../../../../shared/demo-logging.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
@@ -26,14 +26,14 @@ const STICKERS_DIR = helloFruitSharedFile("stickers");
 
 let servicePromise: Promise<Awaited<ReturnType<typeof createOpenReceive>>> | undefined;
 let storePromise: Promise<string> | undefined;
-let hostPromise: Promise<OpenReceiveHost> | undefined;
+let hostPromise: Promise<Host> | undefined;
 
 async function ensureHostStore(): Promise<void> {
   storePromise ??= bootHelloFruitHostStore({ demoId: DEMO_ID, log: logDemo });
   await storePromise;
 }
 
-export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
+export async function httpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
   const [service, host] = await Promise.all([getOpenReceive(), getHost()]);
   return {
     service,
@@ -105,7 +105,7 @@ async function createHelloFruitOpenReceive() {
   // Boot refuses missing/invalid NWC; createOpenReceive then loads the NIP-47 info event.
   const nwc = readRequiredHelloFruitNwcConnectionString();
   const service = await createOpenReceive({
-    ...openReceiveConfig,
+    ...config,
     nwc,
   });
   logDemo("openreceive.ready", "OpenReceive service ready.", {
@@ -114,7 +114,7 @@ async function createHelloFruitOpenReceive() {
   return service;
 }
 
-async function getHost(): Promise<OpenReceiveHost> {
+async function getHost(): Promise<Host> {
   hostPromise ??= createHelloFruitHost();
   try {
     return await hostPromise;
@@ -124,10 +124,10 @@ async function getHost(): Promise<OpenReceiveHost> {
   }
 }
 
-async function createHelloFruitHost(): Promise<OpenReceiveHost> {
+async function createHelloFruitHost(): Promise<Host> {
   await ensureHostStore();
   const service = await getOpenReceive();
-  const host = createOpenReceiveHost({
+  const host = createHost({
     db: helloFruitHostDb(),
     loadOrder: (orderId) => readHelloFruitHostOrder(orderId),
     amountForOrder: (order) => order.amount,
@@ -147,7 +147,7 @@ async function createHelloFruitHost(): Promise<OpenReceiveHost> {
 }
 
 // Runs inside the settlement transaction, only for the order's first settled attempt.
-async function settleHelloFruitPayment(settlement: OpenReceiveOrderSettlement) {
+async function settleHelloFruitPayment(settlement: OrderSettlement) {
   await markHelloFruitOrderPaid(settlement);
   logDemo("openreceive.on_paid", "Verified payment marked host order paid.", {
     paymentHash: settlement.paymentHash,

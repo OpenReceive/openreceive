@@ -1,8 +1,4 @@
-import {
-  openReceiveFulfillmentNoteMarkdown,
-  openReceivePaymentsColumnNames,
-  openReceivePaymentsSeedSql,
-} from "@openreceive/core";
+import { fulfillmentNoteMarkdown, paymentsColumnNames, paymentsSeedSql } from "@openreceive/core";
 import { isSqlite } from "./shared.ts";
 import type { ScaffoldPaymentsOptions } from "./types.ts";
 
@@ -13,11 +9,11 @@ const PLACEHOLDER_NOTE =
 
 /**
  * OPENRECEIVE_PAYMENTS.md: run the ORM migration, then wire
- * `createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid })`. The
+ * `createHost({ db, loadOrder, amountForOrder, onPaid })`. The
  * scaffold emits no repository code — the library owns it at runtime.
  */
 export function wiringGuideMarkdown(options: ScaffoldPaymentsOptions): string {
-  const columnList = openReceivePaymentsColumnNames()
+  const columnList = paymentsColumnNames()
     .map((name) => `\`${name}\``)
     .join(", ");
   return `# OpenReceive payments wiring
@@ -50,9 +46,9 @@ shares.
 ## 2. Wire the host integration
 
 \`\`\`ts
-import { createOpenReceiveHost } from "@openreceive/http";
+import { createHost } from "@openreceive/http";
 
-const host = createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db, loadOrder, amountForOrder, onPaid });
 \`\`\`
 
 - \`loadOrder(orderId)\` returns your order, or \`null\` for a 404.
@@ -87,16 +83,16 @@ safety net for notifications missed while it was down):
 
 \`\`\`ts
 // worker.ts — run with: node worker.ts (e.g. a package.json "worker" script)
-import { startOpenReceiveNotificationWorker } from "@openreceive/http";
+import { startNotificationWorker } from "@openreceive/http";
 
-const worker = await startOpenReceiveNotificationWorker({ service, host });
+const worker = await startNotificationWorker({ service, host });
 process.once("SIGINT", () => void worker.stop());
 process.once("SIGTERM", () => void worker.stop());
 \`\`\`
 
 ## 3. Fulfilling exactly once
 
-${openReceiveFulfillmentNoteMarkdown(options.tableName)}
+${fulfillmentNoteMarkdown(options.tableName)}
 
 In this project's terms, the guarded write goes inside \`onPaid\`:
 
@@ -165,7 +161,7 @@ Prisma's schema language cannot express the canonical CHECK constraints or the
 statements from \`prisma/openreceive-constraints.sql\` to it (the file says
 how), then run \`npx prisma migrate dev\`.`;
     case "drizzle":
-      return `Export \`openReceivePayments\` and \`openReceiveMeta\` from
+      return `Export \`payments\` and \`meta\` from
 \`src/db/openreceive-tables.ts\` in your Drizzle schema entrypoint, then run
 \`drizzle-kit generate\` and your usual migrate step. The schema carries both
 canonical CHECK constraints; the \`schema_version\` seed row cannot be expressed
@@ -173,7 +169,7 @@ in schema, so also create a custom migration for it —
 \`drizzle-kit generate --custom --name openreceive-seed\` — containing:
 
 \`\`\`sql
-${openReceivePaymentsSeedSql(options.dialect, options.metaTableName)};
+${paymentsSeedSql(options.dialect, options.metaTableName)};
 \`\`\``;
     case "typeorm":
       return "Register `src/migrations/20260101000000-create-openreceive-tables.ts` in your DataSource `migrations` list, then run migrations through your usual workflow (for example `npx typeorm migration:run`). The migration executes the canonical OpenReceive DDL directly; no entity class is needed.";
@@ -201,22 +197,22 @@ function dbSection(options: ScaffoldPaymentsOptions): string {
 
 function prismaDbSection(options: ScaffoldPaymentsOptions): string {
   return `Prisma keeps its connection pool private, so pass a small custom
-\`OpenReceiveSqlAdapter\` built from \`$transaction\` + \`$queryRawUnsafe\`. Set
+\`SqlAdapter\` built from \`$transaction\` + \`$queryRawUnsafe\`. Set
 \`dialect\` to match your Prisma datasource provider. ${PLACEHOLDER_NOTE}
 
 \`\`\`ts
 import { PrismaClient } from "@prisma/client";
-import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+import type { SqlAdapter, SqlQuery } from "@openreceive/http";
 
 const prisma = new PrismaClient();
 const queryOn =
   (client: {
     $queryRawUnsafe(sql: string, ...params: unknown[]): Promise<unknown>;
-  }): OpenReceiveSqlQuery =>
+  }): SqlQuery =>
   async (sql, params = []) =>
     (await client.$queryRawUnsafe(sql, ...params)) as Record<string, unknown>[];
 
-export const db: OpenReceiveSqlAdapter = {
+export const db: SqlAdapter = {
   dialect: "${options.dialect}", // match your Prisma datasource provider
   query: queryOn(prisma),
   transaction: (run) => prisma.$transaction((tx) => run({ query: queryOn(tx) })),
@@ -235,16 +231,16 @@ function knexDbSection(options: ScaffoldPaymentsOptions): string {
 
 \`\`\`ts
 import type { Knex } from "knex";
-import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+import type { SqlAdapter, SqlQuery } from "@openreceive/http";
 import { knex } from "./db.ts"; // your configured Knex instance
 
 const queryOn =
-  (executor: Knex | Knex.Transaction): OpenReceiveSqlQuery =>
+  (executor: Knex | Knex.Transaction): SqlQuery =>
   async (sql, params = []) => {
 ${rows}
   };
 
-export const db: OpenReceiveSqlAdapter = {
+export const db: SqlAdapter = {
   dialect: "${options.dialect}",
   query: queryOn(knex),
   transaction: (run) => knex.transaction((trx) => run({ query: queryOn(trx) })),
@@ -257,14 +253,14 @@ function typeOrmDbSection(options: ScaffoldPaymentsOptions): string {
 \`dataSource.transaction\` + \`manager.query\`. ${PLACEHOLDER_NOTE}
 
 \`\`\`ts
-import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+import type { SqlAdapter, SqlQuery } from "@openreceive/http";
 import { dataSource } from "./data-source.ts"; // your initialized DataSource
 const queryOn =
-  (runner: { query(sql: string, params?: unknown[]): Promise<unknown> }): OpenReceiveSqlQuery =>
+  (runner: { query(sql: string, params?: unknown[]): Promise<unknown> }): SqlQuery =>
   async (sql, params = []) =>
     ((await runner.query(sql, [...params])) ?? []) as Record<string, unknown>[];
 
-export const db: OpenReceiveSqlAdapter = {
+export const db: SqlAdapter = {
   dialect: "${options.dialect}",
   query: queryOn(dataSource),
   transaction: (run) => dataSource.transaction((manager) => run({ query: queryOn(manager) })),
@@ -280,7 +276,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3"; // node:sqlite users: driz
 
 const sqlite = new Database("app.db");
 const orm = drizzle(sqlite);
-const host = createOpenReceiveHost({ db: sqlite, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db: sqlite, loadOrder, amountForOrder, onPaid });
 \`\`\``
     : `\`\`\`ts
 import { Pool } from "pg";
@@ -288,7 +284,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const orm = drizzle(pool);
-const host = createOpenReceiveHost({ db: pool, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db: pool, loadOrder, amountForOrder, onPaid });
 \`\`\``;
   const handle = isSqlite(options)
     ? "the better-sqlite3 / `node:sqlite` Database"

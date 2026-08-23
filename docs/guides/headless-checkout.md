@@ -27,8 +27,8 @@ per-route override, and no URL templating. A headless host holds one string.
 
 ```ts
 const snapshot = await prepareCheckout({ orderId, prefix: "/openreceive" });
-const refresh = createOpenReceiveStatusFetcher({ prefix: "/openreceive", snapshot });
-const started = await startOpenReceiveSwapRequest({
+const refresh = createStatusFetcher({ prefix: "/openreceive", snapshot });
+const started = await startSwapRequest({
   fetch: globalThis.fetch,
   prefix: "/openreceive",
   orderId,
@@ -47,54 +47,54 @@ Checkout lifecycle:
 - `selectCheckoutDisplayInvoice`, `isReusableLightningInvoice` — invoice
   display selection.
 - `status` / `Status`, `createCheckoutStatusModel`, `CheckoutStatusModel`,
-  `createOpenReceiveStatusFetcher` (`{ prefix, snapshot }`),
+  `createStatusFetcher` (`{ prefix, snapshot }`),
   `OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS` — status derivation and polling.
-- `postOpenReceiveJson`, `OpenReceiveBrowserRequestError` — the HTTP helper and
+- `postJson`, `BrowserRequestError` — the HTTP helper and
   error type the engine's calls share. It takes `{ fetch, prefix, body }`.
 
 Payment methods and wizard model:
 
-- `openReceivePaymentMethods`, `OpenReceivePaymentMethod`,
-  `OpenReceiveCheckoutPaymentMethod`.
-- `buildOpenReceiveMethodGridEntries` / `OpenReceiveMethodGridEntry`,
-  `createOpenReceivePaymentWizardModel` / `OpenReceivePaymentWizardModel`,
-  `createOpenReceivePaymentWizardSelection` /
-  `updateOpenReceivePaymentWizardSelection` /
-  `OpenReceivePaymentWizardSelection`,
-  `resolveOpenReceivePreservedNetworkSelection`.
-- `createOpenReceiveWizardRouteDisplays` / `OpenReceiveWizardProviderDisplay`,
-  `getOpenReceiveRouteNetworkLabel`, `openReceivePaymentAccentId`,
-  `OpenReceiveSwapMethodGroup`.
+- `paymentMethods`, `PaymentMethod`,
+  `CheckoutPaymentMethod`.
+- `buildMethodGridEntries` / `MethodGridEntry`,
+  `createPaymentWizardModel` / `PaymentWizardModel`,
+  `createPaymentWizardSelection` /
+  `updatePaymentWizardSelection` /
+  `PaymentWizardSelection`,
+  `resolvePreservedNetworkSelection`.
+- `createWizardRouteDisplays` / `WizardProviderDisplay`,
+  `getRouteNetworkLabel`, `paymentAccentId`,
+  `SwapMethodGroup`.
 
 Swap flows:
 
-- `startOpenReceiveSwapRequest` (`{ fetch, prefix, orderId, payInAsset }`),
+- `startSwapRequest` (`{ fetch, prefix, orderId, payInAsset }`),
   `normalizeSwapStartInvoice`.
-- `createOpenReceiveSwapDisplayModel` / `OpenReceiveSwapDisplayModel`,
-  `openReceiveSwapAssetMatchesRoute`, `openReceiveSwapPickerKey`,
-  `formatOpenReceiveSwapLimit`.
+- `createSwapDisplayModel` / `SwapDisplayModel`,
+  `swapAssetMatchesRoute`, `swapPickerKey`,
+  `formatSwapLimit`.
 
 Formatting and labels:
 
-- `formatOpenReceiveMsats`, `formatOpenReceiveFiatAmount`,
-  `formatOpenReceiveNetworkSummary`, `formatOpenReceiveChooseNetworkHeading`.
-- `openReceiveCheckoutLabels`, `createOpenReceiveLightningInvoiceDecodeUrl`.
-- `createOpenReceiveTransactionDetails`,
-  `createOpenReceiveTransactionDetailsFromState`,
-  `OpenReceiveTransactionDetailRow`, `OpenReceiveTransactionDetailsInput`.
+- `formatMsats`, `formatFiatAmount`,
+  `formatNetworkSummary`, `formatChooseNetworkHeading`.
+- `checkoutLabels`, `createLightningInvoiceDecodeUrl`.
+- `createTransactionDetails`,
+  `createTransactionDetailsFromState`,
+  `TransactionDetailRow`, `TransactionDetailsInput`.
 
 Styling tokens (the contract with the shipped `styles.css` — an interface by
 nature, so custom UIs reuse the same class names and data attributes):
 
-- `orClasses`, `openReceiveAssetButtonClasses`,
-  `openReceiveNetworkButtonClasses`, `openReceiveNetworkCheckClasses`,
-  `openReceiveNetworkMobileRevealClasses`,
-  `openReceiveNetworkSummaryIconClasses`.
+- `orClasses`, `assetButtonClasses`,
+  `networkButtonClasses`, `networkCheckClasses`,
+  `networkMobileRevealClasses`,
+  `networkSummaryIconClasses`.
 - `OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES`, `createCheckoutProviderCopyEvent`.
 
 Element plumbing (tag names, attribute/event constants, element factories)
-lives on `@openreceive/elements`, not here: `defineOpenReceiveElements`,
-`createOpenReceiveThemeToggleElement`, `OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME`
+lives on `@openreceive/elements`, not here: `defineElements`,
+`createThemeToggleElement`, `OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME`
 / `_ATTRIBUTES` / `_EVENTS`, and the theme-toggle equivalents.
 
 ## Symbol inventory
@@ -109,16 +109,28 @@ guide.
 The curated surface is 172 symbols:
 
 - `applyCheckoutElementAttributes`
-- `assertOpenReceiveDisplayInvoice`
-- `buildOpenReceiveMethodGridEntries`
+- `assertDisplayInvoice`
+- `assetButtonClasses`
+- `BrowserLogContext`
+- `BrowserLogger`
+- `BrowserLoggerOption`
+- `BrowserRequestError`
+- `buildMethodGridEntries`
+- `CheckoutComponentProps`
 - `CheckoutController`
 - `CheckoutControllerOptions`
 - `CheckoutElementAttributeOptions`
 - `CheckoutElementAttributes`
 - `CheckoutElementEventHandlers`
 - `CheckoutElementListeners`
+- `checkoutElementStyles`
 - `CheckoutInvoiceSnapshot`
+- `checkoutLabels`
+- `CheckoutPaymentMethod`
 - `CheckoutPhase`
+- `CheckoutPropsValidation`
+- `CheckoutSession`
+- `CheckoutSessionOptions`
 - `CheckoutShellElements`
 - `CheckoutShellModel`
 - `CheckoutShellOptions`
@@ -127,12 +139,14 @@ The curated surface is 172 symbols:
 - `CheckoutStatusModel`
 - `CheckoutStatusRefresh`
 - `copyInvoice`
+- `createBlockExplorerUrl`
 - `createCheckoutActionEvent`
 - `createCheckoutController`
 - `createCheckoutElementAttributes`
 - `createCheckoutElementListeners`
 - `createCheckoutErrorEvent`
 - `createCheckoutProviderCopyEvent`
+- `createCheckoutSession`
 - `createCheckoutShell`
 - `createCheckoutShellModel`
 - `CreateCheckoutShellOptions`
@@ -140,52 +154,56 @@ The curated surface is 172 symbols:
 - `createCheckoutState`
 - `createCheckoutStateEvent`
 - `createCheckoutStatusModel`
-- `createOpenReceiveBlockExplorerUrl`
-- `createOpenReceiveCheckoutSession`
-- `createOpenReceiveDetailExternalLink`
-- `createOpenReceiveLightningInvoiceDecodeUrl`
-- `createOpenReceivePaymentDataEntries`
-- `createOpenReceivePaymentWizardController`
-- `createOpenReceivePaymentWizardModel`
-- `createOpenReceivePaymentWizardSelection`
-- `createOpenReceiveStatusFetcher`
-- `createOpenReceiveStoredThemeModel`
-- `createOpenReceiveSwapDisplayModel`
-- `createOpenReceiveThemeChangeEvent`
-- `createOpenReceiveThemeModel`
-- `createOpenReceiveThemeToggleElement`
-- `createOpenReceiveThemeToggleElementAttributes`
-- `createOpenReceiveTickingValueController`
-- `createOpenReceiveTransactionDetails`
-- `createOpenReceiveTransactionDetailsFromState`
-- `createOpenReceiveTransientFeedbackController`
-- `createOpenReceiveWizardRouteAssetDisplays`
-- `createOpenReceiveWizardRouteDisplays`
+- `createDetailExternalLink`
+- `createLightningInvoiceDecodeUrl`
+- `createPaymentDataEntries`
+- `createPaymentWizardController`
+- `createPaymentWizardModel`
+- `createPaymentWizardSelection`
 - `createQrPayloadSvg`
 - `createQrSvg`
+- `createStatusFetcher`
+- `createStoredThemeModel`
+- `createSwapDisplayModel`
+- `createThemeChangeEvent`
+- `createThemeModel`
+- `createThemeToggleElement`
+- `createThemeToggleElementAttributes`
+- `createTickingValueController`
+- `createTransactionDetails`
+- `createTransactionDetailsFromState`
+- `createTransientFeedbackController`
+- `createWizardRouteAssetDisplays`
+- `createWizardRouteDisplays`
 - `deriveCheckoutStateLabels`
+- `deriveStatus`
 - `enterCheckoutResumePath`
-- `escapeOpenReceiveHtml`
-- `findOpenReceiveSwapGridGroup`
-- `formatOpenReceiveAmountCaption`
-- `formatOpenReceiveChooseNetworkHeading`
-- `formatOpenReceiveDepositAmount`
-- `formatOpenReceiveFiatAmount`
-- `formatOpenReceiveMsats`
-- `formatOpenReceiveNetworkSummary`
-- `formatOpenReceiveSwapLimit`
-- `formatOpenReceiveUnixTime`
-- `getOpenReceiveExplorerNetwork`
-- `getOpenReceiveNetworkIcon`
-- `getOpenReceivePaymentMethodIcon`
-- `getOpenReceiveRouteNetworkLabel`
-- `getOpenReceiveSwapOptionIcon`
-- `getOpenReceiveSwapRefundFormError`
-- `getOpenReceiveWizardEmptyMessage`
+- `escapeHtml`
+- `findSwapGridGroup`
+- `formatAmountCaption`
+- `formatChooseNetworkHeading`
+- `formatDepositAmount`
+- `formatFiatAmount`
+- `formatMsats`
+- `formatNetworkSummary`
+- `formatSwapLimit`
+- `formatUnixTime`
+- `getExplorerNetwork`
+- `getNetworkIcon`
+- `getPaymentMethodIcon`
+- `getRouteNetworkLabel`
+- `getSwapOptionIcon`
+- `getSwapRefundFormError`
+- `getWizardEmptyMessage`
 - `GuestCheckoutResumeController`
 - `isReusableLightningInvoice`
-- `mergeOpenReceiveAttemptIntoCheckout`
-- `mergeOpenReceiveAttemptIntoSnapshot`
+- `mergeAttemptIntoCheckout`
+- `mergeAttemptIntoSnapshot`
+- `MethodGridEntry`
+- `networkButtonClasses`
+- `networkCheckClasses`
+- `networkMobileRevealClasses`
+- `networkSummaryIconClasses`
 - `normalizeSwapStartInvoice`
 - `OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES`
 - `OPENRECEIVE_CHECKOUT_DATA_SELECTORS`
@@ -205,81 +223,63 @@ The curated surface is 172 symbols:
 - `OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS`
 - `OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS`
 - `OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME`
-- `openReceiveAssetButtonClasses`
-- `OpenReceiveBrowserLogContext`
-- `OpenReceiveBrowserLogger`
-- `OpenReceiveBrowserLoggerOption`
-- `OpenReceiveBrowserRequestError`
-- `OpenReceiveCheckoutComponentProps`
-- `openReceiveCheckoutElementStyles`
-- `openReceiveCheckoutLabels`
-- `OpenReceiveCheckoutPaymentMethod`
-- `OpenReceiveCheckoutPropsValidation`
-- `OpenReceiveCheckoutSession`
-- `OpenReceiveCheckoutSessionOptions`
-- `OpenReceiveMethodGridEntry`
-- `openReceiveNetworkButtonClasses`
-- `openReceiveNetworkCheckClasses`
-- `openReceiveNetworkMobileRevealClasses`
-- `openReceiveNetworkSummaryIconClasses`
-- `openReceivePaymentAccentId`
-- `OpenReceivePaymentDataSource`
-- `openReceivePaymentIconUrls`
-- `OpenReceivePaymentMethod`
-- `openReceivePaymentMethods`
-- `OpenReceivePaymentWizardController`
-- `OpenReceivePaymentWizardModel`
-- `OpenReceivePaymentWizardSelection`
-- `OpenReceiveQrEncoder`
-- `OpenReceiveResolvedTheme`
-- `OpenReceiveStoredThemeModelOptions`
-- `openReceiveSwapAssetMatchesRoute`
-- `OpenReceiveSwapDisplayModel`
-- `openReceiveSwapGroupLimitOption`
-- `OpenReceiveSwapMethodGroup`
-- `openReceiveSwapOptionLimitMessage`
-- `openReceiveSwapPickerKey`
-- `OpenReceiveSwapSelection`
-- `OpenReceiveThemeModel`
-- `OpenReceiveThemeModelOptions`
-- `OpenReceiveThemePreference`
-- `OpenReceiveThemeToggleElementAttributeOptions`
-- `OpenReceiveThemeToggleElementAttributes`
-- `OpenReceiveTransactionDetailRow`
-- `OpenReceiveTransactionDetailsInput`
-- `OpenReceiveTransactionDetailsSource`
-- `OpenReceiveTransientFeedbackController`
-- `OpenReceiveWizardProviderDisplay`
-- `OpenReceiveWizardRouteAssetDisplay`
-- `OpenReceiveWizardRouteDisplay`
 - `openWallet`
 - `optionalMsatsLabel`
 - `optionalUnixTimeLabel`
 - `orClasses`
-- `overlayOpenReceiveSwapRefundStaging`
-- `parseOpenReceiveBooleanAttribute`
-- `parseOpenReceiveMethodPickerKey`
-- `parseOpenReceiveOptionalInteger`
-- `parseOpenReceivePaymentMethod`
-- `parseOpenReceiveResolvedTheme`
-- `parseOpenReceiveThemePreference`
-- `postOpenReceiveJson`
+- `overlaySwapRefundStaging`
+- `parseBooleanAttribute`
+- `parseMethodPickerKey`
+- `parseOptionalInteger`
+- `parsePaymentMethod`
+- `parseResolvedTheme`
+- `parseThemePreference`
+- `paymentAccentId`
+- `PaymentDataSource`
+- `paymentIconUrls`
+- `PaymentMethod`
+- `paymentMethods`
+- `PaymentWizardController`
+- `PaymentWizardModel`
+- `PaymentWizardSelection`
+- `postJson`
 - `prepareCheckout`
-- `readOpenReceiveThemePreference`
+- `QrEncoder`
+- `readThemePreference`
 - `requestCheckout`
-- `requestOpenReceiveSwapRefund`
-- `resolveOpenReceivePreservedNetworkSelection`
-- `resolveOpenReceiveTransactionDetailRows`
+- `requestSwapRefund`
+- `ResolvedTheme`
+- `resolvePreservedNetworkSelection`
+- `resolveTransactionDetailRows`
 - `selectCheckoutDisplayInvoice`
-- `startOpenReceiveSwapRequest`
-- `status`
+- `startSwapRequest`
 - `Status`
-- `syncOpenReceiveStoredThemeControls`
-- `toggleOpenReceiveStoredThemeControls`
-- `updateOpenReceivePaymentWizardSelection`
-- `updateOpenReceiveSelectedSwapNetworks`
-- `validateOpenReceiveCheckoutProps`
-- `writeOpenReceiveThemePreference`
+- `StoredThemeModelOptions`
+- `swapAssetMatchesRoute`
+- `SwapDisplayModel`
+- `swapGroupLimitOption`
+- `SwapMethodGroup`
+- `swapOptionLimitMessage`
+- `swapPickerKey`
+- `SwapSelection`
+- `syncStoredThemeControls`
+- `ThemeModel`
+- `ThemeModelOptions`
+- `ThemePreference`
+- `ThemeToggleElementAttributeOptions`
+- `ThemeToggleElementAttributes`
+- `toggleStoredThemeControls`
+- `TransactionDetailRow`
+- `TransactionDetailsInput`
+- `TransactionDetailsSource`
+- `TransientFeedbackController`
+- `updatePaymentWizardSelection`
+- `updateSelectedSwapNetworks`
+- `validateCheckoutProps`
+- `WizardProviderDisplay`
+- `WizardRouteAssetDisplay`
+- `WizardRouteDisplay`
+- `writeThemePreference`
 <!-- /generated:headless-symbols -->
 
 ## Curation rule

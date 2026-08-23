@@ -4,7 +4,7 @@ import { access, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { createOpenReceiveSqlPayments } from "@openreceive/http";
+import { createSqlPayments } from "@openreceive/http";
 import {
   bootHelloFruitHostStore,
   closeHelloFruitHostStore,
@@ -60,7 +60,7 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
   assert.equal(readHelloFruitHostOrder("order-1")?.summary.uuid, order.summary.uuid);
 
   // Payment attempts are library-owned rows in the host database.
-  const payments = createOpenReceiveSqlPayments(helloFruitHostDb());
+  const payments = createSqlPayments(helloFruitHostDb());
   const expiresAt = Math.floor(Date.now() / 1_000) + 600;
   const createdAt = Math.floor(Date.now() / 1_000);
   await payments.commitAttempt({

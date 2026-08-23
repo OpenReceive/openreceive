@@ -30,7 +30,7 @@ const originalFetch = globalThis.fetch;
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
-elements.defineOpenReceiveElements();
+elements.defineElements();
 
 const TESTKIT_TRON_DEPOSIT_ADDRESS = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb";
 const PAID_PANEL_PATTERN = /Payment (complete|received)/;

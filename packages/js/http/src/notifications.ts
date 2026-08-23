@@ -4,12 +4,12 @@ import {
   unixSeconds,
   type NwcTransaction,
 } from "@openreceive/core";
-import type { OpenReceive, OpenReceiveWalletNotification } from "@openreceive/node";
-import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
-import { maybeReconcileOpenReceivePayments } from "./reconcile-gate.ts";
-import { startOpenReceiveReconciler } from "./reconcile-loop.ts";
+import type { OpenReceive, WalletNotification } from "@openreceive/node";
+import { type Host, warnFailure } from "./host-payments.ts";
+import { maybeReconcilePayments } from "./reconcile-gate.ts";
+import { startReconciler } from "./reconcile-loop.ts";
 
-export interface OpenReceiveNotificationListener {
+export interface NotificationListener {
   /** Unsubscribe from wallet notifications and wait for any in-flight pass. */
   stop(): Promise<void> | void;
 }
@@ -31,12 +31,12 @@ export interface OpenReceiveNotificationListener {
  * binds notification decryption to the connection's wallet pubkey (the bundled
  * SDK does).
  */
-export async function startOpenReceiveNotificationListener(input: {
+export async function startNotificationListener(input: {
   readonly service: OpenReceive;
-  readonly host: OpenReceiveHost;
+  readonly host: Host;
   readonly overlapSeconds?: number;
   readonly onError?: (error: unknown) => void;
-}): Promise<OpenReceiveNotificationListener> {
+}): Promise<NotificationListener> {
   const subscribe = input.service.subscribeWalletNotifications?.bind(input.service);
   if (subscribe === undefined) {
     throw new OpenReceiveError({
@@ -54,7 +54,7 @@ export async function startOpenReceiveNotificationListener(input: {
   }
   const reportError = (error: unknown) => {
     if (input.onError === undefined) {
-      warnOpenReceiveFailure(
+      warnFailure(
         "payment.notification.failed",
         "notification listener failed (polling remains the safety net)",
         error,
@@ -88,7 +88,7 @@ export async function startOpenReceiveNotificationListener(input: {
           queued = false;
           // Durably gated: a pass another worker just ran (gate_busy) is not
           // repeated, so notification bursts never exceed the scan budget.
-          await maybeReconcileOpenReceivePayments({
+          await maybeReconcilePayments({
             service: input.service,
             host: input.host,
             onError: reportError,
@@ -142,7 +142,7 @@ export async function startOpenReceiveNotificationListener(input: {
     }
   };
 
-  const unsubscribe = await subscribe((notification: OpenReceiveWalletNotification) => {
+  const unsubscribe = await subscribe((notification: WalletNotification) => {
     if (notification.type !== "payment_received") return;
     const transaction = notification.transaction;
     if (transaction === undefined) {
@@ -168,7 +168,7 @@ export async function startOpenReceiveNotificationListener(input: {
   };
 }
 
-export interface OpenReceiveNotificationWorker {
+export interface NotificationWorker {
   /** Unsubscribe, stop the periodic pass, and wait for in-flight work. */
   stop(): Promise<void>;
   /** Resolves after `stop()` once the periodic loop has drained. */
@@ -188,24 +188,24 @@ export interface OpenReceiveNotificationWorker {
  * There is no host-aware CLI for this: wire it from a small host script that
  * owns `service` and `host` (see the scaffold wiring guide).
  */
-export async function startOpenReceiveNotificationWorker(input: {
+export async function startNotificationWorker(input: {
   readonly service: OpenReceive;
-  readonly host: OpenReceiveHost;
+  readonly host: Host;
   /** Periodic safety-net pass interval. Default 15 seconds. */
   readonly pollIntervalMs?: number;
   readonly overlapSeconds?: number;
   readonly onError?: (error: unknown) => void;
-}): Promise<OpenReceiveNotificationWorker> {
-  const reconciler = await startOpenReceiveReconciler({
+}): Promise<NotificationWorker> {
+  const reconciler = await startReconciler({
     service: input.service,
     host: input.host,
     pollIntervalMs: input.pollIntervalMs ?? 15_000,
     ...(input.overlapSeconds === undefined ? {} : { overlapSeconds: input.overlapSeconds }),
     ...(input.onError === undefined ? {} : { onError: input.onError }),
   });
-  let listener: OpenReceiveNotificationListener | undefined;
+  let listener: NotificationListener | undefined;
   try {
-    listener = await startOpenReceiveNotificationListener({
+    listener = await startNotificationListener({
       service: input.service,
       host: input.host,
       ...(input.overlapSeconds === undefined ? {} : { overlapSeconds: input.overlapSeconds }),
@@ -215,7 +215,7 @@ export async function startOpenReceiveNotificationWorker(input: {
     if (error instanceof OpenReceiveError && error.code === "UNSUPPORTED_METHOD") {
       // Notifications are opt-in wallet capability; the periodic pass still runs.
       if (input.onError === undefined) {
-        warnOpenReceiveFailure(
+        warnFailure(
           "payment.notification.unsupported",
           "wallet lacks NWC notifications; running the periodic pass alone",
           error,

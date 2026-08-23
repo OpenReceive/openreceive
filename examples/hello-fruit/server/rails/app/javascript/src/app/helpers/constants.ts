@@ -5,7 +5,7 @@
  */
 let mountPrefix = "";
 
-export function setOpenReceivePrefix(prefix: string): void {
+export function setPrefix(prefix: string): void {
   mountPrefix = prefix.replace(/\/+$/, "");
 }
 

@@ -1,20 +1,20 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import {
-  createOpenReceiveWrapperCheckoutShellBinding,
-  defineOpenReceiveElements,
-  validateOpenReceiveCheckoutProps,
+  createWrapperCheckoutShellBinding,
+  defineElements,
+  validateCheckoutProps,
   type CheckoutElementListeners,
   type CheckoutShellOptions,
   type CheckoutSnapshot,
-  type OpenReceiveThemePreference,
+  type ThemePreference,
 } from "./index.js";
 
 // Prop names, defaults, and per-mode applicability are the shared contract in
 // docs/internal/wrapper-parity.md. This list RESTATES it because Svelte props
 // are declarations, not a type: `export let` (and `let { … } = $props()` under
 // runes) has to name every prop, so it cannot be derived from
-// OpenReceiveWrapperCheckoutComponentProps the way Vue's defineProps and
+// WrapperCheckoutComponentProps the way Vue's defineProps and
 // React's CheckoutProps are. The duplication is forced, not neglected;
 // tests/wrapper-parity.test.mjs is what keeps it in step.
 // Snapshot mode: pass a `checkout` to render it directly.
@@ -26,7 +26,7 @@ export let prefix: string | undefined = undefined;
 export let paymentWizard: boolean | undefined = undefined;
 export let decodeLinkUrl: string | undefined = undefined;
 export let themeToggle: boolean | undefined = undefined;
-export let defaultTheme: OpenReceiveThemePreference | undefined = undefined;
+export let defaultTheme: ThemePreference | undefined = undefined;
 export let storageKey: string | undefined = undefined;
 // Create mode only.
 export let metadata: Record<string, unknown> | undefined = undefined;
@@ -47,11 +47,11 @@ export let options: CheckoutShellOptions = {};
 let mounted = false;
 
 onMount(() => {
-  defineOpenReceiveElements();
+  defineElements();
   mounted = true;
 });
 
-$: validateOpenReceiveCheckoutProps({
+$: validateCheckoutProps({
   framework: "@openreceive/svelte",
   checkout,
   orderId,
@@ -61,7 +61,7 @@ $: validateOpenReceiveCheckoutProps({
   routeOrderId,
 });
 
-$: shell = createOpenReceiveWrapperCheckoutShellBinding(checkout ?? null, {
+$: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...options,
   themeToggle: themeToggle ?? options.themeToggle ?? true,
   deferThemeResolution: !mounted,

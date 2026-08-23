@@ -1163,7 +1163,7 @@ class StorageFreeServerTest < Minitest::Test
     end
 end
 
-# Mirrors the JS openReceiveClientIpBucket cases in
+# Mirrors the JS clientIpBucket cases in
 # tests/rate-limit.test.mjs; the same input must produce the same bucket
 # string in both engines. Change both together.
 class ClientIpBucketTest < Minitest::Test

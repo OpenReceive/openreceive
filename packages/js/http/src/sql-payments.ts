@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
-  openReceivePaymentsDdlStatements,
+  paymentsDdlStatements,
   unixSeconds,
   type PaymentDetails,
 } from "@openreceive/core";
@@ -10,17 +10,17 @@ import { hostError } from "./errors.ts";
 import type { CheckoutCreatedInput } from "./handler.ts";
 import {
   liveAttemptCommitDecision,
-  type OpenReceiveAttemptStatus,
-  type OpenReceivePaymentRecord,
-  type OpenReceivePaymentRepository,
-  type OpenReceiveReconcilableAttempt,
-  type OpenReceiveReconciliationTransition,
-  openReceivePaymentInsert,
+  type AttemptStatus,
+  type PaymentRecord,
+  type PaymentRepository,
+  type ReconcilableAttempt,
+  type ReconciliationTransition,
+  paymentInsert,
 } from "./payment-repository.ts";
 import {
-  type OpenReceiveSqlClient,
-  type OpenReceiveSqlDatabase,
-  type OpenReceiveSqlQuery,
+  type SqlClient,
+  type SqlDatabase,
+  type SqlQuery,
   resolveSqlAdapter,
   toPgPlaceholders,
 } from "./sql-adapters.ts";
@@ -61,7 +61,7 @@ function parseClaimedAt(value: unknown): number | undefined {
   }
 }
 
-export interface OpenReceiveSqlPaymentsOptions {
+export interface SqlPaymentsOptions {
   /** Payment attempts table name. Default `openreceive_payments`. */
   readonly tableName?: string;
   /** Durable reconcile-gate key/value table name. Default `openreceive_meta`. */
@@ -70,7 +70,7 @@ export interface OpenReceiveSqlPaymentsOptions {
 }
 
 /** Settlement context passed to the host's `onPaid` in library-persistence mode. */
-export interface OpenReceiveOrderSettlement {
+export interface OrderSettlement {
   readonly orderId: string;
   readonly paymentHash: string;
   readonly paidAt: number;
@@ -93,17 +93,15 @@ export interface OpenReceiveOrderSettlement {
    * ```
    *
    * An empty result means someone else already fulfilled it; return without
-   * shipping. `openReceiveFulfillmentNote` in `@openreceive/core` is the full
+   * shipping. `fulfillmentNote` in `@openreceive/core` is the full
    * version, and is what the scaffold writes into every generated file.
    */
-  readonly query: OpenReceiveSqlQuery;
+  readonly query: SqlQuery;
 }
 
-export type OpenReceiveOrderSettlementHook = (
-  settlement: OpenReceiveOrderSettlement,
-) => void | Promise<void>;
+export type OrderSettlementHook = (settlement: OrderSettlement) => void | Promise<void>;
 
-export interface OpenReceiveSqlPaymentRepository extends OpenReceivePaymentRepository {
+export interface SqlPaymentRepository extends PaymentRepository {
   /**
    * Replay-safe settlement transaction: set the attempt's `paid_at`/`settled`
    * status once, and run `fulfill` inside the same transaction only for the
@@ -114,22 +112,22 @@ export interface OpenReceiveSqlPaymentRepository extends OpenReceivePaymentRepos
    */
   markPaidOnce(
     input: { paymentHash: string; paidAt: number; details?: PaymentDetails },
-    fulfill: OpenReceiveOrderSettlementHook,
+    fulfill: OrderSettlementHook,
   ): Promise<boolean>;
 }
 
 /**
  * The canonical payment-attempts DDL, rendered as one executable script. The
  * statements themselves live in `@openreceive/core`
- * (`openReceivePaymentsDdlStatements`) so this helper and the scaffold CLI's
+ * (`paymentsDdlStatements`) so this helper and the scaffold CLI's
  * ORM migrations can never drift from each other.
  */
-export function openReceivePaymentsSchemaSql(
+export function paymentsSchemaSql(
   dialect: "postgres" | "sqlite",
   tableName = "openreceive_payments",
   metaTableName = "openreceive_meta",
 ): string {
-  return openReceivePaymentsDdlStatements({ dialect, tableName, metaTableName })
+  return paymentsDdlStatements({ dialect, tableName, metaTableName })
     .map((statement) => `${statement};`)
     .join("\n");
 }
@@ -139,10 +137,10 @@ export function openReceivePaymentsSchemaSql(
  * database. Owns the commit locking, settlement write-once, and reconciliation
  * state transitions so host applications never implement them.
  */
-export function createOpenReceiveSqlPayments(
-  db: OpenReceiveSqlDatabase,
-  options: OpenReceiveSqlPaymentsOptions = {},
-): OpenReceiveSqlPaymentRepository {
+export function createSqlPayments(
+  db: SqlDatabase,
+  options: SqlPaymentsOptions = {},
+): SqlPaymentRepository {
   const adapter = resolveSqlAdapter(db);
   const table = options.tableName ?? "openreceive_payments";
   assertSafeIdentifier(table);
@@ -155,7 +153,7 @@ export function createOpenReceiveSqlPayments(
   const statement = (sql: string): string =>
     adapter.dialect === "postgres" ? toPgPlaceholders(sql) : sql;
 
-  const lockOrder = async (tx: OpenReceiveSqlClient, orderId: string): Promise<void> => {
+  const lockOrder = async (tx: SqlClient, orderId: string): Promise<void> => {
     // SQLite transactions are single-writer (BEGIN IMMEDIATE); postgres needs a
     // per-order serialization boundary that does not assume an orders table.
     if (adapter.dialect === "postgres") {
@@ -167,9 +165,9 @@ export function createOpenReceiveSqlPayments(
   };
 
   const rowsForOrder = async (
-    tx: OpenReceiveSqlClient,
+    tx: SqlClient,
     orderId: string,
-  ): Promise<readonly OpenReceivePaymentRecord[]> => {
+  ): Promise<readonly PaymentRecord[]> => {
     const rows = await tx.query(
       statement(
         `SELECT * FROM ${table} WHERE order_id = ? ORDER BY created_at DESC, payment_hash DESC`,
@@ -226,7 +224,7 @@ export function createOpenReceiveSqlPayments(
         [OPENRECEIVE_RECONCILE_BATCH_SIZE],
       );
       return rows.map(
-        (row): OpenReceiveReconcilableAttempt => ({
+        (row): ReconcilableAttempt => ({
           paymentHash: asString(row.payment_hash, "payment_hash"),
           createdAt: asInteger(row.created_at, "created_at"),
           expiresAt: asInteger(row.expires_at, "expires_at"),
@@ -276,7 +274,7 @@ export function createOpenReceiveSqlPayments(
 
     async commitAttempt(input: CheckoutCreatedInput) {
       await assertSupportedSchema();
-      const insert = openReceivePaymentInsert(input);
+      const insert = paymentInsert(input);
       const now = clock();
       await adapter.transaction(async (tx) => {
         await lockOrder(tx, insert.orderId);
@@ -349,7 +347,7 @@ export function createOpenReceiveSqlPayments(
       return asInteger(rows[0]?.n ?? 0, "n");
     },
 
-    async recordReconciliation(transition: OpenReceiveReconciliationTransition) {
+    async recordReconciliation(transition: ReconciliationTransition) {
       await assertSupportedSchema();
       await adapter.transaction(async (tx) => {
         // Guarding on status = 'pending' makes the transition idempotent and
@@ -378,7 +376,7 @@ export function createOpenReceiveSqlPayments(
 
   async function markPaidOnce(
     input: { paymentHash: string; paidAt: number; details?: PaymentDetails },
-    fulfill: OpenReceiveOrderSettlementHook,
+    fulfill: OrderSettlementHook,
   ): Promise<boolean> {
     await assertSupportedSchema();
     const paymentHash = input.paymentHash.toLowerCase();
@@ -425,7 +423,7 @@ function isFreshTimestamp(now: number, timestamp: number, windowSeconds: number)
   return age < windowSeconds;
 }
 
-function recordFromRow(row: Record<string, unknown>): OpenReceivePaymentRecord {
+function recordFromRow(row: Record<string, unknown>): PaymentRecord {
   const swapData = row.swap_data;
   const paymentHash = asString(row.payment_hash, "payment_hash");
   return {
@@ -465,7 +463,7 @@ function parseRowJson(value: string, column: string, paymentHash: string): unkno
   }
 }
 
-const ATTEMPT_STATUSES: readonly OpenReceiveAttemptStatus[] = [
+const ATTEMPT_STATUSES: readonly AttemptStatus[] = [
   "pending",
   "settled",
   "expired",
@@ -473,9 +471,9 @@ const ATTEMPT_STATUSES: readonly OpenReceiveAttemptStatus[] = [
   "attention",
 ];
 
-function asStatus(value: unknown): OpenReceiveAttemptStatus {
+function asStatus(value: unknown): AttemptStatus {
   if (typeof value === "string" && (ATTEMPT_STATUSES as readonly string[]).includes(value)) {
-    return value as OpenReceiveAttemptStatus;
+    return value as AttemptStatus;
   }
   throw new TypeError(`Unexpected openreceive_payments status: ${String(value)}`);
 }

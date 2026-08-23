@@ -1,13 +1,13 @@
-import { isRecord, type OpenReceiveErrorBody, type OpenReceiveErrorCode } from "@openreceive/core";
+import { isRecord, type ErrorBody, type ErrorCode } from "@openreceive/core";
 
-export class OpenReceiveServiceError extends Error {
+export class ServiceError extends Error {
   readonly status: number;
-  readonly code: OpenReceiveErrorCode;
-  readonly body: OpenReceiveErrorBody;
+  readonly code: ErrorCode;
+  readonly body: ErrorBody;
 
-  constructor(status: number, body: OpenReceiveErrorBody) {
+  constructor(status: number, body: ErrorBody) {
     super(body.message);
-    this.name = "OpenReceiveServiceError";
+    this.name = "ServiceError";
     this.status = status;
     this.code = body.code;
     this.body = body;
@@ -36,11 +36,11 @@ export function parseOptionalRecord(
 
 export function serviceError(
   status: number,
-  code: OpenReceiveErrorCode,
+  code: ErrorCode,
   message: string,
   options: { readonly retryable?: boolean } = {},
-): OpenReceiveServiceError {
-  return new OpenReceiveServiceError(status, {
+): ServiceError {
+  return new ServiceError(status, {
     code,
     message,
     ...(options.retryable === undefined ? {} : { retryable: options.retryable }),

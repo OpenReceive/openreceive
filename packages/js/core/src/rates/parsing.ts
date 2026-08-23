@@ -5,9 +5,9 @@
 
 import {
   formatMissingBtcFiatRateMessage,
-  type OpenReceiveBtcFiatRateMap,
-  OpenReceiveDecimalError,
-  OpenReceivePriceFeedError,
+  type BtcFiatRateMap,
+  DecimalError,
+  PriceFeedError,
   parseDecimal,
 } from "../money/decimal.ts";
 import { isRecord } from "../values.ts";
@@ -15,12 +15,12 @@ import { isRecord } from "../values.ts";
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 
 /**
- * @throws {OpenReceiveDecimalError} when the code is not an uppercase ISO 4217
+ * @throws {DecimalError} when the code is not an uppercase ISO 4217
  * currency — that is caller input, not feed data.
  */
 export function normalizeFiatCurrency(currency: string): string {
   if (!CURRENCY_PATTERN.test(currency)) {
-    throw new OpenReceiveDecimalError("fiat.currency must be an ISO 4217 uppercase code");
+    throw new DecimalError("fiat.currency must be an ISO 4217 uppercase code");
   }
 
   return currency.toLowerCase();
@@ -34,14 +34,14 @@ export function isFiatCurrencyCode(currency: string): boolean {
  * Select the requested currencies out of a Simple Price response (or a cached
  * rate map).
  *
- * @throws {OpenReceivePriceFeedError} when the response is not Simple Price
+ * @throws {PriceFeedError} when the response is not Simple Price
  * shaped, or lacks a usable rate for a requested currency.
  */
 export function parseSimplePriceResponse(
   response: unknown,
   currencies: readonly string[],
   source?: string,
-): OpenReceiveBtcFiatRateMap {
+): BtcFiatRateMap {
   const bitcoin = asRecord(asRecord(response).bitcoin);
   const rates: Record<string, string> = {};
 
@@ -49,7 +49,7 @@ export function parseSimplePriceResponse(
     const rateKey = normalizeFiatCurrency(currency);
     const rawRate = bitcoin[rateKey];
     if (rawRate === undefined) {
-      throw new OpenReceivePriceFeedError(formatMissingBtcFiatRateMessage(currency, source));
+      throw new PriceFeedError(formatMissingBtcFiatRateMessage(currency, source));
     }
     rates[rateKey] = normalizeBtcFiatRate(rawRate, `bitcoin.${rateKey}`);
   }
@@ -64,10 +64,10 @@ export function parseSimplePriceResponse(
  * the response carries and skips ones an upstream returned unusably (so a single
  * dropped currency never fails the refresh).
  *
- * @throws {OpenReceivePriceFeedError} when the response is not Simple Price
+ * @throws {PriceFeedError} when the response is not Simple Price
  * shaped or carries no usable rate at all.
  */
-export function parseAvailableSimplePriceResponse(response: unknown): OpenReceiveBtcFiatRateMap {
+export function parseAvailableSimplePriceResponse(response: unknown): BtcFiatRateMap {
   const bitcoin = asRecord(asRecord(response).bitcoin);
   const rates: Record<string, string> = {};
 
@@ -81,7 +81,7 @@ export function parseAvailableSimplePriceResponse(response: unknown): OpenReceiv
   }
 
   if (Object.keys(rates).length === 0) {
-    throw new OpenReceivePriceFeedError("price response contained no usable BTC fiat rates");
+    throw new PriceFeedError("price response contained no usable BTC fiat rates");
   }
 
   return {
@@ -92,7 +92,7 @@ export function parseAvailableSimplePriceResponse(response: unknown): OpenReceiv
 function normalizeBtcFiatRate(value: unknown, fieldName: string): string {
   if (typeof value === "number") {
     if (!Number.isFinite(value) || value <= 0) {
-      throw new OpenReceivePriceFeedError(`${fieldName} must be a positive number`);
+      throw new PriceFeedError(`${fieldName} must be a positive number`);
     }
     return assertPositiveFeedDecimal(numberToPlainDecimalString(value), fieldName);
   }
@@ -101,7 +101,7 @@ function normalizeBtcFiatRate(value: unknown, fieldName: string): string {
     return assertPositiveFeedDecimal(value, fieldName);
   }
 
-  throw new OpenReceivePriceFeedError(`${fieldName} must be a number or decimal string`);
+  throw new PriceFeedError(`${fieldName} must be a number or decimal string`);
 }
 
 function assertPositiveFeedDecimal(value: string, fieldName: string): string {
@@ -110,10 +110,10 @@ function assertPositiveFeedDecimal(value: string, fieldName: string): string {
     units = parseDecimal(value, fieldName).units;
   } catch {
     // Feed data, not caller input: never surface it as a payer-side RangeError.
-    throw new OpenReceivePriceFeedError(`${fieldName} must be a non-negative decimal string`);
+    throw new PriceFeedError(`${fieldName} must be a non-negative decimal string`);
   }
   if (units <= 0n) {
-    throw new OpenReceivePriceFeedError(`${fieldName} must be greater than 0`);
+    throw new PriceFeedError(`${fieldName} must be greater than 0`);
   }
   return value;
 }
@@ -121,7 +121,7 @@ function assertPositiveFeedDecimal(value: string, fieldName: string): string {
 // The strict reader: shares `isRecord`'s shape rule, keeps its own error type.
 function asRecord(value: unknown): Record<string, unknown> {
   if (!isRecord(value)) {
-    throw new OpenReceivePriceFeedError("price response is not Simple Price shaped");
+    throw new PriceFeedError("price response is not Simple Price shaped");
   }
 
   return value;

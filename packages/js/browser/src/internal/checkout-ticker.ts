@@ -6,15 +6,15 @@
 import { unixSeconds } from "@openreceive/core";
 import {
   OPENRECEIVE_COPY_FEEDBACK_MS,
-  type OpenReceiveTickingValueController,
-  type OpenReceiveTickingValueOptions,
-  type OpenReceiveTransientFeedbackController,
-  type OpenReceiveTransientFeedbackOptions,
+  type TickingValueController,
+  type TickingValueOptions,
+  type TransientFeedbackController,
+  type TransientFeedbackOptions,
 } from "./ui.ts";
 
-export function createOpenReceiveTransientFeedbackController<T>(
-  options: OpenReceiveTransientFeedbackOptions<T>,
-): OpenReceiveTransientFeedbackController<T> {
+export function createTransientFeedbackController<T>(
+  options: TransientFeedbackOptions<T>,
+): TransientFeedbackController<T> {
   const delayMs = options.delayMs ?? OPENRECEIVE_COPY_FEEDBACK_MS;
   const setTimeoutFn = options.setTimeout ?? globalThis.setTimeout;
   const clearTimeoutFn = options.clearTimeout ?? globalThis.clearTimeout;
@@ -39,9 +39,7 @@ export function createOpenReceiveTransientFeedbackController<T>(
   };
 }
 
-export function createOpenReceiveTickingValueController(
-  options: OpenReceiveTickingValueOptions,
-): OpenReceiveTickingValueController {
+export function createTickingValueController(options: TickingValueOptions): TickingValueController {
   const intervalMs = options.intervalMs ?? 1000;
   const now = options.now ?? unixSeconds;
   const setIntervalFn = options.setInterval ?? globalThis.setInterval;

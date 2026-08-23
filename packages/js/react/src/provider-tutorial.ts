@@ -1,15 +1,15 @@
 // The provider tutorial modal and the "open provider" action the wizard links
 // it from. The elements counterpart is elements/src/render-provider-tutorial.ts.
 import {
-  createOpenReceiveLightningInvoiceDecodeUrl,
-  openReceiveCheckoutLabels,
-  type OpenReceiveWizardProviderDisplay,
+  createLightningInvoiceDecodeUrl,
+  checkoutLabels,
+  type WizardProviderDisplay,
   orClasses,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 
 export function renderProviderOpenAction(
-  provider: OpenReceiveWizardProviderDisplay,
+  provider: WizardProviderDisplay,
   onOpenTutorial: () => void,
 ): React.ReactElement {
   if (provider.tutorials.length === 0) {
@@ -37,7 +37,7 @@ export function renderProviderOpenAction(
 }
 
 export function ProviderTutorialModal(options: {
-  readonly provider: OpenReceiveWizardProviderDisplay;
+  readonly provider: WizardProviderDisplay;
   readonly index: number;
   readonly copied: boolean;
   readonly invoice: string;
@@ -90,16 +90,13 @@ export function ProviderTutorialModal(options: {
   const previousIndex = Math.max(0, stepIndex - 1);
   const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
   const isFinalStep = stepIndex === provider.tutorials.length;
-  const decodeHref = createOpenReceiveLightningInvoiceDecodeUrl(
-    options.invoice,
-    options.decodeLinkUrl,
-  );
+  const decodeHref = createLightningInvoiceDecodeUrl(options.invoice, options.decodeLinkUrl);
 
   return React.createElement(
     "div",
     {
       ref: dialogRef,
-      "aria-label": `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`,
+      "aria-label": `${checkoutLabels.tutorialTitlePrefix} ${provider.name}`,
       "aria-modal": true,
       className: orClasses.tutorialModal,
       onClick: (event: React.MouseEvent<HTMLDivElement>) => {
@@ -132,11 +129,7 @@ export function ProviderTutorialModal(options: {
             className: orClasses.tutorialHeaderLogo,
             src: provider.icon,
           }),
-          React.createElement(
-            "h3",
-            null,
-            `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`,
-          ),
+          React.createElement("h3", null, `${checkoutLabels.tutorialTitlePrefix} ${provider.name}`),
         ),
         React.createElement(
           "button",
@@ -163,9 +156,9 @@ export function ProviderTutorialModal(options: {
             React.createElement(
               "p",
               null,
-              `${openReceiveCheckoutLabels.tutorialIntroPrefix} ${provider.name}.`,
+              `${checkoutLabels.tutorialIntroPrefix} ${provider.name}.`,
             ),
-            React.createElement("p", null, openReceiveCheckoutLabels.tutorialIntroCopy),
+            React.createElement("p", null, checkoutLabels.tutorialIntroCopy),
             React.createElement(
               "button",
               {
@@ -173,7 +166,7 @@ export function ProviderTutorialModal(options: {
                 onClick: () => void options.onCopy(),
                 type: "button",
               },
-              openReceiveCheckoutLabels.copyInvoice,
+              checkoutLabels.copyInvoice,
             ),
             decodeHref === undefined
               ? null
@@ -185,7 +178,7 @@ export function ProviderTutorialModal(options: {
                     rel: "noreferrer",
                     target: "_blank",
                   },
-                  openReceiveCheckoutLabels.decodeInvoice,
+                  checkoutLabels.decodeInvoice,
                 ),
             options.copied
               ? React.createElement(
@@ -193,7 +186,7 @@ export function ProviderTutorialModal(options: {
                   {
                     className: orClasses.tutorialCopyMessage,
                   },
-                  openReceiveCheckoutLabels.tutorialCopiedContinue,
+                  checkoutLabels.tutorialCopiedContinue,
                 )
               : null,
           )
@@ -267,7 +260,7 @@ export function ProviderTutorialModal(options: {
             },
             type: "button",
           },
-          isFinalStep ? openReceiveCheckoutLabels.tutorialExit : "Next",
+          isFinalStep ? checkoutLabels.tutorialExit : "Next",
         ),
       ),
     ),

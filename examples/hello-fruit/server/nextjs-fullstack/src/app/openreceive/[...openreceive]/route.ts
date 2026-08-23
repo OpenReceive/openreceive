@@ -1,5 +1,5 @@
 import { openReceiveNextHandlers } from "@openreceive/next";
-import { openReceiveHttpOptions } from "../../../server/openreceive.ts";
+import { httpOptions } from "../../../server/openreceive.ts";
 import { readHelloFruitHostOrder } from "../../../../../../shared/openreceive-store.ts";
 
 // Mount the SHIPPED OpenReceive routes as a Next.js App Router catch-all. The app writes NO
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 async function handle(request: Request): Promise<Response> {
   // rateLimiting is left off in this demo. On Next it additionally needs an
   // explicit IP source (trustProxyIpHeader) — see the rate-limiting guide.
-  const { GET, POST } = openReceiveNextHandlers(await openReceiveHttpOptions());
+  const { GET, POST } = openReceiveNextHandlers(await httpOptions());
   if (request.method.toUpperCase() === "GET") return GET(request);
   return POST(await withHelloFruitOrderMemo(request));
 }
@@ -38,7 +38,7 @@ async function withHelloFruitOrderMemo(request: Request): Promise<Request> {
   if (typeof body !== "object" || body === null) return request;
   const record = { ...(body as Record<string, unknown>) };
   if (typeof record.order_id !== "string" || record.memo !== undefined) return request;
-  // openReceiveHttpOptions() booted the host store before this runs.
+  // httpOptions() booted the host store before this runs.
   const memo = readHelloFruitHostOrder(record.order_id)?.memo;
   if (memo === undefined) return request;
 

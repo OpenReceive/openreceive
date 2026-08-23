@@ -6,23 +6,15 @@ import type {
   SwapCheckout,
   SwapData,
 } from "@openreceive/node";
-import type { OpenReceiveHost } from "./host-payments.ts";
-import {
-  maybeReconcileOpenReceivePayments,
-  type OpenReceiveOpportunisticReconcileResult,
-} from "./reconcile-gate.ts";
-import type {
-  OpenReceiveAuthorize,
-  OpenReceiveAuthorizeAction,
-  OpenReceiveAuthorizeResource,
-  OpenReceiveRateLimit,
-} from "./authorize.ts";
+import type { Host } from "./host-payments.ts";
+import { maybeReconcilePayments, type OpportunisticReconcileResult } from "./reconcile-gate.ts";
+import type { Authorize, AuthorizeAction, AuthorizeResource, RateLimit } from "./authorize.ts";
 import {
   createRequestId,
   errorResponse,
   isServiceErrorShape,
   jsonResponse,
-  OpenReceiveHttpError,
+  HttpError,
 } from "./errors.ts";
 import {
   assertDeclaredFields,
@@ -42,10 +34,10 @@ import {
   toSnakeCase,
 } from "./http-response.ts";
 import {
-  createOpenReceiveIpRateLimit,
-  openReceiveClientIp,
-  openReceiveClientIpBucket,
-  type OpenReceiveIpRateLimitConfig,
+  createIpRateLimit,
+  resolveClientIp,
+  clientIpBucket,
+  type IpRateLimitConfig,
 } from "./rate-limit.ts";
 import { matchRoute, normalizePrefix } from "./router.ts";
 
@@ -70,7 +62,7 @@ export interface CheckoutCreatedInput {
 export type CheckoutCreatedHook = (input: CheckoutCreatedInput) => void | Promise<void>;
 
 export interface ResolveCheckoutContext {
-  readonly action: OpenReceiveAuthorizeAction;
+  readonly action: AuthorizeAction;
   readonly request: Request;
   readonly orderId: string;
   readonly payInAsset?: string;
@@ -100,10 +92,10 @@ export type ResolveCheckoutHook = (
 export interface CreateOpenReceiveHttpHandlerOptions {
   readonly service: OpenReceive;
   /** Host authentication and authorization policy. OpenReceive never inspects host sessions. */
-  readonly authorize: OpenReceiveAuthorize;
-  /** Host authentication-independent payment integration returned by createOpenReceiveHost. */
-  readonly host: OpenReceiveHost;
-  readonly rateLimitHook?: OpenReceiveRateLimit;
+  readonly authorize: Authorize;
+  /** Host authentication-independent payment integration returned by createHost. */
+  readonly host: Host;
+  readonly rateLimitHook?: RateLimit;
   /**
    * Built-in per-IP invoice rate limiting. OFF by default: shared-IP deployments
    * (point-of-sale terminals, kiosks, NAT'd venues) mint many invoices from one
@@ -118,7 +110,7 @@ export interface CreateOpenReceiveHttpHandlerOptions {
    * tune limits or the payer-facing message. Mutually exclusive with a custom
    * `rateLimitHook`.
    */
-  readonly rateLimiting?: boolean | OpenReceiveIpRateLimitConfig;
+  readonly rateLimiting?: boolean | IpRateLimitConfig;
   /**
    * Opportunistic settlement discovery, ON by default: every mounted payment
    * route first runs one durably gated reconcile pass when payment attempts
@@ -141,7 +133,7 @@ export interface CreateOpenReceiveHttpHandlerOptions {
   readonly prefix?: string;
 }
 
-export interface OpenReceiveHttpHandler {
+export interface HttpHandler {
   (request: Request, extras?: { native?: unknown }): Promise<Response>;
   readonly prefix: string;
   handle(request: Request, extras?: { native?: unknown }): Promise<Response>;
@@ -150,12 +142,12 @@ export interface OpenReceiveHttpHandler {
 interface Runtime extends CreateOpenReceiveHttpHandlerOptions {
   readonly prefix: string;
   /** The resolved limiter: the custom `rateLimitHook` or the built-in per-IP one. */
-  readonly rateLimit?: OpenReceiveRateLimit;
+  readonly rateLimit?: RateLimit;
   /** Single client-IP resolution used for BOTH row stamping and limit counting. */
   readonly extractClientIp: (context: {
-    readonly action: OpenReceiveAuthorizeAction;
+    readonly action: AuthorizeAction;
     readonly request: Request;
-    readonly resource: OpenReceiveAuthorizeResource;
+    readonly resource: AuthorizeResource;
     readonly native?: unknown;
   }) => string | undefined;
   /** Resolved opportunistic-reconcile tuning; undefined means disabled. */
@@ -168,9 +160,7 @@ interface Runtime extends CreateOpenReceiveHttpHandlerOptions {
   readonly paymentMethods: Map<number, { readonly at: number; readonly methods: unknown }>;
 }
 
-export function createOpenReceiveHttpHandler(
-  options: CreateOpenReceiveHttpHandlerOptions,
-): OpenReceiveHttpHandler {
+export function createHttpHandler(options: CreateOpenReceiveHttpHandlerOptions): HttpHandler {
   if (options?.service === undefined) throw new TypeError("HTTP handler requires service.");
   if (options.authorize === undefined) {
     throw new TypeError("HTTP handler requires authorize; authentication belongs to the host.");
@@ -208,10 +198,10 @@ export function createOpenReceiveHttpHandler(
   // v4-mapped collapsed).
   const rawExtractClientIp =
     (typeof options.rateLimiting === "object" ? options.rateLimiting.ip : undefined) ??
-    openReceiveClientIp;
+    resolveClientIp;
   const extractClientIp: Runtime["extractClientIp"] = (context) => {
     const ip = rawExtractClientIp(context);
-    return ip === undefined || ip.length === 0 ? undefined : openReceiveClientIpBucket(ip);
+    return ip === undefined || ip.length === 0 ? undefined : clientIpBucket(ip);
   };
   const runtime: Runtime = {
     ...options,
@@ -229,7 +219,7 @@ export function createOpenReceiveHttpHandler(
       return errorResponse(error, requestId);
     }
   };
-  const handler = handle as OpenReceiveHttpHandler;
+  const handler = handle as HttpHandler;
   Object.defineProperties(handler, {
     prefix: { value: runtime.prefix, enumerable: true },
     handle: { value: handle, enumerable: true },
@@ -246,11 +236,7 @@ async function dispatch(
   const url = new URL(request.url);
   const route = matchRoute(runtime.prefix, request.method, url.pathname);
   if (route === null)
-    throw new OpenReceiveHttpError(
-      404,
-      "NOT_FOUND",
-      "No OpenReceive route matched this method and path.",
-    );
+    throw new HttpError(404, "NOT_FOUND", "No OpenReceive route matched this method and path.");
 
   // Unauthenticated GET /rates never triggers the opportunistic pass:
   // crawlers and health checks must not consume the wallet-scan budget.
@@ -267,10 +253,10 @@ async function dispatch(
   // before its own work, run one durably gated reconcile pass (never throws;
   // a failed scan must not fail this request). `payments/check` consumes this
   // pass result below — exactly one gate claim per request.
-  const reconcilePass: OpenReceiveOpportunisticReconcileResult | undefined =
+  const reconcilePass: OpportunisticReconcileResult | undefined =
     runtime.reconcile === undefined
       ? undefined
-      : await maybeReconcileOpenReceivePayments({
+      : await maybeReconcilePayments({
           service: runtime.service,
           host: runtime.host,
           // `service`/`host` stay outside compact: it is recursive, and they
@@ -441,8 +427,7 @@ async function dispatch(
     return jsonResponse(201, { swap: httpSwap(swap) }, requestId);
   }
 
-  const action: OpenReceiveAuthorizeAction =
-    route.kind === "swap.read" ? "swap.read" : "swap.refund";
+  const action: AuthorizeAction = route.kind === "swap.read" ? "swap.read" : "swap.refund";
   const requestedPaymentHash = requiredPaymentHash(
     requiredString(body.payment_hash, "payment_hash"),
   );
@@ -537,7 +522,7 @@ async function commitNewAttempt<T>(
 
 async function resolveHostCheckout(
   runtime: Runtime,
-  action: OpenReceiveAuthorizeAction,
+  action: AuthorizeAction,
   request: Request,
   orderId: string,
   input: Readonly<Record<string, unknown>>,
@@ -560,15 +545,13 @@ async function resolveHostCheckout(
  * repository without `countAttemptsFromIp` (and no custom counter in the config) fails
  * handler construction instead of silently falling back to process-local memory.
  */
-function resolveRateLimiting(
-  options: CreateOpenReceiveHttpHandlerOptions,
-): OpenReceiveRateLimit | undefined {
+function resolveRateLimiting(options: CreateOpenReceiveHttpHandlerOptions): RateLimit | undefined {
   if (options.rateLimiting === undefined || options.rateLimiting === false) return undefined;
   const config = options.rateLimiting === true ? {} : options.rateLimiting;
   const payments = options.host.payments;
   const countAttemptsFromIp =
     config.countAttemptsFromIp ?? payments.countAttemptsFromIp?.bind(payments);
-  return createOpenReceiveIpRateLimit({
+  return createIpRateLimit({
     ...config,
     ...(countAttemptsFromIp === undefined ? {} : { countAttemptsFromIp }),
   });
@@ -576,9 +559,9 @@ function resolveRateLimiting(
 
 async function authorizeAndRateLimit(
   runtime: Runtime,
-  action: OpenReceiveAuthorizeAction,
+  action: AuthorizeAction,
   request: Request,
-  resource: OpenReceiveAuthorizeResource,
+  resource: AuthorizeResource,
   native?: unknown,
 ): Promise<void> {
   await enforceRateLimit(runtime, action, request, resource, native);
@@ -589,14 +572,14 @@ async function authorizeAndRateLimit(
 // once the host has resolved whether a new attempt must be minted (reuse is exempt).
 async function enforceRateLimit(
   runtime: Runtime,
-  action: OpenReceiveAuthorizeAction,
+  action: AuthorizeAction,
   request: Request,
-  resource: OpenReceiveAuthorizeResource,
+  resource: AuthorizeResource,
   native?: unknown,
 ): Promise<void> {
   if (runtime.rateLimit === undefined) return;
   if (!(await runtime.rateLimit({ action, request, resource, native }))) {
-    throw new OpenReceiveHttpError(429, "RATE_LIMITED", "Too many requests.", {
+    throw new HttpError(429, "RATE_LIMITED", "Too many requests.", {
       retryable: true,
       retryAfterSeconds: 60,
     });
@@ -605,13 +588,13 @@ async function enforceRateLimit(
 
 async function enforceAuthorize(
   runtime: Runtime,
-  action: OpenReceiveAuthorizeAction,
+  action: AuthorizeAction,
   request: Request,
-  resource: OpenReceiveAuthorizeResource,
+  resource: AuthorizeResource,
   native?: unknown,
 ): Promise<void> {
   if (!(await runtime.authorize({ action, request, resource, native }))) {
-    throw new OpenReceiveHttpError(403, "FORBIDDEN", "Not authorized for this action.");
+    throw new HttpError(403, "FORBIDDEN", "Not authorized for this action.");
   }
 }
 
@@ -624,10 +607,10 @@ async function persistCheckoutAttempt(
   } catch (error) {
     // Meaningful repository refusals ("already paid", "live attempt for the
     // same method") keep their own status and message.
-    if (error instanceof OpenReceiveHttpError || isServiceErrorShape(error)) throw error;
+    if (error instanceof HttpError || isServiceErrorShape(error)) throw error;
     // Anything else is infrastructure failing to persist (database down, bug):
     // retryable 503, never a payer-blaming conflict.
-    throw new OpenReceiveHttpError(
+    throw new HttpError(
       503,
       "INTERNAL",
       "The host could not persist this payment attempt; payer instructions were withheld. Please retry.",
@@ -666,7 +649,7 @@ async function checkPaymentMethods(runtime: Runtime, amountMsats: number): Promi
 function selectedPaymentHash(resolved: ResolvedHostCheckout, requestedPaymentHash: string): string {
   const selected = hostPaymentHash(resolved.paymentHash);
   if (selected !== requestedPaymentHash) {
-    throw new OpenReceiveHttpError(
+    throw new HttpError(
       404,
       "NOT_FOUND",
       "The selected payment attempt does not belong to this order.",
@@ -685,7 +668,7 @@ function hostPaymentHash(value: unknown): string {
     const hash = value.trim().toLowerCase();
     if (/^[0-9a-f]{64}$/.test(hash)) return hash;
   }
-  throw new OpenReceiveHttpError(
+  throw new HttpError(
     500,
     "INTERNAL",
     "The host resolver returned a missing or malformed payment hash for this order.",
@@ -694,29 +677,21 @@ function hostPaymentHash(value: unknown): string {
 
 function requireResolvedAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
   if (value.amount === undefined || value.amount === null) {
-    throw new OpenReceiveHttpError(
-      500,
-      "INTERNAL",
-      "The host resolved this order without an amount.",
-    );
+    throw new HttpError(500, "INTERNAL", "The host resolved this order without an amount.");
   }
   return value.amount;
 }
 
 function requireResolvedCheckout(value: ResolvedHostCheckout): Checkout {
   if (value.checkout === undefined) {
-    throw new OpenReceiveHttpError(
-      409,
-      "CONFLICT",
-      "The host payment attempt has no checkout snapshot.",
-    );
+    throw new HttpError(409, "CONFLICT", "The host payment attempt has no checkout snapshot.");
   }
   return value.checkout;
 }
 
 function requireResolvedSwapData(value: SwapData | undefined): SwapData {
   if (value === undefined) {
-    throw new OpenReceiveHttpError(404, "NOT_FOUND", "The host order has no swap data.");
+    throw new HttpError(404, "NOT_FOUND", "The host order has no swap data.");
   }
   return value;
 }
@@ -725,7 +700,7 @@ function committedCheckout(orderId: string, resolved: ResolvedHostCheckout): Che
   const paymentHash = hostPaymentHash(resolved.paymentHash);
   const checkout = requireResolvedCheckout(resolved);
   if (checkout.orderId !== orderId || checkout.paymentHash.toLowerCase() !== paymentHash) {
-    throw new OpenReceiveHttpError(
+    throw new HttpError(
       409,
       "CONFLICT",
       "The selected payment attempt is not a reusable pending checkout.",
@@ -744,11 +719,7 @@ async function recoverCommittedSwap(
   const status = await runtime.service.getSwap({ orderId, paymentHash, swapData });
   const checkout = committedCheckout(orderId, resolved);
   if (status.orderId !== orderId || status.paymentHash !== paymentHash) {
-    throw new OpenReceiveHttpError(
-      409,
-      "CONFLICT",
-      "The host swap data does not match its payment hash.",
-    );
+    throw new HttpError(409, "CONFLICT", "The host swap data does not match its payment hash.");
   }
   return { ...status, checkout, swapData };
 }

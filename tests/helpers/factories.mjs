@@ -44,7 +44,7 @@
 // three are owned by the frontend track, so they are listed here for that track
 // rather than migrated from here.
 import { DatabaseSync } from "node:sqlite";
-import { openReceivePaymentsSchemaSql } from "../../packages/js/http/src/index.ts";
+import { paymentsSchemaSql } from "../../packages/js/http/src/index.ts";
 
 /**
  * A 64-hex-character payment hash made of one repeated character.
@@ -80,6 +80,6 @@ export const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2
  */
 export function memoryPaymentsDb() {
   const db = new DatabaseSync(":memory:");
-  db.exec(openReceivePaymentsSchemaSql("sqlite"));
+  db.exec(paymentsSchemaSql("sqlite"));
   return db;
 }

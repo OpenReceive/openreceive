@@ -12,7 +12,7 @@ write-once, and the reconciliation state machine. Rails installs the migration v
 `openreceive:install` with an engine-owned model; Node apps run
 `npx openreceive scaffold payments` (Prisma, Drizzle, TypeORM, Sequelize, or Knex;
 `--dialect postgres` or `sqlite`) to emit the migration only. A custom
-`OpenReceivePaymentRepository` is the documented escape hatch, never the quickstart.
+`PaymentRepository` is the documented escape hatch, never the quickstart.
 
 Each payment row represents one direct payment attempt or one provider swap attempt, with an
 explicit status (`pending | settled | expired | failed | attention`). An order has one live

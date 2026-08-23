@@ -1,5 +1,5 @@
 // React's wrapper over the shared create-mode session
-// (`createOpenReceiveCheckoutSession` in @openreceive/browser/headless): the
+// (`createCheckoutSession` in @openreceive/browser/headless): the
 // same deferred Lightning mint and swap start the custom element runs, with
 // React's publishing (setState) and error surfacing (`onError`) injected.
 //
@@ -15,27 +15,22 @@
 // field change back into React state.
 
 import {
-  createOpenReceiveCheckoutSession,
-  type OpenReceiveCheckoutSession,
-  type OpenReceiveCheckoutSessionOptions,
+  createCheckoutSession,
+  type CheckoutSession,
+  type CheckoutSessionOptions,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 
 /** `onChange` is React's to supply — it is the re-render. */
-export type UseOpenReceiveCheckoutSessionOptions = Omit<
-  OpenReceiveCheckoutSessionOptions,
-  "onChange"
->;
+export type UseOpenReceiveCheckoutSessionOptions = Omit<CheckoutSessionOptions, "onChange">;
 
-export function useOpenReceiveCheckoutSession(
-  options: UseOpenReceiveCheckoutSessionOptions,
-): OpenReceiveCheckoutSession {
+export function useCheckoutSession(options: UseOpenReceiveCheckoutSessionOptions): CheckoutSession {
   const [, rerender] = React.useReducer((count: number) => count + 1, 0);
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
-  const sessionRef = React.useRef<OpenReceiveCheckoutSession | undefined>(undefined);
+  const sessionRef = React.useRef<CheckoutSession | undefined>(undefined);
   if (sessionRef.current === undefined) {
-    sessionRef.current = createOpenReceiveCheckoutSession({
+    sessionRef.current = createCheckoutSession({
       snapshot: () => optionsRef.current.snapshot(),
       orderId: () => optionsRef.current.orderId(),
       requestCheckout: (orderId) => optionsRef.current.requestCheckout?.(orderId),

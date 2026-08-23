@@ -5,10 +5,10 @@ The OpenReceive checkout custom element (`<openreceive-checkout>`) and theme tog
 ## Mount
 
 ```js
-import { defineOpenReceiveElements } from "@openreceive/elements";
+import { defineElements } from "@openreceive/elements";
 import "@openreceive/elements/styles.css";
 
-defineOpenReceiveElements();
+defineElements();
 ```
 
 ```html

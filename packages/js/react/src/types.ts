@@ -4,14 +4,14 @@ import type {
   CheckoutSnapshot,
   CheckoutState,
   CheckoutStatusRefresh,
-  OpenReceiveBrowserLogContext,
-  OpenReceiveBrowserLoggerOption,
-  OpenReceiveCheckoutComponentProps,
-  OpenReceiveCheckoutPaymentMethod,
-  OpenReceiveQrEncoder,
-  OpenReceiveResolvedTheme,
-  OpenReceiveThemeModel,
-  OpenReceiveThemePreference,
+  BrowserLogContext,
+  BrowserLoggerOption,
+  CheckoutComponentProps,
+  CheckoutPaymentMethod,
+  QrEncoder,
+  ResolvedTheme,
+  ThemeModel,
+  ThemePreference,
   Status,
 } from "@openreceive/browser/headless";
 
@@ -56,7 +56,7 @@ export interface UseCheckoutOptions
     Omit<CheckoutEventHandlers, "onProviderCopy" | "onStartOver"> {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly logger?: BrowserLoggerOption;
   readonly refreshStatus?: CheckoutStatusRefresh;
   /**
    * Base path the shipped router is mounted at; the hook polls
@@ -89,7 +89,7 @@ export interface CheckoutProviderProps extends UseCheckoutOptions {
 
 export interface QRCodeProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
   readonly invoice: string;
-  readonly encoder?: OpenReceiveQrEncoder;
+  readonly encoder?: QrEncoder;
   readonly width?: number;
   readonly onError?: (error: unknown) => void;
 }
@@ -100,7 +100,7 @@ export interface CopyInvoiceButtonProps extends React.ButtonHTMLAttributes<HTMLB
   readonly invoice: string;
   readonly copyInvoice?: () => Promise<void>;
   readonly clipboard?: Pick<Clipboard, "writeText">;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly logger?: BrowserLoggerOption;
   readonly onCopied?: () => void;
   readonly onError?: (error: unknown) => void;
   readonly copiedLabel?: React.ReactNode;
@@ -111,7 +111,7 @@ export interface OpenWalletButtonProps extends React.ButtonHTMLAttributes<HTMLBu
   readonly invoice: string;
   readonly openWallet?: () => string;
   readonly open?: (uri: string) => void;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly logger?: BrowserLoggerOption;
   readonly onOpened?: (uri: string) => void;
   readonly onError?: (error: unknown) => void;
   readonly ButtonComponent?: ButtonComponent;
@@ -173,7 +173,7 @@ export interface CheckoutProps
   // (docs/internal/wrapper-parity.md). Everything after it is React doing what
   // the element cannot — component slots, class-name slots, render-prop
   // children.
-  extends OpenReceiveCheckoutComponentProps,
+  extends CheckoutComponentProps,
     CheckoutEventHandlers,
     // Omit the RDFa `prefix` attribute from HTMLAttributes so our create-mode `prefix` wins.
     // The DOM copy/error handlers are replaced by the OpenReceive ones above.
@@ -188,8 +188,8 @@ export interface CheckoutProps
   /** `false` turns status polling off entirely. */
   readonly polling?: boolean;
   readonly pollIntervalMs?: number;
-  readonly qrEncoder?: OpenReceiveQrEncoder;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly qrEncoder?: QrEncoder;
+  readonly logger?: BrowserLoggerOption;
   readonly refreshStatus?: CheckoutStatusRefresh;
   readonly components?: CheckoutComponents;
   readonly classNames?: CheckoutClassNames;
@@ -197,29 +197,29 @@ export interface CheckoutProps
 }
 
 export interface UseThemeOptions {
-  readonly defaultTheme?: OpenReceiveThemePreference;
+  readonly defaultTheme?: ThemePreference;
   readonly storageKey?: string;
   readonly storage?: Storage;
 }
 
 export interface UseThemeResult {
-  readonly theme: OpenReceiveThemePreference;
-  readonly resolvedTheme: OpenReceiveResolvedTheme;
-  readonly model: OpenReceiveThemeModel;
-  readonly nextTheme: OpenReceiveThemePreference;
+  readonly theme: ThemePreference;
+  readonly resolvedTheme: ResolvedTheme;
+  readonly model: ThemeModel;
+  readonly nextTheme: ThemePreference;
   readonly toggleLabel: string;
-  readonly attributes: OpenReceiveThemeModel["attributes"];
-  readonly checkoutElementAttributes: OpenReceiveThemeModel["checkoutElementAttributes"];
+  readonly attributes: ThemeModel["attributes"];
+  readonly checkoutElementAttributes: ThemeModel["checkoutElementAttributes"];
   /** True when this result comes from an ancestor ThemeScope (inherit, don't re-stamp). */
   readonly fromScope: boolean;
-  setTheme(theme: OpenReceiveThemePreference): void;
+  setTheme(theme: ThemePreference): void;
   toggleTheme(): void;
 }
 
 export interface ThemeToggleProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  readonly theme?: OpenReceiveThemePreference;
-  readonly resolvedTheme?: OpenReceiveResolvedTheme;
-  readonly onThemeChange?: (theme: OpenReceiveThemePreference) => void;
+  readonly theme?: ThemePreference;
+  readonly resolvedTheme?: ResolvedTheme;
+  readonly onThemeChange?: (theme: ThemePreference) => void;
   readonly ButtonComponent?: ButtonComponent;
 }
 
@@ -227,7 +227,7 @@ export type ThemeScopeChildren = React.ReactNode | ((theme: UseThemeResult) => R
 
 export interface ThemeScopeProps extends Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   readonly as?: keyof React.JSX.IntrinsicElements;
-  readonly defaultTheme?: OpenReceiveThemePreference;
+  readonly defaultTheme?: ThemePreference;
   readonly storageKey?: string;
   readonly storage?: Storage;
   readonly themeToggle?: boolean;
@@ -246,8 +246,8 @@ export interface PaymentWizardProps {
   readonly invoice?: string;
   readonly checkout?: CheckoutSnapshot;
   readonly className?: string;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
-  readonly logContext?: OpenReceiveBrowserLogContext;
+  readonly logger?: BrowserLoggerOption;
+  readonly logContext?: BrowserLogContext;
   /**
    * Base path the shipped router is mounted at; the swap quote, start and refund
    * routes are derived from it. Omitted, the wizard has no swap backend and
@@ -256,7 +256,7 @@ export interface PaymentWizardProps {
   readonly prefix?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly clipboard?: Pick<Clipboard, "writeText">;
-  readonly qrEncoder?: OpenReceiveQrEncoder;
+  readonly qrEncoder?: QrEncoder;
   /** Base URL of an external bolt11 decoder; omitted, no "Decode" link is rendered. */
   readonly decodeLinkUrl?: string;
   readonly onError?: (error: unknown) => void;
@@ -282,11 +282,11 @@ export interface PaymentWizardProps {
   readonly onProviderCopy?: (providerId: string) => void;
 }
 
-export type OpenReceiveSwapOptionDisplay = OpenReceiveCheckoutPaymentMethod;
+export type SwapOptionDisplay = CheckoutPaymentMethod;
 
-export interface OpenReceiveSwapOptionsResult {
+export interface SwapOptionsResult {
   readonly enabled: boolean;
-  readonly options: readonly OpenReceiveSwapOptionDisplay[];
+  readonly options: readonly SwapOptionDisplay[];
 }
 
 export interface SatsDetailProps extends React.HTMLAttributes<HTMLDivElement> {

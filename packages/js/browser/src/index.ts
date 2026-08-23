@@ -12,10 +12,10 @@ export {
   createCheckoutController,
   createQrPngDataUrl as qrPngDataUrl,
   createQrSvg as qrSvg,
-  OpenReceiveBrowserRequestError,
+  BrowserRequestError,
   openWallet,
   prepareCheckout,
-  readOpenReceiveJsonResponse,
+  readJsonResponse,
   requestCheckout,
 } from "./internal/checkout.ts";
 export { createLightningUri as lightningUri } from "./internal/checkout.ts";
@@ -34,11 +34,11 @@ export type {
   CheckoutSnapshot,
   CheckoutState,
   CopyInvoiceOptions,
-  OpenReceiveBrowserLogEntry,
-  OpenReceiveBrowserLogger,
-  OpenReceiveBrowserLoggerOption,
-  OpenReceiveBrowserLogLevel,
-  OpenReceiveQrOptions as QrOptions,
+  BrowserLogEntry,
+  BrowserLogger,
+  BrowserLoggerOption,
+  BrowserLogLevel,
+  QrOptions,
   OpenWalletOptions,
   PrepareCheckoutOptions,
   RequestCheckoutOptions,
@@ -53,6 +53,6 @@ export type {
   HostBrowserConsoleLogger,
 } from "./internal/console-logger.ts";
 
-export { status } from "./status.ts";
+export { deriveStatus } from "./status.ts";
 
 export type { Status, StatusInvoiceLike } from "./status.ts";

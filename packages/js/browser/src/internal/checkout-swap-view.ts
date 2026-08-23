@@ -7,14 +7,14 @@ import {
   type CheckoutInvoiceSnapshot,
   type CheckoutInvoiceSwapFee,
   OPENRECEIVE_REFUND_REVIEW_NONCE,
-  openReceiveCheckoutLabels,
-  type OpenReceiveSwapDisplayModel,
-  type OpenReceiveSwapFeeBreakdown,
+  checkoutLabels,
+  type SwapDisplayModel,
+  type SwapFeeBreakdown,
 } from "./ui.ts";
 import {
-  formatOpenReceiveCountdown,
-  formatOpenReceiveDepositAmount,
-  formatOpenReceiveFiatAmount,
+  formatCountdown,
+  formatDepositAmount,
+  formatFiatAmount,
   optionalDecimal,
   rescaleHalfUp,
   roundedDiv,
@@ -26,9 +26,9 @@ import {
  * total). The difference is the swap fee (exchange spread + network fees). Returns
  * undefined when the figures are missing or not sensible so callers can hide the row.
  */
-export function createOpenReceiveSwapFeeBreakdown(
+export function createSwapFeeBreakdown(
   fee: CheckoutInvoiceSwapFee | undefined,
-): OpenReceiveSwapFeeBreakdown | undefined {
+): SwapFeeBreakdown | undefined {
   if (fee === undefined) return undefined;
   // Exact decimal math on the shared money engine — never binary floats, even
   // for display-only fiat values.
@@ -42,9 +42,7 @@ export function createOpenReceiveSwapFeeBreakdown(
   const feeUnits = payInUnits > payoutUnits ? payInUnits - payoutUnits : 0n;
   const format = (units: bigint): string => {
     const value = formatDecimal(rescaleHalfUp(units, scale, 2), 2);
-    return (
-      formatOpenReceiveFiatAmount({ currency: fee.currency, value }) ?? `${value} ${fee.currency}`
-    );
+    return formatFiatAmount({ currency: fee.currency, value }) ?? `${value} ${fee.currency}`;
   };
   // fee/payout * 100 at one decimal place, half-up: tenths = fee*1000/payout.
   const percentTenths = roundedDiv(feeUnits * 1000n, payoutUnits);
@@ -57,10 +55,10 @@ export function createOpenReceiveSwapFeeBreakdown(
   };
 }
 
-export function createOpenReceiveSwapDisplayModel(
+export function createSwapDisplayModel(
   invoice: CheckoutInvoiceSnapshot,
   options: { readonly now?: number } = {},
-): OpenReceiveSwapDisplayModel | undefined {
+): SwapDisplayModel | undefined {
   const swap = invoice.swap;
   if (swap === undefined) return undefined;
   const expiresAt = Math.min(
@@ -68,15 +66,15 @@ export function createOpenReceiveSwapDisplayModel(
     invoice.expires_at ?? swap.provider_expires_at,
   );
   const expiresInSeconds = Math.max(0, expiresAt - (options.now ?? unixSeconds()));
-  const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
-  const depositAmount = formatOpenReceiveDepositAmount(swap.deposit_amount);
+  const asset = getSwapAssetDisplay(swap.pay_in_asset);
+  const depositAmount = formatDepositAmount(swap.deposit_amount);
   const networkWarningEmphasis = `${depositAmount} ${asset.assetLabel} on the ${asset.networkLabel} network`;
   // Settlement authority is OpenReceive's own wallet sweep, surfaced as the shadow
   // invoice's settled transaction_state — never the provider's `completed` state (see
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
   // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
   const settled = invoice.transaction_state === "settled" || invoice.settled_at !== undefined;
-  const feeBreakdown = createOpenReceiveSwapFeeBreakdown(swap.fee);
+  const feeBreakdown = createSwapFeeBreakdown(swap.fee);
 
   return {
     provider: swap.provider,
@@ -84,7 +82,7 @@ export function createOpenReceiveSwapDisplayModel(
     payInAsset: swap.pay_in_asset,
     assetLabel: asset.assetLabel,
     networkLabel: asset.networkLabel,
-    networkWarningTitle: openReceiveCheckoutLabels.wrongCurrencyOrNetworkTitle,
+    networkWarningTitle: checkoutLabels.wrongCurrencyOrNetworkTitle,
     networkWarningEmphasis,
     networkWarning: `Be sure you are sending exactly ${networkWarningEmphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost! Pay with one method only — if you already sent ${asset.assetLabel}, do not also pay the Lightning invoice.`,
     depositAddress: swap.deposit_address,
@@ -92,19 +90,19 @@ export function createOpenReceiveSwapDisplayModel(
     depositAmount,
     providerStateLabel: settled
       ? "Payment complete"
-      : getOpenReceiveSwapProviderStateLabel(swap.provider_state),
+      : getSwapProviderStateLabel(swap.provider_state),
     providerStateDetail: settled
       ? "Your payment is confirmed and your order is complete."
-      : getOpenReceiveSwapProviderStateDetail(swap.provider_state, swap.pay_in_asset, {
+      : getSwapProviderStateDetail(swap.provider_state, swap.pay_in_asset, {
           refundReason: swap.refund_reason,
           depositAmount: swap.deposit_amount,
           depositReceivedAmount: swap.deposit_received_amount,
           refundAmount: swap.refund_amount,
         }),
-    state: settled ? "settled" : getOpenReceiveSwapPanelState(swap.provider_state),
+    state: settled ? "settled" : getSwapPanelState(swap.provider_state),
     expiresInSeconds,
-    countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
-    qrPayload: createOpenReceiveSwapQrPayload(swap),
+    countdownLabel: formatCountdown(expiresInSeconds),
+    qrPayload: createSwapQrPayload(swap),
     ...(feeBreakdown === undefined ? {} : { feeBreakdown }),
     ...(swap.deposit_tx_id === undefined ? {} : { depositTxId: swap.deposit_tx_id }),
     ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
@@ -119,11 +117,11 @@ export function createOpenReceiveSwapDisplayModel(
     ...(swap.deposit_received_amount === undefined
       ? {}
       : {
-          depositReceivedAmount: formatOpenReceiveDepositAmount(swap.deposit_received_amount),
+          depositReceivedAmount: formatDepositAmount(swap.deposit_received_amount),
         }),
     ...(swap.refund_amount === undefined
       ? {}
-      : { refundAmount: formatOpenReceiveDepositAmount(swap.refund_amount) }),
+      : { refundAmount: formatDepositAmount(swap.refund_amount) }),
     ...(swap.provider_order_id === undefined ? {} : { providerOrderId: swap.provider_order_id }),
   };
 }
@@ -132,7 +130,7 @@ export function createOpenReceiveSwapDisplayModel(
  * Poll snapshots omit the locally staged refund address/nonce. Overlay them so
  * Review → Confirm is not wiped by the next `/swaps/status` tick.
  */
-export function overlayOpenReceiveSwapRefundStaging(
+export function overlaySwapRefundStaging(
   invoice: CheckoutInvoiceSnapshot,
   local: CheckoutInvoiceSnapshot | undefined | null,
 ): CheckoutInvoiceSnapshot {
@@ -162,10 +160,7 @@ export function overlayOpenReceiveSwapRefundStaging(
   };
 }
 
-export function openReceiveSwapAssetMatchesRoute(
-  routeKey: string,
-  payInAsset: string | undefined,
-): boolean {
+export function swapAssetMatchesRoute(routeKey: string, payInAsset: string | undefined): boolean {
   if (payInAsset === undefined) return false;
   const route = routeKey.includes(":") ? (routeKey.split(":").at(-1) ?? routeKey) : routeKey;
   if (route === "usdt") return payInAsset.startsWith("USDT_");
@@ -175,7 +170,7 @@ export function openReceiveSwapAssetMatchesRoute(
   return false;
 }
 
-export function getOpenReceiveSwapProviderStateLabel(state: string): string {
+export function getSwapProviderStateLabel(state: string): string {
   if (state === "creating_provider_order") return "Preparing payment address";
   if (state === "awaiting_deposit") return "Waiting for your payment";
   if (state === "confirming") return "Confirming payment";
@@ -190,7 +185,7 @@ export function getOpenReceiveSwapProviderStateLabel(state: string): string {
   return state;
 }
 
-function getOpenReceiveSwapProviderStateDetail(
+function getSwapProviderStateDetail(
   state: string,
   payInAsset: string,
   refundContext: {
@@ -200,11 +195,11 @@ function getOpenReceiveSwapProviderStateDetail(
     readonly refundAmount?: string;
   } = {},
 ): string {
-  const { networkLabel, assetLabel } = getOpenReceiveSwapAssetDisplay(payInAsset);
+  const { networkLabel, assetLabel } = getSwapAssetDisplay(payInAsset);
   if (state === "creating_provider_order") return "Creating a payment address.";
   if (state === "awaiting_deposit") return "Send exactly the amount shown below.";
   if (state === "confirming") {
-    return `Your payment was detected on ${networkLabel}. ${getOpenReceiveSwapConfirmationWaitHint(payInAsset)}`;
+    return `Your payment was detected on ${networkLabel}. ${getSwapConfirmationWaitHint(payInAsset)}`;
   }
   if (state === "exchanging") {
     return "Your payment is confirmed and being converted. This usually finishes within a minute.";
@@ -214,14 +209,14 @@ function getOpenReceiveSwapProviderStateDetail(
   }
   if (state === "expired") return "No payment was received before the payment window closed.";
   if (state === "refund_required" || state === "refund_pending" || state === "refunded") {
-    return getOpenReceiveSwapRefundDetail(state, assetLabel, refundContext);
+    return getSwapRefundDetail(state, assetLabel, refundContext);
   }
   if (state === "attention") return "This payment needs support review.";
   if (state === "failed") return "This payment address can no longer be used.";
   return state;
 }
 
-function getOpenReceiveSwapRefundDetail(
+function getSwapRefundDetail(
   state: string,
   assetLabel: string,
   refundContext: {
@@ -231,11 +226,11 @@ function getOpenReceiveSwapRefundDetail(
     readonly refundAmount?: string;
   },
 ): string {
-  const reasonDetail = getOpenReceiveSwapRefundReasonDetail(refundContext, assetLabel);
+  const reasonDetail = getSwapRefundReasonDetail(refundContext, assetLabel);
   const refundAmountDetail =
     refundContext.refundAmount === undefined
       ? undefined
-      : `Estimated refund: ${formatOpenReceiveDepositAmount(refundContext.refundAmount)} ${assetLabel} before network fees.`;
+      : `Estimated refund: ${formatDepositAmount(refundContext.refundAmount)} ${assetLabel} before network fees.`;
 
   if (state === "refund_required") {
     const action = "Enter an address you control to request a refund.";
@@ -251,7 +246,7 @@ function getOpenReceiveSwapRefundDetail(
     .join(" ");
 }
 
-function getOpenReceiveSwapRefundReasonDetail(
+function getSwapRefundReasonDetail(
   refundContext: {
     readonly refundReason?: string;
     readonly depositAmount?: string;
@@ -262,11 +257,11 @@ function getOpenReceiveSwapRefundReasonDetail(
   const expected =
     refundContext.depositAmount === undefined
       ? undefined
-      : formatOpenReceiveDepositAmount(refundContext.depositAmount);
+      : formatDepositAmount(refundContext.depositAmount);
   const received =
     refundContext.depositReceivedAmount === undefined
       ? undefined
-      : formatOpenReceiveDepositAmount(refundContext.depositReceivedAmount);
+      : formatDepositAmount(refundContext.depositReceivedAmount);
 
   if (refundContext.refundReason === "underpaid") {
     if (expected !== undefined && received !== undefined) {
@@ -290,7 +285,7 @@ function getOpenReceiveSwapRefundReasonDetail(
  * Rough payer-facing confirmation guidance by deposit network. Not a SLA —
  * chain congestion and provider policy can take longer.
  */
-export function getOpenReceiveSwapConfirmationWaitHint(payInAsset: string): string {
+export function getSwapConfirmationWaitHint(payInAsset: string): string {
   const network = payInAsset.includes("_")
     ? (payInAsset.split("_").at(-1) ?? payInAsset)
     : payInAsset;
@@ -300,7 +295,7 @@ export function getOpenReceiveSwapConfirmationWaitHint(payInAsset: string): stri
   return "Confirmation usually takes a few minutes.";
 }
 
-function getOpenReceiveSwapPanelState(state: string): OpenReceiveSwapDisplayModel["state"] {
+function getSwapPanelState(state: string): SwapDisplayModel["state"] {
   if (state === "creating_provider_order") return "creating";
   if (state === "awaiting_deposit") return "deposit";
   if (
@@ -319,7 +314,7 @@ function getOpenReceiveSwapPanelState(state: string): OpenReceiveSwapDisplayMode
   return "failed";
 }
 
-export function getOpenReceiveSwapAssetDisplay(payInAsset: string): {
+export function getSwapAssetDisplay(payInAsset: string): {
   readonly assetLabel: string;
   readonly networkLabel: string;
 } {
@@ -338,9 +333,7 @@ export function getOpenReceiveSwapAssetDisplay(payInAsset: string): {
   };
 }
 
-function createOpenReceiveSwapQrPayload(
-  swap: NonNullable<CheckoutInvoiceSnapshot["swap"]>,
-): string {
+function createSwapQrPayload(swap: NonNullable<CheckoutInvoiceSnapshot["swap"]>): string {
   if (swap.pay_in_asset === "ETH_ETH") {
     const wei = decimalAmountToIntegerString(swap.deposit_amount, 18);
     return wei === undefined
@@ -348,7 +341,7 @@ function createOpenReceiveSwapQrPayload(
       : `ethereum:${swap.deposit_address}?value=${wei}`;
   }
   if (swap.pay_in_asset === "SOL_SOL") {
-    const amount = formatOpenReceiveDepositAmount(swap.deposit_amount);
+    const amount = formatDepositAmount(swap.deposit_amount);
     return `solana:${swap.deposit_address}?amount=${encodeURIComponent(amount)}`;
   }
   return swap.deposit_address;

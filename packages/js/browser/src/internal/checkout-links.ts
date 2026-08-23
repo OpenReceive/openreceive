@@ -3,18 +3,16 @@
 // picks between them. Every URL is built from an allowlisted network, never
 // from provider text.
 
-import { openReceiveCheckoutLabels } from "./ui.ts";
+import { checkoutLabels } from "./ui.ts";
 
 /** Deposit networks that have a public block explorer in OpenReceive UI. */
-export type OpenReceiveExplorerNetwork = "ETH" | "SOL" | "TRON";
+export type ExplorerNetwork = "ETH" | "SOL" | "TRON";
 
 /**
  * Resolve the chain network from a `pay_in_asset` like `USDT_ETH` / `SOL_SOL`.
  * Returns undefined for unknown or Lightning-only values.
  */
-export function getOpenReceiveExplorerNetwork(
-  payInAsset: string | undefined,
-): OpenReceiveExplorerNetwork | undefined {
+export function getExplorerNetwork(payInAsset: string | undefined): ExplorerNetwork | undefined {
   if (payInAsset === undefined || payInAsset === "") return undefined;
   const network = payInAsset.includes("_")
     ? (payInAsset.split("_").at(-1) ?? payInAsset)
@@ -26,11 +24,11 @@ export function getOpenReceiveExplorerNetwork(
 /**
  * Public block-explorer URL for an on-chain address or transaction.
  * Lightning identifiers are intentionally unsupported — use
- * {@link createOpenReceiveLightningInvoiceDecodeUrl} for bolt11.
+ * {@link createLightningInvoiceDecodeUrl} for bolt11.
  */
-export function createOpenReceiveBlockExplorerUrl(options: {
+export function createBlockExplorerUrl(options: {
   readonly payInAsset?: string;
-  readonly network?: OpenReceiveExplorerNetwork | string;
+  readonly network?: ExplorerNetwork | string;
   readonly kind: "address" | "tx";
   readonly value: string;
 }): string | undefined {
@@ -39,7 +37,7 @@ export function createOpenReceiveBlockExplorerUrl(options: {
   const network =
     options.network === "ETH" || options.network === "SOL" || options.network === "TRON"
       ? options.network
-      : getOpenReceiveExplorerNetwork(
+      : getExplorerNetwork(
           options.payInAsset ?? (typeof options.network === "string" ? options.network : undefined),
         );
   if (network === undefined) return undefined;
@@ -68,7 +66,7 @@ export function createOpenReceiveBlockExplorerUrl(options: {
  * OpenReceive never picks one on the host's behalf. Omit `decodeLinkUrl` and no
  * link is rendered.
  */
-export function createOpenReceiveLightningInvoiceDecodeUrl(
+export function createLightningInvoiceDecodeUrl(
   invoice: string,
   decodeLinkUrl?: string,
 ): string | undefined {
@@ -85,7 +83,7 @@ export function createOpenReceiveLightningInvoiceDecodeUrl(
 /**
  * External link metadata for a swap/transaction detail row (explorer or decode).
  */
-export function createOpenReceiveDetailExternalLink(options: {
+export function createDetailExternalLink(options: {
   readonly label: string;
   readonly value: string;
   readonly payInAsset?: string;
@@ -95,10 +93,8 @@ export function createOpenReceiveDetailExternalLink(options: {
   const value = options.value.trim();
   if (value === "") return undefined;
   if (options.label === "Lightning invoice") {
-    const href = createOpenReceiveLightningInvoiceDecodeUrl(value, options.decodeLinkUrl);
-    return href === undefined
-      ? undefined
-      : { href, hrefLabel: openReceiveCheckoutLabels.decodeInvoice };
+    const href = createLightningInvoiceDecodeUrl(value, options.decodeLinkUrl);
+    return href === undefined ? undefined : { href, hrefLabel: checkoutLabels.decodeInvoice };
   }
   const kind =
     options.label === "Deposit address" ||
@@ -109,12 +105,10 @@ export function createOpenReceiveDetailExternalLink(options: {
         ? "tx"
         : undefined;
   if (kind === undefined) return undefined;
-  const href = createOpenReceiveBlockExplorerUrl({
+  const href = createBlockExplorerUrl({
     payInAsset: options.payInAsset,
     kind,
     value,
   });
-  return href === undefined
-    ? undefined
-    : { href, hrefLabel: openReceiveCheckoutLabels.viewOnExplorer };
+  return href === undefined ? undefined : { href, hrefLabel: checkoutLabels.viewOnExplorer };
 }

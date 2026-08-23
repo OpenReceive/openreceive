@@ -28,16 +28,12 @@
 // a branch in here.
 
 import {
-  findOpenReceiveReusableLightningInvoice,
-  mergeOpenReceiveAttemptIntoSnapshot,
-  mergeOpenReceiveMintedCheckout,
+  findReusableLightningInvoice,
+  mergeAttemptIntoSnapshot,
+  mergeMintedCheckout,
 } from "./checkout-merge.ts";
-import { startOpenReceiveSwapRequest } from "./swap-http.ts";
-import type {
-  CheckoutInvoiceSnapshot,
-  CheckoutSnapshot,
-  OpenReceiveBrowserLoggerOption,
-} from "./ui.ts";
+import { startSwapRequest } from "./swap-http.ts";
+import type { CheckoutInvoiceSnapshot, CheckoutSnapshot, BrowserLoggerOption } from "./ui.ts";
 
 /**
  * The swap attempt the wizard is showing. It stays host state — the element's
@@ -45,7 +41,7 @@ import type {
  * it in `useState` — so the session reaches it through accessors instead of
  * owning a second copy that could disagree.
  */
-export interface OpenReceiveSwapSelection {
+export interface SwapSelection {
   started(): CheckoutInvoiceSnapshot | undefined;
   setStarted(invoice: CheckoutInvoiceSnapshot): void;
   dismissedInvoiceId(): string | null;
@@ -53,7 +49,7 @@ export interface OpenReceiveSwapSelection {
   setSelectedAsset(payInAsset: string | null): void;
 }
 
-export interface OpenReceiveCheckoutSessionOptions {
+export interface CheckoutSessionOptions {
   /**
    * The snapshot the host is rendering right now, read at call time — the
    * element's changes under it on every poll.
@@ -77,7 +73,7 @@ export interface OpenReceiveCheckoutSessionOptions {
   swapPrefix?(): string | undefined;
   /** Read at call time so a host that swaps `globalThis.fetch` is honoured. */
   fetch?(): typeof globalThis.fetch | undefined;
-  swapSelection?: OpenReceiveSwapSelection;
+  swapSelection?: SwapSelection;
   /**
    * Publish a freshly started swap attempt. The two hosts fold it into their
    * snapshot differently (the element re-keys its poll controller onto the
@@ -85,14 +81,14 @@ export interface OpenReceiveCheckoutSessionOptions {
    * snapshot), so the merge stays on the host side of this callback.
    */
   onSwapStarted?(invoice: CheckoutInvoiceSnapshot): void;
-  logger?: OpenReceiveBrowserLoggerOption;
+  logger?: BrowserLoggerOption;
   /** The host's error surface: a DOM `openreceive:error` event, or `onError`. */
   onError(error: unknown): void;
   /** Session state changed — re-render. */
   onChange(): void;
 }
 
-export interface OpenReceiveCheckoutSession {
+export interface CheckoutSession {
   /** Lightning mint failure, shown inline in the wizard by the element. */
   readonly wizardError: string | undefined;
   /** Swap-start failure, shown inline in the deposit slot with a retry button. */
@@ -125,9 +121,7 @@ function payerFacingMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.length > 0 ? error.message : fallback;
 }
 
-export function createOpenReceiveCheckoutSession(
-  options: OpenReceiveCheckoutSessionOptions,
-): OpenReceiveCheckoutSession {
+export function createCheckoutSession(options: CheckoutSessionOptions): CheckoutSession {
   let wizardError: string | undefined;
   let swapStartError: string | undefined;
   let lightningRequested = false;
@@ -147,10 +141,10 @@ export function createOpenReceiveCheckoutSession(
       // minting a second attempt for the same order. Pinned on both hosts:
       // "re-selecting Bitcoin after the mint reuses the bolt11 …" in
       // tests/element-lifecycle.test.mjs and tests/react-checkout-behavior.test.mjs.
-      const reusableLightning = findOpenReceiveReusableLightningInvoice(current);
+      const reusableLightning = findReusableLightningInvoice(current);
       if (reusableLightning !== undefined) {
         lightningRequested = true;
-        options.onSnapshot?.(mergeOpenReceiveAttemptIntoSnapshot(reusableLightning, current));
+        options.onSnapshot?.(mergeAttemptIntoSnapshot(reusableLightning, current));
         return;
       }
     }
@@ -165,7 +159,7 @@ export function createOpenReceiveCheckoutSession(
       // The mint response does not carry the warmed method catalog, so the
       // merge keeps `payment_methods` and the sibling attempts from the
       // snapshot that was already on screen.
-      options.onSnapshot?.(mergeOpenReceiveMintedCheckout(checkout, options.snapshot()));
+      options.onSnapshot?.(mergeMintedCheckout(checkout, options.snapshot()));
     } catch (error) {
       // Surface the mint failure inline instead of silently returning to the
       // method picker.
@@ -207,7 +201,7 @@ export function createOpenReceiveCheckoutSession(
     options.onChange();
 
     try {
-      const started = await startOpenReceiveSwapRequest({
+      const started = await startSwapRequest({
         fetch: fetcher,
         prefix,
         orderId,

@@ -37,7 +37,7 @@ element cannot (component slots, class-name slots, render-prop children).
 
 `prefix` is the ONLY URL prop, in all four wrappers (G5). The create, prepare,
 payment-check and four swap routes are all derived from it by one function
-(`openReceiveRoutes`, `packages/js/browser/src/internal/routes.ts`), so a
+(`checkoutRoutes`, `packages/js/browser/src/internal/routes.ts`), so a
 checkout cannot be created against one mount and settled against another. There
 used to be five more ways to say the same thing — `checkoutUrl` (string or
 `(orderId) => string`), `{orderId}` / `{order_id}` templating, and an `orderUrl`
@@ -57,7 +57,7 @@ Mode rules:
 - Exactly one of `checkout` (snapshot) or `orderId` (create) is required. Passing
   neither raises one clear boundary error naming the framework and the missing prop —
   not the shared factory's bare `TypeError`. All four call the same
-  `validateOpenReceiveCheckoutProps`, React included (it dispatches on the result in
+  `validateCheckoutProps`, React included (it dispatches on the result in
   `<Checkout>` itself). Where it surfaces follows each framework's prop plumbing: Vue
   validates inside its `computed` shell binding and Svelte inside its reactive
   statement, so the throw does come out of that read; Angular validates in
@@ -72,15 +72,15 @@ Mode rules:
 ## Where the prop list lives
 
 One declaration, in `packages/js/browser/src/internal/checkout-props.ts`
-(`OpenReceiveCheckoutComponentProps`). The browser package is the floor React and
+(`CheckoutComponentProps`). The browser package is the floor React and
 the element wrappers share; `@openreceive/elements` composes the wrapper flavour
-(`OpenReceiveWrapperCheckoutComponentProps` = the shared props + the element's
+(`WrapperCheckoutComponentProps` = the shared props + the element's
 event handlers + the `options` escape hatch) and re-exports it.
 
 | Package | How it gets the props |
 | --- | --- |
-| `@openreceive/react` | derived: `CheckoutProps extends OpenReceiveCheckoutComponentProps` plus the React-only slots |
-| `@openreceive/vue` | derived: `defineProps<OpenReceiveWrapperCheckoutComponentProps>()`, with `withDefaults` for the defaults a type cannot carry |
+| `@openreceive/react` | derived: `CheckoutProps extends CheckoutComponentProps` plus the React-only slots |
+| `@openreceive/vue` | derived: `defineProps<WrapperCheckoutComponentProps>()`, with `withDefaults` for the defaults a type cannot carry |
 | `@openreceive/svelte` | restated: `export let` (and `let { … } = $props()` under runes) is a declaration, not a type — every prop name has to be written |
 | `@openreceive/angular` | restated: `@Input()` is a decorator on a declared field; a type cannot generate fields |
 
@@ -99,13 +99,13 @@ is a loud compile error, never a silently dropped prop.
 
 The deferred Lightning mint and the swap start are ONE implementation, in
 `packages/js/browser/src/internal/checkout-session.ts`
-(`createOpenReceiveCheckoutSession`). React and the custom element each wrap that
+(`createCheckoutSession`). React and the custom element each wrap that
 session; nothing about the decision is written twice.
 
 | Host | How it wraps the session |
 | --- | --- |
 | `@openreceive/elements` | `createElementCheckoutSession` keeps the element-only duties (prepare-once bookkeeping, the "these attributes are ours" guard) and delegates the mint and the swap start |
-| `@openreceive/react` | `useOpenReceiveCheckoutSession` holds one session per component: `CheckoutCreate` wires the mint (it owns the snapshot), `PaymentWizard` wires the swap (it owns the pay-in selection), and `onRequestLightning` connects them |
+| `@openreceive/react` | `useCheckoutSession` holds one session per component: `CheckoutCreate` wires the mint (it owns the snapshot), `PaymentWizard` wires the swap (it owns the pay-in selection), and `onRequestLightning` connects them |
 
 Only two things stay per-host, as injected callbacks, because they are the real
 difference between a custom element and a React tree:

@@ -4,7 +4,7 @@
 //
 // The mint and the swap start themselves are NOT here — they are the same
 // decision React makes, so they live once in
-// @openreceive/browser/headless's `createOpenReceiveCheckoutSession` and this
+// @openreceive/browser/headless's `createCheckoutSession` and this
 // file supplies the element's answers to the two questions that genuinely
 // differ: how a new snapshot reaches the screen (attributes + a shadow rebuild
 // + a re-keyed poll controller) and where a failure is shown (an inline panel
@@ -23,12 +23,12 @@ import {
   applyCheckoutElementAttributes,
   type CheckoutSnapshot,
   createCheckoutElementAttributes,
-  createOpenReceiveCheckoutSession,
-  mergeOpenReceiveAttemptIntoCheckout,
+  createCheckoutSession,
+  mergeAttemptIntoCheckout,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
-  type OpenReceiveBrowserLoggerOption,
-  type OpenReceiveSwapSelection,
+  type BrowserLoggerOption,
+  type SwapSelection,
   prepareCheckout,
   requestCheckout,
 } from "@openreceive/browser/headless";
@@ -37,8 +37,8 @@ import {
 export interface ElementCheckoutSessionHost {
   /** The custom element: its attributes are the create-mode inputs. */
   readonly element: HTMLElement;
-  readonly logger: OpenReceiveBrowserLoggerOption | undefined;
-  readonly swapSelection: OpenReceiveSwapSelection;
+  readonly logger: BrowserLoggerOption | undefined;
+  readonly swapSelection: SwapSelection;
   isCreateMode(): boolean;
   render(): void;
   startCheckoutController(): void;
@@ -152,7 +152,7 @@ export function createElementCheckoutSession(
     host.startCheckoutController();
   }
 
-  const session = createOpenReceiveCheckoutSession({
+  const session = createCheckoutSession({
     snapshot: () => host.latestCheckoutSnapshot(),
     orderId: currentOrderId,
     requestCheckout: (orderId) => {
@@ -175,9 +175,7 @@ export function createElementCheckoutSession(
       const orderId = currentOrderId();
       if (orderId === undefined) return;
       const previous = host.latestCheckoutSnapshot() ?? host.currentCheckoutSnapshot();
-      host.handleControllerSnapshot(
-        mergeOpenReceiveAttemptIntoCheckout(invoice, previous, orderId),
-      );
+      host.handleControllerSnapshot(mergeAttemptIntoCheckout(invoice, previous, orderId));
       host.startCheckoutController();
     },
     logger: host.logger,

@@ -1,10 +1,6 @@
 import { OpenReceiveError } from "./errors/index.ts";
-import { OpenReceiveDecimalError } from "./money/decimal.ts";
-import type {
-  ListTransactionsRequest,
-  NwcTransaction,
-  OpenReceiveReceiveNwcClient,
-} from "./nwc/client.ts";
+import { DecimalError } from "./money/decimal.ts";
+import type { ListTransactionsRequest, NwcTransaction, ReceiveNwcClient } from "./nwc/client.ts";
 import {
   type TransactionSettlementStatus,
   classifyTransactionSettlement,
@@ -36,7 +32,7 @@ export interface PaidPayment {
 }
 
 export interface CheckPaymentOptions {
-  readonly client: OpenReceiveReceiveNwcClient;
+  readonly client: ReceiveNwcClient;
   readonly paymentHash: string;
   /** Exact NIP-47 invoice creation time returned by make_invoice. */
   readonly createdAt: number;
@@ -47,7 +43,7 @@ export interface CheckPaymentOptions {
 }
 
 interface ScanPaymentsOptions {
-  readonly client: OpenReceiveReceiveNwcClient;
+  readonly client: ReceiveNwcClient;
   readonly from?: number;
   readonly until?: number;
   readonly maxPages?: number;
@@ -73,7 +69,7 @@ export interface ReconcilePaymentAttempt {
 }
 
 export interface ReconcilePaymentsOptions {
-  readonly client: OpenReceiveReceiveNwcClient;
+  readonly client: ReceiveNwcClient;
   readonly attempts: readonly ReconcilePaymentAttempt[];
   readonly clock?: () => number;
   readonly overlapSeconds?: number;
@@ -131,7 +127,7 @@ export async function reconcilePaymentAttempts(
   if (options.attempts.length === 0) return [];
   const overlapSeconds = options.overlapSeconds ?? 60;
   if (!Number.isSafeInteger(overlapSeconds) || overlapSeconds < 0) {
-    throw new OpenReceiveDecimalError("overlapSeconds must be a non-negative safe integer");
+    throw new DecimalError("overlapSeconds must be a non-negative safe integer");
   }
   const expected = new Map(
     options.attempts.map((attempt) => [
@@ -262,7 +258,7 @@ function safeTransaction(transaction: NwcTransaction): NwcTransaction {
 function normalizePaymentHash(value: string): string {
   const normalized = value.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(normalized)) {
-    throw new OpenReceiveDecimalError("paymentHash must be 64 hexadecimal characters");
+    throw new DecimalError("paymentHash must be 64 hexadecimal characters");
   }
   return normalized;
 }
@@ -270,7 +266,7 @@ function normalizePaymentHash(value: string): string {
 function normalizeMaxPages(value: number | undefined): number {
   if (value === undefined) return 10_000;
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new OpenReceiveDecimalError("maxPages must be a positive safe integer");
+    throw new DecimalError("maxPages must be a positive safe integer");
   }
   return value;
 }
@@ -289,7 +285,7 @@ function normalizedTransactionHash(transaction: NwcTransaction): string | undefi
 
 function normalizeUnix(value: number, field: string): number {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new OpenReceiveDecimalError(`${field} must be a non-negative safe integer`);
+    throw new DecimalError(`${field} must be a non-negative safe integer`);
   }
   return value;
 }

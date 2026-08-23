@@ -3,7 +3,7 @@
 module OpenReceive
   module Server
     # Client-IP bucketing shared by rate limiting and attempt-row stamping.
-    # Ports the JS openReceiveClientIpBucket exactly: the same input string
+    # Ports the JS clientIpBucket exactly: the same input string
     # must produce the same bucket string in both engines (mirrored tests in
     # tests/rate-limit.test.mjs and the Ruby server tests).
     #

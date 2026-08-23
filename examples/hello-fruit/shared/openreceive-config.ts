@@ -7,7 +7,7 @@ import type { CreateOpenReceiveOptions } from "@openreceive/node";
  * the process environment. LOG_LEVEL (DEBUG|INFO|WARN|ERROR, default INFO) is read by
  * `@openreceive/node` / `@openreceive/browser` console and file loggers automatically.
  */
-export const openReceiveConfig = {
+export const config = {
   priceCurrencies: ["USD"],
   logging: {
     enabled: true,

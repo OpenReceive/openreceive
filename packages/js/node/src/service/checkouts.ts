@@ -12,8 +12,8 @@ import type {
   Checkout,
   CreateCheckoutAmount,
   CreateCheckoutRequest,
-  OpenReceiveRateQuote,
-  OpenReceiveServiceContext,
+  RateQuote,
+  ServiceContext,
 } from "./types.ts";
 
 export const OPENRECEIVE_INVOICE_EXPIRY_SECONDS = 10 * 60;
@@ -28,12 +28,12 @@ export const OPENRECEIVE_INVOICE_EXPIRY_TOLERANCE_SECONDS = 60;
 
 export interface PrepareCheckoutResult {
   readonly amountMsats: number;
-  readonly fiatQuote: OpenReceiveRateQuote | null;
+  readonly fiatQuote: RateQuote | null;
 }
 
 /** Resolve the host order amount to msats without minting a Lightning invoice. */
 export async function prepareCheckout(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   input: { readonly amount: CreateCheckoutAmount },
 ): Promise<PrepareCheckoutResult> {
   const resolved = await resolveCreateAmount({
@@ -49,7 +49,7 @@ export async function prepareCheckout(
 }
 
 export async function createCheckout(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   request: CreateCheckoutRequest,
 ): Promise<Checkout> {
   const input = normalizeCreateCheckoutRequest(request);

@@ -1,4 +1,4 @@
-import type { OpenReceiveBtcFiatRateMap } from "@openreceive/core";
+import type { BtcFiatRateMap } from "@openreceive/core";
 import {
   helloFruitOrderRateCurrencies,
   normalizeHelloFruitCurrency,
@@ -7,9 +7,9 @@ import {
 
 export async function readHelloFruitOrderRates(input: {
   readonly currency: unknown;
-  readonly listRates: (currencies: readonly string[]) => Promise<OpenReceiveBtcFiatRateMap>;
+  readonly listRates: (currencies: readonly string[]) => Promise<BtcFiatRateMap>;
   readonly supportedCurrencies?: readonly string[];
-}): Promise<OpenReceiveBtcFiatRateMap | undefined> {
+}): Promise<BtcFiatRateMap | undefined> {
   const supportedCurrencies = input.supportedCurrencies ?? readHelloFruitCheckoutCurrencies();
   const currency = normalizeHelloFruitCurrency(input.currency, [...supportedCurrencies]);
   const currencies = helloFruitOrderRateCurrencies(currency);

@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { reconcilePaymentAttempts } from "../packages/js/core/src/index.ts";
-import {
-  createOpenReceiveHost,
-  reconcileOpenReceivePayments,
-} from "../packages/js/http/src/index.ts";
+import { createHost, reconcileHostPayments } from "../packages/js/http/src/index.ts";
 
 const PAGE = 20;
 // Ordered hashes: index 0 < index 1 < ... as hex strings, so scan-window
@@ -84,7 +81,7 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
   const wallet = walletWith(history);
   const db = memoryPaymentsDb();
   const settled = [];
-  const host = createOpenReceiveHost({
+  const host = createHost({
     db,
     clock: () => now,
     loadOrder: async (orderId) => ({ orderId }),
@@ -114,7 +111,7 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
         maxPages: 1,
       }),
   };
-  await reconcileOpenReceivePayments({ service, host, clock: () => now });
+  await reconcileHostPayments({ service, host, clock: () => now });
 
   const row = (await host.payments.listForOrder("order-truncated"))[0];
   assert.equal(row.status, "pending", "a capped scan must never close a possibly-paid attempt");
@@ -130,7 +127,7 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
         clock: () => now,
       }),
   };
-  await reconcileOpenReceivePayments({ service: complete, host, clock: () => now });
+  await reconcileHostPayments({ service: complete, host, clock: () => now });
   assert.deepEqual(settled, [paymentHash]);
   assert.equal((await host.payments.listForOrder("order-truncated"))[0].status, "settled");
 });

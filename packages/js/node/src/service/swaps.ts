@@ -1,15 +1,15 @@
 import { isValidSwapAddressForPayInAsset } from "@openreceive/core";
 import {
-  type getOpenReceiveSwapAssetInfo,
-  isOpenReceiveSwapPayInAsset,
-  listOpenReceiveSwapAssetInfo,
+  type getSwapAssetInfo,
+  isSwapPayInAsset,
+  listSwapAssetInfo,
   type SwapOrder,
   type SwapPayInAsset,
   type SwapProvider,
   type SwapProviderAsset,
 } from "../swap/index.ts";
 import { createCheckout } from "./checkouts.ts";
-import { OpenReceiveServiceError, serviceError } from "./core-utils.ts";
+import { ServiceError, serviceError } from "./core-utils.ts";
 import { emitLog } from "./logging.ts";
 import { createAmountRequest, normalizeCreateCheckoutAmount } from "./requests.ts";
 import { resolveCreateAmount } from "./pricing.ts";
@@ -18,7 +18,7 @@ import type {
   GetSwapRequest,
   ListSwapOptionsRequest,
   ListSwapOptionsResult,
-  OpenReceiveServiceContext,
+  ServiceContext,
   PublicSwap,
   SwapCheckout,
   SwapPaymentMethod,
@@ -29,7 +29,7 @@ import type {
 } from "./types.ts";
 
 export async function listSwapOptions(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   input: ListSwapOptionsRequest,
 ): Promise<ListSwapOptionsResult> {
   const providers = context.swapProviders;
@@ -46,7 +46,7 @@ export async function listSwapOptions(
 
   const amountMsats = parseAmountMsats(input.amountMsats);
   const providerCatalog = await resolveSwapProviderCatalog(context, providers);
-  const options = listOpenReceiveSwapAssetInfo().map((asset) =>
+  const options = listSwapAssetInfo().map((asset) =>
     swapCatalogOption({
       asset,
       amountMsats,
@@ -75,7 +75,7 @@ export async function listSwapOptions(
 }
 
 export async function quoteSwap(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   input: SwapQuoteRequest,
 ): Promise<SwapQuoteResult> {
   const amount = normalizeCreateCheckoutAmount(input.amount);
@@ -115,7 +115,7 @@ export async function quoteSwap(
 }
 
 export async function createSwap(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   input: CreateSwapRequest,
 ): Promise<SwapCheckout> {
   const payInAsset = parsePayInAsset(input.payInAsset);
@@ -141,10 +141,7 @@ export async function createSwap(
   };
 }
 
-export async function getSwap(
-  context: OpenReceiveServiceContext,
-  input: GetSwapRequest,
-): Promise<PublicSwap> {
+export async function getSwap(context: ServiceContext, input: GetSwapRequest): Promise<PublicSwap> {
   const recovery = parseSwapData(input.swapData);
   const paymentHash = parsePaymentHash(input.paymentHash);
   const orderId = parseOrderId(input.orderId);
@@ -154,7 +151,7 @@ export async function getSwap(
 }
 
 export async function refundSwap(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   input: SwapRefundRequest,
 ): Promise<PublicSwap> {
   const recovery = parseSwapData(input.swapData);
@@ -179,7 +176,7 @@ export async function refundSwap(
 }
 
 async function selectProvider(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   payInAsset: SwapPayInAsset,
 ): Promise<SwapProvider> {
   const providers = context.swapProviders;
@@ -213,14 +210,14 @@ async function selectProvider(
       // Healthy provider that omits this asset — do not fall through to backup.
       throw serviceError(503, "INTERNAL", `No configured swap provider supports ${payInAsset}.`);
     } catch (error) {
-      if (error instanceof OpenReceiveServiceError) throw error;
+      if (error instanceof ServiceError) throw error;
       // Provider request failed — try the next configured LSC connection.
     }
   }
   throw serviceError(503, "INTERNAL", `No configured swap provider supports ${payInAsset}.`);
 }
 
-function requireProvider(context: OpenReceiveServiceContext, name: string): SwapProvider {
+function requireProvider(context: ServiceContext, name: string): SwapProvider {
   const provider = context.swapProviders.find((candidate) => candidate.name === name);
   if (provider === undefined) {
     throw serviceError(503, "INTERNAL", `Swap provider ${name} is not configured.`);
@@ -293,7 +290,7 @@ function parseOrderId(value: string): string {
 }
 
 function parsePayInAsset(value: string): SwapPayInAsset {
-  if (!isOpenReceiveSwapPayInAsset(value)) {
+  if (!isSwapPayInAsset(value)) {
     throw serviceError(400, "INVALID_REQUEST", "payInAsset is not supported.");
   }
   return value;
@@ -328,7 +325,7 @@ function parseAmountMsats(value: number): number {
 }
 
 async function resolveSwapProviderCatalog(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   providers: readonly SwapProvider[],
 ): Promise<Map<SwapPayInAsset, SwapProviderAsset & { readonly provider: string }>> {
   // Use exactly one live provider: primary when healthy, otherwise the first
@@ -373,7 +370,7 @@ async function resolveSwapProviderCatalog(
 }
 
 function swapCatalogOption(input: {
-  readonly asset: ReturnType<typeof getOpenReceiveSwapAssetInfo>;
+  readonly asset: ReturnType<typeof getSwapAssetInfo>;
   readonly amountMsats: number;
   readonly providerAsset?: SwapProviderAsset & { readonly provider: string };
 }): SwapPaymentMethod {

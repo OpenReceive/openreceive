@@ -8,7 +8,7 @@ export interface StatusInvoiceLike {
   readonly expires_at?: number | string | null;
 }
 
-export function status(
+export function deriveStatus(
   invoice: StatusInvoiceLike,
   options: { readonly now?: number } = {},
 ): Status {

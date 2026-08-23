@@ -7,10 +7,10 @@
 
 import { recordOrEmpty } from "@openreceive/core";
 import {
-  getOpenReceiveSwapAssetInfo,
-  isOpenReceiveLightningNetwork,
-  listOpenReceiveSwapAssetInfo,
-  openReceiveSwapNetworkMatches,
+  getSwapAssetInfo,
+  isLightningNetwork,
+  listSwapAssetInfo,
+  swapNetworkMatches,
   type SwapPayInAsset,
 } from "./assets.ts";
 import { optionalStringField } from "./fixedfloat-fields.ts";
@@ -41,11 +41,11 @@ export function resolveFixedFloatCurrencies(
 ): FixedFloatCurrencyResolution {
   const currencies = readFixedFloatCurrencies(data);
   const payIn = new Map<SwapPayInAsset, FixedFloatCurrency>();
-  for (const asset of listOpenReceiveSwapAssetInfo()) {
+  for (const asset of listSwapAssetInfo()) {
     const found = currencies.find(
       (currency) =>
         currency.coin.toUpperCase() === asset.coin &&
-        openReceiveSwapNetworkMatches(asset.network, currency.network) &&
+        swapNetworkMatches(asset.network, currency.network) &&
         // /ccies recv=false means FixedFloat will not accept deposits for this
         // currency — omit it from the catalog rather than failing at /create.
         currency.recv !== false,
@@ -58,7 +58,7 @@ export function resolveFixedFloatCurrencies(
       ? currencies.find(
           (currency) =>
             currency.coin.toUpperCase() === "BTC" &&
-            isOpenReceiveLightningNetwork(currency.network) &&
+            isLightningNetwork(currency.network) &&
             // Payout side must be sendable to the merchant's bolt11.
             currency.send !== false,
         )
@@ -108,15 +108,13 @@ export function requiredFixedFloatCurrency(
 ): string {
   const currency = resolution.pay_in.get(payInAsset);
   if (currency === undefined) {
-    const label = getOpenReceiveSwapAssetInfo(payInAsset).pay_in_asset;
+    const label = getSwapAssetInfo(payInAsset).pay_in_asset;
     throw new Error(`FixedFloat does not currently support ${label}.`);
   }
   return currency.code;
 }
 
-export function openReceiveFixedFloatRatePairKeys(
-  resolution: FixedFloatCurrencyResolution,
-): Set<string> {
+export function fixedFloatRatePairKeys(resolution: FixedFloatCurrencyResolution): Set<string> {
   const keys = new Set<string>();
   for (const currency of resolution.pay_in.values()) {
     keys.add(fixedFloatRatesPairKey(currency.code, resolution.lightning.code));

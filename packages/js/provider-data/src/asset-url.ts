@@ -10,7 +10,7 @@ const PACKAGED_ASSET_PREFIX = "./assets/";
  * next to that chunk so `/assets/provider-icons/…` and `/assets/pay_tutorials/…`
  * resolve.
  */
-export function resolveOpenReceiveAssetPath(path: string, fromModuleUrl: string): string {
+export function resolveAssetPath(path: string, fromModuleUrl: string): string {
   if (!path.startsWith(PACKAGED_ASSET_PREFIX)) return path;
   try {
     const { pathname } = new URL(fromModuleUrl);
@@ -29,5 +29,5 @@ export function resolveOpenReceiveAssetPath(path: string, fromModuleUrl: string)
  * `import.meta.url`.
  */
 export function assetUrl(path: string): string {
-  return new URL(resolveOpenReceiveAssetPath(path, moduleUrl), moduleUrl).href;
+  return new URL(resolveAssetPath(path, moduleUrl), moduleUrl).href;
 }

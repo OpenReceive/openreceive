@@ -1,17 +1,17 @@
 // NWC client
 
-export type { OpenReceiveErrorBody, OpenReceiveErrorCode } from "./errors/index.ts";
+export type { ErrorBody, ErrorCode } from "./errors/index.ts";
 // Errors
 export {
-  isOpenReceiveErrorCode,
-  isRetryableOpenReceiveErrorCode,
+  isErrorCode,
+  isRetryableErrorCode,
   OpenReceiveError,
 } from "./errors/index.ts";
 export type {
-  OpenReceiveBitcoinAmount,
-  OpenReceiveBtcFiatRateMap,
-  OpenReceiveDecimal,
-  OpenReceiveFiatAmount,
+  BitcoinAmount,
+  BtcFiatRateMap,
+  Decimal,
+  MoneyAmount,
 } from "./money/decimal.ts";
 // Exact integer/decimal money math (bigint — never binary floats). The one
 // decimal engine: rate quoting and the Node swap providers parse through it.
@@ -20,11 +20,11 @@ export {
   convertAmountViaBtcRates,
   decimalScaleFactor,
   formatDecimal,
-  isOpenReceiveBitcoinAmountCurrency,
+  isBitcoinAmountCurrency,
   multiplyAmount,
   OPENRECEIVE_SATS_PER_BTC,
-  OpenReceiveDecimalError,
-  OpenReceivePriceFeedError,
+  DecimalError,
+  PriceFeedError,
   parseDecimal,
   sumAmounts,
 } from "./money/decimal.ts";
@@ -36,17 +36,17 @@ export type {
   NwcEncryptionMode,
   NwcTransaction,
   NwcUriParseErrorCode,
-  OpenReceiveReceiveNwcClient,
-  OpenReceiveTransactionState,
+  ReceiveNwcClient,
+  TransactionState,
   ParsedNwcConnection,
   RedactedNwcConnection,
   WalletCapabilitySummary,
 } from "./nwc/client.ts";
 export {
-  formatOpenReceiveInvalidNwcMessage,
-  formatOpenReceiveMissingNwcMessage,
-  formatOpenReceiveSpendCapabilityRefusedMessage,
-  formatOpenReceiveSpendCapabilityWarningMessage,
+  formatInvalidNwcMessage,
+  formatMissingNwcMessage,
+  formatSpendCapabilityRefusedMessage,
+  formatSpendCapabilityWarningMessage,
   isTransactionSettled,
   NwcUriParseError,
   OPENRECEIVE_NWC_CODE_HELP_URL,
@@ -69,34 +69,34 @@ export { checkPayment, reconcilePaymentAttempts } from "./payments.ts";
 // exactly-once fulfillment duty, rendered into every generated file, migration
 // template, and wiring guide so the guidance can never drift.
 export {
-  openReceiveFulfillmentNote,
-  openReceiveFulfillmentNoteMarkdown,
+  fulfillmentNote,
+  fulfillmentNoteMarkdown,
 } from "./fulfillment-note.ts";
 export type {
-  OpenReceivePaymentsDdlOptions,
-  OpenReceivePaymentsDialect,
+  PaymentsDdlOptions,
+  PaymentsDialect,
 } from "./payments-ddl.ts";
 // Canonical openreceive_payments / openreceive_meta DDL — the ONE rendering
 // both @openreceive/http and the scaffold CLI build their migrations from.
 export {
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
-  openReceivePaymentsColumnNames,
-  openReceivePaymentsDdlStatements,
-  openReceivePaymentsHashCheckSql,
-  openReceivePaymentsIndexName,
-  openReceivePaymentsSeedSql,
-  openReceivePaymentsStatusCheckSql,
+  paymentsColumnNames,
+  paymentsDdlStatements,
+  paymentsHashCheckSql,
+  paymentsIndexName,
+  paymentsSeedSql,
+  paymentsStatusCheckSql,
 } from "./payments-ddl.ts";
 export type {
   CachedPriceFeedOptions,
-  OpenReceiveBtcFiatRateMapWithSource,
-  OpenReceiveDirectAmountQuote,
-  OpenReceiveLivePriceSourceId,
-  OpenReceivePriceFeedHealthCheck,
-  OpenReceivePriceSourceId,
-  OpenReceiveRateQuote,
-  OpenReceiveResolvedPriceProvider,
-  OpenReceiveSourcedPriceProvider,
+  BtcFiatRateMapWithSource,
+  DirectAmountQuote,
+  LivePriceSourceId,
+  PriceFeedHealthCheck,
+  PriceSourceId,
+  RateQuote,
+  ResolvedPriceProvider,
+  SourcedPriceProvider,
   QuoteFiatToMsatsRequest,
   QuoteFiatToMsatsWithPriceRequest,
   SimplePriceFetch,
@@ -122,13 +122,13 @@ export type {
 } from "./settlement/index.ts";
 // Settlement classification
 export { classifyTransactionSettlement } from "./settlement/index.ts";
-export type { OpenReceiveSwapAddressNetwork } from "./swap/address.ts";
+export type { SwapAddressNetwork } from "./swap/address.ts";
 // Swap address validation (deposit + refund), checksum-aware per network
 export {
   getSwapRefundAddressError,
   isValidAddressForSwapNetwork,
   isValidSwapAddressForPayInAsset,
-  openReceiveSwapAddressNetworkForPayInAsset,
+  swapAddressNetworkForPayInAsset,
 } from "./swap/address.ts";
 // Shared value primitives — the one clock, the two record readers, the
 // non-empty-string reader, and the undefined-field compactor. Public because

@@ -3,7 +3,7 @@
 // one place that builds a `lightning:` URI. Every path that shows or copies an
 // invoice goes through `assertInvoice` first.
 
-export function assertOpenReceiveDisplayInvoice(invoice: string): void {
+export function assertDisplayInvoice(invoice: string): void {
   assertInvoice(invoice);
 }
 
@@ -22,7 +22,7 @@ export function assertInvoice(invoice: string): void {
   }
 }
 
-export function assertOpenReceiveBrowserPayloadSafe(value: unknown): void {
+export function assertBrowserPayloadSafe(value: unknown): void {
   if (typeof value === "string") {
     if (value.startsWith("nostr+walletconnect://")) {
       throw new TypeError("OpenReceive browser payload must not include an NWC connection string");
@@ -31,13 +31,13 @@ export function assertOpenReceiveBrowserPayloadSafe(value: unknown): void {
   }
 
   if (Array.isArray(value)) {
-    for (const item of value) assertOpenReceiveBrowserPayloadSafe(item);
+    for (const item of value) assertBrowserPayloadSafe(item);
     return;
   }
 
   if (value !== null && typeof value === "object") {
     for (const item of Object.values(value)) {
-      assertOpenReceiveBrowserPayloadSafe(item);
+      assertBrowserPayloadSafe(item);
     }
   }
 }

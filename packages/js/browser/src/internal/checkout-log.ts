@@ -4,13 +4,9 @@
 // `swapAuditLogFields`.
 
 import { compact } from "@openreceive/core";
-import { resolveOpenReceiveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
-import type {
-  CheckoutState,
-  OpenReceiveBrowserLoggerOption,
-  OpenReceiveBrowserLogLevel,
-} from "./ui.ts";
-import { getOpenReceiveSwapProviderStateLabel } from "./checkout-swap-view.ts";
+import { resolveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
+import type { CheckoutState, BrowserLoggerOption, BrowserLogLevel } from "./ui.ts";
+import { getSwapProviderStateLabel } from "./checkout-swap-view.ts";
 
 /** The swap fields the checkout audit log is allowed to see. */
 interface SwapAuditLogSource {
@@ -88,7 +84,7 @@ function swapAuditLogFields(swap: SwapAuditLogSource | undefined): Record<string
 }
 
 export function emitBrowserSwapTransition(
-  logger: OpenReceiveBrowserLoggerOption | undefined,
+  logger: BrowserLoggerOption | undefined,
   previous: CheckoutState | undefined,
   next: CheckoutState,
 ): void {
@@ -111,7 +107,7 @@ export function emitBrowserSwapTransition(
   const settlementChanged = previousSettled !== nextSettled;
   if (!stateChanged && !nonceChanged && !attentionChanged && !settlementChanged) return;
 
-  const level: OpenReceiveBrowserLogLevel =
+  const level: BrowserLogLevel =
     nextState === "attention" || nextSwap.attention === true
       ? "warn"
       : nextState === "refund_required" ||
@@ -133,19 +129,19 @@ export function emitBrowserSwapTransition(
       previous_provider_state: previousState,
       previous_settled: previousSettled,
       wallet_settled: nextSettled,
-      ui_label: nextSettled ? "Payment complete" : getOpenReceiveSwapProviderStateLabel(nextState),
+      ui_label: nextSettled ? "Payment complete" : getSwapProviderStateLabel(nextState),
     },
   );
 }
 
 export function emitBrowserLog(
-  logger: OpenReceiveBrowserLoggerOption | undefined,
-  level: OpenReceiveBrowserLogLevel,
+  logger: BrowserLoggerOption | undefined,
+  level: BrowserLogLevel,
   event: string,
   message: string,
   fields: Record<string, unknown> = {},
 ): void {
-  const sink = resolveOpenReceiveBrowserLogger(logger);
+  const sink = resolveBrowserLogger(logger);
   if (sink === undefined) return;
 
   try {

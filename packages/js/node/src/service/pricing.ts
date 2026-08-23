@@ -5,34 +5,29 @@ import {
   isResolvedPriceProvider,
   OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV,
   OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
-  type OpenReceiveBitcoinAmount,
-  type OpenReceiveBtcFiatRateMapWithSource,
-  type OpenReceiveFiatAmount,
-  type OpenReceiveRateQuote,
-  type OpenReceiveSourcedPriceProvider,
+  type BitcoinAmount,
+  type BtcFiatRateMapWithSource,
+  type MoneyAmount,
+  type RateQuote,
+  type SourcedPriceProvider,
   nonEmptyString,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
   type SimplePriceFetch,
 } from "@openreceive/core";
-import { OpenReceiveConfigError } from "../config-error.ts";
-import {
-  asRecord,
-  OpenReceiveServiceError,
-  parseOptionalRecord,
-  serviceError,
-} from "./core-utils.ts";
-import type { ListRatesRequest, OpenReceiveServiceContext, ResolvedCreateAmount } from "./types.ts";
+import { ConfigError } from "../config-error.ts";
+import { asRecord, ServiceError, parseOptionalRecord, serviceError } from "./core-utils.ts";
+import type { ListRatesRequest, ServiceContext, ResolvedCreateAmount } from "./types.ts";
 
 export async function listRates(
-  context: OpenReceiveServiceContext,
+  context: ServiceContext,
   input: ListRatesRequest = {},
-): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]> {
+): Promise<BtcFiatRateMapWithSource["rates"]> {
   try {
     const currencies =
       input.currencies === undefined
         ? context.priceCurrencies
-        : normalizeOpenReceivePriceCurrencies(input.currencies, "listRates currencies");
+        : normalizePriceCurrencies(input.currencies, "listRates currencies");
     for (const currency of currencies) {
       assertAllowedFiatCurrency(currency, context.priceCurrencies);
     }
@@ -47,9 +42,9 @@ export async function listRates(
 }
 
 export async function quoteRates(
-  context: OpenReceiveServiceContext,
-  input: { readonly fiat: OpenReceiveFiatAmount },
-): Promise<OpenReceiveRateQuote> {
+  context: ServiceContext,
+  input: { readonly fiat: MoneyAmount },
+): Promise<RateQuote> {
   const body = asRecord(input);
   try {
     const fiat = parseFiatAmount(body.fiat);
@@ -64,14 +59,12 @@ export async function quoteRates(
   }
 }
 
-export function readOpenReceivePriceCurrencies(
-  configured: readonly string[] | undefined,
-): readonly string[] {
+export function readPriceCurrencies(configured: readonly string[] | undefined): readonly string[] {
   const rawCurrencies = configured ?? ["USD"];
-  return normalizeOpenReceivePriceCurrencies(rawCurrencies, "OpenReceive price currencies");
+  return normalizePriceCurrencies(rawCurrencies, "OpenReceive price currencies");
 }
 
-export function normalizeOpenReceivePriceCurrencies(
+export function normalizePriceCurrencies(
   rawCurrencies: readonly string[],
   label: string,
 ): readonly string[] {
@@ -79,7 +72,7 @@ export function normalizeOpenReceivePriceCurrencies(
     ...new Set(rawCurrencies.map((currency) => currency.trim().toUpperCase()).filter(Boolean)),
   ];
   if (currencies.length === 0) {
-    throw new OpenReceiveConfigError({
+    throw new ConfigError({
       code: "INVALID_PRICE_CURRENCIES",
       message: `${label} must include at least one currency.`,
       hint: "Set priceCurrencies to fiat codes like USD and EUR, or omit it to use USD.",
@@ -87,7 +80,7 @@ export function normalizeOpenReceivePriceCurrencies(
   }
   for (const currency of currencies) {
     if (!/^[A-Z]{3}$/.test(currency)) {
-      throw new OpenReceiveConfigError({
+      throw new ConfigError({
         code: "INVALID_PRICE_CURRENCIES",
         message: `Invalid ${label} entry: ${currency}.`,
         hint: "Use three-letter fiat currency codes such as USD or EUR.",
@@ -100,7 +93,7 @@ export function normalizeOpenReceivePriceCurrencies(
 export async function resolveCreateAmount(input: {
   body: Record<string, unknown>;
   now: number;
-  priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+  priceProviders: readonly SourcedPriceProvider[];
   priceCurrencies: readonly string[];
 }): Promise<ResolvedCreateAmount> {
   const { body } = input;
@@ -125,7 +118,7 @@ export async function resolveCreateAmount(input: {
         fiatQuote: null,
       };
     } catch (error) {
-      if (error instanceof OpenReceiveServiceError) throw error;
+      if (error instanceof ServiceError) throw error;
       throw mapPriceError(error);
     }
   }
@@ -144,16 +137,16 @@ export async function resolveCreateAmount(input: {
       fiatQuote: quote,
     };
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError) throw error;
+    if (error instanceof ServiceError) throw error;
     throw mapPriceError(error);
   }
 }
 
 export async function quoteFiatAmount(input: {
-  fiat: OpenReceiveFiatAmount;
+  fiat: MoneyAmount;
   asOf: number;
-  priceProviders: readonly OpenReceiveSourcedPriceProvider[];
-}): Promise<OpenReceiveRateQuote> {
+  priceProviders: readonly SourcedPriceProvider[];
+}): Promise<RateQuote> {
   const rates = await fetchRatesOrUnavailable({
     currencies: [input.fiat.currency],
     priceProviders: input.priceProviders,
@@ -196,20 +189,20 @@ export function assertAllowedFiatCurrency(
  */
 async function fetchRatesOrUnavailable(input: {
   currencies: readonly string[];
-  priceProviders: readonly OpenReceiveSourcedPriceProvider[];
-}): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+  priceProviders: readonly SourcedPriceProvider[];
+}): Promise<BtcFiatRateMapWithSource> {
   try {
     return await getBtcFiatRatesForProviders(input);
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError) throw error;
+    if (error instanceof ServiceError) throw error;
     throw ratesUnavailableError(error instanceof Error ? error.message : undefined);
   }
 }
 
 export async function getBtcFiatRatesForProviders(input: {
   currencies: readonly string[];
-  priceProviders: readonly OpenReceiveSourcedPriceProvider[];
-}): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+  priceProviders: readonly SourcedPriceProvider[];
+}): Promise<BtcFiatRateMapWithSource> {
   if (input.priceProviders.length === 1) {
     const [provider] = input.priceProviders;
     if (isResolvedPriceProvider(provider)) {
@@ -229,7 +222,7 @@ export async function getBtcFiatRatesForProviders(input: {
 
 // Builds the live price feed with a process-local TTL cache. This cache is an
 // optimization only: no payment truth or workflow state depends on it.
-export function createOpenReceivePriceFeed(options: {
+export function createPriceFeed(options: {
   currencies: readonly string[];
   fetch?: SimplePriceFetch;
   clock?: () => number;
@@ -272,7 +265,7 @@ export function readPriceFeedUrlEnv(
  * from a sufficiently recent observation. Invoices are never minted from a
  * mock or stale rate — the fail-closed alternative to silent mispricing.
  */
-export function ratesUnavailableError(internalDetail?: string): OpenReceiveServiceError {
+export function ratesUnavailableError(internalDetail?: string): ServiceError {
   const error = serviceError(
     503,
     "INTERNAL",
@@ -283,8 +276,8 @@ export function ratesUnavailableError(internalDetail?: string): OpenReceiveServi
   return error;
 }
 
-export function mapPriceError(error: unknown): OpenReceiveServiceError {
-  if (error instanceof OpenReceiveServiceError) return error;
+export function mapPriceError(error: unknown): ServiceError {
+  if (error instanceof ServiceError) return error;
   // RangeErrors from quote math are genuine input validation (bad decimal,
   // out-of-range amount) and stay 400; feed failures arrive as plain Errors.
   if (error instanceof RangeError) {
@@ -294,7 +287,7 @@ export function mapPriceError(error: unknown): OpenReceiveServiceError {
   return ratesUnavailableError(error instanceof Error ? error.message : undefined);
 }
 
-export function parseFiatAmount(value: unknown): OpenReceiveFiatAmount {
+export function parseFiatAmount(value: unknown): MoneyAmount {
   const record = parseOptionalRecord(value, "fiat");
   if (record === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "fiat must be a JSON object.");
@@ -313,7 +306,7 @@ export function parseFiatAmount(value: unknown): OpenReceiveFiatAmount {
   };
 }
 
-export function parseBitcoinAmount(value: unknown): OpenReceiveBitcoinAmount {
+export function parseBitcoinAmount(value: unknown): BitcoinAmount {
   const record = parseOptionalRecord(value, "amount");
   if (record === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "amount must be a JSON object.");
@@ -331,7 +324,7 @@ export function parseBitcoinAmount(value: unknown): OpenReceiveBitcoinAmount {
     throw serviceError(400, "INVALID_REQUEST", "amount.value must be a decimal string");
   }
   return {
-    currency: currency as OpenReceiveBitcoinAmount["currency"],
+    currency: currency as BitcoinAmount["currency"],
     value: amountValue,
   };
 }

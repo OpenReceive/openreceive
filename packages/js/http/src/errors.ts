@@ -1,22 +1,22 @@
 import {
-  isOpenReceiveErrorCode,
-  isRetryableOpenReceiveErrorCode,
-  type OpenReceiveErrorBody,
-  type OpenReceiveErrorCode,
+  isErrorCode,
+  isRetryableErrorCode,
+  type ErrorBody,
+  type ErrorCode,
 } from "@openreceive/core";
 
 // Every response — success or failure — carries a request id. Errors echo it in the JSON body
 // (`request_id`) and in the `X-Request-Id` header so a host's logs, the caller's report, and the
 // adapter's trace line up on a single value. The wire body is snake_case JSON with a `code` drawn
-// from the shared OpenReceiveErrorCode enum, matching the Ruby engine and every other adapter.
+// from the shared ErrorCode enum, matching the Ruby engine and every other adapter.
 
 /**
  * A control-flow error the handler maps to a JSON error response. Carries the HTTP status, a
  * shared error code, and an optional `retryable` hint / `details` object.
  */
-export class OpenReceiveHttpError extends Error {
+export class HttpError extends Error {
   readonly status: number;
-  readonly code: OpenReceiveErrorCode;
+  readonly code: ErrorCode;
   readonly retryable?: boolean;
   readonly details?: Record<string, unknown>;
   /** Emitted as a `Retry-After` header so clients can back off with a hint. */
@@ -24,7 +24,7 @@ export class OpenReceiveHttpError extends Error {
 
   constructor(
     status: number,
-    code: OpenReceiveErrorCode,
+    code: ErrorCode,
     message: string,
     options: {
       readonly retryable?: boolean;
@@ -33,7 +33,7 @@ export class OpenReceiveHttpError extends Error {
     } = {},
   ) {
     super(message);
-    this.name = "OpenReceiveHttpError";
+    this.name = "HttpError";
     this.status = status;
     this.code = code;
     if (options.retryable !== undefined) this.retryable = options.retryable;
@@ -45,11 +45,11 @@ export class OpenReceiveHttpError extends Error {
 /** Shape a service error carries: a numeric status and an OpenReceive error body. */
 export interface ServiceErrorShape {
   readonly status: number;
-  readonly body: OpenReceiveErrorBody;
+  readonly body: ErrorBody;
 }
 
 /**
- * Duck-type an OpenReceiveServiceError (from @openreceive/node) without importing the class, so the
+ * Duck-type an ServiceError (from @openreceive/node) without importing the class, so the
  * handler stays runtime-agnostic and never breaks on cross-module `instanceof` identity mismatches
  * (source vs. built dist, or two copies of @openreceive/node).
  */
@@ -59,7 +59,7 @@ export function isServiceErrorShape(error: unknown): error is ServiceErrorShape 
   if (typeof candidate.status !== "number") return false;
   if (typeof candidate.body !== "object" || candidate.body === null) return false;
   const body = candidate.body as { code?: unknown; message?: unknown };
-  return isOpenReceiveErrorCode(body.code) && typeof body.message === "string";
+  return isErrorCode(body.code) && typeof body.message === "string";
 }
 
 /**
@@ -68,7 +68,7 @@ export function isServiceErrorShape(error: unknown): error is ServiceErrorShape 
  * through to a generic 500 and every wallet outage would read as an OpenReceive bug.
  */
 export function isWalletErrorShape(error: unknown): error is {
-  readonly code: OpenReceiveErrorCode;
+  readonly code: ErrorCode;
   readonly message: string;
 } & {
   readonly retryable?: boolean;
@@ -76,7 +76,7 @@ export function isWalletErrorShape(error: unknown): error is {
   if (typeof error !== "object" || error === null) return false;
   const candidate = error as { code?: unknown; message?: unknown; status?: unknown };
   if (candidate.status !== undefined) return false;
-  return isOpenReceiveErrorCode(candidate.code) && typeof candidate.message === "string";
+  return isErrorCode(candidate.code) && typeof candidate.message === "string";
 }
 
 /**
@@ -85,22 +85,22 @@ export function isWalletErrorShape(error: unknown): error is {
  * answered with a refusal is a 502 from an upstream we depend on. Never 500 —
  * that would blame the host application for the wallet being down.
  */
-function walletErrorStatus(code: OpenReceiveErrorCode, retryable: boolean): number {
-  return retryable || isRetryableOpenReceiveErrorCode(code) ? 503 : 502;
+function walletErrorStatus(code: ErrorCode, retryable: boolean): number {
+  return retryable || isRetryableErrorCode(code) ? 503 : 502;
 }
 
 /**
  * Host-route control-flow error with the same `{ status, body }` shape as
- * {@link OpenReceiveServiceError}. Use for cart/validation failures on app routes
+ * {@link ServiceError}. Use for cart/validation failures on app routes
  * (for example the host's `/orders` route) so framework helpers can map them.
  */
-export class OpenReceiveHostError extends Error {
+export class HostError extends Error {
   readonly status: number;
-  readonly body: OpenReceiveErrorBody;
+  readonly body: ErrorBody;
 
-  constructor(status: number, body: OpenReceiveErrorBody) {
+  constructor(status: number, body: ErrorBody) {
     super(body.message);
-    this.name = "OpenReceiveHostError";
+    this.name = "HostError";
     this.status = status;
     this.body = body;
   }
@@ -110,9 +110,9 @@ export class OpenReceiveHostError extends Error {
 export function hostError(
   message: string,
   status = 400,
-  code: OpenReceiveErrorCode = "INVALID_REQUEST",
-): OpenReceiveHostError {
-  return new OpenReceiveHostError(status, {
+  code: ErrorCode = "INVALID_REQUEST",
+): HostError {
+  return new HostError(status, {
     code,
     message,
     retryable: false,
@@ -126,12 +126,12 @@ export function hostError(
  */
 export function mapHostRouteError(
   error: unknown,
-): { readonly status: number; readonly body: OpenReceiveErrorBody } | null {
-  if (error instanceof OpenReceiveHostError || isServiceErrorShape(error)) {
+): { readonly status: number; readonly body: ErrorBody } | null {
+  if (error instanceof HostError || isServiceErrorShape(error)) {
     return { status: error.status, body: error.body };
   }
   if (isWalletErrorShape(error)) {
-    const retryable = error.retryable ?? isRetryableOpenReceiveErrorCode(error.code);
+    const retryable = error.retryable ?? isRetryableErrorCode(error.code);
     return {
       status: walletErrorStatus(error.code, retryable),
       body: { code: error.code, message: error.message, retryable },
@@ -143,11 +143,7 @@ export function mapHostRouteError(
 /** Guarded bigint -> number: throws instead of silently losing precision. */
 export function bigintToJsonNumber(value: bigint): number {
   if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < -BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new OpenReceiveHttpError(
-      500,
-      "INTERNAL",
-      "Numeric value exceeds the JSON safe integer range.",
-    );
+    throw new HttpError(500, "INTERNAL", "Numeric value exceeds the JSON safe integer range.");
   }
   return Number(value);
 }
@@ -192,7 +188,7 @@ export function jsonResponse(
  * a generic 500 INTERNAL so internal messages never leak.
  */
 export function errorResponse(error: unknown, requestId: string): Response {
-  if (error instanceof OpenReceiveHttpError) {
+  if (error instanceof HttpError) {
     return jsonResponse(
       error.status,
       {
@@ -218,7 +214,7 @@ export function errorResponse(error: unknown, requestId: string): Response {
   }
 
   if (isWalletErrorShape(error)) {
-    const retryable = error.retryable ?? isRetryableOpenReceiveErrorCode(error.code);
+    const retryable = error.retryable ?? isRetryableErrorCode(error.code);
     return jsonResponse(
       walletErrorStatus(error.code, retryable),
       { code: error.code, message: error.message, retryable, request_id: requestId },

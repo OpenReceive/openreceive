@@ -1,10 +1,10 @@
 import type {
   NwcTransaction,
-  OpenReceiveBtcFiatRateMapWithSource,
-  OpenReceiveFiatAmount,
-  OpenReceiveRateQuote,
-  OpenReceiveReceiveNwcClient,
-  OpenReceiveSourcedPriceProvider,
+  BtcFiatRateMapWithSource,
+  MoneyAmount,
+  RateQuote,
+  ReceiveNwcClient,
+  SourcedPriceProvider,
   PaidPayment,
   PaymentCheck,
   SimplePriceFetch,
@@ -17,18 +17,18 @@ import type {
   SwapProviderState,
 } from "../swap/index.ts";
 
-export type { OpenReceiveRateQuote };
+export type { RateQuote };
 
-export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
-export interface OpenReceiveLogEvent {
-  readonly level: OpenReceiveLogLevel;
+export interface LogEvent {
+  readonly level: LogLevel;
   readonly event: string;
   readonly message: string;
   readonly [key: string]: unknown;
 }
 
-export type EventHandler = (event: OpenReceiveLogEvent) => void;
+export type EventHandler = (event: LogEvent) => void;
 /** Same signature as {@link EventHandler}; kept as the `logger` option's name. */
 export type Logger = EventHandler;
 
@@ -47,7 +47,7 @@ export interface LoggingOptions {
    * Minimum level for the built-in console and file loggers.
    * When omitted, both read `LOG_LEVEL` (`DEBUG`|`INFO`|`WARN`|`ERROR`, default `INFO`).
    */
-  readonly level?: OpenReceiveLogLevel;
+  readonly level?: LogLevel;
   /**
    * Attach the built-in console logger.
    * Default: `true` when no custom `logger` is supplied; `false` when a custom
@@ -59,8 +59,8 @@ export interface LoggingOptions {
 }
 
 export interface NodeOptions {
-  readonly client: OpenReceiveReceiveNwcClient;
-  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+  readonly client: ReceiveNwcClient;
+  readonly priceProviders?: readonly SourcedPriceProvider[];
   readonly priceCurrencies?: readonly string[];
   readonly swap?: SwapOptions;
   readonly onEvent?: EventHandler;
@@ -70,7 +70,7 @@ export interface NodeOptions {
 }
 
 export interface CreateOpenReceiveOptions extends Omit<NodeOptions, "client"> {
-  readonly client?: OpenReceiveReceiveNwcClient;
+  readonly client?: ReceiveNwcClient;
   /** Explicit override. Normal applications read the receive-only URI from NWC_URI. */
   readonly nwc?: string;
   /** Environment source for NWC_URI, LSC_URI_PRIMARY, and LSC_URI_BACKUP. Defaults to process.env. */
@@ -104,7 +104,7 @@ export interface CreateCheckoutRequest {
 /**
  * The minted invoice — the service-level view of the OpenAPI `Checkout` object
  * (the HTTP handler serializes it to the snake_case wire shape,
- * `OpenReceiveWireCheckout`).
+ * `WireCheckout`).
  */
 export interface Checkout {
   readonly orderId: string;
@@ -113,7 +113,7 @@ export interface Checkout {
   readonly amountMsats: number;
   readonly createdAt: number;
   readonly expiresAt: number;
-  readonly fiatQuote: OpenReceiveRateQuote | null;
+  readonly fiatQuote: RateQuote | null;
 }
 
 export interface CheckPaymentRequest {
@@ -145,15 +145,13 @@ export type NodeSettlementActionHook = (input: NodeSettlementActionInput) => Pro
  * may settle its matching pending attempt directly. Logging only ever surfaces
  * the type and the payment hash.
  */
-export interface OpenReceiveWalletNotification {
+export interface WalletNotification {
   readonly type: string;
   readonly payment_hash?: string;
   readonly transaction?: NwcTransaction;
 }
 
-export type OpenReceiveWalletNotificationHandler = (
-  notification: OpenReceiveWalletNotification,
-) => void;
+export type WalletNotificationHandler = (notification: WalletNotification) => void;
 
 export interface SwapOptions {
   /**
@@ -291,7 +289,7 @@ export interface OpenReceive {
   /** Resolve amount_msats without minting a Lightning invoice or committing an attempt. */
   prepareCheckout(input: { readonly amount: CreateCheckoutAmount }): Promise<{
     readonly amountMsats: number;
-    readonly fiatQuote: OpenReceiveRateQuote | null;
+    readonly fiatQuote: RateQuote | null;
   }>;
   createCheckout(input: CreateCheckoutRequest): Promise<Checkout>;
   checkPayment(input: CheckPaymentRequest): Promise<PaymentCheck>;
@@ -309,22 +307,22 @@ export interface OpenReceive {
    * not support notifications.
    */
   subscribeWalletNotifications?(
-    handler: OpenReceiveWalletNotificationHandler,
+    handler: WalletNotificationHandler,
   ): Promise<() => Promise<void> | void>;
   quoteSwap(input: SwapQuoteRequest): Promise<SwapQuoteResult>;
   listSwapOptions(input: ListSwapOptionsRequest): Promise<ListSwapOptionsResult>;
   createSwap(input: CreateSwapRequest): Promise<SwapCheckout>;
   getSwap(input: GetSwapRequest): Promise<PublicSwap>;
   refundSwap(input: SwapRefundRequest): Promise<PublicSwap>;
-  listRates(input?: ListRatesRequest): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
-  quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
+  listRates(input?: ListRatesRequest): Promise<BtcFiatRateMapWithSource["rates"]>;
+  quoteRates(input: { readonly fiat: MoneyAmount }): Promise<RateQuote>;
   close(): Promise<void>;
 }
 
-export interface OpenReceiveServiceContext {
+export interface ServiceContext {
   readonly options: NodeOptions;
   readonly clock: () => number;
-  readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+  readonly priceProviders: readonly SourcedPriceProvider[];
   readonly priceCurrencies: readonly string[];
   /** Primary first, then failovers in order — see {@link SwapOptions}. */
   readonly swapProviders: readonly SwapProvider[];
@@ -333,7 +331,7 @@ export interface OpenReceiveServiceContext {
 export interface ResolvedCreateAmount {
   readonly amountMsats: number;
   readonly amountSource: "amount" | "fiat";
-  readonly fiatQuote: OpenReceiveRateQuote | null;
+  readonly fiatQuote: RateQuote | null;
 }
 
 export interface NormalizedCreateCheckoutRequest {

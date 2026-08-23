@@ -1,29 +1,29 @@
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
-  createOpenReceiveDetailExternalLink,
-  createOpenReceiveSwapDisplayModel,
-  createOpenReceiveTransactionDetails,
+  createDetailExternalLink,
+  createSwapDisplayModel,
+  createTransactionDetails,
   createQrPayloadSvg,
-  getOpenReceiveSwapRefundFormError,
-  type OpenReceiveBrowserLogger,
-  type OpenReceiveQrEncoder,
-  type OpenReceiveSwapDisplayModel,
-  openReceiveCheckoutLabels,
-  openReceiveSwapOptionLimitMessage,
+  getSwapRefundFormError,
+  type BrowserLogger,
+  type QrEncoder,
+  type SwapDisplayModel,
+  checkoutLabels,
+  swapOptionLimitMessage,
   orClasses,
   selectCheckoutDisplayInvoice,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 import { ClipboardIcon, WaitingState } from "./components.ts";
-import { useOpenReceiveTransientValue } from "./hooks.ts";
+import { useTransientValue } from "./hooks.ts";
 import { TransactionDetails } from "./transaction-details.ts";
-import type { OpenReceiveSwapOptionDisplay } from "./types.ts";
-import { copyOpenReceiveText, joinClassNames, openReceiveSelectAllInputHandlers } from "./utils.ts";
+import type { SwapOptionDisplay } from "./types.ts";
+import { copyText, joinClassNames, selectAllInputHandlers } from "./utils.ts";
 
 export function renderSwapActions(options: {
   readonly enabled: boolean;
-  readonly options: readonly OpenReceiveSwapOptionDisplay[];
+  readonly options: readonly SwapOptionDisplay[];
   readonly startingAsset: string | null;
   readonly onStart: (payInAsset: string) => void;
   readonly checkout?: CheckoutSnapshot;
@@ -40,7 +40,7 @@ export function renderSwapActions(options: {
     },
     shown.map((option) => {
       const disabled = option.available === false;
-      const limitMessage = openReceiveSwapOptionLimitMessage(option, options.checkout);
+      const limitMessage = swapOptionLimitMessage(option, options.checkout);
       return React.createElement(
         "div",
         {
@@ -126,11 +126,11 @@ export function renderSwapPreparing(assetLabel: string): React.ReactElement {
 }
 
 export function renderSwapUnavailable(
-  quote: OpenReceiveSwapOptionDisplay,
+  quote: SwapOptionDisplay,
   checkout: CheckoutSnapshot | undefined,
 ): React.ReactElement {
   const detail =
-    openReceiveSwapOptionLimitMessage(quote, checkout) ??
+    swapOptionLimitMessage(quote, checkout) ??
     quote.unavailable_message ??
     `${quote.label} is not available for this amount.`;
   const range =
@@ -173,9 +173,9 @@ export function renderSwapDepositPanel(options: {
   readonly invoice: CheckoutInvoiceSnapshot;
   readonly checkout?: CheckoutSnapshot;
   readonly now?: number;
-  readonly encoder?: OpenReceiveQrEncoder;
+  readonly encoder?: QrEncoder;
   readonly clipboard?: Pick<Clipboard, "writeText">;
-  readonly logger?: OpenReceiveBrowserLogger | false;
+  readonly logger?: BrowserLogger | false;
   readonly onError?: (error: unknown) => void;
   readonly onRefund: (
     attemptId: string,
@@ -185,7 +185,7 @@ export function renderSwapDepositPanel(options: {
   ) => Promise<void>;
   readonly onBackToLightning: () => void;
 }): React.ReactElement | null {
-  const display = createOpenReceiveSwapDisplayModel(
+  const display = createSwapDisplayModel(
     options.invoice,
     options.now === undefined ? {} : { now: options.now },
   );
@@ -280,7 +280,7 @@ export function renderSwapDepositPanel(options: {
             highlightRows,
           ),
       React.createElement(TransactionDetails, {
-        state: createOpenReceiveTransactionDetails({
+        state: createTransactionDetails({
           ...(options.checkout === undefined
             ? {}
             : {
@@ -484,7 +484,7 @@ export function renderSwapDepositPanel(options: {
 
 function renderSwapNetworkWarning(
   display: Pick<
-    OpenReceiveSwapDisplayModel,
+    SwapDisplayModel,
     "networkWarningTitle" | "networkWarningEmphasis" | "networkWarning"
   >,
 ): React.ReactElement {
@@ -543,7 +543,7 @@ function renderSwapNetworkWarning(
 }
 
 function renderSwapRefundFacts(
-  display: OpenReceiveSwapDisplayModel,
+  display: SwapDisplayModel,
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
@@ -580,7 +580,7 @@ function renderSwapRefundFacts(
 // exchange rate and network fees are baked into the deposit amount. Renders nothing
 // when the provider did not report fiat equivalents.
 function renderSwapFeeBreakdown(
-  breakdown: OpenReceiveSwapDisplayModel["feeBreakdown"],
+  breakdown: SwapDisplayModel["feeBreakdown"],
 ): React.ReactElement | null {
   if (breakdown === undefined) return null;
   const feeValue =
@@ -630,14 +630,14 @@ function renderSwapCopyRow(
 ): readonly React.ReactElement[] {
   const link =
     options.href === undefined
-      ? createOpenReceiveDetailExternalLink({
+      ? createDetailExternalLink({
           label,
           value,
           ...(options.payInAsset === undefined ? {} : { payInAsset: options.payInAsset }),
         })
       : {
           href: options.href,
-          hrefLabel: options.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
+          hrefLabel: options.hrefLabel ?? checkoutLabels.viewOnExplorer,
         };
   const valueField =
     label === "Address" || label === "Amount"
@@ -647,7 +647,7 @@ function renderSwapCopyRow(
           readOnly: true,
           value: displayValue,
           "aria-label": label,
-          ...openReceiveSelectAllInputHandlers(),
+          ...selectAllInputHandlers(),
         })
       : React.createElement("code", { className: orClasses.swapDetailsCode }, displayValue);
   return [
@@ -686,14 +686,14 @@ function SwapCopyButton(props: {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
-  const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
-  const label = copied ? openReceiveCheckoutLabels.copied : "Copy";
+  const [copied, showCopied] = useTransientValue<boolean>(false);
+  const label = copied ? checkoutLabels.copied : "Copy";
   return React.createElement(
     "button",
     {
       className: orClasses.detailCopy,
       onClick: () => {
-        void copyOpenReceiveText(props.value, props.clipboard)
+        void copyText(props.value, props.clipboard)
           .then(() => showCopied(true))
           .catch(props.onError);
       },
@@ -706,7 +706,7 @@ function SwapCopyButton(props: {
 }
 
 function renderSwapSupportDetails(
-  display: NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>,
+  display: NonNullable<ReturnType<typeof createSwapDisplayModel>>,
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
@@ -748,7 +748,7 @@ function renderSwapRefundReturnWarning(): React.ReactElement {
     {
       className: orClasses.swapWarning,
     },
-    openReceiveCheckoutLabels.refundReturnWarning,
+    checkoutLabels.refundReturnWarning,
   );
 }
 
@@ -793,11 +793,7 @@ function SwapRefundForm(props: {
   const [submitting, setSubmitting] = React.useState(false);
   const [showAddressError, setShowAddressError] = React.useState(false);
   const address = refundAddress.trim();
-  const addressError = getOpenReceiveSwapRefundFormError(
-    props.payInAsset,
-    address,
-    props.networkLabel,
-  );
+  const addressError = getSwapRefundFormError(props.payInAsset, address, props.networkLabel);
   const confirm =
     address.length > 0 &&
     props.submittedRefundAddress !== undefined &&
@@ -881,7 +877,7 @@ function SwapRefundForm(props: {
 
 function SwapPayloadQRCode(props: {
   readonly payload: string;
-  readonly encoder?: OpenReceiveQrEncoder;
+  readonly encoder?: QrEncoder;
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
   const [svg, setSvg] = React.useState("");

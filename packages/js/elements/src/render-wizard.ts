@@ -2,36 +2,36 @@
 // route/asset pickers, and the breadcrumb trail. The deposit panel and the
 // provider tutorial modal are rendered by the two sibling modules.
 import {
-  buildOpenReceiveMethodGridEntries,
-  createOpenReceivePaymentWizardModel,
-  createOpenReceiveWizardRouteAssetDisplays,
-  createOpenReceiveWizardRouteDisplays,
-  escapeOpenReceiveHtml as escapeHtml,
-  findOpenReceiveSwapGridGroup,
-  formatOpenReceiveChooseNetworkHeading,
-  formatOpenReceiveNetworkSummary,
-  getOpenReceiveNetworkIcon,
-  getOpenReceivePaymentMethodIcon,
-  getOpenReceiveSwapOptionIcon,
-  getOpenReceiveWizardEmptyMessage,
+  buildMethodGridEntries,
+  createPaymentWizardModel,
+  createWizardRouteAssetDisplays,
+  createWizardRouteDisplays,
+  escapeHtml,
+  findSwapGridGroup,
+  formatChooseNetworkHeading,
+  formatNetworkSummary,
+  getNetworkIcon,
+  getPaymentMethodIcon,
+  getSwapOptionIcon,
+  getWizardEmptyMessage,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
-  openReceiveAssetButtonClasses,
-  openReceiveCheckoutLabels,
-  openReceiveNetworkButtonClasses,
-  openReceiveNetworkCheckClasses,
-  openReceiveNetworkMobileRevealClasses,
-  openReceiveNetworkSummaryIconClasses,
-  openReceivePaymentAccentId,
-  type OpenReceivePaymentMethod,
-  openReceivePaymentMethods,
-  type OpenReceivePaymentWizardSelection,
-  openReceiveSwapAssetMatchesRoute,
-  openReceiveSwapGroupLimitOption,
-  openReceiveSwapPickerKey,
-  type OpenReceiveWizardRouteAssetDisplay,
+  assetButtonClasses,
+  checkoutLabels,
+  networkButtonClasses,
+  networkCheckClasses,
+  networkMobileRevealClasses,
+  networkSummaryIconClasses,
+  paymentAccentId,
+  type PaymentMethod,
+  paymentMethods,
+  type PaymentWizardSelection,
+  swapAssetMatchesRoute,
+  swapGroupLimitOption,
+  swapPickerKey,
+  type WizardRouteAssetDisplay,
   orClasses,
 } from "@openreceive/browser/headless";
-import type { OpenReceiveElementsSwapOption, OpenReceiveElementsWizardView } from "./views.ts";
+import type { ElementsSwapOption, ElementsWizardView } from "./views.ts";
 import {
   elementsSwapLimitMessage,
   renderElementSwapActionsHtml,
@@ -42,13 +42,13 @@ import {
   renderTutorialModalHtml,
 } from "./render-provider-tutorial.ts";
 
-function wizardStartingAsset(view: OpenReceiveElementsWizardView): string | undefined {
+function wizardStartingAsset(view: ElementsWizardView): string | undefined {
   const asset = view.startingSwapAsset;
   return asset !== undefined && asset !== null && asset.length > 0 ? asset : undefined;
 }
 
 function swapGroupIsStarting(
-  group: { readonly options: readonly Pick<OpenReceiveElementsSwapOption, "pay_in_asset">[] },
+  group: { readonly options: readonly Pick<ElementsSwapOption, "pay_in_asset">[] },
   startingAsset: string | undefined,
 ): boolean {
   return (
@@ -57,19 +57,17 @@ function swapGroupIsStarting(
   );
 }
 
-export function renderOpenReceivePaymentWizardHtml(
-  view: OpenReceiveElementsWizardView = {},
-): string {
-  const selection: OpenReceivePaymentWizardSelection = {
+export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
+  const selection: PaymentWizardSelection = {
     selectedMethod: view.selectedMethod ?? null,
     selectedBitcoinRoute: view.selectedBitcoinRoute ?? null,
   };
-  const model = createOpenReceivePaymentWizardModel(selection);
+  const model = createPaymentWizardModel(selection);
   const { wizard } = model;
-  const routeAssetDisplays = createOpenReceiveWizardRouteAssetDisplays(model.routeAssets, {
+  const routeAssetDisplays = createWizardRouteAssetDisplays(model.routeAssets, {
     selectedRoute: model.selectedRoute,
   });
-  const routeDisplays = createOpenReceiveWizardRouteDisplays(wizard.routes);
+  const routeDisplays = createWizardRouteDisplays(wizard.routes);
   const showRoutePicker =
     routeAssetDisplays.length > 0 && (model.selectedRoute === null || routeDisplays.length === 0);
   const breadcrumbs =
@@ -104,7 +102,7 @@ export function renderOpenReceivePaymentWizardHtml(
             class="${orClasses.btnGhost}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="swap-asset"
             type="button"
-          >${escapeHtml(openReceiveCheckoutLabels.switchPaymentMethod)}</button>
+          >${escapeHtml(checkoutLabels.switchPaymentMethod)}</button>
           <span aria-hidden="true">/</span>
           <span part="wizard-breadcrumb-current" class="${orClasses.breadcrumbCurrent}">${escapeHtml(label)}</span>
         </div>
@@ -193,17 +191,14 @@ export function renderOpenReceivePaymentWizardHtml(
             routeDisplays.length === 0
               ? `
             <p part="wizard-empty" class="${orClasses.wizardEmpty}">${escapeHtml(
-              getOpenReceiveWizardEmptyMessage(),
+              getWizardEmptyMessage(),
             )}</p>
 	          `
               : routeDisplays
                   .map((route) => {
                     const activeSwap =
                       view.swapInvoice !== undefined &&
-                      openReceiveSwapAssetMatchesRoute(
-                        route.key,
-                        view.swapInvoice.swap?.pay_in_asset,
-                      )
+                      swapAssetMatchesRoute(route.key, view.swapInvoice.swap?.pay_in_asset)
                         ? view.swapInvoice
                         : undefined;
                     return `
@@ -261,13 +256,13 @@ export function renderOpenReceivePaymentWizardHtml(
 }
 
 function renderElementCompactPaymentSelectorHtml(
-  swapAssetOptions: readonly OpenReceiveElementsSwapOption[],
-  view: OpenReceiveElementsWizardView,
+  swapAssetOptions: readonly ElementsSwapOption[],
+  view: ElementsWizardView,
 ): string {
-  const entries = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, swapAssetOptions);
+  const entries = buildMethodGridEntries(paymentMethods, swapAssetOptions);
   const currenciesLoading = view.currenciesLoading === true && swapAssetOptions.length === 0;
   const selectedKey = view.selectedPickerKey ?? null;
-  const selectedGroup = findOpenReceiveSwapGridGroup(entries, selectedKey);
+  const selectedGroup = findSwapGridGroup(entries, selectedKey);
   const networkRequired = selectedGroup !== undefined && selectedGroup.options.length > 1;
   const selectedNetworks = view.selectedSwapNetworks ?? {};
   const selectedGroupKey = selectedGroup?.label.trim().toUpperCase();
@@ -282,7 +277,7 @@ function renderElementCompactPaymentSelectorHtml(
   const gridBusy = startingAsset !== undefined;
   let continueDisabled = selectedNetworkOption === undefined || gridBusy;
   let continueAttr = "";
-  let continueLabel = escapeHtml(openReceiveCheckoutLabels.continue);
+  let continueLabel = escapeHtml(checkoutLabels.continue);
   const continueStarting =
     selectedNetworkOption !== undefined && selectedNetworkOption.pay_in_asset === startingAsset;
   if (selectedNetworkOption !== undefined) {
@@ -294,8 +289,7 @@ function renderElementCompactPaymentSelectorHtml(
         ? ""
         : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedNetworkOption.pay_in_asset)}"`;
     if (disabled && limitMessage !== undefined) continueLabel = escapeHtml(limitMessage);
-    else if (continueStarting)
-      continueLabel = escapeHtml(openReceiveCheckoutLabels.preparingPayment);
+    else if (continueStarting) continueLabel = escapeHtml(checkoutLabels.preparingPayment);
   } else if (networkRequired) {
     continueDisabled = true;
   }
@@ -316,17 +310,17 @@ function renderElementCompactPaymentSelectorHtml(
     .map((entry) => {
       if (entry.kind === "method") {
         const method = entry.method;
-        const accent = openReceivePaymentAccentId(method.id);
+        const accent = paymentAccentId(method.id);
         return `
           <button
             part="method"
             type="button"
-            class="${openReceiveAssetButtonClasses({ accent, selected: false, disabled: gridBusy })}"
+            class="${assetButtonClasses({ accent, selected: false, disabled: gridBusy })}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method}="${escapeHtml(method.id)}"
             ${gridBusy ? 'disabled aria-disabled="true"' : ""}
           >
             <span aria-hidden="true" class="${orClasses.methodIconWrap}">
-              <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceivePaymentMethodIcon(method.id))}">
+              <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getPaymentMethodIcon(method.id))}">
             </span>
             <span class="${orClasses.methodTitleWrap}">
               <span class="${orClasses.methodTitle}">${escapeHtml(method.title)}</span>
@@ -337,7 +331,7 @@ function renderElementCompactPaymentSelectorHtml(
         entry.group,
         view,
         selectedKey,
-        selectedKey === openReceiveSwapPickerKey(entry.group.label)
+        selectedKey === swapPickerKey(entry.group.label)
           ? continueButton(orClasses.methodConfirmDesktop)
           : undefined,
       );
@@ -346,7 +340,7 @@ function renderElementCompactPaymentSelectorHtml(
   const loadingTile = currenciesLoading
     ? `<div part="currencies-loading" role="status" aria-live="polite" class="${orClasses.methodCurrenciesLoading}">
         <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
-        <span class="${orClasses.methodTitle}">${escapeHtml(openReceiveCheckoutLabels.loadingCurrencies)}</span>
+        <span class="${orClasses.methodTitle}">${escapeHtml(checkoutLabels.loadingCurrencies)}</span>
       </div>`
     : "";
 
@@ -362,11 +356,11 @@ function renderElementCompactPaymentSelectorHtml(
 
   return `
       <header class="${orClasses.wizardHeader}">
-        <h2 id="payment-method-heading" class="${orClasses.wizardHeaderTitle}">${escapeHtml(openReceiveCheckoutLabels.wizardTitle)}</h2>
-        <p class="${orClasses.wizardHeaderSubtitle}">${escapeHtml(openReceiveCheckoutLabels.wizardSubtitle)}</p>
+        <h2 id="payment-method-heading" class="${orClasses.wizardHeaderTitle}">${escapeHtml(checkoutLabels.wizardTitle)}</h2>
+        <p class="${orClasses.wizardHeaderSubtitle}">${escapeHtml(checkoutLabels.wizardSubtitle)}</p>
       </header>
       <div class="${orClasses.wizardBody}" aria-labelledby="payment-method-heading">
-        <div part="method-grid" role="group" aria-label="${escapeHtml(openReceiveCheckoutLabels.paymentMethod)}" class="${orClasses.methodGrid}">
+        <div part="method-grid" role="group" aria-label="${escapeHtml(checkoutLabels.paymentMethod)}" class="${orClasses.methodGrid}">
           ${tiles}${loadingTile}
         </div>
         ${desktopReveal}
@@ -377,13 +371,13 @@ function renderElementCompactPaymentSelectorHtml(
 function renderElementNetworkSelectorHtml(
   group: {
     readonly label: string;
-    readonly options: readonly OpenReceiveElementsSwapOption[];
+    readonly options: readonly ElementsSwapOption[];
   },
-  view: OpenReceiveElementsWizardView,
+  view: ElementsWizardView,
   continueButtonHtml: string,
   mobile: boolean,
 ): string {
-  const accent = openReceivePaymentAccentId(group.label);
+  const accent = paymentAccentId(group.label);
   const groupKey = group.label.trim().toUpperCase();
   const selectedNetworks = view.selectedSwapNetworks ?? {};
   const selectedAsset = selectedNetworks[groupKey];
@@ -403,7 +397,7 @@ function renderElementNetworkSelectorHtml(
           <button
             type="button"
             aria-pressed="${optionSelected ? "true" : "false"}"
-            class="${openReceiveNetworkButtonClasses({
+            class="${networkButtonClasses({
               accent,
               selected: optionSelected,
               disabled: optionDisabled,
@@ -413,12 +407,12 @@ function renderElementNetworkSelectorHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}="${escapeHtml(option.pay_in_asset)}"
           >
             <span aria-hidden="true" class="grid size-6 shrink-0 place-items-center">
-              <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(option.network_label))}">
+              <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getNetworkIcon(option.network_label))}">
             </span>
             <span class="truncate">${escapeHtml(option.network_label)}</span>
             ${
               optionSelected
-                ? `<span aria-hidden="true" class="${openReceiveNetworkCheckClasses(accent)}">✓</span>`
+                ? `<span aria-hidden="true" class="${networkCheckClasses(accent)}">✓</span>`
                 : ""
             }
           </button>
@@ -435,8 +429,8 @@ function renderElementNetworkSelectorHtml(
     selectedOption === undefined
       ? ""
       : `<p aria-live="polite" class="${orClasses.methodNetworkSummary}">
-          <span aria-hidden="true" class="${openReceiveNetworkSummaryIconClasses(accent)}">✓</span>
-          ${escapeHtml(formatOpenReceiveNetworkSummary(group.label, selectedOption.network_label))}
+          <span aria-hidden="true" class="${networkSummaryIconClasses(accent)}">✓</span>
+          ${escapeHtml(formatNetworkSummary(group.label, selectedOption.network_label))}
         </p>`;
 
   return `
@@ -444,15 +438,15 @@ function renderElementNetworkSelectorHtml(
       id="${panelId}"
       role="group"
       aria-labelledby="${headingId}"
-      class="${mobile ? openReceiveNetworkMobileRevealClasses(accent) : orClasses.methodNetworkReveal}"
+      class="${mobile ? networkMobileRevealClasses(accent) : orClasses.methodNetworkReveal}"
     >
       <div class="${orClasses.methodNetworkLayout}">
         <div>
           <h3 id="${headingId}" class="${orClasses.methodNetworkHeading}">${escapeHtml(
-            formatOpenReceiveChooseNetworkHeading(group.label),
+            formatChooseNetworkHeading(group.label),
           )}</h3>
           <p class="${orClasses.methodNetworkHint}">${escapeHtml(
-            openReceiveCheckoutLabels.selectNetworkToContinue,
+            checkoutLabels.selectNetworkToContinue,
           )}</p>
         </div>
         <div role="group" aria-labelledby="${headingId}" class="${orClasses.methodNetworkGrid}">
@@ -494,15 +488,15 @@ function renderElementMethodConfirmHtml(options: {
 function renderElementSwapMethodGroupHtml(
   group: {
     readonly label: string;
-    readonly options: readonly OpenReceiveElementsSwapOption[];
+    readonly options: readonly ElementsSwapOption[];
   },
-  view: OpenReceiveElementsWizardView,
+  view: ElementsWizardView,
   selectedKey: string | null,
   continueButtonHtml?: string,
 ): string {
   const selectedNetworks = view.selectedSwapNetworks ?? {};
   const groupKey = group.label.trim().toUpperCase();
-  const pickerKey = openReceiveSwapPickerKey(group.label);
+  const pickerKey = swapPickerKey(group.label);
   const selected = selectedKey === pickerKey;
   const displayOption =
     group.options.find((option) => option.available !== false) ?? group.options[0];
@@ -518,9 +512,9 @@ function renderElementSwapMethodGroupHtml(
   const starting = swapGroupIsStarting(group, startingAsset);
   const gridBusy = startingAsset !== undefined;
   const disabled = group.options.every((option) => option.available === false);
-  const accent = openReceivePaymentAccentId(group.label);
+  const accent = paymentAccentId(group.label);
   const limitOption = disabled
-    ? (openReceiveSwapGroupLimitOption(group.options) ?? activeOption)
+    ? (swapGroupLimitOption(group.options) ?? activeOption)
     : activeOption;
   const limitMessage = elementsSwapLimitMessage(limitOption, view);
   const panelId = `network-panel-${groupKey.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
@@ -528,7 +522,7 @@ function renderElementSwapMethodGroupHtml(
     !disabled && multiNetwork
       ? selected && selectedOption !== undefined
         ? `${escapeHtml(selectedOption.network_label)} network`
-        : escapeHtml(openReceiveCheckoutLabels.selectNetwork)
+        : escapeHtml(checkoutLabels.selectNetwork)
       : undefined;
   const mobileReveal = multiNetwork
     ? `
@@ -552,7 +546,7 @@ function renderElementSwapMethodGroupHtml(
         type="button"
         aria-pressed="${starting || (multiNetwork && selected) ? "true" : "false"}"
         ${multiNetwork ? `aria-expanded="${selected ? "true" : "false"}" aria-controls="${panelId}"` : ""}
-        class="${openReceiveAssetButtonClasses({
+        class="${assetButtonClasses({
           accent,
           selected: starting || (multiNetwork && selected),
           disabled: disabled || (gridBusy && !starting),
@@ -571,7 +565,7 @@ function renderElementSwapMethodGroupHtml(
           ${
             starting
               ? `<span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>`
-              : `<img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(displayOption))}">`
+              : `<img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getSwapOptionIcon(displayOption))}">`
           }
         </span>
         <span class="${orClasses.methodTitleWrap}">
@@ -593,12 +587,12 @@ function renderElementSwapMethodGroupHtml(
 }
 
 function renderWizardBreadcrumbsHtml(options: {
-  readonly method: OpenReceivePaymentMethod;
+  readonly method: PaymentMethod;
   readonly selectedRoute: string | null;
-  readonly routeAssets: readonly OpenReceiveWizardRouteAssetDisplay[];
+  readonly routeAssets: readonly WizardRouteAssetDisplay[];
 }): string {
-  const method = openReceivePaymentMethods.find((candidate) => candidate.id === options.method);
-  const methodLabel = method?.title ?? openReceiveCheckoutLabels.paymentMethod;
+  const method = paymentMethods.find((candidate) => candidate.id === options.method);
+  const methodLabel = method?.title ?? checkoutLabels.paymentMethod;
   const routeLabel =
     options.selectedRoute === null || options.routeAssets.length <= 1
       ? null
@@ -613,7 +607,7 @@ function renderWizardBreadcrumbsHtml(options: {
         ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="method"
         type="button"
       >
-        <span>${escapeHtml(openReceiveCheckoutLabels.switchPaymentMethod)}</span>
+        <span>${escapeHtml(checkoutLabels.switchPaymentMethod)}</span>
       </button>
       <span part="wizard-breadcrumb-separator" aria-hidden="true">/</span>
       ${

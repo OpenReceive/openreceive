@@ -10,13 +10,13 @@ const MAX_IDENTIFIER_BYTES = 63;
  */
 export const OPENRECEIVE_PAYMENTS_SCHEMA_VERSION = 1 as const;
 
-export type OpenReceivePaymentsDialect = "postgres" | "sqlite";
+export type PaymentsDialect = "postgres" | "sqlite";
 
 /** Every status an attempt row may hold, as a SQL list for the CHECK constraint. */
 const ATTEMPT_STATUS_SQL_LIST = "'pending', 'settled', 'expired', 'failed', 'attention'";
 
-export interface OpenReceivePaymentsDdlOptions {
-  readonly dialect: OpenReceivePaymentsDialect;
+export interface PaymentsDdlOptions {
+  readonly dialect: PaymentsDialect;
   /** Payment attempts table name. Default `openreceive_payments`. */
   readonly tableName?: string;
   /** Durable reconcile-gate key/value table name. Default `openreceive_meta`. */
@@ -24,12 +24,12 @@ export interface OpenReceivePaymentsDdlOptions {
 }
 
 /** The `status IN (...)` predicate every rendering of the schema must enforce. */
-export function openReceivePaymentsStatusCheckSql(): string {
+export function paymentsStatusCheckSql(): string {
   return `status IN (${ATTEMPT_STATUS_SQL_LIST})`;
 }
 
 /** Dialect predicate for "64 lowercase hexadecimal characters". */
-export function openReceivePaymentsHashCheckSql(dialect: OpenReceivePaymentsDialect): string {
+export function paymentsHashCheckSql(dialect: PaymentsDialect): string {
   return dialect === "postgres"
     ? "payment_hash ~ '^[0-9a-f]{64}$'"
     : "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'";
@@ -40,7 +40,7 @@ export function openReceivePaymentsHashCheckSql(dialect: OpenReceivePaymentsDial
  * identifier limit: a long custom table name is truncated and given a short
  * digest of the full name, so two long names cannot collapse onto one index.
  */
-export function openReceivePaymentsIndexName(tableName: string, suffix: string): string {
+export function paymentsIndexName(tableName: string, suffix: string): string {
   const full = `${tableName}_${suffix}`;
   // `.length` (UTF-16 units) is exact here: every caller has passed the name
   // through an ASCII-only identifier check (assertDdlIdentifier below; the
@@ -56,8 +56,8 @@ export function openReceivePaymentsIndexName(tableName: string, suffix: string):
  * installed, as one idempotent INSERT. Every migration path must run it: the
  * repository's newer-schema refusal probe only engages when it exists.
  */
-export function openReceivePaymentsSeedSql(
-  dialect: OpenReceivePaymentsDialect,
+export function paymentsSeedSql(
+  dialect: PaymentsDialect,
   metaTableName = "openreceive_meta",
 ): string {
   assertDdlIdentifier(metaTableName);
@@ -72,7 +72,7 @@ interface PaymentsColumn {
   readonly definition: string;
 }
 
-function paymentsColumns(options: OpenReceivePaymentsDdlOptions): readonly PaymentsColumn[] {
+function paymentsColumns(options: PaymentsDdlOptions): readonly PaymentsColumn[] {
   const bigint = options.dialect === "postgres" ? "BIGINT" : "INTEGER";
   return [
     {
@@ -85,7 +85,7 @@ function paymentsColumns(options: OpenReceivePaymentsDdlOptions): readonly Payme
     // Deliberately TEXT with no foreign key: OpenReceive treats the host's
     // order id as an opaque string and never reads, locks, or joins the host's
     // order table. A host that wants referential integrity adds the constraint
-    // itself — see `openReceiveFulfillmentNote`, which every generated file
+    // itself — see `fulfillmentNote`, which every generated file
     // renders next to this schema.
     { name: "order_id", definition: "TEXT NOT NULL" },
     { name: "payment_hash", definition: "TEXT NOT NULL UNIQUE" },
@@ -107,7 +107,7 @@ function paymentsColumns(options: OpenReceivePaymentsDdlOptions): readonly Payme
  * Derived from the same source the DDL renders from, so documentation built on
  * it (the scaffold wiring guide) cannot drift from the schema.
  */
-export function openReceivePaymentsColumnNames(): readonly string[] {
+export function paymentsColumnNames(): readonly string[] {
   return paymentsColumns({ dialect: "sqlite" }).map((column) => column.name);
 }
 
@@ -129,9 +129,7 @@ export function openReceivePaymentsColumnNames(): readonly string[] {
  * repository enforces the time-dependent predicate inside the per-order commit
  * lock, which no index can express.
  */
-export function openReceivePaymentsDdlStatements(
-  options: OpenReceivePaymentsDdlOptions,
-): readonly string[] {
+export function paymentsDdlStatements(options: PaymentsDdlOptions): readonly string[] {
   const tableName = options.tableName ?? "openreceive_payments";
   const metaTableName = options.metaTableName ?? "openreceive_meta";
   assertDdlIdentifier(tableName);
@@ -144,13 +142,13 @@ export function openReceivePaymentsDdlStatements(
     [
       `CREATE TABLE IF NOT EXISTS ${tableName} (`,
       ...columns,
-      `  CHECK (${openReceivePaymentsStatusCheckSql()}),`,
-      `  CHECK (${openReceivePaymentsHashCheckSql(options.dialect)})`,
+      `  CHECK (${paymentsStatusCheckSql()}),`,
+      `  CHECK (${paymentsHashCheckSql(options.dialect)})`,
       ")",
     ].join("\n"),
-    `CREATE INDEX IF NOT EXISTS ${openReceivePaymentsIndexName(tableName, "order_created_idx")} ON ${tableName} (order_id, created_at)`,
-    `CREATE INDEX IF NOT EXISTS ${openReceivePaymentsIndexName(tableName, "status_created_idx")} ON ${tableName} (status, created_at)`,
-    `CREATE INDEX IF NOT EXISTS ${openReceivePaymentsIndexName(tableName, "client_ip_inserted_idx")} ON ${tableName} (client_ip, inserted_at)`,
+    `CREATE INDEX IF NOT EXISTS ${paymentsIndexName(tableName, "order_created_idx")} ON ${tableName} (order_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS ${paymentsIndexName(tableName, "status_created_idx")} ON ${tableName} (status, created_at)`,
+    `CREATE INDEX IF NOT EXISTS ${paymentsIndexName(tableName, "client_ip_inserted_idx")} ON ${tableName} (client_ip, inserted_at)`,
     [
       `CREATE TABLE IF NOT EXISTS ${metaTableName} (`,
       "  key TEXT PRIMARY KEY,",
@@ -158,7 +156,7 @@ export function openReceivePaymentsDdlStatements(
       `  rev ${bigint} NOT NULL DEFAULT 0`,
       ")",
     ].join("\n"),
-    openReceivePaymentsSeedSql(options.dialect, metaTableName),
+    paymentsSeedSql(options.dialect, metaTableName),
   ];
 }
 

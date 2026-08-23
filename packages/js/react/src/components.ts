@@ -3,17 +3,17 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   copyInvoice as copyInvoiceHelper,
   createCheckoutStatusModel,
-  createOpenReceivePaymentDataEntries,
+  createPaymentDataEntries,
   createQrSvg,
-  formatOpenReceiveAmountCaption,
-  openReceiveCheckoutLabels,
+  formatAmountCaption,
+  checkoutLabels,
   openWallet as openWalletHelper,
   orClasses,
   type CheckoutPhase,
   type CheckoutStatusModel,
-  type OpenReceivePaymentDataSource,
+  type PaymentDataSource,
 } from "@openreceive/browser/headless";
-import { useOpenReceiveTransientValue } from "./hooks.ts";
+import { useTransientValue } from "./hooks.ts";
 import { joinClassNames } from "./utils.ts";
 import type {
   CopyInvoiceButtonProps,
@@ -94,14 +94,14 @@ export function CopyInvoiceButton(props: CopyInvoiceButtonProps): React.ReactEle
     onCopied,
     onError,
     onClick,
-    copiedLabel = openReceiveCheckoutLabels.copied,
+    copiedLabel = checkoutLabels.copied,
     ButtonComponent = "button",
     children,
     type = "button",
     className,
     ...buttonProps
   } = props;
-  const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
+  const [copied, showCopied] = useTransientValue<boolean>(false);
 
   return React.createElement(
     ButtonComponent,
@@ -131,7 +131,7 @@ export function CopyInvoiceButton(props: CopyInvoiceButtonProps): React.ReactEle
         React.Fragment,
         null,
         React.createElement(ClipboardIcon),
-        copied ? copiedLabel : openReceiveCheckoutLabels.copyInvoice,
+        copied ? copiedLabel : checkoutLabels.copyInvoice,
       ),
   );
 }
@@ -146,7 +146,7 @@ export function OpenWalletButton(props: OpenWalletButtonProps): React.ReactEleme
     onError,
     onClick,
     ButtonComponent = "button",
-    children = openReceiveCheckoutLabels.openWallet,
+    children = checkoutLabels.openWallet,
     type = "button",
     className,
     ...buttonProps
@@ -214,10 +214,10 @@ export function SettledCheckIcon(): React.ReactElement {
 
 /** Collapsible "everything the client knows about this payment" panel, shown once settled. */
 export function PaymentData(props: {
-  readonly source: OpenReceivePaymentDataSource;
+  readonly source: PaymentDataSource;
   readonly className?: string;
 }): React.ReactElement | null {
-  const entries = createOpenReceivePaymentDataEntries(props.source);
+  const entries = createPaymentDataEntries(props.source);
   if (entries.length === 0) return null;
   return React.createElement(
     "details",
@@ -225,7 +225,7 @@ export function PaymentData(props: {
     React.createElement(
       "summary",
       { className: orClasses.paymentDataTitle },
-      openReceiveCheckoutLabels.viewPaymentData,
+      checkoutLabels.viewPaymentData,
     ),
     React.createElement(
       "div",
@@ -362,7 +362,7 @@ export function InvoiceSummary(props: InvoiceSummaryProps): React.ReactElement {
 
 export function SatsDetail(props: SatsDetailProps): React.ReactElement | null {
   const { amountLabel, fiatLabel, fiatCurrency, className, ...divProps } = props;
-  const caption = formatOpenReceiveAmountCaption({ amountLabel, fiatLabel, fiatCurrency });
+  const caption = formatAmountCaption({ amountLabel, fiatLabel, fiatCurrency });
 
   if (caption === undefined) return null;
 

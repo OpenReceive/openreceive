@@ -2,8 +2,8 @@ import { assertPaymentsTableName } from "./shared.ts";
 import {
   OPENRECEIVE_DIALECTS,
   OPENRECEIVE_ORMS,
-  type OpenReceiveDialect,
-  type OpenReceiveOrm,
+  type Dialect,
+  type Orm,
   type ScaffoldPaymentsOptions,
 } from "./types.ts";
 
@@ -19,8 +19,8 @@ export interface ParsedScaffoldArgv {
 export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffoldArgv {
   let help = false;
   let interactive = false;
-  let orm: OpenReceiveOrm | undefined;
-  let dialect: OpenReceiveDialect | undefined;
+  let orm: Orm | undefined;
+  let dialect: Dialect | undefined;
   let tableName: string | undefined;
   let metaTableName: string | undefined;
   let force = false;

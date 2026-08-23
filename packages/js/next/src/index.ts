@@ -1,12 +1,12 @@
 import {
   type CreateOpenReceiveHttpHandlerOptions,
   type CreateOpenReceiveStackOptions,
-  createOpenReceiveHttpHandler,
-  createOpenReceiveStack,
+  createHttpHandler,
+  createStack,
   createProxyRateLimitingConfig,
-  isOpenReceiveStackOptions,
+  isStackOptions,
   mapHostRouteError,
-  type OpenReceiveHttpHandler,
+  type HttpHandler,
 } from "@openreceive/http";
 
 // @openreceive/next — App Router route handlers over @openreceive/http. Next App Router route
@@ -30,20 +30,20 @@ import {
 
 export * from "@openreceive/http/adapter-surface";
 
-export type OpenReceiveNextRouteHandler = (request: Request) => Promise<Response>;
+export type NextRouteHandler = (request: Request) => Promise<Response>;
 
-export interface OpenReceiveNextHandlers {
-  readonly GET: OpenReceiveNextRouteHandler;
-  readonly POST: OpenReceiveNextRouteHandler;
+export interface NextHandlers {
+  readonly GET: NextRouteHandler;
+  readonly POST: NextRouteHandler;
   /** The underlying framework-agnostic handler, if you need it directly. */
-  readonly handler: OpenReceiveHttpHandler;
+  readonly handler: HttpHandler;
   /** All-in-one form only: resolves when the owned service and handler are up. */
   readonly ready?: Promise<void>;
   /** All-in-one form only: closes the service the adapter created. */
   readonly close?: () => Promise<void>;
 }
 
-interface OpenReceiveNextAdapterExtras {
+interface NextAdapterExtras {
   /**
    * Opt-in client-IP attribution for `rateLimiting`: a web Request has no
    * socket IP, so the Next adapter must read a forwarded header — and that is
@@ -54,14 +54,12 @@ interface OpenReceiveNextAdapterExtras {
   readonly trustProxyIpHeader?: boolean | string;
 }
 
-export interface OpenReceiveNextHandlersOptions
+export interface NextHandlersOptions
   extends CreateOpenReceiveHttpHandlerOptions,
-    OpenReceiveNextAdapterExtras {}
+    NextAdapterExtras {}
 
 /** All-in-one form: order hooks + `wallet` + `storage`; the adapter builds service and host. */
-export interface OpenReceiveNextStackOptions
-  extends CreateOpenReceiveStackOptions,
-    OpenReceiveNextAdapterExtras {}
+export interface NextStackOptions extends CreateOpenReceiveStackOptions, NextAdapterExtras {}
 
 /**
  * Build Next.js App Router GET/POST handlers for the OpenReceive routes.
@@ -69,22 +67,21 @@ export interface OpenReceiveNextStackOptions
  * Two forms: the all-in-one happy path (order hooks + `wallet` + `storage`; the
  * adapter builds the service and host, exposing `ready`/`close` — no
  * background process, settlement is opportunistic through the durable
- * reconcile gate, with `startOpenReceiveNotificationWorker` as the optional
+ * reconcile gate, with `startNotificationWorker` as the optional
  * push/poll worker) or the composed `{ service, host, authorize }` form.
  */
 export function openReceiveNextHandlers(
-  options: OpenReceiveNextHandlersOptions | OpenReceiveNextStackOptions,
-): OpenReceiveNextHandlers {
-  if (isOpenReceiveStackOptions(options)) {
+  options: NextHandlersOptions | NextStackOptions,
+): NextHandlers {
+  if (isStackOptions(options)) {
     const { trustProxyIpHeader, ...stackOptions } = options;
-    const stack = createOpenReceiveStack({
+    const stack = createStack({
       ...stackOptions,
       ...createProxyRateLimitingConfig(stackOptions.rateLimiting, trustProxyIpHeader, {
         requireIpSource: "Next",
       }),
     });
-    const route: OpenReceiveNextRouteHandler = (request) =>
-      stack.handler(request, { native: request });
+    const route: NextRouteHandler = (request) => stack.handler(request, { native: request });
     return {
       GET: route,
       POST: route,
@@ -94,13 +91,13 @@ export function openReceiveNextHandlers(
     };
   }
   const { trustProxyIpHeader, ...handlerOptions } = options;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     ...handlerOptions,
     ...createProxyRateLimitingConfig(handlerOptions.rateLimiting, trustProxyIpHeader, {
       requireIpSource: "Next",
     }),
   });
-  const route: OpenReceiveNextRouteHandler = (request) => handler(request, { native: request });
+  const route: NextRouteHandler = (request) => handler(request, { native: request });
   return { GET: route, POST: route, handler };
 }
 

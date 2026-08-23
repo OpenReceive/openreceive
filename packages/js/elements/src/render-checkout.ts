@@ -1,27 +1,27 @@
 import {
-  assertOpenReceiveDisplayInvoice,
+  assertDisplayInvoice,
   type CheckoutState,
   createCheckoutStatusModel,
-  createOpenReceiveLightningInvoiceDecodeUrl,
-  createOpenReceivePaymentDataEntries,
+  createLightningInvoiceDecodeUrl,
+  createPaymentDataEntries,
   deriveCheckoutStateLabels,
-  status as deriveStatus,
-  escapeOpenReceiveHtml as escapeHtml,
-  formatOpenReceiveAmountCaption,
+  deriveStatus,
+  escapeHtml,
+  formatAmountCaption,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_PARTS,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS,
-  type OpenReceivePaymentDataSource,
-  openReceiveCheckoutLabels,
+  type PaymentDataSource,
+  checkoutLabels,
   orClasses,
 } from "@openreceive/browser/headless";
 
 import { COPY_INVOICE_ICON } from "./dom-helpers.ts";
 
-import { openReceiveCheckoutStyleTag } from "./element-styles.ts";
+import { checkoutStyleTag } from "./element-styles.ts";
 
-import { renderOpenReceivePaymentWizardHtml } from "./render-wizard.ts";
+import { renderPaymentWizardHtml } from "./render-wizard.ts";
 
 import { type CheckoutView, createElementCheckoutState } from "./views.ts";
 
@@ -31,14 +31,14 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   // SIDE EFFECT of building the `lightning:` URI inside createCheckoutDisplayModel
   // — so deleting that call quietly removed the guard for any view without an
   // invoice-id. It is explicit now, and it is checked before anything is built.
-  if (view.invoice !== "") assertOpenReceiveDisplayInvoice(view.invoice);
+  if (view.invoice !== "") assertDisplayInvoice(view.invoice);
   const checkoutState = view.liveState ?? createElementCheckoutState(view);
   // The caption reads the ATTRIBUTES, not the state: in create mode there is no
   // state yet, and the amount/fiat attributes are what the host rendered the
   // element with. Same label rule as the state carries — one derivation, two
   // sources, and the source stays the one it always was.
   const labels = deriveCheckoutStateLabels(view);
-  const amountCaption = formatOpenReceiveAmountCaption({
+  const amountCaption = formatAmountCaption({
     amountLabel: labels.amountLabel,
     fiatLabel: labels.fiatLabel,
     fiatCurrency: view.fiat_quote?.fiat?.currency,
@@ -67,10 +67,8 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     (view.lightningRequested === false ||
       ((view.wizard?.selectedSwapAsset ?? null) !== null && !expired));
   const wizard =
-    expired || settled || view.payment_wizard === false
-      ? ""
-      : renderOpenReceivePaymentWizardHtml(view.wizard);
-  const copyButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" class="${orClasses.btn}" type="button">${COPY_INVOICE_ICON}<span ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopyLabel}>${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</span></button>`;
+    expired || settled || view.payment_wizard === false ? "" : renderPaymentWizardHtml(view.wizard);
+  const copyButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" class="${orClasses.btn}" type="button">${COPY_INVOICE_ICON}<span ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopyLabel}>${escapeHtml(checkoutLabels.copyInvoice)}</span></button>`;
   const decodeInvoice =
     view.invoice.trim() !== ""
       ? view.invoice
@@ -81,12 +79,12 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   const decodeHref =
     decodeInvoice === undefined
       ? undefined
-      : createOpenReceiveLightningInvoiceDecodeUrl(decodeInvoice, view.decodeLinkUrl);
+      : createLightningInvoiceDecodeUrl(decodeInvoice, view.decodeLinkUrl);
   const decodeButton =
     decodeHref === undefined
       ? ""
-      : `<a part="decode-invoice" class="${orClasses.btn}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(openReceiveCheckoutLabels.decodeInvoice)}</a>`;
-  const startOverButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" class="${orClasses.btn}" type="button">${escapeHtml(openReceiveCheckoutLabels.startOver)}</button>`;
+      : `<a part="decode-invoice" class="${orClasses.btn}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(checkoutLabels.decodeInvoice)}</a>`;
+  const startOverButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" class="${orClasses.btn}" type="button">${escapeHtml(checkoutLabels.startOver)}</button>`;
   // Settled: the QR / copy / decode affordances are for paying, so they drop out and a
   // payment-data panel takes their place next to the green "Payment received" status.
   const lightningPane =
@@ -103,7 +101,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   const invoiceTitle =
     expired || settled
       ? ""
-      : `<p part="invoice-title" class="${orClasses.invoiceTitle}">${escapeHtml(openReceiveCheckoutLabels.bitcoinLightningInvoice)}</p>`;
+      : `<p part="invoice-title" class="${orClasses.invoiceTitle}">${escapeHtml(checkoutLabels.bitcoinLightningInvoice)}</p>`;
   const actions = settled
     ? // No state means no attempt to derive one from (a standalone caller that
       // passed `status: "settled"` and no invoice-id), so the panel reads the
@@ -144,7 +142,7 @@ export interface RenderOpenReceiveStyleOptions {
 }
 
 function styleTag(inlineStyles: boolean | undefined): string {
-  return inlineStyles === false ? "" : openReceiveCheckoutStyleTag;
+  return inlineStyles === false ? "" : checkoutStyleTag;
 }
 
 /**
@@ -202,7 +200,7 @@ export function renderCheckoutCreatingHtml(
   `;
 }
 
-export function renderOpenReceiveThemeToggleHtml(
+export function renderThemeToggleHtml(
   label: string,
   options: RenderOpenReceiveStyleOptions = {},
 ): string {
@@ -241,8 +239,8 @@ function renderElementPaymentStatusHtml(state: CheckoutState): string {
   `;
 }
 
-function renderElementPaymentDataHtml(source: OpenReceivePaymentDataSource): string {
-  const entries = createOpenReceivePaymentDataEntries(source);
+function renderElementPaymentDataHtml(source: PaymentDataSource): string {
+  const entries = createPaymentDataEntries(source);
   if (entries.length === 0) return "";
   const rows = entries
     .map(
@@ -255,7 +253,7 @@ function renderElementPaymentDataHtml(source: OpenReceivePaymentDataSource): str
     .join("");
   return `
     <details part="payment-data" class="${orClasses.paymentData}">
-      <summary part="payment-data-summary" class="${orClasses.paymentDataTitle}">${escapeHtml(openReceiveCheckoutLabels.viewPaymentData)}</summary>
+      <summary part="payment-data-summary" class="${orClasses.paymentDataTitle}">${escapeHtml(checkoutLabels.viewPaymentData)}</summary>
       <div class="${orClasses.paymentDataBody}">${rows}</div>
     </details>
   `;

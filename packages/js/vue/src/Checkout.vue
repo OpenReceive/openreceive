@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import {
-  createOpenReceiveWrapperCheckoutShellBinding,
-  defineOpenReceiveElements,
-  validateOpenReceiveCheckoutProps,
-  type OpenReceiveWrapperCheckoutComponentProps,
+  createWrapperCheckoutShellBinding,
+  defineElements,
+  validateCheckoutProps,
+  type WrapperCheckoutComponentProps,
 } from "./index.js";
 
 defineOptions({
@@ -17,7 +17,7 @@ defineOptions({
 // = `orderId` + optional `prefix`), and docs/internal/wrapper-parity.md is the
 // human-readable contract. `withDefaults` still spells the defaults out — a
 // type carries none.
-const props = withDefaults(defineProps<OpenReceiveWrapperCheckoutComponentProps>(), {
+const props = withDefaults(defineProps<WrapperCheckoutComponentProps>(), {
   options: () => ({}),
   // Explicit undefined defaults suppress Vue's absent-Boolean-prop-to-false
   // coercion: an unbound boolean prop must stay undefined so the
@@ -32,11 +32,11 @@ const props = withDefaults(defineProps<OpenReceiveWrapperCheckoutComponentProps>
 const mounted = ref(false);
 onMounted(() => {
   mounted.value = true;
-  defineOpenReceiveElements();
+  defineElements();
 });
 
 const shell = computed(() => {
-  validateOpenReceiveCheckoutProps({
+  validateCheckoutProps({
     framework: "@openreceive/vue",
     checkout: props.checkout,
     orderId: props.orderId,
@@ -45,7 +45,7 @@ const shell = computed(() => {
     resumePathPrefix: props.resumePathPrefix,
     routeOrderId: props.routeOrderId,
   });
-  return createOpenReceiveWrapperCheckoutShellBinding(props.checkout ?? null, {
+  return createWrapperCheckoutShellBinding(props.checkout ?? null, {
     ...props.options,
     themeToggle: props.themeToggle ?? props.options.themeToggle ?? true,
     deferThemeResolution: !mounted.value,

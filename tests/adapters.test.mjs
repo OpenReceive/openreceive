@@ -80,23 +80,23 @@ test("adapters expose the curated http surface, not internals", () => {
     ["@openreceive/next", nextAdapter],
   ];
   const curated = [
-    "createOpenReceiveHttpHandler",
-    "createOpenReceiveStack",
+    "createHttpHandler",
+    "createStack",
     "hostError",
     "isServiceErrorShape",
     "mapHostRouteError",
-    "OpenReceiveHostError",
-    "OpenReceiveHttpError",
-    "startOpenReceiveNotificationWorker",
+    "HostError",
+    "HttpError",
+    "startNotificationWorker",
   ];
   const internals = [
-    "createOpenReceiveHost",
-    "createOpenReceiveSqlPayments",
-    "maybeReconcileOpenReceivePayments",
-    "openReceivePaymentsSchemaSql",
-    "openReceiveWebRequest",
-    "reconcileOpenReceivePayments",
-    "startOpenReceiveReconciler",
+    "createHost",
+    "createSqlPayments",
+    "maybeReconcilePayments",
+    "paymentsSchemaSql",
+    "webRequest",
+    "reconcileHostPayments",
+    "startReconciler",
   ];
   // The internals stay available where they belong: @openreceive/http.
   for (const key of [...curated, ...internals]) {
@@ -500,7 +500,7 @@ test("fastify trustProxyIpHeader names a custom header for the limiter", async (
 });
 
 test("sendHostRouteError has fastify and next counterparts", async () => {
-  const error = new httpSurface.OpenReceiveHostError(422, {
+  const error = new httpSurface.HostError(422, {
     code: "INVALID_REQUEST",
     message: "bad cart",
     retryable: false,

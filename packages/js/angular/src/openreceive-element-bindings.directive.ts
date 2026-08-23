@@ -10,9 +10,9 @@ import {
 import {
   type AppliedElementBindings,
   EMPTY_APPLIED_ELEMENT_BINDINGS,
-  type OpenReceiveElementBindings,
-  applyOpenReceiveElementBindings,
-  detachOpenReceiveElementListeners,
+  type ElementBindings,
+  applyElementBindings,
+  detachElementListeners,
 } from "./element-bindings";
 
 /** Applies a wrapper binding's attributes and listeners to the element host. */
@@ -20,8 +20,8 @@ import {
   selector: "[openreceiveElementBindings]",
   standalone: true,
 })
-export class OpenReceiveElementBindingsDirective implements OnChanges, OnDestroy {
-  @Input("openreceiveElementBindings") bindings: OpenReceiveElementBindings = {};
+export class ElementBindingsDirective implements OnChanges, OnDestroy {
+  @Input("openreceiveElementBindings") bindings: ElementBindings = {};
 
   private applied: AppliedElementBindings = EMPTY_APPLIED_ELEMENT_BINDINGS;
   // Zone-wrapped handlers are cached per original handler: the applier compares
@@ -37,7 +37,7 @@ export class OpenReceiveElementBindingsDirective implements OnChanges, OnDestroy
     // outside Angular keeps those timers unpatched, so they never schedule a change
     // detection pass; the listeners below re-enter the zone for host callbacks.
     this.zone.runOutsideAngular(() => {
-      this.applied = applyOpenReceiveElementBindings(
+      this.applied = applyElementBindings(
         this.host.nativeElement,
         { ...this.bindings, listeners: this.zoneListeners(this.bindings.listeners) },
         this.applied,
@@ -46,12 +46,12 @@ export class OpenReceiveElementBindingsDirective implements OnChanges, OnDestroy
   }
 
   ngOnDestroy(): void {
-    detachOpenReceiveElementListeners(this.host.nativeElement, this.applied.listeners);
+    detachElementListeners(this.host.nativeElement, this.applied.listeners);
     this.applied = EMPTY_APPLIED_ELEMENT_BINDINGS;
   }
 
   private zoneListeners(
-    listeners: OpenReceiveElementBindings["listeners"],
+    listeners: ElementBindings["listeners"],
   ): Readonly<Record<string, ((event: Event) => void) | undefined>> {
     if (listeners === undefined) return {};
     const wrapped: Record<string, ((event: Event) => void) | undefined> = {};

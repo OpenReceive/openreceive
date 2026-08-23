@@ -1,4 +1,4 @@
-import { createOpenReceiveThemeToggleElement } from "@openreceive/elements";
+import { createThemeToggleElement } from "@openreceive/elements";
 import { observer } from "mobx-react";
 import type React from "react";
 import { useEffect, useRef } from "react";
@@ -14,7 +14,7 @@ const ThemeToggle: React.FC = observer(() => {
     const container = containerRef.current;
     if (container === null) return;
     container.replaceChildren(
-      createOpenReceiveThemeToggleElement({
+      createThemeToggleElement({
         document,
         rootSelector: ".page",
         checkoutSelector: ".demo-checkout",

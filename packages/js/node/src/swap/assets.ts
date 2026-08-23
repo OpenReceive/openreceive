@@ -1,6 +1,6 @@
 import {
   isValidAddressForSwapNetwork,
-  type OpenReceiveSwapAddressNetwork,
+  type SwapAddressNetwork,
 } from "@openreceive/core/swap-address";
 
 export const OPENRECEIVE_SWAP_PAY_IN_ASSETS = [
@@ -15,16 +15,16 @@ export const OPENRECEIVE_SWAP_PAY_IN_ASSETS = [
 
 export type SwapPayInAsset = (typeof OPENRECEIVE_SWAP_PAY_IN_ASSETS)[number];
 
-export interface OpenReceiveSwapAssetInfo {
+export interface SwapAssetInfo {
   readonly pay_in_asset: SwapPayInAsset;
   readonly label: string;
   readonly network_label: string;
   readonly coin: string;
-  readonly network: OpenReceiveSwapAddressNetwork;
+  readonly network: SwapAddressNetwork;
   readonly expiry_seconds: number;
 }
 
-const ASSET_INFO: Readonly<Record<SwapPayInAsset, OpenReceiveSwapAssetInfo>> = {
+const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
   SOL_SOL: {
     pay_in_asset: "SOL_SOL",
     label: "SOL",
@@ -83,28 +83,28 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, OpenReceiveSwapAssetInfo>> = {
   },
 } as const;
 
-export function isOpenReceiveSwapPayInAsset(value: unknown): value is SwapPayInAsset {
+export function isSwapPayInAsset(value: unknown): value is SwapPayInAsset {
   return (
     typeof value === "string" &&
     (OPENRECEIVE_SWAP_PAY_IN_ASSETS as readonly string[]).includes(value)
   );
 }
 
-export function getOpenReceiveSwapAssetInfo(payInAsset: SwapPayInAsset): OpenReceiveSwapAssetInfo {
+export function getSwapAssetInfo(payInAsset: SwapPayInAsset): SwapAssetInfo {
   return ASSET_INFO[payInAsset];
 }
 
-export function listOpenReceiveSwapAssetInfo(): readonly OpenReceiveSwapAssetInfo[] {
+export function listSwapAssetInfo(): readonly SwapAssetInfo[] {
   return OPENRECEIVE_SWAP_PAY_IN_ASSETS.map((asset) => ASSET_INFO[asset]);
 }
 
-export function normalizeOpenReceiveSwapNetwork(value: string): string {
+export function normalizeSwapNetwork(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]+/g, "");
 }
 
-export function openReceiveSwapNetworkMatches(expected: string, actual: string): boolean {
-  const normalizedExpected = normalizeOpenReceiveSwapNetwork(expected);
-  const normalizedActual = normalizeOpenReceiveSwapNetwork(actual);
+export function swapNetworkMatches(expected: string, actual: string): boolean {
+  const normalizedExpected = normalizeSwapNetwork(expected);
+  const normalizedActual = normalizeSwapNetwork(actual);
   if (normalizedActual === normalizedExpected) return true;
 
   if (normalizedExpected === "TRX") {
@@ -123,8 +123,8 @@ export function openReceiveSwapNetworkMatches(expected: string, actual: string):
   return false;
 }
 
-export function isOpenReceiveLightningNetwork(value: string): boolean {
-  const normalized = normalizeOpenReceiveSwapNetwork(value);
+export function isLightningNetwork(value: string): boolean {
+  const normalized = normalizeSwapNetwork(value);
   return (
     normalized === "LN" ||
     normalized === "LIGHTNING" ||
@@ -141,5 +141,5 @@ export function isOpenReceiveLightningNetwork(value: string): boolean {
  * one rule set; callers throw their own error.
  */
 export function isValidSwapAddressForNetwork(payInAsset: SwapPayInAsset, address: string): boolean {
-  return isValidAddressForSwapNetwork(getOpenReceiveSwapAssetInfo(payInAsset).network, address);
+  return isValidAddressForSwapNetwork(getSwapAssetInfo(payInAsset).network, address);
 }

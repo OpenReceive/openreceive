@@ -17,10 +17,8 @@ const { renderToStaticMarkup } = await import("react-dom/server");
 const { Checkout, CheckoutProvider, InvoiceSummary, OpenWalletButton, ThemeScope } = await import(
   "../packages/js/react/src/index.ts"
 );
-const { useOpenReceiveCheckoutSession } = await import(
-  "../packages/js/react/src/checkout-session.ts"
-);
-const { OPENRECEIVE_THEME_STORAGE_KEY, openReceiveCheckoutLabels } = await import(
+const { useCheckoutSession } = await import("../packages/js/react/src/checkout-session.ts");
+const { OPENRECEIVE_THEME_STORAGE_KEY, checkoutLabels } = await import(
   "../packages/js/browser/src/headless.ts"
 );
 
@@ -212,15 +210,15 @@ test("copy feedback appears on click and resets itself", async (t) => {
   });
   const handle = mount(React.createElement(Checkout, { checkout: snapshot, polling: false }));
   try {
-    const copy = await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {
+    const copy = await until(() => handle.button(checkoutLabels.copyInvoice), {
       label: "copy button",
     });
     copy.click();
-    await until(() => handle.text().includes(openReceiveCheckoutLabels.copied), {
+    await until(() => handle.text().includes(checkoutLabels.copied), {
       label: "copied feedback",
     });
     // The feedback is transient: it must clear itself without another click.
-    await until(() => !handle.text().includes(openReceiveCheckoutLabels.copied), {
+    await until(() => !handle.text().includes(checkoutLabels.copied), {
       label: "copied feedback reset",
     });
   } finally {
@@ -341,15 +339,15 @@ test("create mode keeps one checkout view across the deferred Lightning mint", a
   try {
     const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
     bitcoin.click();
-    await until(() => handle.text().includes(openReceiveCheckoutLabels.switchPaymentMethod), {
+    await until(() => handle.text().includes(checkoutLabels.switchPaymentMethod), {
       label: "wizard breadcrumb after selecting Bitcoin",
     });
-    await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {
+    await until(() => handle.button(checkoutLabels.copyInvoice), {
       label: "minted Lightning invoice",
     });
     // The grid heading only renders while no method is selected.
     assert.ok(
-      !handle.text().includes(openReceiveCheckoutLabels.wizardTitle),
+      !handle.text().includes(checkoutLabels.wizardTitle),
       "the mint must not remount the wizard back to the method grid",
     );
   } finally {
@@ -384,7 +382,7 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
       { label: "Tron network" },
     );
     tron.click();
-    const cont = await until(() => handle.button(openReceiveCheckoutLabels.continue), {
+    const cont = await until(() => handle.button(checkoutLabels.continue), {
       label: "continue button",
     });
     cont.click();
@@ -398,7 +396,7 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
     );
     assert.equal(swapStartPosts, 1, "a failed swap start must not be auto-retried");
 
-    const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
+    const back = await until(() => handle.button(checkoutLabels.switchPaymentMethod), {
       label: "back breadcrumb",
     });
     back.click();
@@ -442,7 +440,7 @@ test("a second Bitcoin selection during the mint does not POST a second checkout
     // payer stepping back to the grid and choosing Bitcoin again while the first
     // POST /checkouts is still open. Unguarded, the second one went out and the
     // loser's 409 surfaced over a perfectly good invoice.
-    const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
+    const back = await until(() => handle.button(checkoutLabels.switchPaymentMethod), {
       label: "wizard breadcrumb",
     });
     back.click();
@@ -452,7 +450,7 @@ test("a second Bitcoin selection during the mint does not POST a second checkout
     assert.equal(mints, 1, "a second Bitcoin selection must not POST a second checkout");
 
     releaseMint();
-    await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {
+    await until(() => handle.button(checkoutLabels.copyInvoice), {
       label: "minted Lightning invoice",
     });
     assert.equal(mints, 1);
@@ -520,7 +518,7 @@ test("the checkout session survives a re-render, so a second start is refused", 
   function SwapProbe() {
     const [, bump] = React.useState(0);
     const startedRef = React.useRef(undefined);
-    probe.session = useOpenReceiveCheckoutSession({
+    probe.session = useCheckoutSession({
       snapshot: () => undefined,
       orderId: () => "order-probe",
       swapPrefix: () => "http://harness.local/openreceive",
@@ -580,12 +578,12 @@ test("Bitcoin selected again after the mint reuses the bolt11 instead of minting
     bitcoin.click();
     // Unlike the in-flight test, the mint is allowed to finish: the payer is
     // holding a payable bolt11 before they go anywhere.
-    await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {
+    await until(() => handle.button(checkoutLabels.copyInvoice), {
       label: "minted Lightning invoice",
     });
     assert.equal(mints, 1);
 
-    const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
+    const back = await until(() => handle.button(checkoutLabels.switchPaymentMethod), {
       label: "wizard breadcrumb",
     });
     back.click();
@@ -599,7 +597,7 @@ test("Bitcoin selected again after the mint reuses the bolt11 instead of minting
       "Bitcoin re-selected with a live bolt11 must not POST a second checkout",
     );
     // Reuse, not a silent no-op: the invoice is still on screen to pay.
-    assert.notEqual(handle.button(openReceiveCheckoutLabels.copyInvoice), undefined);
+    assert.notEqual(handle.button(checkoutLabels.copyInvoice), undefined);
   } finally {
     handle.unmount();
     await stack.close();
@@ -633,7 +631,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
     });
     assert.equal(swapStarts(), 1);
 
-    const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
+    const back = await until(() => handle.button(checkoutLabels.switchPaymentMethod), {
       label: "back breadcrumb",
     });
     back.click();
@@ -690,7 +688,7 @@ test("the session refuses a second start for an asset it already holds instructi
     const [started, setStarted] = React.useState(undefined);
     const [dismissed, setDismissed] = React.useState(null);
     const [selected, setSelected] = React.useState(null);
-    probe.session = useOpenReceiveCheckoutSession({
+    probe.session = useCheckoutSession({
       snapshot: () => undefined,
       orderId: () => "order-reselect",
       swapPrefix: () => "http://harness.local/openreceive",

@@ -4,18 +4,18 @@ import path from "node:path";
 import test from "node:test";
 import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
-  formatOpenReceiveMsats,
-  openReceiveCheckoutElementStyles,
-  openReceiveCheckoutLabels,
+  formatMsats,
+  checkoutElementStyles,
+  checkoutLabels,
 } from "@openreceive/browser/headless";
 import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  defineOpenReceiveElements,
+  defineElements,
   renderCheckoutHtml,
-  renderOpenReceiveThemeToggleHtml,
+  renderThemeToggleHtml,
 } from "@openreceive/elements";
 import { renderCheckoutCreatingHtml } from "../packages/js/elements/src/render-checkout.ts";
-import { renderOpenReceivePaymentWizardHtml } from "../packages/js/elements/src/render-wizard.ts";
+import { renderPaymentWizardHtml } from "../packages/js/elements/src/render-wizard.ts";
 
 test("elements render display-safe checkout HTML", () => {
   const html = renderCheckoutHtml({
@@ -81,7 +81,7 @@ test("elements derive waiting display from browser checkout state", () => {
 });
 
 test("elements render payment wizard route choices and providers from browser state", () => {
-  const firstStep = renderOpenReceivePaymentWizardHtml();
+  const firstStep = renderPaymentWizardHtml();
   assert.match(firstStep, /Bitcoin/);
   assert.doesNotMatch(firstStep, />Crypto</);
   assert.doesNotMatch(firstStep, /Credit Card/);
@@ -90,14 +90,14 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(firstStep, /assets\/icons\/card\.svg/);
   assert.doesNotMatch(firstStep, /change payment method/);
 
-  const loadingStep = renderOpenReceivePaymentWizardHtml({
+  const loadingStep = renderPaymentWizardHtml({
     currenciesLoading: true,
   });
   assert.match(loadingStep, /Bitcoin/);
   assert.match(loadingStep, /Loading currencies/);
   assert.doesNotMatch(loadingStep, />Crypto</);
 
-  const belowMin = renderOpenReceivePaymentWizardHtml({
+  const belowMin = renderPaymentWizardHtml({
     amountMsats: 3_000_000,
     fiat: { currency: "USD", value: "2.00" },
     swapOptions: [
@@ -121,7 +121,7 @@ test("elements render payment wizard route choices and providers from browser st
     /aria-disabled="true"[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
   );
 
-  const startingSol = renderOpenReceivePaymentWizardHtml({
+  const startingSol = renderPaymentWizardHtml({
     startingSwapAsset: "SOL_SOL",
     swapOptions: [
       {
@@ -138,7 +138,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(startingSol, /disabled aria-disabled="true"/);
   assert.match(startingSol, />SOL</);
 
-  const startingUsdtContinue = renderOpenReceivePaymentWizardHtml({
+  const startingUsdtContinue = renderPaymentWizardHtml({
     selectedPickerKey: "swap:USDT",
     selectedSwapNetworks: { USDT: "USDT_SOL" },
     startingSwapAsset: "USDT_SOL",
@@ -174,7 +174,7 @@ test("elements render payment wizard route choices and providers from browser st
     /part="method-confirm"[^>]*disabled aria-disabled="true"[^>]*aria-busy="true"/,
   );
 
-  const usdtNetworksBelowMin = renderOpenReceivePaymentWizardHtml({
+  const usdtNetworksBelowMin = renderPaymentWizardHtml({
     amountMsats: 3_000_000,
     fiat: { currency: "USD", value: "2.00" },
     selectedPickerKey: "swap:USDT",
@@ -223,7 +223,7 @@ test("elements render payment wizard route choices and providers from browser st
     /aria-disabled="true"[\s\S]*?>Ethereum<\/span>[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
   );
 
-  const bitcoinStep = renderOpenReceivePaymentWizardHtml({
+  const bitcoinStep = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
   });
   assert.match(bitcoinStep, /data-or-breadcrumb="method"/);
@@ -240,7 +240,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(bitcoinStep, /part="country-select"/);
   assert.doesNotMatch(bitcoinStep, /Credit \/ debit card/);
 
-  const tutorialIntro = renderOpenReceivePaymentWizardHtml({
+  const tutorialIntro = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 0,
@@ -261,7 +261,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(tutorialIntro, /Step 1 of 5/);
   assert.doesNotMatch(tutorialIntro, /assets\/pay_tutorials\/strike-1\.webp/);
 
-  const copiedTutorialIntro = renderOpenReceivePaymentWizardHtml({
+  const copiedTutorialIntro = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 0,
@@ -269,7 +269,7 @@ test("elements render payment wizard route choices and providers from browser st
   });
   assert.match(copiedTutorialIntro, /Copied! Click next below to continue with tutorial\./);
 
-  const tutorialStep = renderOpenReceivePaymentWizardHtml({
+  const tutorialStep = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 2,
@@ -283,7 +283,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(tutorialStep, /Choose Bitcoin wallet/);
   assert.match(tutorialStep, /Step 3 of 5/);
 
-  const finalTutorialStep = renderOpenReceivePaymentWizardHtml({
+  const finalTutorialStep = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 4,
@@ -294,7 +294,7 @@ test("elements render payment wizard route choices and providers from browser st
 });
 
 test("elements render package-owned theme toggle HTML", () => {
-  const html = renderOpenReceiveThemeToggleHtml("dark mode");
+  const html = renderThemeToggleHtml("dark mode");
   assert.match(html, /data-openreceive-theme-toggle/);
   assert.match(html, /part="button"/);
   assert.match(html, /dark mode/);
@@ -322,21 +322,18 @@ test("elements package exposes shared browser-owned checkout styles", () => {
   assert.match(styles, /Generated by tools\/package\/build-browser-css\.mjs/);
   assert.match(
     renderCheckoutHtml({ invoice: "lnbc-style-test" }),
-    new RegExp(escapeRegExp(openReceiveCheckoutElementStyles.trim().slice(0, 20))),
+    new RegExp(escapeRegExp(checkoutElementStyles.trim().slice(0, 20))),
   );
   assert.match(
-    renderOpenReceiveThemeToggleHtml("dark mode"),
-    new RegExp(escapeRegExp(openReceiveCheckoutElementStyles.trim().slice(0, 20))),
+    renderThemeToggleHtml("dark mode"),
+    new RegExp(escapeRegExp(checkoutElementStyles.trim().slice(0, 20))),
   );
   // The custom elements adopt one shared constructable stylesheet instead, so the
   // ~100KB sheet is not re-inserted and reparsed on every render.
   assert.doesNotMatch(renderCheckoutHtml({ invoice: "lnbc-style", inlineStyles: false }), /<style/);
-  assert.doesNotMatch(
-    renderOpenReceiveThemeToggleHtml("dark mode", { inlineStyles: false }),
-    /<style/,
-  );
-  assert.match(source, /openReceiveCheckoutElementStyles/);
-  assert.doesNotMatch(source, /openReceiveThemeToggleElementStyles/);
+  assert.doesNotMatch(renderThemeToggleHtml("dark mode", { inlineStyles: false }), /<style/);
+  assert.match(source, /checkoutElementStyles/);
+  assert.doesNotMatch(source, /themeToggleElementStyles/);
   assert.doesNotMatch(source, /--or-good-bg/);
   assert.doesNotMatch(source, /--or-theme-toggle-bg/);
 });
@@ -391,10 +388,10 @@ function escapeRegExp(value) {
 }
 
 test("elements format sat and msat amounts", () => {
-  assert.equal(formatOpenReceiveMsats(1000), "1 sat");
-  assert.equal(formatOpenReceiveMsats(2000), "2 sats");
-  assert.equal(formatOpenReceiveMsats(1500), "1,500 msats");
-  assert.throws(() => formatOpenReceiveMsats(-1), /non-negative safe integer/);
+  assert.equal(formatMsats(1000), "1 sat");
+  assert.equal(formatMsats(2000), "2 sats");
+  assert.equal(formatMsats(1500), "1,500 msats");
+  assert.throws(() => formatMsats(-1), /non-negative safe integer/);
 });
 
 test("elements expose a create-mode prefix attribute and creating placeholder", () => {
@@ -414,7 +411,7 @@ test("elements expose a create-mode prefix attribute and creating placeholder", 
 });
 
 test("elements refund screen warns to bookmark the checkout URL", () => {
-  const html = renderOpenReceivePaymentWizardHtml({
+  const html = renderPaymentWizardHtml({
     selectedSwapAsset: "USDT_SOL",
     swapOptions: [
       {
@@ -450,16 +447,14 @@ test("elements refund screen warns to bookmark the checkout URL", () => {
   assert.match(html, /part="swap-refund-return"/);
   assert.match(html, /data-or-swap-refund-nonce="confirm"/);
   assert.match(html, /Review refund address/);
-  assert.ok(html.includes(openReceiveCheckoutLabels.refundReturnWarning));
-  assert.ok(
-    html.indexOf("Payment details") < html.indexOf(openReceiveCheckoutLabels.refundReturnWarning),
-  );
+  assert.ok(html.includes(checkoutLabels.refundReturnWarning));
+  assert.ok(html.indexOf("Payment details") < html.indexOf(checkoutLabels.refundReturnWarning));
 });
 
 test("elements definition fails clearly without DOM custom elements", () => {
   assert.throws(
     () =>
-      defineOpenReceiveElements({
+      defineElements({
         registry: undefined,
       }),
     /Custom elements are unavailable/,

@@ -2,7 +2,7 @@
 
 Use this when the [Node quickstart](../guides/quickstart-node.md) is not enough.
 Most apps should mount `@openreceive/express` (or Fastify/Next) and keep host policy in
-`createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid })` plus the host's
+`createHost({ db, loadOrder, amountForOrder, onPaid })` plus the host's
 `authorize` policy.
 
 ## Request flow
@@ -66,12 +66,12 @@ transaction; `query` runs statements (`?` placeholders) in that same transaction
 update or an outbox insert. A duplicate sibling settlement is recorded with
 `status_reason = 'duplicate_settlement'` and never fulfills again.
 
-The advanced form replaces `db` with `payments: OpenReceivePaymentRepository`
+The advanced form replaces `db` with `payments: PaymentRepository`
 (`listForOrder`, `listReconcilableAttempts`, `commitAttempt`, `recordReconciliation`,
 `recordSettlement`, plus `claimReconcileGate` unless the host passes
 `opportunisticReconcile: false`); the host then owns locking and the reconciliation
 transitions, while write-once settlement stays library-owned — `recordSettlement` is the
-claim, and repository-mode `onPaid` (context: `OpenReceiveSettlementEvent` — `paymentHash`,
+claim, and repository-mode `onPaid` (context: `SettlementEvent` — `paymentHash`,
 `paidAt`, `details?`; no `orderId` or transactional `query`) fires only when it is won. If
 `commitAttempt` refuses, OpenReceive returns
 `409` and withholds the new payer instructions (infrastructure failure: retryable `503`).
@@ -82,10 +82,10 @@ See [Payment storage](../guides/storage.md), [Node ORM recipes](../guides/node-o
 ## Settlement and reconciliation
 
 Opportunistic reconcile is the default: every mounted payment route runs one gated
-`reconcileOpenReceivePayments` pass when attempts are pending, serialized across instances by
-the durable `openreceive_meta` gate (unauthenticated `GET /rates` never triggers it). `maybeReconcileOpenReceivePayments({ service, host })`
+`reconcileHostPayments` pass when attempts are pending, serialized across instances by
+the durable `openreceive_meta` gate (unauthenticated `GET /rates` never triggers it). `maybeReconcilePayments({ service, host })`
 exposes the same gated pass for host-owned routes and middleware; the optional
-`startOpenReceiveNotificationWorker` runs listening plus the periodic pass in one separate
+`startNotificationWorker` runs listening plus the periodic pass in one separate
 process. Each pass loads only `pending` attempts and issues one batched `list_transactions`
 scan (never one lookup per invoice), so the window stays roughly the active invoice window and
 no durable cursor exists. Delivery is at-least-once; the settlement transaction makes replays

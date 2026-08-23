@@ -1,7 +1,7 @@
 import {
   copyInvoice as copyInvoiceHelper,
-  status as deriveStatus,
-  OpenReceiveBrowserRequestError,
+  deriveStatus,
+  BrowserRequestError,
   prepareCheckout,
   requestCheckout,
   type Status,
@@ -13,7 +13,7 @@ import {
   type CheckoutStatusModel,
   createCheckoutState,
   createCheckoutStatusModel,
-  createOpenReceiveStatusFetcher,
+  createStatusFetcher,
   isReusableLightningInvoice,
   selectCheckoutDisplayInvoice,
 } from "@openreceive/browser/headless";
@@ -106,8 +106,8 @@ export class CheckoutFlow extends Model({
    * rule over this snapshot and shipped the answers on the state, so these take
    * them rather than formatting the raw fields a second time.
    *
-   * They used to call `formatOpenReceiveMsats` / `formatOpenReceiveFiatAmount`
-   * here. `formatOpenReceiveMsats` THROWS on an amount that is not a non-negative
+   * They used to call `formatMsats` / `formatFiatAmount`
+   * here. `formatMsats` THROWS on an amount that is not a non-negative
    * safe integer — correctly, it is the formatter the wire builders share — and
    * these are @computed s read inside an `observer`, so a server answering with a
    * nonsense `amount_msats` took out the whole checkout panel instead of the one
@@ -290,7 +290,7 @@ export class CheckoutFlow extends Model({
     this.pollInFlight = true;
     const polledOrderId = this.orderId;
     try {
-      const refresh = createOpenReceiveStatusFetcher({
+      const refresh = createStatusFetcher({
         prefix: openReceivePrefix(),
         snapshot,
       });
@@ -303,7 +303,7 @@ export class CheckoutFlow extends Model({
     } catch (error) {
       this.pollFailureCount += 1;
       const retryAfterSeconds =
-        error instanceof OpenReceiveBrowserRequestError ? error.retryAfterSeconds : undefined;
+        error instanceof BrowserRequestError ? error.retryAfterSeconds : undefined;
       const backoffSeconds =
         retryAfterSeconds ?? Math.min(60, 2 ** Math.min(this.pollFailureCount, 6));
       this.pollBackoffUntil = unixNow() + backoffSeconds;

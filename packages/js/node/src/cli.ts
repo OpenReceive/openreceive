@@ -1,22 +1,18 @@
-import {
-  formatOpenReceiveInvalidNwcMessage,
-  NwcUriParseError,
-  parseNwcUri,
-} from "@openreceive/core";
+import { formatInvalidNwcMessage, NwcUriParseError, parseNwcUri } from "@openreceive/core";
 import { readLscConnectionsFromEnvironment } from "./lsc-uri.ts";
 import { runScaffoldPayments, SCAFFOLD_PAYMENTS_HELP } from "./scaffold/index.ts";
 import { redactSecrets } from "./service/logging.ts";
 
-export interface OpenReceiveCliIo {
+export interface CliIo {
   write(message: string): void;
 }
 
-export interface OpenReceiveCliOptions {
+export interface CliOptions {
   readonly argv: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
   readonly cwd?: string;
-  readonly stdout?: OpenReceiveCliIo;
-  readonly stderr?: OpenReceiveCliIo;
+  readonly stdout?: CliIo;
+  readonly stderr?: CliIo;
   readonly stdin?: NodeJS.ReadableStream;
   readonly isTTY?: boolean;
   readonly prompt?: (question: string) => Promise<string>;
@@ -35,7 +31,7 @@ Options:
   -h, --help           Show this help.
 `.trim();
 
-export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise<number> {
+export async function runCli(options: CliOptions): Promise<number> {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
   const env = options.env ?? process.env;
@@ -81,7 +77,7 @@ function runDiagnostics(input: {
   readonly command: "doctor" | "debug-report";
   readonly env: NodeJS.ProcessEnv;
   readonly cwd: string;
-  readonly stdout: OpenReceiveCliIo;
+  readonly stdout: CliIo;
 }): number {
   const nwc = input.env.NWC_URI?.trim();
   let nwcError: unknown;
@@ -90,7 +86,7 @@ function runDiagnostics(input: {
   } catch (error) {
     nwcError =
       error instanceof NwcUriParseError
-        ? new Error(formatOpenReceiveInvalidNwcMessage({ reason: error.description }))
+        ? new Error(formatInvalidNwcMessage({ reason: error.description }))
         : error;
   }
   let lscConnections = 0;

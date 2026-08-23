@@ -1,8 +1,8 @@
 import type { CheckoutState } from "@openreceive/browser";
 import {
-  createOpenReceiveThemeToggleElement,
+  createThemeToggleElement,
   createTransactionDetailsElement,
-  defineOpenReceiveElements,
+  defineElements,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
@@ -81,7 +81,7 @@ let purchasedStickers: readonly HelloFruitPurchasedSticker[] = [];
 let settledCheckoutState: CheckoutState | undefined;
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("static-html-small-api");
 
-defineOpenReceiveElements();
+defineElements();
 logDemo("app.bootstrap", "Bootstrapping static HTML demo app.", {
   fruitCount: fruits.length,
   currencyOptions,
@@ -150,7 +150,7 @@ function renderThemeToggle(): void {
   const topbar = requireElement("topbar");
   logDemo("theme_toggle.render", "Rendering OpenReceive theme toggle.");
   topbar.replaceChildren(
-    createOpenReceiveThemeToggleElement({
+    createThemeToggleElement({
       document,
       rootSelector: ".page",
       checkoutSelector: "openreceive-checkout",

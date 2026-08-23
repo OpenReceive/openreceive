@@ -7,50 +7,50 @@
  *
  * Two error domains, kept distinct so a transport can map them without
  * guessing which side was at fault:
- * - {@link OpenReceiveDecimalError} extends `RangeError` — the caller (host or
+ * - {@link DecimalError} extends `RangeError` — the caller (host or
  *   payer) supplied a value outside the accepted domain. Maps to 400.
- * - {@link OpenReceivePriceFeedError} is deliberately NOT a `RangeError` — a
+ * - {@link PriceFeedError} is deliberately NOT a `RangeError` — a
  *   price feed answered with data we cannot price from. Maps to a retryable
  *   503, because a feed being unusable is an outage, never payer input.
  */
 
 /** Caller/payer input outside the accepted domain. */
-export class OpenReceiveDecimalError extends RangeError {
+export class DecimalError extends RangeError {
   constructor(message: string) {
     super(message);
-    this.name = "OpenReceiveDecimalError";
+    this.name = "DecimalError";
   }
 }
 
 /** Price-feed data OpenReceive cannot price from (missing, malformed, or non-positive). */
-export class OpenReceivePriceFeedError extends Error {
+export class PriceFeedError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "OpenReceivePriceFeedError";
+    this.name = "PriceFeedError";
   }
 }
 
 export const OPENRECEIVE_SATS_PER_BTC = 100_000_000n;
 export const OPENRECEIVE_MSATS_PER_SAT = 1000n;
 
-export interface OpenReceiveDecimal {
+export interface Decimal {
   readonly units: bigint;
   readonly scale: number;
 }
 
 /** A currency-tagged decimal amount. `currency` is fiat, or `BTC`/`SAT`/`SATS`. */
-export interface OpenReceiveFiatAmount {
+export interface MoneyAmount {
   readonly currency: string;
   readonly value: string;
 }
 
-export interface OpenReceiveBitcoinAmount {
+export interface BitcoinAmount {
   readonly currency: "BTC" | "SAT" | "SATS";
   readonly value: string;
 }
 
 /** BTC prices keyed by lowercase ISO 4217 code, in units of fiat per 1 BTC. */
-export interface OpenReceiveBtcFiatRateMap {
+export interface BtcFiatRateMap {
   readonly bitcoin: Readonly<Record<string, string>>;
 }
 
@@ -59,11 +59,11 @@ const DECIMAL_PATTERN = /^\d+(?:\.\d+)?$/;
 /**
  * Parse a non-negative decimal string into integer units + scale.
  *
- * @throws {OpenReceiveDecimalError} when `value` is not a non-negative decimal.
+ * @throws {DecimalError} when `value` is not a non-negative decimal.
  */
-export function parseDecimal(value: string, fieldName = "Amount"): OpenReceiveDecimal {
+export function parseDecimal(value: string, fieldName = "Amount"): Decimal {
   if (!DECIMAL_PATTERN.test(value)) {
-    throw new OpenReceiveDecimalError(`${fieldName} must be a non-negative decimal string.`);
+    throw new DecimalError(`${fieldName} must be a non-negative decimal string.`);
   }
   const [integer, fraction = ""] = value.split(".");
   return {
@@ -76,11 +76,11 @@ export function parseDecimal(value: string, fieldName = "Amount"): OpenReceiveDe
  * `10 ** scale` as a bigint — the multiplier that moves a parsed decimal
  * between scales without ever touching a binary float.
  *
- * @throws {OpenReceiveDecimalError} when `scale` is not a non-negative integer.
+ * @throws {DecimalError} when `scale` is not a non-negative integer.
  */
 export function decimalScaleFactor(scale: number): bigint {
   if (!Number.isInteger(scale) || scale < 0) {
-    throw new OpenReceiveDecimalError("Decimal scale must be a non-negative integer.");
+    throw new DecimalError("Decimal scale must be a non-negative integer.");
   }
   return 10n ** BigInt(scale);
 }
@@ -89,11 +89,11 @@ export function decimalScaleFactor(scale: number): bigint {
  * Format integer units at a fixed scale back to a decimal string. Negative
  * units keep the sign in front of the whole part.
  *
- * @throws {OpenReceiveDecimalError} when `scale` is not a non-negative integer.
+ * @throws {DecimalError} when `scale` is not a non-negative integer.
  */
 export function formatDecimal(units: bigint, scale: number): string {
   if (!Number.isInteger(scale) || scale < 0) {
-    throw new OpenReceiveDecimalError("Decimal scale must be a non-negative integer.");
+    throw new DecimalError("Decimal scale must be a non-negative integer.");
   }
   if (scale === 0) return units.toString();
   const negative = units < 0n;
@@ -108,11 +108,11 @@ export function formatDecimal(units: bigint, scale: number): string {
  * Integer division rounding away from zero on any remainder, so a payer is
  * never quoted less than the amount owed.
  *
- * @throws {OpenReceiveDecimalError} when `denominator` is not greater than zero.
+ * @throws {DecimalError} when `denominator` is not greater than zero.
  */
 export function ceilDiv(numerator: bigint, denominator: bigint): bigint {
   if (denominator <= 0n) {
-    throw new OpenReceiveDecimalError("Division denominator must be greater than zero.");
+    throw new DecimalError("Division denominator must be greater than zero.");
   }
   return (numerator + denominator - 1n) / denominator;
 }
@@ -122,32 +122,30 @@ export function formatBtcFromSats(sats: bigint): string {
   return formatDecimal(sats, 8).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-export function isOpenReceiveBitcoinAmountCurrency(
-  currency: string,
-): currency is OpenReceiveBitcoinAmount["currency"] {
+export function isBitcoinAmountCurrency(currency: string): currency is BitcoinAmount["currency"] {
   return currency === "BTC" || currency === "SAT" || currency === "SATS";
 }
 
 /**
  * Whole satoshis for a BTC/SAT/SATS amount.
  *
- * @throws {OpenReceiveDecimalError} when the value is not a non-negative
+ * @throws {DecimalError} when the value is not a non-negative
  * decimal, is finer than one satoshi, or is a fractional satoshi count.
  */
-export function bitcoinAmountToSats(amount: OpenReceiveBitcoinAmount): bigint {
+export function bitcoinAmountToSats(amount: BitcoinAmount): bigint {
   const parsed = parseDecimal(amount.value, "amount.value");
   const scale = decimalScaleFactor(parsed.scale);
 
   if (amount.currency === "BTC") {
     const numerator = parsed.units * OPENRECEIVE_SATS_PER_BTC;
     if (numerator % scale !== 0n) {
-      throw new OpenReceiveDecimalError("BTC amount cannot be more precise than satoshis.");
+      throw new DecimalError("BTC amount cannot be more precise than satoshis.");
     }
     return numerator / scale;
   }
 
   if (parsed.units % scale !== 0n) {
-    throw new OpenReceiveDecimalError("SATS amount must be a whole number of satoshis.");
+    throw new DecimalError("SATS amount must be a whole number of satoshis.");
   }
   return parsed.units / scale;
 }
@@ -155,15 +153,12 @@ export function bitcoinAmountToSats(amount: OpenReceiveBitcoinAmount): bigint {
 /**
  * Multiply a money amount by a whole quantity.
  *
- * @throws {OpenReceiveDecimalError} for a negative/non-integer quantity or a
+ * @throws {DecimalError} for a negative/non-integer quantity or a
  * malformed amount.
  */
-export function multiplyAmount(
-  amount: OpenReceiveFiatAmount,
-  quantity: number,
-): OpenReceiveFiatAmount {
+export function multiplyAmount(amount: MoneyAmount, quantity: number): MoneyAmount {
   if (!Number.isInteger(quantity) || quantity < 0) {
-    throw new OpenReceiveDecimalError("Quantity must be a non-negative integer.");
+    throw new DecimalError("Quantity must be a non-negative integer.");
   }
   const decimal = parseDecimal(amount.value);
   return {
@@ -175,13 +170,13 @@ export function multiplyAmount(
 /**
  * Total amounts that share one currency, at the widest scale present.
  *
- * @throws {OpenReceiveDecimalError} when the list is empty, mixes currencies,
+ * @throws {DecimalError} when the list is empty, mixes currencies,
  * or carries a malformed value.
  */
-export function sumAmounts(amounts: readonly OpenReceiveFiatAmount[]): OpenReceiveFiatAmount {
+export function sumAmounts(amounts: readonly MoneyAmount[]): MoneyAmount {
   const first = amounts[0];
   if (first === undefined) {
-    throw new OpenReceiveDecimalError("At least one amount is required to total.");
+    throw new DecimalError("At least one amount is required to total.");
   }
   const currency = first.currency;
   let scale = 0;
@@ -189,7 +184,7 @@ export function sumAmounts(amounts: readonly OpenReceiveFiatAmount[]): OpenRecei
 
   for (const amount of amounts) {
     if (amount.currency !== currency) {
-      throw new OpenReceiveDecimalError("Amounts must use one currency.");
+      throw new DecimalError("Amounts must use one currency.");
     }
     const decimal = parseDecimal(amount.value);
     if (decimal.scale > scale) {
@@ -214,15 +209,12 @@ export function formatMissingBtcFiatRateMessage(currency: string, source?: strin
 /**
  * Require a BTC/<currency> price from a rate map (keys are lowercase ISO codes).
  *
- * @throws {OpenReceivePriceFeedError} when the map has no rate for the currency.
+ * @throws {PriceFeedError} when the map has no rate for the currency.
  */
-export function requiredBtcFiatRate(
-  rates: OpenReceiveBtcFiatRateMap | undefined,
-  currency: string,
-): string {
+export function requiredBtcFiatRate(rates: BtcFiatRateMap | undefined, currency: string): string {
   const rate = rates?.bitcoin[currency.toLowerCase()];
   if (rate === undefined) {
-    throw new OpenReceivePriceFeedError(formatMissingBtcFiatRateMessage(currency));
+    throw new PriceFeedError(formatMissingBtcFiatRateMessage(currency));
   }
   return rate;
 }
@@ -230,16 +222,16 @@ export function requiredBtcFiatRate(
 /**
  * Parse a BTC/fiat price (units of fiat per 1 BTC) from feed data.
  *
- * @throws {OpenReceivePriceFeedError} when the price is malformed or not
+ * @throws {PriceFeedError} when the price is malformed or not
  * greater than zero. Never a `RangeError`: a bad price is a feed outage.
  */
-export function parseBtcFiatPrice(btcFiatPrice: string): OpenReceiveDecimal {
+export function parseBtcFiatPrice(btcFiatPrice: string): Decimal {
   if (!DECIMAL_PATTERN.test(btcFiatPrice)) {
-    throw new OpenReceivePriceFeedError("BTC fiat price must be a non-negative decimal string.");
+    throw new PriceFeedError("BTC fiat price must be a non-negative decimal string.");
   }
   const price = parseDecimal(btcFiatPrice);
   if (price.units <= 0n) {
-    throw new OpenReceivePriceFeedError("BTC fiat price must be greater than zero.");
+    throw new PriceFeedError("BTC fiat price must be greater than zero.");
   }
   return price;
 }
@@ -248,8 +240,8 @@ export function parseBtcFiatPrice(btcFiatPrice: string): OpenReceiveDecimal {
  * Convert a fiat value to whole satoshis using a BTC/fiat price
  * (units of fiat per 1 BTC). Rounds up to the next whole satoshi.
  *
- * @throws {OpenReceiveDecimalError} when `fiatValue` is malformed.
- * @throws {OpenReceivePriceFeedError} when `btcFiatPrice` is unusable.
+ * @throws {DecimalError} when `fiatValue` is malformed.
+ * @throws {PriceFeedError} when `btcFiatPrice` is unusable.
  */
 export function fiatValueToSats(fiatValue: string, btcFiatPrice: string): bigint {
   const fiat = parseDecimal(fiatValue, "fiat.value");
@@ -263,12 +255,12 @@ export function fiatValueToSats(fiatValue: string, btcFiatPrice: string): bigint
  * Reverse of {@link fiatValueToSats}: whole satoshis → fiat decimal string
  * using a BTC/fiat price (units of fiat per 1 BTC).
  *
- * @throws {OpenReceiveDecimalError} for negative sats or a bad output scale.
- * @throws {OpenReceivePriceFeedError} when `btcFiatPrice` is unusable.
+ * @throws {DecimalError} for negative sats or a bad output scale.
+ * @throws {PriceFeedError} when `btcFiatPrice` is unusable.
  */
 export function satsToFiatValue(sats: bigint, btcFiatPrice: string, outputScale = 2): string {
   if (sats < 0n) {
-    throw new OpenReceiveDecimalError("Satoshis must be non-negative.");
+    throw new DecimalError("Satoshis must be non-negative.");
   }
   const price = parseBtcFiatPrice(btcFiatPrice);
   const scaleFactor = decimalScaleFactor(outputScale);
@@ -281,8 +273,8 @@ export function satsToFiatValue(sats: bigint, btcFiatPrice: string, outputScale 
  * Convert a value between two fiat currencies that both have BTC prices
  * (units of fiat per 1 BTC). Used for USD→EUR style display conversion.
  *
- * @throws {OpenReceiveDecimalError} for a malformed value or output scale.
- * @throws {OpenReceivePriceFeedError} when either price is unusable.
+ * @throws {DecimalError} for a malformed value or output scale.
+ * @throws {PriceFeedError} when either price is unusable.
  */
 export function convertFiatViaBtcPrices(
   value: string,
@@ -308,23 +300,23 @@ export function convertFiatViaBtcPrices(
  * BTC/SATS→fiat — plus BTC↔SATS, which needs no rate at all. Currency codes
  * compare case-insensitively, matching the lowercase rate-map lookup.
  *
- * @throws {OpenReceiveDecimalError} when the amount is malformed.
- * @throws {OpenReceivePriceFeedError} when a rate the conversion needs is
+ * @throws {DecimalError} when the amount is malformed.
+ * @throws {PriceFeedError} when a rate the conversion needs is
  * missing or unusable.
  */
 export function convertAmountViaBtcRates(
-  amount: OpenReceiveFiatAmount,
+  amount: MoneyAmount,
   targetCurrency: string,
-  rates: OpenReceiveBtcFiatRateMap | undefined,
+  rates: BtcFiatRateMap | undefined,
   options: { readonly outputScale?: number } = {},
-): OpenReceiveFiatAmount {
+): MoneyAmount {
   const from = amount.currency.toUpperCase();
   const target = targetCurrency.toUpperCase();
   if (from === target) return amount;
 
   const outputScale = options.outputScale ?? 2;
-  const fromBitcoin = isOpenReceiveBitcoinAmountCurrency(from);
-  const targetBitcoin = isOpenReceiveBitcoinAmountCurrency(target);
+  const fromBitcoin = isBitcoinAmountCurrency(from);
+  const targetBitcoin = isBitcoinAmountCurrency(target);
 
   if (fromBitcoin) {
     const sats = bitcoinAmountToSats({ currency: from, value: amount.value });
@@ -351,11 +343,7 @@ export function convertAmountViaBtcRates(
   };
 }
 
-function bitcoinAmount(
-  currency: string,
-  normalizedCurrency: string,
-  sats: bigint,
-): OpenReceiveFiatAmount {
+function bitcoinAmount(currency: string, normalizedCurrency: string, sats: bigint): MoneyAmount {
   return {
     currency,
     value: normalizedCurrency === "BTC" ? formatBtcFromSats(sats) : sats.toString(),

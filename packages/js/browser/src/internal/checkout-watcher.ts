@@ -1,6 +1,6 @@
 // The polling loop and the controller around it: CheckoutWatcher owns the
 // interval, the terminal-state stop rules and the subscriber list;
-// OpenReceiveBrowserCheckoutController is the object the UI packages drive.
+// BrowserCheckoutController is the object the UI packages drive.
 
 import { unixSeconds } from "@openreceive/core";
 import {
@@ -11,10 +11,7 @@ import {
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
 } from "./ui.ts";
 import { checkoutLogFields, emitBrowserLog } from "./checkout-log.ts";
-import {
-  createOpenReceiveStatusFetcher,
-  OpenReceiveBrowserRequestError,
-} from "./checkout-transport.ts";
+import { createStatusFetcher, BrowserRequestError } from "./checkout-transport.ts";
 import {
   createCheckoutState,
   normalizeCheckoutState,
@@ -208,7 +205,7 @@ export class CheckoutWatcher {
     } catch (error) {
       this.pollFailureCount += 1;
       const retryAfterSeconds =
-        error instanceof OpenReceiveBrowserRequestError ? error.retryAfterSeconds : undefined;
+        error instanceof BrowserRequestError ? error.retryAfterSeconds : undefined;
       const backoffSeconds =
         retryAfterSeconds ?? Math.min(60, 2 ** Math.min(this.pollFailureCount, 6));
       this.pollBackoffUntil = this.now() + backoffSeconds;
@@ -243,7 +240,7 @@ export class CheckoutWatcher {
   }
 }
 
-export class OpenReceiveBrowserCheckoutController implements CheckoutController {
+export class BrowserCheckoutController implements CheckoutController {
   private options: CheckoutControllerOptions;
   private watcher: CheckoutWatcher;
   private state: CheckoutState | undefined;
@@ -310,7 +307,7 @@ export class OpenReceiveBrowserCheckoutController implements CheckoutController 
       options.refreshStatus ??
       (options.prefix === undefined
         ? undefined
-        : createOpenReceiveStatusFetcher({
+        : createStatusFetcher({
             prefix: options.prefix,
             snapshot: options.snapshot,
             fetch: options.fetch,
@@ -340,5 +337,5 @@ export class OpenReceiveBrowserCheckoutController implements CheckoutController 
 }
 
 export function createCheckoutController(options: CheckoutControllerOptions): CheckoutController {
-  return new OpenReceiveBrowserCheckoutController(options);
+  return new BrowserCheckoutController(options);
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   checkPayment,
-  OpenReceiveDecimalError,
+  DecimalError,
   OpenReceiveError,
   reconcilePaymentAttempts,
 } from "../packages/js/core/src/index.ts";
@@ -117,7 +117,7 @@ test("a truncated scan surfaces as a retryable WALLET_UNAVAILABLE, never a bare 
   );
 });
 
-test("malformed reconcile inputs throw the 400-mapped OpenReceiveDecimalError", async () => {
+test("malformed reconcile inputs throw the 400-mapped DecimalError", async () => {
   const client = {
     async preflight() {
       return {};
@@ -131,7 +131,7 @@ test("malformed reconcile inputs throw the 400-mapped OpenReceiveDecimalError", 
   };
   const inputError = (options) =>
     assert.rejects(reconcilePaymentAttempts({ client, ...options }), (error) => {
-      assert.ok(error instanceof OpenReceiveDecimalError);
+      assert.ok(error instanceof DecimalError);
       // The Node service maps payer/host input errors to 400 by RangeError.
       assert.ok(error instanceof RangeError);
       return true;

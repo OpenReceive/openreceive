@@ -3,14 +3,14 @@ import test from "node:test";
 import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
-  createOpenReceiveHttpHandler,
-  createOpenReceiveIpRateLimit,
-  createOpenReceiveSqlPayments,
-  openReceiveClientIp,
+  createHttpHandler,
+  createIpRateLimit,
+  createSqlPayments,
+  resolveClientIp,
 } from "../packages/js/http/src/index.ts";
 import {
   OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR,
-  openReceiveClientIpBucket,
+  clientIpBucket,
 } from "../packages/js/http/src/rate-limit.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
@@ -47,7 +47,7 @@ function createRequest(orderId) {
 
 test("rate limiting is off by default", async () => {
   const service = await newService();
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost(),
@@ -63,7 +63,7 @@ test("rate limiting is off by default", async () => {
 test("rateLimiting: true counts attempt rows via the repository and returns a payer-facing 429", async () => {
   const service = await newService();
   const counted = [];
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -92,7 +92,7 @@ test("rateLimiting refuses to boot without persistent counting", async () => {
   // handler must fail construction rather than degrade to per-process memory.
   assert.throws(
     () =>
-      createOpenReceiveHttpHandler({
+      createHttpHandler({
         service,
         authorize: () => true,
         host: testHost(),
@@ -102,15 +102,15 @@ test("rateLimiting refuses to boot without persistent counting", async () => {
   );
 });
 
-test("createOpenReceiveIpRateLimit requires a counter at construction", () => {
-  assert.throws(() => createOpenReceiveIpRateLimit(), /countAttemptsFromIp/);
+test("createIpRateLimit requires a counter at construction", () => {
+  assert.throws(() => createIpRateLimit(), /countAttemptsFromIp/);
 });
 
 test("rateLimiting rejects non-create actions at construction", async () => {
   const service = await newService();
   assert.throws(
     () =>
-      createOpenReceiveHttpHandler({
+      createHttpHandler({
         service,
         authorize: () => true,
         host: testHost({ countAttemptsFromIp: () => 0 }),
@@ -132,7 +132,7 @@ test("a capped payer can still re-fetch an already-committed attempt", async () 
     expiresAt: 1500,
     fiatQuote: null,
   };
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: {
@@ -162,7 +162,7 @@ test("a capped payer can still re-fetch an already-committed attempt", async () 
 
 test("rateLimiting fails open when no client IP is attributable", async () => {
   const service = await newService();
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -180,7 +180,7 @@ test("rateLimiting fails open when no client IP is attributable", async () => {
 
 test("rateLimiting does not throttle non-create actions", async () => {
   const service = await newService();
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({ countAttemptsFromIp: () => 1_000_000 }),
@@ -201,7 +201,7 @@ test("rateLimiting and a custom rateLimitHook are mutually exclusive", async () 
   const service = await newService();
   assert.throws(
     () =>
-      createOpenReceiveHttpHandler({
+      createHttpHandler({
         service,
         authorize: () => true,
         host: testHost(),
@@ -215,8 +215,8 @@ test("rateLimiting and a custom rateLimitHook are mutually exclusive", async () 
 test("checkout create stores the client IP on the attempt row", async () => {
   const service = await newService();
   const db = memoryPaymentsDb();
-  const payments = createOpenReceiveSqlPayments(db, { clock: () => 1000 });
-  const handler = createOpenReceiveHttpHandler({
+  const payments = createSqlPayments(db, { clock: () => 1000 });
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: {
@@ -246,9 +246,9 @@ test("checkout create stores the client IP on the attempt row", async () => {
   assert.equal(anonymousRow.client_ip, null);
 });
 
-test("createOpenReceiveIpRateLimit enforces hourly and daily windows against the counter", async () => {
+test("createIpRateLimit enforces hourly and daily windows against the counter", async () => {
   const seen = [];
-  const limiter = createOpenReceiveIpRateLimit({
+  const limiter = createIpRateLimit({
     limitPerHour: 2,
     limitPerDay: 3,
     now: () => 100_000,
@@ -270,18 +270,18 @@ test("createOpenReceiveIpRateLimit enforces hourly and daily windows against the
   assert.deepEqual(seen, [100_000 - 3_600, 100_000 - 86_400]);
 });
 
-test("openReceiveClientIp reads the adapter request IP and tolerates anything else", () => {
-  assert.equal(openReceiveClientIp({ native: { ip: "203.0.113.9" } }), "203.0.113.9");
-  assert.equal(openReceiveClientIp({ native: { ip: 42 } }), undefined);
-  assert.equal(openReceiveClientIp({ native: undefined }), undefined);
-  assert.equal(openReceiveClientIp({}), undefined);
+test("resolveClientIp reads the adapter request IP and tolerates anything else", () => {
+  assert.equal(resolveClientIp({ native: { ip: "203.0.113.9" } }), "203.0.113.9");
+  assert.equal(resolveClientIp({ native: { ip: 42 } }), undefined);
+  assert.equal(resolveClientIp({ native: undefined }), undefined);
+  assert.equal(resolveClientIp({}), undefined);
 });
 
 test("a custom ip extractor both counts and stamps the same IP (SQL counting)", async () => {
   const db = memoryPaymentsDb();
-  const payments = createOpenReceiveSqlPayments(db, { clock: () => 1000 });
+  const payments = createSqlPayments(db, { clock: () => 1000 });
   const service = await newService();
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: {
@@ -318,7 +318,7 @@ test("a custom ip extractor both counts and stamps the same IP (SQL counting)", 
 
 test("429 responses carry a Retry-After header", async () => {
   const service = await newService();
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({ countAttemptsFromIp: () => 999 }),
@@ -335,7 +335,7 @@ test("429 responses carry a Retry-After header", async () => {
 
 test("rateLimiting: false composes with a custom rateLimitHook", async () => {
   const service = await newService();
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost(),
@@ -349,18 +349,18 @@ test("rateLimiting: false composes with a custom rateLimitHook", async () => {
   assert.ok(Number(response.headers.get("retry-after")) >= 1);
 });
 
-test("openReceiveClientIpBucket collapses v4-mapped and buckets IPv6 by /64", () => {
-  assert.equal(openReceiveClientIpBucket("203.0.113.9"), "203.0.113.9");
-  assert.equal(openReceiveClientIpBucket("::ffff:203.0.113.9"), "203.0.113.9");
-  assert.equal(openReceiveClientIpBucket("2001:db8:1:2:aaaa:bbbb:cccc:dddd"), "2001:db8:1:2::/64");
+test("clientIpBucket collapses v4-mapped and buckets IPv6 by /64", () => {
+  assert.equal(clientIpBucket("203.0.113.9"), "203.0.113.9");
+  assert.equal(clientIpBucket("::ffff:203.0.113.9"), "203.0.113.9");
+  assert.equal(clientIpBucket("2001:db8:1:2:aaaa:bbbb:cccc:dddd"), "2001:db8:1:2::/64");
   // Rotating privacy addresses inside one /64 share a single budget.
   assert.equal(
-    openReceiveClientIpBucket("2001:db8:1:2:1111:2222:3333:4444"),
-    openReceiveClientIpBucket("2001:db8:1:2:aaaa:bbbb:cccc:dddd"),
+    clientIpBucket("2001:db8:1:2:1111:2222:3333:4444"),
+    clientIpBucket("2001:db8:1:2:aaaa:bbbb:cccc:dddd"),
   );
-  assert.equal(openReceiveClientIpBucket("2001:db8::1"), "2001:db8:0:0::/64");
+  assert.equal(clientIpBucket("2001:db8::1"), "2001:db8:0:0::/64");
   // Idempotent: bucketing a bucket changes nothing.
-  assert.equal(openReceiveClientIpBucket("2001:db8:1:2::/64"), "2001:db8:1:2::/64");
+  assert.equal(clientIpBucket("2001:db8:1:2::/64"), "2001:db8:1:2::/64");
   // Unparsable input passes through so the limit still gets a consistent key.
-  assert.equal(openReceiveClientIpBucket("not-an-ip:zz"), "not-an-ip:zz");
+  assert.equal(clientIpBucket("not-an-ip:zz"), "not-an-ip:zz");
 });

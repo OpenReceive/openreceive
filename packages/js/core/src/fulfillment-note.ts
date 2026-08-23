@@ -12,7 +12,7 @@ import { FULFILLMENT_NOTE_TEMPLATE } from "./generated/fulfillment-note-text.ts"
  * That boundary means the exactly-once guarantee has a documented edge, and
  * this note is where it is documented. Every generated file, migration
  * template, and wiring guide renders these same lines through
- * `openReceiveFulfillmentNote`, so the guidance shown next to host code can
+ * `fulfillmentNote`, so the guidance shown next to host code can
  * never drift from the guidance shown next to the schema.
  *
  * The text itself lives in `spec/data/fulfillment-note.txt` and is generated
@@ -31,10 +31,7 @@ function fulfillmentNoteLines(tableName: string): readonly string[] {
  * `""` for prose. Blank lines are emitted with the prefix trimmed, so no
  * comment block ends up with trailing whitespace a formatter would strip.
  */
-export function openReceiveFulfillmentNote(
-  prefix = "",
-  tableName = "openreceive_payments",
-): string {
+export function fulfillmentNote(prefix = "", tableName = "openreceive_payments"): string {
   return fulfillmentNoteLines(tableName)
     .map((line) => (line.length === 0 ? prefix.trimEnd() : `${prefix}${line}`))
     .join("\n");
@@ -45,7 +42,7 @@ export function openReceiveFulfillmentNote(
  * indented blocks become fenced SQL, so it reads as documentation rather than
  * as a comment block that happens to be in a document.
  */
-export function openReceiveFulfillmentNoteMarkdown(tableName = "openreceive_payments"): string {
+export function fulfillmentNoteMarkdown(tableName = "openreceive_payments"): string {
   const out: string[] = [];
   let fenced = false;
   const closeFence = (): void => {

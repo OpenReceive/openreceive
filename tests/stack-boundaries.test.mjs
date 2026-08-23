@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  createOpenReceiveStack,
-  isOpenReceiveStackOptions,
-} from "../packages/js/http/src/index.ts";
+import { createStack, isStackOptions } from "../packages/js/http/src/index.ts";
 
 const authorize = () => true;
 
@@ -18,14 +15,14 @@ function stubPayments() {
   };
 }
 
-test("isOpenReceiveStackOptions routes composed and flat forms", () => {
+test("isStackOptions routes composed and flat forms", () => {
   assert.equal(
-    isOpenReceiveStackOptions({ service: {}, host: {}, authorize }),
+    isStackOptions({ service: {}, host: {}, authorize }),
     false,
     "composed form with host must not enter the all-in-one path",
   );
   assert.equal(
-    isOpenReceiveStackOptions({
+    isStackOptions({
       nwc: "nostr+walletconnect://example",
       db: {},
       loadOrder: async () => null,
@@ -36,7 +33,7 @@ test("isOpenReceiveStackOptions routes composed and flat forms", () => {
     true,
   );
   assert.equal(
-    isOpenReceiveStackOptions({
+    isStackOptions({
       service: {},
       payments: stubPayments(),
       loadOrder: async () => null,
@@ -51,7 +48,7 @@ test("isOpenReceiveStackOptions routes composed and flat forms", () => {
 
 test("composed options missing host throw the missing-host error", () => {
   assert.throws(
-    () => isOpenReceiveStackOptions({ service: {}, authorize }),
+    () => isStackOptions({ service: {}, authorize }),
     (error) => {
       assert.ok(error instanceof TypeError);
       assert.match(error.message, /require host/);
@@ -66,7 +63,7 @@ test("stack close() during an in-flight boot waits for the boot to finish", asyn
   const service = new Promise((resolve) => {
     resolveService = resolve;
   });
-  const stack = createOpenReceiveStack({
+  const stack = createStack({
     wallet: { service },
     storage: { payments: stubPayments(), onPaid: async () => {} },
     loadOrder: async () => null,
@@ -89,7 +86,7 @@ test("stack close() during an in-flight boot waits for the boot to finish", asyn
 });
 
 test("stack close() resolves even when boot fails", async () => {
-  const stack = createOpenReceiveStack({
+  const stack = createStack({
     wallet: { service: Promise.reject(new Error("boot failed")) },
     storage: { payments: stubPayments(), onPaid: async () => {} },
     loadOrder: async () => null,

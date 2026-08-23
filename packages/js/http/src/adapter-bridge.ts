@@ -4,13 +4,13 @@
 // Keeping this in one place stops the adapters drifting apart (they already
 // had: Fastify hardcoding http:// while Express honored req.protocol).
 
-import { OpenReceiveHttpError } from "./errors.ts";
-import { openReceiveClaimsPath } from "./router.ts";
+import { HttpError } from "./errors.ts";
+import { claimsPath } from "./router.ts";
 
 const SKIP_REQUEST_HEADERS = new Set(["content-length", "transfer-encoding", "connection"]);
 
 /** The pieces of a framework request the bridge needs, framework-agnostic. */
-export interface OpenReceiveNodeRequestParts {
+export interface NodeRequestParts {
   readonly method: string;
   readonly headers: Readonly<Record<string, string | string[] | undefined>>;
   /** Request path (may include the query string). */
@@ -22,7 +22,7 @@ export interface OpenReceiveNodeRequestParts {
 }
 
 /** Convert a parsed framework request into the Web Request the handler speaks. */
-export function openReceiveWebRequest(parts: OpenReceiveNodeRequestParts): Request {
+export function webRequest(parts: NodeRequestParts): Request {
   const rawHost = parts.headers.host;
   const host = (Array.isArray(rawHost) ? rawHost[0] : rawHost) ?? "localhost";
   const protocol =
@@ -59,7 +59,7 @@ export function openReceiveWebRequest(parts: OpenReceiveNodeRequestParts): Reque
  * undefined only when no body parser ran at all (body-parser sets `{}` even
  * when it declines the content-type), so this names the real misconfiguration.
  */
-function assertBodyWasParsed(parts: OpenReceiveNodeRequestParts, parsed: unknown): void {
+function assertBodyWasParsed(parts: NodeRequestParts, parsed: unknown): void {
   if (parsed !== undefined) return;
   const header = (name: string): string | undefined => {
     const value = parts.headers[name];
@@ -68,7 +68,7 @@ function assertBodyWasParsed(parts: OpenReceiveNodeRequestParts, parsed: unknown
   const declaresBody =
     Number(header("content-length") ?? "0") > 0 || header("transfer-encoding") !== undefined;
   if (!declaresBody || !(header("content-type") ?? "").includes("json")) return;
-  throw new OpenReceiveHttpError(
+  throw new HttpError(
     500,
     "INTERNAL",
     "OpenReceive received a JSON request body that no body parser had read. Mount your " +
@@ -82,6 +82,6 @@ function assertBodyWasParsed(parts: OpenReceiveNodeRequestParts, parsed: unknown
  * instead of the surrounding app. A root mount (`prefix: "/"`) claims only the
  * library's own paths.
  */
-export function openReceiveIsUnderPrefix(pathname: string, prefix: string): boolean {
-  return openReceiveClaimsPath(prefix, pathname);
+export function isUnderPrefix(pathname: string, prefix: string): boolean {
+  return claimsPath(prefix, pathname);
 }

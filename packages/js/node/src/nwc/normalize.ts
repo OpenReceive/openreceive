@@ -17,7 +17,7 @@ import {
   OPENRECEIVE_MAX_AMOUNT_MSATS,
   OPENRECEIVE_MIN_AMOUNT_MSATS,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
-  type OpenReceiveTransactionState,
+  type TransactionState,
   type ParsedNwcConnection,
   nonEmptyString,
   type WalletCapabilitySummary,
@@ -375,7 +375,7 @@ function normalizeNwcMethodName(value: string): string {
     .toLowerCase();
 }
 
-function normalizeTransactionState(value: unknown): OpenReceiveTransactionState | undefined {
+function normalizeTransactionState(value: unknown): TransactionState | undefined {
   if (typeof value !== "string") return undefined;
 
   const normalized = value.toLowerCase();

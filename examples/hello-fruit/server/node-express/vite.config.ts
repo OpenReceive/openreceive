@@ -6,7 +6,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig, loadEnv } from "vite";
 import * as vueCompiler from "vue/compiler-sfc";
-import { copyOpenReceivePaymentIconsPlugin } from "../../shared/copy-openreceive-payment-icons-plugin.ts";
+import { copyPaymentIconsPlugin } from "../../shared/copy-openreceive-payment-icons-plugin.ts";
 import { createHelloFruitServer } from "./src/server/create-server.ts";
 
 const demoRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
       vue({ compiler: vueCompiler }),
       svelte(),
       react(),
-      copyOpenReceivePaymentIconsPlugin(repoRoot),
+      copyPaymentIconsPlugin(repoRoot),
       {
         name: "openreceive-hello-fruit-api",
         async configureServer(server) {

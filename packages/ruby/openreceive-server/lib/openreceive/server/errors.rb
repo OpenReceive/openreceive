@@ -6,7 +6,7 @@ module OpenReceive
     # #status and #code so the Rack layer can map to an error.schema.json body directly.
 
     # Generic service error carrying an explicit HTTP status + canonical code,
-    # the Ruby analogue of the JS OpenReceiveServiceError. Used where the JS
+    # the Ruby analogue of the JS ServiceError. Used where the JS
     # service raises serviceError(status, code, message) — e.g. the swap flows
     # — so both engines put the same status/code/message on the wire.
     class ServiceError < StandardError
@@ -80,7 +80,7 @@ module OpenReceive
     # 500 INTERNAL raised deliberately (for example: the host resolved an
     # order without an amount). Unlike an unexpected exception, the message is
     # payer-safe by construction and stays on the wire — mirroring the JS
-    # handler's OpenReceiveHttpError(500, "INTERNAL", ...).
+    # handler's HttpError(500, "INTERNAL", ...).
     class InternalHostError < StandardError
       attr_reader :status, :code
 

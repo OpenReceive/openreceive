@@ -4,11 +4,11 @@ import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { until } from "./helpers/lifecycle-harness.mjs";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
-  createOpenReceiveHost,
-  createOpenReceiveHttpHandler,
-  maybeReconcileOpenReceivePayments,
-  openReceiveReconcileIntervalSeconds,
-  startOpenReceiveReconciler,
+  createHost,
+  createHttpHandler,
+  maybeReconcilePayments,
+  reconcileIntervalSeconds,
+  startReconciler,
 } from "../packages/js/http/src/index.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
@@ -30,7 +30,7 @@ async function fixture() {
   const db = memoryPaymentsDb();
   const orders = new Map();
   const paid = [];
-  const host = createOpenReceiveHost({
+  const host = createHost({
     db,
     clock,
     loadOrder: (orderId) => orders.get(orderId) ?? null,
@@ -39,7 +39,7 @@ async function fixture() {
       paid.push(settlement);
     },
   });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host,
@@ -132,7 +132,7 @@ test("two workers sharing one openreceive_meta run one scan per interval", async
   fix.state.now = 1_010;
 
   // A second logical worker: its own repository over the SAME host database.
-  const workerHost = createOpenReceiveHost({
+  const workerHost = createHost({
     db: fix.db,
     clock: () => fix.state.now,
     loadOrder: (orderId) => fix.orders.get(orderId) ?? null,
@@ -140,13 +140,13 @@ test("two workers sharing one openreceive_meta run one scan per interval", async
     onPaid: async () => undefined,
   });
 
-  const first = await maybeReconcileOpenReceivePayments({
+  const first = await maybeReconcilePayments({
     service: fix.service,
     host: workerHost,
     clock: () => fix.state.now,
   });
   assert.equal(first.reason, "ran");
-  const second = await maybeReconcileOpenReceivePayments({
+  const second = await maybeReconcilePayments({
     service: fix.service,
     host: fix.host,
     clock: () => fix.state.now,
@@ -155,7 +155,7 @@ test("two workers sharing one openreceive_meta run one scan per interval", async
 
   // After the interval (all pending invoices young: 2s), the gate reopens.
   fix.state.now = 1_013;
-  const third = await maybeReconcileOpenReceivePayments({
+  const third = await maybeReconcilePayments({
     service: fix.service,
     host: fix.host,
     clock: () => fix.state.now,
@@ -169,7 +169,7 @@ test("a worker pass inside the gate interval never touches the wallet", async ()
   fix.state.now = 1_010;
 
   // The web request path wins the gate first.
-  const first = await maybeReconcileOpenReceivePayments({
+  const first = await maybeReconcilePayments({
     service: fix.service,
     host: fix.host,
     clock: () => fix.state.now,
@@ -178,7 +178,7 @@ test("a worker pass inside the gate interval never touches the wallet", async ()
   const walksAfterWeb = fix.walks.length;
 
   // The polling worker starts inside the interval: its passes are gate_busy.
-  const reconciler = await startOpenReceiveReconciler({
+  const reconciler = await startReconciler({
     service: fix.service,
     host: fix.host,
     pollIntervalMs: 250,
@@ -210,7 +210,7 @@ test("GET /rates never claims the reconcile gate or scans the wallet", async () 
     return claim(input);
   };
   const walksBefore = fix.walks.length;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service: { ...fix.service, listRates: async () => ({ rates: [] }) },
     authorize: () => true,
     host: fix.host,
@@ -309,7 +309,7 @@ test("a pass exceeding the scan timeout is a failed scan and the gate stays clai
   fix.wallet.listTransactions = () => new Promise(() => undefined);
 
   const warnings = [];
-  const result = await maybeReconcileOpenReceivePayments({
+  const result = await maybeReconcilePayments({
     service: fix.service,
     host: fix.host,
     clock: () => fix.state.now,
@@ -340,7 +340,7 @@ test("the default failure sink redacts secrets instead of printing raw error tex
   console.warn = (...args) => warnings.push(args.join(" "));
   try {
     // No onError: this is the DEFAULT sink, the one a host never configures.
-    const result = await maybeReconcileOpenReceivePayments({
+    const result = await maybeReconcilePayments({
       service: fix.service,
       host: fix.host,
       clock: () => fix.state.now,
@@ -374,10 +374,10 @@ test("a custom repository without claimReconcileGate fails construction unless d
     },
   };
   assert.throws(
-    () => createOpenReceiveHttpHandler({ service, authorize: () => true, host: gateLessHost }),
+    () => createHttpHandler({ service, authorize: () => true, host: gateLessHost }),
     /claimReconcileGate/,
   );
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: gateLessHost,
@@ -388,16 +388,16 @@ test("a custom repository without claimReconcileGate fails construction unless d
 
 test("the gate interval stretches with pending-invoice age", () => {
   const attempt = (createdAt) => ({ paymentHash: "ab".repeat(32), createdAt, expiresAt: 99_999 });
-  assert.equal(openReceiveReconcileIntervalSeconds([attempt(990)], 1_000), 2);
-  assert.equal(openReceiveReconcileIntervalSeconds([attempt(750)], 1_000), 6);
-  assert.equal(openReceiveReconcileIntervalSeconds([attempt(100)], 1_000), 12);
+  assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000), 2);
+  assert.equal(reconcileIntervalSeconds([attempt(750)], 1_000), 6);
+  assert.equal(reconcileIntervalSeconds([attempt(100)], 1_000), 12);
   // The youngest pending invoice drives the pace.
-  assert.equal(openReceiveReconcileIntervalSeconds([attempt(100), attempt(990)], 1_000), 2);
+  assert.equal(reconcileIntervalSeconds([attempt(100), attempt(990)], 1_000), 2);
   // A configured floor can only slow it down, never beat the 2s minimum.
-  assert.equal(openReceiveReconcileIntervalSeconds([attempt(990)], 1_000, 5), 5);
-  assert.equal(openReceiveReconcileIntervalSeconds([attempt(990)], 1_000, 1), 2);
+  assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000, 5), 5);
+  assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000, 1), 2);
   // An empty pending set — the natural input from a host driving the gate —
   // is the floor, never Infinity.
-  assert.equal(openReceiveReconcileIntervalSeconds([], 1_000), 2);
-  assert.equal(openReceiveReconcileIntervalSeconds([], 1_000, 5), 5);
+  assert.equal(reconcileIntervalSeconds([], 1_000), 2);
+  assert.equal(reconcileIntervalSeconds([], 1_000, 5), 5);
 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { runOpenReceiveCli } from "../dist/cli.js";
+import { runCli } from "../dist/cli.js";
 
 // loadEnvFile exists from Node 20.12; missing .env is fine either way.
 if (typeof process.loadEnvFile === "function") {
@@ -11,7 +11,7 @@ if (typeof process.loadEnvFile === "function") {
   }
 }
 
-const exitCode = await runOpenReceiveCli({
+const exitCode = await runCli({
   argv: process.argv.slice(2),
   env: process.env,
   cwd: process.cwd(),

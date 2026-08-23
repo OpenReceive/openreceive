@@ -3,7 +3,7 @@
  *
  * Orders are host rows; payment attempts live in the library-owned
  * `openreceive_payments` table, created here from the canonical OpenReceive
- * DDL and passed to `createOpenReceiveHost({ db })` as the host database
+ * DDL and passed to `createHost({ db })` as the host database
  * handle. Every demo boot wipes the local file and recreates schema so the
  * checkout surface stays disposable while still showing the real host DB
  * pattern.
@@ -13,7 +13,7 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { openReceivePaymentsSchemaSql, type OpenReceiveOrderSettlement } from "@openreceive/http";
+import { paymentsSchemaSql, type OrderSettlement } from "@openreceive/http";
 import type { CreateCheckoutAmount } from "@openreceive/node";
 import type { HelloFruitDemoOrder } from "./demo-order.ts";
 
@@ -41,7 +41,7 @@ const HELLO_FRUIT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url
  * overrides the in-repo default so hermetic runs — the E2E harness — can point
  * the store at a temp dir instead of examples/hello-fruit/.openreceive.
  */
-function openReceiveDir(): string {
+function dir(): string {
   const override = process.env.OPENRECEIVE_DEMO_DB;
   if (override !== undefined && override.length > 0) return path.resolve(override);
   return path.join(HELLO_FRUIT_ROOT, ".openreceive");
@@ -66,7 +66,7 @@ export async function bootHelloFruitHostStore(input: {
   }
   closeHelloFruitHostStore();
 
-  await mkdir(openReceiveDir(), { recursive: true });
+  await mkdir(dir(), { recursive: true });
   const dbPath = dbPathFor(input.demoId);
   input.log("host.store.wipe", "Wiping local host SQLite database for a fresh demo boot.", {
     demoId: input.demoId,
@@ -93,7 +93,7 @@ export async function bootHelloFruitHostStore(input: {
     );
   `);
   // The payment-attempt schema is library-owned; the host only runs the DDL.
-  next.exec(openReceivePaymentsSchemaSql("sqlite"));
+  next.exec(paymentsSchemaSql("sqlite"));
 
   db = next;
   activeDemoId = input.demoId;
@@ -104,7 +104,7 @@ export async function bootHelloFruitHostStore(input: {
   return dbPath;
 }
 
-/** The booted host database handle to pass to `createOpenReceiveHost({ db })`. */
+/** The booted host database handle to pass to `createHost({ db })`. */
 export function helloFruitHostDb(): DatabaseSync {
   return requireDb();
 }
@@ -155,7 +155,7 @@ export function readHelloFruitHostOrder(orderId: string): HelloFruitStoredOrder 
  * for the order's first settled attempt) and marks the host order paid.
  */
 export async function markHelloFruitOrderPaid(
-  settlement: OpenReceiveOrderSettlement,
+  settlement: OrderSettlement,
 ): Promise<HelloFruitStoredOrder | null> {
   const rows = await settlement.query(`SELECT summary_json, amount_json FROM orders WHERE id = ?`, [
     settlement.orderId,
@@ -184,7 +184,7 @@ function requireDb(): DatabaseSync {
 }
 
 function dbPathFor(demoId: string): string {
-  return path.join(openReceiveDir(), `${demoId}.sqlite`);
+  return path.join(dir(), `${demoId}.sqlite`);
 }
 
 async function rmSqliteFiles(dbPath: string): Promise<void> {

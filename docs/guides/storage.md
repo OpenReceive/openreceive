@@ -16,9 +16,9 @@ commit locking, write-once settlement, and the reconciliation state machine.
 ## Schema
 
 The canonical DDL lives in `@openreceive/core` —
-`openReceivePaymentsDdlStatements` in `payments-ddl.ts` is the single source
+`paymentsDdlStatements` in `payments-ddl.ts` is the single source
 of truth every rendering derives from:
-`openReceivePaymentsSchemaSql(dialect)` (`"postgres"` or `"sqlite"`) renders
+`paymentsSchemaSql(dialect)` (`"postgres"` or `"sqlite"`) renders
 it as one executable script, and `npx openreceive scaffold payments` emits it
 as a migration for your ORM. There is nothing to adjust — `order_id` is always
 `TEXT` and carries no foreign key, because OpenReceive never reads, writes,
@@ -60,7 +60,7 @@ passes so rapid calls collapse to one wallet scan per interval, and its
 
 ### Schema version
 
-`openReceivePaymentsSchemaSql` seeds `openreceive_meta.schema_version` with
+`paymentsSchemaSql` seeds `openreceive_meta.schema_version` with
 `OPENRECEIVE_PAYMENTS_SCHEMA_VERSION` (currently `1`). The upgrade rule:
 
 - **Stored version newer than the library's** — the repository refuses to run.
@@ -153,7 +153,7 @@ on the existing row.
 ## Escape hatch
 
 If your persistence cannot be reached through a supported `db` handle,
-implement the `OpenReceivePaymentRepository` interface yourself and pass it as
+implement the `PaymentRepository` interface yourself and pass it as
 `payments` instead of `db`. You then own the storage primitives — commit
 locking (`commitAttempt`), the first-settlement claim (`recordSettlement`),
 reconciliation transitions (`recordReconciliation`), and `claimReconcileGate`,
@@ -162,8 +162,8 @@ you implement the gate or pass `opportunisticReconcile: false`.
 
 The state machine itself stays library-owned in this mode too. The settlement
 hook is `onPaid` in this mode as well, but it receives the raw
-`OpenReceiveSettlementEvent` (`paymentHash`, `paidAt`, `details?`) instead of
-db mode's `OpenReceiveOrderSettlement` — no `orderId` and no transactional
+`SettlementEvent` (`paymentHash`, `paidAt`, `details?`) instead of
+db mode's `OrderSettlement` — no `orderId` and no transactional
 `query`, because your repository owns that mapping. OpenReceive calls
 `recordSettlement` for every observed settlement and runs your `onPaid` only
 when that call reports it won the order's first-settlement

@@ -1,25 +1,22 @@
-import {
-  OPENRECEIVE_ERROR_CODES,
-  type OpenReceiveGeneratedErrorCode,
-} from "../generated/contracts.ts";
+import { OPENRECEIVE_ERROR_CODES, type GeneratedErrorCode } from "../generated/contracts.ts";
 
-export type OpenReceiveErrorCode = OpenReceiveGeneratedErrorCode;
+export type ErrorCode = GeneratedErrorCode;
 
-export interface OpenReceiveErrorBody {
-  code: OpenReceiveErrorCode;
+export interface ErrorBody {
+  code: ErrorCode;
   message: string;
   retryable?: boolean;
   request_id?: string;
   details?: Record<string, unknown>;
 }
 
-export class OpenReceiveError extends Error implements OpenReceiveErrorBody {
-  readonly code: OpenReceiveErrorCode;
+export class OpenReceiveError extends Error implements ErrorBody {
+  readonly code: ErrorCode;
   readonly retryable?: boolean;
   readonly request_id?: string;
   readonly details?: Record<string, unknown>;
 
-  constructor(input: OpenReceiveErrorBody, options?: ErrorOptions) {
+  constructor(input: ErrorBody, options?: ErrorOptions) {
     super(input.message, options);
     this.name = "OpenReceiveError";
     this.code = input.code;
@@ -28,7 +25,7 @@ export class OpenReceiveError extends Error implements OpenReceiveErrorBody {
     if (input.details !== undefined) this.details = input.details;
   }
 
-  toJSON(): OpenReceiveErrorBody {
+  toJSON(): ErrorBody {
     return {
       code: this.code,
       message: this.message,
@@ -46,12 +43,12 @@ const OPENRECEIVE_RETRYABLE_ERROR_CODE_SET = new Set<string>([
   "TIMEOUT",
   "WALLET_UNAVAILABLE",
   "INTERNAL",
-] satisfies readonly OpenReceiveErrorCode[]);
+] satisfies readonly ErrorCode[]);
 
-export function isOpenReceiveErrorCode(value: unknown): value is OpenReceiveErrorCode {
+export function isErrorCode(value: unknown): value is ErrorCode {
   return typeof value === "string" && OPENRECEIVE_ERROR_CODE_SET.has(value);
 }
 
-export function isRetryableOpenReceiveErrorCode(code: OpenReceiveErrorCode): boolean {
+export function isRetryableErrorCode(code: ErrorCode): boolean {
   return OPENRECEIVE_RETRYABLE_ERROR_CODE_SET.has(code);
 }

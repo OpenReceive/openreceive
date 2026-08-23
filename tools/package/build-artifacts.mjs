@@ -218,7 +218,7 @@ function parseNpmPackJson(output) {
   return Array.isArray(parsed) ? parsed : Object.values(parsed);
 }
 
-export function buildOpenReceivePackageTarballs(input = {}) {
+export function buildPackageTarballs(input = {}) {
   const root = input.root ?? process.cwd();
   const packages = input.packages ?? discoverWorkspacePackages({ root });
   validateWorkspacePackageGraph(packages);
@@ -265,7 +265,7 @@ function main() {
   const npmTimeoutMs = Number(
     process.env.OPENRECEIVE_PACKAGE_SMOKE_NPM_TIMEOUT_MS ?? DEFAULT_NPM_TIMEOUT_MS,
   );
-  const result = buildOpenReceivePackageTarballs({
+  const result = buildPackageTarballs({
     root,
     outDir,
     npmTimeoutMs,

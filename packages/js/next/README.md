@@ -38,25 +38,25 @@ database. It selects the exact attempt for reads and appends attempts under a
 per-order lock before the public response. Settlement piggybacks on the
 mounted routes by default through the durable `openreceive_meta` gate —
 serverless-safe, no background process (`opportunisticReconcile` disables or
-tunes it); `startOpenReceiveNotificationWorker` is the optional worker.
+tunes it); `startNotificationWorker` is the optional worker.
 `swapData` stays server-only. Behind a reverse proxy, the `trustProxyIpHeader`
 option attributes `rateLimiting` client IPs from a proxy-set header.
 
 ## Advanced: composed form
 
 Construct the pieces yourself (shared service, custom repository, tests) and
-pass them in. `createOpenReceiveHost` is the persistence step: it owns the
+pass them in. `createHost` is the persistence step: it owns the
 `openreceive_payments` rows — per-order commit locking, write-once settlement,
 and the reconciliation state machine.
 
 ```ts
-import { createOpenReceiveHost } from "@openreceive/http";
+import { createHost } from "@openreceive/http";
 import { openReceiveNextHandlers } from "@openreceive/next";
 import { createOpenReceive } from "@openreceive/node";
 
 const service = await createOpenReceive(); // reads NWC_URI
 
-const host = createOpenReceiveHost({
+const host = createHost({
   db,
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => order.amount,
@@ -70,8 +70,8 @@ export const { GET, POST } = openReceiveNextHandlers({ service, authorize, host 
 
 This package re-exports only the curated `@openreceive/http` surface: the
 handler/stack factories, the error surface, the notification worker, the
-options/context/hook types, and the generated `OpenReceiveWire*` wire body
-types. Host-integration internals — `createOpenReceiveHost`, the SQL payment
+options/context/hook types, and the generated `Wire*` wire body
+types. Host-integration internals — `createHost`, the SQL payment
 repository, the reconcile gate, the rate-limit helpers — live only in
 `@openreceive/http`; import them from there when composing your own host
 (`npm run check:public-api` pins both surfaces).

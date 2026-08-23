@@ -1,4 +1,4 @@
-import { OpenReceiveHttpError } from "./errors.ts";
+import { HttpError } from "./errors.ts";
 
 export type MatchedRoute =
   | { readonly kind: "checkout.prepare" }
@@ -45,7 +45,7 @@ function routePath(prefix: string, pathname: string): string {
  * the host application, so it claims only the library's own paths — otherwise
  * every app route would get an OpenReceive JSON 404.
  */
-export function openReceiveClaimsPath(prefix: string, pathname: string): boolean {
+export function claimsPath(prefix: string, pathname: string): boolean {
   if (prefix === "") return KNOWN_PATHS.has(routePath(prefix, pathname));
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
@@ -56,22 +56,18 @@ export function openReceiveClaimsPath(prefix: string, pathname: string): boolean
  * path under the prefix and 405 for a known path with the wrong method.
  */
 export function matchRoute(prefix: string, method: string, pathname: string): MatchedRoute | null {
-  if (!openReceiveClaimsPath(prefix, pathname)) return null;
+  if (!claimsPath(prefix, pathname)) return null;
   const normalizedPath = routePath(prefix, pathname);
   const route = ROUTES[`${method.toUpperCase()} ${normalizedPath}`];
   if (route === undefined) {
     if (KNOWN_PATHS.has(normalizedPath)) {
-      throw new OpenReceiveHttpError(
+      throw new HttpError(
         405,
         "INVALID_REQUEST",
         "This OpenReceive route does not support that HTTP method.",
       );
     }
-    throw new OpenReceiveHttpError(
-      404,
-      "NOT_FOUND",
-      "No OpenReceive route matched this method and path.",
-    );
+    throw new HttpError(404, "NOT_FOUND", "No OpenReceive route matched this method and path.");
   }
   return route;
 }

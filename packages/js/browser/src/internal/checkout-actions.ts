@@ -11,24 +11,21 @@ import {
   OPENRECEIVE_QR_ERROR_CORRECTION,
   OPENRECEIVE_QR_LIGHT_COLOR,
   OPENRECEIVE_QR_QUIET_ZONE_MODULES,
-  type OpenReceiveQrEncoder,
-  type OpenReceiveQrOptions,
+  type QrEncoder,
+  type QrOptions,
   type OpenWalletOptions,
 } from "./ui.ts";
 import { assertInvoice, createLightningUri } from "./checkout-invoice.ts";
 import { asRecord } from "./checkout-read.ts";
 import { emitBrowserLog } from "./checkout-log.ts";
 
-export async function createQrSvg(
-  invoice: string,
-  options: OpenReceiveQrOptions = {},
-): Promise<string> {
+export async function createQrSvg(invoice: string, options: QrOptions = {}): Promise<string> {
   return await createQrPayloadSvg(createLightningUri(invoice), options);
 }
 
 export async function createQrPayloadSvg(
   payload: string,
-  options: OpenReceiveQrOptions = {},
+  options: QrOptions = {},
 ): Promise<string> {
   const encoder = getQrEncoder(options.encoder);
   const svg = await encoder.toString(payload, {
@@ -47,7 +44,7 @@ export async function createQrPayloadSvg(
 
 export async function createQrPngDataUrl(
   invoice: string,
-  options: OpenReceiveQrOptions = {},
+  options: QrOptions = {},
 ): Promise<string> {
   const encoder = getQrEncoder(options.encoder);
 
@@ -118,13 +115,13 @@ export function openWallet(options: OpenWalletOptions): string {
   return uri;
 }
 
-function getQrEncoder(encoder: OpenReceiveQrEncoder | undefined): OpenReceiveQrEncoder {
+function getQrEncoder(encoder: QrEncoder | undefined): QrEncoder {
   if (encoder !== undefined) return encoder;
   if (isQrEncoder(defaultQrEncoder)) return defaultQrEncoder;
   throw new Error("qrcode package did not expose a compatible encoder.");
 }
 
-function isQrEncoder(value: unknown): value is OpenReceiveQrEncoder {
+function isQrEncoder(value: unknown): value is QrEncoder {
   const record = asRecord(value);
   // Every object inherits Object.prototype.toString, so probing for `toString`
   // alone accepts anything — and a wrong import would then silently render a QR

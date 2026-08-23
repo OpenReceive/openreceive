@@ -3,9 +3,9 @@
 // hash / timestamp / invoice, and the HTML escaper every string renderer runs
 // values through. Pure functions over values — nothing here reads a snapshot.
 
-import { ceilDiv, formatDecimal, type OpenReceiveDecimal, parseDecimal } from "@openreceive/core";
+import { ceilDiv, formatDecimal, type Decimal, parseDecimal } from "@openreceive/core";
 
-export function formatOpenReceiveCountdown(seconds: number): string {
+export function formatCountdown(seconds: number): string {
   const safeSeconds = Math.max(0, Math.trunc(seconds));
   const minutes = Math.floor(safeSeconds / 60);
   const remainderSeconds = safeSeconds % 60;
@@ -18,7 +18,7 @@ export function formatOpenReceiveCountdown(seconds: number): string {
  * stripped: integer amounts like "100" keep their zeros, and non-numeric input
  * is returned unchanged.
  */
-export function formatOpenReceiveDepositAmount(amount: string): string {
+export function formatDepositAmount(amount: string): string {
   if (!/^[0-9]+(?:\.[0-9]+)?$/.test(amount) || !amount.includes(".")) return amount;
   return amount.replace(/0+$/, "").replace(/\.$/, "");
 }
@@ -30,7 +30,7 @@ export function formatOpenReceiveDepositAmount(amount: string): string {
  * money engine but return undefined instead of throwing so the caller can hide the
  * row rather than break the panel.
  */
-export function optionalDecimal(value: string): OpenReceiveDecimal | undefined {
+export function optionalDecimal(value: string): Decimal | undefined {
   if (typeof value !== "string") return undefined;
   try {
     return parseDecimal(value);
@@ -49,7 +49,7 @@ export function rescaleHalfUp(units: bigint, scale: number, digits: number): big
   return roundedDiv(units * 10n ** BigInt(digits), 10n ** BigInt(scale));
 }
 
-export function escapeOpenReceiveHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -59,7 +59,7 @@ export function escapeOpenReceiveHtml(value: string): string {
 }
 
 /**
- * THE msat rule, in one place: is this a value `formatOpenReceiveMsats` can be
+ * THE msat rule, in one place: is this a value `formatMsats` can be
  * handed?
  *
  * Every rule in this file that judges an msat amount asks this instead of
@@ -82,7 +82,7 @@ function isDisplayableMsats(amountMsats: number | undefined): amountMsats is num
 
 /**
  * The display boundary for an msat amount: same output as
- * {@link formatOpenReceiveMsats}, but `undefined` instead of a throw when the
+ * {@link formatMsats}, but `undefined` instead of a throw when the
  * amount is nonsense.
  *
  * EVERY display site formats through this one — including sites outside this
@@ -98,23 +98,23 @@ function isDisplayableMsats(amountMsats: number | undefined): amountMsats is num
  * "Amount (msats)" rows), so nothing is hidden from whoever has to debug it.
  */
 export function optionalMsatsLabel(amountMsats: number | undefined): string | undefined {
-  return isDisplayableMsats(amountMsats) ? formatOpenReceiveMsats(amountMsats) : undefined;
+  return isDisplayableMsats(amountMsats) ? formatMsats(amountMsats) : undefined;
 }
 
-export function formatOpenReceiveMsats(amountMsats: number): string {
+export function formatMsats(amountMsats: number): string {
   if (!isDisplayableMsats(amountMsats)) {
     throw new RangeError("amount_msats must be a non-negative safe integer");
   }
 
   if (amountMsats % 1000 === 0) {
     const sats = amountMsats / 1000;
-    return `${formatOpenReceiveInteger(sats)} ${sats === 1 ? "sat" : "sats"}`;
+    return `${formatInteger(sats)} ${sats === 1 ? "sat" : "sats"}`;
   }
 
-  return `${formatOpenReceiveInteger(amountMsats)} msats`;
+  return `${formatInteger(amountMsats)} msats`;
 }
 
-export function formatOpenReceiveFiatAmount(
+export function formatFiatAmount(
   fiat:
     | {
         readonly currency?: string;
@@ -130,7 +130,7 @@ export function formatOpenReceiveFiatAmount(
 }
 
 /** Combined QR caption, e.g. `19,174 sats / $12.00 US`. */
-export function formatOpenReceiveAmountCaption(options: {
+export function formatAmountCaption(options: {
   readonly amountLabel?: string;
   readonly fiatLabel?: string;
   readonly fiatCurrency?: string;
@@ -147,7 +147,7 @@ export function formatOpenReceiveAmountCaption(options: {
   return options.amountLabel ?? fiat;
 }
 
-function formatOpenReceiveInteger(value: number): string {
+function formatInteger(value: number): string {
   return value.toLocaleString("en-US");
 }
 
@@ -160,7 +160,7 @@ function formatOpenReceiveInteger(value: number): string {
  * Minimums ceil and maximums floor to the display scale so the note never
  * understates a floor or overstates a ceiling.
  */
-export function formatOpenReceiveSwapLimit(
+export function formatSwapLimit(
   checkout: {
     readonly amount_msats: number;
     readonly fiat?: { readonly currency: string; readonly value: string };
@@ -186,7 +186,7 @@ export function formatOpenReceiveSwapLimit(
       rounding,
     });
     if (scaled !== undefined) {
-      const formatted = formatOpenReceiveFiatAmount({
+      const formatted = formatFiatAmount({
         currency: fiat.currency,
         value: scaled,
       });
@@ -219,7 +219,7 @@ function scaleFiatLimitExact(input: {
   return formatDecimal(units, outScale);
 }
 
-export function formatOpenReceivePaymentHashLabel(hash: string): string {
+export function formatPaymentHashLabel(hash: string): string {
   return hash.length <= 16 ? hash : `${hash.slice(0, 8)}...${hash.slice(-8)}`;
 }
 
@@ -238,7 +238,7 @@ const MAX_DISPLAYABLE_UNIX_SECONDS = 8.64e15 / 1000;
  * reason, with {@link optionalUnixTimeLabel} published beside it on ./internal
  * and ./headless: callers want the boundary, not a licence to re-derive the
  * bound. The upper bound is the half that keeps getting
- * forgotten: `formatOpenReceiveUnixTime` guarded finite-and-positive but not
+ * forgotten: `formatUnixTime` guarded finite-and-positive but not
  * magnitude, and two display sites in checkout-details.ts called `new Date(...)`
  * with no guard at all, so `1e13` — a `paid_at` sent in MILLISECONDS instead of
  * seconds — took down the whole settled screen.
@@ -266,7 +266,7 @@ function isDisplayableUnixSeconds(seconds: number | undefined): seconds is numbe
 
 /**
  * The display boundary for a unix timestamp: the same ISO label
- * {@link formatOpenReceiveUnixTime} produces, or `undefined` when no clock can
+ * {@link formatUnixTime} produces, or `undefined` when no clock can
  * render the value.
  *
  * EVERY timestamp display site formats through this one, exactly as every
@@ -277,25 +277,25 @@ function isDisplayableUnixSeconds(seconds: number | undefined): seconds is numbe
  * mistake stays visible to whoever has to debug it.
  */
 export function optionalUnixTimeLabel(seconds: number | undefined): string | undefined {
-  return isDisplayableUnixSeconds(seconds) ? formatOpenReceiveUnixTime(seconds) : undefined;
+  return isDisplayableUnixSeconds(seconds) ? formatUnixTime(seconds) : undefined;
 }
 
 /**
  * ECHOES rather than throws on a value it cannot render — the one place this
  * rule reads differently from the amount rule above, deliberately.
- * `formatOpenReceiveMsats` throws because wire construction and amount
+ * `formatMsats` throws because wire construction and amount
  * validation share it and a bad amount there must surface; nothing constructs
  * or validates anything through this formatter, so a throw would only ever
  * reach a display site, which is precisely what must not happen. The echo was
  * already its answer for a non-finite or non-positive input; routing the guard
  * through {@link isDisplayableUnixSeconds} closes the out-of-range hole in it.
  */
-export function formatOpenReceiveUnixTime(seconds: number): string {
+export function formatUnixTime(seconds: number): string {
   if (!isDisplayableUnixSeconds(seconds)) return String(seconds);
   return new Date(seconds * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-export function formatOpenReceiveInvoiceLabel(invoice: string): string {
+export function formatInvoiceLabel(invoice: string): string {
   if (invoice.length <= 48) return invoice;
   return `${invoice.slice(0, 20)}…${invoice.slice(-16)}`;
 }
@@ -330,7 +330,7 @@ export function deriveCheckoutStateLabels(source: {
   } | null;
   readonly payment_hash?: string;
 }): CheckoutStateLabels {
-  const fiatLabel = formatOpenReceiveFiatAmount(source.fiat_quote?.fiat);
+  const fiatLabel = formatFiatAmount(source.fiat_quote?.fiat);
   // TOTAL on purpose. `createCheckoutState` runs this on every status poll
   // result, so a server answering with a negative or non-integer amount_msats
   // must cost the amount LABEL, not the whole payment screen — which is exactly
@@ -342,6 +342,6 @@ export function deriveCheckoutStateLabels(source: {
     ...(fiatLabel === undefined ? {} : { fiatLabel }),
     ...(source.payment_hash === undefined
       ? {}
-      : { paymentHashLabel: formatOpenReceivePaymentHashLabel(source.payment_hash) }),
+      : { paymentHashLabel: formatPaymentHashLabel(source.payment_hash) }),
   };
 }

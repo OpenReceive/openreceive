@@ -8,33 +8,27 @@ process.env.LOG_LEVEL ??= "error";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  createOpenReceiveSwapDisplayModel,
-  createOpenReceiveTransactionDetails,
-  createOpenReceiveBlockExplorerUrl,
-  createOpenReceiveLightningInvoiceDecodeUrl,
-  createOpenReceiveDetailExternalLink,
-  getOpenReceiveExplorerNetwork,
-  openReceiveCheckoutLabels,
+  createSwapDisplayModel,
+  createTransactionDetails,
+  createBlockExplorerUrl,
+  createLightningInvoiceDecodeUrl,
+  createDetailExternalLink,
+  getExplorerNetwork,
+  checkoutLabels,
 } from "@openreceive/browser/headless";
 // Test-only: an engine seam no renderer imports, read from its source module.
-import { getOpenReceiveSwapConfirmationWaitHint } from "../packages/js/browser/src/internal/checkout-swap-view.ts";
+import { getSwapConfirmationWaitHint } from "../packages/js/browser/src/internal/checkout-swap-view.ts";
 import { TransactionDetails, renderSwapDepositPanel } from "@openreceive/react";
 
 test("swap confirming copy includes network-specific wait guidance", () => {
+  assert.equal(getSwapConfirmationWaitHint("USDT_TRON"), "Confirmation usually takes 1–3 minutes.");
   assert.equal(
-    getOpenReceiveSwapConfirmationWaitHint("USDT_TRON"),
-    "Confirmation usually takes 1–3 minutes.",
-  );
-  assert.equal(
-    getOpenReceiveSwapConfirmationWaitHint("SOL_SOL"),
+    getSwapConfirmationWaitHint("SOL_SOL"),
     "Confirmation usually takes under a minute.",
   );
-  assert.equal(
-    getOpenReceiveSwapConfirmationWaitHint("ETH_ETH"),
-    "Confirmation often takes 5–15 minutes.",
-  );
+  assert.equal(getSwapConfirmationWaitHint("ETH_ETH"), "Confirmation often takes 5–15 minutes.");
 
-  const tron = createOpenReceiveSwapDisplayModel({
+  const tron = createSwapDisplayModel({
     invoice_id: "or_inv_swap",
     rail: "swap",
     transaction_state: "pending",
@@ -55,7 +49,7 @@ test("swap confirming copy includes network-specific wait guidance", () => {
   assert.match(tron?.providerStateDetail ?? "", /Tron/);
   assert.match(tron?.providerStateDetail ?? "", /1–3 minutes/);
 
-  const eth = createOpenReceiveSwapDisplayModel({
+  const eth = createSwapDisplayModel({
     invoice_id: "or_inv_swap_eth",
     rail: "swap",
     transaction_state: "pending",
@@ -74,7 +68,7 @@ test("swap confirming copy includes network-specific wait guidance", () => {
 });
 
 test("swap deposit warning stresses exact asset and network", () => {
-  const deposit = createOpenReceiveSwapDisplayModel({
+  const deposit = createSwapDisplayModel({
     invoice_id: "or_inv_warn",
     rail: "swap",
     transaction_state: "pending",
@@ -117,13 +111,13 @@ test("swap deposit warning stresses exact asset and network", () => {
 });
 
 test("browser builds block explorer and Lightning decode links for transaction details", () => {
-  assert.equal(getOpenReceiveExplorerNetwork("USDT_ETH"), "ETH");
-  assert.equal(getOpenReceiveExplorerNetwork("SOL_SOL"), "SOL");
-  assert.equal(getOpenReceiveExplorerNetwork("USDT_TRON"), "TRON");
-  assert.equal(getOpenReceiveExplorerNetwork("lightning"), undefined);
+  assert.equal(getExplorerNetwork("USDT_ETH"), "ETH");
+  assert.equal(getExplorerNetwork("SOL_SOL"), "SOL");
+  assert.equal(getExplorerNetwork("USDT_TRON"), "TRON");
+  assert.equal(getExplorerNetwork("lightning"), undefined);
 
   assert.equal(
-    createOpenReceiveBlockExplorerUrl({
+    createBlockExplorerUrl({
       payInAsset: "ETH_ETH",
       kind: "tx",
       value: "0xabc",
@@ -131,7 +125,7 @@ test("browser builds block explorer and Lightning decode links for transaction d
     "https://etherscan.io/tx/0xabc",
   );
   assert.equal(
-    createOpenReceiveBlockExplorerUrl({
+    createBlockExplorerUrl({
       payInAsset: "USDC_ETH",
       kind: "address",
       value: "0xdef",
@@ -139,7 +133,7 @@ test("browser builds block explorer and Lightning decode links for transaction d
     "https://etherscan.io/address/0xdef",
   );
   assert.equal(
-    createOpenReceiveBlockExplorerUrl({
+    createBlockExplorerUrl({
       payInAsset: "SOL_SOL",
       kind: "tx",
       value: "sig123",
@@ -147,7 +141,7 @@ test("browser builds block explorer and Lightning decode links for transaction d
     "https://solscan.io/tx/sig123",
   );
   assert.equal(
-    createOpenReceiveBlockExplorerUrl({
+    createBlockExplorerUrl({
       payInAsset: "USDT_SOL",
       kind: "address",
       value: "SoLAddr",
@@ -155,7 +149,7 @@ test("browser builds block explorer and Lightning decode links for transaction d
     "https://solscan.io/account/SoLAddr",
   );
   assert.equal(
-    createOpenReceiveBlockExplorerUrl({
+    createBlockExplorerUrl({
       payInAsset: "USDT_TRON",
       kind: "tx",
       value: "trx123",
@@ -163,7 +157,7 @@ test("browser builds block explorer and Lightning decode links for transaction d
     "https://tronscan.org/#/transaction/trx123",
   );
   assert.equal(
-    createOpenReceiveBlockExplorerUrl({
+    createBlockExplorerUrl({
       payInAsset: "USDT_TRON",
       kind: "address",
       value: "TAddr",
@@ -175,41 +169,38 @@ test("browser builds block explorer and Lightning decode links for transaction d
     "lnbc330n1p498rfepp5xdd2gx39pz59rh0uaqgnvnxgkcfl337vq3x7up478krszyllmlzqdqqcqzysxqyz5vqrzjqv3dpepm8kfdxrk3sl6wzqdf49s9c0h9ljtjrek6c08r6aejlwcnur0dwyqqvaqqqyqqqqlgqqqq86qqjqsp5l6z5cvzu7xdv0tjgu6890lxytmx6ecfua9x4pfvh567try3zynjq9qxpqysgqesq6nsr2snzzsrz9vvpnypf5q00w3c72ul02jex9qcpxkw3u63rq2ystseqkh26plwvaz6mwp2qawadp453m5veur4vytcqfhfqnsmsp957mtd";
   // No decoder is configured by default: the bolt11 must never reach a third party
   // unless the host opts in with a decode base URL.
-  assert.equal(createOpenReceiveLightningInvoiceDecodeUrl(invoice), undefined);
+  assert.equal(createLightningInvoiceDecodeUrl(invoice), undefined);
   const decodeLinkUrl = "https://rizful.com/decode_invoice";
   assert.equal(
-    createOpenReceiveLightningInvoiceDecodeUrl(invoice, decodeLinkUrl),
+    createLightningInvoiceDecodeUrl(invoice, decodeLinkUrl),
     `${decodeLinkUrl}?invoice=${encodeURIComponent(invoice)}`,
   );
   assert.equal(
-    createOpenReceiveLightningInvoiceDecodeUrl(`lightning:${invoice}`, decodeLinkUrl),
+    createLightningInvoiceDecodeUrl(`lightning:${invoice}`, decodeLinkUrl),
     `${decodeLinkUrl}?invoice=${encodeURIComponent(invoice)}`,
   );
 
-  const addressLink = createOpenReceiveDetailExternalLink({
+  const addressLink = createDetailExternalLink({
     label: "Refund address",
     value: "0x019a427c0080c402e6B311B2D2A3538BEE4fc743",
     payInAsset: "ETH_ETH",
   });
-  assert.equal(addressLink?.hrefLabel, openReceiveCheckoutLabels.viewOnExplorer);
+  assert.equal(addressLink?.hrefLabel, checkoutLabels.viewOnExplorer);
   assert.equal(
     addressLink?.href,
     "https://etherscan.io/address/0x019a427c0080c402e6B311B2D2A3538BEE4fc743",
   );
 
-  assert.equal(
-    createOpenReceiveDetailExternalLink({ label: "Lightning invoice", value: invoice }),
-    undefined,
-  );
-  const decodeLink = createOpenReceiveDetailExternalLink({
+  assert.equal(createDetailExternalLink({ label: "Lightning invoice", value: invoice }), undefined);
+  const decodeLink = createDetailExternalLink({
     label: "Lightning invoice",
     value: invoice,
     decodeLinkUrl,
   });
-  assert.equal(decodeLink?.hrefLabel, openReceiveCheckoutLabels.decodeInvoice);
+  assert.equal(decodeLink?.hrefLabel, checkoutLabels.decodeInvoice);
   assert.match(decodeLink?.href ?? "", /rizful\.com\/decode_invoice\?invoice=/);
 
-  const rows = createOpenReceiveTransactionDetails({
+  const rows = createTransactionDetails({
     invoice,
     rail: "swap",
     decodeLinkUrl,
@@ -232,14 +223,14 @@ test("browser builds block explorer and Lightning decode links for transaction d
   assert.equal(byLabel["Deposit transaction"]?.href, "https://etherscan.io/tx/0xdeposittx");
   assert.equal(byLabel["Refund address"]?.href, "https://etherscan.io/address/0xrefund");
   assert.equal(byLabel["Refund transaction"]?.href, "https://etherscan.io/tx/0xrefundtx");
-  assert.equal(byLabel["Lightning invoice"]?.hrefLabel, openReceiveCheckoutLabels.decodeInvoice);
+  assert.equal(byLabel["Lightning invoice"]?.hrefLabel, checkoutLabels.decodeInvoice);
   assert.equal(byLabel["Lightning payout"]?.href, undefined);
   assert.equal(byLabel["Provider order"]?.href, undefined);
   assert.equal(byLabel["Provider state"]?.value, "refunded");
 
   // Settled orders stop polling the swap provider, so the stored provider_state is a
   // pre-settlement snapshot. The row must say so instead of presenting it as live.
-  const settledRows = createOpenReceiveTransactionDetails({
+  const settledRows = createTransactionDetails({
     rail: "swap",
     transaction_state: "settled",
     settled_at: 1_700_000_000,
@@ -336,9 +327,7 @@ test("react refund screen warns to bookmark the checkout URL", () => {
   );
   assert.match(html, /Refund needed/);
   assert.match(html, /Payment details/);
-  assert.ok(html.includes(openReceiveCheckoutLabels.refundReturnWarning));
-  assert.ok(
-    html.indexOf("Payment details") < html.indexOf(openReceiveCheckoutLabels.refundReturnWarning),
-  );
+  assert.ok(html.includes(checkoutLabels.refundReturnWarning));
+  assert.ok(html.indexOf("Payment details") < html.indexOf(checkoutLabels.refundReturnWarning));
   assert.match(html, /Review refund address/);
 });

@@ -55,7 +55,7 @@ files where the resolution lands. Per setup:
   requests (see below) and place — or serve — the icons at that path.
 
 To verify a setup, check the DevTools network panel for `…/icons/*.svg`
-requests, or log `openReceivePaymentIconUrls` (exported from
+requests, or log `paymentIconUrls` (exported from
 `@openreceive/browser/headless`) to see every resolved URL.
 
 `@openreceive/provider-data` follows the same contract for its runtime images

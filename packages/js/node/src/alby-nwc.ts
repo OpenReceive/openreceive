@@ -10,14 +10,14 @@
 
 import {
   compact,
-  formatOpenReceiveSpendCapabilityRefusedMessage,
-  formatOpenReceiveSpendCapabilityWarningMessage,
+  formatSpendCapabilityRefusedMessage,
+  formatSpendCapabilityWarningMessage,
   type ListTransactionsRequest,
   type ListTransactionsResult,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
   OpenReceiveError,
-  type OpenReceiveReceiveNwcClient,
+  type ReceiveNwcClient,
   type ParsedNwcConnection,
   parseNwcUri,
   type RedactedNwcConnection,
@@ -101,7 +101,7 @@ export interface AlbyNwcReceiveClientOptions {
   spendCapabilityWarning?: (message: string) => void;
 }
 
-export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
+export class AlbyNwcReceiveClient implements ReceiveNwcClient {
   /**
    * Safe, loggable view of the connection (wallet pubkey, relays, lud16, and
    * the secret-redacted URI). The parsed connection with the client secret is
@@ -236,11 +236,11 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
         );
         throw new WalletPreflightError(
           "spend_capability_advertised",
-          formatOpenReceiveSpendCapabilityRefusedMessage({ spendMethods }),
+          formatSpendCapabilityRefusedMessage({ spendMethods }),
           summary,
         );
       }
-      const warning = formatOpenReceiveSpendCapabilityWarningMessage({
+      const warning = formatSpendCapabilityWarningMessage({
         spendMethods,
       });
       this.#log(

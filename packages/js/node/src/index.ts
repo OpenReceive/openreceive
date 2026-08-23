@@ -1,8 +1,8 @@
 export { OpenReceiveError } from "@openreceive/core";
 export type {
-  OpenReceiveErrorBody,
-  OpenReceiveErrorCode,
-  OpenReceiveReceiveNwcClient,
+  ErrorBody,
+  ErrorCode,
+  ReceiveNwcClient,
   PaidPayment,
   PaymentCheck,
 } from "@openreceive/core";
@@ -26,15 +26,15 @@ export type {
   LscConnection,
 } from "./lsc-uri.ts";
 export {
-  OpenReceiveConfigError,
-  OpenReceiveServiceError,
+  ConfigError,
+  ServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed,
+  createPriceFeed,
 } from "./service.ts";
 // The redaction every service log sink applies, so code outside the service
 // (the mounted HTTP layer's default warnings) can reuse it rather than
 // printing raw wallet or provider error text.
-export { sanitizeOpenReceiveEvent } from "./service/logging.ts";
+export { sanitizeEvent } from "./service/logging.ts";
 export type {
   Checkout,
   CheckPaymentRequest,
@@ -53,11 +53,11 @@ export type {
   NodeSettlementActionInput,
   NwcTransaction,
   OpenReceive,
-  OpenReceiveLogEvent,
-  OpenReceiveLogLevel,
-  OpenReceiveRateQuote,
-  OpenReceiveWalletNotification,
-  OpenReceiveWalletNotificationHandler,
+  LogEvent,
+  LogLevel,
+  RateQuote,
+  WalletNotification,
+  WalletNotificationHandler,
   PublicSwap,
   ReconcilePaymentsRequest,
   SwapCheckout,

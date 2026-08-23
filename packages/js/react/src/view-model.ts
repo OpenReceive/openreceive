@@ -1,7 +1,7 @@
 import {
   createCheckoutState,
   selectCheckoutDisplayInvoice,
-  status as deriveStatus,
+  deriveStatus,
   type CheckoutSnapshot,
   type Status,
 } from "@openreceive/browser/headless";

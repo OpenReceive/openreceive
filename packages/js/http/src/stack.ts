@@ -1,12 +1,12 @@
 import { compact } from "@openreceive/core";
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
-import type { CreateOpenReceiveHttpHandlerOptions, OpenReceiveHttpHandler } from "./handler.ts";
-import { createOpenReceiveHttpHandler } from "./handler.ts";
+import type { CreateOpenReceiveHttpHandlerOptions, HttpHandler } from "./handler.ts";
+import { createHttpHandler } from "./handler.ts";
 import type {
   CreateOpenReceiveHostDbOptions,
   CreateOpenReceiveHostRepositoryOptions,
 } from "./host-payments.ts";
-import { createOpenReceiveHost } from "./host-payments.ts";
+import { createHost } from "./host-payments.ts";
 import { normalizePrefix } from "./router.ts";
 
 /**
@@ -19,26 +19,26 @@ import { normalizePrefix } from "./router.ts";
  * happens opportunistically when any later OpenReceive call wins the durable
  * reconcile gate (the handler's default `opportunisticReconcile`). Hosts that
  * want push notifications or a poll loop run the optional worker —
- * `startOpenReceiveNotificationWorker` — in a separate process.
+ * `startNotificationWorker` — in a separate process.
  */
 /**
  * The wallet the stack talks to: a receive-only NWC connection string — the
  * stack builds and owns the client, and `close()` closes it — or a prebuilt
  * (or promised) service for custom options, whose lifecycle stays yours.
  */
-export type OpenReceiveStackWallet =
+export type StackWallet =
   | { readonly nwc: string; readonly service?: never }
   | { readonly service: OpenReceive | Promise<OpenReceive>; readonly nwc?: never };
 
 /**
  * Where attempts live, which decides what `onPaid` receives. With the host
  * database handle (`db`, the default mode) it is the per-order
- * `OpenReceiveOrderSettlement`, with `orderId` and the transactional `query`;
+ * `OrderSettlement`, with `orderId` and the transactional `query`;
  * with a custom repository (`payments`, advanced) it is the raw
- * `OpenReceiveSettlementEvent`. The branch carries the hook's type, so the
+ * `SettlementEvent`. The branch carries the hook's type, so the
  * wrong signature is a type error rather than a runtime surprise.
  */
-export type OpenReceiveStackStorage =
+export type StackStorage =
   | Pick<CreateOpenReceiveHostDbOptions<unknown>, "db" | "tableName" | "onPaid" | "payments">
   | Pick<
       CreateOpenReceiveHostRepositoryOptions<unknown>,
@@ -48,30 +48,28 @@ export type OpenReceiveStackStorage =
 export interface CreateOpenReceiveStackOptions<Order = unknown>
   extends Omit<CreateOpenReceiveHttpHandlerOptions, "service" | "host">,
     Omit<CreateOpenReceiveHostDbOptions<Order>, "db" | "tableName" | "onPaid" | "payments"> {
-  readonly wallet: OpenReceiveStackWallet;
-  readonly storage: OpenReceiveStackStorage;
+  readonly wallet: StackWallet;
+  readonly storage: StackStorage;
 }
 
-export interface OpenReceiveStack {
+export interface Stack {
   /**
    * Handler that boots lazily: the first request (and `ready`) awaits service
    * construction. Boot failures surface on `ready` and on every request.
    */
-  readonly handler: OpenReceiveHttpHandler;
+  readonly handler: HttpHandler;
   /** Resolves when the service and handler are up. */
   readonly ready: Promise<void>;
   /** Closes the service if the stack created it. */
   close(): Promise<void>;
 }
 
-export function createOpenReceiveStack<Order = unknown>(
-  options: CreateOpenReceiveStackOptions<Order>,
-): OpenReceiveStack {
+export function createStack<Order = unknown>(options: CreateOpenReceiveStackOptions<Order>): Stack {
   const { wallet, storage, loadOrder, amountForOrder, clock, ...handlerOptions } = options;
   // The storage branch reaches the host factory as the mode it is — a
   // repository stays repository mode, a database handle stays db mode — and
   // its `onPaid` already has the type of that branch.
-  const host = createOpenReceiveHost<Order>({
+  const host = createHost<Order>({
     ...storage,
     loadOrder,
     amountForOrder,
@@ -80,13 +78,13 @@ export function createOpenReceiveStack<Order = unknown>(
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
 
   let ownedService: OpenReceive | undefined;
-  const boot: Promise<OpenReceiveHttpHandler> = (async () => {
+  const boot: Promise<HttpHandler> = (async () => {
     const resolved =
       wallet.service !== undefined
         ? await wallet.service
         : await createOpenReceive({ nwc: wallet.nwc });
     if (wallet.service === undefined) ownedService = resolved;
-    return createOpenReceiveHttpHandler({
+    return createHttpHandler({
       ...handlerOptions,
       ...compact({ clock }),
       service: resolved,
@@ -106,7 +104,7 @@ export function createOpenReceiveStack<Order = unknown>(
 
   const handle = async (request: Request, extras?: { native?: unknown }): Promise<Response> =>
     (await boot)(request, extras);
-  const handler = handle as OpenReceiveHttpHandler;
+  const handler = handle as HttpHandler;
   Object.defineProperties(handler, {
     prefix: { value: prefix, enumerable: true },
     handle: { value: handle, enumerable: true },
@@ -131,7 +129,7 @@ export function createOpenReceiveStack<Order = unknown>(
  * `{ service, authorize }`) throw the missing-host error instead of entering
  * the all-in-one path and blaming the caller for omitting nwc/db/onPaid.
  */
-export function isOpenReceiveStackOptions<Order>(
+export function isStackOptions<Order>(
   options: CreateOpenReceiveHttpHandlerOptions | CreateOpenReceiveStackOptions<Order>,
 ): options is CreateOpenReceiveStackOptions<Order> {
   if ((options as { host?: unknown }).host !== undefined) return false;

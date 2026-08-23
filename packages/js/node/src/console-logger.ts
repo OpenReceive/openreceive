@@ -1,10 +1,6 @@
 import { compact } from "@openreceive/core";
-import {
-  openReceiveLogLevelOrder,
-  readOpenReceiveLogLevelFromEnvironment,
-  resolveOpenReceiveLogLevel,
-} from "./log-level.ts";
-import type { OpenReceiveLogEvent, Logger, OpenReceiveLogLevel } from "./service/types.ts";
+import { logLevelOrder, readLogLevelFromEnvironment, resolveLogLevel } from "./log-level.ts";
+import type { LogEvent, Logger, LogLevel } from "./service/types.ts";
 
 export interface CreateOpenReceiveConsoleLoggerOptions {
   /** Prefix before the event, e.g. `openreceive:my-app`. Default `openreceive`. */
@@ -13,31 +9,29 @@ export interface CreateOpenReceiveConsoleLoggerOptions {
    * Minimum level to emit. Default: `LOG_LEVEL` from the environment, or `info`.
    * Accepts the same values as `LOG_LEVEL` (`DEBUG` | `INFO` | `WARN` | `ERROR`).
    */
-  readonly minLevel?: OpenReceiveLogLevel | string;
+  readonly minLevel?: LogLevel | string;
   readonly console?: Pick<Console, "debug" | "info" | "warn" | "error" | "log">;
   /** Clock for the leading ISO timestamp. Default `() => new Date()`. */
   readonly now?: () => Date;
 }
 
 /**
- * Logger that writes OpenReceive {@link OpenReceiveLogEvent} values to the console.
+ * Logger that writes OpenReceive {@link LogEvent} values to the console.
  * Pair with the auto-attached file logger, or pass as `createOpenReceive({ logger })`.
  *
  * Format: `[ISO8601] LEVEL [prefix] event: message { fields }`
  */
-export function createOpenReceiveConsoleLogger(
-  options: CreateOpenReceiveConsoleLoggerOptions = {},
-): Logger {
+export function createConsoleLogger(options: CreateOpenReceiveConsoleLoggerOptions = {}): Logger {
   const prefix = options.prefix ?? "openreceive";
   const target = options.console ?? console;
   const now = options.now ?? (() => new Date());
 
-  return (entry: OpenReceiveLogEvent) => {
+  return (entry: LogEvent) => {
     const minLevel =
       options.minLevel === undefined
-        ? readOpenReceiveLogLevelFromEnvironment()
-        : resolveOpenReceiveLogLevel(options.minLevel);
-    if (openReceiveLogLevelOrder(entry.level) < openReceiveLogLevelOrder(minLevel)) return;
+        ? readLogLevelFromEnvironment()
+        : resolveLogLevel(options.minLevel);
+    if (logLevelOrder(entry.level) < logLevelOrder(minLevel)) return;
     const { level, event, message, ...fields } = entry;
     const method =
       level === "error"
@@ -66,7 +60,7 @@ export type HostConsoleLogger = (
   event: string,
   message: string,
   fields?: Record<string, unknown>,
-  level?: OpenReceiveLogLevel,
+  level?: LogLevel,
 ) => void;
 
 export interface CreateHostConsoleLoggerOptions {
@@ -75,7 +69,7 @@ export interface CreateHostConsoleLoggerOptions {
   /**
    * Minimum level to emit. Default: `LOG_LEVEL` from the environment, or `info`.
    */
-  readonly minLevel?: OpenReceiveLogLevel | string;
+  readonly minLevel?: LogLevel | string;
   readonly console?: Pick<Console, "debug" | "info" | "warn" | "error" | "log">;
   readonly now?: () => Date;
 }
@@ -90,9 +84,9 @@ export function createHostConsoleLogger(
   return (event, message, fields = {}, level = "info") => {
     const minLevel =
       options.minLevel === undefined
-        ? readOpenReceiveLogLevelFromEnvironment()
-        : resolveOpenReceiveLogLevel(options.minLevel);
-    if (openReceiveLogLevelOrder(level) < openReceiveLogLevelOrder(minLevel)) return;
+        ? readLogLevelFromEnvironment()
+        : resolveLogLevel(options.minLevel);
+    if (logLevelOrder(level) < logLevelOrder(minLevel)) return;
     const method =
       level === "error"
         ? "error"
@@ -118,7 +112,7 @@ export function createHostConsoleLogger(
 
 function formatConsoleLogLine(input: {
   readonly at: string;
-  readonly level: OpenReceiveLogLevel;
+  readonly level: LogLevel;
   readonly prefix: string;
   readonly event: string;
   readonly message: string;

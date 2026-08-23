@@ -1,4 +1,4 @@
-import { isOpenReceiveBitcoinAmountCurrency, isRecord, nonEmptyString } from "@openreceive/core";
+import { isBitcoinAmountCurrency, isRecord, nonEmptyString } from "@openreceive/core";
 import { HEX_64 } from "../hex.ts";
 import { asRecord, parseOptionalRecord, serviceError } from "./core-utils.ts";
 import type {
@@ -11,7 +11,7 @@ export function createAmountRequest(amount: CreateCheckoutAmount): Record<string
   if ("sats" in amount) {
     return { amount: { currency: "SATS", value: normalizeSatsValue(amount.sats) } };
   }
-  if (isOpenReceiveBitcoinAmountCurrency(amount.currency)) {
+  if (isBitcoinAmountCurrency(amount.currency)) {
     return { amount: { currency: amount.currency, value: amount.value } };
   }
   return { fiat: { currency: amount.currency, value: amount.value } };
@@ -82,7 +82,7 @@ export function normalizeCreateCheckoutAmount(value: unknown): CreateCheckoutAmo
   if (currency === undefined || amountValue === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "amount must be { sats } or { currency, value }.");
   }
-  if (!isOpenReceiveBitcoinAmountCurrency(currency) && !/^[A-Z]{3}$/.test(currency)) {
+  if (!isBitcoinAmountCurrency(currency) && !/^[A-Z]{3}$/.test(currency)) {
     throw serviceError(
       400,
       "INVALID_REQUEST",

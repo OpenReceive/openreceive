@@ -1,8 +1,8 @@
 import { compact, unixSeconds } from "@openreceive/core";
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
-import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
-import type { OpenReceiveReconcilableAttempt } from "./payment-repository.ts";
-import { reconcileOpenReceivePayments } from "./reconcile-loop.ts";
+import { type Host, warnFailure } from "./host-payments.ts";
+import type { ReconcilableAttempt } from "./payment-repository.ts";
+import { reconcileHostPayments } from "./reconcile-loop.ts";
 
 /**
  * Floor for the durable reconcile-gate interval: at most one real wallet scan
@@ -30,13 +30,13 @@ const LATE_INVOICE_INTERVAL_SECONDS = 12;
 const EARLY_INVOICE_WINDOW_SECONDS = 2 * 60;
 const MID_INVOICE_WINDOW_SECONDS = 5 * 60;
 
-export type OpenReceiveOpportunisticReconcileResult =
+export type OpportunisticReconcileResult =
   | { readonly reason: "ran"; readonly checks: readonly PaymentCheck[] }
   | { readonly reason: "no_pending" | "gate_busy" | "scan_failed" };
 
 export interface MaybeReconcileOpenReceivePaymentsOptions {
   readonly service: OpenReceive;
-  readonly host: OpenReceiveHost;
+  readonly host: Host;
   /** Gate interval floor. Default (and minimum) 2 seconds. */
   readonly minIntervalSeconds?: number;
   readonly overlapSeconds?: number;
@@ -52,8 +52,8 @@ export interface MaybeReconcileOpenReceivePaymentsOptions {
  * stretched by invoice age (2s while any pending invoice is under 2 minutes
  * old, 6s under 5 minutes, else 12s).
  */
-export function openReceiveReconcileIntervalSeconds(
-  attempts: readonly OpenReceiveReconcilableAttempt[],
+export function reconcileIntervalSeconds(
+  attempts: readonly ReconcilableAttempt[],
   now: number,
   minIntervalSeconds: number = OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS,
 ): number {
@@ -80,7 +80,7 @@ function intervalForInvoiceAge(elapsedSeconds: number): number {
  * Opportunistic settlement discovery, piggybacked on any later OpenReceive
  * call: skip without a wallet call when nothing is pending, try the durable
  * `openreceive_meta` gate (`gate_busy` means another worker just scanned —
- * skip the wallet), otherwise AWAIT one bounded `reconcileOpenReceivePayments`
+ * skip the wallet), otherwise AWAIT one bounded `reconcileHostPayments`
  * pass (serverless-safe) and return its per-hash results.
  *
  * Never throws: a failed or timed-out scan is reported (default console.warn)
@@ -94,9 +94,9 @@ function intervalForInvoiceAge(elapsedSeconds: number): number {
  * so hosts can also drive it from their own routes or middleware (host-only
  * routes never auto-run it).
  */
-export async function maybeReconcileOpenReceivePayments(
+export async function maybeReconcilePayments(
   input: MaybeReconcileOpenReceivePaymentsOptions,
-): Promise<OpenReceiveOpportunisticReconcileResult> {
+): Promise<OpportunisticReconcileResult> {
   // A missing gate is a wiring error, not a transient failure: propagate it
   // (the HTTP handler already refuses to construct in this state) instead of
   // silently degrading the default settlement path.
@@ -110,7 +110,7 @@ export async function maybeReconcileOpenReceivePayments(
   const report =
     input.onError ??
     ((error: unknown) => {
-      warnOpenReceiveFailure(
+      warnFailure(
         "payment.reconcile.opportunistic.failed",
         "opportunistic reconcile failed (will retry)",
         error,
@@ -121,15 +121,11 @@ export async function maybeReconcileOpenReceivePayments(
     if (attempts.length === 0) return { reason: "no_pending" };
     const clock = input.clock ?? unixSeconds;
     const now = clock();
-    const intervalSeconds = openReceiveReconcileIntervalSeconds(
-      attempts,
-      now,
-      input.minIntervalSeconds,
-    );
+    const intervalSeconds = reconcileIntervalSeconds(attempts, now, input.minIntervalSeconds);
     const claimed = await claimReconcileGate.call(input.host.payments, { now, intervalSeconds });
     if (!claimed) return { reason: "gate_busy" };
     const checks = await withScanTimeout(
-      reconcileOpenReceivePayments({
+      reconcileHostPayments({
         service: input.service,
         host: input.host,
         overlapSeconds: input.overlapSeconds,

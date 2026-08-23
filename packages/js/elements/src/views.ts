@@ -3,10 +3,10 @@ import {
   type CheckoutState,
   createCheckoutSnapshotFromInvoice,
   createCheckoutState,
-  type OpenReceiveBrowserLoggerOption,
-  type OpenReceiveCheckoutPaymentMethod,
-  type OpenReceivePaymentMethod,
-  type OpenReceiveQrEncoder,
+  type BrowserLoggerOption,
+  type CheckoutPaymentMethod,
+  type PaymentMethod,
+  type QrEncoder,
   type Status,
 } from "@openreceive/browser/headless";
 
@@ -40,7 +40,7 @@ export interface CheckoutView {
   readonly inlineStyles?: boolean;
   /** False until the payer selects Bitcoin in create-mode (deferred Lightning mint). */
   readonly lightningRequested?: boolean;
-  readonly wizard?: OpenReceiveElementsWizardView;
+  readonly wizard?: ElementsWizardView;
   /**
    * Live controller state, when the element has one. Preferred over the
    * attribute-reconstructed state: after a swap re-key the attributes still
@@ -49,10 +49,10 @@ export interface CheckoutView {
   readonly liveState?: CheckoutState;
 }
 
-export interface OpenReceiveElementsWizardView {
-  readonly selectedMethod?: OpenReceivePaymentMethod | null;
+export interface ElementsWizardView {
+  readonly selectedMethod?: PaymentMethod | null;
   readonly selectedBitcoinRoute?: string | null;
-  readonly swapOptions?: readonly OpenReceiveElementsSwapOption[];
+  readonly swapOptions?: readonly ElementsSwapOption[];
   /**
    * True until the first order-status response supplies `payment_methods` /
    * `swap_pay_options` (provider catalog warm-up). Shows a loader tile.
@@ -86,14 +86,14 @@ export interface OpenReceiveElementsWizardView {
   readonly wizardError?: string;
 }
 
-export type OpenReceiveElementsSwapOption = OpenReceiveCheckoutPaymentMethod;
+export type ElementsSwapOption = CheckoutPaymentMethod;
 
 export interface DefineOpenReceiveElementsOptions {
   readonly tagName?: string;
   readonly themeToggleTagName?: string;
   readonly registry?: CustomElementRegistry;
-  readonly qrEncoder?: OpenReceiveQrEncoder;
-  readonly logger?: OpenReceiveBrowserLoggerOption;
+  readonly qrEncoder?: QrEncoder;
+  readonly logger?: BrowserLoggerOption;
 }
 
 /**

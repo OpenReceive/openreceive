@@ -8,7 +8,7 @@ You never hand-write a payment repository. OpenReceive owns the
    emits one migration/schema file — `openreceive_payments` and the sibling
    `openreceive_meta` reconcile gate together — plus a wiring guide. Run it
    through your normal migration workflow.
-2. **The `db` handle** passed to `createOpenReceiveHost({ db, ... })`.
+2. **The `db` handle** passed to `createHost({ db, ... })`.
 
 ## What to pass as `db`
 
@@ -22,7 +22,7 @@ You never hand-write a payment repository. OpenReceive owns the
 | Sequelize              | a separate `pg` Pool to the same database, or an adapter like TypeORM's |
 
 A custom adapter is `{ dialect, query, transaction }`
-(`OpenReceiveSqlAdapter`): `dialect` is `"postgres"` or `"sqlite"`, `query`
+(`SqlAdapter`): `dialect` is `"postgres"` or `"sqlite"`, `query`
 runs one statement with `?` placeholders and returns SELECT rows (`[]`
 otherwise), and `transaction` runs a callback against a transactional client.
 Postgres drivers need `?` rewritten to `$1`-style.
@@ -31,16 +31,16 @@ Postgres drivers need `?` rewritten to `$1`-style.
 
 ```ts
 import type { PrismaClient } from "@prisma/client";
-import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+import type { SqlAdapter, SqlQuery } from "@openreceive/http";
 
 type Tx = Pick<PrismaClient, "$queryRawUnsafe" | "$executeRawUnsafe">;
 
-export function openReceivePrismaDb(
+export function prismaDb(
   prisma: PrismaClient,
   dialect: "postgres" | "sqlite", // match your Prisma datasource provider
-): OpenReceiveSqlAdapter {
+): SqlAdapter {
   // SQL arrives already written for `dialect` — pass it through verbatim.
-  const queryOn = (tx: Tx): OpenReceiveSqlQuery => async (sql, params = []) => {
+  const queryOn = (tx: Tx): SqlQuery => async (sql, params = []) => {
     if (/^\s*select/i.test(sql)) {
       return (await tx.$queryRawUnsafe(sql, ...params)) as Record<string, unknown>[];
     }
@@ -61,10 +61,10 @@ Knex already uses `?` bindings; only the result shape differs per driver.
 
 ```ts
 import type { Knex } from "knex";
-import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+import type { SqlAdapter, SqlQuery } from "@openreceive/http";
 
-export function openReceiveKnexDb(knex: Knex, dialect: "postgres" | "sqlite"): OpenReceiveSqlAdapter {
-  const queryOn = (executor: Knex | Knex.Transaction): OpenReceiveSqlQuery =>
+export function knexDb(knex: Knex, dialect: "postgres" | "sqlite"): SqlAdapter {
+  const queryOn = (executor: Knex | Knex.Transaction): SqlQuery =>
     async (sql, params = []) => {
       // SQL arrives already written for `dialect`; only the RESULT shape differs.
       const result = await executor.raw(sql, [...params] as Knex.RawBinding[]);
@@ -87,14 +87,14 @@ export function openReceiveKnexDb(knex: Knex, dialect: "postgres" | "sqlite"): O
 
 ```ts
 import type { DataSource } from "typeorm";
-import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+import type { SqlAdapter, SqlQuery } from "@openreceive/http";
 
-export function openReceiveTypeOrmDb(
+export function typeOrmDb(
   dataSource: DataSource,
   dialect: "postgres" | "sqlite",
-): OpenReceiveSqlAdapter {
+): SqlAdapter {
   // SQL arrives already written for `dialect` — pass it through verbatim.
-  const queryOn = (runner: { query(sql: string, params?: unknown[]): Promise<unknown> }): OpenReceiveSqlQuery =>
+  const queryOn = (runner: { query(sql: string, params?: unknown[]): Promise<unknown> }): SqlQuery =>
     async (sql, params = []) =>
       ((await runner.query(sql, [...params])) ?? []) as Record<string, unknown>[];
   return {
@@ -110,7 +110,7 @@ export function openReceiveTypeOrmDb(
 ## Schema and `onPaid`
 
 The scaffolded migration renders the canonical DDL in `@openreceive/core`
-(`payments-ddl.ts` — the same source `openReceivePaymentsSchemaSql(dialect)`
+(`payments-ddl.ts` — the same source `paymentsSchemaSql(dialect)`
 renders, so the two cannot drift): `order_id` indexed but not unique,
 `payment_hash` unique (64-lowercase-hex CHECK), `status` (CHECK over the five
 statuses) + `status_reason`, `paid_at`, `expires_at`, exact wallet
@@ -156,7 +156,7 @@ const onPaid = async ({ orderId, paidAt, query }) => {
 Every scaffolded file carries the long-form version of this note.
 
 Only if no supported handle or adapter can reach your persistence, implement
-the full `OpenReceivePaymentRepository` interface and pass it as `payments`
+the full `PaymentRepository` interface and pass it as `payments`
 instead of `db`; that advanced escape hatch makes you responsible for commit
 locking, write-once settlement, and reconciliation transitions. It must also
 implement `claimReconcileGate({ now, intervalSeconds })` — construction throws

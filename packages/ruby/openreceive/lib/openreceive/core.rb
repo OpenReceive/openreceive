@@ -113,7 +113,7 @@ module OpenReceive
     module_function
 
     # The transaction states OpenReceive recognizes (mirrors the JS
-    # OpenReceiveTransactionState union).
+    # TransactionState union).
     TRANSACTION_STATES = %w[pending settled expired failed accepted].freeze
 
     def make_invoice_request(request)

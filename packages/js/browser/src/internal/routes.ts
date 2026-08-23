@@ -11,7 +11,7 @@
  *
  * A trailing slash on the prefix is stripped; `""` means "mounted at the root".
  */
-export interface OpenReceiveRoutes {
+export interface Routes {
   /** POST: mint (or reuse) a Lightning attempt for an order. */
   readonly checkouts: string;
   /** POST: lock the order amount and load payment methods without minting. */
@@ -36,7 +36,7 @@ export interface OpenReceiveRoutes {
  * DIFFERENT deployments — a checkout created against one host, then prepared,
  * polled, swapped and refunded against another. That is a lost payment, not a
  * cosmetic bug, and it surfaces long after the mistake. Every published entry
- * point (`requestCheckout` / `prepareCheckout`, `createOpenReceiveStatusFetcher`
+ * point (`requestCheckout` / `prepareCheckout`, `createStatusFetcher`
  * and the swap calls) derives its routes here, so this one check covers all of
  * them before the first request goes out.
  *
@@ -48,7 +48,7 @@ export interface OpenReceiveRoutes {
  * `TypeError` from `.replace` on `undefined`, which names neither the option
  * nor the fix.
  */
-export function openReceiveRoutes(prefix: string): OpenReceiveRoutes {
+export function checkoutRoutes(prefix: string): Routes {
   if (typeof prefix !== "string") {
     throw new TypeError(
       "OpenReceive requires `prefix`, the base path the shipped router is mounted at " +

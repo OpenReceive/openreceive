@@ -1,15 +1,15 @@
 import type { HelloFruitFiatAmount } from "./demo-formatting.ts";
 import { formatHelloFruitFiat } from "./demo-formatting.ts";
 import {
-  OpenReceiveDecimalError,
+  DecimalError,
   convertAmountViaBtcRates,
   multiplyAmount,
   parseDecimal,
   sumAmounts,
-  type OpenReceiveBtcFiatRateMap,
+  type BtcFiatRateMap,
 } from "@openreceive/core";
 
-export type HelloFruitBtcFiatRates = OpenReceiveBtcFiatRateMap;
+export type HelloFruitBtcFiatRates = BtcFiatRateMap;
 
 /** Rate keys are lowercase ISO 4217 codes, exactly as the demo servers emit them. */
 const HELLO_FRUIT_RATE_CURRENCY_PATTERN = /^[a-z]{3}$/;
@@ -79,7 +79,7 @@ function asHelloFruitRecord(value: unknown): Record<string, unknown> | undefined
  * where a bad rate must surface instead of quietly pricing an order wrong.
  *
  * The catch is deliberately unfiltered. Conversion throws at least three ways —
- * `OpenReceiveDecimalError` for a bad amount, `OpenReceivePriceFeedError` for a
+ * `DecimalError` for a bad amount, `PriceFeedError` for a
  * missing or malformed rate, `TypeError` for a rate map that is not shaped like
  * one — and a display boundary that enumerates error types is a boundary that
  * leaks the next one. {@link parseHelloFruitBtcFiatRates} is what keeps a
@@ -114,9 +114,7 @@ export function convertHelloFruitUsdAmount(
   rates: HelloFruitBtcFiatRates | undefined,
 ): HelloFruitFiatAmount {
   if (amount.currency !== "USD") {
-    throw new OpenReceiveDecimalError(
-      "Hello Fruit catalog prices must use USD as the base currency.",
-    );
+    throw new DecimalError("Hello Fruit catalog prices must use USD as the base currency.");
   }
   return convertAmountViaBtcRates(amount, currency, rates);
 }

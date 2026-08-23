@@ -8,7 +8,7 @@
 // docs/internal/wrapper-parity.md; tests/wrapper-parity.test.mjs enforces it
 // against the shipped source of all four framework packages.
 
-import type { CheckoutSnapshot, OpenReceiveThemePreference } from "./checkout-types.ts";
+import type { CheckoutSnapshot, ThemePreference } from "./checkout-types.ts";
 
 /**
  * The flat prop surface of an OpenReceive checkout component. Every framework
@@ -17,7 +17,7 @@ import type { CheckoutSnapshot, OpenReceiveThemePreference } from "./checkout-ty
  * (Svelte, Angular). Framework-only additions (React's component/class-name
  * slots, the element wrappers' `options` escape hatch) sit beside it.
  */
-export interface OpenReceiveCheckoutComponentProps {
+export interface CheckoutComponentProps {
   /** Snapshot mode: render this checkout directly. */
   readonly checkout?: CheckoutSnapshot;
   /** Create mode: the component creates the checkout for this order, then renders and polls. */
@@ -25,7 +25,7 @@ export interface OpenReceiveCheckoutComponentProps {
   /**
    * Base path the shipped router is mounted at. Default `/openreceive`. The ONLY
    * URL input: create, prepare, payment-check and the four swap routes are all
-   * derived from it (see `openReceiveRoutes` in ./routes.ts).
+   * derived from it (see `checkoutRoutes` in ./routes.ts).
    */
   readonly prefix?: string;
   readonly paymentWizard?: boolean;
@@ -36,7 +36,7 @@ export interface OpenReceiveCheckoutComponentProps {
   readonly decodeLinkUrl?: string;
   /** Default true: the checkout owns `data-theme` and renders the package theme toggle. */
   readonly themeToggle?: boolean;
-  readonly defaultTheme?: OpenReceiveThemePreference;
+  readonly defaultTheme?: ThemePreference;
   readonly storageKey?: string;
   /** Create mode only: metadata sent with the create request. */
   readonly metadata?: Record<string, unknown>;
@@ -67,8 +67,8 @@ const warnedSnapshotModeProps = new Set<string>();
  * What the check reads: the two mode props plus the create-only ones, derived
  * from the list above so the names exist once.
  */
-export interface OpenReceiveCheckoutPropsValidation
-  extends Pick<OpenReceiveCheckoutComponentProps, CreateModeOnlyProp | "orderId"> {
+export interface CheckoutPropsValidation
+  extends Pick<CheckoutComponentProps, CreateModeOnlyProp | "orderId"> {
   readonly framework: string;
   /** `null` as well as `undefined`: Angular binds an absent snapshot input as null. */
   readonly checkout?: CheckoutSnapshot | null;
@@ -80,7 +80,7 @@ export interface OpenReceiveCheckoutPropsValidation
  * as a `TypeError` thrown from inside a computed/reactive statement (in Angular, on every
  * change-detection pass) rather than as one clear error where the props are read.
  */
-export function validateOpenReceiveCheckoutProps(props: OpenReceiveCheckoutPropsValidation): void {
+export function validateCheckoutProps(props: CheckoutPropsValidation): void {
   const snapshot = props.checkout ?? null;
   if (snapshot === null && (props.orderId === undefined || props.orderId.length === 0)) {
     throw new TypeError(

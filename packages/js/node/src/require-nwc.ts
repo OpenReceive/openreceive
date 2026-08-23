@@ -1,6 +1,6 @@
 import {
-  formatOpenReceiveInvalidNwcMessage,
-  formatOpenReceiveMissingNwcMessage,
+  formatInvalidNwcMessage,
+  formatMissingNwcMessage,
   NwcUriParseError,
   parseNwcUri,
 } from "@openreceive/core";
@@ -20,14 +20,14 @@ export function readNwcFromEnvironment(options: RequireNwcFromEnvironmentOptions
   const subject = options.subject ?? "OpenReceive";
   const value = (options.env ?? process.env).NWC_URI?.trim();
   if (value === undefined || value.length === 0) {
-    throw new Error(formatOpenReceiveMissingNwcMessage({ subject }));
+    throw new Error(formatMissingNwcMessage({ subject }));
   }
 
   try {
     parseNwcUri(value);
   } catch (error) {
     const reason = error instanceof NwcUriParseError ? error.description : "Invalid NWC URI.";
-    throw new Error(formatOpenReceiveInvalidNwcMessage({ reason }));
+    throw new Error(formatInvalidNwcMessage({ reason }));
   }
 
   return value;

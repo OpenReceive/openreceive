@@ -289,10 +289,10 @@ function validateStorageFreeTree() {
 
   const httpExports = readFileSync(path.join(root, "packages/js/http/src/index.ts"), "utf8");
   assert(
-    httpExports.includes("createOpenReceiveHost") &&
-      httpExports.includes("createOpenReceiveSqlPayments") &&
-      httpExports.includes("OpenReceivePaymentRepository") &&
-      httpExports.includes("openReceivePaymentsSchemaSql"),
+    httpExports.includes("createHost") &&
+      httpExports.includes("createSqlPayments") &&
+      httpExports.includes("PaymentRepository") &&
+      httpExports.includes("paymentsSchemaSql"),
     "@openreceive/http must expose the host integration and the library-owned payments repository",
   );
   for (const relative of [

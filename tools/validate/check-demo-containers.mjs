@@ -37,11 +37,7 @@ const forbidSecrets = (relativePath, text) => {
   expect(!/[?&]secret=[0-9a-fA-F]{16,}/.test(text), `${relativePath}: contains an NWC secret`);
 };
 /** Compose/Dockerfile must not configure OpenReceive runtime persistence. */
-const forbidOpenReceiveRuntimePersistence = (
-  relativePath,
-  text,
-  { allowHostPostgres = false } = {},
-) => {
+const forbidRuntimePersistence = (relativePath, text, { allowHostPostgres = false } = {}) => {
   expect(
     !/OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE|OPENRECEIVE_DATABASE/i.test(text),
     `${relativePath}: contains OpenReceive runtime persistence configuration`,
@@ -106,7 +102,7 @@ for (const demo of nodeDemos) {
   const dockerfilePath = `${demo.dir}/Dockerfile`;
   const dockerfile = read(dockerfilePath);
   forbidSecrets(dockerfilePath, dockerfile);
-  forbidOpenReceiveRuntimePersistence(dockerfilePath, dockerfile);
+  forbidRuntimePersistence(dockerfilePath, dockerfile);
   forbidDemoModeSwitch(dockerfilePath, dockerfile);
   forbidTestkitWalletSwitch(dockerfilePath, dockerfile);
   expect(/^FROM node:22-bookworm-slim$/m.test(dockerfile), `${dockerfilePath}: must use Node 22`);
@@ -134,7 +130,7 @@ for (const demo of nodeDemos) {
   const compose = parse(composePath, parseCompose);
   const service = compose.services?.[demo.service] ?? {};
   forbidSecrets(composePath, composeText);
-  forbidOpenReceiveRuntimePersistence(composePath, composeText);
+  forbidRuntimePersistence(composePath, composeText);
   forbidDemoModeSwitch(composePath, composeText);
   forbidTestkitWalletSwitch(composePath, composeText);
   expect(
@@ -159,7 +155,7 @@ for (const demo of nodeDemos) {
   const overrideText = read(overridePath);
   const override = parse(overridePath, parseCompose);
   forbidSecrets(overridePath, overrideText);
-  forbidOpenReceiveRuntimePersistence(overridePath, overrideText);
+  forbidRuntimePersistence(overridePath, overrideText);
   forbidDemoModeSwitch(overridePath, overrideText);
   forbidTestkitWalletSwitch(overridePath, overrideText);
   expectPortsOnlyOverride(overridePath, override, demo.service, demo.port);
@@ -190,7 +186,7 @@ for (const demo of nodeDemos) {
   const dockerfilePath = `${demo.dir}/Dockerfile`;
   const dockerfile = read(dockerfilePath);
   forbidSecrets(dockerfilePath, dockerfile);
-  forbidOpenReceiveRuntimePersistence(dockerfilePath, dockerfile, { allowHostPostgres: true });
+  forbidRuntimePersistence(dockerfilePath, dockerfile, { allowHostPostgres: true });
   forbidDemoModeSwitch(dockerfilePath, dockerfile);
   forbidTestkitWalletSwitch(dockerfilePath, dockerfile);
   expect(/FROM ruby:/m.test(dockerfile), `${dockerfilePath}: must use a Ruby base image`);
@@ -287,7 +283,7 @@ for (const demo of nodeDemos) {
   const notifications = compose.services?.[demo.notificationsService] ?? {};
   const db = compose.services?.[demo.dbService] ?? {};
   forbidSecrets(composePath, composeText);
-  forbidOpenReceiveRuntimePersistence(composePath, composeText, { allowHostPostgres: true });
+  forbidRuntimePersistence(composePath, composeText, { allowHostPostgres: true });
   forbidDemoModeSwitch(composePath, composeText);
   forbidTestkitWalletSwitch(composePath, composeText);
   expect(db.image?.includes("postgres"), `${composePath}: must define a host Postgres service`);
@@ -328,7 +324,7 @@ for (const demo of nodeDemos) {
   const overrideText = read(overridePath);
   const override = parse(overridePath, parseCompose);
   forbidSecrets(overridePath, overrideText);
-  forbidOpenReceiveRuntimePersistence(overridePath, overrideText, { allowHostPostgres: true });
+  forbidRuntimePersistence(overridePath, overrideText, { allowHostPostgres: true });
   forbidDemoModeSwitch(overridePath, overrideText);
   forbidTestkitWalletSwitch(overridePath, overrideText);
   expectPortsOnlyOverride(overridePath, override, demo.service, demo.port);

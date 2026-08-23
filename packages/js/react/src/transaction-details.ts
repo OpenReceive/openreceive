@@ -1,17 +1,17 @@
 import {
-  openReceiveCheckoutLabels,
+  checkoutLabels,
   orClasses,
-  type OpenReceiveTransactionDetailRow,
-  type OpenReceiveTransactionDetailsSource,
-  resolveOpenReceiveTransactionDetailRows,
+  type TransactionDetailRow,
+  type TransactionDetailsSource,
+  resolveTransactionDetailRows,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 import { ClipboardIcon } from "./components.ts";
-import { useOpenReceiveTransientValue } from "./hooks.ts";
-import { copyOpenReceiveText, joinClassNames } from "./utils.ts";
+import { useTransientValue } from "./hooks.ts";
+import { copyText, joinClassNames } from "./utils.ts";
 
 export interface TransactionDetailsProps {
-  readonly state?: OpenReceiveTransactionDetailsSource;
+  readonly state?: TransactionDetailsSource;
   readonly open?: boolean;
   readonly className?: string;
   readonly clipboard?: Pick<Clipboard, "writeText">;
@@ -21,10 +21,10 @@ export interface TransactionDetailsProps {
 /**
  * Collapsible post-settlement transaction details panel with copy (and optional
  * explorer) buttons. Builds rows from {@link CheckoutState} / detail input, or
- * accepts pre-built rows from `createOpenReceiveTransactionDetails*`.
+ * accepts pre-built rows from `createTransactionDetails*`.
  */
 export function TransactionDetails(props: TransactionDetailsProps): React.ReactElement | null {
-  const rows = resolveOpenReceiveTransactionDetailRows(props.state);
+  const rows = resolveTransactionDetailRows(props.state);
   if (rows.length === 0) return null;
   return React.createElement(
     "details",
@@ -35,7 +35,7 @@ export function TransactionDetails(props: TransactionDetailsProps): React.ReactE
     React.createElement(
       "summary",
       { className: orClasses.transactionDetailsTitle },
-      openReceiveCheckoutLabels.transactionDetails,
+      checkoutLabels.transactionDetails,
     ),
     React.createElement(
       "div",
@@ -55,7 +55,7 @@ export function TransactionDetails(props: TransactionDetailsProps): React.ReactE
 }
 
 function renderTransactionDetailRow(
-  row: OpenReceiveTransactionDetailRow,
+  row: TransactionDetailRow,
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
@@ -90,7 +90,7 @@ function renderTransactionDetailRow(
                 rel: "noreferrer",
                 target: "_blank",
               },
-              row.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
+              row.hrefLabel ?? checkoutLabels.viewOnExplorer,
             ),
       ),
     ),
@@ -102,8 +102,8 @@ function TransactionDetailCopyButton(props: {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
-  const [copied, setCopied] = useOpenReceiveTransientValue(false);
-  const label = copied ? openReceiveCheckoutLabels.copied : "Copy";
+  const [copied, setCopied] = useTransientValue(false);
+  const label = copied ? checkoutLabels.copied : "Copy";
   return React.createElement(
     "button",
     {
@@ -112,7 +112,7 @@ function TransactionDetailCopyButton(props: {
       "aria-label": label,
       title: label,
       onClick: () => {
-        void copyOpenReceiveText(props.value, props.clipboard)
+        void copyText(props.value, props.clipboard)
           .then(() => setCopied(true))
           .catch((error) => props.onError?.(error));
       },

@@ -21,19 +21,19 @@ OpenReceive service methods do not authenticate callers and never read a host se
 | `listRates` | Read the cached BTC/fiat rates. (`quoteRates` also exists but is JS-internal plumbing — no HTTP route, no Ruby counterpart.) |
 
 There is no order read, checkout history route, migration runner, or durable workflow cursor.
-Attempt persistence lives in `@openreceive/http` (`createOpenReceiveSqlPayments`), not in the
+Attempt persistence lives in `@openreceive/http` (`createSqlPayments`), not in the
 service.
 
 ## Safe checkout route
 
 Even a custom controller should use the library-owned repository
-(`createOpenReceiveSqlPayments(db)`) so commit locking, the status state machine, and
+(`createSqlPayments(db)`) so commit locking, the status state machine, and
 write-once settlement stay library code. The row commits before the BOLT11 reaches the payer.
 
 ```ts
-import { createOpenReceiveSqlPayments } from "@openreceive/http";
+import { createSqlPayments } from "@openreceive/http";
 
-const payments = createOpenReceiveSqlPayments(db);
+const payments = createSqlPayments(db);
 
 app.post("/checkout", async (request, response) => {
   const order = await orders.authorizedForCheckout(request.user, request.body.order_id);

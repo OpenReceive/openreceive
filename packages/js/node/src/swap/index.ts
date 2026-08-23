@@ -1,8 +1,8 @@
 export {
   OPENRECEIVE_SWAP_PAY_IN_ASSETS,
-  isOpenReceiveSwapPayInAsset,
-  getOpenReceiveSwapAssetInfo,
-  listOpenReceiveSwapAssetInfo,
+  isSwapPayInAsset,
+  getSwapAssetInfo,
+  listSwapAssetInfo,
 } from "./assets.ts";
 export type { SwapPayInAsset } from "./assets.ts";
 

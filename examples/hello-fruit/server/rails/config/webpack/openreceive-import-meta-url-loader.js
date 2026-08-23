@@ -13,6 +13,6 @@
 // on its own.
 const RUNNING_SCRIPT_URL = "(document.currentScript ? document.currentScript.src : location.href)";
 
-module.exports = function openReceiveImportMetaUrlLoader(source) {
+module.exports = function importMetaUrlLoader(source) {
   return source.replaceAll("import.meta.url", RUNNING_SCRIPT_URL);
 };

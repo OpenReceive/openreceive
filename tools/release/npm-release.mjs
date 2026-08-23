@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import {
-  buildOpenReceivePackageTarballs,
+  buildPackageTarballs,
   createPackageBuildWorkspace,
   discoverWorkspacePackages,
   readJson,
@@ -163,7 +163,7 @@ function workspaceManifestPaths(root) {
   return paths.sort();
 }
 
-function updateOpenReceiveVersions(root, targetVersion) {
+function updateVersions(root, targetVersion) {
   const rootPackage = readRootPackage(root);
   const currentVersion = rootPackage.version;
   const changed = [];
@@ -373,7 +373,7 @@ function buildPublicTarballs(root, targetVersion, args) {
   mkdirSync(outDir, { recursive: true });
 
   const workspace = createPackageBuildWorkspace({ root, outDir });
-  const result = buildOpenReceivePackageTarballs({
+  const result = buildPackageTarballs({
     root,
     packages: publicPackages(root),
     workspace,
@@ -462,7 +462,7 @@ function main() {
       printPrepareDryRun(dryRunPrepare(root, targetVersion));
       return;
     }
-    const changed = updateOpenReceiveVersions(root, targetVersion);
+    const changed = updateVersions(root, targetVersion);
     console.log(`Prepared OpenReceive npm release ${targetVersion}.`);
     console.log("Changed files:");
     for (const file of changed) console.log(`- ${file}`);

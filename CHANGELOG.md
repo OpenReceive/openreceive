@@ -19,6 +19,29 @@ behind.
   moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
   rest of that document was history.
 
+### The OpenReceive prefix is gone; the import path is the namespace
+
+- 415 exported and internal names drop the `OpenReceive` / `openReceive`
+  prefix: `createOpenReceiveHttpHandler` → `createHttpHandler`,
+  `createOpenReceiveHost` → `createHost`, `createOpenReceiveStack` →
+  `createStack`, `OpenReceiveHttpError` → `HttpError`,
+  `OpenReceiveServiceError` → `ServiceError`, `OpenReceiveDecimalError` →
+  `DecimalError`, `openReceiveCheckoutLabels` → `checkoutLabels`,
+  `formatOpenReceiveMsats` → `formatMsats`, `OpenReceiveWire*` → `Wire*`, and
+  so on, one rule throughout. Kept, each for a reason: `OPENRECEIVE_*`
+  constants (they read as config keys) and the custom-element tag names;
+  `OpenReceive`, `createOpenReceive`, and `OpenReceiveError` (OpenReceive is
+  the noun there, and `Error` is taken); the three mounts `openReceiveExpress`,
+  `openReceiveFastify`, `openReceiveNextHandlers`; and `markOpenReceivePaidOnce`
+  / `createOpenReceiveCheckoutElementAttributes`, which sit beside an
+  unprefixed sibling that means something else. Where the bare name was
+  already taken the rename picks a clearer one: `openReceiveRoutes` →
+  `checkoutRoutes`, `reconcileOpenReceivePayments` → `reconcileHostPayments`,
+  `openReceiveClientIp` → `resolveClientIp`.
+- `status` is `deriveStatus` (its only in-tree caller already renamed it on
+  import), and `OpenReceiveFiatAmount` — a currency-tagged decimal that is
+  fiat OR BTC/SAT — is `MoneyAmount`.
+
 ### Fewer exports: what nothing outside the package reaches for
 
 - 51 names leave the public surface because no guide, example, smoke check,

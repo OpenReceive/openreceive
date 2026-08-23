@@ -1,4 +1,4 @@
-import { openReceiveFulfillmentNote } from "@openreceive/core";
+import { fulfillmentNote } from "@openreceive/core";
 import { canonicalPaymentsDdlStatements } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
@@ -19,13 +19,13 @@ export function renderSequelizeFiles(options: ScaffoldPaymentsOptions): Scaffold
  * Executes the canonical OpenReceive DDL: \`${options.tableName}\` and the
  * \`${options.metaTableName}\` reconcile gate, CHECK constraints and the
  * schema_version seed row included. OpenReceive owns the payment-attempt
- * repository at runtime (createOpenReceiveHost in @openreceive/http), so no
+ * repository at runtime (createHost in @openreceive/http), so no
  * model or repository code is generated. Keep every column and constraint;
  * timestamps are unix-seconds integer columns, on purpose.
  *
  * Dialect: ${options.dialect}
  *
-${openReceiveFulfillmentNote(" * ", options.tableName)}
+${fulfillmentNote(" * ", options.tableName)}
  */
 module.exports = {
   async up(queryInterface) {

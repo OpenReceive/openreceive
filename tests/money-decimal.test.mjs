@@ -6,8 +6,8 @@ import {
   decimalScaleFactor,
   formatDecimal,
   multiplyAmount,
-  OpenReceiveDecimalError,
-  OpenReceivePriceFeedError,
+  DecimalError,
+  PriceFeedError,
   parseDecimal,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
@@ -35,7 +35,7 @@ test("formatDecimal keeps the sign in front of the whole part at every scale", (
   assert.equal(formatDecimal(-1n, 0), "-1");
   assert.equal(formatDecimal(-100n, 2), "-1.00");
   assert.equal(formatDecimal(0n, 4), "0.0000");
-  assert.throws(() => formatDecimal(1n, -1), OpenReceiveDecimalError);
+  assert.throws(() => formatDecimal(1n, -1), DecimalError);
 });
 
 test("parseDecimal names the field it rejected and stays inside the input-error domain", () => {
@@ -44,7 +44,7 @@ test("parseDecimal names the field it rejected and stays inside the input-error 
   assert.throws(
     () => parseDecimal("-5", "fiat.value"),
     (error) => {
-      assert.ok(error instanceof OpenReceiveDecimalError);
+      assert.ok(error instanceof DecimalError);
       // The Node service maps payer input to 400 by RangeError; decimal domain
       // errors must keep landing there.
       assert.ok(error instanceof RangeError);
@@ -52,10 +52,10 @@ test("parseDecimal names the field it rejected and stays inside the input-error 
       return true;
     },
   );
-  assert.throws(() => parseDecimal("1.2.3"), OpenReceiveDecimalError);
+  assert.throws(() => parseDecimal("1.2.3"), DecimalError);
   assert.equal(decimalScaleFactor(8), 100_000_000n);
   assert.equal(ceilDiv(7n, 2n), 4n);
-  assert.throws(() => ceilDiv(1n, 0n), OpenReceiveDecimalError);
+  assert.throws(() => ceilDiv(1n, 0n), DecimalError);
 });
 
 test("price-feed failures are NOT RangeErrors, so a feed outage cannot read as payer input", () => {
@@ -69,16 +69,16 @@ test("price-feed failures are NOT RangeErrors, so a feed outage cannot read as p
   };
 
   const missing = feedError(() => requiredBtcFiatRate(RATES, "GBP"));
-  assert.ok(missing instanceof OpenReceivePriceFeedError);
+  assert.ok(missing instanceof PriceFeedError);
   assert.equal(missing instanceof RangeError, false);
   assert.match(missing.message, /rate for GBP not available/);
 
   const zeroPrice = feedError(() => fiatValueToSats("10.00", "0"));
-  assert.ok(zeroPrice instanceof OpenReceivePriceFeedError);
+  assert.ok(zeroPrice instanceof PriceFeedError);
   assert.equal(zeroPrice instanceof RangeError, false);
 
   const junkPrice = feedError(() => fiatValueToSats("10.00", "not-a-price"));
-  assert.ok(junkPrice instanceof OpenReceivePriceFeedError);
+  assert.ok(junkPrice instanceof PriceFeedError);
   assert.equal(junkPrice instanceof RangeError, false);
 });
 
@@ -103,7 +103,7 @@ test("quoting splits payer input from feed data across the same two error types"
         btcFiatPrice: "0",
       }),
     (error) => {
-      assert.ok(error instanceof OpenReceivePriceFeedError);
+      assert.ok(error instanceof PriceFeedError);
       assert.equal(error instanceof RangeError, false);
       return true;
     },

@@ -5,9 +5,9 @@
 // Element plumbing (tag names, attribute/event constants, element factories)
 // is @openreceive/elements surface: these are contracts between independently
 // loaded code, and this package is where custom elements live.
-export type { OpenReceiveTransactionDetailsSource } from "@openreceive/browser/headless";
+export type { TransactionDetailsSource } from "@openreceive/browser/headless";
 export {
-  createOpenReceiveThemeToggleElement,
+  createThemeToggleElement,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
@@ -15,11 +15,11 @@ export {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
 } from "@openreceive/browser/headless";
-export { defineOpenReceiveElements } from "./define-elements.ts";
+export { defineElements } from "./define-elements.ts";
 export {
   renderCheckoutCreateErrorHtml,
   renderCheckoutHtml,
-  renderOpenReceiveThemeToggleHtml,
+  renderThemeToggleHtml,
 } from "./render-checkout.ts";
 export {
   createTransactionDetailsElement,
@@ -28,5 +28,5 @@ export {
 export type {
   CheckoutView,
   DefineOpenReceiveElementsOptions,
-  OpenReceiveElementsWizardView,
+  ElementsWizardView,
 } from "./views.ts";

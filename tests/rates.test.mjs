@@ -270,7 +270,7 @@ test("a cache window wider than the quote TTL is refused at construction", () =>
     });
 
   // Host misconfiguration is a boot bug: a TypeError, never the 400-mapped
-  // OpenReceiveDecimalError that would read as payer input.
+  // DecimalError that would read as payer input.
   const configError = (run, pattern) =>
     assert.throws(run, (error) => {
       assert.ok(error instanceof TypeError);

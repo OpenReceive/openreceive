@@ -3,13 +3,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { VALID_NWC } from "./helpers/factories.mjs";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
-import * as openReceiveNode from "../packages/js/node/src/index.ts";
+import * as node from "../packages/js/node/src/index.ts";
 import { createNwcReceiveClient, createOpenReceive } from "../packages/js/node/src/index.ts";
 import { normalizeMakeInvoiceResult } from "../packages/js/node/src/nwc/normalize.ts";
-import {
-  isSensitiveLogKey,
-  sanitizeOpenReceiveEvent,
-} from "../packages/js/node/src/service/logging.ts";
+import { isSensitiveLogKey, sanitizeEvent } from "../packages/js/node/src/service/logging.ts";
 import {
   invoiceLimitsFromFixedFloatRate,
   quotePayAmountFromFixedFloatRate,
@@ -22,12 +19,12 @@ import {
 // The payments repository moved to @openreceive/http; the Node service stays
 // persistence-free: no repository, schema, or SQL adapter surface leaks here.
 test("@openreceive/node exports no persistence surface", () => {
-  const names = Object.keys(openReceiveNode);
+  const names = Object.keys(node);
   assert.ok(names.includes("createOpenReceive"));
   for (const banned of [
-    "createOpenReceiveSqlPayments",
-    "createOpenReceiveHost",
-    "openReceivePaymentsSchemaSql",
+    "createSqlPayments",
+    "createHost",
+    "paymentsSchemaSql",
     "resolveSqlAdapter",
     "listUnsettledAttempts",
   ]) {
@@ -402,7 +399,7 @@ test("isSensitiveLogKey redacts swap_data and provider credentials", () => {
   ]) {
     assert.equal(isSensitiveLogKey(key), false, `${key} must stay loggable`);
   }
-  const sanitized = sanitizeOpenReceiveEvent({
+  const sanitized = sanitizeEvent({
     level: "info",
     event: "swap.created",
     message: "swap created",

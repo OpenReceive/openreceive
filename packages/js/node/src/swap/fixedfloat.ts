@@ -10,7 +10,7 @@ import type { SwapPayInAsset } from "./assets.ts";
 import {
   deserializeFixedFloatCurrencyResolution,
   type FixedFloatCurrencyResolution,
-  openReceiveFixedFloatRatePairKeys,
+  fixedFloatRatePairKeys,
   requiredFixedFloatCurrency,
   resolveFixedFloatCurrencies,
   serializeFixedFloatCurrencyResolution,
@@ -388,10 +388,7 @@ class FixedFloatProvider implements SwapProvider {
         now: this.now,
         requestTimeoutMs: this.transport.requestTimeoutMs,
       });
-      const index = retainFixedFloatRatePairsForKeys(
-        fetched,
-        openReceiveFixedFloatRatePairKeys(resolution),
-      );
+      const index = retainFixedFloatRatePairsForKeys(fetched, fixedFloatRatePairKeys(resolution));
       this.transport.logApiResponse({
         path,
         status: 200,

@@ -167,7 +167,7 @@ that matters for your deployment, police those actions with a custom
 For policies the built-in limiter cannot express (per-session budgets,
 exempting signed-in users, an external limiter service), pass `rateLimitHook`
 instead — same context as `authorize`; return `false` for a generic `429`, or
-throw an `OpenReceiveHttpError(429, "RATE_LIMITED", message, { retryable: true })`
-for a custom payer-facing message. `createOpenReceiveIpRateLimit(config)` is
+throw an `HttpError(429, "RATE_LIMITED", message, { retryable: true })`
+for a custom payer-facing message. `createIpRateLimit(config)` is
 exported from `@openreceive/http` so a custom hook can compose the built-in
 behavior.

@@ -3,7 +3,7 @@
 // Pool/Client or a SQLite handle (node:sqlite or better-sqlite3) in it without
 // adding dependencies. The repository itself — the tables, the SQL, the
 // settlement and reconciliation transitions — lives in sql-payments.ts and only
-// ever talks to an OpenReceiveSqlAdapter.
+// ever talks to an SqlAdapter.
 
 /**
  * Runs one SQL statement and returns SELECT rows (`[]` otherwise). The SQL
@@ -12,13 +12,13 @@
  * it: a `?` inside a string literal, a comment, or a postgres JSON operator
  * (`data ? 'field'`) must survive untouched.
  */
-export type OpenReceiveSqlQuery = (
+export type SqlQuery = (
   sql: string,
   params?: readonly unknown[],
 ) => Promise<readonly Record<string, unknown>[]>;
 
-export interface OpenReceiveSqlClient {
-  readonly query: OpenReceiveSqlQuery;
+export interface SqlClient {
+  readonly query: SqlQuery;
 }
 
 /**
@@ -26,9 +26,9 @@ export interface OpenReceiveSqlClient {
  * transaction wrapper. The built-in bindings cover `pg` pools/clients and
  * SQLite (`node:sqlite` or better-sqlite3) without adding dependencies.
  */
-export interface OpenReceiveSqlAdapter extends OpenReceiveSqlClient {
+export interface SqlAdapter extends SqlClient {
   readonly dialect: "postgres" | "sqlite";
-  transaction<T>(run: (tx: OpenReceiveSqlClient) => Promise<T>): Promise<T>;
+  transaction<T>(run: (tx: SqlClient) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -57,8 +57,8 @@ interface SqliteLike {
   exec(sql: string): void;
 }
 
-/** Any database handle `createOpenReceiveSqlPayments` accepts. */
-export type OpenReceiveSqlDatabase = OpenReceiveSqlAdapter | PgLike | SqliteLike;
+/** Any database handle `createSqlPayments` accepts. */
+export type SqlDatabase = SqlAdapter | PgLike | SqliteLike;
 
 /**
  * How long SQLite waits for another connection's write lock before reporting
@@ -68,17 +68,17 @@ export type OpenReceiveSqlDatabase = OpenReceiveSqlAdapter | PgLike | SqliteLike
 const SQLITE_BUSY_TIMEOUT_MS = 5_000;
 
 /** Wrap a supported database handle in the uniform adapter interface. */
-export function resolveSqlAdapter(db: OpenReceiveSqlDatabase): OpenReceiveSqlAdapter {
+export function resolveSqlAdapter(db: SqlDatabase): SqlAdapter {
   if (isSqlAdapter(db)) return db;
   if (isSqliteLike(db)) return sqliteAdapter(db);
   if (isPgLike(db)) return pgAdapter(db);
   throw new TypeError(
-    "Unsupported database handle. Pass a pg Pool/Client, a SQLite database (node:sqlite or better-sqlite3), or an OpenReceiveSqlAdapter.",
+    "Unsupported database handle. Pass a pg Pool/Client, a SQLite database (node:sqlite or better-sqlite3), or an SqlAdapter.",
   );
 }
 
-function isSqlAdapter(db: OpenReceiveSqlDatabase): db is OpenReceiveSqlAdapter {
-  const candidate = db as Partial<OpenReceiveSqlAdapter>;
+function isSqlAdapter(db: SqlDatabase): db is SqlAdapter {
+  const candidate = db as Partial<SqlAdapter>;
   return (
     (candidate.dialect === "postgres" || candidate.dialect === "sqlite") &&
     typeof candidate.transaction === "function" &&
@@ -86,12 +86,12 @@ function isSqlAdapter(db: OpenReceiveSqlDatabase): db is OpenReceiveSqlAdapter {
   );
 }
 
-function isSqliteLike(db: OpenReceiveSqlDatabase): db is SqliteLike {
+function isSqliteLike(db: SqlDatabase): db is SqliteLike {
   const candidate = db as Partial<SqliteLike>;
   return typeof candidate.prepare === "function" && typeof candidate.exec === "function";
 }
 
-function isPgLike(db: OpenReceiveSqlDatabase): db is PgLike {
+function isPgLike(db: SqlDatabase): db is PgLike {
   return typeof (db as Partial<PgLike>).query === "function";
 }
 
@@ -112,7 +112,7 @@ function createSerialQueue(): <T>(task: () => Promise<T>) => Promise<T> {
   };
 }
 
-function sqliteAdapter(db: SqliteLike): OpenReceiveSqlAdapter {
+function sqliteAdapter(db: SqliteLike): SqlAdapter {
   // Without a busy timeout, BEGIN IMMEDIATE fails instantly with SQLITE_BUSY
   // whenever another connection (the host's own, typically) holds the write
   // lock, surfacing as a 503 on a checkout that would have succeeded a
@@ -123,7 +123,7 @@ function sqliteAdapter(db: SqliteLike): OpenReceiveSqlAdapter {
     // A handle that rejects the pragma (a wrapper, a read-only connection)
     // keeps SQLite's default behaviour rather than failing construction.
   }
-  const query: OpenReceiveSqlQuery = async (sql, params = []) => {
+  const query: SqlQuery = async (sql, params = []) => {
     const statement = db.prepare(sql);
     if (sqliteStatementReturnsRows(sql, statement)) {
       return statement.all(...params) as Record<string, unknown>[];
@@ -164,7 +164,7 @@ function sqliteAdapter(db: SqliteLike): OpenReceiveSqlAdapter {
  * Whether a prepared sqlite statement produces rows. better-sqlite3 reports it
  * directly (`reader`); node:sqlite does not, so statements are classified by
  * shape: `SELECT`/`VALUES`/`WITH` heads and any `RETURNING` clause run through
- * `.all()`, per the `OpenReceiveSqlQuery` contract. A row-less `WITH … INSERT`
+ * `.all()`, per the `SqlQuery` contract. A row-less `WITH … INSERT`
  * still executes correctly under `.all()` and yields `[]`.
  */
 function sqliteStatementReturnsRows(sql: string, statement: unknown): boolean {
@@ -182,9 +182,9 @@ function isPooledClient(value: unknown): value is PgPooledClientLike {
   );
 }
 
-function pgAdapter(db: PgLike): OpenReceiveSqlAdapter {
+function pgAdapter(db: PgLike): SqlAdapter {
   const queryOn =
-    (client: { query: PgLike["query"] }): OpenReceiveSqlQuery =>
+    (client: { query: PgLike["query"] }): SqlQuery =>
     async (sql, params = []) => {
       // Verbatim: the library already wrote `$n` for this dialect, and host SQL
       // (the settlement hook's own statements) must not be rewritten at all.
@@ -270,8 +270,8 @@ function pgAdapter(db: PgLike): OpenReceiveSqlAdapter {
   };
 
   const runTransaction = async <T>(
-    query: OpenReceiveSqlQuery,
-    run: (tx: OpenReceiveSqlClient) => Promise<T>,
+    query: SqlQuery,
+    run: (tx: SqlClient) => Promise<T>,
   ): Promise<T> => {
     await query("BEGIN");
     try {

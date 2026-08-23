@@ -1,4 +1,4 @@
-import type { OpenReceiveBrowserLogContext } from "@openreceive/browser/headless";
+import type { BrowserLogContext } from "@openreceive/browser/headless";
 import type * as React from "react";
 
 export function joinClassNames(...values: readonly (string | undefined)[]): string | undefined {
@@ -7,7 +7,7 @@ export function joinClassNames(...values: readonly (string | undefined)[]): stri
 }
 
 /** Readonly value fields: click/focus selects all; block partial selection. */
-export function openReceiveSelectAllInputHandlers(): {
+export function selectAllInputHandlers(): {
   readonly onFocus: (event: React.FocusEvent<HTMLInputElement>) => void;
   readonly onClick: (event: React.MouseEvent<HTMLInputElement>) => void;
   readonly onMouseUp: (event: React.MouseEvent<HTMLInputElement>) => void;
@@ -36,7 +36,7 @@ export function openReceiveSelectAllInputHandlers(): {
   };
 }
 
-export async function copyOpenReceiveText(
+export async function copyText(
   text: string,
   clipboard?: Pick<Clipboard, "writeText">,
 ): Promise<void> {
@@ -51,7 +51,7 @@ export function getCheckoutLogContext(data: {
   readonly amount_msats?: number;
   readonly transaction_state?: string;
   readonly workflow_state?: string;
-}): OpenReceiveBrowserLogContext {
+}): BrowserLogContext {
   return {
     ...(data.invoice_id === undefined ? {} : { invoice_id: data.invoice_id }),
     ...(data.payment_hash === undefined ? {} : { payment_hash: data.payment_hash }),

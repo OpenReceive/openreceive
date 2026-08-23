@@ -28,7 +28,7 @@ test("source-shape tripwire: copy feedback goes through the shared controller", 
   // onState/onSettled/refreshStatus) is covered behaviorally there too.
   const source = readReactSource();
 
-  assert.match(source, /createOpenReceiveTransientFeedbackController/);
+  assert.match(source, /createTransientFeedbackController/);
   assert.doesNotMatch(source, /globalThis\.setTimeout/);
 });
 

@@ -1,5 +1,5 @@
 import { isRecord, nonEmptyString } from "@openreceive/core";
-import { OpenReceiveHttpError } from "./errors.ts";
+import { HttpError } from "./errors.ts";
 
 // The request half of the HTTP wire boundary: everything that reads payer- or
 // host-supplied input off a `Request` and refuses it BY NAME when it does not
@@ -39,7 +39,7 @@ export function assertDeclaredFields(routeKind: string, body: Record<string, unk
   if (allowed === undefined) return;
   for (const key of Object.keys(body)) {
     if (!allowed.includes(key)) {
-      throw new OpenReceiveHttpError(
+      throw new HttpError(
         400,
         "INVALID_REQUEST",
         `Unexpected request field for this route: ${key}.`,
@@ -50,7 +50,7 @@ export function assertDeclaredFields(routeKind: string, body: Record<string, unk
 
 export function rejectPayerAmount(body: Record<string, unknown>): void {
   if (body.amount !== undefined || body.amount_msats !== undefined) {
-    throw new OpenReceiveHttpError(
+    throw new HttpError(
       400,
       "INVALID_REQUEST",
       "This route does not accept a payer-supplied amount; the host resolves its order price.",
@@ -61,7 +61,7 @@ export function rejectPayerAmount(body: Record<string, unknown>): void {
 export async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
-    throw new OpenReceiveHttpError(413, "INVALID_REQUEST", "Request body is too large.");
+    throw new HttpError(413, "INVALID_REQUEST", "Request body is too large.");
   }
   const text = await readCappedBodyText(request);
   try {
@@ -69,7 +69,7 @@ export async function readJsonBody(request: Request): Promise<Record<string, unk
     if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error();
     return value as Record<string, unknown>;
   } catch {
-    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
+    throw new HttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
   }
 }
 
@@ -90,13 +90,13 @@ async function readCappedBodyText(request: Request): Promise<string> {
     try {
       result = await reader.read();
     } catch {
-      throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
+      throw new HttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
     }
     if (result.done) break;
     total += result.value.byteLength;
     if (total > MAX_BODY_BYTES) {
       await reader.cancel().catch(() => undefined);
-      throw new OpenReceiveHttpError(413, "INVALID_REQUEST", "Request body is too large.");
+      throw new HttpError(413, "INVALID_REQUEST", "Request body is too large.");
     }
     chunks.push(result.value);
   }
@@ -122,7 +122,7 @@ export function ratesCurrencies(raw: string | null): readonly string[] | undefin
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
   if (currencies.length === 0 || currencies.some((value) => !/^[A-Za-z]{3}$/.test(value))) {
-    throw new OpenReceiveHttpError(
+    throw new HttpError(
       400,
       "INVALID_REQUEST",
       "currencies must be a comma-separated list of three-letter currency codes.",
@@ -137,7 +137,7 @@ export function ratesCurrencies(raw: string | null): readonly string[] | undefin
 export function optionalCheckoutFields(body: Record<string, unknown>) {
   const memo = trimmedField(body.memo);
   if (memo !== undefined && memo.length > MAX_MEMO_LENGTH) {
-    throw new OpenReceiveHttpError(
+    throw new HttpError(
       400,
       "INVALID_REQUEST",
       `memo must be ${MAX_MEMO_LENGTH} characters or fewer.`,
@@ -153,21 +153,16 @@ export function optionalCheckoutFields(body: Record<string, unknown>) {
 export function requiredPaymentHash(value: unknown): string {
   const hash = requiredString(value, "payment_hash").toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(hash)) {
-    throw new OpenReceiveHttpError(
-      400,
-      "INVALID_REQUEST",
-      "payment_hash must be 64 hexadecimal characters.",
-    );
+    throw new HttpError(400, "INVALID_REQUEST", "payment_hash must be 64 hexadecimal characters.");
   }
   return hash;
 }
 
 export function requiredString(value: unknown, field: string, maxLength?: number): string {
   const result = trimmedField(value);
-  if (result === undefined)
-    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", `${field} is required.`);
+  if (result === undefined) throw new HttpError(400, "INVALID_REQUEST", `${field} is required.`);
   if (maxLength !== undefined && result.length > maxLength) {
-    throw new OpenReceiveHttpError(
+    throw new HttpError(
       400,
       "INVALID_REQUEST",
       `${field} must be ${maxLength} characters or fewer.`,
@@ -188,7 +183,7 @@ function trimmedField(value: unknown): string | undefined {
 function readRecord(value: unknown): Record<string, unknown> | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value)) {
-    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "metadata must be an object.");
+    throw new HttpError(400, "INVALID_REQUEST", "metadata must be an object.");
   }
   return value;
 }

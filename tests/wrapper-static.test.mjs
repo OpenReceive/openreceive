@@ -8,7 +8,7 @@ import test from "node:test";
 import { compile } from "svelte/compiler";
 import { parse as parseVueSfc } from "@vue/compiler-sfc";
 
-import { createOpenReceiveWrapperCheckoutShellBinding } from "../packages/js/elements/src/wrapper-shared.ts";
+import { createWrapperCheckoutShellBinding } from "../packages/js/elements/src/wrapper-shared.ts";
 
 const SVELTE_SFC = "packages/js/svelte/src/Checkout.svelte";
 const VUE_SFC = "packages/js/vue/src/Checkout.vue";
@@ -18,7 +18,7 @@ const VUE_SFC = "packages/js/vue/src/Checkout.vue";
 // H14/H15/H16 all shipped because nothing mounted these components in CI.
 
 function shellFixture() {
-  return createOpenReceiveWrapperCheckoutShellBinding(null, {
+  return createWrapperCheckoutShellBinding(null, {
     orderId: "order-mount",
     metadata: { sku: "sticker-1" },
     themeToggle: true,
@@ -97,7 +97,7 @@ test("the Angular component drives attributes from the binding, not a hand-writt
 });
 
 test("the Angular element bindings apply and prune element attributes", async () => {
-  const { applyOpenReceiveElementBindings, EMPTY_APPLIED_ELEMENT_BINDINGS } = await import(
+  const { applyElementBindings, EMPTY_APPLIED_ELEMENT_BINDINGS } = await import(
     "../packages/js/angular/src/element-bindings.ts"
   );
 
@@ -112,7 +112,7 @@ test("the Angular element bindings apply and prune element attributes", async ()
   };
 
   const handler = () => {};
-  let applied = applyOpenReceiveElementBindings(
+  let applied = applyElementBindings(
     element,
     {
       attributes: { "order-id": "order-mount", metadata: '{"sku":"sticker-1"}', theme: undefined },
@@ -127,7 +127,7 @@ test("the Angular element bindings apply and prune element attributes", async ()
   assert.deepEqual(listeners, [["add", "openreceive-settled", handler]]);
 
   // An attribute that disappears from the binding must be removed from the DOM.
-  applied = applyOpenReceiveElementBindings(
+  applied = applyElementBindings(
     element,
     { attributes: { "order-id": "order-mount" }, listeners: {} },
     applied,

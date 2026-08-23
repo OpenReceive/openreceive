@@ -1,7 +1,7 @@
-import { openReceiveCheckoutElementStyles } from "@openreceive/browser/headless";
+import { checkoutElementStyles } from "@openreceive/browser/headless";
 
 /** Inline stylesheet for shadow roots that cannot adopt a constructable sheet. */
-export const openReceiveCheckoutStyleTag = `<style>${openReceiveCheckoutElementStyles}</style>`;
+export const checkoutStyleTag = `<style>${checkoutElementStyles}</style>`;
 
 // One constructable sheet per document: a sheet belongs to the document that
 // built it and cannot be adopted by another (iframes, print documents).
@@ -16,9 +16,9 @@ const sheetsByDocument = new WeakMap<Document, CSSStyleSheet>();
  * parses it once per document and survives `innerHTML` writes.
  *
  * Returns false when constructable stylesheets are unavailable; callers then
- * inline {@link openReceiveCheckoutStyleTag} instead.
+ * inline {@link checkoutStyleTag} instead.
  */
-export function adoptOpenReceiveCheckoutStyles(root: ShadowRoot): boolean {
+export function adoptCheckoutStyles(root: ShadowRoot): boolean {
   const ownerDocument = root.ownerDocument as Document | null;
   if (ownerDocument === null) return false;
   const view = ownerDocument.defaultView as (Window & typeof globalThis) | null;
@@ -30,7 +30,7 @@ export function adoptOpenReceiveCheckoutStyles(root: ShadowRoot): boolean {
     try {
       const created = new SheetConstructor();
       if (typeof created.replaceSync !== "function") return false;
-      created.replaceSync(openReceiveCheckoutElementStyles);
+      created.replaceSync(checkoutElementStyles);
       sheet = created;
     } catch {
       // Older engines reject `new CSSStyleSheet()` outright.

@@ -45,7 +45,7 @@ order is settled, so the persisted `provider_state` is the last pre-settlement s
 the provider's terminal status. Fast providers finish deposit → payout inside one poll
 interval, so a settled order may still record `awaiting_deposit`. Do not "fix" this by
 resuming polling — settlement authority is the wallet, and the snapshot is presentation state
-only. UIs must label the field as last-known once settled (`createOpenReceiveTransactionDetails`
+only. UIs must label the field as last-known once settled (`createTransactionDetails`
 renders it as "Last provider state"); anything needing the true terminal record calls
 `getSwap` on demand.
 

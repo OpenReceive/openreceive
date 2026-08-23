@@ -1,11 +1,11 @@
 import {
-  createOpenReceiveDetailExternalLink,
-  createOpenReceiveTransientFeedbackController,
-  escapeOpenReceiveHtml as escapeHtml,
+  createDetailExternalLink,
+  createTransientFeedbackController,
+  escapeHtml,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_PAYMENT_WIZARD_SELECTORS,
-  openReceiveCheckoutLabels,
+  checkoutLabels,
   optionalUnixTimeLabel,
   orClasses,
 } from "@openreceive/browser/headless";
@@ -14,7 +14,7 @@ export const COPY_INVOICE_ICON = `<svg class="${orClasses.copyIcon}" width="16" 
 
 const elementCopyFeedbackControllers = new WeakMap<
   Element,
-  ReturnType<typeof createOpenReceiveTransientFeedbackController<string>>
+  ReturnType<typeof createTransientFeedbackController<string>>
 >();
 
 export function readElementFiatQuote(element: Element) {
@@ -32,7 +32,7 @@ export function readElementFiatQuote(element: Element) {
 /**
  * WHICH ATTRIBUTES MAY BE READ STRICTLY, decided once for the whole element.
  *
- * `parseOpenReceiveOptionalInteger` throws on a negative or non-integer value.
+ * `parseOptionalInteger` throws on a negative or non-integer value.
  * That is the right read for an attribute a HOST typed by hand — a typo should
  * be heard — and exactly the wrong read for one carrying SERVER data, because
  * `render()` reads these and nothing wraps `render()`: one bad field then blanks
@@ -165,8 +165,8 @@ export function showElementCopyFeedback(button: Element | null): void {
       button.getAttribute("aria-label")?.trim() ||
       labelEl?.textContent?.trim() ||
       button.textContent?.trim() ||
-      openReceiveCheckoutLabels.copyInvoice;
-    controller = createOpenReceiveTransientFeedbackController({
+      checkoutLabels.copyInvoice;
+    controller = createTransientFeedbackController({
       resetValue,
       onValue: (label) => {
         if (!button.isConnected) return;
@@ -185,7 +185,7 @@ export function showElementCopyFeedback(button: Element | null): void {
     });
     elementCopyFeedbackControllers.set(button, controller);
   }
-  controller.show(openReceiveCheckoutLabels.copied);
+  controller.show(checkoutLabels.copied);
 }
 
 export function wireSwapSelectAllInputs(root: ParentNode): void {
@@ -216,14 +216,14 @@ export function renderElementSwapCopyDetailHtml(
 ): string {
   const link =
     href === undefined
-      ? createOpenReceiveDetailExternalLink({
+      ? createDetailExternalLink({
           label,
           value,
           ...(payInAsset === undefined ? {} : { payInAsset }),
         })
       : {
           href,
-          hrefLabel: hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
+          hrefLabel: hrefLabel ?? checkoutLabels.viewOnExplorer,
         };
   const external =
     link === undefined

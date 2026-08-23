@@ -18,7 +18,7 @@
 // Everything not listed is package-private and free to move: the modules
 // behind internal/checkout.ts and internal/ui.ts, the wire parsers, the
 // log-field builders, the watcher class, and the create-flow steps that only
-// createOpenReceiveCheckoutSession calls.
+// createCheckoutSession calls.
 
 // Custom-element DOM contract: the attribute, part and event names the element
 // renders and the wrappers bind to, their derived selectors, and the attribute
@@ -28,7 +28,7 @@ export {
   createCheckoutErrorEvent,
   createCheckoutProviderCopyEvent,
   createCheckoutStateEvent,
-  createOpenReceiveThemeChangeEvent,
+  createThemeChangeEvent,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
@@ -43,11 +43,11 @@ export {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  parseOpenReceiveBooleanAttribute,
-  parseOpenReceiveOptionalInteger,
-  parseOpenReceivePaymentMethod,
-  parseOpenReceiveResolvedTheme,
-  parseOpenReceiveThemePreference,
+  parseBooleanAttribute,
+  parseOptionalInteger,
+  parsePaymentMethod,
+  parseResolvedTheme,
+  parseThemePreference,
 } from "./internal/ui.ts";
 
 // Mounting the element: the attribute/listener factories every wrapper binding
@@ -58,8 +58,8 @@ export {
   createCheckoutElementListeners,
   createCheckoutShell,
   createCheckoutShellModel,
-  createOpenReceiveThemeToggleElement,
-  createOpenReceiveThemeToggleElementAttributes,
+  createThemeToggleElement,
+  createThemeToggleElementAttributes,
 } from "./internal/elements.ts";
 export type {
   CheckoutElementAttributeOptions,
@@ -70,19 +70,19 @@ export type {
   CheckoutShellModel,
   CheckoutShellOptions,
   CreateCheckoutShellOptions,
-  OpenReceiveThemeToggleElementAttributeOptions,
-  OpenReceiveThemeToggleElementAttributes,
+  ThemeToggleElementAttributeOptions,
+  ThemeToggleElementAttributes,
 } from "./internal/ui.ts";
 
 // The one declaration of the wrapper prop surface (G7). React and Vue derive
 // their props from it; Svelte and Angular restate the names because their prop
 // syntax cannot derive, and tests/wrapper-parity.test.mjs polices the gap.
-// `validateOpenReceiveCheckoutProps` is the create/snapshot boundary check —
+// `validateCheckoutProps` is the create/snapshot boundary check —
 // one implementation, called by the element wrappers and by React alike.
-export { validateOpenReceiveCheckoutProps } from "./internal/checkout-props.ts";
+export { validateCheckoutProps } from "./internal/checkout-props.ts";
 export type {
-  OpenReceiveCheckoutComponentProps,
-  OpenReceiveCheckoutPropsValidation,
+  CheckoutComponentProps,
+  CheckoutPropsValidation,
 } from "./internal/checkout-props.ts";
 
 // Checkout lifecycle: prepare/create calls, the polling controller, and the
@@ -95,25 +95,25 @@ export {
   requestCheckout,
 } from "./internal/checkout.ts";
 export {
-  mergeOpenReceiveAttemptIntoCheckout,
-  mergeOpenReceiveAttemptIntoSnapshot,
+  mergeAttemptIntoCheckout,
+  mergeAttemptIntoSnapshot,
 } from "./internal/checkout-merge.ts";
 // The create-mode flow itself (G6): the deferred Lightning mint, the swap
 // start, and the in-flight guards that make both safe to click twice. One
 // implementation, wrapped by the element class and by React's hook.
 //
-// Its three ingredients — findOpenReceiveReusableLightningInvoice,
-// mergeOpenReceiveMintedCheckout and startOpenReceiveSwapRequest — are
+// Its three ingredients — findReusableLightningInvoice,
+// mergeMintedCheckout and startSwapRequest — are
 // deliberately NOT on this list. Nothing outside packages/js/browser calls
 // them; the session is the whole point, and publishing the steps it is made of
 // would invite a second, subtly different create flow beside it. (A headless
 // integration that does want to drive a swap start itself gets
-// startOpenReceiveSwapRequest from ./headless, where it is documented.)
-export { createOpenReceiveCheckoutSession } from "./internal/checkout-session.ts";
+// startSwapRequest from ./headless, where it is documented.)
+export { createCheckoutSession } from "./internal/checkout-session.ts";
 export type {
-  OpenReceiveCheckoutSession,
-  OpenReceiveCheckoutSessionOptions,
-  OpenReceiveSwapSelection,
+  CheckoutSession,
+  CheckoutSessionOptions,
+  SwapSelection,
 } from "./internal/checkout-session.ts";
 export { enterCheckoutResumePath } from "./internal/guest-resume.ts";
 export type { GuestCheckoutResumeController } from "./internal/guest-resume.ts";
@@ -129,10 +129,10 @@ export type {
 } from "./internal/ui.ts";
 
 // Checkout state: snapshot + now -> the one derived view both renderers read
-// (G4). `assertOpenReceiveDisplayInvoice` is the display boundary — a snapshot
+// (G4). `assertDisplayInvoice` is the display boundary — a snapshot
 // with no renderable attempt must fail here, loudly, not halfway down a render.
 export {
-  assertOpenReceiveDisplayInvoice,
+  assertDisplayInvoice,
   createCheckoutState,
   createCheckoutStatusModel,
   deriveCheckoutStateLabels,
@@ -144,182 +144,182 @@ export type {
   CheckoutStatusModel,
   CheckoutStatusRefresh,
 } from "./internal/ui.ts";
-export { status } from "./status.ts";
+export { deriveStatus } from "./status.ts";
 export type { Status } from "./status.ts";
 
 // Payment wizard: the method grid, network selection, and provider tutorials.
 export {
-  buildOpenReceiveMethodGridEntries,
-  createOpenReceivePaymentWizardController,
-  createOpenReceivePaymentWizardModel,
-  createOpenReceivePaymentWizardSelection,
-  createOpenReceiveWizardRouteAssetDisplays,
-  createOpenReceiveWizardRouteDisplays,
-  formatOpenReceiveChooseNetworkHeading,
-  formatOpenReceiveNetworkSummary,
-  getOpenReceiveNetworkIcon,
-  getOpenReceivePaymentMethodIcon,
-  getOpenReceiveRouteNetworkLabel,
-  getOpenReceiveWizardEmptyMessage,
-  openReceivePaymentAccentId,
-  parseOpenReceiveMethodPickerKey,
-  updateOpenReceivePaymentWizardSelection,
+  buildMethodGridEntries,
+  createPaymentWizardController,
+  createPaymentWizardModel,
+  createPaymentWizardSelection,
+  createWizardRouteAssetDisplays,
+  createWizardRouteDisplays,
+  formatChooseNetworkHeading,
+  formatNetworkSummary,
+  getNetworkIcon,
+  getPaymentMethodIcon,
+  getRouteNetworkLabel,
+  getWizardEmptyMessage,
+  paymentAccentId,
+  parseMethodPickerKey,
+  updatePaymentWizardSelection,
 } from "./internal/wizard.ts";
-export { openReceivePaymentMethods } from "./internal/ui.ts";
+export { paymentMethods } from "./internal/ui.ts";
 export type {
-  OpenReceiveCheckoutPaymentMethod,
-  OpenReceivePaymentMethod,
-  OpenReceivePaymentWizardController,
-  OpenReceivePaymentWizardSelection,
-  OpenReceiveWizardProviderDisplay,
-  OpenReceiveWizardRouteAssetDisplay,
-  OpenReceiveWizardRouteDisplay,
+  CheckoutPaymentMethod,
+  PaymentMethod,
+  PaymentWizardController,
+  PaymentWizardSelection,
+  WizardProviderDisplay,
+  WizardRouteAssetDisplay,
+  WizardRouteDisplay,
 } from "./internal/ui.ts";
 
 // Swap flows: asset/network pickers, the deposit view model and its fee
 // arithmetic, the refund form, and the swap HTTP calls.
 export {
-  findOpenReceiveSwapGridGroup,
-  getOpenReceiveSwapOptionIcon,
-  getOpenReceiveSwapRefundFormError,
-  openReceiveSwapGroupLimitOption,
-  openReceiveSwapOptionLimitMessage,
-  openReceiveSwapPickerKey,
-  updateOpenReceiveSelectedSwapNetworks,
+  findSwapGridGroup,
+  getSwapOptionIcon,
+  getSwapRefundFormError,
+  swapGroupLimitOption,
+  swapOptionLimitMessage,
+  swapPickerKey,
+  updateSelectedSwapNetworks,
 } from "./internal/wizard.ts";
 export {
-  createOpenReceiveSwapDisplayModel,
-  openReceiveSwapAssetMatchesRoute,
-  overlayOpenReceiveSwapRefundStaging,
+  createSwapDisplayModel,
+  swapAssetMatchesRoute,
+  overlaySwapRefundStaging,
 } from "./internal/checkout.ts";
 export {
-  postOpenReceiveJson,
-  requestOpenReceiveSwapRefund,
+  postJson,
+  requestSwapRefund,
 } from "./internal/swap-http.ts";
-export type { OpenReceiveSwapDisplayModel } from "./internal/ui.ts";
+export type { SwapDisplayModel } from "./internal/ui.ts";
 
 // Transaction details and payment-data rows: the row model both renderers
 // build, plus the explorer/decode links a row can carry.
 export {
-  createOpenReceiveBlockExplorerUrl,
-  createOpenReceiveDetailExternalLink,
-  createOpenReceiveLightningInvoiceDecodeUrl,
-  createOpenReceivePaymentDataEntries,
-  createOpenReceiveTransactionDetails,
-  createOpenReceiveTransactionDetailsFromState,
-  getOpenReceiveExplorerNetwork,
-  resolveOpenReceiveTransactionDetailRows,
+  createBlockExplorerUrl,
+  createDetailExternalLink,
+  createLightningInvoiceDecodeUrl,
+  createPaymentDataEntries,
+  createTransactionDetails,
+  createTransactionDetailsFromState,
+  getExplorerNetwork,
+  resolveTransactionDetailRows,
 } from "./internal/checkout.ts";
 export type {
-  OpenReceivePaymentDataSource,
-  OpenReceiveTransactionDetailsSource,
+  PaymentDataSource,
+  TransactionDetailsSource,
 } from "./internal/checkout.ts";
-export type { OpenReceiveTransactionDetailRow } from "./internal/ui.ts";
+export type { TransactionDetailRow } from "./internal/ui.ts";
 
 // Formatting + labels.
 //
 // THE RULE, restated where the two renderers meet it: FORMATTERS THROW,
-// DISPLAY BOUNDARIES BLANK. `formatOpenReceiveMsats` throws a RangeError on an
+// DISPLAY BOUNDARIES BLANK. `formatMsats` throws a RangeError on an
 // amount that is not a non-negative safe integer, because wire construction
 // and amount validation share it. `optionalUnixTimeLabel` is the same rule
 // with `undefined` in place of the throw: reach for it when the value came
 // from a server, so a field a server should never have sent costs one label,
 // never the payment screen. (./headless documents this pair at length.)
 export {
-  escapeOpenReceiveHtml,
-  formatOpenReceiveAmountCaption,
-  formatOpenReceiveDepositAmount,
-  formatOpenReceiveMsats,
-  formatOpenReceiveUnixTime,
+  escapeHtml,
+  formatAmountCaption,
+  formatDepositAmount,
+  formatMsats,
+  formatUnixTime,
   optionalUnixTimeLabel,
 } from "./internal/checkout.ts";
-export { openReceiveCheckoutLabels } from "./internal/ui.ts";
+export { checkoutLabels } from "./internal/ui.ts";
 
 // Actions and the little controllers around them: QR rendering, copy-to-
 // clipboard with its feedback window, open-in-wallet, and the ticking value
 // the countdown reads.
 export {
   copyInvoice,
-  createOpenReceiveTickingValueController,
-  createOpenReceiveTransientFeedbackController,
+  createTickingValueController,
+  createTransientFeedbackController,
   createQrPayloadSvg,
   createQrSvg,
   openWallet,
 } from "./internal/checkout.ts";
 export { OPENRECEIVE_COPY_FEEDBACK_MS } from "./internal/ui.ts";
 export type {
-  OpenReceiveQrEncoder,
-  OpenReceiveTransientFeedbackController,
+  QrEncoder,
+  TransientFeedbackController,
 } from "./internal/ui.ts";
 
 // Theme: preference storage, the resolved-theme models the wrappers bind, and
 // the control-syncing helpers the element and React both drive.
 export {
-  createOpenReceiveStoredThemeModel,
-  createOpenReceiveThemeModel,
-  readOpenReceiveThemePreference,
-  syncOpenReceiveStoredThemeControls,
-  toggleOpenReceiveStoredThemeControls,
-  writeOpenReceiveThemePreference,
+  createStoredThemeModel,
+  createThemeModel,
+  readThemePreference,
+  syncStoredThemeControls,
+  toggleStoredThemeControls,
+  writeThemePreference,
 } from "./internal/theme.ts";
 export { OPENRECEIVE_THEME_STORAGE_KEY } from "./internal/ui.ts";
 export type {
-  OpenReceiveResolvedTheme,
-  OpenReceiveStoredThemeModelOptions,
-  OpenReceiveThemeModel,
-  OpenReceiveThemeModelOptions,
-  OpenReceiveThemePreference,
+  ResolvedTheme,
+  StoredThemeModelOptions,
+  ThemeModel,
+  ThemeModelOptions,
+  ThemePreference,
 } from "./internal/ui.ts";
 
 // Styling tokens: the contract with the shipped stylesheet, so the element's
 // HTML strings and React's elements carry the same class names.
 export {
-  openReceiveCheckoutElementStyles,
+  checkoutElementStyles,
   orClasses,
 } from "./internal/ui.ts";
 export {
-  openReceiveAssetButtonClasses,
-  openReceiveNetworkButtonClasses,
-  openReceiveNetworkCheckClasses,
-  openReceiveNetworkMobileRevealClasses,
-  openReceiveNetworkSummaryIconClasses,
+  assetButtonClasses,
+  networkButtonClasses,
+  networkCheckClasses,
+  networkMobileRevealClasses,
+  networkSummaryIconClasses,
 } from "./internal/wizard.ts";
 
 // Logging: the option a wrapper accepts and the shapes it passes through. The
 // console logger itself is on the main entry, not here.
 export type {
-  OpenReceiveBrowserLogContext,
-  OpenReceiveBrowserLogger,
-  OpenReceiveBrowserLoggerOption,
+  BrowserLogContext,
+  BrowserLogger,
+  BrowserLoggerOption,
 } from "./internal/ui.ts";
 
 // The icon-asset contract's diagnostic: packages/js/browser/README.md tells
 // integrators to log it when icons 404, and tools/validate/package-smoke.mjs
 // asserts the packaged URLs resolve into dist/assets/icons.
-export { openReceivePaymentIconUrls } from "./internal/ui.ts";
+export { paymentIconUrls } from "./internal/ui.ts";
 
 // Headless-integration extras: the pieces an application driving the engine
 // from its own store needs beyond what the renderers import — the reusable-
 // invoice check, the request error class, the swap start call, and the
-// display boundaries (optionalMsatsLabel beside formatOpenReceiveMsats).
+// display boundaries (optionalMsatsLabel beside formatMsats).
 export {
-  createOpenReceiveStatusFetcher,
+  createStatusFetcher,
   isReusableLightningInvoice,
-  OpenReceiveBrowserRequestError,
+  BrowserRequestError,
 } from "./internal/checkout.ts";
-export { resolveOpenReceivePreservedNetworkSelection } from "./internal/wizard.ts";
-export type { OpenReceivePaymentWizardModel } from "./internal/ui.ts";
+export { resolvePreservedNetworkSelection } from "./internal/wizard.ts";
+export type { PaymentWizardModel } from "./internal/ui.ts";
 export type {
-  OpenReceiveMethodGridEntry,
-  OpenReceiveSwapMethodGroup,
+  MethodGridEntry,
+  SwapMethodGroup,
 } from "./internal/wizard.ts";
-export { formatOpenReceiveSwapLimit } from "./internal/checkout.ts";
+export { formatSwapLimit } from "./internal/checkout.ts";
 export {
   normalizeSwapStartInvoice,
-  startOpenReceiveSwapRequest,
+  startSwapRequest,
 } from "./internal/swap-http.ts";
 export {
-  formatOpenReceiveFiatAmount,
+  formatFiatAmount,
   optionalMsatsLabel,
 } from "./internal/checkout.ts";
-export type { OpenReceiveTransactionDetailsInput } from "./internal/ui.ts";
+export type { TransactionDetailsInput } from "./internal/ui.ts";

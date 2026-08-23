@@ -9,7 +9,7 @@
   `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`; OpenReceive still logs a loud warning.
 - Recompute checkout prices from your own order/catalog data; reject payer amounts.
 - The attempt row commits before the invoice is exposed; the library serializes concurrent
-  creates per order. Custom `OpenReceivePaymentRepository` implementations must keep that
+  creates per order. Custom `PaymentRepository` implementations must keep that
   guarantee.
 - Accept settlement only from `settled_at` or wallet state `settled`; a preimage is never final
   proof. A wallet notification carrying a qualifying finality signal for a known pending attempt
@@ -74,7 +74,7 @@ check, in order:
 
 A wallet that cannot answer `get_info` also fails boot rather than deferring
 the failure to a customer's first checkout. Node surfaces all of this as
-`OpenReceiveConfigError` (`WALLET_PREFLIGHT_FAILED`) before
+`ConfigError` (`WALLET_PREFLIGHT_FAILED`) before
 [`createOpenReceive()`](api-reference.md#createopenreceive) resolves; the Rails
 engine runs the same preflight eagerly in production
 ([Deploying](deploying.md#boot-behavior)).

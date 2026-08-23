@@ -4,12 +4,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
-import {
-  createOpenReceiveHttpHandler,
-  createOpenReceiveHost,
-  hostError,
-} from "../packages/js/http/src/index.ts";
-import { openReceivePaymentInsert } from "../packages/js/http/src/payment-repository.ts";
+import { createHttpHandler, createHost, hostError } from "../packages/js/http/src/index.ts";
+import { paymentInsert } from "../packages/js/http/src/payment-repository.ts";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
@@ -185,7 +181,7 @@ test("HTTP commits payment hash before returning payer instructions", async () =
     clock: () => 1000,
   });
   const committed = [];
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -254,7 +250,7 @@ test("HTTP prepare locks amount without minting or committing an attempt", async
     clock: () => 1000,
   });
   const committed = [];
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -283,7 +279,7 @@ test("HTTP withholds invoice when host persistence fails", async () => {
   const service = await createOpenReceive({
     client: createTestkitReceiveClient(),
   });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -315,7 +311,7 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
     clock: () => 1000,
   });
   let committed;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -354,7 +350,7 @@ test("host checkout snapshot makes retry independent of wallet reads", async () 
   const wallet = createTestkitReceiveClient();
   const service = await createOpenReceive({ client: wallet });
   const rows = [];
-  const host = createOpenReceiveHost({
+  const host = createHost({
     clock: () => 1000,
     loadOrder: () => ({ total: 10 }),
     amountForOrder: () => ({ sats: 10 }),
@@ -362,7 +358,7 @@ test("host checkout snapshot makes retry independent of wallet reads", async () 
       listForOrder: async () => rows,
       commitAttempt: (input) => {
         rows.push({
-          ...openReceivePaymentInsert(input),
+          ...paymentInsert(input),
           status: "pending",
           statusReason: null,
           paidAt: null,
@@ -374,7 +370,7 @@ test("host checkout snapshot makes retry independent of wallet reads", async () 
     },
     onPaid: async () => undefined,
   });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host,
@@ -402,7 +398,7 @@ test("concurrent host-row loser receives no payer instructions", async () => {
     client: createTestkitReceiveClient(),
   });
   let committed;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -445,7 +441,7 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
     clock: () => 1000,
   });
   let committed;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -523,7 +519,7 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   let hostSwapData;
   let hostCheckout;
   let commits = 0;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -694,15 +690,15 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
     clock: () => 1000,
   });
   const handlers = {
-    default: createOpenReceiveHttpHandler({ service, authorize: () => true, host }),
+    default: createHttpHandler({ service, authorize: () => true, host }),
     // A hook that always refuses models a payer over the budget.
-    rate_limited: createOpenReceiveHttpHandler({
+    rate_limited: createHttpHandler({
       service,
       authorize: () => true,
       host,
       rateLimitHook: () => false,
     }),
-    settled_check: createOpenReceiveHttpHandler({
+    settled_check: createHttpHandler({
       service: settledService,
       authorize: () => true,
       host: testHost({
@@ -754,7 +750,7 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
 test("a host resolver returning a malformed payment hash is a 500 host bug, not a payer 400", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
   for (const hostHash of [undefined, "not-a-hash"]) {
-    const handler = createOpenReceiveHttpHandler({
+    const handler = createHttpHandler({
       service,
       authorize: () => true,
       host: testHost({
@@ -783,7 +779,7 @@ test("handler extras.native reaches the authorize context", async () => {
     client: createTestkitReceiveClient(),
   });
   const contexts = [];
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: (context) => {
       contexts.push(context);
@@ -813,7 +809,7 @@ test("handler called without extras leaves the authorize context native undefine
     client: createTestkitReceiveClient(),
   });
   const contexts = [];
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: (context) => {
       contexts.push(context);
@@ -837,7 +833,7 @@ test("handler called without extras leaves the authorize context native undefine
 
 test("the wire contract is snake_case only: camelCase aliases are rejected", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -859,7 +855,7 @@ test("the wire contract is snake_case only: camelCase aliases are rejected", asy
 
 test("undeclared request fields are rejected, including payment_hash on create", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -887,7 +883,7 @@ test("undeclared request fields are rejected, including payment_hash on create",
 
 test("declared length caps are enforced (order_id 200, memo 500)", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -914,7 +910,7 @@ test("declared length caps are enforced (order_id 200, memo 500)", async () => {
 test("oversized request bodies are rejected 413 before authorize runs", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
   let authorized = 0;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => {
       authorized += 1;
@@ -937,7 +933,7 @@ test("oversized request bodies are rejected 413 before authorize runs", async ()
 
 test("create routes reject payer-supplied amounts", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -968,7 +964,7 @@ test("create routes reject payer-supplied amounts", async () => {
 test("a chunked body is capped mid-stream, before authorize and before it is buffered", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
   let authorized = 0;
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => {
       authorized += 1;
@@ -1021,7 +1017,7 @@ test("wallet failures keep their code and map to 502/503, never a generic 500", 
         retryable: expected.retryable,
       });
     };
-    const handler = createOpenReceiveHttpHandler({
+    const handler = createHttpHandler({
       service,
       authorize: () => true,
       host: testHost({
@@ -1044,7 +1040,7 @@ test("wallet failures keep their code and map to 502/503, never a generic 500", 
 
 test("GET /rates rejects malformed currencies as input, not as a rates outage", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     host: testHost({
@@ -1092,7 +1088,7 @@ test("a wallet that ignores unpaid:true never flaps a live attempt to not_found"
     },
     clock: () => now,
   });
-  const handler = createOpenReceiveHttpHandler({
+  const handler = createHttpHandler({
     service,
     authorize: () => true,
     clock: () => now,

@@ -7,15 +7,15 @@ import {
   OPENRECEIVE_MAX_AMOUNT_MSATS,
   OPENRECEIVE_MIN_AMOUNT_MSATS,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
-  type OpenReceiveReceiveNwcClient,
-  type OpenReceiveTransactionState,
+  type ReceiveNwcClient,
+  type TransactionState,
   unixSeconds,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 import type {
   NwcNotificationUnsubscribe,
-  OpenReceiveWalletNotification,
-  OpenReceiveWalletNotificationHandler,
+  WalletNotification,
+  WalletNotificationHandler,
 } from "@openreceive/node";
 
 export {
@@ -32,7 +32,7 @@ export const TESTKIT_PREIMAGE = "1".repeat(64);
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
 export interface TestkitInvoiceFixture extends MakeInvoiceResult {
-  readonly state?: OpenReceiveTransactionState;
+  readonly state?: TransactionState;
   readonly settled_at?: number;
   readonly preimage?: string;
 }
@@ -57,7 +57,7 @@ export interface TestkitInvoiceSelector {
 
 export type TestkitTransactionScriptStep =
   | {
-      readonly state: OpenReceiveTransactionState;
+      readonly state: TransactionState;
       readonly settled_at?: number;
       readonly preimage?: string;
     }
@@ -74,7 +74,7 @@ interface TestkitStoredInvoice {
   amount_msats: bigint;
   created_at: number;
   expires_at: number;
-  state: OpenReceiveTransactionState;
+  state: TransactionState;
   settled_at?: number;
   preimage?: string;
 }
@@ -84,7 +84,7 @@ interface TestkitTransactionScript {
   next: number;
 }
 
-export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
+export class TestkitReceiveClient implements ReceiveNwcClient {
   readonly capabilitySummary: WalletCapabilitySummary;
 
   #now: () => number;
@@ -93,7 +93,7 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
   #byPaymentHash = new Map<string, TestkitStoredInvoice>();
   #byInvoice = new Map<string, TestkitStoredInvoice>();
   #transactionScripts = new Map<TestkitStoredInvoice, TestkitTransactionScript>();
-  #notificationHandlers = new Set<OpenReceiveWalletNotificationHandler>();
+  #notificationHandlers = new Set<WalletNotificationHandler>();
 
   constructor(options: TestkitReceiveClientOptions = {}) {
     this.#now = options.now ?? unixSeconds;
@@ -242,7 +242,7 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
    * with {@link emitNotification} or `settleInvoice(selector, { notify: true })`.
    */
   async subscribeNotifications(
-    handler: OpenReceiveWalletNotificationHandler,
+    handler: WalletNotificationHandler,
   ): Promise<NwcNotificationUnsubscribe> {
     this.#notificationHandlers.add(handler);
     return () => {
@@ -255,7 +255,7 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
    * client: anything other than `payment_received` is filtered out, and a
    * throwing handler never breaks the subscription.
    */
-  emitNotification(notification: OpenReceiveWalletNotification): void {
+  emitNotification(notification: WalletNotification): void {
     if (notification.type !== "payment_received") return;
     for (const handler of [...this.#notificationHandlers]) {
       try {

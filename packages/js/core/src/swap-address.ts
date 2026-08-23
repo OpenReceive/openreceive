@@ -1,7 +1,7 @@
-export type { OpenReceiveSwapAddressNetwork } from "./swap/address.ts";
+export type { SwapAddressNetwork } from "./swap/address.ts";
 export {
   getSwapRefundAddressError,
   isValidAddressForSwapNetwork,
   isValidSwapAddressForPayInAsset,
-  openReceiveSwapAddressNetworkForPayInAsset,
+  swapAddressNetworkForPayInAsset,
 } from "./swap/address.ts";

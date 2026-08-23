@@ -2,12 +2,12 @@
 // by the package build, so no compiler emits this). The props themselves come from the
 // shared wrapper type, so the surface exists in exactly one place.
 import { SvelteComponent } from "svelte";
-import type { OpenReceiveWrapperCheckoutComponentProps } from "./index.js";
+import type { WrapperCheckoutComponentProps } from "./index.js";
 
-export type OpenReceiveSvelteCheckoutProps = OpenReceiveWrapperCheckoutComponentProps;
+export type SvelteCheckoutProps = WrapperCheckoutComponentProps;
 
 export default class Checkout extends SvelteComponent<
-  OpenReceiveSvelteCheckoutProps,
+  SvelteCheckoutProps,
   Record<string, never>,
   Record<string, never>
 > {}

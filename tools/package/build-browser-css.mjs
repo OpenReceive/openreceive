@@ -49,7 +49,7 @@ for (const target of wrapperCssTargets) {
 // leaves the tree failing format:check. A biome failure fails the build —
 // silently writing unformatted output would leave format:check failing later
 // with no pointer back to the real cause.
-const generatedSource = `${header}\nexport const openReceiveCompiledStyles = ${JSON.stringify(css)};\n`;
+const generatedSource = `${header}\nexport const compiledStyles = ${JSON.stringify(css)};\n`;
 const formatted = spawnSync(
   path.join(root, "node_modules/.bin/biome"),
   ["format", `--stdin-file-path=${generatedTs}`],

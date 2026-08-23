@@ -1,7 +1,7 @@
 import {
   checkPayment as checkPaymentWithClient,
-  formatOpenReceiveInvalidNwcMessage,
-  formatOpenReceiveMissingNwcMessage,
+  formatInvalidNwcMessage,
+  formatMissingNwcMessage,
   NwcUriParseError,
   OPENRECEIVE_NWC_CODE_HELP_URL,
   OpenReceiveError,
@@ -12,16 +12,11 @@ import {
 } from "@openreceive/core";
 import { createNwcReceiveClient } from "./alby-nwc.ts";
 import type { NwcNotificationUnsubscribe, NwcWalletNotificationHandler } from "./alby-nwc.ts";
-import { OpenReceiveConfigError } from "./config-error.ts";
+import { ConfigError } from "./config-error.ts";
 import { createLscSwapProvidersFromEnvironment } from "./lsc-uri.ts";
-import { attachOpenReceiveLogging } from "./service/file-logger.ts";
+import { attachLogging } from "./service/file-logger.ts";
 import { createCheckout, prepareCheckout } from "./service/checkouts.ts";
-import {
-  createOpenReceivePriceFeed,
-  listRates,
-  quoteRates,
-  readOpenReceivePriceCurrencies,
-} from "./service/pricing.ts";
+import { createPriceFeed, listRates, quoteRates, readPriceCurrencies } from "./service/pricing.ts";
 import {
   createNwcEndpointLogger,
   emitLog,
@@ -32,22 +27,22 @@ import { createSwap, getSwap, listSwapOptions, quoteSwap, refundSwap } from "./s
 import type {
   CreateOpenReceiveOptions,
   OpenReceive,
-  OpenReceiveLogLevel,
-  OpenReceiveServiceContext,
+  LogLevel,
+  ServiceContext,
   SwapOptions,
 } from "./service/types.ts";
 import { type SwapProvider, SwapProviderWeightBudget, TransientSwapCache } from "./swap/index.ts";
 
-export { OpenReceiveConfigError } from "./config-error.ts";
-export { OpenReceiveServiceError } from "./service/core-utils.ts";
+export { ConfigError } from "./config-error.ts";
+export { ServiceError } from "./service/core-utils.ts";
 export type * from "./service/types.ts";
-export { createOpenReceivePriceFeed };
+export { createPriceFeed };
 
 export async function createOpenReceive(
   supplied: CreateOpenReceiveOptions = {},
 ): Promise<OpenReceive> {
   const environment = supplied.env ?? process.env;
-  const options = attachOpenReceiveLogging(supplied);
+  const options = attachLogging(supplied);
   const clock = options.clock ?? unixSeconds;
   const nwcLogger = createNwcEndpointLogger(options);
   const allowSpendCapableWallet =
@@ -66,14 +61,14 @@ export async function createOpenReceive(
     });
   await preflight(client);
 
-  const priceCurrencies = readOpenReceivePriceCurrencies(options.priceCurrencies);
+  const priceCurrencies = readPriceCurrencies(options.priceCurrencies);
   // Fiat pricing defaults to the LIVE feed (priceFetch defaults to global
   // fetch inside the feed). There is deliberately no implicit static-mock
   // fallback: a payments service must refuse to price invoices rather than
   // silently quote from a hard-coded rate. Tests and offline dev opt in
   // explicitly with priceProviders: [new StaticPriceProvider()].
   const priceProviders = options.priceProviders ?? [
-    createOpenReceivePriceFeed({
+    createPriceFeed({
       currencies: priceCurrencies,
       fetch: options.priceFetch,
       clock,
@@ -83,7 +78,7 @@ export async function createOpenReceive(
   const swapProviders = resolveSwapProviders(options.swap, () =>
     createLscSwapProvidersFromEnvironment(environment, { now: clock }),
   );
-  const nodeOptions: OpenReceiveServiceContext["options"] = { ...options, client };
+  const nodeOptions: ServiceContext["options"] = { ...options, client };
   emitLog(
     nodeOptions,
     "debug",
@@ -120,7 +115,7 @@ export async function createOpenReceive(
     );
   }
 
-  const context: OpenReceiveServiceContext = {
+  const context: ServiceContext = {
     options: nodeOptions,
     clock,
     priceProviders,
@@ -315,7 +310,7 @@ export async function createOpenReceive(
 }
 
 /** Catalog/rate polls are noisy; keep order mutations at info. */
-function swapProviderApiLogLevel(path: string): OpenReceiveLogLevel {
+function swapProviderApiLogLevel(path: string): LogLevel {
   const normalized = path.toLowerCase();
   if (
     normalized.includes("rates") ||
@@ -329,9 +324,9 @@ function swapProviderApiLogLevel(path: string): OpenReceiveLogLevel {
 
 function requireNwc(value: string | undefined, { subject }: { subject: string }): string {
   if (value === undefined || value.trim().length === 0) {
-    throw new OpenReceiveConfigError({
+    throw new ConfigError({
       code: "MISSING_NWC",
-      message: formatOpenReceiveMissingNwcMessage(),
+      message: formatMissingNwcMessage(),
       hint: "Set the receive-only connection in NWC_URI or pass nwc explicitly.",
     });
   }
@@ -339,9 +334,9 @@ function requireNwc(value: string | undefined, { subject }: { subject: string })
     parseNwcUri(value.trim());
   } catch (error) {
     const reason = error instanceof NwcUriParseError ? error.description : "Invalid NWC URI.";
-    throw new OpenReceiveConfigError({
+    throw new ConfigError({
       code: "INVALID_NWC",
-      message: formatOpenReceiveInvalidNwcMessage({ reason, subject }),
+      message: formatInvalidNwcMessage({ reason, subject }),
       hint: "Use a receive-only nostr+walletconnect URI from a trusted wallet.",
       cause: error,
     });
@@ -371,14 +366,14 @@ function isEnvironmentFlagEnabled(value: string | undefined): boolean {
   return ["1", "true", "yes"].includes(value.trim().toLowerCase());
 }
 
-async function preflight(client: OpenReceiveServiceContext["options"]["client"]): Promise<void> {
+async function preflight(client: ServiceContext["options"]["client"]): Promise<void> {
   try {
     // Always fetches the NIP-47 info event (kind 13194) when the wallet client supports it.
     // Spend methods (e.g. pay_invoice) fail preflight closed unless the host
     // sets the explicit allowSpendCapableWallet override.
     await client.preflight();
   } catch (cause) {
-    throw new OpenReceiveConfigError({
+    throw new ConfigError({
       code: "WALLET_PREFLIGHT_FAILED",
       message: "OpenReceive wallet preflight failed.",
       hint: `Use a receive-only NWC connection advertising make_invoice and list_transactions. Get one at ${OPENRECEIVE_NWC_CODE_HELP_URL}`,

@@ -44,7 +44,7 @@ export const OPENRECEIVE_PROVIDER_ICON_FILES: readonly string[] = [
   "zeus.png",
 ];
 
-export const openReceiveProviderIconUrls: Readonly<Record<string, string>> = Object.fromEntries(
+export const providerIconUrls: Readonly<Record<string, string>> = Object.fromEntries(
   OPENRECEIVE_PROVIDER_ICON_FILES.map((file) => [
     `assets/provider-icons/${file}`,
     assetUrl(`./assets/provider-icons/${file}`),

@@ -7,12 +7,12 @@
  * keeps Angular in step with the other wrappers by construction.
  */
 
-export interface OpenReceiveElementBindings {
+export interface ElementBindings {
   readonly attributes?: Readonly<Record<string, string | undefined>>;
   readonly listeners?: Readonly<Record<string, ((event: Event) => void) | undefined>>;
 }
 
-export interface OpenReceiveElementBindingTarget {
+export interface ElementBindingTarget {
   getAttribute(name: string): string | null;
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
@@ -32,9 +32,9 @@ export const EMPTY_APPLIED_ELEMENT_BINDINGS: AppliedElementBindings = {
   listeners: [],
 };
 
-export function applyOpenReceiveElementBindings(
-  element: OpenReceiveElementBindingTarget,
-  bindings: OpenReceiveElementBindings,
+export function applyElementBindings(
+  element: ElementBindingTarget,
+  bindings: ElementBindings,
   applied: AppliedElementBindings,
 ): AppliedElementBindings {
   return {
@@ -43,15 +43,15 @@ export function applyOpenReceiveElementBindings(
   };
 }
 
-export function detachOpenReceiveElementListeners(
-  element: OpenReceiveElementBindingTarget,
+export function detachElementListeners(
+  element: ElementBindingTarget,
   listeners: AttachedListeners,
 ): void {
   for (const [name, handler] of listeners) element.removeEventListener(name, handler);
 }
 
 function syncAttributes(
-  element: OpenReceiveElementBindingTarget,
+  element: ElementBindingTarget,
   attributes: Readonly<Record<string, string | undefined>>,
   applied: readonly string[],
 ): readonly string[] {
@@ -68,7 +68,7 @@ function syncAttributes(
 }
 
 function syncListeners(
-  element: OpenReceiveElementBindingTarget,
+  element: ElementBindingTarget,
   listeners: Readonly<Record<string, ((event: Event) => void) | undefined>>,
   attached: AttachedListeners,
 ): AttachedListeners {
@@ -82,7 +82,7 @@ function syncListeners(
       return current !== undefined && current[0] === name && current[1] === handler;
     });
   if (unchanged) return attached;
-  detachOpenReceiveElementListeners(element, attached);
+  detachElementListeners(element, attached);
   for (const [name, handler] of next) element.addEventListener(name, handler);
   return next;
 }

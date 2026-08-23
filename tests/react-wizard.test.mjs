@@ -10,35 +10,35 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
-  createOpenReceivePaymentWizardModel,
-  createOpenReceivePaymentWizardSelection,
-  createOpenReceiveStoredThemeModel,
-  createOpenReceiveThemeModel,
-  createOpenReceiveWizardRouteAssetDisplays,
-  createOpenReceiveWizardRouteDisplays,
-  formatOpenReceiveDepositAmount,
-  getOpenReceivePaymentMethodIcon,
-  getOpenReceiveRouteNetworkLabel,
-  getOpenReceiveNetworkIcon,
-  getOpenReceiveSwapOptionIcon,
-  getOpenReceiveWizardEmptyMessage,
-  openReceiveCheckoutLabels,
-  openReceivePaymentMethods,
-  buildOpenReceiveMethodGridEntries,
-  readOpenReceiveThemePreference,
-  syncOpenReceiveStoredThemeControls,
-  toggleOpenReceiveStoredThemeControls,
-  updateOpenReceivePaymentWizardSelection,
-  writeOpenReceiveThemePreference,
+  createPaymentWizardModel,
+  createPaymentWizardSelection,
+  createStoredThemeModel,
+  createThemeModel,
+  createWizardRouteAssetDisplays,
+  createWizardRouteDisplays,
+  formatDepositAmount,
+  getPaymentMethodIcon,
+  getRouteNetworkLabel,
+  getNetworkIcon,
+  getSwapOptionIcon,
+  getWizardEmptyMessage,
+  checkoutLabels,
+  paymentMethods,
+  buildMethodGridEntries,
+  readThemePreference,
+  syncStoredThemeControls,
+  toggleStoredThemeControls,
+  updatePaymentWizardSelection,
+  writeThemePreference,
 } from "@openreceive/browser/headless";
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { applyCheckoutThemeAttributes } from "../packages/js/browser/src/internal/theme.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
-import { applyOpenReceiveThemeAttributes } from "../packages/js/browser/src/internal/theme.ts";
+import { applyThemeAttributes } from "../packages/js/browser/src/internal/theme.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
-import { createOpenReceivePaymentWizardState } from "../packages/js/browser/src/internal/wizard.ts";
+import { createPaymentWizardState } from "../packages/js/browser/src/internal/wizard.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
-import { getOpenReceivePaymentStatusText } from "../packages/js/browser/src/internal/wizard.ts";
+import { getPaymentStatusText } from "../packages/js/browser/src/internal/wizard.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { getCheckoutProviderIcon } from "../packages/js/browser/src/internal/wizard.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
@@ -46,14 +46,14 @@ import { getCheckoutProviderOpenLabel } from "../packages/js/browser/src/interna
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { getCheckoutProviderTutorials } from "../packages/js/browser/src/internal/wizard.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
-import { getOpenReceiveRouteIcon } from "../packages/js/browser/src/internal/wizard.ts";
+import { getRouteIcon } from "../packages/js/browser/src/internal/wizard.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
-import { resolveOpenReceiveTheme } from "../packages/js/browser/src/internal/theme.ts";
+import { resolveTheme } from "../packages/js/browser/src/internal/theme.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
-import { toggleOpenReceiveStoredThemePreference } from "../packages/js/browser/src/internal/theme.ts";
+import { toggleStoredThemePreference } from "../packages/js/browser/src/internal/theme.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { OPENRECEIVE_PROVIDER_PREVIEW_LIMIT } from "../packages/js/browser/src/internal/dom-contract.ts";
-import { formatOpenReceiveCountdown } from "../packages/js/browser/src/internal/checkout-format.ts";
+import { formatCountdown } from "../packages/js/browser/src/internal/checkout-format.ts";
 import { getProvider } from "@openreceive/provider-data";
 import { PaymentWizard, ThemeScope, ThemeToggle } from "@openreceive/react";
 
@@ -132,13 +132,13 @@ test("React payment wizard greys under-minimum swaps with rounded minimum amount
 });
 
 test("method grid never includes the standalone Crypto button", () => {
-  const empty = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, []);
+  const empty = buildMethodGridEntries(paymentMethods, []);
   assert.deepEqual(
     empty.map((entry) => (entry.kind === "method" ? entry.method.id : entry.group.label)),
     ["bitcoin"],
   );
 
-  const withUsdt = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, [
+  const withUsdt = buildMethodGridEntries(paymentMethods, [
     {
       label: "USDT",
       pay_in_asset: "USDT_TRON",
@@ -218,22 +218,22 @@ function createTestStorage() {
 }
 
 test("browser checkout formatting helpers and UI constants", () => {
-  assert.equal(formatOpenReceiveCountdown(65), "1:05");
-  assert.equal(formatOpenReceiveDepositAmount("12.25900000"), "12.259");
-  assert.equal(formatOpenReceiveDepositAmount("5.000"), "5");
-  assert.equal(formatOpenReceiveDepositAmount("1.05"), "1.05");
-  assert.equal(formatOpenReceiveDepositAmount("0.0008"), "0.0008");
-  assert.equal(formatOpenReceiveDepositAmount("100"), "100");
+  assert.equal(formatCountdown(65), "1:05");
+  assert.equal(formatDepositAmount("12.25900000"), "12.259");
+  assert.equal(formatDepositAmount("5.000"), "5");
+  assert.equal(formatDepositAmount("1.05"), "1.05");
+  assert.equal(formatDepositAmount("0.0008"), "0.0008");
+  assert.equal(formatDepositAmount("100"), "100");
   assert.equal(OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS, 3000);
   assert.equal(OPENRECEIVE_COPY_FEEDBACK_MS, 1800);
   assert.equal(OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, 4);
 });
 
 test("browser checkout labels and status text", () => {
-  assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy invoice");
-  assert.equal(openReceiveCheckoutLabels.bitcoinLightningInvoice, "Bitcoin Lightning invoice");
-  assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
-  assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Bitcoin Lightning.");
+  assert.equal(checkoutLabels.copyInvoice, "Copy invoice");
+  assert.equal(checkoutLabels.bitcoinLightningInvoice, "Bitcoin Lightning invoice");
+  assert.equal(getPaymentStatusText("settled").title, "Payment received");
+  assert.equal(getWizardEmptyMessage("bitcoin"), "Choose Bitcoin Lightning.");
   assert.equal(getCheckoutProviderOpenLabel("Boltz"), "How To Pay");
 });
 
@@ -260,33 +260,30 @@ test("browser checkout provider icon and tutorial helpers", () => {
 });
 
 test("browser checkout route, method, and network icon helpers", () => {
-  assert.equal(getOpenReceiveRouteNetworkLabel("btc-lightning"), "Lightning Network");
-  assert.equal(getOpenReceiveRouteNetworkLabel("usdt-tron"), "usdt-tron");
-  assert.match(getOpenReceivePaymentMethodIcon("bitcoin"), /assets\/icons\/btc\.svg/);
+  assert.equal(getRouteNetworkLabel("btc-lightning"), "Lightning Network");
+  assert.equal(getRouteNetworkLabel("usdt-tron"), "usdt-tron");
+  assert.match(getPaymentMethodIcon("bitcoin"), /assets\/icons\/btc\.svg/);
   assert.match(
-    getOpenReceiveRouteIcon({ symbol: "btc", route: "btc-lightning" }),
+    getRouteIcon({ symbol: "btc", route: "btc-lightning" }),
     /assets\/icons\/lightning\.svg/,
   );
+  assert.match(getRouteIcon({ symbol: "usdt", route: "usdt-tron" }), /assets\/icons\/usdt\.svg/);
   assert.match(
-    getOpenReceiveRouteIcon({ symbol: "usdt", route: "usdt-tron" }),
+    getSwapOptionIcon({ label: "USDT", network_label: "Tron" }),
     /assets\/icons\/usdt\.svg/,
   );
   assert.match(
-    getOpenReceiveSwapOptionIcon({ label: "USDT", network_label: "Tron" }),
-    /assets\/icons\/usdt\.svg/,
-  );
-  assert.match(
-    getOpenReceiveSwapOptionIcon({ label: "USDC", network_label: "Solana" }),
+    getSwapOptionIcon({ label: "USDC", network_label: "Solana" }),
     /assets\/icons\/usdc\.svg/,
   );
-  assert.match(getOpenReceiveNetworkIcon("Tron"), /assets\/icons\/trx\.svg/);
-  assert.match(getOpenReceiveNetworkIcon("Solana"), /assets\/icons\/sol\.svg/);
-  assert.match(getOpenReceiveNetworkIcon("Ethereum"), /assets\/icons\/eth\.svg/);
+  assert.match(getNetworkIcon("Tron"), /assets\/icons\/trx\.svg/);
+  assert.match(getNetworkIcon("Solana"), /assets\/icons\/sol\.svg/);
+  assert.match(getNetworkIcon("Ethereum"), /assets\/icons\/eth\.svg/);
 });
 
 test("browser checkout theme resolution builds a full theme model", () => {
-  assert.equal(resolveOpenReceiveTheme("system", { systemDark: true }), "dark");
-  assert.deepEqual(createOpenReceiveThemeModel("system", { systemDark: true }), {
+  assert.equal(resolveTheme("system", { systemDark: true }), "dark");
+  assert.deepEqual(createThemeModel("system", { systemDark: true }), {
     theme: "system",
     resolvedTheme: "dark",
     nextTheme: "light",
@@ -303,11 +300,11 @@ test("browser checkout theme resolution builds a full theme model", () => {
 
 test("browser checkout theme preference round-trips through storage", () => {
   const storage = createTestStorage();
-  assert.equal(readOpenReceiveThemePreference({ storage, defaultTheme: "dark" }), "dark");
-  assert.equal(readOpenReceiveThemePreference({ storage }), "system");
-  writeOpenReceiveThemePreference("dark", { storage });
-  assert.equal(readOpenReceiveThemePreference({ storage }), "dark");
-  const storedThemeModel = createOpenReceiveStoredThemeModel({ storage });
+  assert.equal(readThemePreference({ storage, defaultTheme: "dark" }), "dark");
+  assert.equal(readThemePreference({ storage }), "system");
+  writeThemePreference("dark", { storage });
+  assert.equal(readThemePreference({ storage }), "dark");
+  const storedThemeModel = createStoredThemeModel({ storage });
   assert.deepEqual(storedThemeModel, {
     theme: "dark",
     resolvedTheme: "dark",
@@ -323,7 +320,7 @@ test("browser checkout theme preference round-trips through storage", () => {
   });
   const themeAttrs = {};
   const checkoutAttrs = {};
-  applyOpenReceiveThemeAttributes(
+  applyThemeAttributes(
     {
       getAttribute: (name) => themeAttrs[name] ?? null,
       setAttribute: (name, value) => {
@@ -348,17 +345,17 @@ test("browser checkout theme preference round-trips through storage", () => {
   assert.deepEqual(checkoutAttrs, {
     theme: "dark",
   });
-  assert.equal(toggleOpenReceiveStoredThemePreference({ storage }).resolvedTheme, "light");
-  assert.equal(readOpenReceiveThemePreference({ storage }), "light");
+  assert.equal(toggleStoredThemePreference({ storage }).resolvedTheme, "light");
+  assert.equal(readThemePreference({ storage }), "light");
 });
 
 test("browser checkout stored theme controls sync and toggle together", () => {
   const storage = createTestStorage();
-  writeOpenReceiveThemePreference("light", { storage });
+  writeThemePreference("light", { storage });
   const controlAttrs = {};
   const checkoutControlAttrs = {};
   const toggleControl = { textContent: "" };
-  const controlTheme = syncOpenReceiveStoredThemeControls(
+  const controlTheme = syncStoredThemeControls(
     {
       root: {
         getAttribute: (name) => controlAttrs[name] ?? null,
@@ -380,7 +377,7 @@ test("browser checkout stored theme controls sync and toggle together", () => {
   assert.equal(controlAttrs["data-openreceive-theme"], "light");
   assert.equal(checkoutControlAttrs.theme, "light");
   assert.equal(toggleControl.textContent, "light mode");
-  const toggledControlTheme = toggleOpenReceiveStoredThemeControls(
+  const toggledControlTheme = toggleStoredThemeControls(
     {
       toggle: toggleControl,
     },
@@ -391,32 +388,32 @@ test("browser checkout stored theme controls sync and toggle together", () => {
 });
 
 test("browser checkout wizard selection is a pure state machine", () => {
-  const initialSelection = createOpenReceivePaymentWizardSelection();
+  const initialSelection = createPaymentWizardSelection();
   assert.equal(initialSelection.selectedMethod, null);
   assert.equal(initialSelection.selectedBitcoinRoute, null);
 
-  const methodSelection = updateOpenReceivePaymentWizardSelection(initialSelection, {
+  const methodSelection = updatePaymentWizardSelection(initialSelection, {
     type: "select_method",
     method: "bitcoin",
   });
   assert.equal(methodSelection.selectedMethod, "bitcoin");
   assert.equal(methodSelection.selectedBitcoinRoute, "btc-lightning");
 
-  const changedMethodSelection = updateOpenReceivePaymentWizardSelection(methodSelection, {
+  const changedMethodSelection = updatePaymentWizardSelection(methodSelection, {
     type: "change_method",
   });
   assert.equal(changedMethodSelection.selectedMethod, null);
   assert.equal(changedMethodSelection.selectedBitcoinRoute, null);
 
-  const bitcoinSelection = updateOpenReceivePaymentWizardSelection(changedMethodSelection, {
+  const bitcoinSelection = updatePaymentWizardSelection(changedMethodSelection, {
     type: "select_method",
     method: "bitcoin",
   });
   assert.equal(bitcoinSelection.selectedBitcoinRoute, "btc-lightning");
-  const routeModel = createOpenReceivePaymentWizardModel(bitcoinSelection);
+  const routeModel = createPaymentWizardModel(bitcoinSelection);
   assert.equal(routeModel.selectedRoute, "btc-lightning");
   assert.ok(routeModel.routeAssets.length > 0);
-  const routeAssetDisplays = createOpenReceiveWizardRouteAssetDisplays(routeModel.routeAssets, {
+  const routeAssetDisplays = createWizardRouteAssetDisplays(routeModel.routeAssets, {
     selectedRoute: routeModel.selectedRoute,
   });
   const lightningRouteAsset = routeAssetDisplays.find((asset) => asset.id === "btc-lightning");
@@ -426,25 +423,22 @@ test("browser checkout wizard selection is a pure state machine", () => {
 });
 
 test("browser checkout wizard route displays carry provider entries", () => {
-  const bitcoinState = createOpenReceivePaymentWizardState({
+  const bitcoinState = createPaymentWizardState({
     selectedMethod: "bitcoin",
     selectedBitcoinRoute: "btc-lightning",
   });
   assert.equal(bitcoinState.selectedRouteId, "btc-lightning");
   assert.ok(bitcoinState.routes.length > 0);
-  const bitcoinRouteDisplays = createOpenReceiveWizardRouteDisplays(bitcoinState.routes);
+  const bitcoinRouteDisplays = createWizardRouteDisplays(bitcoinState.routes);
   assert.equal(bitcoinRouteDisplays[0].providers.length, bitcoinState.routes[0].providers.length);
   assert.equal(
-    createOpenReceiveWizardRouteDisplays(bitcoinState.routes, {
+    createWizardRouteDisplays(bitcoinState.routes, {
       providerPreviewLimit: OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
     })[0].providers.length <= OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
     true,
   );
-  assert.equal(
-    bitcoinRouteDisplays[0].providers[0].copyLabel,
-    openReceiveCheckoutLabels.copyInvoice,
-  );
-  assert.equal(bitcoinRouteDisplays[0].providers[0].copiedLabel, openReceiveCheckoutLabels.copied);
+  assert.equal(bitcoinRouteDisplays[0].providers[0].copyLabel, checkoutLabels.copyInvoice);
+  assert.equal(bitcoinRouteDisplays[0].providers[0].copiedLabel, checkoutLabels.copied);
   assert.equal(bitcoinRouteDisplays[0].providers[0].openLabel, "How To Pay");
   assert.equal(bitcoinRouteDisplays[0].providers[0].kind, "browser wallet");
   assert.equal(

@@ -2,16 +2,12 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync
 import { appendFile } from "node:fs/promises";
 import path from "node:path";
 import { compact } from "@openreceive/core";
-import { createOpenReceiveConsoleLogger } from "../console-logger.ts";
-import {
-  openReceiveLogLevelOrder,
-  parseOpenReceiveLogLevel,
-  readOpenReceiveLogLevelFromEnvironment,
-} from "../log-level.ts";
+import { createConsoleLogger } from "../console-logger.ts";
+import { logLevelOrder, parseLogLevel, readLogLevelFromEnvironment } from "../log-level.ts";
 import type {
   CreateOpenReceiveOptions,
-  OpenReceiveLogEvent,
-  OpenReceiveLogLevel,
+  LogEvent,
+  LogLevel,
   Logger,
   LoggingOptions,
 } from "./types.ts";
@@ -31,7 +27,7 @@ export const OPENRECEIVE_LOGGING_DEFAULTS = {
   filename: "openreceive.log",
   maxFileSizeMb: 10,
   maxFiles: 5,
-  level: "info" as OpenReceiveLogLevel,
+  level: "info" as LogLevel,
 } as const;
 
 interface ResolvedFileLoggerConfig {
@@ -39,11 +35,11 @@ interface ResolvedFileLoggerConfig {
   readonly filename: string;
   readonly maxFileSizeBytes: number;
   readonly maxFiles: number;
-  readonly minLevel: OpenReceiveLogLevel;
+  readonly minLevel: LogLevel;
 }
 
 /** A file logger plus the handle needed to await its buffered lines reaching disk. */
-export interface OpenReceiveFileLogger extends Logger {
+export interface FileLogger extends Logger {
   /** Resolves once every entry emitted so far has been written. */
   flush(): Promise<void>;
 }
@@ -53,13 +49,11 @@ export interface OpenReceiveFileLogger extends Logger {
  * file, rotating by size. Writes are buffered and flushed asynchronously so a log
  * line never blocks the event loop on disk; `flush()` awaits the buffer, and a
  * process-exit hook drains it synchronously so the final lines are never lost.
- * Entries arrive already sanitized (secrets redacted) from `emitOpenReceiveEvent`,
+ * Entries arrive already sanitized (secrets redacted) from `emitEvent`,
  * so no further redaction happens here. Every filesystem interaction is wrapped so
  * logging can never throw into payment/settlement code.
  */
-export function createOpenReceiveFileLogger(
-  config: ResolvedFileLoggerConfig,
-): OpenReceiveFileLogger {
+export function createFileLogger(config: ResolvedFileLoggerConfig): FileLogger {
   const logPath = path.join(config.directory, config.filename);
   let initialized = false;
   let currentBytes = 0;
@@ -156,8 +150,8 @@ export function createOpenReceiveFileLogger(
     scheduled.unref();
   };
 
-  const logger = (entry: OpenReceiveLogEvent) => {
-    if (openReceiveLogLevelOrder(entry.level) < openReceiveLogLevelOrder(config.minLevel)) return;
+  const logger = (entry: LogEvent) => {
+    if (logLevelOrder(entry.level) < logLevelOrder(config.minLevel)) return;
     const { level: entryLevel, event, message, ...rest } = entry;
     buffered.push(
       `${JSON.stringify({
@@ -183,19 +177,19 @@ export function createOpenReceiveFileLogger(
  * host has not opted in (`logging: { enabled: true }`). Writing files is a host
  * decision: the library does not create directories in someone else's process.
  */
-export function createOpenReceiveFileLoggerFromConfig(
+export function createFileLoggerFromConfig(
   config: LoggingOptions | undefined,
-): OpenReceiveFileLogger | undefined {
+): FileLogger | undefined {
   if ((config?.enabled ?? OPENRECEIVE_LOGGING_DEFAULTS.enabled) !== true) return undefined;
   const defaults = OPENRECEIVE_LOGGING_DEFAULTS;
   const maxFileSizeMb = config?.maxFileSizeMb ?? defaults.maxFileSizeMb;
   const maxFiles = config?.maxFiles ?? defaults.maxFiles;
-  return createOpenReceiveFileLogger({
+  return createFileLogger({
     directory: config?.directory ?? defaults.directory,
     filename: config?.filename ?? defaults.filename,
     maxFileSizeBytes: Math.max(1024, Math.round(maxFileSizeMb * 1024 * 1024)),
     maxFiles: Math.max(1, Math.floor(maxFiles)),
-    minLevel: parseOpenReceiveLogLevel(config?.level) ?? readOpenReceiveLogLevelFromEnvironment(),
+    minLevel: parseLogLevel(config?.level) ?? readLogLevelFromEnvironment(),
   });
 }
 
@@ -204,9 +198,7 @@ export function createOpenReceiveFileLoggerFromConfig(
  * file logger both receive every entry. Each sink is isolated: one throwing never stops
  * the others.
  */
-export function composeOpenReceiveLoggers(
-  ...loggers: readonly (Logger | undefined)[]
-): Logger | undefined {
+export function composeLoggers(...loggers: readonly (Logger | undefined)[]): Logger | undefined {
   const active = loggers.filter((logger): logger is Logger => logger !== undefined);
   if (active.length === 0) return undefined;
   if (active.length === 1) return active[0];
@@ -228,19 +220,17 @@ export function composeOpenReceiveLoggers(
  * Console defaults on when no custom `logger` is supplied; file logging is off
  * until `logging.enabled === true`.
  */
-export function attachOpenReceiveLogging(
-  options: CreateOpenReceiveOptions,
-): CreateOpenReceiveOptions {
-  const fileLogger = createOpenReceiveFileLoggerFromConfig(options.logging);
+export function attachLogging(options: CreateOpenReceiveOptions): CreateOpenReceiveOptions {
+  const fileLogger = createFileLoggerFromConfig(options.logging);
   const consoleEnabled = options.logging?.console ?? options.logger === undefined;
   const consoleLogger = consoleEnabled
-    ? createOpenReceiveConsoleLogger(
+    ? createConsoleLogger(
         compact({
           prefix: options.logging?.prefix ?? "openreceive",
           minLevel: options.logging?.level,
         }),
       )
     : undefined;
-  const logger = composeOpenReceiveLoggers(options.logger, consoleLogger, fileLogger);
+  const logger = composeLoggers(options.logger, consoleLogger, fileLogger);
   return logger === undefined ? options : { ...options, logger };
 }

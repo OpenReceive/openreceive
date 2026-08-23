@@ -1,10 +1,6 @@
 import { unixSeconds } from "@openreceive/core";
-import type {
-  OpenReceiveAuthorizeAction,
-  OpenReceiveAuthorizeContext,
-  OpenReceiveRateLimit,
-} from "./authorize.ts";
-import { OpenReceiveHttpError } from "./errors.ts";
+import type { AuthorizeAction, AuthorizeContext, RateLimit } from "./authorize.ts";
+import { HttpError } from "./errors.ts";
 
 // Built-in per-IP invoice rate limiting. OFF unless the host opts in via the handler's
 // `rateLimiting` option: any per-IP cap is wrong for shared-IP deployments (point-of-sale
@@ -17,7 +13,7 @@ import { OpenReceiveHttpError } from "./errors.ts";
 // degrade to per-process counting that resets on restart and multiplies per instance
 // behind a load balancer.
 
-export interface OpenReceiveIpRateLimitConfig {
+export interface IpRateLimitConfig {
   /** Maximum invoice creations per IP per rolling hour. Default 60. */
   readonly limitPerHour?: number;
   /** Optional additional cap per rolling 24 hours. Unset = hourly cap only. */
@@ -30,14 +26,14 @@ export interface OpenReceiveIpRateLimitConfig {
    * mints, so a throttle on any other action could never trigger. Police other
    * actions with a custom `rateLimitHook` instead.
    */
-  readonly actions?: readonly OpenReceiveAuthorizeAction[];
+  readonly actions?: readonly AuthorizeAction[];
   /**
    * Client IP extractor. The default reads `native.ip` (Express/Fastify request).
    * Returning undefined allows the request — the limiter fails open rather than
    * blocking payers the host cannot attribute, and warns once per limiter so an
    * adapter that never supplies an IP is visible.
    */
-  readonly ip?: (context: OpenReceiveAuthorizeContext) => string | undefined;
+  readonly ip?: (context: AuthorizeContext) => string | undefined;
   /**
    * Count invoice attempts for this IP at or after `sinceUnixSeconds`. The handler
    * wires this to the payment repository's `countAttemptsFromIp` automatically.
@@ -56,11 +52,8 @@ export const OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR = 60;
 
 const HOUR_SECONDS = 3_600;
 const DAY_SECONDS = 86_400;
-const MINT_ACTIONS: ReadonlySet<OpenReceiveAuthorizeAction> = new Set([
-  "checkout.create",
-  "swap.create",
-]);
-const DEFAULT_ACTIONS: readonly OpenReceiveAuthorizeAction[] = ["checkout.create", "swap.create"];
+const MINT_ACTIONS: ReadonlySet<AuthorizeAction> = new Set(["checkout.create", "swap.create"]);
+const DEFAULT_ACTIONS: readonly AuthorizeAction[] = ["checkout.create", "swap.create"];
 const DEFAULT_MESSAGE = "Too many payment attempts. Please try again later.";
 
 /**
@@ -70,9 +63,7 @@ const DEFAULT_MESSAGE = "Too many payment attempts. Please try again later.";
  * payer-facing message; requests with no attributable IP are always allowed.
  * Fails closed at construction when no `countAttemptsFromIp` counter is supplied.
  */
-export function createOpenReceiveIpRateLimit(
-  config: OpenReceiveIpRateLimitConfig = {},
-): OpenReceiveRateLimit {
+export function createIpRateLimit(config: IpRateLimitConfig = {}): RateLimit {
   const limitPerHour = config.limitPerHour ?? OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR;
   const limitPerDay = config.limitPerDay;
   if (!Number.isSafeInteger(limitPerHour) || limitPerHour < 1) {
@@ -104,14 +95,14 @@ export function createOpenReceiveIpRateLimit(
     );
   }
   const message = config.message ?? DEFAULT_MESSAGE;
-  const extractIp = config.ip ?? openReceiveClientIp;
+  const extractIp = config.ip ?? resolveClientIp;
   const now = config.now ?? unixSeconds;
   let warnedUnattributable = false;
 
   return async (context) => {
     if (!actions.has(context.action)) return true;
     const extracted = extractIp(context);
-    const ip = extracted === undefined ? undefined : openReceiveClientIpBucket(extracted);
+    const ip = extracted === undefined ? undefined : clientIpBucket(extracted);
     if (ip === undefined || ip.length === 0) {
       // Fail open by design (shared-IP note above) — but say so once, loudly: an
       // adapter that never supplies an IP silently disables the whole control.
@@ -152,10 +143,10 @@ export function createOpenReceiveIpRateLimit(
  * unset and simply keep the default limiter when no header is trusted.
  */
 export function createProxyRateLimitingConfig(
-  rateLimiting: boolean | OpenReceiveIpRateLimitConfig | undefined,
+  rateLimiting: boolean | IpRateLimitConfig | undefined,
   trustProxyIpHeader: boolean | string | undefined,
   options: { readonly requireIpSource?: string } = {},
-): { readonly rateLimiting?: boolean | OpenReceiveIpRateLimitConfig } {
+): { readonly rateLimiting?: boolean | IpRateLimitConfig } {
   if (rateLimiting === undefined || rateLimiting === false) return {};
   const headerName =
     trustProxyIpHeader === true
@@ -166,7 +157,7 @@ export function createProxyRateLimitingConfig(
   const headerIp =
     headerName === undefined
       ? undefined
-      : (context: OpenReceiveAuthorizeContext): string | undefined => {
+      : (context: AuthorizeContext): string | undefined => {
           const value = context.request.headers.get(headerName);
           const first = value?.split(",")[0]?.trim();
           return first !== undefined && first.length > 0 ? first : undefined;
@@ -192,9 +183,7 @@ export function createProxyRateLimitingConfig(
  * Undefined when no adapter IP is available — callers must treat that as
  * "unattributable", never as an error.
  */
-export function openReceiveClientIp(
-  context: Pick<OpenReceiveAuthorizeContext, "native">,
-): string | undefined {
+export function resolveClientIp(context: Pick<AuthorizeContext, "native">): string | undefined {
   const native = context.native as { ip?: unknown } | null | undefined;
   const ip = native?.ip;
   return typeof ip === "string" && ip.length > 0 ? ip : undefined;
@@ -213,7 +202,7 @@ export function openReceiveClientIp(
  * - Unparsable input passes through as-is — an odd value still gets SOME
  *   consistent bucket rather than disabling the limit.
  */
-export function openReceiveClientIpBucket(ip: string): string {
+export function clientIpBucket(ip: string): string {
   let value = ip.trim().toLowerCase();
   if (value.startsWith("::ffff:") && value.includes(".")) value = value.slice("::ffff:".length);
   if (!value.includes(":")) return value;
@@ -256,10 +245,10 @@ function expandIpv6(value: string): readonly string[] | undefined {
   return [...head, ...Array.from({ length: missing }, () => "0"), ...tail];
 }
 
-function tooManyAttempts(message: string): OpenReceiveHttpError {
+function tooManyAttempts(message: string): HttpError {
   // The precise wait depends on when the oldest counted row ages out of the
   // window; 60s is a conservative, honest floor for a rolling-hour budget.
-  return new OpenReceiveHttpError(429, "RATE_LIMITED", message, {
+  return new HttpError(429, "RATE_LIMITED", message, {
     retryable: true,
     retryAfterSeconds: 60,
   });

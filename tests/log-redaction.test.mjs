@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeOpenReceiveEvent } from "../packages/js/node/src/index.ts";
+import { sanitizeEvent } from "../packages/js/node/src/index.ts";
 import { redactSecrets } from "../packages/js/node/src/service/logging.ts";
 
-// Every log line passes through sanitizeOpenReceiveEvent. These fixtures are
+// Every log line passes through sanitizeEvent. These fixtures are
 // the shapes credentials actually arrive in: connection URIs pasted into a
 // message, provider REST URLs, and provider payloads attached to an error.
 const NWC_URI =
@@ -23,7 +23,7 @@ test("connection URIs are redacted wherever they appear in a log string", () => 
 });
 
 test("nested credentials, preimages, and invoices never reach a log sink", () => {
-  const sanitized = sanitizeOpenReceiveEvent({
+  const sanitized = sanitizeEvent({
     level: "error",
     event: "swap.provider.request.failed",
     message: `provider call failed for ${LSC_URI}`,

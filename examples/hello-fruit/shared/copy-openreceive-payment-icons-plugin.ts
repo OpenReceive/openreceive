@@ -25,7 +25,7 @@ const RUNTIME_ASSET_DIRS = [
  * `new URL("./icons/…", import.meta.url)` and rewritten provider-data
  * `./provider-icons/…` / `./pay_tutorials/…` paths from `/assets/*.js` resolve.
  */
-export function copyOpenReceivePaymentIconsPlugin(
+export function copyPaymentIconsPlugin(
   repoRoot: string,
   options: { readonly destRoot?: string } = {},
 ): Plugin {

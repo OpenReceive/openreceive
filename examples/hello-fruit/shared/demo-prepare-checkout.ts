@@ -73,7 +73,7 @@ export async function createHelloFruitCreateOrderResult(
     items,
     total_amount,
   };
-  const amount = createOpenReceiveCheckoutAmount(total_amount, currency);
+  const amount = createCheckoutAmount(total_amount, currency);
 
   return {
     order,
@@ -88,7 +88,7 @@ export async function createHelloFruitCreateOrderResult(
   };
 }
 
-function createOpenReceiveCheckoutAmount(
+function createCheckoutAmount(
   total_amount: HelloFruitFiatAmount,
   currency: string,
 ): HelloFruitCreateOrderResult["invoiceRequest"]["amount"] {

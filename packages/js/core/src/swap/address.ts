@@ -18,7 +18,7 @@
 
 import { keccak256, sha256 } from "./hash.ts";
 
-export type OpenReceiveSwapAddressNetwork = "ETH" | "SOL" | "TRX";
+export type SwapAddressNetwork = "ETH" | "SOL" | "TRX";
 
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -72,7 +72,7 @@ function decodeBase58(value: string): Uint8Array | undefined {
  * `TRON` is the only alias: it is the suffix OpenReceive's `pay_in_asset` codes
  * use (`USDT_TRON`) for the network the rest of the code calls `TRX`.
  */
-function normalizeSwapAddressNetwork(network: string): OpenReceiveSwapAddressNetwork | undefined {
+function normalizeSwapAddressNetwork(network: string): SwapAddressNetwork | undefined {
   if (network === "ETH") return "ETH";
   if (network === "SOL") return "SOL";
   if (network === "TRX" || network === "TRON") return "TRX";
@@ -123,10 +123,10 @@ function isValidSolanaAddress(address: string): boolean {
 
 /**
  * True when `address` is a payable address on `network`, checksum included.
- * `network` is an {@link OpenReceiveSwapAddressNetwork} or the `TRON` alias;
+ * `network` is an {@link SwapAddressNetwork} or the `TRON` alias;
  * any other string is rejected rather than waved through on length, so callers
  * resolve the network first (see
- * {@link openReceiveSwapAddressNetworkForPayInAsset}).
+ * {@link swapAddressNetworkForPayInAsset}).
  */
 export function isValidAddressForSwapNetwork(network: string, address: string): boolean {
   if (address.length > MAX_SWAP_ADDRESS_LENGTH || /\s/.test(address)) return false;
@@ -141,9 +141,9 @@ export function isValidAddressForSwapNetwork(network: string, address: string): 
  * Resolve the address network from an OpenReceive `pay_in_asset` code
  * (`USDT_ETH` → ETH, `USDT_TRON` → TRX, `SOL_SOL` → SOL).
  */
-export function openReceiveSwapAddressNetworkForPayInAsset(
+export function swapAddressNetworkForPayInAsset(
   payInAsset: string,
-): OpenReceiveSwapAddressNetwork | undefined {
+): SwapAddressNetwork | undefined {
   const suffix = payInAsset.split("_").at(-1)?.toUpperCase();
   return suffix === undefined ? undefined : normalizeSwapAddressNetwork(suffix);
 }
@@ -154,7 +154,7 @@ export function openReceiveSwapAddressNetworkForPayInAsset(
  * check degrades to a bounded non-empty string — deliberately, and only there.
  */
 export function isValidSwapAddressForPayInAsset(payInAsset: string, address: string): boolean {
-  const network = openReceiveSwapAddressNetworkForPayInAsset(payInAsset);
+  const network = swapAddressNetworkForPayInAsset(payInAsset);
   if (network === undefined) {
     return address.length >= 5 && address.length <= MAX_SWAP_ADDRESS_LENGTH && !/\s/.test(address);
   }
@@ -173,7 +173,7 @@ export function getSwapRefundAddressError(
   const trimmed = address.trim();
   if (trimmed.length === 0) return undefined;
   if (isValidSwapAddressForPayInAsset(payInAsset, trimmed)) return undefined;
-  const network = openReceiveSwapAddressNetworkForPayInAsset(payInAsset);
+  const network = swapAddressNetworkForPayInAsset(payInAsset);
   if (network === "ETH") {
     if (ETH_ADDRESS_SHAPE.test(trimmed)) {
       return `That ${networkLabel} address failed its checksum. Copy it again from your wallet.`;
