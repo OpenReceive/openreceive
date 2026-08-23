@@ -16,7 +16,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@getalby/sdk": "^7.0.0",
+    "@getalby/sdk": "^8.0.3",
     "@openreceive/core": "0.2.0-alpha.0"
   },
   "bin": {
