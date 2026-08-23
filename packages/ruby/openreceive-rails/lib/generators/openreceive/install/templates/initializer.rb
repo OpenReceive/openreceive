@@ -10,13 +10,28 @@ OpenReceive.configure do |config|
 
   # The host authorizes every request; OpenReceive mints no tokens.
   #
-  # The default below treats possession of the reference as the authorization
-  # (an unknown reference is still a 404, because amount_for returns nil for
-  # it). That is only safe while your references are unguessable (UUIDs, not
-  # sequential integers). If they are enumerable, or an order should only be
-  # visible to the customer who placed it, replace this with a
-  # session/ownership policy, e.g.:
-  #   config.authorize = ->(context) { OrderPolicy.viewer_may?(current_user_for(context), context) }
+  # `context` is a Hash with three symbol keys:
+  #   context[:action]   — which route: "checkout.prepare", "checkout.create",
+  #                        "payment.check", "swap.quote", "swap.create",
+  #                        "swap.read", or "swap.refund"
+  #   context[:request]  — the ActionDispatch::Request; read your session,
+  #                        cookies, or headers from it, as in a controller
+  #   context[:resource] — { reference:, payment_hash: } copied from the
+  #                        payer's JSON body. It names an order; it does not
+  #                        prove this caller owns it.
+  # Return true to allow the request, false for a 403.
+  #
+  # The default below allows every request, treating possession of the
+  # reference as the authorization (an unknown reference is still a 404,
+  # because amount_for returns nil for it). That is only safe while your
+  # references are unguessable (UUIDs, not sequential integers). If they are
+  # enumerable, or an order should only be visible to the customer who placed
+  # it, check ownership against your own session instead (`Order` stands in
+  # for your own model — any name works; OpenReceive never sees it):
+  #   config.authorize = lambda do |context|
+  #     order = Order.find_by(id: context[:resource][:reference])
+  #     order && order.user_id == context[:request].session[:user_id]
+  #   end
   config.authorize = ->(_context) { true }
 
   # The price for a reference — the string your checkout passes, typically
@@ -38,7 +53,9 @@ OpenReceive.configure do |config|
   #
   # TODO(fulfillment): replace the logging placeholder with your real
   # fulfillment. Written as the guarded transition described above, so a
-  # second fulfillment path can never ship the same order twice:
+  # second fulfillment path can never ship the same order twice.
+  # (FulfillOrder stands in for your own application code — ship the goods,
+  # enqueue the confirmation email. OpenReceive does not provide it.)
   #
   #   config.on_paid = lambda do |settlement|
   #     claimed = Order

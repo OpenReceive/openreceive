@@ -17,6 +17,11 @@ service = OpenReceive::Server::Service.new(nwc_client: MyNwcClient.new)
 
 run OpenReceive::Server::RackApp.new(
   service: service,
+  # context is a Hash: context[:action] is the route name ("checkout.create",
+  # "payment.check", …), context[:request] is the Rack env, and
+  # context[:resource] is { reference:, payment_hash: } copied from the
+  # payer's body — it names an order, it does not prove ownership.
+  # Return true to allow, false for a 403.
   authorize: ->(context) { my_policy_allows?(context) },
   resolve_checkout: lambda do |action:, request:, reference:, input:, pay_in_asset: nil|
     order = MyOrders.find(reference) or raise OpenReceive::Server::NotFoundError, "Unknown reference."

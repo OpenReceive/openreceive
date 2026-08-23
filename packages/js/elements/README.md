@@ -8,6 +8,10 @@ The OpenReceive checkout custom element (`<openreceive-checkout>`) and theme tog
 import { defineElements } from "@openreceive/elements";
 import "@openreceive/elements/styles.css";
 
+// Registers <openreceive-checkout> and <openreceive-theme-toggle> with the
+// browser. Until this runs, those tags are unknown markup and render as
+// nothing; once it runs, every such tag on the page — already in the HTML or
+// added later — becomes the live checkout UI. Call once per page.
 defineElements();
 ```
 

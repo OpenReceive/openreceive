@@ -1037,33 +1037,88 @@ application boots while it is still configured.
 OpenReceive.configure do |config| ... end
 ```
 
-The quickstart host hooks:
+Three hooks are required — authorization, the trusted price, and fulfillment —
+plus a handful of optional settings:
 
-| Setting | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `config.authorize` | `->(context)` | yes | Your policy for every request; the context carries the action and untrusted selectors. |
-| `config.amount_for` | `->(reference)` | yes | The trusted price for that id, `{ "sats" => }` or `{ "currency" =>, "value" => }`, or `nil` → 404. Called only where a price is minted or quoted. |
-| `config.on_paid` | `->(settlement)` | yes | Fulfillment. Receives [PaymentSettlement](#ordersettlement). |
-| `config.opportunistic_reconcile` | `false` or `{ min_interval_seconds: }` | no | Request-path settlement pass on every engine route; on by default through the durable `openreceive_meta` gate shared by all Puma workers. `false` disables (required with a custom repository that runs its own settlement worker). |
-| `config.rate_limiting` | `true` or `Hash` | no | Opt-in per-IP invoice cap, mirroring the JS `rateLimiting` option: off by default; `true` caps invoice creation at 60 per client IP per rolling hour, counted from the engine-owned `openreceive_payments` rows; or `{ limit_per_hour:, limit_per_day: }`. Mutually exclusive with `config.rate_limit`. See [Rate limiting](rate-limiting.md). |
-| `config.rate_limit` | `->(context)` | no | Custom rate-limit hook; same context as `config.authorize`. Return `false` (or raise the engine's rate-limited error) for `429`. |
-| `config.client_ip` | `->(request)` | no | Client-IP extractor for rate limiting and row stamping. Default: `ActionDispatch::Request#ip`, which honors the app's trusted-proxy configuration. |
-| `config.allow_spend_capable_wallet` | `Boolean` | no | Explicit override for a spend-capable NWC code; your application otherwise refuses to start. Also `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
+```ruby
+OpenReceive.configure do |config|
+  # `Order` in these examples is YOUR model — any name works. OpenReceive
+  # never sees it; these hooks are the only bridge into your data.
+
+  # REQUIRED. Your policy, called before every checkout/payment/swap route.
+  # `context` is a Hash with three symbol keys:
+  #   context[:action]   — which route, as a String: "checkout.prepare",
+  #                        "checkout.create", "payment.check", "swap.quote",
+  #                        "swap.create", "swap.read", or "swap.refund"
+  #   context[:request]  — the ActionDispatch::Request; read your session,
+  #                        cookies, or headers from it, as in a controller
+  #   context[:resource] — { reference: } on every action, plus
+  #                        { payment_hash: } on payment.check, swap.read, and
+  #                        swap.refund. Copied from the payer's JSON body
+  #                        before any lookup: it names an order, it does NOT
+  #                        prove this caller may touch it.
+  # Return true to allow, false for a 403. Look the order up in YOUR data and
+  # decide whether THIS caller may perform THIS action on it.
+  config.authorize = lambda do |context|
+    order = Order.find_by(id: context[:resource][:reference])
+    order && order.user_id == context[:request].session[:user_id]
+  end
+
+  # REQUIRED. The trusted price for a reference (your order id). Return
+  # { "currency" => "USD", "value" => "12.00" } or { "sats" => 1200 }, or nil
+  # when there is nothing to pay for (a 404). Called only where a price is
+  # minted or quoted; payer input never carries an amount.
+  config.amount_for = lambda do |reference|
+    order = Order.find_by(id: reference)
+    order && { "currency" => "USD", "value" => order.total.to_s }
+  end
+
+  # REQUIRED. Fulfillment. Runs inside the settlement transaction, only for
+  # the first settled attempt for a reference. `settlement` responds to:
+  #   settlement.reference    — your order id that just settled (String)
+  #   settlement.payment_hash — 64-char lowercase hex hash of the attempt
+  #   settlement.paid_at      — Unix seconds of settlement (Integer)
+  #   settlement.details      — wallet-observed details Hash (transaction
+  #                             snapshot, observed_at, paid_at_source — the
+  #                             same shape JS delivers to onPaid), or nil
+  config.on_paid = lambda do |settlement|
+    Order.find(settlement.reference).update!(status: "paid")
+  end
+
+  # Per-IP invoice cap for public web shops. Off by default — never throttle
+  # a shared-IP POS terminal by accident. `true` caps invoice creation at 60
+  # per client IP per rolling hour, counted from the engine-owned
+  # openreceive_payments rows. See Rate limiting.
+  # config.rate_limiting = true
+  # config.rate_limiting = { limit_per_hour: 60, limit_per_day: 300 }
+
+  # OR a custom rate-limit hook — receives the same `context` Hash as
+  # config.authorize; return false (or raise the engine's rate-limited error)
+  # for a 429. Mutually exclusive with config.rate_limiting.
+  # config.rate_limit = ->(context) { MyLimiter.allow?(context[:request].ip) }
+
+  # Client-IP extractor for rate limiting and attempt-row stamping. Default:
+  # ActionDispatch::Request#ip, which honors Rails' trusted-proxy
+  # configuration.
+  # config.client_ip = ->(request) { request.headers["CF-Connecting-IP"] }
+
+  # Request-path settlement pass on every engine route, ON by default through
+  # the durable openreceive_meta gate shared by all Puma workers. Set false
+  # when a dedicated worker owns scanning (required with a custom repository).
+  # config.opportunistic_reconcile = false
+  # config.opportunistic_reconcile = { min_interval_seconds: 10 }
+
+  # Your application otherwise refuses to start on a spend-capable NWC code
+  # (also OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true).
+  # config.allow_spend_capable_wallet = true
+end
+```
 
 `on_paid` runs inside the settlement transaction through the engine's
 write-once `mark_paid_once!`, only for the first settled attempt for a reference;
 delivery is at-least-once, so a raise rolls back and the next pass retries.
 Advanced hooks (`resolve_checkout`, `on_checkout_created`) exist for
 custom-repository applications.
-
-#### PaymentSettlement
-
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `reference` | `String` | Your order that just settled. |
-| `payment_hash` | `String` | 64-character lowercase hex hash of the settled attempt. |
-| `paid_at` | `Integer` | Unix seconds of settlement (`settled_at`, else the observation time). |
-| `details` | `Hash?` | Wallet-observed settlement details (transaction snapshot, `observed_at`, `paid_at_source`) — the same shape JS delivers to `onPaid`. `nil` for settlements recorded without wallet details. |
 
 ### OpenReceive::ReconcileJob
 

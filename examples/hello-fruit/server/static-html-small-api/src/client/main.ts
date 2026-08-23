@@ -81,6 +81,8 @@ let purchasedStickers: readonly HelloFruitPurchasedSticker[] = [];
 let settledCheckoutState: CheckoutState | undefined;
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("static-html-small-api");
 
+// Register <openreceive-checkout>/<openreceive-theme-toggle> with the browser
+// so the tags in index.html upgrade into the live checkout UI.
 defineElements();
 logDemo("app.bootstrap", "Bootstrapping static HTML demo app.", {
   fruitCount: fruits.length,

@@ -109,6 +109,15 @@ function checkoutSnapshotDisplayKey(snapshot: CheckoutSnapshot): string {
   });
 }
 
+/**
+ * Register the OpenReceive custom elements with the browser's element
+ * registry. Until this runs, `<openreceive-checkout>` and
+ * `<openreceive-theme-toggle>` are unknown tags the browser renders as
+ * nothing; once it runs, every such tag on the page — already in the HTML or
+ * added later — upgrades into the live checkout / theme toggle. Call it once
+ * from your page's JS; order relative to the markup does not matter, and
+ * calling it again skips tags that are already defined.
+ */
 export function defineElements(options: DefineOpenReceiveElementsOptions = {}): void {
   const registry = options.registry ?? globalThis.customElements;
   const HTMLElementCtor = globalThis.HTMLElement;

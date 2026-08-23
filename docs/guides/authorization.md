@@ -116,8 +116,25 @@ You still write the same `authorize` function. You do not register a second
 one. If your user lives on `req.session`, read `native`; if you look the
 session up from cookies on the Web Request, read `request`.
 
-Rails applications mount the engine and keep their own authentication and
-`current_user` logic. The engine also inherits your `protect_from_forgery`:
+Rails applications mount the engine and configure the same policy as
+`config.authorize` in the initializer. The contract is identical; the context
+is a Hash with symbol keys:
+
+```ruby
+config.authorize = lambda do |context|
+  # context[:action]   — same seven action strings as above
+  # context[:request]  — the ActionDispatch::Request (session, cookies, headers)
+  # context[:resource] — { reference:, payment_hash: } from the payer's body —
+  #                      a claim, not proof (see above)
+  # `Order` is your own model (any name) — the check runs against YOUR data.
+  order = Order.find_by(id: context[:resource][:reference])
+  order && order.user_id == context[:request].session[:user_id]
+end
+```
+
+Your application keeps its own authentication and `current_user` logic — the
+policy reads the session however the rest of your app does. The engine also
+inherits your `protect_from_forgery`:
 render `csrf_meta_tags` in the layout and the checkout client sends
 `X-CSRF-Token` from it on every request; a failed check is the shared `403`.
 API-only parents (`ActionController::API`) have no forgery protection, and

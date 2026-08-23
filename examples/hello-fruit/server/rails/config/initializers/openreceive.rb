@@ -40,7 +40,10 @@ OpenReceive.configure do |config|
   # request.ip is the payer, not the proxy.
   config.rate_limiting = true
 
-  # The host authorizes every request; OpenReceive mints no tokens.
+  # The host authorizes every request; OpenReceive mints no tokens. `context`
+  # is { action:, request:, resource: } — the route name, the
+  # ActionDispatch::Request, and the payer-claimed { reference:, payment_hash: }.
+  # The policy model documents the keys and the demo's ownership rule.
   config.authorize = ->(context) { OpenReceiveOrderPolicy.authorized?(context) }
 
   # The price for an order id; nil for an unknown id (mapped to 404). The host

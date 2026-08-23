@@ -52,6 +52,8 @@ config.on_paid = lambda do |settlement|
               .update_all(state: "paid", paid_at: Time.at(settlement.paid_at).utc)
   next if claimed.zero? # someone else already fulfilled it
 
+  # FulfillOrder — like Order — is your own application code: ship the goods,
+  # enqueue the confirmation email. OpenReceive provides neither.
   FulfillOrder.call(Order.find(settlement.reference), payment_hash: settlement.payment_hash)
 end
 ```
@@ -88,7 +90,27 @@ one order be paid twice.
 
 ```ruby
 OpenReceive.configure do |config|
-  config.authorize = ->(context) { OpenReceiveOrderPolicy.authorized?(context) }
+  # `Order` throughout is YOUR model — it could be named anything. OpenReceive
+  # never sees it or touches its table; these hooks are the only bridge
+  # between the engine and your data.
+  #
+  # Your policy, called before every checkout/payment/swap request. `context`
+  # is a Hash with three symbol keys:
+  #   context[:action]   — which route: "checkout.prepare", "checkout.create",
+  #                        "payment.check", "swap.quote", "swap.create",
+  #                        "swap.read", or "swap.refund"
+  #   context[:request]  — the ActionDispatch::Request; read your session,
+  #                        cookies, or headers from it, as in a controller
+  #   context[:resource] — { reference:, payment_hash: } copied from the
+  #                        payer's JSON body. It names an order; it does not
+  #                        prove this caller owns it.
+  # Return true to allow, false for a 403. Here: only the signed-in customer
+  # who placed the order may act on it.
+  config.authorize = lambda do |context|
+    order = Order.find_by(id: context[:resource][:reference])
+    order && order.user_id == context[:request].session[:user_id]
+  end
+
   # The price for a reference — here, your order id — from your own data;
   # nil when there is nothing to pay for (a 404).
   config.amount_for = lambda do |reference|
@@ -151,6 +173,11 @@ stylesheet link can serve):
 // In your JS bundle (importmap/esbuild/webpacker):
 import { defineElements } from "@openreceive/elements";
 import "@openreceive/elements/styles.css"; // or link the compiled styles.css
+
+// Registers the <openreceive-checkout> tag with the browser. Without this,
+// the tag in the ERB above is unknown markup and renders as nothing; with it,
+// the element wakes up wherever the tag appears. Call once per page — order
+// relative to the markup does not matter.
 defineElements();
 ```
 
