@@ -56,6 +56,20 @@ behind.
 
 ### Maintenance
 
+- `swap.providers` is `swap.provider` + `swap.failoverProviders`: the name
+  now says what the code always did — failovers are consulted only when the
+  primary throws, never to fill assets it omits.
+- `prepareCheckout` takes `PrepareCheckoutOptions` (order id, prefix, fetch,
+  headers): the type no longer accepts a `memo` it silently dropped.
+- The spend-capability warning no longer pauses boot (the 5-second delay
+  defaults to 0; nothing in the repo constructs a wallet client from a
+  terminal, so there was no CLI site to keep it). The stack's boot-failure
+  line logs the error message, not the object and its raw cause.
+- `@openreceive/http` describes itself as framework-neutral over Web
+  Request/Response and built on the Node runtime. `openReceivePaymentsIndexName`
+  measures identifiers with `.length` (they are ASCII by construction) and
+  keeps the digest that makes truncated names unique.
+
 - `fixedfloat.ts` (1,134 lines, nine jobs) is six modules along the seams
   its siblings already used — transport, currencies, orders, quote, field
   readers, and the provider assembly. Move-only: the conformance vectors

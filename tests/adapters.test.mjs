@@ -570,13 +570,15 @@ function stackFixture() {
   return {
     db,
     options: {
-      service: newService(),
-      db,
+      wallet: { service: newService() },
+      storage: {
+        db,
+        onPaid: async (settlement) => {
+          paid.push(settlement.orderId);
+        },
+      },
       loadOrder: (orderId) => orders.get(orderId) ?? null,
       amountForOrder: (order) => order.amount,
-      onPaid: async (settlement) => {
-        paid.push(settlement.orderId);
-      },
       authorize: () => true,
     },
   };
@@ -605,16 +607,18 @@ test("express all-in-one form boots lazily and serves a checkout", async () => {
 test("the all-in-one form wires a custom repository instead of a db handle", async () => {
   const committed = [];
   const middleware = openReceiveExpress({
-    service: newService(),
-    payments: {
-      listForOrder: async () => [],
-      commitAttempt: (input) => committed.push(input),
-      listReconcilableAttempts: async () => [],
-      recordReconciliation: async () => undefined,
-      // The library owns write-once settlement even for custom repositories.
-      recordSettlement: async () => true,
+    wallet: { service: newService() },
+    storage: {
+      payments: {
+        listForOrder: async () => [],
+        commitAttempt: (input) => committed.push(input),
+        listReconcilableAttempts: async () => [],
+        recordReconciliation: async () => undefined,
+        // The library owns write-once settlement even for custom repositories.
+        recordSettlement: async () => true,
+      },
+      onPaid: async () => undefined,
     },
-    onPaid: async () => undefined,
     loadOrder: () => ({ amount: { sats: 21 } }),
     amountForOrder: (order) => order.amount,
     authorize: () => true,
@@ -635,12 +639,12 @@ test("the all-in-one form wires a custom repository instead of a db handle", asy
   await middleware.close();
 });
 
-test("all-in-one form requires exactly one of nwc or service", () => {
+test("a wallet with neither nwc nor service fails loudly at boot", async () => {
   const { options } = stackFixture();
-  assert.throws(
-    () => openReceiveExpress({ ...options, service: undefined }),
-    /exactly one of nwc or service/,
-  );
+  // The type forbids this; a JS caller gets the wallet client's own refusal
+  // on `ready` (and on every request) rather than a silent boot.
+  const middleware = openReceiveExpress({ ...options, wallet: {} });
+  await assert.rejects(middleware.ready);
 });
 
 test("next all-in-one form serves requests and exposes ready/close", async () => {

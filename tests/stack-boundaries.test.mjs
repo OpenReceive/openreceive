@@ -67,11 +67,10 @@ test("stack close() during an in-flight boot waits for the boot to finish", asyn
     resolveService = resolve;
   });
   const stack = createOpenReceiveStack({
-    service,
-    payments: stubPayments(),
+    wallet: { service },
+    storage: { payments: stubPayments(), onPaid: async () => {} },
     loadOrder: async () => null,
     amountForOrder: () => ({ sats: 1000 }),
-    onPaid: async () => {},
     authorize,
   });
   let booted = false;
@@ -91,11 +90,10 @@ test("stack close() during an in-flight boot waits for the boot to finish", asyn
 
 test("stack close() resolves even when boot fails", async () => {
   const stack = createOpenReceiveStack({
-    service: Promise.reject(new Error("boot failed")),
-    payments: stubPayments(),
+    wallet: { service: Promise.reject(new Error("boot failed")) },
+    storage: { payments: stubPayments(), onPaid: async () => {} },
     loadOrder: async () => null,
     amountForOrder: () => ({ sats: 1000 }),
-    onPaid: async () => {},
     authorize,
   });
   await stack.ready.catch(() => {});

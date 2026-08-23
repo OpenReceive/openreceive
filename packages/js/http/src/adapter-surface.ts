@@ -31,6 +31,8 @@ export type {
   OpenReceiveSettlementEvent,
   OpenReceiveSettlementEventHook,
   OpenReceiveStack,
+  OpenReceiveStackStorage,
+  OpenReceiveStackWallet,
   OpenReceiveWireCheckout,
   OpenReceiveWireCreateCheckoutRequest,
   OpenReceiveWireCreateCheckoutResponse,

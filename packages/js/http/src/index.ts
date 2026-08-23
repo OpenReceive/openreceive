@@ -113,5 +113,10 @@ export {
   OPENRECEIVE_RECONCILE_BATCH_SIZE,
   openReceivePaymentsSchemaSql,
 } from "./sql-payments.ts";
-export type { CreateOpenReceiveStackOptions, OpenReceiveStack } from "./stack.ts";
+export type {
+  CreateOpenReceiveStackOptions,
+  OpenReceiveStack,
+  OpenReceiveStackStorage,
+  OpenReceiveStackWallet,
+} from "./stack.ts";
 export { createOpenReceiveStack, isOpenReceiveStackOptions } from "./stack.ts";

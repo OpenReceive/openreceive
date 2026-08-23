@@ -94,9 +94,14 @@ export function createOpenReceiveStack<Order = unknown>(
     });
   })();
   // Fail loud at boot even if the host never awaits ready or sends a request;
-  // the rejection still surfaces on ready and on every request.
-  boot.catch((error) => {
-    console.error("OpenReceive stack failed to start:", error);
+  // the rejection still surfaces on ready and on every request. The message
+  // only: a boot-time wallet error object carries its raw cause, which has
+  // passed through none of the redaction the host wired for every other line.
+  boot.catch((error: unknown) => {
+    console.error(
+      "OpenReceive stack failed to start:",
+      error instanceof Error ? error.message : String(error),
+    );
   });
 
   const handle = async (request: Request, extras?: { native?: unknown }): Promise<Response> =>

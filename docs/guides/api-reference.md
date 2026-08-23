@@ -31,7 +31,8 @@ const service = await createOpenReceive(options?: CreateOpenReceiveOptions): Pro
 | `allowSpendCapableWallet` | `boolean` | no | Explicit override to boot on a wallet advertising spend methods. Default `false`; also settable via `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
 | `priceFetch` | `SimplePriceFetch` | no | Fiat price fetch override for `{ currency, value }` amounts. Defaults to global `fetch` against the live feeds; when no sufficiently recent rate is available, fiat-priced creation refuses with a retryable 503 (no mock fallback). |
 | `clock` | `() => number` | no | Unix-seconds clock override (tests). |
-| `client`, `priceProviders`, `priceCurrencies`, `swap`, `logging`, `logger`, `onEvent` | — | no | Advanced overrides; see the type. |
+| `swap` | `{ provider?, failoverProviders? }` | no | Explicit primary swap provider plus ordered failovers, consulted only when the primary throws — never to fill assets it omits. Omitted, read from `LSC_URI_PRIMARY` / `LSC_URI_BACKUP`. |
+| `client`, `priceProviders`, `priceCurrencies`, `logging`, `logger`, `onEvent` | — | no | Advanced overrides; see the type. |
 
 Returns the `OpenReceive` wallet client. Wallet preflight runs before the promise
 resolves and **fails closed**: a missing/invalid NWC URI, a wallet without
