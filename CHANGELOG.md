@@ -6,6 +6,15 @@ OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
 behind.
 
+### `openreceive` is the CLI; the library is `@openreceive/*`
+
+- The unscoped `openreceive` package no longer re-exports the library. It
+  ships the `openreceive` command only (`npx openreceive scaffold payments`,
+  `npx openreceive doctor`), forwarding to `@openreceive/node/cli`. Its 23
+  `openreceive/*` subpaths are gone: import the scoped package you installed
+  (`@openreceive/express`, `@openreceive/react`, …). One package per install,
+  one package per import, and 646 fewer symbols in the public-API snapshot.
+
 ### Wallet preflight proves receive-only from the connection's own list
 
 - Receive-only is proved from NIP-47 `get_info.methods` — what this

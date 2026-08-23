@@ -19,7 +19,8 @@ The npm release surface, all versioned in lockstep:
 - `@openreceive/angular`
 
 Public package manifests are public while testkit stays private. The public
-surface includes the unscoped `openreceive` umbrella package, the Node service
+surface includes the unscoped `openreceive` CLI package (a bin that forwards to
+`@openreceive/node`), the Node service
 package, the shipped HTTP route handler (`@openreceive/http`) and its framework
 adapters (`@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`),
 core contracts/helpers, browser checkout helpers, provider-data assets,

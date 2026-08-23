@@ -6,12 +6,14 @@ Express + React, receiving Lightning payments. Requires Node ≥ 22 (the workspa
 ## 1. Install
 
 ```sh
-npm install openreceive @openreceive/express @openreceive/react
+npm install @openreceive/express @openreceive/react
 ```
 
-`openreceive` is the umbrella package (wallet client, HTTP handler, contracts, CLI);
-add the adapter and UI package for your stack. Different stack? Swap only the
-last two packages; the rest of this guide is identical.
+Install the adapter for your server and the UI package for your frontend; the
+wallet client, HTTP handler, and contracts come along as dependencies. The
+`openreceive` package is the CLI only — `npx openreceive …` below needs no
+install. Different stack? Swap the two packages; the rest of this guide is
+identical.
 
 |          | Packages                                                                                        |
 | -------- | ----------------------------------------------------------------------------------------------- |

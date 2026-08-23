@@ -51,7 +51,12 @@ export function validateWorkspacePackageGraph(packages) {
   const publicNames = new Set(OPENRECEIVE_PUBLIC_PACKAGE_NAMES);
 
   for (const pkg of packages) {
-    assert(pkg.manifest.exports?.["."], `${pkg.manifest.name}: package export is required`);
+    // Every library package exposes a root export; the openreceive CLI package
+    // exposes a bin instead.
+    assert(
+      pkg.manifest.exports?.["."] || typeof pkg.manifest.bin === "object",
+      `${pkg.manifest.name}: package export (or bin) is required`,
+    );
     for (const [dependency, version] of Object.entries(pkg.manifest.dependencies ?? EMPTY_OBJECT)) {
       if (dependency === "openreceive" || dependency.startsWith("@openreceive/")) {
         assert(
@@ -160,6 +165,8 @@ export function createPackageBuildWorkspace(input = {}) {
 }
 
 export function buildPackageArtifact(pkg, _artifactRoot, input = {}) {
+  // A bin-only package (the openreceive CLI) has nothing to build and packs
+  // straight from its checked-in files.
   if (pkg.manifest.scripts?.build !== undefined) {
     runNpm(
       ["run", "build", "-w", pkg.manifest.name],
@@ -167,11 +174,11 @@ export function buildPackageArtifact(pkg, _artifactRoot, input = {}) {
       input.cacheDir,
       input.npmTimeoutMs,
     );
+    assert(
+      existsSync(path.join(pkg.dir, "dist")),
+      `${pkg.manifest.name}: build must emit dist before npm pack`,
+    );
   }
-  assert(
-    existsSync(path.join(pkg.dir, "dist")),
-    `${pkg.manifest.name}: build must emit dist before npm pack`,
-  );
   return pkg.dir;
 }
 

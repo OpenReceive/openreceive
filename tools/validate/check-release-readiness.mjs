@@ -48,6 +48,16 @@ function workspacePackages() {
     .sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
 }
 
+// The openreceive CLI package ships a bin and no library surface at all.
+function isBinOnlyPackage(manifest) {
+  return (
+    typeof manifest.bin === "object" &&
+    manifest.exports === undefined &&
+    manifest.main === undefined &&
+    manifest.types === undefined
+  );
+}
+
 function hasRootExport(manifest) {
   const rootExport = manifest.exports?.["."];
   if (typeof rootExport === "string") return true;
@@ -92,10 +102,13 @@ expect(
   rootPackage.scripts?.["check:release"] === "node tools/validate/check-release-readiness.mjs",
   "package.json: missing check:release script",
 );
-expect(
-  rootPackage.scripts?.["build:packages"]?.includes("-w openreceive"),
-  "package.json: build:packages must build every JS workspace package",
-);
+for (const { relativePath, manifest } of packages) {
+  if (manifest.scripts?.build === undefined) continue;
+  expect(
+    rootPackage.scripts?.["build:packages"]?.includes(`-w ${manifest.name}`),
+    `package.json: build:packages must build ${manifest.name} (${relativePath} has a build script)`,
+  );
+}
 expect(
   rootPackage.scripts?.["test:package-smoke"],
   "package.json: release gate must keep package smoke script",
@@ -123,7 +136,10 @@ for (const { relativePath, manifest } of packages) {
   } else {
     expect(manifest.private === true, `${relativePath}: private package must stay private`);
   }
-  expect(hasRootExport(manifest), `${relativePath}: package must expose a root export`);
+  expect(
+    hasRootExport(manifest) || isBinOnlyPackage(manifest),
+    `${relativePath}: package must expose a root export (or be bin-only)`,
+  );
 
   // npm-page completeness: these fields are what the registry renders, and a
   // publish without them ships a bare listing that cannot be amended for that
@@ -152,8 +168,8 @@ for (const { relativePath, manifest } of packages) {
       `${relativePath}: publishConfig.access must be "public"`,
     );
     expect(
-      typeof manifest.scripts?.prepack === "string",
-      `${relativePath}: missing prepack build script`,
+      manifest.scripts?.build === undefined || typeof manifest.scripts?.prepack === "string",
+      `${relativePath}: a package with a build script must also build on prepack`,
     );
     expect(
       manifest.repository?.url === "git+https://github.com/openreceive/openreceive.git",

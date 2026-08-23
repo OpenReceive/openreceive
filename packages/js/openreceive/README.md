@@ -1,103 +1,35 @@
 # openreceive
 
-Receive-only Lightning payments through a wallet you control.
-
-OpenReceive adds inbound Bitcoin Lightning payments to a website or app. Your
-server creates and verifies BOLT11 invoices over a server-side, receive-only
-Nostr Wallet Connect (NWC / NIP-47) connection; when a swap provider is
-configured, payers can also start from USDT, USDC, ETH, or SOL and have the
-payment settle into Bitcoin. OpenReceive is not a custodian or payment
-processor: it never transmits money or holds funds, and your app keeps
-ownership of orders while the library manages its own `openreceive_payments`
-rows in your existing database. No separate database or Redis required.
-
-This package is the umbrella: it re-exports the OpenReceive Node service,
-browser helpers, checkout UI, provider data, and generated contracts, and it
-installs the `openreceive` CLI.
-
-This package is ESM-only and requires Node >= 22.
-
-## Install
-
-```sh
-npm install openreceive
-```
-
-Framework adapters and UI wrappers are optional peer packages — add the ones
-for your stack:
+The `openreceive` command-line tool. The library itself ships as the
+`@openreceive/*` packages: install the adapter for your server and the UI
+package for your frontend, and the rest comes along as dependencies.
 
 ```sh
 npm install @openreceive/express @openreceive/react
-# or: @openreceive/fastify, @openreceive/next,
-#     @openreceive/vue, @openreceive/svelte, @openreceive/angular
 ```
+
+See the [Node quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md).
+
+This package is ESM-only and requires Node >= 22.
 
 ## Use
 
-Prefer a subpath for the surface you need:
-
-- `openreceive/node` — server SDK (service, wallet client, pricing)
-- `openreceive/http` — framework-neutral checkout HTTP handler
-- `openreceive/express` | `openreceive/fastify` | `openreceive/next` — route adapters
-- `openreceive/browser` | `openreceive/react` | `openreceive/vue` | `openreceive/svelte` | `openreceive/angular` | `openreceive/elements` — checkout UI
-- `openreceive/provider-data` — Lightning provider registry
-- `openreceive/contracts` — generated contract constants
-
-The UI subpaths mirror the full per-framework surface, components and styles
-included: `openreceive/vue/checkout.vue`, `openreceive/svelte/checkout.svelte`,
-`openreceive/angular/checkout-component`, and
-`openreceive/{react,vue,svelte,angular,elements}/styles.css` resolve to the same
-files as their `@openreceive/*` counterparts.
-
-```ts
-import express from "express";
-import { openReceiveExpress } from "openreceive/express";
-import { db, orders } from "./app.ts"; // your existing database handle and models
-
-const app = express();
-app.use(express.json());
-app.use(
-  openReceiveExpress({
-    nwc: process.env.NWC_URI!, // receive-only NWC code; boot fails closed otherwise
-    db,
-    loadOrder: (orderId) => orders.find(orderId),
-    amountForOrder: (order) => ({ currency: "USD", value: order.total.toString() }),
-    onPaid: async ({ orderId, query }) => {
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
-    },
-    // Your policy: OpenReceive never inspects sessions, and possession of an
-    // order id is not ownership. See docs/guides/authorization.md.
-    authorize: ({ native, resource }) =>
-      orders.ownedBy(
-        (native as { session?: { userId?: string } }).session?.userId,
-        resource.orderId,
-      ),
-  }),
-);
-```
-
-Before the first checkout, scaffold the payments migration for your ORM with
-the bundled CLI and run it through your normal migration workflow:
+No install needed:
 
 ```sh
 npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequelize | knex
-# then run the emitted migration (e.g. npx prisma migrate dev)
+npx openreceive doctor
 ```
 
-On the browser side, mount the checkout and import its stylesheet once. The
-compiled `styles.css` sheets are self-contained — a plain `<link>` works with
-no build step:
+- `scaffold payments` emits the `openreceive_payments` and `openreceive_meta`
+  schema/migration for your ORM plus a wiring guide; it never touches a
+  database.
+- `doctor` checks the environment and the receive-only NWC connection.
 
-```tsx
-import { Checkout } from "openreceive/react";
-import "openreceive/react/styles.css";
+The command is implemented in `@openreceive/node` (`@openreceive/node/cli`).
+This package exists so that `npx openreceive` resolves under every package
+manager, including the ones that never hoist a transitive dependency's bin.
 
-<Checkout orderId={order.id} />;
-```
+## License
 
-## Learn more
-
-- [Node quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md)
-- [API reference](https://github.com/openreceive/openreceive/blob/master/docs/guides/api-reference.md)
-- [Repository](https://github.com/openreceive/openreceive)
-- [openreceive.org](https://openreceive.org)
+MIT

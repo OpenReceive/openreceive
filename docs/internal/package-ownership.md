@@ -10,7 +10,7 @@ parallel work. Shared contract files still need lead coordination.
 | JS core contracts | `packages/js/core` | Implemented, lead-owned | Lead |
 | Node receive SDK | `packages/js/node` | Implemented | JS lane |
 | HTTP handler + adapters | `packages/js/http`, `express`, `fastify`, `next` | Implemented | JS lane |
-| Umbrella package | `packages/js/openreceive` (`openreceive/express|fastify|next|…`) | Implemented | JS lane |
+| CLI package | `packages/js/openreceive` (`npx openreceive`, a bin forwarding to `@openreceive/node/cli`) | Implemented | JS lane |
 | Browser helpers | `packages/js/browser` | Implemented | Browser lane |
 | Elements package | `packages/js/elements` | Implemented | Browser lane |
 | React package | `packages/js/react` | Implemented | Frontend lane |
@@ -23,6 +23,12 @@ parallel work. Shared contract files still need lead coordination.
 | Ruby server + Rails | `packages/ruby/openreceive-server`, `openreceive-rails` | Implemented | Ecosystem lane |
 | Hello Fruit examples | `examples/hello-fruit/**` | Implemented | Example lane |
 | Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem lanes |
+
+Why this many packages: each framework adapter (`express`, `fastify`, `next`;
+`react`, `vue`, `svelte`, `angular`) carries its own framework peer
+dependency, so a host installs exactly one framework's peer set and nothing
+else. The unscoped `openreceive` package is the CLI only; the library ships as
+the scoped packages.
 
 Safe post-reference parallel lanes:
 

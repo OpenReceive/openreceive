@@ -66,10 +66,10 @@
     // index.ts is the only TS surface and all binding logic lives in
     // @openreceive/elements/wrapper-shared, so .vue/.svelte files are not
     // scanned here.
-    // The umbrella package: every src/*.ts file is a published subpath.
+    // The openreceive CLI package: one bin (knip reads it from package.json)
+    // that forwards to @openreceive/node/cli.
     "packages/js/openreceive": {
-      "entry": ["src/*.ts"],
-      "project": ["src/**/*.{ts,tsx,mjs}"]
+      "project": ["bin/**/*.mjs"]
     }
   }
 }

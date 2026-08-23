@@ -47,8 +47,6 @@ const importChecks = {
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
   "@openreceive/vue":
     "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.defineOpenReceiveElements === 'function' && typeof mod.validateOpenReceiveCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createOpenReceiveThemeToggleElement === undefined && mod.createOpenReceiveWrapperCheckoutController === undefined && mod.createOpenReceiveWrapperCheckoutShell === undefined && mod.createOpenReceiveWrapperThemeBinding === undefined && mod.createOpenReceiveWrapperStoredThemeBinding === undefined",
-  openreceive:
-    "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function'",
 };
 
 function writeInstallProject(installDir, tarballs) {
@@ -107,14 +105,17 @@ function assembleOfflineInstall(installDir, tarballs) {
 }
 
 function writeImportSmoke(installDir, packages) {
-  const checks = packages.map(({ manifest }) => {
-    const check = importChecks[manifest.name];
-    assert(check !== undefined, `${manifest.name}: missing package smoke import check`);
-    return {
-      name: manifest.name,
-      check,
-    };
-  });
+  // The openreceive CLI package is bin-only; its check is the bin run below.
+  const checks = packages
+    .filter(({ manifest }) => manifest.exports !== undefined)
+    .map(({ manifest }) => {
+      const check = importChecks[manifest.name];
+      assert(check !== undefined, `${manifest.name}: missing package smoke import check`);
+      return {
+        name: manifest.name,
+        check,
+      };
+    });
 
   writeFileSync(
     path.join(installDir, "smoke.mjs"),
@@ -178,24 +179,6 @@ assert.equal(
   "@openreceive/core/swap-address: address validation must be importable"
 );
 
-const umbrellaChecks = [
-  ["openreceive/node", "createOpenReceive"],
-  ["openreceive/browser", "requestCheckout"],
-  ["openreceive/react", "Checkout"],
-  ["openreceive/vue", "createOpenReceiveWrapperCheckoutBinding"],
-  ["openreceive/svelte", "createOpenReceiveWrapperCheckoutBinding"],
-  ["openreceive/angular", "createOpenReceiveWrapperCheckoutBinding"],
-  ["openreceive/elements", "renderCheckoutHtml"],
-  ["openreceive/provider-data", "providerRegistry"],
-  ["openreceive/contracts", "OPENRECEIVE_ERROR_CODES"]
-];
-for (const [specifier, exportName] of umbrellaChecks) {
-  const mod = await import(specifier);
-  assert(
-    mod[exportName] !== undefined,
-    \`\${specifier}: umbrella subpath must re-export \${exportName}\`
-  );
-}
 
 for (const item of checks) {
   const mod = await import(item.name);
@@ -247,32 +230,6 @@ for (const packageName of ["vue", "svelte", "angular"]) {
     \`@openreceive/\${packageName}: styles.css must import the shared browser styles\`
   );
 }
-// The umbrella's per-framework subpaths cover the full wrapper surface:
-// component subpaths and styles.css, not just the binding factories.
-for (const forwarder of [
-  "react-styles.css",
-  "vue-styles.css",
-  "svelte-styles.css",
-  "angular-styles.css",
-  "elements-styles.css",
-  "vue-checkout.js",
-  "vue-checkout.d.ts",
-  "svelte-checkout.js",
-  "svelte-checkout.d.ts",
-  "angular-checkout-component.js",
-  "angular-checkout-component.d.ts",
-]) {
-  assert(
-    existsSync(\`node_modules/openreceive/dist/\${forwarder}\`),
-    \`openreceive: dist/\${forwarder} must be packaged\`
-  );
-}
-assert(
-  JSON.parse(readFileSync("node_modules/openreceive/package.json", "utf8")).exports[
-    "./package.json"
-  ] === "./package.json",
-  "openreceive: the umbrella must export ./package.json"
-);
 assert(
   existsSync("node_modules/@openreceive/browser/dist/assets/icons/btc.svg"),
   "@openreceive/browser: checkout icon assets must be packaged"

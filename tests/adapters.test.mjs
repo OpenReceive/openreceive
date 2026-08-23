@@ -9,9 +9,6 @@ import * as fastifyAdapter from "../packages/js/fastify/src/index.ts";
 import { openReceiveFastify } from "../packages/js/fastify/src/index.ts";
 import * as nextAdapter from "../packages/js/next/src/index.ts";
 import { openReceiveNextHandlers } from "../packages/js/next/src/index.ts";
-import * as umbrellaExpress from "../packages/js/openreceive/src/express.ts";
-import * as umbrellaFastify from "../packages/js/openreceive/src/fastify.ts";
-import * as umbrellaNext from "../packages/js/openreceive/src/next.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
 function testHost({ countAttemptsFromIp } = {}) {
@@ -76,14 +73,11 @@ function fakeExpressResponse() {
 // reconcile-gate / host-factory internals, which stay importable from
 // @openreceive/http itself. tools/validate/check-public-api.mjs pins the full
 // per-entry surface; this test guards the runtime split.
-test("adapters and umbrella subpaths expose the curated http surface, not internals", () => {
+test("adapters expose the curated http surface, not internals", () => {
   const surfaces = [
     ["@openreceive/express", expressAdapter],
     ["@openreceive/fastify", fastifyAdapter],
     ["@openreceive/next", nextAdapter],
-    ["openreceive/express", umbrellaExpress],
-    ["openreceive/fastify", umbrellaFastify],
-    ["openreceive/next", umbrellaNext],
   ];
   const curated = [
     "createOpenReceiveHttpHandler",

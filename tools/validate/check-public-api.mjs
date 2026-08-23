@@ -20,9 +20,7 @@ const snapshotPath = path.join(root, "tools", "validate", "public-api.snapshot.j
 const update = process.argv.includes("--update");
 
 // Entry points whose published types do not follow the dist/<name>.d.ts ->
-// src/<name>.ts convention. Paths are relative to the package directory; the
-// umbrella's component mirrors point at the owning package's source, because
-// the mirror files re-export through node_modules (which needs built dist).
+// src/<name>.ts convention. Paths are relative to the package directory.
 const entrySourceOverrides = {
   "@openreceive/angular": {
     ".": "src/index.ts",
@@ -30,11 +28,6 @@ const entrySourceOverrides = {
   },
   "@openreceive/vue": { "./checkout.vue": "src/Checkout.vue.d.ts" },
   "@openreceive/svelte": { "./checkout.svelte": "src/Checkout.svelte.d.ts" },
-  openreceive: {
-    "./vue/checkout.vue": "../vue/src/Checkout.vue.d.ts",
-    "./svelte/checkout.svelte": "../svelte/src/Checkout.svelte.d.ts",
-    "./angular/checkout-component": "../angular/src/openreceive-checkout.component.ts",
-  },
 };
 
 function fail(message) {

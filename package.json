@@ -24,7 +24,7 @@
     "check:example-imports": "node tools/validate/check-example-imports.mjs",
     "check:public-api": "node tools/validate/check-public-api.mjs",
     "check:dead-exports": "knip",
-    "build:packages": "npm run build -w @openreceive/core -w @openreceive/provider-data -w @openreceive/browser -w @openreceive/elements -w @openreceive/node -w @openreceive/http -w @openreceive/express -w @openreceive/fastify -w @openreceive/next -w @openreceive/react -w @openreceive/vue -w @openreceive/svelte -w @openreceive/angular -w @openreceive/testkit -w openreceive",
+    "build:packages": "npm run build -w @openreceive/core -w @openreceive/provider-data -w @openreceive/browser -w @openreceive/elements -w @openreceive/node -w @openreceive/http -w @openreceive/express -w @openreceive/fastify -w @openreceive/next -w @openreceive/react -w @openreceive/vue -w @openreceive/svelte -w @openreceive/angular -w @openreceive/testkit",
     "release:plan": "node tools/release/npm-release.mjs plan",
     "release:prepare": "node tools/release/npm-release.mjs prepare",
     "release:stamp": "node tools/release/npm-release.mjs stamp",
