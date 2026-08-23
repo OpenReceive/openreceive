@@ -19,19 +19,27 @@ Configure any swap provider that implements the
 [FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs) and
 checkout offers these pay-in routes, each converted into Bitcoin on the way in:
 
-| Pay with | On network |
-| --- | --- |
-| <img src="packages/js/browser/src/assets/icons/usdt.svg" alt="USDT" width="28"> &nbsp;**USDT** (Tether) | <img src="packages/js/browser/src/assets/icons/trx.svg" alt="Tron" width="18"> Tron &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
-| <img src="packages/js/browser/src/assets/icons/usdc.svg" alt="USDC" width="28"> &nbsp;**USDC** (USD Coin) | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
-| <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana) | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana |
-| <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether) | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
+| Pay with                                                                                                  | On network                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="packages/js/browser/src/assets/icons/usdt.svg" alt="USDT" width="28"> &nbsp;**USDT** (Tether)   | <img src="packages/js/browser/src/assets/icons/trx.svg" alt="Tron" width="18"> Tron &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
+| <img src="packages/js/browser/src/assets/icons/usdc.svg" alt="USDC" width="28"> &nbsp;**USDC** (USD Coin) | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                  |
+| <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana)      | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana                                                                                                                                                                                                           |
+| <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether)       | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                                                                                                                       |
 
 OpenReceive does not transmit money or hold customer funds. It helps your
 backend create invoices and verify settlement — nothing more.
 
 ## Quickstart
 
-Pick your stack:
+```sh
+npm install @openreceive/express @openreceive/react   # Node: your server adapter + UI package
+```
+
+```ruby
+gem "openreceive-rails"                               # Rails
+```
+
+Then pick your stack:
 
 | Stack         | Quickstart                                          |
 | ------------- | --------------------------------------------------- |
@@ -43,44 +51,14 @@ Each one is the same loop: your server owns the price and the order, the payer
 gets a Lightning invoice, and your `onPaid` hook runs once inside the settlement
 transaction.
 
-## What can customers pay with?
-
-Every checkout ends at the same settlement primitive: a Lightning invoice paid
-into the merchant wallet.
-
-- **Bitcoin Lightning** — direct BOLT11 payment with no swap provider.
-- **Swap routes** — every coin/network pair in the table above, quoted and
-  converted to Lightning by the configured swap provider.
-
-Swap options appear only when a compatible provider is configured and returns
-a usable quote. Actual availability, minimums, fees, liquidity, and regional
-access belong to that provider; OpenReceive never promises that every route is
-available for every payer.
-
-Products can be priced directly in BTC or sats, or in a configured fiat
-currency. The built-in price-feed data supports:
-
-```text
-USD, AED, ARS, AUD, BDT, BHD, BMD, BRL, CAD, CHF, CLP, CNY, CZK, DKK,
-EUR, GBP, GEL, HKD, HUF, IDR, ILS, INR, JPY, KRW, KWD, LKR, MMK, MXN,
-MYR, NGN, NOK, NZD, PHP, PKR, PLN, RUB, SAR, SEK, SGD, THB, TRY, TWD,
-UAH, VEF, VND, ZAR
-```
-
-Fiat is a pricing input, not a settlement asset. OpenReceive converts the exact
-decimal order price to sats when creating the invoice; public payment payloads
-use `amount_msats`.
-
 ## Design
 
-OpenReceive hinges on three ideas:
-
-- **One receive primitive.** BOLT11 is widely recognized across wallets,
-  exchanges, and services. Every payment route converges on one fast,
-  interoperable Lightning invoice.
-- **Your wallet, your funds.** OpenReceive uses receive-only NWC methods to
-  create and inspect invoices. Receive-only NWC codes never belong in browser
-  code, mobile apps, logs, screenshots, documentation examples, or demo assets.
+- **Paranoid security defaults.**
+  1. An attacker who controls your server has no way to spend your funds:
+     all your server holds is a receive-only NWC code, and boot fails closed
+     if that code can spend.
+  2. Every payment settles as Bitcoin Lightning, swapped from other
+     currencies as necessary.
 - **Your app owns business state.** Your application owns orders; the library
   owns the `openreceive_payments` rows (they live in your database) — see
   [Payment storage](docs/guides/storage.md). OpenReceive never owns orders,

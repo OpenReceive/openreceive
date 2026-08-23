@@ -32,7 +32,7 @@ Gem::Specification.new do |spec|
   # The gems release in lockstep, so sibling dependencies pin the exact version.
   spec.add_dependency "openreceive", "= #{OpenReceive::Rails::VERSION}"
   spec.add_dependency "openreceive-server", "= #{OpenReceive::Rails::VERSION}"
-  spec.add_dependency "rails", ">= 7.1"
+  spec.add_dependency "rails", ">= 8.0"
 
   # Test-only: the engine-owned model tests run against in-memory SQLite.
   spec.add_development_dependency "sqlite3", ">= 2.1"

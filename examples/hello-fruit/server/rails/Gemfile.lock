@@ -4,7 +4,7 @@ PATH
     openreceive-rails (0.2.0-alpha.0)
       openreceive (= 0.2.0-alpha.0)
       openreceive-server (= 0.2.0-alpha.0)
-      rails (>= 7.1)
+      rails (>= 8.0)
 
 PATH
   remote: ../../../../packages/ruby/openreceive-server

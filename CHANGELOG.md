@@ -15,6 +15,15 @@ behind.
   (`@openreceive/express`, `@openreceive/react`, …). One package per install,
   one package per import, and 646 fewer symbols in the public-API snapshot.
 
+### Compatibility ranges are ranges that run
+
+- `@getalby/sdk` `^8` (was `^7`; v8's one breaking change is requiring Node
+  22, already this repo's floor). `@openreceive/next` declares
+  `next ^14 || ^15 || ^16` (13 dropped; the adapter uses Web
+  Request/Response only). `openreceive-rails` requires Rails `>= 8.0` (7.1
+  and 7.2 are past security support and were never run here; 8.1 is what CI
+  runs).
+
 ### Wallet preflight proves receive-only from the connection's own list
 
 - Receive-only is proved from NIP-47 `get_info.methods` — what this
