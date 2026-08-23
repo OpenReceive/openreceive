@@ -404,9 +404,10 @@ behavior, package artifacts, demos, secret scans, release metadata, deployment
 templates, and documentation aligned:
 
 ```sh
-npm run test:ci:core   # fast JS/package gate
+npm test               # the JS suite
+npm run check          # contracts and secret-safety checks
+npm run test:ci:core   # fast JS/package gate — exactly what CI runs per push
 npm run test:ci        # full deterministic gate, including Ruby and demos
-npm test               # contracts and secret-safety checks
 npm run test:live      # live wallet smoke (Node + Ruby); separate from test:ci
 ```
 

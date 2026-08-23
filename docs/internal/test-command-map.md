@@ -2,17 +2,18 @@
 
 | Command | Purpose | Requires Secrets |
 | --- | --- | --- |
-| `npm test` | Run the fast local gate: `validate` (JSON/schema/vector/provider validation plus generated-doc-table freshness) then `scan:secrets`. | No |
+| `npm test` | Run the Node test suite (`test:js`). `pretest:js` first builds the Angular dist chain — the one `@openreceive/*` import under `tests/` with no tsconfig `paths` entry. | No |
+| `npm run check` | Run the fast local gate: `validate` (JSON/schema/vector/provider validation plus generated-doc-table freshness) then `scan:secrets`. | No |
 | `npm run test:ci` | Run the full repository gate: `test:ci:core` then `test:ci:release`. | No |
-| `npm run test:ci:core` | Deterministic source gate: fast local gate, lint, format check, generated-model freshness, public-API surface check, typecheck, Vue and Svelte checks, dead-export check, JS tests, package smoke. | No |
-| `npm run test:ci:release` | Release-shaped gate: build packages, Ruby tests, demo container/release/workflow checks, example-import check, Rails example tests, demo builds, client-bundle scan, docs build. | No |
+| `npm run test:ci:core` | Deterministic source gate, and exactly what `ci.yml` runs per push: `check`, lint, format check, workflow and example-import checks, generated-model freshness, public-API surface check, typecheck, Vue and Svelte checks, dead-export check, JS tests, package smoke. | No |
+| `npm run test:ci:release` | Release-shaped gate: build packages, Ruby tests, demo container and release checks, Rails example tests, demo builds, client-bundle scan, docs build. | No |
 | `npm run test:live` | Live NWC smoke against a real wallet (Node + Ruby). Never part of the deterministic gate. | Yes |
 | `npm run test:e2e` | Playwright end-to-end suite: boots the node-express Hello Fruit demo in `DEMO_WALLET=testkit` mode and drives real Chromium through all four framework tabs (lightning, swap + refund, remint, resume/theme). Weekly full run in `demos.yml`. | No |
 | `npm run test:e2e:smoke` | The lightning spec's React tab only — the per-push `e2e-smoke` job in `ci.yml`. | No |
 | `npm run check:public-api` | Diff every publishable package's export surface against the committed snapshot (`tools/validate/public-api.snapshot.json`) — the gate behind the curated adapter/wrapper surfaces. Regenerate a reviewed change with `--update`. | No |
 | `npm run check:vue` | Type-check the Vue wrapper with `vue-tsc`. | No |
 | `npm run check:svelte` | Type-check the Svelte wrapper with `svelte-check`. | No |
-| `npm run check:example-imports` | Reject `@openreceive/*/internal` imports under `examples/`. Runs per-push in CI and inside `test:ci:release`. | No |
+| `npm run check:example-imports` | Reject `@openreceive/*/internal` imports under `examples/`. Part of `test:ci:core`. | No |
 | `npm run validate` | Contract/vector validation plus generated doc-table freshness (spec route/error tables, headless symbol inventory). Vector validation runs here — there is no separate `test:vectors` command. | No |
 | `npm run scan:secrets` | Scan public repo files for likely committed receive-only NWC codes and reject tracked env files. | No |
 | `npm run scan:client-bundles` | Scan generated demo `dist` bundles for browser-side NWC markers after `build:demo`. | No |

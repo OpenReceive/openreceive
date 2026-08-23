@@ -57,13 +57,17 @@ export function openReceiveReconcileIntervalSeconds(
   now: number,
   minIntervalSeconds: number = OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS,
 ): number {
+  const floor = Math.max(OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS, minIntervalSeconds);
+  // Nothing pending: nothing to pace, so the floor. Math.min() of an empty
+  // list is Infinity, and a host feeding that to the gate would never reopen it.
+  if (attempts.length === 0) return floor;
   const ageStretch = Math.min(
     // A wallet-issued createdAt ahead of the host clock reads as a negative
     // age; clamped to zero it counts as freshly minted (scan fast), which is
     // what a just-created invoice deserves.
     ...attempts.map((attempt) => intervalForInvoiceAge(Math.max(0, now - attempt.createdAt))),
   );
-  return Math.max(OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS, minIntervalSeconds, ageStretch);
+  return Math.max(floor, ageStretch);
 }
 
 function intervalForInvoiceAge(elapsedSeconds: number): number {

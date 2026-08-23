@@ -12,16 +12,9 @@ const workflowDirectory = ".github/workflows";
 // land unvalidated.
 const requiredWorkflows = {
   "ci.yml": [
-    "npm test",
-    "npm run lint",
-    "npm run format:check",
-    "npm run check:workflows",
-    "npm run check:example-imports",
-    "npm run check:generated",
-    "npm run typecheck",
-    "npm run check:dead-exports",
-    "npm run test:js",
-    "npm run test:package-smoke",
+    // The per-push gate is package.json's test:ci:core, asserted by name so
+    // its step list lives in exactly one place.
+    "npm run test:ci:core",
     // Per-push browser smoke: one real checkout through the node-express
     // demo in Chromium (full spec matrix stays in the weekly demos lane).
     "npm run test:e2e:smoke",
@@ -250,6 +243,14 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
 }
 
 const ciWorkflow = readWorkflow(`${workflowDirectory}/ci.yml`).workflow;
+// The gate ci.yml runs must exist, and must still contain the checker that
+// validates ci.yml itself — otherwise this file stops running on push.
+const rootScripts = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).scripts ?? {};
+expect(
+  typeof rootScripts["test:ci:core"] === "string" &&
+    rootScripts["test:ci:core"].includes("npm run check:workflows"),
+  "package.json: test:ci:core must exist and include npm run check:workflows",
+);
 expect(
   ciWorkflow.on?.pull_request !== undefined,
   `${workflowDirectory}/ci.yml: missing pull_request trigger`,

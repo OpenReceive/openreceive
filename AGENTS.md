@@ -80,16 +80,17 @@ small, honest API and a good developer experience.
 
 ## Testing
 
-Use the smallest relevant test while iterating. The default contract/secret check is:
+Use the smallest relevant test while iterating. `npm test` is the JS suite; the contract and
+secret check is:
 
 ```sh
-npm test
+npm run check
 ```
 
 For JS/TS changes, run a focused test first and then at minimum:
 
 ```sh
-npm run typecheck && npm run test:js
+npm run typecheck && npm test
 ```
 
 For broad route, package, contract, schema, release, or deployment changes, run:

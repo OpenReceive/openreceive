@@ -639,7 +639,7 @@ async function persistCheckoutAttempt(
 /** Seconds a `payments/check` payment_methods catalog stays warm per amount. */
 const PAYMENT_METHODS_CACHE_SECONDS = 60;
 
-/** Amount buckets kept warm before the oldest entries are dropped. */
+/** Amount buckets kept warm before the cache is cleared wholesale: a memory cap, not an LRU. */
 const PAYMENT_METHODS_CACHE_MAX_ENTRIES = 256;
 
 /**

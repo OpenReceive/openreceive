@@ -4,7 +4,6 @@ export type Status = "pending" | "settled" | "expired" | "failed";
 
 export interface StatusInvoiceLike {
   readonly transaction_state?: string;
-  readonly settled_at?: number | string | null;
   readonly expires_at?: number | string | null;
 }
 
@@ -12,9 +11,10 @@ export function status(
   invoice: StatusInvoiceLike,
   options: { readonly now?: number } = {},
 ): Status {
-  if (invoice.transaction_state === "settled" || invoice.settled_at != null) {
-    return "settled";
-  }
+  // transaction_state is the server's verdict, computed from the settlement
+  // rule in @openreceive/core. The browser never re-derives "settled" from
+  // settled_at: one rule, one owner.
+  if (invoice.transaction_state === "settled") return "settled";
   if (invoice.transaction_state === "failed") return "failed";
   if (invoice.transaction_state === "expired") return "expired";
 

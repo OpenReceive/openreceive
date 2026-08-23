@@ -19,7 +19,11 @@ process.env.LOG_LEVEL ??= "error";
 GlobalRegistrator.register({ url: "http://angular.local/" });
 
 // The built entry point, not the raw .ts: the source needs Angular's AOT
-// decorator handling, which node's TS loader does not provide.
+// decorator handling, which node's TS loader does not provide. Every other
+// @openreceive/* import under tests/ resolves from src via tsx + tsconfig
+// paths; only @openreceive/angular/checkout-component has no paths entry, so
+// package.json's `pretest:js` builds just this chain — angular plus the
+// workspace deps whose dist .d.ts its build type-checks against.
 import { CheckoutComponent } from "@openreceive/angular/checkout-component";
 
 // Angular sets @Input values only after construction, so field initializers see

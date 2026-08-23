@@ -5,10 +5,10 @@ Thanks for helping build OpenReceive. The short version:
 ## Setup
 
 - Node ≥ 22 and Ruby ≥ 3.2 (every gemspec's `required_ruby_version`; CI tests 3.2 and 3.4).
-- `npm ci`, then `npm run test:js` for the JS suite and `npm run test:ruby`
-  for the Ruby engine + cross-language conformance harness.
-- `npm test` runs the contract validators and secret scan; `npm run lint` and
-  `npm run typecheck` must both be clean.
+- `npm ci`, then `npm test` for the JS suite and `npm run test:ruby` for the
+  Ruby engine + cross-language conformance harness.
+- `npm run check` runs the contract validators and secret scan; `npm run lint`
+  and `npm run typecheck` must both be clean.
 
 ## Ground rules
 
@@ -25,8 +25,8 @@ Thanks for helping build OpenReceive. The short version:
 ## Pull requests
 
 - Keep changes focused; include tests for behavior changes.
-- CI runs the JS suite, the Ruby suite, package smoke tests, lint,
-  typecheck, and the validators on every PR — `npm run test:ci:core` plus
-  `npm run test:ruby` approximates it locally.
+- CI runs `npm run test:ci:core` on every push and PR (JS suite, package
+  smoke, lint, typecheck, the public-API snapshot, and the validators) plus
+  `npm run test:ruby` — run the same two commands locally.
 - Security reports: see `SECURITY.md` (do not open public issues for
   vulnerabilities).

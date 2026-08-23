@@ -396,4 +396,8 @@ test("the gate interval stretches with pending-invoice age", () => {
   // A configured floor can only slow it down, never beat the 2s minimum.
   assert.equal(openReceiveReconcileIntervalSeconds([attempt(990)], 1_000, 5), 5);
   assert.equal(openReceiveReconcileIntervalSeconds([attempt(990)], 1_000, 1), 2);
+  // An empty pending set — the natural input from a host driving the gate —
+  // is the floor, never Infinity.
+  assert.equal(openReceiveReconcileIntervalSeconds([], 1_000), 2);
+  assert.equal(openReceiveReconcileIntervalSeconds([], 1_000, 5), 5);
 });

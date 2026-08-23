@@ -112,7 +112,7 @@ export function createOpenReceiveTransactionDetails(
     // (e.g. still "awaiting_deposit" when the provider raced through deposit → payout
     // inside one poll interval). Label it as a last-known value, not a live one.
     // See docs/guides/automated-swaps.md, "Provider state after settlement".
-    const settled = input.transaction_state === "settled" || input.settled_at !== undefined;
+    const settled = input.transaction_state === "settled";
     const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
     push("Swap provider", swap.provider);
     push("Provider order", swap.provider_order_id);

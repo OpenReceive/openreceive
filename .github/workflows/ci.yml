@@ -27,16 +27,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm test
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run check:workflows
-      - run: npm run check:example-imports
-      - run: npm run check:generated
-      - run: npm run typecheck
-      - run: npm run check:dead-exports
-      - run: npm run test:js
-      - run: npm run test:package-smoke
+      # package.json's test:ci:core is the one list of per-push gate steps;
+      # this job runs it rather than restating it, so the README, CI, and
+      # check-workflows.mjs cannot drift apart.
+      - run: npm run test:ci:core
 
   ruby-engine:
     runs-on: ubuntu-latest
