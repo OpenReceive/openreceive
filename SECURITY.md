@@ -22,8 +22,10 @@ vulnerability.
   [Payment storage](docs/guides/storage.md)) before payer instructions are
   exposed. A row represents one direct payment attempt or one provider swap
   attempt, never several provider orders.
-- Checkout creation locks the host order, reuses its one live attempt, and
-  rejects creation after any sibling attempt has settled.
+- Checkout creation serializes per `order_id` on OpenReceive-owned rows,
+  reuses the order's one live attempt, and rejects creation after any sibling
+  attempt has settled. The host's order table is never read, written, locked,
+  or joined.
 - Payment, swap-status, and refund requests include the displayed
   `payment_hash`; the host verifies that the selected attempt belongs to the
   authorized order.

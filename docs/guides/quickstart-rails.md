@@ -62,6 +62,12 @@ config.on_paid = lambda do |settlement|
 end
 ```
 
+Delivery is at-least-once: `on_paid` runs inside the settlement transaction,
+and a raise rolls it back for the next pass to retry. Keep it to database
+writes on the order — an email or webhook sent from here would survive the
+rollback and go out again. The `state: "paid"` transition above is the flag;
+let your own job drain it after commit.
+
 Within OpenReceive's own settlement paths, `on_paid` already runs at most once
 per order: a second payment to a second invoice is recorded with
 `status_reason = "duplicate_settlement"` and never fulfills again.

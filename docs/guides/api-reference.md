@@ -440,6 +440,12 @@ transaction: an ORM call made here uses that ORM's own connection, so it commits
 separately and can survive a rolled-back settlement (or be lost when settlement
 commits and it does not).
 
+Keep `onPaid` to database writes. Anything that reaches outside the
+transaction — an email, a webhook, a shipping call — survives a rollback and
+runs again on the retry. Flag the order here (or insert the outbox row below)
+and let your own worker drain it after commit; there is no after-commit hook,
+by design.
+
 ```ts
 onPaid: async ({ orderId, query }) => {
   await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);

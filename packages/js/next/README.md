@@ -27,7 +27,9 @@ settled attempt. Do the order update (or insert an outbox row) through the
 supplied `query`: a plain ORM call commits on its own connection, so it would
 survive a rolled-back settlement — settlement side effects belong on `query`.
 Delivery is at-least-once and retried until `onPaid` succeeds, so make it
-idempotent.
+idempotent, and keep it to database writes: an email or webhook sent from here
+survives a rolled-back settlement and goes out again on the retry. Flag the
+order and drain it from your own worker after commit.
 
 The library owns the `openreceive_payments` rows in the host's existing
 database. It selects the exact attempt for reads and appends attempts under a

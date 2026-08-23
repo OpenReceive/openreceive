@@ -1,6 +1,6 @@
 # OpenReceive
 
-Accept payments on your website or app that no one can block, reverse, or freeze.
+Accept Bitcoin payments on your website or app, straight into a wallet you control.
 
 <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="56">
 
@@ -8,9 +8,11 @@ Accept payments on your website or app that no one can block, reverse, or freeze
 internet. Your server issues an invoice from a wallet you already control. The payer settles it, and your server
 approves delivery of the purchase.
 
-**Deposit-only by design.** Funds move in one direction — toward you.
-OpenReceive never takes custody of your money and never holds a key that can
-spend it. You can use [any backing NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments) to hold your funds.
+**Deposit-only by design.** OpenReceive exposes no payment-sending API and
+never holds a key: it connects with a receive-only NWC code, and boot fails
+closed when the code can spend. Custody, freezing, and reversal are properties
+of the [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments)
+and swap provider you choose — not of this library.
 
 **Optionally Swap In Payments From Other Currencies:**
 
@@ -24,8 +26,7 @@ the [FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs), and
 your customers can pay in USDT, USDC, ETH, SOL, and more — each is instantly converted into
 Bitcoin on the way in.
 
-OpenReceive is not a bank, exchange, wallet, broker, custodian, or payment
-processor. It does not transmit money or hold customer funds. It helps your
+OpenReceive does not transmit money or hold customer funds. It helps your
 backend create invoices and verify settlement — nothing more.
 
 ## Quickstart

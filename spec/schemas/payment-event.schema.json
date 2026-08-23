@@ -23,5 +23,5 @@
       "additionalProperties": true
     }
   },
-  "description": "In-process JS callback payload (camelCase) delivered to host onPaid/onSettlement hooks. This is deliberately NOT a wire schema: HTTP bodies are snake_case and are described by the OpenAPI document and error.schema.json. It describes the serializable event only \u2014 db-mode onPaid additionally receives a `query` handle bound to the settlement transaction, which is a runtime capability rather than event data and is therefore not modelled here."
+  "description": "In-process JS callback payload (camelCase) delivered to the host onPaid hook. This is deliberately NOT a wire schema: HTTP bodies are snake_case and are described by the OpenAPI document and error.schema.json. It describes the serializable event only \u2014 db-mode onPaid additionally receives a `query` handle bound to the settlement transaction, which is a runtime capability rather than event data and is therefore not modelled here."
 }
