@@ -251,13 +251,10 @@ components:
         fiat_quote:
           oneOf:
             - { type: 'null' }
-            - { type: object, additionalProperties: true }
+            - { $ref: '#/components/schemas/FiatQuote' }
         payment_methods:
           type: array
-          items:
-            type: object
-            additionalProperties: true
-            required: [pay_in_asset, label, network_label, provider, available]
+          items: { $ref: '#/components/schemas/PaymentMethod' }
     CreateCheckoutRequest:
       type: object
       additionalProperties: false
@@ -280,7 +277,7 @@ components:
         fiat_quote:
           oneOf:
             - { type: 'null' }
-            - { type: object, additionalProperties: true }
+            - { $ref: '#/components/schemas/FiatQuote' }
     CreateCheckoutResponse:
       type: object
       additionalProperties: false
@@ -297,6 +294,66 @@ components:
     PaymentStatus:
       type: string
       enum: [pending, settled, expired, failed, not_found]
+    PaymentMethod:
+      description: One swap pay-in option for an invoice amount.
+      type: object
+      additionalProperties: false
+      required: [pay_in_asset, label, network_label, provider, available]
+      properties:
+        pay_in_asset: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1 }
+        network_label: { type: string, minLength: 1 }
+        provider: { type: string }
+        available: { type: boolean }
+        unavailable_reason: { type: string }
+        unavailable_message: { type: string }
+        pay_amount: { type: string }
+        minimum_pay_amount: { type: string }
+        maximum_pay_amount: { type: string }
+        minimum_invoice_amount_msats: { type: integer, minimum: 0 }
+        maximum_invoice_amount_msats: { type: integer, minimum: 0 }
+    FiatQuote:
+      # Kept in lockstep with spec/schemas/rate-quote.schema.json: the quote the
+      # checkout was priced from, snake_case on the wire.
+      type: object
+      additionalProperties: false
+      required: [fiat, btc_fiat_price, amount_sats, amount_msats, source, as_of, expires_at]
+      properties:
+        fiat:
+          type: object
+          additionalProperties: false
+          required: [currency, value]
+          properties:
+            currency: { type: string, pattern: '^[A-Z]{3}$' }
+            value: { type: string, pattern: '^[0-9]+(\.[0-9]+)?$' }
+        btc_fiat_price: { type: string, pattern: '^[0-9]+(\.[0-9]+)?$' }
+        amount_sats: { type: integer, minimum: 1, maximum: 9007199254740 }
+        amount_msats: { type: integer, minimum: 1000, maximum: 9007199254740991 }
+        source: { type: string, enum: [static_mock, primary, fallback] }
+        as_of: { type: integer, minimum: 0 }
+        expires_at: { type: integer, minimum: 0 }
+    PaymentDetails:
+      description: >
+        The wallet row that proved settlement, reduced to its payer-facing
+        fields (never the preimage, the full invoice, or wallet metadata).
+      type: object
+      additionalProperties: false
+      required: [observed_at]
+      properties:
+        transaction:
+          type: object
+          additionalProperties: false
+          properties:
+            payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+            state: { type: string }
+            transaction_state: { type: string }
+            amount_msats: { type: integer, minimum: 0 }
+            fees_paid_msats: { type: integer, minimum: 0 }
+            created_at: { type: integer, minimum: 0 }
+            settled_at: { type: integer, minimum: 0 }
+            expires_at: { type: integer, minimum: 0 }
+        observed_at: { type: integer, minimum: 0 }
+        paid_at_source: { type: string, enum: [settled_at, observed_at] }
     PaymentCheck:
       type: object
       additionalProperties: false
@@ -305,30 +362,14 @@ components:
         payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
         status: { $ref: '#/components/schemas/PaymentStatus' }
         paid_at: { type: integer, minimum: 0 }
-        details: { type: object, additionalProperties: true }
+        details: { $ref: '#/components/schemas/PaymentDetails' }
         payment_methods:
           type: array
           description: >
             Swap pay-in options for this invoice amount. Empty when no LSC
             provider is configured. Present even while Lightning is the only rail
             so clients can stop showing a currencies loader.
-          items:
-            type: object
-            additionalProperties: true
-            required: [pay_in_asset, label, network_label, provider, available]
-            properties:
-              pay_in_asset: { type: string, minLength: 1 }
-              label: { type: string, minLength: 1 }
-              network_label: { type: string, minLength: 1 }
-              provider: { type: string }
-              available: { type: boolean }
-              unavailable_reason: { type: string }
-              unavailable_message: { type: string }
-              pay_amount: { type: string }
-              minimum_pay_amount: { type: string }
-              maximum_pay_amount: { type: string }
-              minimum_invoice_amount_msats: { type: integer, minimum: 0 }
-              maximum_invoice_amount_msats: { type: integer, minimum: 0 }
+          items: { $ref: '#/components/schemas/PaymentMethod' }
     SwapQuoteRequest:
       type: object
       additionalProperties: false
@@ -396,12 +437,13 @@ components:
         maximum_invoice_amount_msats: { type: integer, minimum: 0 }
         unavailable_reason: { type: string }
         unavailable_message: { type: string }
-    Swap:
+    SwapBase:
+      # The fields of a swap attempt, open so Swap and SwapCheckout can compose it;
+      # each of those closes itself with unevaluatedProperties: false.
       description: >
         Payer-facing swap attempt state (the PublicSwap service object on the
         wire). Never carries swap_data — provider recovery state is server-only.
       type: object
-      additionalProperties: false
       required:
         - payment_hash
         - order_id
@@ -432,44 +474,23 @@ components:
         emergency_repeat: { type: boolean }
         provider_order_id: { type: string }
         fee: { $ref: '#/components/schemas/SwapFee' }
+    Swap:
+      description: Payer-facing swap attempt state on the wire.
+      allOf:
+        - $ref: '#/components/schemas/SwapBase'
+      unevaluatedProperties: false
     SwapCheckout:
-      # Swap plus the committed shadow checkout. Kept in lockstep with the Swap
-      # schema field-for-field (additionalProperties: false forbids allOf reuse).
+      # Swap plus the committed shadow checkout, by composition: OpenAPI 3.1 is
+      # JSON Schema 2020-12, where unevaluatedProperties: false closes an allOf
+      # the way additionalProperties: false cannot.
       description: A committed swap attempt with its Lightning shadow checkout.
-      type: object
-      additionalProperties: false
-      required:
-        - payment_hash
-        - order_id
-        - provider
-        - pay_in_asset
-        - deposit_address
-        - deposit_amount
-        - provider_state
-        - provider_expires_at
-        - checkout
-      properties:
-        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
-        order_id: { type: string, minLength: 1, maxLength: 200 }
-        provider: { type: string, minLength: 1 }
-        pay_in_asset: { $ref: '#/components/schemas/SwapPayInAsset' }
-        deposit_address: { type: string, minLength: 1 }
-        deposit_memo: { type: string }
-        deposit_amount: { type: string, minLength: 1 }
-        provider_state: { $ref: '#/components/schemas/SwapProviderState' }
-        provider_expires_at: { type: integer, minimum: 0 }
-        deposit_tx_id: { type: string }
-        payout_tx_id: { type: string }
-        refund_tx_id: { type: string }
-        refund_reason: { type: string }
-        refund_amount: { type: string }
-        attention: { type: boolean }
-        attention_reason: { type: string }
-        deposit_received_amount: { type: string }
-        emergency_repeat: { type: boolean }
-        provider_order_id: { type: string }
-        fee: { $ref: '#/components/schemas/SwapFee' }
-        checkout: { $ref: '#/components/schemas/Checkout' }
+      allOf:
+        - $ref: '#/components/schemas/SwapBase'
+        - type: object
+          required: [checkout]
+          properties:
+            checkout: { $ref: '#/components/schemas/Checkout' }
+      unevaluatedProperties: false
     CreateSwapResponse:
       type: object
       additionalProperties: false

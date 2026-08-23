@@ -94,6 +94,9 @@ const WIRE_SCHEMA_NAMES = [
   "CreateCheckoutResponse",
   "PaymentCheckRequest",
   "PaymentStatus",
+  "PaymentMethod",
+  "FiatQuote",
+  "PaymentDetails",
   "PaymentCheck",
   "SwapQuoteRequest",
   "CreateSwapRequest",
@@ -113,13 +116,40 @@ function wireTypeName(schemaName) {
   return `OpenReceiveWire${schemaName}`;
 }
 
-function wireTypeForSchema(schema, indent) {
+// The component schemas of the OpenAPI document being generated, so an allOf
+// member can be inlined by $ref.
+let wireSchemas = EMPTY_OBJECT;
+
+function resolveWireRef(ref) {
+  const match = ref.match(/^#\/components\/schemas\/([A-Za-z0-9]+)$/);
+  assert(match !== null, `unsupported wire $ref: ${ref}`);
+  return match[1];
+}
+
+/**
+ * `closed` — the enclosing allOf carries `unevaluatedProperties: false`, so
+ * this member gets no index signature even though it declares no
+ * `additionalProperties: false` of its own (JSON Schema 2020-12 composition).
+ */
+function wireTypeForSchema(schema, indent, closed = false) {
   assert(schema !== undefined && schema !== null, "wire schema is required");
   if (typeof schema.$ref === "string") {
-    const match = schema.$ref.match(/^#\/components\/schemas\/([A-Za-z0-9]+)$/);
-    assert(match !== null, `unsupported wire $ref: ${schema.$ref}`);
-    assert(WIRE_SCHEMA_NAMES.includes(match[1]), `wire $ref to an unlisted schema: ${match[1]}`);
-    return wireTypeName(match[1]);
+    const name = resolveWireRef(schema.$ref);
+    if (closed) {
+      // Inline the composed base so the closed shape is the one emitted; the
+      // open base (e.g. SwapBase) is never a wire type by itself.
+      const target = wireSchemas[name];
+      assert(target !== undefined, `wire $ref to a missing schema: ${name}`);
+      return wireTypeForSchema(target, indent, true);
+    }
+    assert(WIRE_SCHEMA_NAMES.includes(name), `wire $ref to an unlisted schema: ${name}`);
+    return wireTypeName(name);
+  }
+  if (Array.isArray(schema.allOf)) {
+    const memberClosed = schema.unevaluatedProperties === false;
+    return schema.allOf
+      .map((member) => wireTypeForSchema(member, indent, memberClosed))
+      .join(" & ");
   }
   if (Array.isArray(schema.oneOf)) {
     return schema.oneOf.map((member) => wireTypeForSchema(member, indent)).join(" | ");
@@ -139,16 +169,17 @@ function wireTypeForSchema(schema, indent) {
     case "array":
       return `readonly (${wireTypeForSchema(schema.items ?? EMPTY_OBJECT, indent)})[]`;
     case "object":
-      return wireTypeForObjectSchema(schema, indent);
+      return wireTypeForObjectSchema(schema, indent, closed);
     default:
       throw new Error(`unsupported wire schema type: ${JSON.stringify(schema.type)}`);
   }
 }
 
-function wireTypeForObjectSchema(schema, indent) {
+function wireTypeForObjectSchema(schema, indent, closed = false) {
   const properties = schema.properties ?? EMPTY_OBJECT;
   const required = new Set(schema.required ?? []);
-  const open = schema.additionalProperties !== false;
+  const open =
+    !closed && schema.additionalProperties !== false && schema.unevaluatedProperties !== false;
   const names = Object.keys(properties);
   const undeclaredRequired = [...required].filter((name) => !(name in properties));
   if (names.length === 0 && undeclaredRequired.length === 0) {
@@ -176,6 +207,7 @@ function wireTypeForObjectSchema(schema, indent) {
 function generateWire() {
   const openApi = readYaml("spec/openapi/openreceive-http.v1.yaml");
   const schemas = openApi.components?.schemas ?? EMPTY_OBJECT;
+  wireSchemas = schemas;
   assert(openApi.info?.version, "OpenAPI info.version is required");
 
   const declarations = WIRE_SCHEMA_NAMES.map((name) => {

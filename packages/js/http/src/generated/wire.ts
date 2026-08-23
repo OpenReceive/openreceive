@@ -13,15 +13,8 @@ export type OpenReceiveWirePrepareCheckoutRequest = {
 export type OpenReceiveWirePrepareCheckoutResponse = {
   readonly order_id: string;
   readonly amount_msats: number;
-  readonly fiat_quote?: null | Record<string, unknown>;
-  readonly payment_methods: readonly {
-    readonly [key: string]: unknown;
-    readonly pay_in_asset: unknown;
-    readonly label: unknown;
-    readonly network_label: unknown;
-    readonly provider: unknown;
-    readonly available: unknown;
-  }[];
+  readonly fiat_quote?: null | OpenReceiveWireFiatQuote;
+  readonly payment_methods: readonly OpenReceiveWirePaymentMethod[];
 };
 
 /** Wire shape of the OpenAPI `CreateCheckoutRequest` schema (snake_case JSON body). */
@@ -39,7 +32,7 @@ export type OpenReceiveWireCheckout = {
   readonly amount_msats: number;
   readonly created_at: number;
   readonly expires_at: number;
-  readonly fiat_quote?: null | Record<string, unknown>;
+  readonly fiat_quote?: null | OpenReceiveWireFiatQuote;
 };
 
 /** Wire shape of the OpenAPI `CreateCheckoutResponse` schema (snake_case JSON body). */
@@ -61,27 +54,59 @@ export type OpenReceiveWirePaymentStatus =
   | "failed"
   | "not_found";
 
+/** Wire shape of the OpenAPI `PaymentMethod` schema (snake_case JSON body). */
+export type OpenReceiveWirePaymentMethod = {
+  readonly pay_in_asset: string;
+  readonly label: string;
+  readonly network_label: string;
+  readonly provider: string;
+  readonly available: boolean;
+  readonly unavailable_reason?: string;
+  readonly unavailable_message?: string;
+  readonly pay_amount?: string;
+  readonly minimum_pay_amount?: string;
+  readonly maximum_pay_amount?: string;
+  readonly minimum_invoice_amount_msats?: number;
+  readonly maximum_invoice_amount_msats?: number;
+};
+
+/** Wire shape of the OpenAPI `FiatQuote` schema (snake_case JSON body). */
+export type OpenReceiveWireFiatQuote = {
+  readonly fiat: {
+    readonly currency: string;
+    readonly value: string;
+  };
+  readonly btc_fiat_price: string;
+  readonly amount_sats: number;
+  readonly amount_msats: number;
+  readonly source: "static_mock" | "primary" | "fallback";
+  readonly as_of: number;
+  readonly expires_at: number;
+};
+
+/** Wire shape of the OpenAPI `PaymentDetails` schema (snake_case JSON body). */
+export type OpenReceiveWirePaymentDetails = {
+  readonly transaction?: {
+    readonly payment_hash?: string;
+    readonly state?: string;
+    readonly transaction_state?: string;
+    readonly amount_msats?: number;
+    readonly fees_paid_msats?: number;
+    readonly created_at?: number;
+    readonly settled_at?: number;
+    readonly expires_at?: number;
+  };
+  readonly observed_at: number;
+  readonly paid_at_source?: "settled_at" | "observed_at";
+};
+
 /** Wire shape of the OpenAPI `PaymentCheck` schema (snake_case JSON body). */
 export type OpenReceiveWirePaymentCheck = {
   readonly payment_hash: string;
   readonly status: OpenReceiveWirePaymentStatus;
   readonly paid_at?: number;
-  readonly details?: Record<string, unknown>;
-  readonly payment_methods: readonly {
-    readonly [key: string]: unknown;
-    readonly pay_in_asset: string;
-    readonly label: string;
-    readonly network_label: string;
-    readonly provider: string;
-    readonly available: boolean;
-    readonly unavailable_reason?: string;
-    readonly unavailable_message?: string;
-    readonly pay_amount?: string;
-    readonly minimum_pay_amount?: string;
-    readonly maximum_pay_amount?: string;
-    readonly minimum_invoice_amount_msats?: number;
-    readonly maximum_invoice_amount_msats?: number;
-  }[];
+  readonly details?: OpenReceiveWirePaymentDetails;
+  readonly payment_methods: readonly OpenReceiveWirePaymentMethod[];
 };
 
 /** Wire shape of the OpenAPI `SwapQuoteRequest` schema (snake_case JSON body). */
@@ -190,6 +215,7 @@ export type OpenReceiveWireSwapCheckout = {
   readonly emergency_repeat?: boolean;
   readonly provider_order_id?: string;
   readonly fee?: OpenReceiveWireSwapFee;
+} & {
   readonly checkout: OpenReceiveWireCheckout;
 };
 

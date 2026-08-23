@@ -19,6 +19,17 @@ behind.
   moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
   rest of that document was history.
 
+### The spec's own response shapes are closed
+
+- `PaymentMethod`, `FiatQuote`, and `PaymentDetails` are named, closed
+  component schemas; `PrepareCheckoutResponse`, `Checkout`, and
+  `PaymentCheck` reference them instead of `additionalProperties: true`.
+  `Swap` and `SwapCheckout` compose an open `SwapBase` and close themselves
+  with `unevaluatedProperties: false` (OpenAPI 3.1 is JSON Schema 2020-12),
+  replacing the hand-copied field list. The generated wire types follow
+  (`OpenReceiveWirePaymentMethod`, `OpenReceiveWireFiatQuote`,
+  `OpenReceiveWirePaymentDetails`; every wire type is now closed).
+
 ### One status vocabulary; one error vocabulary per layer
 
 - `TransactionSettlementStatus` (`pending | settled | expired | failed`) is

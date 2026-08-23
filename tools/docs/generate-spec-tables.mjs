@@ -85,10 +85,31 @@ function listOperations(openApi) {
   return operations;
 }
 
+// An object schema's effective field list. A composed schema (`allOf` over an
+// open base, closed by `unevaluatedProperties: false`) contributes every
+// member's fields; `$ref` members resolve against the components.
+function effectiveObject(schema, schemas) {
+  if (typeof schema.$ref === "string")
+    return effectiveObject(schemas[refName(schema.$ref)], schemas);
+  const members = Array.isArray(schema.allOf)
+    ? schema.allOf.map((member) => effectiveObject(member, schemas))
+    : [];
+  return {
+    isObject: schema.type === "object" || members.length > 0,
+    required: [...(schema.required ?? []), ...members.flatMap((member) => member.required)],
+    properties: Object.assign(
+      {},
+      ...members.map((member) => member.properties),
+      schema.properties ?? {},
+    ),
+  };
+}
+
 // `{ order_id, amount_msats, fiat_quote?, payment_methods }` from an object schema.
-function objectShape(schema) {
-  const required = new Set(schema.required ?? []);
-  const keys = Object.entries(schema.properties ?? {}).map(([key, prop]) => {
+function objectShape(schema, schemas) {
+  const { required: requiredList, properties } = effectiveObject(schema, schemas);
+  const required = new Set(requiredList);
+  const keys = Object.entries(properties).map(([key, prop]) => {
     const suffix = required.has(key) ? "" : "?";
     return prop?.$ref ? `${key}${suffix}: ${refName(prop.$ref)}` : `${key}${suffix}`;
   });
@@ -102,8 +123,8 @@ function bodyShape(entry, schemas) {
   if (schema.$ref) {
     const name = refName(schema.$ref);
     const resolved = schemas[name];
-    assert(resolved?.type === "object", `${name}: expected an object schema`);
-    return `\`${name}\` \`${objectShape(resolved)}\``;
+    assert(effectiveObject(resolved, schemas).isObject, `${name}: expected an object schema`);
+    return `\`${name}\` \`${objectShape(resolved, schemas)}\``;
   }
   assert(
     schema.type === "object",
