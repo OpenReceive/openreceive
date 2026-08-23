@@ -31,15 +31,7 @@ backend create invoices and verify settlement — nothing more.
 
 ## Quickstart
 
-```sh
-npm install @openreceive/express @openreceive/react   # Node: your server adapter + UI package
-```
-
-```ruby
-gem "openreceive-rails"                               # Rails
-```
-
-Then pick your stack:
+Pick your stack:
 
 | Stack         | Quickstart                                          |
 | ------------- | --------------------------------------------------- |
