@@ -4,7 +4,7 @@ module OpenReceiveOrderPolicy
   module_function
 
   def authorized?(context)
-    order_id = context[:resource]&.[](:order_id) || context[:resource]&.[]("order_id")
-    order_id.present? && Order.exists?(order_id)
+    reference = context[:resource]&.[](:reference) || context[:resource]&.[]("reference")
+    reference.present? && Order.exists?(reference)
   end
 end

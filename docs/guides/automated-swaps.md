@@ -6,8 +6,8 @@ attempt row before those instructions reach the payer. One row holds exactly one
 order; a swap retry creates another row with a fresh invoice hash.
 
 Node applications configure provider credentials with optional `LSC_URI_PRIMARY` and
-`LSC_URI_BACKUP` environment variables. Primary is used exclusively while it is
-healthy; backup is only for primary outage. See
+`LSC_URI_BACKUP` environment variables ([Environment variables](environment-variables.md)).
+Primary is used exclusively while it is healthy; backup is only for primary outage. See
 [Lightning Swap Connect](lightning-swap-connect.md) for the URI grammar and
 security requirements. OpenReceive only quotes its small fixed pay-in asset
 list into Lightning — provider market dumps are not merged in.
@@ -22,7 +22,7 @@ on the attempt row and stays server-only; never return it to browsers or log it.
 framework/database field encryption, but OpenReceive does not require a separate encryption
 key. Provider `completed` does not fulfill an order unless the wallet also reports settlement.
 
-Refunds are authorized by your application and pass the row's `orderId`, `paymentHash`, `swapData`, and
+Refunds are authorized by your application and pass the row's `reference`, `paymentHash`, `swapData`, and
 refund address. The wallet client refreshes provider state immediately before requesting the refund
 and refuses states other than `refund_required`.
 

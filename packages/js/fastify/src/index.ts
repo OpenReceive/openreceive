@@ -81,11 +81,11 @@ export interface FastifyHandlerOptions
   extends CreateOpenReceiveHttpHandlerOptions,
     FastifyAdapterExtras {}
 
-/** All-in-one form: order hooks + `wallet` + `storage`; the plugin builds service and host. */
+/** All-in-one form: host hooks + `wallet` + `storage`; the plugin builds service and host. */
 export interface FastifyStackOptions extends CreateOpenReceiveStackOptions, FastifyAdapterExtras {}
 
 /**
- * Two forms: the all-in-one happy path (order hooks + `wallet` + `storage`; the
+ * Two forms: the all-in-one happy path (host hooks + `wallet` + `storage`; the
  * plugin builds the service and host and closes the owned service on app close
  * — no background process, settlement is opportunistic) or the composed
  * `{ service, host, authorize }` form.

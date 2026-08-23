@@ -330,14 +330,14 @@ test("React checkout context fails clearly outside the provider", () => {
   );
 });
 
-test("React <Checkout orderId> enters create mode and renders the creating placeholder", () => {
+test("React <Checkout reference> enters create mode and renders the creating placeholder", () => {
   // react-dom/server does not run effects, so the on-mount create POST is not observable from
-  // an SSR render; the create -> POST { order_id } -> poll /openreceive/payments/check
+  // an SSR render; the create -> POST { reference } -> poll /openreceive/payments/check
   // lifecycle is driven for real (happy-dom + real handler) in tests/lifecycle.test.mjs
   // (react-create surface) and tests/element-lifecycle.test.mjs. Here we assert the
   // component enters create mode and shows its minimal placeholder while pending.
   const html = renderToStaticMarkup(
-    React.createElement(Checkout, { orderId: "ord-1", prefix: "/openreceive" }),
+    React.createElement(Checkout, { reference: "ord-1", prefix: "/openreceive" }),
   );
   assert.match(html, /openreceive-checkout-creating/);
   assert.match(html, /Creating checkout/);
@@ -345,7 +345,7 @@ test("React <Checkout orderId> enters create mode and renders the creating place
 
   // A create with the default prefix (no prefix prop) also enters create mode.
   const defaultPrefixHtml = renderToStaticMarkup(
-    React.createElement(Checkout, { orderId: "ord-2" }),
+    React.createElement(Checkout, { reference: "ord-2" }),
   );
   assert.match(defaultPrefixHtml, /openreceive-checkout-creating/);
 });

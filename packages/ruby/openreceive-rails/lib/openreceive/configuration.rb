@@ -6,12 +6,12 @@ module OpenReceive
   class ConfigurationError < StandardError; end
 
   # Passed to the quickstart `config.on_paid` inside the settlement transaction,
-  # only for the order's first settled attempt. (Named to avoid the core gem's
-  # OpenReceive::Settlement rules module; mirrors JS OrderSettlement.)
+  # only for the first settled attempt for a reference. (Named to avoid the core gem's
+  # OpenReceive::Settlement rules module; mirrors JS PaymentSettlement.)
   # `details` carries the wallet-observed settlement details JS delivers to
   # onPaid (transaction snapshot, observed_at, paid_at_source); may be nil for
   # settlements recorded without wallet details.
-  OrderSettlement = Struct.new(:order_id, :payment_hash, :paid_at, :details, keyword_init: true)
+  PaymentSettlement = Struct.new(:reference, :payment_hash, :paid_at, :details, keyword_init: true)
 
   # The generated initializer's placeholder `config.on_paid`: it logs the
   # settlement and fulfills nothing. Kept as a named constant so the engine can
@@ -19,20 +19,20 @@ module OpenReceive
   # settled without ever being fulfilled must not pass silently.
   LOGGING_ON_PAID = lambda do |settlement|
     ::Rails.logger.info(
-      "[openreceive] order #{settlement.order_id} paid (payment_hash #{settlement.payment_hash})"
+      "[openreceive] order #{settlement.reference} paid (payment_hash #{settlement.payment_hash})"
     )
   end
 
   class Configuration
-    # Quickstart contract: authorize + load_order + amount_for_order + on_paid.
-    # The engine derives checkout resolution, attempt commit, and settlement
-    # write-once from the engine-owned OpenReceivePayment model.
+    # Quickstart contract: authorize + amount_for + on_paid. The engine derives
+    # checkout resolution, attempt commit, and settlement write-once from the
+    # engine-owned OpenReceivePayment model.
     #
     # Advanced escape hatch: hosts with a custom payment repository configure
     # resolve_checkout and on_checkout_created together; on_paid then receives
     # the raw settlement event and owns replay safety itself.
     attr_accessor :parent_controller, :nwc, :nwc_client, :authorize,
-                  :load_order, :amount_for_order, :on_paid,
+                  :amount_for, :on_paid,
                   :resolve_checkout, :on_checkout_created,
                   :rate_limit, :rate_limiting, :client_ip, :price_provider,
                   :swap_providers, :price_currencies, :allow_spend_capable_wallet,
@@ -43,8 +43,7 @@ module OpenReceive
       @nwc = nil
       @nwc_client = nil
       @authorize = nil
-      @load_order = nil
-      @amount_for_order = nil
+      @amount_for = nil
       @on_paid = nil
       @resolve_checkout = nil
       @on_checkout_created = nil
@@ -156,9 +155,9 @@ module OpenReceive
         raise ConfigurationError,
               "OpenReceive.config.resolve_checkout and on_checkout_created must be configured together (advanced mode)."
       end
-      if !advanced_hooks? && (@load_order.nil? || @amount_for_order.nil?)
+      if !advanced_hooks? && @amount_for.nil?
         raise ConfigurationError,
-              "Set OpenReceive.config.load_order and amount_for_order (quickstart), " \
+              "Set OpenReceive.config.amount_for (quickstart), " \
               "or resolve_checkout and on_checkout_created (advanced)."
       end
       resolved_nwc_client
@@ -247,18 +246,20 @@ module OpenReceive
             "OpenReceive.config.rate_limiting #{name} must be a positive integer (got #{limit})."
     end
 
+    # The host is asked only where a price is minted or quoted. Status polls
+    # and refund recovery for committed attempts are answered from the engine's
+    # own rows and never wait for the host's price hook.
     def engine_resolve_checkout
-      lambda do |action:, request:, order_id:, input:, pay_in_asset: nil|
-        order = @load_order.call(order_id)
-        raise OpenReceive::Server::NotFoundError, "Order not found." if order.nil?
-
-        amount = @amount_for_order.call(order)
+      lambda do |action:, request:, reference:, input:, pay_in_asset: nil|
+        pricing = %w[checkout.prepare swap.quote checkout.create swap.create].include?(action)
+        amount = pricing ? @amount_for.call(reference) : nil
+        raise OpenReceive::Server::NotFoundError, "Unknown reference." if pricing && amount.nil?
         next({ amount: amount }) if %w[checkout.prepare swap.quote].include?(action)
 
         requested_hash = input["payment_hash"] || input[:payment_hash]
         begin
           payment = OpenReceivePayment.selected_for(
-            order_id: order.id,
+            reference: reference,
             action: action,
             payment_hash: requested_hash,
             pay_in_asset: pay_in_asset
@@ -267,7 +268,7 @@ module OpenReceive
           raise OpenReceive::Server::ConflictError, e.message
         end
         if !requested_hash.to_s.strip.empty? && payment.nil?
-          raise OpenReceive::Server::NotFoundError, "Payment attempt not found for this order."
+          raise OpenReceive::Server::NotFoundError, "Payment attempt not found for this reference."
         end
 
         {
@@ -280,15 +281,10 @@ module OpenReceive
     end
 
     def engine_on_checkout_created
-      lambda do |order_id:, payment_hash:, checkout:, swap_data: nil, client_ip: nil, **|
-        # load_order still gates on the order existing (an unknown id is a 404),
-        # but the engine does not touch the object it returns: commit_attempt!
-        # serializes on its own rows, keyed by the id alone.
-        raise OpenReceive::Server::NotFoundError, "Order not found." if @load_order.call(order_id).nil?
-
+      lambda do |reference:, payment_hash:, checkout:, swap_data: nil, client_ip: nil, **|
         begin
           OpenReceivePayment.commit_attempt!(
-            order_id: order_id,
+            reference: reference,
             payment_hash: payment_hash,
             checkout: checkout,
             swap_data: swap_data,
@@ -311,8 +307,8 @@ module OpenReceive
           paid_at: data.fetch("paid_at")
         ) do |payment|
           @on_paid.call(
-            OrderSettlement.new(
-              order_id: payment.order_id,
+            PaymentSettlement.new(
+              reference: payment.reference,
               payment_hash: payment.payment_hash,
               paid_at: payment.paid_at,
               details: data["details"]

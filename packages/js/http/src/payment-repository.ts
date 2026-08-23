@@ -42,7 +42,7 @@ export type AttemptStatus = TransactionSettlementStatus | "attention";
  * An order may have many of these records. `swapData` must remain server-only.
  */
 export interface PaymentRecord {
-  readonly orderId: string;
+  readonly reference: string;
   readonly paymentHash: string;
   readonly status: AttemptStatus;
   /** Optional operator-facing detail for the current status (e.g. "superseded"). */
@@ -61,7 +61,7 @@ export interface PaymentRecord {
 export type LiveAttemptCommitDecision = "ignore" | "conflict" | "supersede";
 
 export interface PaymentInsert {
-  readonly orderId: string;
+  readonly reference: string;
   readonly paymentHash: string;
   readonly expiresAt: number;
   readonly createdAt: number;
@@ -117,7 +117,7 @@ export interface SettlementRecord {
  * call reports the claim won, so a redelivered settlement fulfills once.
  */
 export interface PaymentRepository {
-  listForOrder(orderId: string): Promise<readonly PaymentRecord[]>;
+  listForReference(reference: string): Promise<readonly PaymentRecord[]>;
   /**
    * The oldest `pending` attempts, terminal rows excluded. A repository with a
    * large backlog should return an oldest-first batch (the built-in SQL one
@@ -228,7 +228,7 @@ export function reconciliationTransition(
 /** Convert a checkout callback to the values common ORM create calls persist. */
 export function paymentInsert(input: CheckoutCreatedInput): PaymentInsert {
   return {
-    orderId: input.orderId,
+    reference: input.reference,
     paymentHash: input.paymentHash.toLowerCase(),
     createdAt: input.checkout.createdAt,
     checkout: structuredClone(input.checkout),

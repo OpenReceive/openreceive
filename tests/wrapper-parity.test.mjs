@@ -47,7 +47,7 @@ const HANDLERS = [
 ];
 const SHARED_PROPS = [
   "checkout",
-  "orderId",
+  "reference",
   "prefix",
   "paymentWizard",
   "decodeLinkUrl",
@@ -57,7 +57,7 @@ const SHARED_PROPS = [
   "metadata",
   "syncUrl",
   "resumePathPrefix",
-  "routeOrderId",
+  "routeReference",
 ];
 
 function read(file) {
@@ -163,7 +163,7 @@ test("every wrapper exposes all seven event handlers as first-class props", () =
 test("the shared binding subscribes to every element event, including open-wallet", () => {
   const handlers = Object.fromEntries(HANDLERS.map((handler) => [handler, () => undefined]));
   const shell = createWrapperCheckoutShellBinding(null, {
-    orderId: "order-parity",
+    reference: "order-parity",
     ...handlers,
   });
 
@@ -177,7 +177,7 @@ test("the shared binding subscribes to every element event, including open-walle
 test("missing mode props fail at the boundary with one clear error", () => {
   assert.throws(
     () => validateCheckoutProps({ framework: "@openreceive/test" }),
-    /requires a checkout snapshot or an orderId/,
+    /requires a checkout snapshot or an reference/,
   );
   // The shared factory used to be the first thing to notice, throwing from inside a
   // computed/reactive read (in Angular, once per change-detection pass).
@@ -187,7 +187,7 @@ test("missing mode props fail at the boundary with one clear error", () => {
 test("create-mode props warn once per wrapper when passed in snapshot mode", () => {
   const snapshot = {
     checkout_id: "or_chk_parity",
-    order_id: "order-parity",
+    reference: "order-parity",
     status: "open",
     amount_msats: 1000,
     invoices: [],
@@ -212,18 +212,20 @@ test("React runs its mode props through the same boundary check as the wrappers"
   // G6a: React used to carry its own CREATE_MODE_ONLY_PROPS list and its own warn
   // function. PRODUCT CHANGE — the missing-mode failure is now the shared TypeError
   // (it was a plain Error reading "<Checkout> requires ..."), and an empty-string
-  // orderId is rejected instead of quietly starting create mode with no order.
+  // reference is rejected instead of quietly starting create mode with no order.
   assert.throws(
     () => Checkout({}),
     (error) =>
       error instanceof TypeError &&
-      /@openreceive\/react Checkout requires a checkout snapshot or an orderId/.test(error.message),
+      /@openreceive\/react Checkout requires a checkout snapshot or an reference/.test(
+        error.message,
+      ),
   );
-  assert.throws(() => Checkout({ orderId: "" }), TypeError);
+  assert.throws(() => Checkout({ reference: "" }), TypeError);
 
   const snapshot = {
     checkout_id: "or_chk_react_boundary",
-    order_id: "order-react-boundary",
+    reference: "order-react-boundary",
     status: "open",
     amount_msats: 1000,
     invoices: [],
@@ -249,7 +251,7 @@ test("React snapshot mode with no prefix polls via the default prefix", () => {
   // exposes the props it hands the snapshot-mode wrapper.
   const snapshot = {
     checkout_id: "or_chk_poll_parity",
-    order_id: "order-poll-parity",
+    reference: "order-poll-parity",
     status: "open",
     amount_msats: 1000,
     invoices: [],
@@ -275,7 +277,7 @@ test("snapshot-mode polling defaults and knobs match the parity table", () => {
 
   const snapshot = {
     checkout_id: "or_chk_poll_defaults",
-    order_id: "order-poll-defaults",
+    reference: "order-poll-defaults",
     status: "open",
     amount_msats: 1000,
     invoices: [],
@@ -325,16 +327,16 @@ test("the theme is resolved from the default until the wrapper mounts", () => {
     setItem: () => undefined,
   };
   const deferred = createWrapperCheckoutShellBinding(null, {
-    orderId: "order-parity",
+    reference: "order-parity",
     deferThemeResolution: true,
   });
   const deferredWithHostStorage = createWrapperCheckoutShellBinding(null, {
-    orderId: "order-parity",
+    reference: "order-parity",
     storage,
     deferThemeResolution: true,
   });
   const mounted = createWrapperCheckoutShellBinding(null, {
-    orderId: "order-parity",
+    reference: "order-parity",
     storage,
   });
 

@@ -69,7 +69,7 @@ export interface ElementsWizardView {
   /** Invoice amount + fiat, used to render fiat limit messages for out-of-range assets. */
   readonly amountMsats?: number;
   readonly fiat?: { readonly currency?: string; readonly value?: string };
-  readonly orderId?: string;
+  readonly reference?: string;
   readonly checkoutId?: string;
   /** Display Lightning BOLT11 from the checkout (swap shadows may omit invoice). */
   readonly lightningInvoice?: string;
@@ -118,7 +118,7 @@ export interface DefineOpenReceiveElementsOptions {
  * A whitespace-only id is the same nothing wearing a coat (`nonEmptyString` does
  * not trim, so `" "` sails through the parse boundary and becomes a junk id that
  * `createCheckoutSnapshotFromInvoice` then also copies into `checkout_id` and
- * `order_id`), so it is rejected by the same test.
+ * `reference`), so it is rejected by the same test.
  *
  * A usable id is returned RAW, exactly as the number readers keep their value
  * raw: trimming it here would silently mint an id that matches nothing the

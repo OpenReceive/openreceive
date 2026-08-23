@@ -2,7 +2,7 @@
 
 Use this when the [Node quickstart](../guides/quickstart-node.md) is not enough.
 Most apps should mount `@openreceive/express` (or Fastify/Next) and keep host policy in
-`createHost({ db, loadOrder, amountForOrder, onPaid })` plus the host's
+`createHost({ db, amountFor, onPaid })` plus the host's
 `authorize` policy.
 
 ## Request flow
@@ -14,24 +14,24 @@ browser
       ▼
 host validates cart, calculates exact price, creates order row
       │
-      └── response { order_id }
+      └── response { reference }
 
-browser renders <Checkout orderId={order_id} />
+browser renders <Checkout reference={reference} />
       │
       ▼
-POST /openreceive/checkouts/prepare { order_id }        (prepare: no invoice yet)
+POST /openreceive/checkouts/prepare { reference }        (prepare: no invoice yet)
       │
-      ├── authorize(request, action, order_id)
-      ├── loadOrder + amountForOrder → authoritative amount
+      ├── authorize(request, action, reference)
+      ├── amountFor → authoritative amount
       └── response { amount_msats, fiat_quote?, payment_methods }
 
 payer picks a method (Bitcoin → mint; swap asset → POST /openreceive/swaps)
       │
       ▼
-POST /openreceive/checkouts { order_id }                (mint)
+POST /openreceive/checkouts { reference }                (mint)
       │
-      ├── authorize(request, action, order_id)
-      ├── loadOrder + amountForOrder → authoritative amount
+      ├── authorize(request, action, reference)
+      ├── amountFor → authoritative amount
       ├── create or reuse the committed attempt (library-owned selection)
       ├── commitAttempt → transactional openreceive_payments insert
       └── response exposes payer instructions only after commit succeeds
@@ -39,7 +39,7 @@ POST /openreceive/checkouts { order_id }                (mint)
 later status refresh or reconcile pass
       │
       ├── authorize again (mounted routes)
-      ├── library verifies { order_id, payment_hash } selects a committed attempt
+      ├── library verifies { reference, payment_hash } selects a committed attempt
       ├── OpenReceive verifies the receive wallet (batched list_transactions)
       └── settled → write-once settlement transaction → onPaid for the first settled attempt
 ```
@@ -52,27 +52,26 @@ only:
 | Option           | Host responsibility                                        |
 | ---------------- | ---------------------------------------------------------- |
 | `db`             | Handle to the existing database holding `openreceive_payments` |
-| `loadOrder`      | Load the host order (or `null` → 404)                      |
-| `amountForOrder` | Authoritative `{ sats }` or `{ currency, value }` price    |
+| `amountFor`      | Authoritative `{ sats }` or `{ currency, value }` price, or `null` → 404 |
 | `onPaid`         | In-transaction fulfillment for the first settled attempt   |
 
-Attempt selection, per-order commit locking, the status state machine, write-once settlement,
+Attempt selection, per-reference commit locking, the status state machine, write-once settlement,
 and reconciliation transitions are library-owned. `authorize` stays separate on the adapter:
 OpenReceive does not inspect the host session; it passes the Web-standard `Request`, requested
 action, and order ID. Knowing an order ID is not authentication.
 
-`onPaid({ orderId, paymentHash, paidAt, details?, query })` runs inside the settlement
+`onPaid({ reference, paymentHash, paidAt, details?, query })` runs inside the settlement
 transaction; `query` runs statements (`?` placeholders) in that same transaction for the order
 update or an outbox insert. A duplicate sibling settlement is recorded with
 `status_reason = 'duplicate_settlement'` and never fulfills again.
 
 The advanced form replaces `db` with `payments: PaymentRepository`
-(`listForOrder`, `listReconcilableAttempts`, `commitAttempt`, `recordReconciliation`,
+(`listForReference`, `listReconcilableAttempts`, `commitAttempt`, `recordReconciliation`,
 `recordSettlement`, plus `claimReconcileGate` unless the host passes
 `opportunisticReconcile: false`); the host then owns locking and the reconciliation
 transitions, while write-once settlement stays library-owned — `recordSettlement` is the
 claim, and repository-mode `onPaid` (context: `SettlementEvent` — `paymentHash`,
-`paidAt`, `details?`; no `orderId` or transactional `query`) fires only when it is won. If
+`paidAt`, `details?`; no `reference` or transactional `query`) fires only when it is won. If
 `commitAttempt` refuses, OpenReceive returns
 `409` and withholds the new payer instructions (infrastructure failure: retryable `503`).
 
@@ -107,7 +106,7 @@ one) before `service.close()` on shutdown.
 - Retries reuse a live attempt that still has more than the reuse buffer (60 s) of life; a
   near-expiry same-rail attempt is superseded (`status_reason = 'superseded'`); it stays
   `pending` so a late payment to it still reconciles, and closes only on a wallet scan.
-- Concurrent creates serialize per order inside the library repository; the loser receives
+- Concurrent creates serialize per reference inside the library repository; the loser receives
   `409` and no invoice.
 - A payer can hold one live Lightning attempt and one live swap attempt per asset to switch
   methods; the first wallet settlement fulfills.
@@ -122,7 +121,7 @@ and commit through the host's library-owned repository before display:
 
 ```ts
 const checkout = await service.createCheckout({
-  orderId: order.id,
+  reference: order.id,
   amount: {
     currency: order.currency,
     value: order.total.toString(),
@@ -130,7 +129,7 @@ const checkout = await service.createCheckout({
 });
 
 await host.payments.commitAttempt({
-  orderId: order.id,
+  reference: order.id,
   paymentHash: checkout.paymentHash,
   checkout,
 });
@@ -139,7 +138,7 @@ return checkout;
 ```
 
 For retry recovery, return the selected attempt's stored `checkout` snapshot
-(`host.payments.listForOrder`). Full custom-controller patterns are in
+(`host.payments.listForReference`). Full custom-controller patterns are in
 [Writing your own checkout route](../guides/custom-checkout-route.md).
 
 ## Mounted routes

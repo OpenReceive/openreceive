@@ -10,29 +10,29 @@ OpenReceive.configure do |config|
 
   # The host authorizes every request; OpenReceive mints no tokens.
   #
-  # The default below treats possession of the order id as the authorization:
-  # the request must name an order that exists. That is only safe while your
-  # order ids are unguessable (UUIDs, not sequential integers). If your ids are
-  # enumerable, or an order should only be visible to the customer who placed
-  # it, replace this with a session/ownership policy, e.g.:
+  # The default below treats possession of the reference as the authorization
+  # (an unknown reference is still a 404, because amount_for returns nil for
+  # it). That is only safe while your references are unguessable (UUIDs, not
+  # sequential integers). If they are enumerable, or an order should only be
+  # visible to the customer who placed it, replace this with a
+  # session/ownership policy, e.g.:
   #   config.authorize = ->(context) { OrderPolicy.viewer_may?(current_user_for(context), context) }
-  config.authorize = lambda { |context|
-    resource = context[:resource] || context["resource"]
-    order_id = resource&.[](:order_id) || resource&.[]("order_id")
-    order_id.present? && <%= order_model_name %>.exists?(order_id)
-  }
+  config.authorize = ->(_context) { true }
 
-  # Load the host-owned order; return nil for an unknown id (mapped to 404).
-  # The engine only checks that this returns something (an unknown id is a 404)
-  # and asks amount_for_order for the price. It never locks, writes, or
-  # references <%= order_model_name %> — see the on_paid note below.
-  config.load_order = ->(order_id) { <%= order_model_name %>.find_by(id: order_id) }
-
-  # The host order is the only price authority; payer input never carries an amount.
-  config.amount_for_order = ->(order) { { currency: "USD", value: order.total.to_s } }
+  # The price for a reference — the string your checkout passes, typically
+  # your order id. Your application is the only price authority; payer input
+  # never carries an amount. Return { currency: "USD", value: "12.00" } or
+  # { sats: 1200 }, or nil when there is nothing to pay for (a 404). The
+  # engine refuses to serve checkouts until this is set.
+  #
+  # TODO(price): look the reference up in your own application, e.g.
+  # config.amount_for = lambda do |reference|
+  #   order = Order.find_by(id: reference)
+  #   order && { currency: "USD", value: order.total.to_s }
+  # end
 
   # Runs inside the settlement transaction, only for the order's first settled
-  # attempt. `settlement` exposes order_id, payment_hash, and paid_at.
+  # attempt. `settlement` exposes reference, payment_hash, and paid_at.
   #
 <%= fulfillment_note("  # ") %>
   #
@@ -41,12 +41,12 @@ OpenReceive.configure do |config|
   # second fulfillment path can never ship the same order twice:
   #
   #   config.on_paid = lambda do |settlement|
-  #     claimed = <%= order_model_name %>
-  #                 .where(id: settlement.order_id, state: "awaiting_payment")
+  #     claimed = Order
+  #                 .where(id: settlement.reference, state: "awaiting_payment")
   #                 .update_all(state: "paid", paid_at: Time.at(settlement.paid_at).utc)
   #     next if claimed.zero? # someone else already fulfilled it
   #
-  #     FulfillOrder.call(<%= order_model_name %>.find(settlement.order_id),
+  #     FulfillOrder.call(Order.find(settlement.reference),
   #                       payment_hash: settlement.payment_hash)
   #   end
   #

@@ -9,8 +9,8 @@ const PLACEHOLDER_NOTE =
 
 /**
  * OPENRECEIVE_PAYMENTS.md: run the ORM migration, then wire
- * `createHost({ db, loadOrder, amountForOrder, onPaid })`. The
- * scaffold emits no repository code — the library owns it at runtime.
+ * `createHost({ db, amountFor, onPaid })`. The scaffold emits no repository
+ * code — the library owns it at runtime.
  */
 export function wiringGuideMarkdown(options: ScaffoldPaymentsOptions): string {
   const columnList = paymentsColumnNames()
@@ -24,11 +24,6 @@ The OpenReceive library owns the payment-attempt repository at runtime — commi
 locking, settlement write-once, the durable reconcile gate, and reconciliation
 state transitions all run inside \`@openreceive/http\`, never in generated or
 hand-written host code.
-
-Your order table is not part of this. OpenReceive never reads, writes, locks,
-or references it, and never had to be told its name or its primary-key type —
-see [section 3](#3-fulfilling-exactly-once) below, which is the one thing this
-boundary asks of you.
 
 ## 1. Run the migration
 
@@ -48,16 +43,16 @@ shares.
 \`\`\`ts
 import { createHost } from "@openreceive/http";
 
-const host = createHost({ db, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db, amountFor, onPaid });
 \`\`\`
 
-- \`loadOrder(orderId)\` returns your order, or \`null\` for a 404.
-- \`amountForOrder(order)\` returns the trusted host amount, never a payer-supplied value.
-- \`onPaid\` fires for the order's first settled attempt only. Mark the order
+- \`amountFor(reference)\` returns the trusted amount — never a payer-supplied
+  value — or \`null\` for a 404.
+- \`onPaid\` fires for the first settled attempt for a reference only. Mark the order
   paid with your own ORM:
 
 \`\`\`ts
-const onPaid = async ({ orderId }) => {
+const onPaid = async ({ reference }) => {
   ${onPaidUpdateLine(options)}
 };
 \`\`\`
@@ -97,15 +92,15 @@ ${fulfillmentNoteMarkdown(options.tableName)}
 In this project's terms, the guarded write goes inside \`onPaid\`:
 
 \`\`\`ts
-const onPaid = async ({ orderId, paidAt, query }) => {
+const onPaid = async ({ reference, paidAt, query }) => {
   // \`query\` runs in OpenReceive's settlement transaction, so the order
   // transition and the payment record commit or roll back together.
   const claimed = await query(
     ${guardedUpdateSql(options)},
-    [paidAt, orderId],
+    [paidAt, reference],
   );
   if (claimed.length === 0) return; // someone else already fulfilled it
-  await shipOrder(orderId);
+  await shipOrder(reference);
 };
 \`\`\`
 
@@ -124,13 +119,13 @@ Never expose \`swap_data\` / \`swapData\` from application APIs, logs, or browse
  * rather than by a driver-specific affected-rows field.
  */
 function guardedUpdateSql(options: ScaffoldPaymentsOptions): string {
-  const [paidAt, orderId] = isSqlite(options) ? ["?", "?"] : ["$1", "$2"];
+  const [paidAt, reference] = isSqlite(options) ? ["?", "?"] : ["$1", "$2"];
   // Indented to sit under the 4-space `query(` argument in the rendered
   // snippet, with the SQL keywords right-aligned into one river.
   return [
     "`UPDATE orders",
     `        SET state = 'paid', paid_at = ${paidAt}`,
-    `      WHERE id = ${orderId}`,
+    `      WHERE id = ${reference}`,
     "        AND state = 'awaiting_payment'",
     "     RETURNING id`",
   ].join("\n");
@@ -139,15 +134,15 @@ function guardedUpdateSql(options: ScaffoldPaymentsOptions): string {
 function onPaidUpdateLine(options: ScaffoldPaymentsOptions): string {
   switch (options.orm) {
     case "prisma":
-      return 'await prisma.order.update({ where: { id: orderId }, data: { state: "paid" } });';
+      return 'await prisma.order.update({ where: { id: reference }, data: { state: "paid" } });';
     case "drizzle":
-      return 'await orm.update(orders).set({ state: "paid" }).where(eq(orders.id, orderId));';
+      return 'await orm.update(orders).set({ state: "paid" }).where(eq(orders.id, reference));';
     case "typeorm":
-      return 'await dataSource.getRepository(Order).update({ id: orderId }, { state: "paid" });';
+      return 'await dataSource.getRepository(Order).update({ id: reference }, { state: "paid" });';
     case "sequelize":
-      return 'await Order.update({ state: "paid" }, { where: { id: orderId } });';
+      return 'await Order.update({ state: "paid" }, { where: { id: reference } });';
     case "knex":
-      return 'await knex("orders").where({ id: orderId }).update({ state: "paid" });';
+      return 'await knex("orders").where({ id: reference }).update({ state: "paid" });';
   }
 }
 
@@ -276,7 +271,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3"; // node:sqlite users: driz
 
 const sqlite = new Database("app.db");
 const orm = drizzle(sqlite);
-const host = createHost({ db: sqlite, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db: sqlite, amountFor, onPaid });
 \`\`\``
     : `\`\`\`ts
 import { Pool } from "pg";
@@ -284,7 +279,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const orm = drizzle(pool);
-const host = createHost({ db: pool, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db: pool, amountFor, onPaid });
 \`\`\``;
   const handle = isSqlite(options)
     ? "the better-sqlite3 / `node:sqlite` Database"

@@ -84,14 +84,14 @@ test("createHostConsoleLogger includes timestamps and honors minLevel", () => {
   });
 
   log("cart.updated", "ignored at warn");
-  log("openreceive.on_paid", "Checkout settled.", { orderId: "o1" }, "warn");
+  log("openreceive.on_paid", "Checkout settled.", { reference: "o1" }, "warn");
 
   assert.equal(lines.length, 1);
   assert.equal(
     lines[0][0],
     "[2026-07-30T00:01:58.332Z] WARN [hello-fruit:test:server] openreceive.on_paid: Checkout settled.",
   );
-  assert.deepEqual(lines[0][1], { orderId: "o1" });
+  assert.deepEqual(lines[0][1], { reference: "o1" });
 });
 
 test("createOpenReceive attaches a console logger when the host omits logger", async () => {
@@ -159,7 +159,7 @@ test("browser console logger reads runtime __OPENRECEIVE_LOG_LEVEL__ and formats
       level: "debug",
       event: "checkout.state.refreshed",
       message: "Refreshed checkout state from order status.",
-      order_id: "o1",
+      reference: "o1",
     });
 
     assert.equal(lines.length, 1);

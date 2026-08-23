@@ -89,7 +89,7 @@ test("React checkout displays the Lightning invoice after a swap payment settles
   };
   const paidSwapCheckout = {
     checkout_id: "or_chk_paid_swap",
-    order_id: "order-paid-swap",
+    reference: "order-paid-swap",
     status: "paid",
     paid_at: 1783518782,
     amount_msats: 19450000,
@@ -110,7 +110,7 @@ test("React checkout renders swap-only deferred checkouts without a Lightning in
   // React view model must not throw; Lightning UI stays hidden until a bolt11 exists.
   const swapOnlyCheckout = {
     checkout_id: "or_chk_swap_only",
-    order_id: "order-swap-only",
+    reference: "order-swap-only",
     status: "open",
     amount_msats: 3028000,
     active: {

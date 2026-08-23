@@ -20,8 +20,8 @@ import type { CheckoutSnapshot, ThemePreference } from "./checkout-types.ts";
 export interface CheckoutComponentProps {
   /** Snapshot mode: render this checkout directly. */
   readonly checkout?: CheckoutSnapshot;
-  /** Create mode: the component creates the checkout for this order, then renders and polls. */
-  readonly orderId?: string;
+  /** Create mode: the component creates the checkout for this reference, then renders and polls. */
+  readonly reference?: string;
   /**
    * Base path the shipped router is mounted at. Default `/openreceive`. The ONLY
    * URL input: create, prepare, payment-check and the four swap routes are all
@@ -41,9 +41,9 @@ export interface CheckoutComponentProps {
   /** Create mode only: metadata sent with the create request. */
   readonly metadata?: Record<string, unknown>;
   /**
-   * Create mode only. Opt into History API URL sync to `{resumePathPrefix}/{orderId}`
+   * Create mode only. Opt into History API URL sync to `{resumePathPrefix}/{reference}`
    * (default `/checkout/:id`). Off by default — many hosts own routing themselves — and
-   * skipped when `routeOrderId` is set. This controls URL mutation only; order-resume
+   * skipped when `routeReference` is set. This controls URL mutation only; order-resume
    * data remains a host concern.
    */
   readonly syncUrl?: boolean;
@@ -53,11 +53,16 @@ export interface CheckoutComponentProps {
    * Create mode only. Order id from the app router (e.g. Next.js). When set, the component
    * does not push/replace the URL itself.
    */
-  readonly routeOrderId?: string;
+  readonly routeReference?: string;
 }
 
 /** Which props only do something in create mode (no `checkout` snapshot). */
-const CREATE_MODE_ONLY_PROPS = ["metadata", "syncUrl", "resumePathPrefix", "routeOrderId"] as const;
+const CREATE_MODE_ONLY_PROPS = [
+  "metadata",
+  "syncUrl",
+  "resumePathPrefix",
+  "routeReference",
+] as const;
 
 type CreateModeOnlyProp = (typeof CREATE_MODE_ONLY_PROPS)[number];
 
@@ -68,7 +73,7 @@ const warnedSnapshotModeProps = new Set<string>();
  * from the list above so the names exist once.
  */
 export interface CheckoutPropsValidation
-  extends Pick<CheckoutComponentProps, CreateModeOnlyProp | "orderId"> {
+  extends Pick<CheckoutComponentProps, CreateModeOnlyProp | "reference"> {
   readonly framework: string;
   /** `null` as well as `undefined`: Angular binds an absent snapshot input as null. */
   readonly checkout?: CheckoutSnapshot | null;
@@ -82,9 +87,9 @@ export interface CheckoutPropsValidation
  */
 export function validateCheckoutProps(props: CheckoutPropsValidation): void {
   const snapshot = props.checkout ?? null;
-  if (snapshot === null && (props.orderId === undefined || props.orderId.length === 0)) {
+  if (snapshot === null && (props.reference === undefined || props.reference.length === 0)) {
     throw new TypeError(
-      `${props.framework} Checkout requires a checkout snapshot or an orderId (create mode).`,
+      `${props.framework} Checkout requires a checkout snapshot or an reference (create mode).`,
     );
   }
   if (snapshot === null) return;
@@ -96,6 +101,6 @@ export function validateCheckoutProps(props: CheckoutPropsValidation): void {
   const warn = props.warn ?? ((message: string) => globalThis.console?.warn?.(message));
   warn(
     `${props.framework} Checkout ignores ${ignored.join(", ")} in snapshot mode; ` +
-      "those props only apply when the component creates the checkout from an orderId.",
+      "those props only apply when the component creates the checkout from an reference.",
   );
 }

@@ -4,7 +4,7 @@
   "request": {
     "method": "POST",
     "path": "/openreceive/checkouts/prepare",
-    "body": { "order_id": "order-golden-prepare" }
+    "body": { "reference": "order-golden-prepare" }
   },
   "expected": {
     "status": 200,
@@ -13,7 +13,7 @@
       "x-request-id": "<request_id>"
     },
     "body": {
-      "order_id": "order-golden-prepare",
+      "reference": "order-golden-prepare",
       "amount_msats": 1000,
       "fiat_quote": null,
       "payment_methods": []

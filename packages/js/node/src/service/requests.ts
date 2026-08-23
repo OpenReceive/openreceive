@@ -19,7 +19,7 @@ export function createAmountRequest(amount: CreateCheckoutAmount): Record<string
 
 /** The declared {@link CreateCheckoutRequest} fields — the only accepted keys. */
 const CREATE_CHECKOUT_REQUEST_FIELDS: readonly string[] = [
-  "orderId",
+  "reference",
   "amount",
   "memo",
   "descriptionHash",
@@ -39,10 +39,10 @@ export function normalizeCreateCheckoutRequest(
       throw serviceError(400, "INVALID_REQUEST", `Unexpected create checkout field: ${key}.`);
     }
   }
-  const orderId = nonEmptyString(body.orderId);
-  if (orderId === undefined) throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
-  if (orderId.length > 200) {
-    throw serviceError(400, "INVALID_REQUEST", "orderId must be 200 characters or fewer.");
+  const reference = nonEmptyString(body.reference);
+  if (reference === undefined) throw serviceError(400, "INVALID_REQUEST", "reference is required.");
+  if (reference.length > 200) {
+    throw serviceError(400, "INVALID_REQUEST", "reference must be 200 characters or fewer.");
   }
   const amount = normalizeCreateCheckoutAmount(body.amount);
   const memo = nonEmptyString(body.memo);
@@ -57,7 +57,7 @@ export function normalizeCreateCheckoutRequest(
     throw serviceError(400, "INVALID_REQUEST", "expirySeconds must be a positive safe integer.");
   }
   return {
-    orderId,
+    reference,
     amount,
     ...(memo === undefined ? {} : { memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),

@@ -47,9 +47,9 @@ export interface ElementCheckoutSessionHost {
   currentCheckoutSnapshot(): CheckoutSnapshot | undefined;
   currentThemeOption(): { readonly theme?: "light" | "dark" };
   createMetadata(): Record<string, unknown> | undefined;
-  syncResumePath(orderId: string): void;
+  syncResumePath(reference: string): void;
   /** The mount every server route is derived from, or undefined when there is no order. */
-  resolvePollPrefix(orderId?: string): string | undefined;
+  resolvePollPrefix(reference?: string): string | undefined;
   dispatchError(error: unknown): void;
 }
 
@@ -82,8 +82,8 @@ export interface ElementCheckoutSession {
 export function createElementCheckoutSession(
   host: ElementCheckoutSessionHost,
 ): ElementCheckoutSession {
-  // Create-mode bookkeeping: `createdKey` is `${prefix}::${orderId}` so prepare runs once
-  // per order/prefix and re-runs when either changes; `creating` guards against overlap.
+  // Create-mode bookkeeping: `createdKey` is `${prefix}::${reference}` so prepare runs once
+  // per reference/prefix and re-runs when either changes; `creating` guards against overlap.
   // Keep `createdKey` after prepare failure so theme/error DOM churn cannot storm
   // `/checkouts/prepare`.
   let creating = false;
@@ -106,15 +106,15 @@ export function createElementCheckoutSession(
   }
 
   /** The order the element would act on right now, or undefined. */
-  function currentOrderId(): string | undefined {
-    const orderId = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-    return orderId === null || orderId.length === 0 ? undefined : orderId;
+  function currentReference(): string | undefined {
+    const reference = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
+    return reference === null || reference.length === 0 ? undefined : reference;
   }
 
-  /** `${prefix}::${orderId}` the element would prepare right now, or undefined. */
+  /** `${prefix}::${reference}` the element would prepare right now, or undefined. */
   function currentCreateKey(): string | undefined {
-    const orderId = currentOrderId();
-    return orderId === undefined ? undefined : `${currentPrefix()}::${orderId}`;
+    const reference = currentReference();
+    return reference === undefined ? undefined : `${currentPrefix()}::${reference}`;
   }
 
   function writeOwnAttributes(write: () => void): void {
@@ -154,28 +154,28 @@ export function createElementCheckoutSession(
 
   const session = createCheckoutSession({
     snapshot: () => host.latestCheckoutSnapshot(),
-    orderId: currentOrderId,
-    requestCheckout: (orderId) => {
+    reference: currentReference,
+    requestCheckout: (reference) => {
       const metadata = host.createMetadata();
       return requestCheckout({
         prefix: currentPrefix(),
-        orderId,
+        reference,
         ...(metadata === undefined ? {} : { metadata }),
         fetch: globalThis.fetch,
       });
     },
     onSnapshot: publishSnapshot,
-    swapPrefix: () => host.resolvePollPrefix(currentOrderId()),
+    swapPrefix: () => host.resolvePollPrefix(currentReference()),
     fetch: () => globalThis.fetch,
     swapSelection: host.swapSelection,
     // A swap attempt is NOT written back as attributes: a bolt11 attribute
     // would take the element out of create mode. It re-keys the poll
     // controller onto the merged snapshot and nothing else.
     onSwapStarted: (invoice) => {
-      const orderId = currentOrderId();
-      if (orderId === undefined) return;
+      const reference = currentReference();
+      if (reference === undefined) return;
       const previous = host.latestCheckoutSnapshot() ?? host.currentCheckoutSnapshot();
-      host.handleControllerSnapshot(mergeAttemptIntoCheckout(invoice, previous, orderId));
+      host.handleControllerSnapshot(mergeAttemptIntoCheckout(invoice, previous, reference));
       host.startCheckoutController();
     },
     logger: host.logger,
@@ -184,10 +184,10 @@ export function createElementCheckoutSession(
   });
 
   async function createCheckout(): Promise<void> {
-    const orderId = currentOrderId();
-    if (orderId === undefined) return;
+    const reference = currentReference();
+    if (reference === undefined) return;
     const prefix = currentPrefix();
-    const key = `${prefix}::${orderId}`;
+    const key = `${prefix}::${reference}`;
     if (creating || createdKey === key) return;
     creating = true;
     createdKey = key;
@@ -195,14 +195,14 @@ export function createElementCheckoutSession(
 
     try {
       createError = undefined;
-      host.syncResumePath(orderId);
+      host.syncResumePath(reference);
       // Lock amount without minting a payer Lightning invoice. Bitcoin selection mints later.
       const checkout = await prepareCheckout({
         prefix,
-        orderId,
+        reference,
         fetch: globalThis.fetch,
       });
-      // The host may have re-pointed order-id/prefix while this was in flight;
+      // The host may have re-pointed reference/prefix while this was in flight;
       // applying an older order's attributes here would silently show, and poll,
       // the wrong order. The finally block re-runs for whatever is current.
       if (currentCreateKey() !== key) return;

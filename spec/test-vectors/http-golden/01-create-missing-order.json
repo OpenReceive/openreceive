@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "name": "create checkout requires order_id",
+  "name": "create checkout requires reference",
   "request": { "method": "POST", "path": "/openreceive/checkouts", "body": {} },
   "expected": {
     "status": 400,
@@ -10,7 +10,7 @@
     },
     "body": {
       "code": "INVALID_REQUEST",
-      "message": "order_id is required.",
+      "message": "reference is required.",
       "request_id": "<request_id>"
     }
   }

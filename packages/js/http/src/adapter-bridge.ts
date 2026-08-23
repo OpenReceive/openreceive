@@ -55,7 +55,7 @@ export function webRequest(parts: NodeRequestParts): Request {
 /**
  * A JSON body arrived but nothing parsed it, so the raw stream is still
  * unread and the reconstructed request would look empty — every route would
- * then blame the client for a missing `order_id`. Express leaves `req.body`
+ * then blame the client for a missing `reference`. Express leaves `req.body`
  * undefined only when no body parser ran at all (body-parser sets `{}` even
  * when it declines the content-type), so this names the real misconfiguration.
  */

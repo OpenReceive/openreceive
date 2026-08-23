@@ -3,7 +3,7 @@ import {
   mapHostRouteError,
   type CreateOpenReceiveHttpHandlerOptions,
   type Host,
-  type OrderSettlement,
+  type PaymentSettlement,
 } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 import { config } from "../../../../shared/openreceive-config.ts";
@@ -38,7 +38,7 @@ export async function httpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions
   return {
     service,
     authorize: ({ resource }) =>
-      resource.orderId !== undefined && readHelloFruitHostOrder(resource.orderId) !== null,
+      resource.reference !== undefined && readHelloFruitHostOrder(resource.reference) !== null,
     host,
   };
 }
@@ -129,8 +129,7 @@ async function createHelloFruitHost(): Promise<Host> {
   const service = await getOpenReceive();
   const host = createHost({
     db: helloFruitHostDb(),
-    loadOrder: (orderId) => readHelloFruitHostOrder(orderId),
-    amountForOrder: (order) => order.amount,
+    amountFor: async (orderId) => (await readHelloFruitHostOrder(orderId))?.amount ?? null,
     onPaid: settleHelloFruitPayment,
   });
 
@@ -147,11 +146,11 @@ async function createHelloFruitHost(): Promise<Host> {
 }
 
 // Runs inside the settlement transaction, only for the order's first settled attempt.
-async function settleHelloFruitPayment(settlement: OrderSettlement) {
+async function settleHelloFruitPayment(settlement: PaymentSettlement) {
   await markHelloFruitOrderPaid(settlement);
   logDemo("openreceive.on_paid", "Verified payment marked host order paid.", {
     paymentHash: settlement.paymentHash,
-    orderId: settlement.orderId,
+    orderId: settlement.reference,
   });
 }
 

@@ -111,15 +111,13 @@ export function typeOrmDb(
 
 The scaffolded migration renders the canonical DDL in `@openreceive/core`
 (`payments-ddl.ts` — the same source `paymentsSchemaSql(dialect)`
-renders, so the two cannot drift): `order_id` indexed but not unique,
+renders, so the two cannot drift): `reference` indexed but not unique,
 `payment_hash` unique (64-lowercase-hex CHECK), `status` (CHECK over the five
 statuses) + `status_reason`, `paid_at`, `expires_at`, exact wallet
 `created_at`, locally-clocked `updated_at`, write-once `inserted_at`,
 `checkout_data`, server-only `swap_data`, and
 nullable `client_ip` (with its `(client_ip, inserted_at)` index — DB-backed
-rate limiting counts on it). Keep every column. `order_id` is always `TEXT`
-with no foreign key: OpenReceive never reads, writes, locks, or joins your
-order table, so its name and primary-key type never enter the schema. See
+rate limiting counts on it). Keep every column. See
 [Payment storage](storage.md).
 
 The same file also creates `openreceive_meta` (`key`, `value`, `rev`) in the
@@ -130,8 +128,8 @@ the durable claim that collapses the request-path reconcile passes of every
 instance into one wallet scan per interval, so keep it even though no code of yours
 touches it.
 
-`onPaid({ orderId, paymentHash, paidAt, details?, query })` runs inside the
-library's settlement transaction, only for the order's first settled attempt.
+`onPaid({ reference, paymentHash, paidAt, details?, query })` runs inside the
+library's settlement transaction, only for the first settled attempt for a reference.
 Use `query` (same `?` placeholders) to update your order or insert an outbox
 row transactionally — do not use your ORM's separate connection there. Never
 map `swap_data` into an API serializer, log, or browser bundle.
@@ -142,14 +140,14 @@ admin action, a second processor, or a replayed job can also fulfill an order,
 those race each other — so make the transition itself the guard:
 
 ```ts
-const onPaid = async ({ orderId, paidAt, query }) => {
+const onPaid = async ({ reference, paidAt, query }) => {
   const claimed = await query(
     `UPDATE orders SET state = 'paid', paid_at = $1
       WHERE id = $2 AND state = 'awaiting_payment' RETURNING id`,
-    [paidAt, orderId],
+    [paidAt, reference],
   );
   if (claimed.length === 0) return; // someone else already fulfilled it
-  await shipOrder(orderId);
+  await shipOrder(reference);
 };
 ```
 

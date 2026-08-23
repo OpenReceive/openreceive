@@ -218,8 +218,7 @@ function sqliteHostWithPendingAttempt({ paymentHash, onPaid }) {
   const db = memoryPaymentsDb();
   const host = createHost({
     db,
-    loadOrder: async () => ({ total: "10.00" }),
-    amountForOrder: () => ({ sats: 100 }),
+    amountFor: () => ({ sats: 100 }),
     onPaid,
   });
   // A live attempt relative to the real clock so a fallback scan pass never
@@ -229,10 +228,10 @@ function sqliteHostWithPendingAttempt({ paymentHash, onPaid }) {
     host,
     commit: () =>
       host.onCheckoutCreated({
-        orderId: "order-1",
+        reference: "order-1",
         paymentHash,
         checkout: {
-          orderId: "order-1",
+          reference: "order-1",
           paymentHash,
           bolt11: "lnbc-f",
           amountMsats: 1_000,
@@ -251,7 +250,7 @@ test("a settled notification payload settles the pending attempt directly with z
     paymentHash,
     onPaid: (settlement) => {
       settled.push({
-        orderId: settlement.orderId,
+        reference: settlement.reference,
         paymentHash: settlement.paymentHash,
         paidAt: settlement.paidAt,
         paidAtSource: settlement.details?.paid_at_source,
@@ -279,9 +278,9 @@ test("a settled notification payload settles the pending attempt directly with z
   });
   await until(() => settled.length === 1, { label: "the settlement to run" });
   assert.deepEqual(settled, [
-    { orderId: "order-1", paymentHash, paidAt: 990, paidAtSource: "settled_at" },
+    { reference: "order-1", paymentHash, paidAt: 990, paidAtSource: "settled_at" },
   ]);
-  const rows = await host.payments.listForOrder("order-1");
+  const rows = await host.payments.listForReference("order-1");
   assert.equal(rows[0].status, "settled");
   assert.equal(rows[0].paidAt, 990);
   assert.equal(notifier.reconcileCalls, 0, "a settled notification never wakes a wallet scan");
@@ -320,7 +319,7 @@ test("a payload without a finality signal only wakes a reconcile pass", async ()
   });
   await until(() => settled.length === 1, { label: "the settlement to run" });
   assert.equal(notifier.reconcileCalls, 1, "the settlement came from the wallet scan");
-  const rows = await host.payments.listForOrder("order-1");
+  const rows = await host.payments.listForReference("order-1");
   assert.equal(rows[0].status, "settled");
 
   await listener.stop();
@@ -354,7 +353,7 @@ test("a settled payload for an unknown hash settles nothing and wakes a reconcil
   });
   await until(() => notifier.reconcileCalls === 1, { label: "the woken reconcile pass" });
   assert.deepEqual(settled, [], "an unknown hash never settles anything directly");
-  const rows = await host.payments.listForOrder("order-1");
+  const rows = await host.payments.listForReference("order-1");
   assert.equal(rows[0].status, "pending");
 
   await listener.stop();
@@ -405,7 +404,7 @@ test("notification listener wakes one reconcile pass that settles a pending sqli
   const { host, commit } = sqliteHostWithPendingAttempt({
     paymentHash,
     onPaid: (settlement) => {
-      settled.push({ orderId: settlement.orderId, paymentHash: settlement.paymentHash });
+      settled.push({ reference: settlement.reference, paymentHash: settlement.paymentHash });
     },
   });
   await commit();
@@ -422,8 +421,8 @@ test("notification listener wakes one reconcile pass that settles a pending sqli
   // Without a payload the notification is only a wake-up hint; the scan settles.
   notifier.handler({ type: "payment_received", payment_hash: paymentHash });
   await until(() => settled.length === 1, { label: "the settlement to run" });
-  assert.deepEqual(settled, [{ orderId: "order-1", paymentHash }]);
-  const rows = await host.payments.listForOrder("order-1");
+  assert.deepEqual(settled, [{ reference: "order-1", paymentHash }]);
+  const rows = await host.payments.listForReference("order-1");
   assert.equal(rows[0].status, "settled");
 
   await listener.stop();
@@ -438,7 +437,7 @@ test("notification listener coalesces bursts and stop() unsubscribes", async () 
   const passes = [];
   const host = {
     payments: {
-      listForOrder: async () => [],
+      listForReference: async () => [],
       listReconcilableAttempts: async () => [
         { paymentHash: hash("b"), createdAt: 900, expiresAt: 1_600 },
       ],
@@ -486,7 +485,7 @@ test("notification listener routes reconcile failures to onError and keeps liste
   const errors = [];
   const host = {
     payments: {
-      listForOrder: async () => [],
+      listForReference: async () => [],
       listReconcilableAttempts: async () => [
         { paymentHash: hash("b"), createdAt: 900, expiresAt: 1_600 },
       ],
@@ -518,7 +517,7 @@ test("notification listener defaults its error sink to the sanitized warn", asyn
   const leaked = "nostr+walletconnect://abc?relay=wss://relay.test&secret=deadbeefcafe";
   const host = {
     payments: {
-      listForOrder: async () => [],
+      listForReference: async () => [],
       listReconcilableAttempts: async () => [
         { paymentHash: hash("b"), createdAt: 900, expiresAt: 1_600 },
       ],
@@ -555,7 +554,7 @@ test("notification listener defaults its error sink to the sanitized warn", asyn
 test("a wake while another worker holds the gate never touches the wallet", async () => {
   const host = {
     payments: {
-      listForOrder: async () => [],
+      listForReference: async () => [],
       listReconcilableAttempts: async () => [
         { paymentHash: hash("b"), createdAt: 900, expiresAt: 1_600 },
       ],
@@ -586,7 +585,7 @@ test("notification listener refuses a repository without the durable scan gate",
       service,
       host: {
         payments: {
-          listForOrder: async () => [],
+          listForReference: async () => [],
           listReconcilableAttempts: async () => [],
           commitAttempt: async () => undefined,
           recordReconciliation: async () => undefined,
@@ -607,7 +606,7 @@ test("notification listener rejects UNSUPPORTED_METHOD for a service without not
         service: { reconcilePayments: async () => [] },
         host: {
           payments: {
-            listForOrder: async () => [],
+            listForReference: async () => [],
             listReconcilableAttempts: async () => [],
             commitAttempt: async () => undefined,
             recordReconciliation: async () => undefined,

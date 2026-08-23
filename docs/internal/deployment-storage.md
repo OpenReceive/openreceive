@@ -7,7 +7,7 @@ contributor-level invariants.
 OpenReceive has no separate deployment storage service. Scaling web instances requires the same
 receive-only NWC configuration and access to the host database on each instance.
 
-The library serializes attempt insertion per order (Postgres advisory lock or SQLite immediate
+The library serializes attempt insertion per reference (Postgres advisory lock or SQLite immediate
 transaction), enforces unique `payment_hash`, and makes settlement write-once inside the host
 database it is handed. No reconciler process is required: every instance participates in
 request-path opportunistic reconcile through the shared `openreceive_meta` gate row (durable,

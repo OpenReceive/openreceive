@@ -127,7 +127,7 @@ export function summarizeSwapProviderApiRequest(entry: {
   return compact({
     provider: entry.provider,
     path: entry.path,
-    order_id: optionalLogString(body?.id),
+    reference: optionalLogString(body?.id),
     choice: optionalLogString(body?.choice),
     from_ccy: optionalLogString(body?.fromCcy),
     to_ccy: optionalLogString(body?.toCcy),
@@ -171,9 +171,9 @@ export function summarizeSwapProviderApiResponse(entry: {
     return summary;
   }
 
-  const orderId = optionalLogString(data.id);
+  const reference = optionalLogString(data.id);
   const orderStatus = optionalLogString(data.status);
-  if (orderId !== undefined) summary.order_id = orderId;
+  if (reference !== undefined) summary.reference = reference;
   if (orderStatus !== undefined) summary.order_status = orderStatus;
 
   const from = summarizeSwapProviderSide(data.from);
@@ -209,7 +209,7 @@ export function summarizeSwapProviderApiResponse(entry: {
   }
 
   // /price quotes carry from/to amounts without an order id.
-  if (orderId === undefined) {
+  if (reference === undefined) {
     const fromRecord = isRecord(data.from) ? data.from : undefined;
     const toRecord = isRecord(data.to) ? data.to : undefined;
     const fromAmount = optionalLogString(fromRecord?.amount) ?? optionalLogString(data.fromAmount);

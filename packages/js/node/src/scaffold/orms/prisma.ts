@@ -32,7 +32,7 @@ ${fulfillmentNote("// ", options.tableName)}
 
 model OpenReceivePayment {
   id           ${idField}
-  orderId      String  @map("order_id")
+  reference      String  @map("reference")
   paymentHash  String  @unique @map("payment_hash")
   status       String  @default("pending")
   statusReason String? @map("status_reason")
@@ -45,7 +45,7 @@ model OpenReceivePayment {
   swapData     String? @map("swap_data")
   clientIp     String? @map("client_ip")
 
-  @@index([orderId, createdAt])
+  @@index([reference, createdAt])
   @@index([status, createdAt])
   @@index([clientIp, insertedAt])
   @@map("${options.tableName}")

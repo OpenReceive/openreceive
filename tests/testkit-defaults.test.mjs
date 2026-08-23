@@ -20,7 +20,7 @@ test("a default-clock testkit invoice stays pending through a reconcile pass", a
   const service = await createOpenReceive({ client: wallet });
   try {
     const checkout = await service.createCheckout({
-      orderId: "order-testkit-clock",
+      reference: "order-testkit-clock",
       amount: { sats: 10 },
     });
     const transitions = [];

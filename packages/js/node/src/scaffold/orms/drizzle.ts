@@ -11,11 +11,11 @@ import { wiringGuideMarkdown } from "../wiring-guide.ts";
 export function renderDrizzleFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
   const sqlite = isSqlite(options);
   const table = options.tableName;
-  const orderIdLine = `orderId: text("order_id").notNull(),`;
+  const referenceLine = `reference: text("reference").notNull(),`;
   const indexName = (suffix: string): string => paymentsIndexName(table, suffix);
   const constraints = [
     `    uniqueIndex("${indexName("hash_uidx")}").on(table.paymentHash),`,
-    `    index("${indexName("order_created_idx")}").on(table.orderId, table.createdAt),`,
+    `    index("${indexName("reference_created_idx")}").on(table.reference, table.createdAt),`,
     `    index("${indexName("status_created_idx")}").on(table.status, table.createdAt),`,
     `    index("${indexName("client_ip_inserted_idx")}").on(table.clientIp, table.insertedAt),`,
     // Both canonical CHECK constraints, so drizzle-kit migrations enforce the
@@ -43,7 +43,7 @@ export const payments = sqliteTable(
   "${table}",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    ${orderIdLine}
+    ${referenceLine}
     paymentHash: text("payment_hash").notNull(),
     status: text("status").notNull().default("pending"),
     statusReason: text("status_reason"),
@@ -75,7 +75,7 @@ export const payments = pgTable(
   "${table}",
   {
     id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
-    ${orderIdLine}
+    ${referenceLine}
     paymentHash: text("payment_hash").notNull(),
     status: text("status").notNull().default("pending"),
     statusReason: text("status_reason"),

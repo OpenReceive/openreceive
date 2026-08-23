@@ -23,14 +23,14 @@ application boots.
   (Rails: [`config.allow_spend_capable_wallet = true`](api-reference.md#openreceiveconfigure))
   or `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`; OpenReceive still logs a loud warning.
 - Recompute checkout prices from your own order/catalog data
-  ([`amountForOrder`](api-reference.md#createhost); Rails
-  [`config.amount_for_order`](api-reference.md#openreceiveconfigure)); reject payer amounts. A
+  ([`amountFor`](api-reference.md#createhost); Rails
+  [`config.amount_for`](api-reference.md#openreceiveconfigure)); reject payer amounts. A
   create request carries an order id, never a price, and your
   [`authorize`](api-reference.md#the-authorize-context) policy runs on every order-scoped
-  route ([Authorization and the order bridge](authorization.md)).
+  route ([Authorization and the host](authorization.md)).
 - The attempt row commits before the invoice is exposed
   ([`onCheckoutCreated`](api-reference.md#createhost)); the library serializes concurrent
-  creates per order ([Live attempts](storage.md#live-attempts)). Custom
+  creates per reference ([Live attempts](storage.md#live-attempts)). Custom
   [`PaymentRepository`](storage.md#escape-hatch) implementations must keep that guarantee
   ([`commitAttempt`](api-reference.md#createsqlpayments)).
 - Accept settlement only from [`settled_at`][nwc05-list_transactions] or wallet state

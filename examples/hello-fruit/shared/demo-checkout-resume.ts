@@ -1,7 +1,7 @@
 /**
  * Hello Fruit guest checkout URL helpers (`/checkout/:orderId`).
  * The host application owns summary restore. These helpers provide its storage, fetch, and
- * URL behavior; `<Checkout orderId />` owns only payment creation and polling.
+ * URL behavior; `<Checkout reference />` owns only payment creation and polling.
  */
 
 import {
@@ -23,7 +23,7 @@ function parseHelloFruitDemoOrder(value: unknown): HelloFruitDemoOrder | undefin
 export const helloFruitCheckoutResume = createGuestCheckoutResume<HelloFruitDemoOrder>({
   pathPrefix: HELLO_FRUIT_CHECKOUT_PATH_PREFIX,
   storageKeyPrefix: ORDER_STORAGE_KEY_PREFIX,
-  orderIdOf: (order) => order.uuid,
+  referenceOf: (order) => order.uuid,
   parseOrder: parseHelloFruitDemoOrder,
   fetchOrder: createGuestOrderFetcher({
     parseOrder: parseHelloFruitDemoOrder,
@@ -36,7 +36,7 @@ export function helloFruitCheckoutPath(orderId: string): string {
 }
 
 export function parseHelloFruitCheckoutOrderId(pathname: string): string | undefined {
-  return helloFruitCheckoutResume.parseOrderId(pathname);
+  return helloFruitCheckoutResume.parseReference(pathname);
 }
 
 export function rememberHelloFruitOrder(order: HelloFruitDemoOrder): void {

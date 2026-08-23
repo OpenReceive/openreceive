@@ -7,9 +7,8 @@
 class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>]
   def change
     create_table :openreceive_payments do |t|
-      # Opaque host order id. Deliberately a string with no foreign key — see
-      # the note above if you want to add one yourself.
-      t.string :order_id, null: false
+      # Your order id, as you passed it.
+      t.string :reference, null: false
       t.string :payment_hash, null: false, limit: 64
       # Attempt lifecycle: pending | settled | expired | failed | attention.
       t.string :status, null: false, default: "pending"
@@ -32,7 +31,7 @@ class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>
     end
 
     add_index :openreceive_payments, :payment_hash, unique: true
-    add_index :openreceive_payments, [:order_id, :created_at]
+    add_index :openreceive_payments, [:reference, :created_at]
     add_index :openreceive_payments, [:status, :created_at]
     add_index :openreceive_payments, [:client_ip, :inserted_at]
 

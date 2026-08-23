@@ -10,7 +10,7 @@ This page is the canonical home of that statement — other docs link here
 instead of restating it. OpenReceive never owns orders, users, prices, or
 fulfillment, and never requires a separate database, Redis, or migration
 runner. You run the `openreceive_payments` migration through your own workflow
-and pass a database handle (`db`); the library owns the schema, per-order
+and pass a database handle (`db`); the library owns the schema, per-reference
 commit locking, write-once settlement, and the reconciliation state machine.
 
 ## Schema
@@ -20,14 +20,12 @@ The canonical DDL lives in `@openreceive/core` —
 of truth every rendering derives from:
 `paymentsSchemaSql(dialect)` (`"postgres"` or `"sqlite"`) renders
 it as one executable script, and `npx openreceive scaffold payments` emits it
-as a migration for your ORM. There is nothing to adjust — `order_id` is always
-`TEXT` and carries no foreign key, because OpenReceive never reads, writes,
-locks, or joins your order table. Every column must stay:
+as a migration for your ORM. Every column must stay:
 
 ```text
 openreceive_payments
   id             primary key
-  order_id       required, indexed, opaque TEXT (no FK); many attempts per order
+  reference       required, indexed TEXT; many attempts per reference
   payment_hash   required, unique, 64 lowercase hex (CHECK)
   status         required, default 'pending' (CHECK: the five statuses below)
   status_reason  nullable operator-facing detail
@@ -47,7 +45,7 @@ must be one of the five statuses in the table below, and `payment_hash` must be
 for "one live attempt per rail": liveness is time-dependent (a superseded or
 just-expired attempt stays `pending` until a wallet scan closes it), and any
 uniqueness over pending rows would reject legitimate reminting. The repository
-enforces that rule inside the per-order commit lock instead. Generated index
+enforces that rule inside the per-reference commit lock instead. Generated index
 names are truncated with a short digest when a custom table name would push
 them past Postgres's 63-byte identifier limit.
 
@@ -135,7 +133,7 @@ and a backlog drains over successive passes instead of loading every pending
 row into one wallet scan window.
 
 Settlement is write-once per attempt. `onPaid` runs inside the settlement
-transaction only for the order's first settled attempt; a genuine second
+transaction only for the first settled attempt for a reference; a genuine second
 settlement of a sibling attempt is recorded (`duplicate_settlement`) and never
 fulfills again.
 
@@ -143,7 +141,7 @@ fulfills again.
 
 An order has one live payment session; within it, at most one live attempt per
 rail/asset, so a payer can switch between Lightning and swap assets. A retry or
-concurrent create serializes per order inside the library. Your application
+concurrent create serializes per reference inside the library. Your application
 never sees this vocabulary — an order is simply unpaid or paid.
 
 One row holds at most one provider swap order. A swap retry creates another row
@@ -163,7 +161,7 @@ you implement the gate or pass `opportunisticReconcile: false`.
 The state machine itself stays library-owned in this mode too. The settlement
 hook is `onPaid` in this mode as well, but it receives the raw
 `SettlementEvent` (`paymentHash`, `paidAt`, `details?`) instead of
-db mode's `OrderSettlement` — no `orderId` and no transactional
+db mode's `PaymentSettlement` — no `reference` and no transactional
 `query`, because your repository owns that mapping. OpenReceive calls
 `recordSettlement` for every observed settlement and runs your `onPaid` only
 when that call reports it won the order's first-settlement

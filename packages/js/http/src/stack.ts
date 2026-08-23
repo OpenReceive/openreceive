@@ -10,7 +10,7 @@ import { createHost } from "./host-payments.ts";
 import { normalizePrefix } from "./router.ts";
 
 /**
- * The one-factory happy path (T1): five callbacks plus a db handle. The stack
+ * The one-factory happy path (T1): three callbacks plus a db handle. The stack
  * builds the service, host, and handler in one call — the composed
  * `{ service, host, ... }` form and every individual piece stay exported for
  * tests and custom repositories.
@@ -32,22 +32,19 @@ export type StackWallet =
 
 /**
  * Where attempts live, which decides what `onPaid` receives. With the host
- * database handle (`db`, the default mode) it is the per-order
- * `OrderSettlement`, with `orderId` and the transactional `query`;
+ * database handle (`db`, the default mode) it is the per-reference
+ * `PaymentSettlement`, with `reference` and the transactional `query`;
  * with a custom repository (`payments`, advanced) it is the raw
  * `SettlementEvent`. The branch carries the hook's type, so the
  * wrong signature is a type error rather than a runtime surprise.
  */
 export type StackStorage =
-  | Pick<CreateOpenReceiveHostDbOptions<unknown>, "db" | "tableName" | "onPaid" | "payments">
-  | Pick<
-      CreateOpenReceiveHostRepositoryOptions<unknown>,
-      "payments" | "onPaid" | "db" | "tableName"
-    >;
+  | Pick<CreateOpenReceiveHostDbOptions, "db" | "tableName" | "onPaid" | "payments">
+  | Pick<CreateOpenReceiveHostRepositoryOptions, "payments" | "onPaid" | "db" | "tableName">;
 
-export interface CreateOpenReceiveStackOptions<Order = unknown>
+export interface CreateOpenReceiveStackOptions
   extends Omit<CreateOpenReceiveHttpHandlerOptions, "service" | "host">,
-    Omit<CreateOpenReceiveHostDbOptions<Order>, "db" | "tableName" | "onPaid" | "payments"> {
+    Omit<CreateOpenReceiveHostDbOptions, "db" | "tableName" | "onPaid" | "payments"> {
   readonly wallet: StackWallet;
   readonly storage: StackStorage;
 }
@@ -64,15 +61,14 @@ export interface Stack {
   close(): Promise<void>;
 }
 
-export function createStack<Order = unknown>(options: CreateOpenReceiveStackOptions<Order>): Stack {
-  const { wallet, storage, loadOrder, amountForOrder, clock, ...handlerOptions } = options;
+export function createStack(options: CreateOpenReceiveStackOptions): Stack {
+  const { wallet, storage, amountFor, clock, ...handlerOptions } = options;
   // The storage branch reaches the host factory as the mode it is — a
   // repository stays repository mode, a database handle stays db mode — and
   // its `onPaid` already has the type of that branch.
-  const host = createHost<Order>({
+  const host = createHost({
     ...storage,
-    loadOrder,
-    amountForOrder,
+    amountFor,
     ...compact({ clock }),
   });
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
@@ -124,25 +120,20 @@ export function createStack<Order = unknown>(options: CreateOpenReceiveStackOpti
 
 /**
  * True when adapter options are the flat all-in-one form (no prebuilt `host`).
- * The composed form always carries `host`; the flat form carries the order
+ * The composed form always carries `host`; the flat form carries the host
  * hooks directly. Composed options that merely forgot `host` (e.g.
  * `{ service, authorize }`) throw the missing-host error instead of entering
  * the all-in-one path and blaming the caller for omitting nwc/db/onPaid.
  */
-export function isStackOptions<Order>(
-  options: CreateOpenReceiveHttpHandlerOptions | CreateOpenReceiveStackOptions<Order>,
-): options is CreateOpenReceiveStackOptions<Order> {
+export function isStackOptions(
+  options: CreateOpenReceiveHttpHandlerOptions | CreateOpenReceiveStackOptions,
+): options is CreateOpenReceiveStackOptions {
   if ((options as { host?: unknown }).host !== undefined) return false;
-  const flat = options as CreateOpenReceiveStackOptions<Order>;
-  if (
-    flat.wallet !== undefined ||
-    flat.storage !== undefined ||
-    flat.loadOrder !== undefined ||
-    flat.amountForOrder !== undefined
-  ) {
+  const flat = options as CreateOpenReceiveStackOptions;
+  if (flat.wallet !== undefined || flat.storage !== undefined || flat.amountFor !== undefined) {
     return true;
   }
   throw new TypeError(
-    "OpenReceive composed options require host: pass { service, host, authorize }, or use the all-in-one form with wallet/storage/loadOrder/amountForOrder.",
+    "OpenReceive composed options require host: pass { service, host, authorize }, or use the all-in-one form with wallet/storage/amountFor.",
   );
 }

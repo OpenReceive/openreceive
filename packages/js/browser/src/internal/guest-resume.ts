@@ -2,7 +2,7 @@
  * Guest checkout resume helpers for no-account content sites.
  *
  * Pattern:
- * - Put the public `order_id` in the URL (`/checkout/:orderId`) so refresh/share works.
+ * - Put the public `reference` in the URL (`/checkout/:reference`) so refresh/share works.
  * - Let the host authorize access to the order using its normal session or guest-order policy.
  * - Mirror an optional host order summary in sessionStorage for instant same-tab restore;
  *   use the host-supplied `fetchOrder` when storage is empty.
@@ -11,21 +11,21 @@
 
 export interface GuestCheckoutResumeOptions<TOrder> {
   /**
-   * URL path prefix before the order id. Default `"/checkout"` → `/checkout/:orderId`.
+   * URL path prefix before the order id. Default `"/checkout"` → `/checkout/:reference`.
    * Leading/trailing slashes are normalized.
    */
   readonly pathPrefix?: string;
   /** sessionStorage key prefix for host order summaries (required so hosts do not collide). */
   readonly storageKeyPrefix: string;
   /** Extract the public order id used as the storage/URL key. */
-  readonly orderIdOf: (order: TOrder) => string;
+  readonly referenceOf: (order: TOrder) => string;
   /** Validate a value from storage or a fetch body as a host order. */
   readonly parseOrder: (value: unknown) => TOrder | undefined;
   /**
    * Load an order when sessionStorage misses (new tab / shared link).
    * Return `undefined` for missing or unauthorized orders.
    */
-  readonly fetchOrder?: (orderId: string) => Promise<TOrder | undefined>;
+  readonly fetchOrder?: (reference: string) => Promise<TOrder | undefined>;
   /** Path to push when leaving a checkout URL. Default `"/"`. */
   readonly homePath?: string;
 }
@@ -33,19 +33,19 @@ export interface GuestCheckoutResumeOptions<TOrder> {
 export interface GuestCheckoutResumeController<TOrder> {
   /** Normalized path prefix including a leading slash, e.g. `"/checkout"`. */
   readonly pathPrefix: string;
-  checkoutPath(orderId: string): string;
-  /** Parse `/checkout/:orderId` from a pathname. Returns undefined when not a resume URL. */
-  parseOrderId(pathname: string): string | undefined;
+  checkoutPath(reference: string): string;
+  /** Parse `/checkout/:reference` from a pathname. Returns undefined when not a resume URL. */
+  parseReference(pathname: string): string | undefined;
   rememberOrder(order: TOrder): void;
-  readRememberedOrder(orderId: string): TOrder | undefined;
-  /** Forget one order, or every order under this storage prefix when `orderId` is omitted. */
-  forgetOrder(orderId?: string): void;
+  readRememberedOrder(reference: string): TOrder | undefined;
+  /** Forget one order, or every order under this storage prefix when `reference` is omitted. */
+  forgetOrder(reference?: string): void;
   /** Push the checkout path when not already there (History API / SPAs). */
-  enterCheckout(orderId: string): void;
+  enterCheckout(reference: string): void;
   /** Return to `homePath` when the current location is a checkout resume URL. */
   leaveCheckout(): void;
   /** sessionStorage first, then optional `fetchOrder`. */
-  loadOrderForResume(orderId: string): Promise<TOrder | undefined>;
+  loadOrderForResume(reference: string): Promise<TOrder | undefined>;
 }
 
 /**
@@ -63,46 +63,47 @@ export function createGuestCheckoutResume<TOrder>(
   }
   const homePath = options.homePath ?? "/";
 
-  function checkoutPath(orderId: string): string {
-    return `${pathPrefix}/${encodeURIComponent(orderId)}`;
+  function checkoutPath(reference: string): string {
+    return `${pathPrefix}/${encodeURIComponent(reference)}`;
   }
 
-  function parseOrderId(pathname: string): string | undefined {
+  function parseReference(pathname: string): string | undefined {
     const segments = pathname.split("/").filter((segment) => segment.length > 0);
     if (segments.length !== 2 || segments[0] !== pathSegment) return undefined;
     const raw = segments[1];
     if (raw === undefined || raw.length === 0) return undefined;
-    let orderId: string;
+    let reference: string;
     try {
-      orderId = decodeURIComponent(raw);
+      reference = decodeURIComponent(raw);
     } catch {
       return undefined;
     }
-    if (orderId.length === 0 || orderId.includes("/") || orderId.includes("..")) return undefined;
-    return orderId;
+    if (reference.length === 0 || reference.includes("/") || reference.includes(".."))
+      return undefined;
+    return reference;
   }
 
-  function orderStorageKey(orderId: string): string {
-    return `${storageKeyPrefix}${orderId}`;
+  function orderStorageKey(reference: string): string {
+    return `${storageKeyPrefix}${reference}`;
   }
 
   function rememberOrder(order: TOrder): void {
-    const orderId = options.orderIdOf(order);
-    if (orderId.length === 0) return;
+    const reference = options.referenceOf(order);
+    if (reference.length === 0) return;
     const store = sessionStore();
     if (store === undefined) return;
     try {
-      store.setItem(orderStorageKey(orderId), JSON.stringify(order));
+      store.setItem(orderStorageKey(reference), JSON.stringify(order));
     } catch {
       // Best-effort; fetchOrder can still restore display.
     }
   }
 
-  function readRememberedOrder(orderId: string): TOrder | undefined {
+  function readRememberedOrder(reference: string): TOrder | undefined {
     const store = sessionStore();
     if (store === undefined) return undefined;
     try {
-      const raw = store.getItem(orderStorageKey(orderId));
+      const raw = store.getItem(orderStorageKey(reference));
       if (raw === null || raw.length === 0) return undefined;
       return options.parseOrder(JSON.parse(raw) as unknown);
     } catch {
@@ -110,12 +111,12 @@ export function createGuestCheckoutResume<TOrder>(
     }
   }
 
-  function forgetOrder(orderId?: string): void {
+  function forgetOrder(reference?: string): void {
     const store = sessionStore();
     if (store === undefined) return;
     try {
-      if (orderId !== undefined) {
-        store.removeItem(orderStorageKey(orderId));
+      if (reference !== undefined) {
+        store.removeItem(orderStorageKey(reference));
         return;
       }
       const keys: string[] = [];
@@ -129,22 +130,22 @@ export function createGuestCheckoutResume<TOrder>(
     }
   }
 
-  function enterCheckout(orderId: string): void {
-    enterCheckoutResumePath(orderId, { pathPrefix });
+  function enterCheckout(reference: string): void {
+    enterCheckoutResumePath(reference, { pathPrefix });
   }
 
   function leaveCheckout(): void {
     if (typeof globalThis.location === "undefined") return;
-    if (parseOrderId(globalThis.location.pathname) === undefined) return;
+    if (parseReference(globalThis.location.pathname) === undefined) return;
     globalThis.history.pushState({}, "", homePath);
   }
 
-  async function loadOrderForResume(orderId: string): Promise<TOrder | undefined> {
-    const remembered = readRememberedOrder(orderId);
+  async function loadOrderForResume(reference: string): Promise<TOrder | undefined> {
+    const remembered = readRememberedOrder(reference);
     if (remembered !== undefined) return remembered;
     if (options.fetchOrder === undefined) return undefined;
     try {
-      const fetched = await options.fetchOrder(orderId);
+      const fetched = await options.fetchOrder(reference);
       if (fetched === undefined) return undefined;
       rememberOrder(fetched);
       return fetched;
@@ -156,7 +157,7 @@ export function createGuestCheckoutResume<TOrder>(
   return {
     pathPrefix,
     checkoutPath,
-    parseOrderId,
+    parseReference,
     rememberOrder,
     readRememberedOrder,
     forgetOrder,
@@ -167,25 +168,25 @@ export function createGuestCheckoutResume<TOrder>(
 }
 
 /**
- * Push `/checkout/:orderId` (or a custom path prefix) via the History API when not already
+ * Push `/checkout/:reference` (or a custom path prefix) via the History API when not already
  * there. Used by `<Checkout syncUrl>` and hosts that sync the URL after creating an order.
- * No-ops when `routeOrderId` is provided (app router already owns the URL).
+ * No-ops when `routeReference` is provided (app router already owns the URL).
  */
 export function enterCheckoutResumePath(
-  orderId: string,
+  reference: string,
   options: {
     readonly pathPrefix?: string;
     /** When set, skip History API sync (Next.js / file-based routes own the URL). */
-    readonly routeOrderId?: string;
+    readonly routeReference?: string;
   } = {},
 ): void {
-  if (options.routeOrderId !== undefined) return;
-  if (orderId.length === 0) return;
+  if (options.routeReference !== undefined) return;
+  if (reference.length === 0) return;
   const pathPrefix = normalizePathPrefix(options.pathPrefix ?? "/checkout");
-  const path = `${pathPrefix}/${encodeURIComponent(orderId)}`;
+  const path = `${pathPrefix}/${encodeURIComponent(reference)}`;
   if (typeof globalThis.location === "undefined") return;
   if (globalThis.location.pathname === path) return;
-  globalThis.history.pushState({ openreceiveCheckout: orderId }, "", path);
+  globalThis.history.pushState({ openreceiveCheckout: reference }, "", path);
 }
 
 /**
@@ -199,13 +200,13 @@ export function createGuestOrderFetcher<TOrder>(options: {
    * Nothing here is an OpenReceive route: the mounted router's routes all come from
    * `prefix` (see ./routes.ts), and it serves no order-read endpoint at all.
    */
-  readonly hostOrderUrl: (orderId: string) => string;
+  readonly hostOrderUrl: (reference: string) => string;
   readonly fetch?: typeof globalThis.fetch;
-}): (orderId: string) => Promise<TOrder | undefined> {
+}): (reference: string) => Promise<TOrder | undefined> {
   const fetchFn = options.fetch ?? globalThis.fetch;
   const hostOrderUrl = options.hostOrderUrl;
-  return async (orderId: string): Promise<TOrder | undefined> => {
-    const response = await fetchFn(hostOrderUrl(orderId));
+  return async (reference: string): Promise<TOrder | undefined> => {
+    const response = await fetchFn(hostOrderUrl(reference));
     if (response.status === 404 || !response.ok) return undefined;
     const body = (await response.json()) as unknown;
     if (typeof body !== "object" || body === null) return undefined;

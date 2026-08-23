@@ -64,10 +64,10 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
   const expiresAt = Math.floor(Date.now() / 1_000) + 600;
   const createdAt = Math.floor(Date.now() / 1_000);
   await payments.commitAttempt({
-    orderId: "order-1",
+    reference: "order-1",
     paymentHash: "a".repeat(64),
     checkout: {
-      orderId: "order-1",
+      reference: "order-1",
       paymentHash: "a".repeat(64),
       bolt11: "lnbc1test",
       amountMsats: 1000,
@@ -75,7 +75,7 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
       expiresAt,
     },
   });
-  const stored = await payments.listForOrder("order-1");
+  const stored = await payments.listForReference("order-1");
   assert.equal(stored[0].status, "pending");
   assert.equal(stored[0].checkout.bolt11, "lnbc1test");
   assert.equal(stored[0].createdAt, createdAt);
@@ -86,10 +86,10 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
   await assert.rejects(
     () =>
       payments.commitAttempt({
-        orderId: "order-1",
+        reference: "order-1",
         paymentHash: "b".repeat(64),
         checkout: {
-          orderId: "order-1",
+          reference: "order-1",
           paymentHash: "b".repeat(64),
           bolt11: "lnbc1test2",
           amountMsats: 1000,
@@ -97,7 +97,7 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
           expiresAt,
         },
       }),
-    /already in progress for this order/i,
+    /already in progress for this reference/i,
   );
 
   // Settlement is write-once; fulfillment runs inside the transaction exactly once.
@@ -111,7 +111,7 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
   await payments.markPaidOnce({ paymentHash: "a".repeat(64), paidAt }, fulfill);
   assert.equal(fulfillments, 1);
   assert.equal(readHelloFruitHostOrder("order-1")?.summary.status, "paid");
-  const settled = await payments.listForOrder("order-1");
+  const settled = await payments.listForReference("order-1");
   assert.equal(settled[0].status, "settled");
   assert.equal(settled[0].paidAt, paidAt);
   assert.deepEqual(await payments.listReconcilableAttempts(), []);

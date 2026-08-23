@@ -20,7 +20,7 @@ function testHost({ countAttemptsFromIp } = {}) {
       onCheckoutCreated: (input) => committed.push(input),
       onPaid: async () => undefined,
       payments: {
-        listForOrder: async () => [],
+        listForReference: async () => [],
         commitAttempt: (input) => committed.push(input),
         listReconcilableAttempts: async () => [],
         recordReconciliation: async () => undefined,
@@ -130,7 +130,7 @@ test("express middleware serves its prefix and passes other paths to next()", as
 
   const res = fakeExpressResponse();
   await middleware(
-    fakeExpressRequest({ url: "/openreceive/checkouts", body: { order_id: "order-ex" } }),
+    fakeExpressRequest({ url: "/openreceive/checkouts", body: { reference: "order-ex" } }),
     res,
     () => {
       throw new Error("must not fall through");
@@ -138,7 +138,7 @@ test("express middleware serves its prefix and passes other paths to next()", as
   );
   assert.equal(res.state.statusCode, 201);
   const body = JSON.parse(res.state.body);
-  assert.equal(body.checkout.order_id, "order-ex");
+  assert.equal(body.checkout.reference, "order-ex");
 });
 
 test("a root-mounted express middleware claims only the OpenReceive routes", async () => {
@@ -160,7 +160,7 @@ test("a root-mounted express middleware claims only the OpenReceive routes", asy
 
   const served = fakeExpressResponse();
   await middleware(
-    fakeExpressRequest({ url: "/checkouts", body: { order_id: "order-root" } }),
+    fakeExpressRequest({ url: "/checkouts", body: { reference: "order-root" } }),
     served,
     () => {
       throw new Error("must not fall through");
@@ -185,7 +185,7 @@ test("express middleware works sub-mounted under app.use('/api', ...)", async ()
       url: "/openreceive/checkouts",
       protocol: "http",
       headers: { host: "shop.example", "content-type": "application/json" },
-      body: { order_id: "order-sub" },
+      body: { reference: "order-sub" },
     },
     res,
     () => {
@@ -193,7 +193,7 @@ test("express middleware works sub-mounted under app.use('/api', ...)", async ()
     },
   );
   assert.equal(res.state.statusCode, 201);
-  assert.equal(JSON.parse(res.state.body).checkout.order_id, "order-sub");
+  assert.equal(JSON.parse(res.state.body).checkout.reference, "order-sub");
 
   // A foreign path inside the mount still belongs to the app.
   let nextCalls = 0;
@@ -241,7 +241,7 @@ test("a JSON body no parser read names the missing body parser", async () => {
   assert.equal(res.state.statusCode, 500);
   const body = JSON.parse(res.state.body);
   assert.match(body.message, /body parser/);
-  assert.doesNotMatch(body.message, /order_id/);
+  assert.doesNotMatch(body.message, /reference/);
 });
 
 test("express native.ip drives rate limiting through the whole adapter path", async () => {
@@ -257,7 +257,7 @@ test("express native.ip drives rate limiting through the whole adapter path", as
   await middleware(
     fakeExpressRequest({
       url: "/openreceive/checkouts",
-      body: { order_id: "order-limited" },
+      body: { reference: "order-limited" },
       ip: "203.0.113.9",
     }),
     res,
@@ -298,7 +298,7 @@ test("express trustProxyIpHeader reads x-forwarded-for for the limiter", async (
         "content-type": "application/json",
         "x-forwarded-for": "198.51.100.9, 10.0.0.1",
       },
-      body: { order_id: "order-xff" },
+      body: { reference: "order-xff" },
     },
     res,
     () => {
@@ -370,12 +370,12 @@ test("fastify plugin serves its prefix, honors protocol, and never captures the 
       headers: { host: "shop.example", "content-type": "application/json" },
       raw: { url: "/openreceive/checkouts" },
       protocol: "https",
-      body: { order_id: "order-ff" },
+      body: { reference: "order-ff" },
     },
     served,
   );
   assert.equal(served.state.statusCode, 201);
-  assert.equal(JSON.parse(served.state.body).checkout.order_id, "order-ff");
+  assert.equal(JSON.parse(served.state.body).checkout.reference, "order-ff");
 });
 
 test("fastify plugin serves its default prefix inside a prefixed register scope", async () => {
@@ -391,12 +391,12 @@ test("fastify plugin serves its default prefix inside a prefixed register scope"
       method: "POST",
       headers: { host: "shop.example", "content-type": "application/json" },
       raw: { url: "/api/openreceive/checkouts" },
-      body: { order_id: "order-scoped" },
+      body: { reference: "order-scoped" },
     },
     served,
   );
   assert.equal(served.state.statusCode, 201);
-  assert.equal(JSON.parse(served.state.body).checkout.order_id, "order-scoped");
+  assert.equal(JSON.parse(served.state.body).checkout.reference, "order-scoped");
 
   const missed = fakeFastifyReply();
   await route(
@@ -441,12 +441,12 @@ test("fastify register { prefix } serves the routes at the mount root", async ()
       method: "POST",
       headers: { host: "shop.example", "content-type": "application/json" },
       raw: { url: "/api/checkouts" },
-      body: { order_id: "order-mount-root" },
+      body: { reference: "order-mount-root" },
     },
     served,
   );
   assert.equal(served.state.statusCode, 201);
-  assert.equal(JSON.parse(served.state.body).checkout.order_id, "order-mount-root");
+  assert.equal(JSON.parse(served.state.body).checkout.reference, "order-mount-root");
 });
 
 test("fastify prefix that disagrees with the register scope fails registration", async () => {
@@ -491,7 +491,7 @@ test("fastify trustProxyIpHeader names a custom header for the limiter", async (
         "cf-connecting-ip": "203.0.113.7",
       },
       raw: { url: "/openreceive/checkouts" },
-      body: { order_id: "order-cf" },
+      body: { reference: "order-cf" },
     },
     reply,
   );
@@ -553,7 +553,7 @@ test("next adapter trustProxyIpHeader reads x-forwarded-for for the limiter", as
     new Request("http://shop.example/openreceive/checkouts", {
       method: "POST",
       headers: { "x-forwarded-for": "198.51.100.9, 10.0.0.1" },
-      body: JSON.stringify({ order_id: "order-next" }),
+      body: JSON.stringify({ reference: "order-next" }),
     }),
   );
   assert.equal(response.status, 429);
@@ -573,11 +573,10 @@ function stackFixture() {
       storage: {
         db,
         onPaid: async (settlement) => {
-          paid.push(settlement.orderId);
+          paid.push(settlement.reference);
         },
       },
-      loadOrder: (orderId) => orders.get(orderId) ?? null,
-      amountForOrder: (order) => order.amount,
+      amountFor: (reference) => orders.get(reference)?.amount ?? null,
       authorize: () => true,
     },
   };
@@ -590,15 +589,15 @@ test("express all-in-one form boots lazily and serves a checkout", async () => {
   assert.ok(middleware.ready instanceof Promise);
   const res = fakeExpressResponse();
   await middleware(
-    fakeExpressRequest({ url: "/openreceive/checkouts", body: { order_id: "order-stack" } }),
+    fakeExpressRequest({ url: "/openreceive/checkouts", body: { reference: "order-stack" } }),
     res,
     () => {
       throw new Error("must not fall through");
     },
   );
   assert.equal(res.state.statusCode, 201);
-  const row = db.prepare("SELECT order_id FROM openreceive_payments").get();
-  assert.equal(row.order_id, "order-stack");
+  const row = db.prepare("SELECT reference FROM openreceive_payments").get();
+  assert.equal(row.reference, "order-stack");
   await middleware.ready;
   await middleware.close();
 });
@@ -609,7 +608,7 @@ test("the all-in-one form wires a custom repository instead of a db handle", asy
     wallet: { service: newService() },
     storage: {
       payments: {
-        listForOrder: async () => [],
+        listForReference: async () => [],
         commitAttempt: (input) => committed.push(input),
         listReconcilableAttempts: async () => [],
         recordReconciliation: async () => undefined,
@@ -618,15 +617,14 @@ test("the all-in-one form wires a custom repository instead of a db handle", asy
       },
       onPaid: async () => undefined,
     },
-    loadOrder: () => ({ amount: { sats: 21 } }),
-    amountForOrder: (order) => order.amount,
+    amountFor: () => ({ sats: 21 }),
     authorize: () => true,
     // This repository has no durable gate, so it opts out explicitly.
     opportunisticReconcile: false,
   });
   const res = fakeExpressResponse();
   await middleware(
-    fakeExpressRequest({ url: "/openreceive/checkouts", body: { order_id: "order-custom" } }),
+    fakeExpressRequest({ url: "/openreceive/checkouts", body: { reference: "order-custom" } }),
     res,
     () => {
       throw new Error("must not fall through");
@@ -634,7 +632,7 @@ test("the all-in-one form wires a custom repository instead of a db handle", asy
   );
   assert.equal(res.state.statusCode, 201);
   assert.equal(committed.length, 1);
-  assert.equal(committed[0].orderId, "order-custom");
+  assert.equal(committed[0].reference, "order-custom");
   await middleware.close();
 });
 
@@ -653,7 +651,7 @@ test("next all-in-one form serves requests and exposes ready/close", async () =>
     new Request("http://shop.example/openreceive/checkouts", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ order_id: "order-stack" }),
+      body: JSON.stringify({ reference: "order-stack" }),
     }),
   );
   assert.equal(response.status, 201);

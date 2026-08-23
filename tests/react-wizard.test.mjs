@@ -78,7 +78,7 @@ test("React payment wizard greys under-minimum swaps with rounded minimum amount
       invoice: undefined,
       checkout: {
         checkout_id: "or_chk_min",
-        order_id: "order-min",
+        reference: "order-min",
         status: "open",
         amount_msats: 3_000_000,
         fiat: { currency: "USD", value: "2.00" },

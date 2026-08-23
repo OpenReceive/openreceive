@@ -99,7 +99,7 @@ export function createCheckoutState(
     return normalizeCheckoutState(
       {
         checkout_id: snapshot.checkout_id,
-        order_id: snapshot.order_id,
+        reference: snapshot.reference,
         invoice_id: "",
         invoice: "",
         rail: "checkout_lock",
@@ -144,7 +144,7 @@ export function createCheckoutState(
   const state = normalizeCheckoutState(
     {
       checkout_id: snapshot.checkout_id,
-      order_id: snapshot.order_id,
+      reference: snapshot.reference,
       invoice_id: invoice.invoice_id,
       invoice: bolt11,
       rail: invoice.rail,
@@ -199,7 +199,7 @@ export function createCheckoutState(
  * The custom element's source of truth is HTML attributes, not a wire payload:
  * declarative and SSR usage give it one attempt's fields and nothing else. This
  * is the only place that invents the surrounding checkout, and it stays
- * conservative — checkout_id and order_id fall back to the invoice id, and the
+ * conservative — checkout_id and reference fall back to the invoice id, and the
  * checkout counts as paid exactly when the attempt does.
  *
  * It takes a {@link CheckoutInvoiceSnapshot}, the canonical sub-part, rather
@@ -208,7 +208,7 @@ export function createCheckoutState(
  */
 export function createCheckoutSnapshotFromInvoice(
   attempt: CheckoutInvoiceSnapshot,
-  identity: { readonly checkout_id?: string; readonly order_id?: string } = {},
+  identity: { readonly checkout_id?: string; readonly reference?: string } = {},
 ): CheckoutSnapshot {
   const rail = requiredInvoiceRail(attempt.rail);
   const invoiceId = requiredString(attempt.invoice_id, "invoice_id");
@@ -230,7 +230,7 @@ export function createCheckoutSnapshotFromInvoice(
   const paid = attempt.settled_at !== undefined || attempt.transaction_state === "settled";
   return {
     checkout_id: identity.checkout_id ?? invoiceId,
-    order_id: identity.order_id ?? invoiceId,
+    reference: identity.reference ?? invoiceId,
     status: paid ? "paid" : "open",
     ...(attempt.settled_at === undefined ? {} : { paid_at: attempt.settled_at }),
     amount_msats: attempt.amount_msats ?? 0,
@@ -381,7 +381,7 @@ function snapshotFromCheckoutState(state: CheckoutState): CheckoutSnapshot {
   };
   return {
     checkout_id: state.checkout_id,
-    order_id: state.order_id,
+    reference: state.reference,
     status: state.paid ? "paid" : state.terminal ? "expired" : "open",
     ...(state.settled_at === undefined ? {} : { paid_at: state.settled_at }),
     amount_msats: state.amount_msats ?? 0,

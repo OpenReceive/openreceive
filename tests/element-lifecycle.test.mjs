@@ -77,18 +77,18 @@ function createFetchStub(routes) {
   return fetchStub;
 }
 
-function prepareBody(orderId, amountMsats) {
+function prepareBody(reference, amountMsats) {
   return {
-    order_id: orderId,
+    reference: reference,
     amount_msats: amountMsats,
     payment_methods: [],
   };
 }
 
-function checkoutBody(orderId, amountMsats, paymentHash) {
+function checkoutBody(reference, amountMsats, paymentHash) {
   return {
     checkout: {
-      order_id: orderId,
+      reference: reference,
       payment_hash: paymentHash,
       bolt11: `lnbc-${paymentHash}`,
       amount_msats: amountMsats,
@@ -120,7 +120,7 @@ test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => 
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-1", prefix: "/openreceive" });
+  const element = mount({ reference: "order-1", prefix: "/openreceive" });
 
   try {
     const bitcoin = await until(
@@ -163,7 +163,7 @@ test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting a
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-reuse-ln", prefix: "/openreceive" });
+  const element = mount({ reference: "order-reuse-ln", prefix: "/openreceive" });
 
   try {
     const bitcoin = await until(
@@ -202,34 +202,34 @@ test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting a
   }
 });
 
-test("an order-id change mid-prepare wins over the request it superseded", async () => {
+test("an reference change mid-prepare wins over the request it superseded", async () => {
   const firstPrepare = deferred();
   const fetchStub = createFetchStub({
     "/checkouts/prepare": (body) =>
-      body.order_id === "order-1" ? firstPrepare.promise : prepareBody("order-2", 2_000),
+      body.reference === "order-1" ? firstPrepare.promise : prepareBody("order-2", 2_000),
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-1", prefix: "/openreceive" });
+  const element = mount({ reference: "order-1", prefix: "/openreceive" });
 
   try {
     await until(() => fetchStub.pathCount("/checkouts/prepare") === 1, {
       label: "first prepare",
     });
-    element.setAttribute("order-id", "order-2");
+    element.setAttribute("reference", "order-2");
     // The first order's response lands after the swap; it must not be applied.
     firstPrepare.resolve(prepareBody("order-1", 1_000));
 
     await until(() => element.getAttribute("amount-msats") === "2000", {
       label: "order-2 attributes",
     });
-    assert.equal(element.getAttribute("order-id"), "order-2");
+    assert.equal(element.getAttribute("reference"), "order-2");
     assert.equal(fetchStub.pathCount("/checkouts/prepare"), 2);
     assert.deepEqual(
       fetchStub.calls
         .filter((call) => call.path.endsWith("/payments/check"))
-        .map((call) => call.body.order_id)
-        .filter((orderId) => orderId !== "order-2"),
+        .map((call) => call.body.reference)
+        .filter((reference) => reference !== "order-2"),
       [],
       "no controller may poll the superseded order",
     );
@@ -245,7 +245,7 @@ test("a status transition the element wrote does not restart the controller", as
   });
   globalThis.fetch = fetchStub;
   const element = mount({
-    "order-id": "order-3",
+    reference: "order-3",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -275,7 +275,7 @@ test("a slow QR encode never paints over a newer invoice", async () => {
   qrRequests.length = 0;
   const expiresAt = String(Math.floor(Date.now() / 1000) + 900);
   const element = mount({
-    "order-id": "order-4",
+    reference: "order-4",
     prefix: "/openreceive",
     "invoice-id": "c".repeat(64),
     invoice: "lnbc-first",
@@ -319,7 +319,7 @@ test("checkout and theme-toggle shadow roots share one adopted stylesheet", asyn
   globalThis.fetch = fetchStub;
   const paymentHash = "e".repeat(64);
   const element = mount({
-    "order-id": "order-5",
+    reference: "order-5",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -359,7 +359,7 @@ test("a cosmetic theme flip re-renders without restarting the poll controller", 
   globalThis.fetch = fetchStub;
   const paymentHash = "a".repeat(64);
   const element = mount({
-    "order-id": "order-theme-poll",
+    reference: "order-theme-poll",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -405,7 +405,7 @@ test("a failed prepare plus a theme flip never re-prepares", async () => {
     },
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-prepare-fail", prefix: "/openreceive" });
+  const element = mount({ reference: "order-prepare-fail", prefix: "/openreceive" });
 
   try {
     await until(() => prepareCalls === 1, { label: "failed prepare attempt" });
@@ -435,7 +435,7 @@ test('polling="false" renders the snapshot without any status requests', async (
   globalThis.fetch = fetchStub;
   const paymentHash = "b".repeat(64);
   const element = mount({
-    "order-id": "order-no-poll",
+    reference: "order-no-poll",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -461,9 +461,9 @@ test('polling="false" renders the snapshot without any status requests', async (
 });
 
 /** Prepare body advertising one payable swap asset, so the wizard offers it directly. */
-function prepareBodyWithSwapAsset(orderId, payInAsset) {
+function prepareBodyWithSwapAsset(reference, payInAsset) {
   return {
-    order_id: orderId,
+    reference: reference,
     amount_msats: 5_000_000,
     payment_methods: [
       {
@@ -506,7 +506,7 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-swap-1", prefix: "/openreceive" });
+  const element = mount({ reference: "order-swap-1", prefix: "/openreceive" });
 
   try {
     const asset = await until(
@@ -538,7 +538,7 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
       element.shadowRoot?.innerHTML ?? "",
       /Could not prepare the payment address/,
     );
-    // Prepare stays a once-per-order gate across all of that re-rendering.
+    // Prepare stays a once-per-reference gate across all of that re-rendering.
     assert.equal(fetchStub.pathCount("/checkouts/prepare"), 1);
   } finally {
     element.remove();
@@ -562,7 +562,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-swap-reselect", prefix: "/openreceive" });
+  const element = mount({ reference: "order-swap-reselect", prefix: "/openreceive" });
 
   try {
     const asset = await until(
@@ -617,7 +617,7 @@ test("attributes the element writes never re-enter its own callback", async () =
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-reentry", prefix: "/openreceive" });
+  const element = mount({ reference: "order-reentry", prefix: "/openreceive" });
 
   try {
     await until(() => element.getAttribute("amount-msats") === "21000", {
@@ -658,7 +658,7 @@ test("a nonsense amount-msats costs the amount label, not the element", async ()
   globalThis.fetch = fetchStub;
   const paymentHash = "f".repeat(64);
   const element = mount({
-    "order-id": "order-bad-amount",
+    reference: "order-bad-amount",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -689,7 +689,7 @@ test("a nonsense amount-msats costs the amount label, not the element", async ()
   // The rule must not blank a GOOD amount on this rail: same element, same
   // settled screen, a legitimate value.
   const good = mount({
-    "order-id": "order-good-amount",
+    reference: "order-good-amount",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -720,7 +720,7 @@ test("a hostile expires-at costs the countdown, not the element", async () => {
   globalThis.fetch = fetchStub;
   const paymentHash = "c".repeat(64);
   const element = mount({
-    "order-id": "order-bad-expiry",
+    reference: "order-bad-expiry",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -814,7 +814,7 @@ test("an expires-at already in the past still reaches the expired screen", async
   });
   const paymentHash = "b".repeat(64);
   const element = mount({
-    "order-id": "order-past-expiry",
+    reference: "order-past-expiry",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -848,7 +848,7 @@ test("a legitimate expires-at still drives the countdown", async () => {
   globalThis.fetch = fetchStub;
   const paymentHash = "d".repeat(64);
   const element = mount({
-    "order-id": "order-good-expiry",
+    reference: "order-good-expiry",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
@@ -884,7 +884,7 @@ test("a hostile invoice-id costs the payment screen, not the shadow root", async
     const errors = [];
     element.addEventListener("openreceive-error", (event) => errors.push(event.detail.error));
     for (const [name, value] of Object.entries({
-      "order-id": "order-unidentified",
+      reference: "order-unidentified",
       prefix: "/openreceive",
       invoice: `lnbc-${"a".repeat(64)}`,
       "amount-msats": "21000",
@@ -942,9 +942,9 @@ test("a hostile invoice-id costs the payment screen, not the shadow root", async
   }
 });
 
-function prepareBodyWithSwapAssets(orderId, assets) {
+function prepareBodyWithSwapAssets(reference, assets) {
   return {
-    order_id: orderId,
+    reference: reference,
     amount_msats: 5_000_000,
     payment_methods: assets.map(([payInAsset, networkLabel]) => ({
       pay_in_asset: payInAsset,
@@ -973,7 +973,7 @@ test("retrying a failed swap start replaces the error with the preparing spinner
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-swap-retry", prefix: "/openreceive" });
+  const element = mount({ reference: "order-swap-retry", prefix: "/openreceive" });
 
   try {
     const asset = await until(
@@ -1028,7 +1028,7 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
-  const element = mount({ "order-id": "order-two-coins", prefix: "/openreceive" });
+  const element = mount({ reference: "order-two-coins", prefix: "/openreceive" });
 
   try {
     const sol = await until(

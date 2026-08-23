@@ -10,19 +10,19 @@ module OpenReceive
     class RequestHandler
       # Spec-declared caps, mirroring the OpenAPI request schemas and the JS
       # handler exactly (the second settlement engine must not drift).
-      MAX_ORDER_ID_LENGTH = 200
+      MAX_REFERENCE_LENGTH = 200
       MAX_MEMO_LENGTH = 500
       MAX_BODY_BYTES = 64 * 1024
       # Declared fields per route (additionalProperties: false, snake_case
       # only — camelCase aliases are rejected, matching JS).
       ROUTE_BODY_FIELDS = {
-        "checkout.prepare" => %w[order_id],
-        "checkout.create" => %w[order_id memo metadata],
-        "payment.check" => %w[order_id payment_hash],
-        "swap.quote" => %w[order_id pay_in_asset],
-        "swap.create" => %w[order_id pay_in_asset memo metadata],
-        "swap.read" => %w[order_id payment_hash],
-        "swap.refund" => %w[order_id payment_hash refund_address]
+        "checkout.prepare" => %w[reference],
+        "checkout.create" => %w[reference memo metadata],
+        "payment.check" => %w[reference payment_hash],
+        "swap.quote" => %w[reference pay_in_asset],
+        "swap.create" => %w[reference pay_in_asset memo metadata],
+        "swap.read" => %w[reference payment_hash],
+        "swap.refund" => %w[reference payment_hash refund_address]
       }.freeze
 
       # `client_ip` (a proc receiving the framework request) attributes payer
@@ -46,31 +46,31 @@ module OpenReceive
       def prepare_checkout(raw_body:, request:, request_id:)
         handle(request_id) do
           body = parse(raw_body, "checkout.prepare")
-          order_id = required_order_id(body)
+          reference = required_reference(body)
           reject_payer_amount(body)
-          guard("checkout.prepare", request, { order_id: order_id })
-          resolved = resolve_host("checkout.prepare", request, order_id, body)
+          guard("checkout.prepare", request, { reference: reference })
+          resolved = resolve_host("checkout.prepare", request, reference, body)
           prepared = @service.prepare_checkout("amount" => required_amount(resolved))
-          success(200, prepared.merge("order_id" => order_id), request_id)
+          success(200, prepared.merge("reference" => reference), request_id)
         end
       end
 
       def create_checkout(raw_body:, request:, request_id:)
         handle(request_id) do
           body = parse(raw_body, "checkout.create")
-          order_id = required_order_id(body)
+          reference = required_reference(body)
           reject_payer_amount(body)
-          authorize!("checkout.create", request, { order_id: order_id })
-          resolved = resolve_host("checkout.create", request, order_id, body)
+          authorize!("checkout.create", request, { reference: reference })
+          resolved = resolve_host("checkout.create", request, reference, body)
           # Rate limits meter minting only: re-serving an already-committed
           # attempt costs no wallet call, so a capped payer can still re-fetch
           # instructions they were already given (mirrors JS).
-          enforce_rate_limit!("checkout.create", request, { order_id: order_id }) unless resolved["payment_hash"]
+          enforce_rate_limit!("checkout.create", request, { reference: reference }) unless resolved["payment_hash"]
           checkout = if resolved["payment_hash"]
-                       committed_checkout(order_id, resolved)
+                       committed_checkout(reference, resolved)
                      else
                        @service.create_checkout(
-                         "order_id" => order_id, "amount" => required_amount(resolved),
+                         "reference" => reference, "amount" => required_amount(resolved),
                          "memo" => validated_memo(body), "metadata" => body["metadata"]
                        )
                      end
@@ -93,14 +93,14 @@ module OpenReceive
       def check_payment(raw_body:, request:, request_id:, reconcile_pass: nil, attempt_status: nil)
         handle(request_id) do
           body = parse(raw_body, "payment.check")
-          order_id = required_order_id(body)
+          reference = required_reference(body)
           # Payer input is shape-validated BEFORE any host hook runs (mirrors
           # JS): guard/resolve never see an un-vetted selector.
           requested_hash = required_payment_hash(body["payment_hash"])
-          guard("payment.check", request, { order_id: order_id, payment_hash: requested_hash })
-          resolved = resolve_host("payment.check", request, order_id, body)
+          guard("payment.check", request, { reference: reference, payment_hash: requested_hash })
+          resolved = resolve_host("payment.check", request, reference, body)
           hash = selected_payment_hash(resolved, requested_hash)
-          checkout = committed_checkout(order_id, resolved)
+          checkout = committed_checkout(reference, resolved)
           public_checked =
             if reconcile_pass.nil?
               checked_via_wallet(hash, checkout)
@@ -119,11 +119,11 @@ module OpenReceive
       def quote_swap(raw_body:, request:, request_id:)
         handle(request_id) do
           body = parse(raw_body, "swap.quote")
-          order_id = required_order_id(body)
+          reference = required_reference(body)
           reject_payer_amount(body)
           asset = required(body["pay_in_asset"], "pay_in_asset")
-          guard("swap.quote", request, { order_id: order_id })
-          resolved = resolve_host("swap.quote", request, order_id, body, asset)
+          guard("swap.quote", request, { reference: reference })
+          resolved = resolve_host("swap.quote", request, reference, body, asset)
           success(200, @service.quote_swap("amount" => required_amount(resolved), "pay_in_asset" => asset), request_id)
         end
       end
@@ -131,19 +131,19 @@ module OpenReceive
       def create_swap(raw_body:, request:, request_id:)
         handle(request_id) do
           body = parse(raw_body, "swap.create")
-          order_id = required_order_id(body)
+          reference = required_reference(body)
           reject_payer_amount(body)
           asset = required(body["pay_in_asset"], "pay_in_asset")
-          authorize!("swap.create", request, { order_id: order_id })
-          resolved = resolve_host("swap.create", request, order_id, body, asset)
-          enforce_rate_limit!("swap.create", request, { order_id: order_id }) unless resolved["payment_hash"]
+          authorize!("swap.create", request, { reference: reference })
+          resolved = resolve_host("swap.create", request, reference, body, asset)
+          enforce_rate_limit!("swap.create", request, { reference: reference }) unless resolved["payment_hash"]
           swap = if resolved["payment_hash"]
                    data = required_swap_data(resolved["swap_data"])
                    status = @service.get_swap(
-                     order_id: order_id, payment_hash: resolved["payment_hash"], swap_data: data
+                     reference: reference, payment_hash: resolved["payment_hash"], swap_data: data
                    )
                    status.merge(
-                     "checkout" => committed_checkout(order_id, resolved),
+                     "checkout" => committed_checkout(reference, resolved),
                      "swap_data" => data
                    )
                  else
@@ -152,7 +152,7 @@ module OpenReceive
                    # the provider-mandated shadow-invoice expiry, and duplicate
                    # order keys would split authorization from minting).
                    @service.create_swap(
-                     "order_id" => order_id,
+                     "reference" => reference,
                      "amount" => required_amount(resolved),
                      "pay_in_asset" => asset,
                      "memo" => validated_memo(body),
@@ -165,15 +165,15 @@ module OpenReceive
       end
 
       def get_swap(raw_body:, request:, request_id:)
-        swap_action("swap.read", raw_body, request, request_id) do |order_id, hash, data, _body|
-          @service.get_swap(order_id: order_id, payment_hash: hash, swap_data: data)
+        swap_action("swap.read", raw_body, request, request_id) do |reference, hash, data, _body|
+          @service.get_swap(reference: reference, payment_hash: hash, swap_data: data)
         end
       end
 
       def refund_swap(raw_body:, request:, request_id:)
-        swap_action("swap.refund", raw_body, request, request_id) do |order_id, hash, data, body|
+        swap_action("swap.refund", raw_body, request, request_id) do |reference, hash, data, body|
           @service.refund_swap(
-            order_id: order_id,
+            reference: reference,
             payment_hash: hash,
             swap_data: data,
             refund_address: required(body["refund_address"], "refund_address")
@@ -275,7 +275,7 @@ module OpenReceive
         end
         row = attempt_status&.call(hash)
         # resolve_host selected this hash from the same repository moments ago.
-        raise NotFoundError, "Payment attempt not found for this order." if row.nil?
+        raise NotFoundError, "Payment attempt not found for this reference." if row.nil?
 
         # Row `attention` serves as `pending` on the wire (operator state, not
         # payer information); the row path never emits `not_found`.
@@ -288,19 +288,19 @@ module OpenReceive
       def swap_action(action, raw_body, request, request_id)
         handle(request_id) do
           body = parse(raw_body, action)
-          order_id = required_order_id(body)
+          reference = required_reference(body)
           # Shape-validated before guard/resolve, matching JS: host hooks
           # never receive an un-vetted payer selector.
           requested_hash = required_payment_hash(body["payment_hash"])
-          guard(action, request, { order_id: order_id, payment_hash: requested_hash })
-          resolved = resolve_host(action, request, order_id, body)
+          guard(action, request, { reference: reference, payment_hash: requested_hash })
+          resolved = resolve_host(action, request, reference, body)
           hash = selected_payment_hash(resolved, requested_hash)
-          success(200, yield(order_id, hash, required_swap_data(resolved["swap_data"]), body), request_id)
+          success(200, yield(reference, hash, required_swap_data(resolved["swap_data"]), body), request_id)
         end
       end
 
-      def resolve_host(action, request, order_id, body, pay_in_asset = nil)
-        args = { action: action, request: request, order_id: order_id, input: body }
+      def resolve_host(action, request, reference, body, pay_in_asset = nil)
+        args = { action: action, request: request, reference: reference, input: body }
         args[:pay_in_asset] = pay_in_asset unless pay_in_asset.nil?
         OpenReceive.stringify(@resolve_checkout.call(**args))
       end
@@ -327,7 +327,7 @@ module OpenReceive
       def commit(checkout, swap_data = nil, request = nil)
         client_ip = @client_ip&.call(request)
         @on_checkout_created.call(
-          order_id: checkout.fetch("order_id"),
+          reference: checkout.fetch("reference"),
           payment_hash: checkout.fetch("payment_hash"),
           checkout: checkout,
           swap_data: swap_data,
@@ -433,12 +433,12 @@ module OpenReceive
         text
       end
 
-      def required_order_id(body)
-        order_id = required(body["order_id"], "order_id")
-        if order_id.length > MAX_ORDER_ID_LENGTH
-          raise ValidationError, "order_id must be #{MAX_ORDER_ID_LENGTH} characters or fewer."
+      def required_reference(body)
+        reference = required(body["reference"], "reference")
+        if reference.length > MAX_REFERENCE_LENGTH
+          raise ValidationError, "reference must be #{MAX_REFERENCE_LENGTH} characters or fewer."
         end
-        order_id
+        reference
       end
 
       def validated_memo(body)
@@ -487,7 +487,7 @@ module OpenReceive
         raise ValidationError, "This route does not accept a payer-supplied amount; the host resolves its order price."
       end
 
-      def committed_checkout(order_id, resolved)
+      def committed_checkout(reference, resolved)
         checkout = resolved["checkout"]
         unless checkout.is_a?(Hash)
           raise ConflictError, "The host payment attempt has no checkout snapshot."
@@ -496,8 +496,8 @@ module OpenReceive
         data = OpenReceive.as_string_keys(checkout)
         hash = required(data["payment_hash"] || data["paymentHash"], "payment_hash").downcase
         selected = required(resolved["payment_hash"], "payment_hash").downcase
-        checkout_order = required(data["order_id"] || data["orderId"], "order_id")
-        if hash != selected || checkout_order != order_id
+        checkout_order = required(data["reference"] || data["reference"], "reference")
+        if hash != selected || checkout_order != reference
           raise ConflictError, "The selected payment attempt is not a reusable pending checkout."
         end
         data

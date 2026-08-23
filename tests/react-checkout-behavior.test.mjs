@@ -335,7 +335,7 @@ test("create mode keeps one checkout view across the deferred Lightning mint", a
   const stack = await createLifecycleStack();
   globalThis.fetch = stack.fetchStub;
   stack.addOrder("order-mint", 2000);
-  const handle = mount(React.createElement(Checkout, { orderId: "order-mint" }));
+  const handle = mount(React.createElement(Checkout, { reference: "order-mint" }));
   try {
     const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
     bitcoin.click();
@@ -373,7 +373,7 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
     return stack.fetchStub(input, init);
   };
   stack.addOrder("order-swap-error", 2000);
-  const handle = mount(React.createElement(Checkout, { orderId: "order-swap-error" }));
+  const handle = mount(React.createElement(Checkout, { reference: "order-swap-error" }));
   try {
     const usdt = await until(() => handle.button("USDT"), { label: "USDT tile" });
     usdt.click();
@@ -431,7 +431,7 @@ test("a second Bitcoin selection during the mint does not POST a second checkout
     }
     return stack.fetchStub(input, init);
   };
-  const handle = mount(React.createElement(Checkout, { orderId: "order-double-mint" }));
+  const handle = mount(React.createElement(Checkout, { reference: "order-double-mint" }));
   try {
     const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
     bitcoin.click();
@@ -477,7 +477,7 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
     }
     return stack.fetchStub(input, init);
   };
-  const handle = mount(React.createElement(Checkout, { orderId: "order-swap-guard" }));
+  const handle = mount(React.createElement(Checkout, { reference: "order-swap-guard" }));
   try {
     const sol = await until(() => handle.button("SOL"), { label: "SOL tile" });
     // React's first click replaces the whole method grid with the focused swap
@@ -520,7 +520,7 @@ test("the checkout session survives a re-render, so a second start is refused", 
     const startedRef = React.useRef(undefined);
     probe.session = useCheckoutSession({
       snapshot: () => undefined,
-      orderId: () => "order-probe",
+      reference: () => "order-probe",
       swapPrefix: () => "http://harness.local/openreceive",
       fetch: () => fetchStub,
       swapSelection: {
@@ -572,7 +572,7 @@ test("Bitcoin selected again after the mint reuses the bolt11 instead of minting
     if (url.pathname === "/openreceive/checkouts") mints += 1;
     return stack.fetchStub(input, init);
   };
-  const handle = mount(React.createElement(Checkout, { orderId: "order-reuse-mint" }));
+  const handle = mount(React.createElement(Checkout, { reference: "order-reuse-mint" }));
   try {
     const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
     bitcoin.click();
@@ -622,7 +622,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
     stack.requests.filter((entry) => entry.path.endsWith("/swaps") && entry.method === "POST")
       .length;
   const solDeposit = "So11111111111111111111111111111111111111112";
-  const handle = mount(React.createElement(Checkout, { orderId: "order-swap-reselect" }));
+  const handle = mount(React.createElement(Checkout, { reference: "order-swap-reselect" }));
   try {
     const sol = await until(() => handle.button("SOL"), { label: "SOL tile" });
     sol.click();
@@ -690,7 +690,7 @@ test("the session refuses a second start for an asset it already holds instructi
     const [selected, setSelected] = React.useState(null);
     probe.session = useCheckoutSession({
       snapshot: () => undefined,
-      orderId: () => "order-reselect",
+      reference: () => "order-reselect",
       swapPrefix: () => "http://harness.local/openreceive",
       fetch: () => fetchStub,
       swapSelection: {

@@ -48,13 +48,13 @@ export function mergeAttemptIntoSnapshot(
 export function mergeAttemptIntoCheckout(
   invoice: CheckoutInvoiceSnapshot,
   previous: CheckoutSnapshot | undefined,
-  orderId: string,
+  reference: string,
 ): CheckoutSnapshot {
   const base =
     previous ??
     ({
       checkout_id: invoice.invoice_id,
-      order_id: orderId,
+      reference: reference,
       status: "open" as const,
       amount_msats: invoice.amount_msats ?? 0,
       invoices: [],

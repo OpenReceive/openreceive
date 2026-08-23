@@ -8,7 +8,7 @@ lives in that database.
 
 ## Multi-instance semantics
 
-The library serializes attempt insertion per order (Postgres advisory lock or
+The library serializes attempt insertion per reference (Postgres advisory lock or
 SQLite immediate transaction), enforces unique `payment_hash`, and makes
 settlement write-once inside the database it is handed. Scale web
 instances freely: restarts and overlapping passes repeat bounded, idempotent
@@ -82,7 +82,7 @@ read as `pending` on the wire — payers never see them — so alert on them
 internally:
 
 ```sql
-SELECT order_id, payment_hash, status_reason, expires_at
+SELECT reference, payment_hash, status_reason, expires_at
 FROM openreceive_payments
 WHERE status = 'attention';
 ```

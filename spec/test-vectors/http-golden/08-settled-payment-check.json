@@ -6,7 +6,7 @@
     "method": "POST",
     "path": "/openreceive/payments/check",
     "body": {
-      "order_id": "order-golden-settled",
+      "reference": "order-golden-settled",
       "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
     }
   },

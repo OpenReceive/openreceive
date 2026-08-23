@@ -107,7 +107,7 @@ const lightningInvoice = {
 };
 const lightningPending = {
   checkout_id: "or_chk_ln_pending",
-  order_id: "order-ln-pending",
+  reference: "order-ln-pending",
   status: "open",
   amount_msats: 200_000,
   fiat: { currency: "USD", value: "0.05" },
@@ -129,7 +129,7 @@ const settledLightningInvoice = {
 };
 const lightningSettled = {
   checkout_id: "or_chk_ln_settled",
-  order_id: "order-ln-settled",
+  reference: "order-ln-settled",
   status: "paid",
   paid_at: NOW - 30,
   amount_msats: 200_000,
@@ -150,7 +150,7 @@ const expiredLightningInvoice = {
 };
 const lightningExpired = {
   checkout_id: "or_chk_ln_expired",
-  order_id: "order-ln-expired",
+  reference: "order-ln-expired",
   status: "open",
   amount_msats: 200_000,
   fiat: { currency: "USD", value: "0.05" },
@@ -184,7 +184,7 @@ const swapAttempt = {
 };
 const swapPending = {
   checkout_id: "or_chk_swap_pending",
-  order_id: "order-swap-pending",
+  reference: "order-swap-pending",
   status: "open",
   amount_msats: 3_028_000,
   fiat: { currency: "USD", value: "2.10" },
@@ -207,7 +207,7 @@ const settledSwapAttempt = {
 };
 const swapSettled = {
   checkout_id: "or_chk_swap_settled",
-  order_id: "order-swap-settled",
+  reference: "order-swap-settled",
   status: "paid",
   paid_at: NOW - 45,
   amount_msats: 3_028_000,
@@ -232,7 +232,7 @@ const refundSwapAttempt = {
 };
 const swapRefundRequired = {
   checkout_id: "or_chk_swap_refund",
-  order_id: "order-swap-refund",
+  reference: "order-swap-refund",
   status: "open",
   amount_msats: 3_028_000,
   fiat: { currency: "USD", value: "2.10" },
@@ -250,7 +250,7 @@ const checkoutLockAttempt = {
 };
 const checkoutLockDeferred = {
   checkout_id: "or_chk_lock",
-  order_id: "order-lock",
+  reference: "order-lock",
   status: "open",
   amount_msats: 750_000,
   fiat: { currency: "USD", value: "0.19" },
@@ -293,7 +293,7 @@ const siblingSwapShadow = {
 };
 const paidWithSiblingAttempts = {
   checkout_id: "or_chk_siblings",
-  order_id: "order-siblings",
+  reference: "order-siblings",
   status: "paid",
   paid_at: NOW - 10,
   amount_msats: 19_450_000,
@@ -332,7 +332,7 @@ test("characterization: lightning pending", () => {
   const state = browserState(lightningPending);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_ln_pending",
-    order_id: "order-ln-pending",
+    reference: "order-ln-pending",
     invoice_id: "or_inv_ln_pending",
     invoice: "lnbc-pending",
     rail: "lightning",
@@ -387,7 +387,7 @@ test("characterization: lightning settled", () => {
   const state = browserState(lightningSettled);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_ln_settled",
-    order_id: "order-ln-settled",
+    reference: "order-ln-settled",
     invoice_id: "or_inv_ln_settled",
     invoice: "lnbc-settled",
     rail: "lightning",
@@ -427,7 +427,7 @@ test("characterization: lightning expired", () => {
   const state = browserState(lightningExpired);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_ln_expired",
-    order_id: "order-ln-expired",
+    reference: "order-ln-expired",
     invoice_id: "or_inv_ln_expired",
     invoice: "lnbc-expired",
     rail: "lightning",
@@ -466,7 +466,7 @@ test("characterization: swap pending", () => {
   const state = browserState(swapPending);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_swap_pending",
-    order_id: "order-swap-pending",
+    reference: "order-swap-pending",
     invoice_id: "or_inv_swap_pending",
     invoice: "",
     rail: "swap",
@@ -518,7 +518,7 @@ test("characterization: swap settled", () => {
   const state = browserState(swapSettled);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_swap_settled",
-    order_id: "order-swap-settled",
+    reference: "order-swap-settled",
     invoice_id: "or_inv_swap_settled",
     invoice: "",
     rail: "swap",
@@ -569,7 +569,7 @@ test("characterization: swap refund_required", () => {
   const state = browserState(swapRefundRequired);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_swap_refund",
-    order_id: "order-swap-refund",
+    reference: "order-swap-refund",
     invoice_id: "or_inv_swap_refund",
     invoice: "",
     rail: "swap",
@@ -603,7 +603,7 @@ test("characterization: checkout_lock deferred", () => {
   const state = browserState(checkoutLockDeferred);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_lock",
-    order_id: "order-lock",
+    reference: "order-lock",
     invoice_id: "",
     invoice: "",
     rail: "checkout_lock",
@@ -640,7 +640,7 @@ test("characterization: paid with sibling attempts", () => {
   const state = browserState(paidWithSiblingAttempts);
   assert.deepStrictEqual(state, {
     checkout_id: "or_chk_siblings",
-    order_id: "order-siblings",
+    reference: "order-siblings",
     // The displayed attempt is the payable Lightning one, not the settled swap
     // shadow that has no bolt11.
     invoice_id: "or_inv_sibling_ln",
@@ -705,7 +705,7 @@ test("divergence (b) RECONCILED: amount_msats falls back to the checkout amount"
   };
   const snapshot = {
     checkout_id: "or_chk_b",
-    order_id: "order-b",
+    reference: "order-b",
     status: "open",
     amount_msats: 123_000,
     active: invoiceWithoutAmount,
@@ -731,7 +731,7 @@ test("divergence (c) RECONCILED: the missing-bolt11 TypeError message", () => {
   };
   const snapshot = {
     checkout_id: "or_chk_c",
-    order_id: "order-c",
+    reference: "order-c",
     status: "open",
     amount_msats: 1_000,
     active: invoiceWithoutBolt11,
@@ -757,7 +757,7 @@ test("divergence (d) RECONCILED: no lightning_uri on a swap attempt", () => {
   };
   const snapshot = {
     checkout_id: "or_chk_d",
-    order_id: "order-d",
+    reference: "order-d",
     status: "open",
     amount_msats: 5_000,
     active: swapWithBolt11,
@@ -821,7 +821,7 @@ function nonsenseAmountSnapshot({ rail, settled, amountMsats }) {
   };
   return {
     checkout_id: `or_chk_bad_${rail}`,
-    order_id: `order-bad-${rail}`,
+    reference: `order-bad-${rail}`,
     status: settled ? "paid" : "open",
     ...(settled ? { paid_at: NOW - 10 } : {}),
     amount_msats: amountMsats,
@@ -969,7 +969,7 @@ function timestampSnapshot({ rail, settled, settledAt, expiresAt }) {
   };
   return {
     checkout_id: `or_chk_time_${rail}`,
-    order_id: `order-time-${rail}`,
+    reference: `order-time-${rail}`,
     status: settled ? "paid" : "open",
     ...(settled ? { paid_at: settledAt } : {}),
     amount_msats: 200_000,

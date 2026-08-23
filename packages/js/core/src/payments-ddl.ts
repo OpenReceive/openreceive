@@ -82,12 +82,7 @@ function paymentsColumns(options: PaymentsDdlOptions): readonly PaymentsColumn[]
           ? "BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
           : "INTEGER PRIMARY KEY AUTOINCREMENT",
     },
-    // Deliberately TEXT with no foreign key: OpenReceive treats the host's
-    // order id as an opaque string and never reads, locks, or joins the host's
-    // order table. A host that wants referential integrity adds the constraint
-    // itself — see `fulfillmentNote`, which every generated file
-    // renders next to this schema.
-    { name: "order_id", definition: "TEXT NOT NULL" },
+    { name: "reference", definition: "TEXT NOT NULL" },
     { name: "payment_hash", definition: "TEXT NOT NULL UNIQUE" },
     { name: "status", definition: "TEXT NOT NULL DEFAULT 'pending'" },
     { name: "status_reason", definition: "TEXT" },
@@ -116,8 +111,7 @@ export function paymentsColumnNames(): readonly string[] {
  * semicolons). `@openreceive/http` renders it for its migration helper and the
  * scaffold CLI renders it into ORM migrations — both from here, so the two can
  * never drift. Every column and constraint must be kept as rendered; there is
- * nothing here to tune per host, because `order_id` is an opaque string with
- * no foreign key. The sibling `openreceive_meta` key/value/rev table
+ * nothing here to tune per host. The sibling `openreceive_meta` key/value/rev table
  * backs the durable reconcile gate shared by every worker on this database —
  * same host database, never a second one — and records the installed schema
  * version.
@@ -126,7 +120,7 @@ export function paymentsColumnNames(): readonly string[] {
  * replaced attempt stays `pending` with a future `expires_at`, and an expired
  * attempt stays `pending` until a wallet scan closes it, so any DB-level
  * uniqueness over pending rows would reject legitimate reminting. The
- * repository enforces the time-dependent predicate inside the per-order commit
+ * repository enforces the time-dependent predicate inside the per-reference commit
  * lock, which no index can express.
  */
 export function paymentsDdlStatements(options: PaymentsDdlOptions): readonly string[] {
@@ -146,7 +140,7 @@ export function paymentsDdlStatements(options: PaymentsDdlOptions): readonly str
       `  CHECK (${paymentsHashCheckSql(options.dialect)})`,
       ")",
     ].join("\n"),
-    `CREATE INDEX IF NOT EXISTS ${paymentsIndexName(tableName, "order_created_idx")} ON ${tableName} (order_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS ${paymentsIndexName(tableName, "reference_created_idx")} ON ${tableName} (reference, created_at)`,
     `CREATE INDEX IF NOT EXISTS ${paymentsIndexName(tableName, "status_created_idx")} ON ${tableName} (status, created_at)`,
     `CREATE INDEX IF NOT EXISTS ${paymentsIndexName(tableName, "client_ip_inserted_idx")} ON ${tableName} (client_ip, inserted_at)`,
     [

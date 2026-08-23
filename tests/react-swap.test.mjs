@@ -275,7 +275,7 @@ test("browser builds block explorer and Lightning decode links for transaction d
   const detailsHtml = renderToStaticMarkup(
     React.createElement(TransactionDetails, {
       state: {
-        order_id: "ord_tx",
+        reference: "ord_tx",
         checkout_id: "chk_tx",
         invoice_id: "inv_tx",
         invoice: "lnbc-tx-detail",

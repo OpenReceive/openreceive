@@ -82,7 +82,7 @@ export type BrowserLogger = (entry: BrowserLogEntry) => void;
 export type BrowserLoggerOption = BrowserLogger | false;
 
 export interface BrowserLogContext {
-  readonly order_id?: string;
+  readonly reference?: string;
   readonly invoice_id?: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
@@ -249,7 +249,7 @@ export interface CheckoutPaymentMethod {
  */
 export interface CheckoutSnapshot {
   readonly checkout_id: string;
-  readonly order_id: string;
+  readonly reference: string;
   readonly status: "open" | "paid" | "expired";
   readonly paid_at?: number;
   readonly amount_msats: number;
@@ -265,14 +265,14 @@ export interface CheckoutSnapshot {
 export interface CheckoutElementAttributeOptions {
   /**
    * Order id for create mode. When no checkout snapshot is supplied, the element is rendered
-   * with this as its `order-id` attribute (paired with `prefix`) and owns the whole
+   * with this as its `reference` attribute (paired with `prefix`) and owns the whole
    * create/poll lifecycle itself. Ignored when a snapshot is supplied — the snapshot's
-   * `order_id` wins.
+   * `reference` wins.
    */
-  readonly orderId?: string;
+  readonly reference?: string;
   /**
    * Base path the shipped router is mounted at. Emitted as the element's `prefix` attribute
-   * so a create-mode element (`order-id` with no `invoice`) can derive its create/order
+   * so a create-mode element (`reference` with no `invoice`) can derive its create/order
    * routes without spelling them out.
    */
   readonly prefix?: string;
@@ -285,7 +285,7 @@ export interface CheckoutElementAttributeOptions {
   readonly theme?: ResolvedTheme;
   readonly paymentWizard?: boolean;
   /**
-   * Opt into History API URL sync to `{resumePathPrefix}/{orderId}` (default `/checkout/:id`).
+   * Opt into History API URL sync to `{resumePathPrefix}/{reference}` (default `/checkout/:id`).
    * This controls URL mutation only; order-resume data remains a host concern.
    */
   readonly syncUrl?: boolean;
@@ -294,7 +294,7 @@ export interface CheckoutElementAttributeOptions {
   /**
    * Order id from the app router (e.g. Next.js). When set, skip History API URL sync.
    */
-  readonly routeOrderId?: string;
+  readonly routeReference?: string;
   /**
    * Base URL of an external bolt11 decoder. Omitted (the default), the element
    * renders no "Decode" link and the invoice is never sent to a third party.
@@ -404,7 +404,7 @@ export interface CheckoutShellElements {
  */
 export interface CheckoutState extends CheckoutStateLabels {
   readonly checkout_id: string;
-  readonly order_id: string;
+  readonly reference: string;
   readonly invoice_id: string;
   readonly invoice: string;
   readonly rail: "lightning" | "swap" | "checkout_lock";
@@ -440,7 +440,7 @@ export interface CheckoutStatusModel {
   readonly countdownLabel?: string;
 }
 
-export type CheckoutStatusRefresh = (orderId: string) => Promise<CheckoutSnapshot | null>;
+export type CheckoutStatusRefresh = (reference: string) => Promise<CheckoutSnapshot | null>;
 
 export type RequestCheckoutOptions = RequestCheckoutBaseOptions;
 
@@ -450,7 +450,7 @@ export type RequestCheckoutOptions = RequestCheckoutBaseOptions;
  */
 export type PrepareCheckoutOptions = Pick<
   RequestCheckoutBaseOptions,
-  "prefix" | "orderId" | "fetch" | "headers"
+  "prefix" | "reference" | "fetch" | "headers"
 >;
 
 export interface RequestCheckoutBaseOptions {
@@ -460,7 +460,7 @@ export interface RequestCheckoutBaseOptions {
    * because it is the only URL input: there is no per-route override.
    */
   readonly prefix: string;
-  readonly orderId: string;
+  readonly reference: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
   readonly memo?: string;
@@ -693,7 +693,7 @@ export interface TransactionDetailRow {
 }
 
 export interface TransactionDetailsInput {
-  readonly order_id?: string;
+  readonly reference?: string;
   readonly checkout_id?: string;
   readonly invoice_id?: string;
   readonly invoice?: string | null;

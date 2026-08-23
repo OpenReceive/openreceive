@@ -4,7 +4,7 @@
   "request": {
     "method": "POST",
     "path": "/openreceive/payments/check",
-    "body": { "order_id": "ord-without-payment" }
+    "body": { "reference": "ord-without-payment" }
   },
   "expected": {
     "status": 400,

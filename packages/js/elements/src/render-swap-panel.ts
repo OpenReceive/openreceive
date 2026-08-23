@@ -349,7 +349,7 @@ function renderElementTransactionDetailsHtml(
 ): string {
   const bolt11 = typeof invoice.invoice === "string" ? invoice.invoice : view.lightningInvoice;
   return renderTransactionDetailsHtml({
-    ...(view.orderId === undefined ? {} : { order_id: view.orderId }),
+    ...(view.reference === undefined ? {} : { reference: view.reference }),
     ...(view.checkoutId === undefined ? {} : { checkout_id: view.checkoutId }),
     invoice_id: invoice.invoice_id,
     ...(bolt11 === undefined ? {} : { invoice: bolt11 }),

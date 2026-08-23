@@ -23,7 +23,7 @@ const SCHEMA_PATHS = {
 };
 
 const CANONICAL_COLUMNS = [
-  /order_id|orderId/,
+  /reference|reference/,
   /payment_hash|paymentHash/,
   /\bstatus\b/,
   /status_reason|statusReason/,
@@ -50,10 +50,10 @@ function renderFor(orm, dialect, extra = {}) {
 
 /**
  * The generated files carry the fulfillment note, which deliberately SHOWS
- * host-side locking SQL and an opt-in foreign key. Those lines are guidance in
- * a comment, not emitted logic, so assertions about what the scaffold emits
- * must exclude them. Matching against the note's own lines keeps this exact:
- * new note text is excluded automatically, anything else is not.
+ * host-side locking SQL. Those lines are guidance in a comment, not emitted
+ * logic, so assertions about what the scaffold emits must exclude them.
+ * Matching against the note's own lines keeps this exact: new note text is
+ * excluded automatically, anything else is not.
  */
 function withoutFulfillmentNote(text, tableName = "openreceive_payments") {
   const noteLines = new Set(
@@ -150,30 +150,11 @@ test("parseScaffoldPaymentsArgv accepts ORM, dialect, and table flags", () => {
   }
 });
 
-// The scaffold no longer asks about the host's order table, so a stale scripted
-// invocation must fail loudly and say why rather than reporting a bare
-// "unexpected option" that reads like a typo.
-test("removed order-table flags are rejected by name, in both spellings", () => {
-  const removed = [
-    ["--order-model", "Purchase"],
-    ["--order-table", "purchases"],
-    ["--order-id-type", "uuid"],
-    ["--skip-foreign-key"],
-  ];
-  for (const [flag, value] of removed) {
-    for (const argv of value === undefined ? [[flag]] : [[flag, value], [`${flag}=${value}`]]) {
-      assert.throws(
-        () => parseScaffoldPaymentsArgv(["--orm", "knex", ...argv]),
-        (error) => {
-          assert.match(error.message, new RegExp(flag.replace(/-/g, "\\-")));
-          assert.match(error.message, /was removed/);
-          assert.match(error.message, /order_id is always TEXT/);
-          return true;
-        },
-        `${argv.join(" ")} should be rejected by name`,
-      );
-    }
-  }
+test("unknown options are rejected", () => {
+  assert.throws(
+    () => parseScaffoldPaymentsArgv(["--orm", "knex", "--order-model", "Purchase"]),
+    /Unexpected option: --order-model/,
+  );
 });
 
 test("each ORM emits its schema/migration files plus the wiring guide", () => {
@@ -352,7 +333,7 @@ test("wiring guide shows the library host wiring and the optional worker", () =>
     for (const dialect of OPENRECEIVE_DIALECTS) {
       const guide = guideFile(renderFor(orm, dialect)).contents;
       assert.match(guide, /import \{ createHost \} from "@openreceive\/http";/);
-      assert.match(guide, /createHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
+      assert.match(guide, /createHost\(\{ db, amountFor, onPaid \}\)/);
       // Default settlement is opportunistic (no boot-time loop); the worker is
       // an optional separate process wired by a host script.
       assert.match(guide, /opportunisticReconcile/);
@@ -420,29 +401,20 @@ test("sqlite schemas use sqlite constructs", () => {
   assert.match(prisma, /Int\s+@id @default\(autoincrement\(\)\)/);
 });
 
-// The order table is out of scope entirely: order_id is opaque TEXT, no ORM
-// emits a relation or a REFERENCES clause, and no rendering varies by the
-// host's primary-key type.
-test("no ORM couples openreceive_payments to the host order table", () => {
+// reference is text and nothing relates it to another table.
+test("no ORM emits a relation for reference", () => {
   for (const orm of OPENRECEIVE_ORMS) {
     for (const dialect of OPENRECEIVE_DIALECTS) {
       const schema = schemaFile(renderFor(orm, dialect), orm).contents;
-      // Strip the fulfillment note, which deliberately SHOWS an opt-in FK.
-      const generated = schema.replaceAll(/^.*(REFERENCES orders|ADD CONSTRAINT).*$/gm, "");
       assert.doesNotMatch(
-        generated,
-        /@relation|\.references\(/,
-        `${orm}/${dialect} should not emit an ORM relation to the order table`,
+        schema,
+        /@relation|\.references\(|REFERENCES/,
+        `${orm}/${dialect} should not emit a relation for reference`,
       );
       assert.match(
         schema,
-        /order_id TEXT NOT NULL|orderId\s+String\s+@map\("order_id"\)|orderId: text\("order_id"\)/,
-        `${orm}/${dialect} should type order_id as opaque text`,
-      );
-      assert.doesNotMatch(
-        schema,
-        /order_id (UUID|BIGINT|INTEGER)|@db\.Uuid/,
-        `${orm}/${dialect} should not type order_id from a host primary key`,
+        /reference TEXT NOT NULL|reference\s+String\s+@map\("reference"\)|reference: text\("reference"\)/,
+        `${orm}/${dialect} should type reference as text`,
       );
     }
   }
@@ -459,7 +431,7 @@ test("every generated schema and the guide carry the fulfillment note", () => {
       assert.match(contents, /WHAT YOU MUST GUARANTEE|What you must guarantee/);
       assert.match(contents, /AND state = 'awaiting_payment'/);
       assert.match(contents, /FOR UPDATE/);
-      assert.match(contents, /ON DELETE RESTRICT/);
+      assert.doesNotMatch(contents, /FOREIGN KEY|ON DELETE/);
     }
   }
 });
@@ -483,7 +455,7 @@ test("scaffold logs plan details including dialect", async () => {
     assert.match(text, /wrote /);
     assert.match(text, /Done\./);
     assert.match(text, /single-writer/);
-    assert.match(text, /createHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
+    assert.match(text, /createHost\(\{ db, amountFor, onPaid \}\)/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -508,7 +480,7 @@ test("interactive wizard fills missing options and writes files", async () => {
     assert.match(schema, /@@map\("openreceive_payments"\)/);
     assert.match(schema, /Dialect: sqlite/);
     const guide = await readFile(path.join(dir, "OPENRECEIVE_PAYMENTS.md"), "utf8");
-    assert.match(guide, /createHost\(\{ db, loadOrder, amountForOrder, onPaid \}\)/);
+    assert.match(guide, /createHost\(\{ db, amountFor, onPaid \}\)/);
     assert.match(output.join(""), /wrote /);
     assert.match(output.join(""), /dialect:\s+sqlite/);
   } finally {

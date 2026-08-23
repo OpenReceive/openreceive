@@ -5,7 +5,7 @@
   "request": {
     "method": "POST",
     "path": "/openreceive/checkouts",
-    "body": { "order_id": "order-limited" }
+    "body": { "reference": "order-limited" }
   },
   "expected": {
     "status": 429,

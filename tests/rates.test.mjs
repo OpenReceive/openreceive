@@ -66,7 +66,7 @@ test("fiat checkout REFUSES with a retryable 503 when rates are unavailable", as
     },
   });
   await assert.rejects(
-    service.createCheckout({ orderId: "order-rates", amount: { currency: "USD", value: "100" } }),
+    service.createCheckout({ reference: "order-rates", amount: { currency: "USD", value: "100" } }),
     (error) => {
       assert.equal(error.status, 503);
       assert.equal(error.body.retryable, true);
@@ -85,7 +85,7 @@ test("a provider currency gap maps to the same retryable 503, not a payer 400", 
     priceFetch: fakePriceFetch({ bitcoin: { usd: "68000.00" } }).fetcher,
   });
   await assert.rejects(
-    service.createCheckout({ orderId: "order-gap", amount: { currency: "EUR", value: "50" } }),
+    service.createCheckout({ reference: "order-gap", amount: { currency: "EUR", value: "50" } }),
     (error) => {
       assert.equal(error.status, 503);
       assert.equal(error.body.retryable, true);

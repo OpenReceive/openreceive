@@ -176,8 +176,8 @@ function FrameworkCheckout({
         if (canceled) return;
 
         const app = createApp(VueCheckout, {
-          orderId,
-          ...(routeOrderId === undefined ? {} : { routeOrderId }),
+          reference: orderId,
+          ...(routeOrderId === undefined ? {} : { routeReference: routeOrderId }),
           onSettled: options.onSettled,
           onStartOver,
           options: {
@@ -215,8 +215,8 @@ function FrameworkCheckout({
           environmentInjector: application.injector,
           hostElement: mountTarget,
         });
-        component.setInput("orderId", orderId);
-        if (routeOrderId !== undefined) component.setInput("routeOrderId", routeOrderId);
+        component.setInput("reference", orderId);
+        if (routeOrderId !== undefined) component.setInput("routeReference", routeOrderId);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
         component.setInput("options", {
@@ -248,8 +248,8 @@ function FrameworkCheckout({
         const component = mount(SvelteCheckout, {
           target: mountTarget,
           props: {
-            orderId,
-            ...(routeOrderId === undefined ? {} : { routeOrderId }),
+            reference: orderId,
+            ...(routeOrderId === undefined ? {} : { routeReference: routeOrderId }),
             onSettled: options.onSettled,
             onStartOver,
             options: {
@@ -286,8 +286,8 @@ function FrameworkCheckout({
     return (
       <Checkout
         className="demo-checkout"
-        orderId={orderId}
-        routeOrderId={routeOrderId}
+        reference={orderId}
+        routeReference={routeOrderId}
         onError={onError}
         onSettled={onSettled}
         onState={onState}

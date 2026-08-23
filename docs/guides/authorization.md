@@ -1,9 +1,8 @@
-# Authorization and the order bridge
+# Authorization and the host
 
 OpenReceive never inspects your session. The happy path is the all-in-one
-adapter factory: your order hooks plus a database handle, and your
-authorization policy. The adapter builds the wallet client and the order
-bridge itself:
+adapter factory: your hooks plus a database handle, and your authorization
+policy. The adapter builds the wallet client and the host itself:
 
 ```ts
 import { openReceiveExpress } from "@openreceive/express";
@@ -12,15 +11,14 @@ app.use(openReceiveExpress({
   wallet: { nwc: process.env.NWC_URI! }, // receive-only; your app refuses to start otherwise
   storage: {
     db, // your existing database handle
-    onPaid: async ({ orderId, query }) => {
-      // Settlement transaction; runs only for the order's first settled attempt.
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    onPaid: async ({ reference, query }) => {
+      // Settlement transaction; runs only for the first settled attempt for a reference.
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
     },
   },
-  loadOrder: (orderId) => orders.find(orderId),
-  amountForOrder: (order) => ({ currency: "USD", value: order.total.toString() }),
+  amountFor: (reference) => orders.priceOf(reference), // { currency, value } or null → 404
   authorize: async ({ action, request, resource }) =>
-    orders.viewerMay(await sessions.currentUser(request), resource.orderId, action),
+    orders.viewerMay(await sessions.currentUser(request), resource.reference, action),
 }));
 ```
 
@@ -37,28 +35,28 @@ The context object:
 - `action`: one of `checkout.prepare`, `checkout.create`, `payment.check`, `swap.quote`,
   `swap.create`, `swap.read`, `swap.refund`.
 - `request`: the web-standard `Request`.
-- `resource`: `{ orderId?, paymentHash? }` — untrusted payer-supplied selectors; possession
+- `resource`: `{ reference?, paymentHash? }` — untrusted payer-supplied selectors; possession
   is not ownership.
 - `native`: the untouched framework-native request when an adapter provides one — use it for
   middleware-attached session/user state. Express:
 
   ```ts
   authorize: ({ native, resource }) =>
-    orders.ownedBy((native as { session?: { userId?: string } }).session?.userId, resource.orderId)
+    orders.ownedBy((native as { session?: { userId?: string } }).session?.userId, resource.reference)
   ```
 
 Rails applications mount the engine and keep their own authentication and
 `current_user` logic. The engine's JSON checkout routes skip Rails form CSRF
 protection, so `authorize` is the auth boundary there too.
 
-`loadOrder` returns your order (or `null` → 404). `amountForOrder` returns the
-authoritative `{ sats }` or `{ currency, value }` price from that order. The create body cannot
+`amountFor` returns the authoritative `{ sats }` or `{ currency, value }` price
+for an order id, or `null` → 404. The create body cannot
 contain `amount` or `amount_msats` — your application resolves the price, so a payer-supplied amount
 could only ever be an attempt to pay less (or trick support with an overpaid receipt); the
 route rejects it outright. A
 failed attempt commit withholds invoice and swap payer instructions.
 
-Payment checks, swap status, and refunds send `order_id` plus the displayed `payment_hash`.
+Payment checks, swap status, and refunds send `reference` plus the displayed `payment_hash`.
 After authorization, the library verifies that hash belongs to the order before loading optional
 server-only `swap_data`. The hash is an attempt selector, not an authorization capability.
 
@@ -73,7 +71,7 @@ import { createOpenReceive } from "@openreceive/node";
 import { createHost } from "@openreceive/http";
 
 const service = await createOpenReceive();
-const host = createHost({ db, loadOrder, amountForOrder, onPaid });
+const host = createHost({ db, amountFor, onPaid });
 
 app.use(openReceiveExpress({ service, host, authorize }));
 ```
@@ -85,9 +83,9 @@ retryable `503`) with the invoice withheld. Only a fully custom server-side
 flow bypasses that wiring, and then the commit step is yours:
 
 ```ts
-const checkout = await service.createCheckout({ orderId: order.id, amount });
+const checkout = await service.createCheckout({ reference: order.id, amount });
 await host.payments.commitAttempt({
-  orderId: order.id,
+  reference: order.id,
   paymentHash: checkout.paymentHash,
   checkout,
 }); // commit BEFORE the payer sees the invoice

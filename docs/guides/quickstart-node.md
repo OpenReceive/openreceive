@@ -1,7 +1,6 @@
 # Node quickstart
 
-Express + React, receiving Lightning payments. Requires Node ≥ 22 (the workspace
-`.nvmrc` and every package's `engines` field).
+Express + React. Requires Node ≥ 22.
 
 ## 1. Install
 
@@ -15,9 +14,9 @@ wallet client, HTTP handler, and contracts come along as dependencies. The
 install. Different stack? Swap the two packages; the rest of this guide is
 identical.
 
-|          | Packages                                                                                        |
-| -------- | ----------------------------------------------------------------------------------------------- |
-| Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                              |
+|          | Packages                                                                                                                      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
 ## 2. Migrate the payment tables
@@ -49,18 +48,22 @@ LSC_URI_BACKUP=
 1. Get a receive-only NWC code from a compatible wallet
    ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments))
    → `NWC_URI`.
-2. Optionally set up a swap provider (also covered on
-   [openreceive.org](https://openreceive.org))
+2. Optionally set up a [swap provider](https://openreceive.org/set_up_swap_provider)
    → `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP` if you have one).
 
 Never put these values in browser code. Your application refuses to start if
 the NWC code also advertises spend methods such as `pay_invoice`; mint a
 receive-only code ([Security](security.md)).
 
+OpenReceive reads `process.env`; creating a `.env` file is not enough on its
+own. How that file (or production secrets) get into the process —
+`dotenv` on Express/Fastify, Next.js auto-load, secret managers in
+production — is on [Environment variables](environment-variables.md).
+
 ## 4. Wire OpenReceive
 
-One factory: your order hooks plus a database handle. The adapter builds the
-wallet client and the order bridge; there is no background reconciler —
+One factory: your hooks plus a database handle. The adapter builds the
+wallet client and the host; there is no background reconciler —
 settlement piggybacks on requests through the durable gate.
 
 ```ts
@@ -74,18 +77,25 @@ const openreceive = openReceiveExpress({
   wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
-    onPaid: async ({ orderId, query }) => {
-      // Settlement transaction; runs only for the order's first settled attempt.
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    onPaid: async ({ reference, query }) => {
+      // Settlement transaction; runs only for the first settled attempt for a reference.
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
     },
   },
-  // Look up one of your orders by id; return null when there is no such order.
-  loadOrder: (orderId) => orders.find(orderId),
-  // Price that order; OpenReceive converts this into the Lightning invoice.
-  amountForOrder: (order) => ({ currency: "USD", value: order.total.toString() }),
-  // Your own access check: may this caller do this action to this order?
+  // The price for a reference — here, your order id — from your own data;
+  // OpenReceive converts it into the Lightning invoice. Return null when
+  // there is nothing to pay for.
+  amountFor: async (reference) => {
+    const order = await orders.find(reference);
+    return order ? { currency: "USD", value: order.total.toString() } : null;
+  },
+  // Your own access check: may this caller do this action to this reference?
   authorize: async ({ action, request, resource }) =>
-    orders.viewerMay(await sessions.currentUser(request), resource.orderId, action),
+    orders.viewerMay(
+      await sessions.currentUser(request),
+      resource.reference,
+      action,
+    ),
   // Recommended for public web shops: caps invoice creation at 60 per client IP
   // per hour. Leave it off (the default) for point-of-sale deployments, where
   // many payers share the terminal's IP.
@@ -128,12 +138,16 @@ the worker's own periodic pass is the safety net for notifications missed while 
 → [startNotificationWorker](api-reference.md#startnotificationworker)
 
 Your app also needs an ordinary order-creation route that validates the cart,
-prices with exact decimal math, and returns `{ order_id }`. OpenReceive never
-prices from payer input.
+prices with exact decimal math, and returns the order id the page will pass as
+the `reference`. OpenReceive never prices from payer input.
 
-Naming boundary: TypeScript APIs use camelCase fields (`orderId`,
-`paymentHash`); everything on the wire — the mounted HTTP routes and the
-browser snapshots — is snake_case (`order_id`, `payment_hash`).
+The `reference` is a string you choose — your order id, a cart id, a UUID.
+OpenReceive stores it only to group attempts under it and to hand it back to
+`onPaid`; it never looks inside it.
+
+Naming boundary: TypeScript APIs use camelCase fields (`paymentHash`,
+`amountMsats`); everything on the wire — the mounted HTTP routes and the
+browser snapshots — is snake_case (`payment_hash`, `amount_msats`).
 
 ## 5. Render checkout
 
@@ -141,7 +155,7 @@ browser snapshots — is snake_case (`order_id`, `payment_hash`).
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
-<Checkout orderId={order_id} prefix="/openreceive" />;
+<Checkout reference={order.id} prefix="/openreceive" />;
 ```
 
 The checkout renders, polls, and settles itself. The compiled `styles.css`

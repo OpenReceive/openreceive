@@ -151,14 +151,14 @@ test("the server refund path rejects an address that fails its network checksum"
   });
   try {
     const swap = await openreceive.createSwap({
-      orderId: "swap-refund-checksum",
+      reference: "swap-refund-checksum",
       amount: { sats: 20_000 },
       payInAsset: "USDT_TRON",
     });
     const swapData = JSON.parse(JSON.stringify(swap.swapData));
     const refund = (refundAddress) =>
       openreceive.refundSwap({
-        orderId: swap.orderId,
+        reference: swap.reference,
         paymentHash: swap.paymentHash,
         swapData,
         refundAddress,

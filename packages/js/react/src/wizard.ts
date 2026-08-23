@@ -82,7 +82,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
   const fetcher = props.fetch ?? globalThis.fetch;
   const checkout = props.checkout;
-  const orderId = checkout?.order_id;
+  const reference = checkout?.reference;
   // The swap start, shared with the custom element (G6): one in-flight start per
   // wizard, one error string, and the same "already holding this asset's
   // instructions" answer. The wizard supplies what is genuinely React's — where
@@ -90,7 +90,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   // snapshot) and where the failure is surfaced.
   const session = useCheckoutSession({
     snapshot: () => checkout,
-    orderId: () => orderId,
+    reference: () => reference,
     swapPrefix: () => props.prefix,
     fetch: () => fetcher,
     swapSelection: {
@@ -138,7 +138,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const quoteSwap = React.useCallback(
     async (payInAsset: string): Promise<SwapOptionDisplay | undefined> => {
       const prefix = props.prefix;
-      if (prefix === undefined || orderId === undefined || fetcher === undefined) {
+      if (prefix === undefined || reference === undefined || fetcher === undefined) {
         return undefined;
       }
       try {
@@ -146,7 +146,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           fetch: fetcher,
           prefix,
           body: {
-            order_id: orderId,
+            reference: reference,
             action: "swap_quote",
             pay_in_asset: payInAsset,
           },
@@ -164,7 +164,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         return undefined;
       }
     },
-    [props.prefix, orderId, fetcher, session],
+    [props.prefix, reference, fetcher, session],
   );
   // Enter the focused flow for a pay-in coin. The effect below quotes it first and only
   // starts the swap when the quote confirms the amount is in range.
@@ -180,14 +180,14 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const refundSwap = React.useCallback(
     async (attemptId: string, refundAddress: string, refundNonce: string, confirm: boolean) => {
       const prefix = props.prefix;
-      if (prefix === undefined || orderId === undefined || fetcher === undefined) {
+      if (prefix === undefined || reference === undefined || fetcher === undefined) {
         return;
       }
       try {
         const invoice = await requestSwapRefund({
           fetch: fetcher,
           prefix,
-          orderId,
+          reference,
           invoices: [startedSwapInvoice, ...(checkout?.invoices ?? [])],
           attemptId,
           refundAddress,
@@ -203,7 +203,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     },
     [
       props.prefix,
-      orderId,
+      reference,
       fetcher,
       props.onError,
       props.logger,

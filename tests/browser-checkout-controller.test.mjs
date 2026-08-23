@@ -45,7 +45,7 @@ function lightningInvoice(overrides = {}) {
 function snapshotOf(invoices, active = invoices[0]) {
   return {
     checkout_id: active.invoice_id,
-    order_id: "order-1",
+    reference: "order-1",
     status: "open",
     amount_msats: 21_000,
     active,
@@ -166,14 +166,14 @@ test("swap routes derive from the mount prefix and never carry the action key", 
     fetch: quoteFetch,
     prefix: "/openreceive",
     body: {
-      order_id: "order-1",
+      reference: "order-1",
       action: "swap_quote",
       pay_in_asset: "USDT_TRON",
     },
   });
   assert.equal(quoteFetch.requests[0].url, "/openreceive/swaps/quote");
   assert.deepEqual(quoteFetch.requests[0].body, {
-    order_id: "order-1",
+    reference: "order-1",
     pay_in_asset: "USDT_TRON",
   });
 
@@ -184,14 +184,14 @@ test("swap routes derive from the mount prefix and never carry the action key", 
     fetch: plainFetch,
     prefix: "/openreceive",
     body: {
-      order_id: "order-1",
+      reference: "order-1",
       payment_hash: hash("a"),
       action: "status",
     },
   });
   assert.equal(plainFetch.requests[0].url, "/openreceive/payments/check");
   assert.deepEqual(plainFetch.requests[0].body, {
-    order_id: "order-1",
+    reference: "order-1",
     payment_hash: hash("a"),
   });
 });
@@ -234,15 +234,15 @@ test("the published entry points inherit the prefix guard", async () => {
     /OpenReceive requires `prefix`/,
   );
   await assert.rejects(
-    requestCheckout({ orderId: "order-1", fetch: () => {} }),
+    requestCheckout({ reference: "order-1", fetch: () => {} }),
     /OpenReceive requires `prefix`/,
   );
   await assert.rejects(
-    prepareCheckout({ orderId: "order-1", fetch: () => {} }),
+    prepareCheckout({ reference: "order-1", fetch: () => {} }),
     /OpenReceive requires `prefix`/,
   );
   await assert.rejects(
-    startSwapRequest({ orderId: "order-1", payInAsset: "USDT", fetch: () => {} }),
+    startSwapRequest({ reference: "order-1", payInAsset: "USDT", fetch: () => {} }),
     /OpenReceive requires `prefix`/,
   );
 });
@@ -253,7 +253,7 @@ test("deferred-mode element attributes carry the same create-time options as cre
     metadata: { cart: "abc" },
     syncUrl: true,
     resumePathPrefix: "/pay",
-    routeOrderId: "order-1",
+    routeReference: "order-1",
     theme: "dark",
   };
   const lock = {
@@ -263,11 +263,11 @@ test("deferred-mode element attributes carry the same create-time options as cre
     transaction_state: "pending",
     workflow_state: "invoice_created",
   };
-  const created = createCheckoutElementAttributes(null, { ...options, orderId: "order-1" });
+  const created = createCheckoutElementAttributes(null, { ...options, reference: "order-1" });
   const deferred = createCheckoutElementAttributes(
     {
       checkout_id: "lock:order-1",
-      order_id: "order-1",
+      reference: "order-1",
       status: "open",
       amount_msats: 21_000,
       active: lock,
@@ -276,7 +276,7 @@ test("deferred-mode element attributes carry the same create-time options as cre
     options,
   );
 
-  for (const attribute of ["metadata", "sync-url", "resume-path-prefix", "route-order-id"]) {
+  for (const attribute of ["metadata", "sync-url", "resume-path-prefix", "route-reference"]) {
     assert.equal(
       deferred[attribute],
       created[attribute],
@@ -472,7 +472,7 @@ test("every amount a swap start admits is one the display boundary will format",
     const state = createCheckoutState(
       {
         checkout_id: invoice.invoice_id,
-        order_id: "order-1",
+        reference: "order-1",
         status: "open",
         amount_msats: amountMsats,
         active: invoice,

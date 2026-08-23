@@ -18,7 +18,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | Prop | Default | React | Vue / Svelte / Angular | Mode |
 | --- | --- | --- | --- | --- |
 | `checkout` | – | yes | yes | snapshot |
-| `orderId` | – | yes | yes | create |
+| `reference` | – | yes | yes | create |
 | `prefix` | `/openreceive` | yes | yes | both |
 | `paymentWizard` | `true` | yes | yes | both |
 | `decodeLinkUrl` | – (no decode link) | yes | yes | both |
@@ -28,7 +28,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | `metadata` | – | yes | yes | **create only** |
 | `syncUrl` | `false` | yes | yes | **create only** |
 | `resumePathPrefix` | `/checkout` | yes | yes | **create only** |
-| `routeOrderId` | – | yes | yes | **create only** |
+| `routeReference` | – | yes | yes | **create only** |
 | `polling` / `pollIntervalMs` | on / engine default | yes | via `options` | both |
 | `createFetch` | `globalThis.fetch` | yes | element-owned | create |
 | `qrEncoder`, `logger` | – | yes | element-owned | both |
@@ -40,7 +40,7 @@ payment-check and four swap routes are all derived from it by one function
 (`checkoutRoutes`, `packages/js/browser/src/internal/routes.ts`), so a
 checkout cannot be created against one mount and settled against another. There
 used to be five more ways to say the same thing — `checkoutUrl` (string or
-`(orderId) => string`), `{orderId}` / `{order_id}` templating, and an `orderUrl`
+`(reference) => string`), `{reference}` / `{reference}` templating, and an `orderUrl`
 prop / `order-url` attribute that was really the mounted `/payments/check`
 route — and all of them are gone. To turn polling off, pass `polling={false}`
 (React) or `polling="false"` (the element); to drop swaps, pass
@@ -54,7 +54,7 @@ through the `options` escape hatch onto exactly those attributes.
 
 Mode rules:
 
-- Exactly one of `checkout` (snapshot) or `orderId` (create) is required. Passing
+- Exactly one of `checkout` (snapshot) or `reference` (create) is required. Passing
   neither raises one clear boundary error naming the framework and the missing prop —
   not the shared factory's bare `TypeError`. All four call the same
   `validateCheckoutProps`, React included (it dispatches on the result in
@@ -62,7 +62,7 @@ Mode rules:
   validates inside its `computed` shell binding and Svelte inside its reactive
   statement, so the throw does come out of that read; Angular validates in
   `ngOnChanges` — once per input change, never once per change-detection pass. An
-  `orderId` of `""` counts as absent and is rejected the same way.
+  `reference` of `""` counts as absent and is rejected the same way.
 - The create-only props do nothing in snapshot mode. Each wrapper warns once when
   one is passed with a `checkout` present.
 - `themeToggle: false` means the host owns theming: no package toggle is rendered

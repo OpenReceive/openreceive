@@ -91,12 +91,12 @@ export class CheckoutWatcher {
         logger: this.options.logger,
       });
     const refreshStatus = this.options.refreshStatus;
-    if (refreshStatus === undefined || current.order_id.length === 0) {
+    if (refreshStatus === undefined || current.reference.length === 0) {
       return current;
     }
 
     try {
-      const next = await refreshStatus(current.order_id);
+      const next = await refreshStatus(current.reference);
       if (next === null) return current;
       this.options.onSnapshot?.(next);
       const nextState = createCheckoutState(next, {
@@ -156,7 +156,7 @@ export class CheckoutWatcher {
     if (
       state.settled ||
       this.options.refreshStatus === undefined ||
-      state.order_id.length === 0 ||
+      state.reference.length === 0 ||
       !canPollAttempt
     ) {
       this.stopPolling();
@@ -185,7 +185,7 @@ export class CheckoutWatcher {
     this.pollInFlight = true;
 
     try {
-      const next = await refreshStatus(current.order_id);
+      const next = await refreshStatus(current.reference);
       this.pollFailureCount = 0;
       this.pollBackoffUntil = undefined;
       if (next === null) return;

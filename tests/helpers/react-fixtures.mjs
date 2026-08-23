@@ -23,7 +23,7 @@ export function invoice(overrides = {}) {
   };
   return {
     checkout_id: overrides.checkout_id ?? `or_chk_${invoice.invoice_id}`,
-    order_id: overrides.order_id ?? `order_${invoice.invoice_id}`,
+    reference: overrides.reference ?? `order_${invoice.invoice_id}`,
     status: overrides.status ?? "open",
     amount_msats: overrides.amount_msats ?? invoice.amount_msats,
     ...(overrides.fiat === undefined ? {} : { fiat: overrides.fiat }),

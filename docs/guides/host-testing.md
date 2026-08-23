@@ -1,7 +1,7 @@
 # Testing your OpenReceive integration
 
-How to test your integration — your `loadOrder`, `amountForOrder`,
-`authorize`, and `onPaid` wiring — without touching a real wallet or a swap
+How to test your integration — your `amountFor`, `authorize`, and `onPaid`
+wiring — without touching a real wallet or a swap
 provider.
 
 ## Inject a fake wallet client

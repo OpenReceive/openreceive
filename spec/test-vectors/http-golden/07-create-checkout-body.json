@@ -4,7 +4,7 @@
   "request": {
     "method": "POST",
     "path": "/openreceive/checkouts",
-    "body": { "order_id": "order-golden-create" }
+    "body": { "reference": "order-golden-create" }
   },
   "expected": {
     "status": 201,
@@ -14,7 +14,7 @@
     },
     "body": {
       "checkout": {
-        "order_id": "order-golden-create",
+        "reference": "order-golden-create",
         "payment_hash": "<payment_hash>",
         "bolt11": "<bolt11>",
         "amount_msats": 1000,

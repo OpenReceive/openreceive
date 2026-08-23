@@ -58,13 +58,13 @@ export interface NextHandlersOptions
   extends CreateOpenReceiveHttpHandlerOptions,
     NextAdapterExtras {}
 
-/** All-in-one form: order hooks + `wallet` + `storage`; the adapter builds service and host. */
+/** All-in-one form: host hooks + `wallet` + `storage`; the adapter builds service and host. */
 export interface NextStackOptions extends CreateOpenReceiveStackOptions, NextAdapterExtras {}
 
 /**
  * Build Next.js App Router GET/POST handlers for the OpenReceive routes.
  *
- * Two forms: the all-in-one happy path (order hooks + `wallet` + `storage`; the
+ * Two forms: the all-in-one happy path (host hooks + `wallet` + `storage`; the
  * adapter builds the service and host, exposing `ready`/`close` — no
  * background process, settlement is opportunistic through the durable
  * reconcile gate, with `startNotificationWorker` as the optional

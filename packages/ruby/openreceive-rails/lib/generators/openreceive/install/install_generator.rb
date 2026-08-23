@@ -19,12 +19,6 @@ module OpenReceive
       class_option :skip_initializer, type: :boolean, default: false
       class_option :skip_route, type: :boolean, default: false
       class_option :skip_migration, type: :boolean, default: false
-      # Only the host model NAME, and only so the generated initializer can call
-      # your own code (load_order, amount_for_order, the on_paid example). The
-      # engine itself never touches that model or its table, so there is nothing
-      # to configure about its table name, its primary-key type, or a foreign
-      # key — order_id is opaque TEXT.
-      class_option :order_model, type: :string, default: "Order"
 
       def create_openreceive_migration
         return if options[:skip_migration]
@@ -42,11 +36,7 @@ module OpenReceive
 
       private
 
-      def order_model_name
-        options[:order_model]
-      end
-
-      # The order-table boundary note, shared verbatim with the JS scaffold.
+      # The exactly-once fulfillment note, shared verbatim with the JS scaffold.
       #
       # Rails and Thor binread their templates, so ERB builds the output in
       # ASCII-8BIT. The note is UTF-8 prose, and concatenating the two raises

@@ -6,6 +6,37 @@ OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
 behind.
 
+### `reference`, not `order_id`: the host's order is not part of the story
+
+- The grouping key OpenReceive stores is now called `reference` everywhere —
+  the `openreceive_payments` column, every HTTP request and response body,
+  the browser snapshots, the `<Checkout reference>` prop (`route-reference`
+  for the element wrappers), `AuthorizeResource.reference`, and the
+  settlement passed to `onPaid` / `config.on_paid` (`PaymentSettlement`,
+  formerly `OrderSettlement`). It is a string the host chooses — an order id,
+  a cart id, a UUID — that OpenReceive stores only to group attempts under and
+  to hand back on settlement. Rails hosts recreate the engine tables
+  (`bin/rails db:reset` on a development database).
+- `loadOrder` + `amountForOrder` collapsed into one hook: `amountFor(reference)`
+  returns the trusted price or `null` for a 404 (Rails: `config.amount_for`,
+  `nil`). The host is consulted only where a price is minted or quoted; status
+  polls and refunds are answered from OpenReceive's own rows. This also fixes
+  the Rails engine selecting attempts by the loaded object's `.id` rather than
+  the id it was given, which broke hosts whose lookup key was not their
+  primary key.
+- `openreceive:install` no longer takes `--order-model`; the generated
+  initializer names no model. `authorize` defaults to possession of the
+  reference and `config.amount_for` is left for you to write (the engine
+  refuses to serve checkouts until it is set).
+- The fulfillment note rendered into every scaffolded migration, the Rails
+  initializer, and the wiring guide now says only what OpenReceive guarantees
+  about `onPaid` and what the host must guarantee. Its "optional foreign key"
+  recipe is gone, as is every "OpenReceive never reads, locks, or joins your
+  order table" paragraph in the docs and source — there is no relationship to
+  explain. `npx openreceive scaffold payments` rejects the long-removed
+  `--order-model`/`--order-table`/`--order-id-type`/`--skip-foreign-key` flags
+  as plain unknown options.
+
 ### One subpath under the UI: `@openreceive/browser/headless`
 
 - `@openreceive/browser/internal` is gone. It was public API with a

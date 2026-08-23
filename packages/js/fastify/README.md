@@ -14,13 +14,12 @@ await fastify.register(openReceiveFastify, {
   wallet: { nwc: process.env.NWC_URI! }, // receive-only; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
-    onPaid: async ({ orderId, query }) => {
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    onPaid: async ({ reference, query }) => {
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
     },
   },
-  loadOrder: (orderId) => orders.find(orderId),
-  amountForOrder: (order) => order.amount,
-  authorize: ({ resource }) => orders.viewerOwns(resource.orderId),
+  amountFor: (reference) => orders.find(reference)?.amount ?? null, // null → 404
+  authorize: ({ resource }) => orders.viewerOwns(resource.reference),
   prefix: "/openreceive",
 });
 ```
@@ -47,7 +46,7 @@ database or Redis.
 
 Construct the pieces yourself (shared service, custom repository, tests) and
 pass them in. `createHost` is the persistence step: it owns the
-`openreceive_payments` rows — per-order commit locking, write-once settlement,
+`openreceive_payments` rows — per-reference commit locking, write-once settlement,
 and the reconciliation state machine.
 
 ```ts
@@ -59,10 +58,9 @@ const service = await createOpenReceive(); // reads NWC_URI
 
 const host = createHost({
   db,
-  loadOrder: (orderId) => orders.find(orderId),
-  amountForOrder: (order) => order.amount,
-  onPaid: async ({ orderId, query }) => {
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+  amountFor: (reference) => orders.find(reference)?.amount ?? null, // null → 404
+  onPaid: async ({ reference, query }) => {
+    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
   },
 });
 

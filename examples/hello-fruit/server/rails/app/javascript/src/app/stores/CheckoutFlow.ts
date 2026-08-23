@@ -151,7 +151,7 @@ export class CheckoutFlow extends Model({
   applyAttempt(invoice: CheckoutInvoiceSnapshot): void {
     const base: CheckoutSnapshot = this.snapshot?.data ?? {
       checkout_id: invoice.invoice_id,
-      order_id: this.orderId,
+      reference: this.orderId,
       status: "open",
       amount_msats: invoice.amount_msats ?? 0,
       invoices: [],
@@ -197,7 +197,7 @@ export class CheckoutFlow extends Model({
     this.prepareErrorMessage = null;
     try {
       const snapshot = yield* _await(
-        prepareCheckout({ prefix: openReceivePrefix(), orderId: this.orderId }),
+        prepareCheckout({ prefix: openReceivePrefix(), reference: this.orderId }),
       );
       this.applyPrepared(snapshot);
       logDemo("checkout.prepared", "Checkout prepared (amount locked, methods loaded).", {
@@ -240,7 +240,7 @@ export class CheckoutFlow extends Model({
     this.mintingLightning = true;
     try {
       const checkout = yield* _await(
-        requestCheckout({ prefix: openReceivePrefix(), orderId: this.orderId }),
+        requestCheckout({ prefix: openReceivePrefix(), reference: this.orderId }),
       );
       const minted = selectCheckoutDisplayInvoice(checkout) ?? checkout.active;
       const previousMethods = this.snapshot?.data.payment_methods;

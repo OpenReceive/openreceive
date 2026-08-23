@@ -10,7 +10,7 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
-    "orderId": {
+    "reference": {
       "type": "string",
       "minLength": 1
     },

@@ -46,10 +46,10 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   // Vue's defineProps and React's CheckoutProps are. The duplication is forced,
   // not neglected; tests/wrapper-parity.test.mjs is what keeps it in step.
   // Snapshot mode: bind a `checkout` to render it directly.
-  // Create mode: omit `checkout` and bind `orderId` (+ optional `prefix`); the underlying
+  // Create mode: omit `checkout` and bind `reference` (+ optional `prefix`); the underlying
   // <openreceive-checkout> element creates the checkout, then renders and polls itself.
   @Input() checkout?: CheckoutSnapshot | null;
-  @Input() orderId?: string;
+  @Input() reference?: string;
   @Input() prefix?: string;
   @Input() paymentWizard?: boolean;
   @Input() decodeLinkUrl?: string;
@@ -60,7 +60,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() metadata?: Record<string, unknown>;
   @Input() syncUrl?: boolean;
   @Input() resumePathPrefix?: string;
-  @Input() routeOrderId?: string;
+  @Input() routeReference?: string;
   @Input() onCopy?: (event: Event) => void;
   @Input() onOpenWallet?: (event: Event) => void;
   @Input() onState?: (event: Event) => void;
@@ -122,11 +122,11 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
     validateCheckoutProps({
       framework: "@openreceive/angular",
       checkout: this.checkout,
-      orderId: this.orderId,
+      reference: this.reference,
       metadata: this.metadata,
       syncUrl: this.syncUrl,
       resumePathPrefix: this.resumePathPrefix,
-      routeOrderId: this.routeOrderId,
+      routeReference: this.routeReference,
     });
     const options: WrapperCheckoutShellOptions = {
       ...this.options,
@@ -134,7 +134,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       // Storage and matchMedia only exist in the browser: resolving the theme before
       // the elements mount would make a server-rendered shell disagree with hydration.
       deferThemeResolution: !this.elementsReady,
-      ...(this.orderId === undefined ? {} : { orderId: this.orderId }),
+      ...(this.reference === undefined ? {} : { reference: this.reference }),
       ...(this.prefix === undefined ? {} : { prefix: this.prefix }),
       ...(this.paymentWizard === undefined ? {} : { paymentWizard: this.paymentWizard }),
       ...(this.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: this.decodeLinkUrl }),
@@ -143,7 +143,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       ...(this.metadata === undefined ? {} : { metadata: this.metadata }),
       ...(this.syncUrl === undefined ? {} : { syncUrl: this.syncUrl }),
       ...(this.resumePathPrefix === undefined ? {} : { resumePathPrefix: this.resumePathPrefix }),
-      ...(this.routeOrderId === undefined ? {} : { routeOrderId: this.routeOrderId }),
+      ...(this.routeReference === undefined ? {} : { routeReference: this.routeReference }),
       ...(this.onCopy === undefined ? {} : { onCopy: this.onCopy }),
       ...(this.onOpenWallet === undefined ? {} : { onOpenWallet: this.onOpenWallet }),
       ...(this.onState === undefined ? {} : { onState: this.onState }),

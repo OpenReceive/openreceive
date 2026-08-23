@@ -70,7 +70,7 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
     });
   };
 
-  push("Order ID", input.order_id);
+  push("Order ID", input.reference);
   push("Checkout ID", input.checkout_id);
   push("Invoice ID", input.invoice_id);
   push("Rail", input.rail);
@@ -158,7 +158,7 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
 export function createTransactionDetailsFromState(
   state: Pick<
     CheckoutState,
-    | "order_id"
+    | "reference"
     | "checkout_id"
     | "invoice_id"
     | "invoice"
@@ -174,7 +174,7 @@ export function createTransactionDetailsFromState(
   >,
 ): TransactionDetailRow[] {
   return createTransactionDetails({
-    order_id: state.order_id,
+    reference: state.reference,
     checkout_id: state.checkout_id,
     invoice_id: state.invoice_id,
     invoice: state.invoice,
@@ -225,7 +225,7 @@ export function resolveTransactionDetailRows(
 function isCheckoutStateSource(value: object): value is CheckoutState {
   return (
     "checkout_id" in value &&
-    "order_id" in value &&
+    "reference" in value &&
     "invoice_id" in value &&
     "invoice" in value &&
     "transaction_state" in value &&
@@ -240,7 +240,7 @@ export interface PaymentDataEntry {
 
 /** Structural subset of {@link CheckoutState} / display data a payment-data panel needs. */
 export interface PaymentDataSource {
-  readonly order_id?: string;
+  readonly reference?: string;
   readonly checkout_id?: string;
   readonly invoice_id?: string;
   readonly invoice?: string;
@@ -264,7 +264,7 @@ export function createPaymentDataEntries(source: PaymentDataSource): readonly Pa
   const add = (label: string, value: string | undefined): void => {
     if (value !== undefined && value !== "") entries.push({ label, value });
   };
-  add("Order", source.order_id);
+  add("Order", source.reference);
   add("Checkout", source.checkout_id);
   add("Invoice ID", source.invoice_id);
   add("Payment hash", source.payment_hash);

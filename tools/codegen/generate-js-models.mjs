@@ -8,7 +8,7 @@ import { parse as parseYaml } from "yaml";
 const root = process.cwd();
 const outputPath = "packages/js/core/src/generated/contracts.ts";
 const wireOutputPath = "packages/js/http/src/generated/wire.ts";
-// The order-table boundary note. One text file, rendered into both engines, so
+// The exactly-once fulfillment note. One text file, rendered into both engines, so
 // the guidance the JS scaffold emits and the guidance the Rails generator emits
 // cannot drift apart.
 const fulfillmentNotePath = "spec/data/fulfillment-note.txt";

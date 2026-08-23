@@ -188,7 +188,7 @@ function validateContracts() {
     "HTTP route set drifted",
   );
   const create = openapi.components.schemas.CreateCheckoutRequest;
-  assert(create.required.includes("order_id"), "checkout create requires order_id");
+  assert(create.required.includes("reference"), "checkout create requires reference");
   assert(
     create.properties.amount === undefined && create.properties.amount_msats === undefined,
     "payer create request must not contain amount",
@@ -203,7 +203,7 @@ function validateContracts() {
   );
   assert(
     JSON.stringify(openapi.components.schemas.PaymentCheckRequest.required) ===
-      JSON.stringify(["order_id", "payment_hash"]),
+      JSON.stringify(["reference", "payment_hash"]),
     "payment checks must select an exact host-owned attempt",
   );
   assert(
@@ -313,8 +313,8 @@ function validateStorageFreeTree() {
   );
   assert(
     /add_index :openreceive_payments, :payment_hash, unique: true/.test(migration) &&
-      !/order_id[^\n]*unique: true/.test(migration),
-    "Rails migration must allow many attempts per order and uniquely index payment_hash",
+      !/reference[^\n]*unique: true/.test(migration),
+    "Rails migration must allow many attempts per reference and uniquely index payment_hash",
   );
 }
 

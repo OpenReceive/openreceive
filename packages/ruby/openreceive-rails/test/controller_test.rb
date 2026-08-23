@@ -116,7 +116,7 @@ class EngineControllerAdapterTest < Minitest::Test
   # An over-declared Content-Length is rejected before a single byte is read
   # (mirrors RackApp#read_body and the JS readJsonBody declared-length check).
   def test_raw_body_rejects_an_over_declared_content_length_before_reading
-    input = RecordingInput.new(JSON.generate("order_id" => "rails-cap"))
+    input = RecordingInput.new(JSON.generate("reference" => "rails-cap"))
     env = build_env(input, content_length: (MAX_BODY_BYTES + 1).to_s)
     assert_raises(OpenReceive::Server::PayloadTooLargeError) { raw_body_for(env) }
     assert_empty input.read_lengths, "the body must not be read when the declared length is over the cap"
@@ -131,7 +131,7 @@ class EngineControllerAdapterTest < Minitest::Test
   end
 
   def test_raw_body_under_the_cap_flows_through_unchanged
-    raw = JSON.generate("order_id" => "rails-ok")
+    raw = JSON.generate("reference" => "rails-ok")
     assert_equal raw, raw_body_for(build_env(StringIO.new(raw), content_length: raw.bytesize.to_s))
   end
 

@@ -32,8 +32,8 @@ export function useCheckoutSession(options: UseOpenReceiveCheckoutSessionOptions
   if (sessionRef.current === undefined) {
     sessionRef.current = createCheckoutSession({
       snapshot: () => optionsRef.current.snapshot(),
-      orderId: () => optionsRef.current.orderId(),
-      requestCheckout: (orderId) => optionsRef.current.requestCheckout?.(orderId),
+      reference: () => optionsRef.current.reference(),
+      requestCheckout: (reference) => optionsRef.current.requestCheckout?.(reference),
       onSnapshot: (snapshot) => optionsRef.current.onSnapshot?.(snapshot),
       swapPrefix: () => optionsRef.current.swapPrefix?.(),
       fetch: () => optionsRef.current.fetch?.(),

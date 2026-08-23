@@ -182,7 +182,7 @@ export function renderCheckoutCreateErrorHtml(
   `;
 }
 
-// Minimal "creating checkout" placeholder shown by a create-mode element (`order-id` with no
+// Minimal "creating checkout" placeholder shown by a create-mode element (`reference` with no
 // `invoice`) while the checkout is being created, before the invoice attributes are populated
 // and the normal checkout UI takes over.
 export function renderCheckoutCreatingHtml(

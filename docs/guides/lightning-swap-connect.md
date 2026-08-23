@@ -4,9 +4,9 @@ Lightning Swap Connect is OpenReceive's compact, server-only format for
 configuring an authenticated swap API endpoint. One URI replaces a provider's
 HTTPS base URL, API key, and API secret.
 
-LSC is experimental in OpenReceive v0.1. The `lightning+swapconnect` scheme is
-not registered with IANA and must not be treated as an interoperable standard
-outside software that explicitly implements this document.
+The `lightning+swapconnect` scheme is not registered with IANA and must not be
+treated as an interoperable standard outside software that explicitly
+implements this document.
 
 ## Example
 
@@ -74,37 +74,10 @@ URIs may not derive the same identifier.
 
 ## Environment variables
 
-OpenReceive reads a primary LSC connection and an optional backup:
-
-```dotenv
-LSC_URI_PRIMARY=lightning+swapconnect://primary.example/?key=...&secret=...
-LSC_URI_BACKUP=lightning+swapconnect://backup.example/?key=...&secret=...
-```
-
-While the primary answers, OpenReceive uses only the primary for catalogs,
-quotes, and creates. The backup is consulted only when the primary is down
-(network/API failure). A healthy primary that simply omits an asset does not
-fail over to the backup for that asset.
-
-An empty connection is ignored. Keep the secret environment small — the
-connection strings, plus at most a few non-secret operational toggles (log
-level, documented `OPENRECEIVE_*` overrides):
-
-```dotenv
-NWC_URI=nostr+walletconnect://...
-LSC_URI_PRIMARY=lightning+swapconnect://...
-LSC_URI_BACKUP=
-```
-
-Currencies, logging, route prefixes, callbacks, and other ordinary application
-settings do not belong in these variables. Put those in your framework's
-normal tracked configuration: a Node configuration module or a Rails
-initializer.
-
-The OpenReceive libraries read `process.env` or `ENV`; they do not find or load
-a `.env` file themselves. Application entry points may load one for local
-development. Production should supply the same variables through its secret
-manager or process environment.
+Swap providers are configured with `LSC_URI_PRIMARY` and optional
+`LSC_URI_BACKUP`. While the primary answers, OpenReceive uses only the
+primary; the backup is consulted only when the primary is down. See
+[Environment variables](environment-variables.md).
 
 ## Security requirements
 

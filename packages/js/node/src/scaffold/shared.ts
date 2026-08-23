@@ -16,9 +16,8 @@ export function isSqlite(options: ScaffoldPaymentsOptions): boolean {
 /**
  * The canonical `openreceive_payments` DDL — the same statements
  * `paymentsSchemaSql` in `@openreceive/http` renders — with only the
- * table names threaded through. `order_id` is always TEXT and carries no
- * foreign key: OpenReceive never reads or locks the host's order table.
- * Timestamps are unix-seconds integers. Every column must be kept.
+ * table names threaded through. Timestamps are unix-seconds integers. Every
+ * column must be kept.
  */
 export function canonicalPaymentsDdlStatements(
   options: ScaffoldPaymentsOptions,

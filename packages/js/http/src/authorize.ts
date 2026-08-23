@@ -8,7 +8,7 @@ export type AuthorizeAction =
   | "swap.refund";
 
 export interface AuthorizeResource {
-  orderId?: string;
+  reference?: string;
   paymentHash?: string;
 }
 

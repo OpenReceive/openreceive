@@ -14,11 +14,11 @@ import "@openreceive/vue/styles.css";
 </script>
 
 <template>
-  <Checkout order-id="order-123" :onSettled="() => console.log('paid')" />
+  <Checkout reference="order-123" :onSettled="() => console.log('paid')" />
 </template>
 ```
 
-Pass `orderId` to let the element create the checkout (create mode), or pass a
+Pass `reference` to let the element create the checkout (create mode), or pass a
 `checkout` snapshot to render one your server already created. Prop names,
 defaults, and the full surface are shared across the wrappers — see
 `docs/internal/wrapper-parity.md` in the repository.

@@ -8,9 +8,8 @@ require "digest"
 #
 # An order may have many historical attempts. Each row is direct Lightning or
 # exactly one provider swap attempt; never attach several provider orders to one
-# invoice. commit_attempt! serializes on an OpenReceive-owned per-order lock —
-# never on the host's order table, which the engine does not read, write, lock,
-# or reference. Same-method reusable lives conflict; other rails may remain live
+# invoice. commit_attempt! serializes on an OpenReceive-owned per-reference lock.
+# Same-method reusable lives conflict; other rails may remain live
 # so payers can switch methods. "Already paid" means any settled row; live means status "pending"
 # and unexpired — hosts never see the live/supersede/conflict vocabulary.
 class OpenReceivePayment < ActiveRecord::Base
@@ -42,7 +41,7 @@ class OpenReceivePayment < ActiveRecord::Base
            .where("status_reason IS NULL OR status_reason != ?", "superseded")
   }
 
-  # Namespacing seed for the postgres per-order advisory lock. Identical to the
+  # Namespacing seed for the postgres per-reference advisory lock. Identical to the
   # JS repository's ADVISORY_LOCK_SEED, and the lock key is computed with the
   # same expression, so a database served by both engines at once still
   # serializes one order's commits against each other.
@@ -53,27 +52,22 @@ class OpenReceivePayment < ActiveRecord::Base
 
   class LockTimeout < StandardError; end
 
-  # The per-order serialization boundary for commit and settlement, owned
-  # entirely by OpenReceive.
-  #
-  # This used to lock the host's order row (OpenReceive.config.order_model),
-  # which forced every host to register its order model and let a hard-deleted
-  # order stall settlement. Nothing here needs the host's table: every
-  # predicate commit_attempt! and mark_paid_once! evaluate reads only
-  # openreceive_payments rows, so a lock keyed by the order id is exactly as
-  # strong and costs the host nothing.
+  # The per-reference serialization boundary for commit and settlement, owned
+  # entirely by OpenReceive: every predicate commit_attempt! and
+  # mark_paid_once! evaluate reads only openreceive_payments rows, so the lock
+  # is keyed by the order id alone.
   #
   # Postgres takes a transaction-scoped advisory lock, matching the JS
-  # repository's lockOrder so both engines can serve one database. MySQL has no
+  # repository's lockReference so both engines can serve one database. MySQL has no
   # transaction-scoped equivalent, so it takes a session-scoped named lock
   # around the transaction and releases it after commit. SQLite serializes
   # writers itself, so the transaction is the boundary; the payment_hash UNIQUE
   # constraint is the backstop on every adapter.
-  def self.with_order_lock(order_id, &block)
-    key = order_id.to_s
-    raise ArgumentError, "order_id is required" if key.empty?
+  def self.with_reference_lock(reference, &block)
+    key = reference.to_s
+    raise ArgumentError, "reference is required" if key.empty?
 
-    return with_mysql_order_lock(key, &block) if mysql_connection?
+    return with_mysql_reference_lock(key, &block) if mysql_connection?
 
     transaction do
       if postgres_connection?
@@ -90,12 +84,12 @@ class OpenReceivePayment < ActiveRecord::Base
   # GET_LOCK is session-scoped, so it is taken before BEGIN and released after
   # COMMIT — releasing inside the transaction would leave a window where a
   # second worker could commit against state this one has already read.
-  def self.with_mysql_order_lock(key)
+  def self.with_mysql_reference_lock(key)
     name = "openreceive:#{Digest::SHA256.hexdigest(key)[0, 40]}"
     acquired = connection.select_value(
       sanitize_sql_array(["SELECT GET_LOCK(?, ?)", name, MYSQL_LOCK_TIMEOUT_SECONDS])
     )
-    raise LockTimeout, "Timed out taking the OpenReceive lock for this order." unless acquired.to_i == 1
+    raise LockTimeout, "Timed out taking the OpenReceive lock for this reference." unless acquired.to_i == 1
 
     begin
       transaction { yield }
@@ -118,15 +112,15 @@ class OpenReceivePayment < ActiveRecord::Base
     super.except("swap_data")
   end
 
-  def self.selected_for(order_id:, action:, payment_hash: nil, pay_in_asset: nil, now: Time.current)
+  def self.selected_for(reference:, action:, payment_hash: nil, pay_in_asset: nil, now: Time.current)
     OpenReceiveMeta.assert_supported_schema!
-    attempts = where(order_id: order_id)
+    attempts = where(reference: reference)
     unless payment_hash.to_s.strip.empty?
       return attempts.find_by(payment_hash: payment_hash.to_s.downcase)
     end
 
     if %w[checkout.create swap.create].include?(action)
-      raise AttemptConflict, "This order is already paid." if attempts.settled.exists?
+      raise AttemptConflict, "This reference is already paid." if attempts.settled.exists?
 
       matching = attempts.live_at(now).newest_first.select do |payment|
         matches_create_action?(payment, action, pay_in_asset)
@@ -159,24 +153,24 @@ class OpenReceivePayment < ActiveRecord::Base
     where(client_ip: client_ip).where("inserted_at >= ?", since).count
   end
 
-  def self.commit_attempt!(order_id:, payment_hash:, checkout:, swap_data: nil, client_ip: nil)
+  def self.commit_attempt!(reference:, payment_hash:, checkout:, swap_data: nil, client_ip: nil)
     OpenReceiveMeta.assert_supported_schema!
     normalized_hash = payment_hash.to_s.downcase
     raise ArgumentError, "invalid payment_hash" unless normalized_hash.match?(/\A[0-9a-f]{64}\z/)
 
-    key = order_id.to_s
-    raise ArgumentError, "order_id is required" if key.empty?
+    key = reference.to_s
+    raise ArgumentError, "reference is required" if key.empty?
 
-    with_order_lock(key) do
+    with_reference_lock(key) do
       same = find_by(payment_hash: normalized_hash)
       unless same.nil?
-        raise AttemptConflict, "payment hash belongs to another order" if same.order_id.to_s != key
+        raise AttemptConflict, "payment hash belongs to another reference" if same.reference.to_s != key
         return same
       end
-      raise AttemptConflict, "This order is already paid." if where(order_id: key).settled.exists?
+      raise AttemptConflict, "This reference is already paid." if where(reference: key).settled.exists?
 
       now = Time.current
-      where(order_id: key).live_at(now).find_each do |live|
+      where(reference: key).live_at(now).find_each do |live|
         decision = live_attempt_commit_decision(live, swap_data, now)
         case decision
         when :conflict
@@ -190,7 +184,7 @@ class OpenReceivePayment < ActiveRecord::Base
       end
 
       create!(
-        order_id: key,
+        reference: key,
         payment_hash: normalized_hash,
         status: "pending",
         expires_at: Time.at(attempt_expires_at(checkout, swap_data)).utc,
@@ -206,12 +200,12 @@ class OpenReceivePayment < ActiveRecord::Base
   # Write-once settlement. Records every settled attempt, including an
   # accidental second payment: a later sibling settlement is stored with
   # status_reason "duplicate_settlement". The fulfill block runs inside the
-  # settlement transaction only for the order's first settled attempt, and a
+  # settlement transaction only for the first settled attempt for a reference, and a
   # settled row is never overwritten.
   #
   # Exactly-once holds across every settlement path OpenReceive owns, because
   # first_for_order is decided from openreceive_payments rows under the same
-  # per-order lock commit_attempt! takes. It says nothing about fulfillment the
+  # per-reference lock commit_attempt! takes. It says nothing about fulfillment the
   # host triggers elsewhere (an admin action, another processor, a replayed
   # job) — those race each other, and the host guards them. The install
   # generator writes that guidance next to the generated on_paid.
@@ -220,11 +214,11 @@ class OpenReceivePayment < ActiveRecord::Base
     payment = find_by(payment_hash: payment_hash.to_s.downcase)
     return nil if payment.nil?
 
-    with_order_lock(payment.order_id) do
+    with_reference_lock(payment.reference) do
       payment.reload
       return payment if payment.status == "settled"
 
-      first_for_order = !where(order_id: payment.order_id).settled.exists?
+      first_for_order = !where(reference: payment.reference).settled.exists?
       payment.update!(
         status: "settled",
         status_reason: first_for_order ? nil : "duplicate_settlement",

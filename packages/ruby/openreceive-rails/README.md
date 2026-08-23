@@ -2,7 +2,7 @@
 
 Mountable receive-only OpenReceive engine. The engine owns the
 `OpenReceivePayment` attempt model (statuses `pending`, `settled`, `expired`,
-`failed`, `attention`), its per-order commit locking, settlement write-once, and
+`failed`, `attention`), its per-reference commit locking, settlement write-once, and
 the reconciliation state machine. The install generator mounts the routes and
 emits the initializer plus one migration creating both engine tables
 (`openreceive_payments` and the `openreceive_meta` reconcile gate):
@@ -16,9 +16,9 @@ The generated migration supports PostgreSQL, SQLite, and MySQL, and seeds the
 shared `schema_version`; on its first database touch the engine refuses to
 operate a database whose stored schema version is newer than the gem.
 
-The quickstart host contract is `config.authorize`, `config.load_order`,
-`config.amount_for_order`, and `config.on_paid` (run inside the settlement
-transaction, only for the order's first settled attempt). The generated
+The quickstart host contract is `config.authorize`, `config.amount_for` (the
+trusted price for a reference, or `nil` for a 404), and `config.on_paid` (run
+inside the settlement transaction, only for the first settled attempt for a reference). The generated
 initializer starts with the `OpenReceive::LOGGING_ON_PAID` placeholder, which
 only logs settlements — the engine warns every time your application boots
 until it is replaced.
@@ -38,13 +38,9 @@ and reconciles periodically; `OpenReceive::ReconcileJob` and
 unpaid attempt requires a successful wallet scan at or after expiry plus the
 shared grace window — a local clock alone never closes a row.
 
-The engine never reads, writes, locks, or references the host's order table:
-`order_id` is an opaque string with no foreign key, and commit/settlement
-serialize on an OpenReceive-owned per-order lock. `--order-model` only names
-the model the generated initializer calls. Because the engine cannot see
-fulfillment that happens outside it, `config.on_paid` must be idempotent if any
-other path can also fulfill an order — the generated initializer shows the
-guarded transition. The receive-only wallet URI loads from `ENV["NWC_URI"]`; your
+Because the engine cannot see fulfillment that happens outside it,
+`config.on_paid` must be idempotent if any other path can also fulfill an
+order — the generated initializer shows the guarded transition. The receive-only wallet URI loads from `ENV["NWC_URI"]`; your
 application refuses to start when the connection advertises spend methods unless
 `config.allow_spend_capable_wallet` or `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC`
 overrides it. Keep ordinary settings such as `config.price_currencies` in

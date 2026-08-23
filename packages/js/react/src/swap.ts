@@ -284,7 +284,7 @@ export function renderSwapDepositPanel(options: {
           ...(options.checkout === undefined
             ? {}
             : {
-                order_id: options.checkout.order_id,
+                reference: options.checkout.reference,
                 checkout_id: options.checkout.checkout_id,
                 ...(options.checkout.fiat === undefined
                   ? {}

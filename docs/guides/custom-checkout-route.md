@@ -27,7 +27,7 @@ session or order.
 | Method | Responsibility |
 | --- | --- |
 | `prepareCheckout({ amount })` | Resolve the charged msats (and any fiat quote) without minting. |
-| `createCheckout({ orderId, amount })` | Normalize the host price and mint a wallet invoice. |
+| `createCheckout({ reference, amount })` | Normalize the host price and mint a wallet invoice. |
 | `checkPayment({ paymentHash, createdAt })` | Verify one payment with bounded wallet-history scans. |
 | `reconcilePayments({ attempts })` | Batch-verify the host's unresolved hashes and creation times. |
 | `listSwapOptions({ amountMsats })` | List configured swap pay-in methods for an invoice amount. |
@@ -50,9 +50,9 @@ import { createSqlPayments } from "@openreceive/http";
 const payments = createSqlPayments(db);
 
 app.post("/checkout", async (request, response) => {
-  const order = await orders.authorizedForCheckout(request.user, request.body.order_id);
+  const order = await orders.authorizedForCheckout(request.user, request.body.reference);
 
-  const existing = await payments.listForOrder(order.id);
+  const existing = await payments.listForReference(order.id);
   const live = existing.find((row) => row.status === "pending" && row.expiresAt > now());
   if (live) {
     response.json(live.checkout);
@@ -60,12 +60,12 @@ app.post("/checkout", async (request, response) => {
   }
 
   const checkout = await openreceive.createCheckout({
-    orderId: order.id,
+    reference: order.id,
     amount: { currency: "USD", value: order.price_usd },
   });
 
   try {
-    await payments.commitAttempt({ orderId: order.id, paymentHash: checkout.paymentHash, checkout });
+    await payments.commitAttempt({ reference: order.id, paymentHash: checkout.paymentHash, checkout });
   } catch {
     // Already paid, or a concurrent create won. Never expose the losing invoice.
     response.status(409).json({ message: "Checkout changed; retry." });
@@ -76,7 +76,7 @@ app.post("/checkout", async (request, response) => {
 });
 ```
 
-`commitAttempt` serializes per order inside the library, rejects a paid order or a reusable
+`commitAttempt` serializes per reference inside the library, rejects a paid order or a reusable
 live same-rail attempt, and supersedes a near-expiry one. If it throws, withhold the invoice.
 Terminal attempts remain as history and a later request may append a new row.
 
@@ -90,15 +90,15 @@ const checked = await openreceive.checkPayment({
 if (checked.status === "settled" && checked.paidAt !== undefined) {
   await payments.markPaidOnce(
     { paymentHash: checked.paymentHash, paidAt: checked.paidAt },
-    async ({ orderId, query }) => {
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    async ({ reference, query }) => {
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
     },
   );
 }
 ```
 
 Delivery is at least once. `markPaidOnce` sets the attempt settled exactly once and runs the
-fulfill hook inside the same transaction, only for the order's first settled attempt; a sibling
+fulfill hook inside the same transaction, only for the first settled attempt for a reference; a sibling
 second settlement is recorded with `status_reason = 'duplicate_settlement'` without fulfilling.
 A notification that carries a finality signal (`settled_at` or wallet state `settled`) for a
 known pending attempt settles it directly through `markPaidOnce`; without that signal, or for an
@@ -113,13 +113,13 @@ any deposit address or amount. Subsequent status calls use the host-loaded data:
 
 ```ts
 const current = await openreceive.getSwap({
-  orderId: order.id,
+  reference: order.id,
   paymentHash: payment.payment_hash,
   swapData: payment.swap_data,
 });
 ```
 
-`refundSwap({ orderId, paymentHash, swapData, refundAddress })` refreshes the provider ledger before acting. Keep
+`refundSwap({ reference, paymentHash, swapData, refundAddress })` refreshes the provider ledger before acting. Keep
 `swap_data` server-only and exclude it from logs and serializers.
 
 For normative HTTP shapes, use the

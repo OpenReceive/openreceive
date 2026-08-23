@@ -18,14 +18,14 @@ service = OpenReceive::Server::Service.new(nwc_client: MyNwcClient.new)
 run OpenReceive::Server::RackApp.new(
   service: service,
   authorize: ->(context) { my_policy_allows?(context) },
-  resolve_checkout: lambda do |action:, request:, order_id:, input:, pay_in_asset: nil|
-    order = MyOrders.find(order_id) or raise OpenReceive::Server::NotFoundError, "Order not found."
+  resolve_checkout: lambda do |action:, request:, reference:, input:, pay_in_asset: nil|
+    order = MyOrders.find(reference) or raise OpenReceive::Server::NotFoundError, "Unknown reference."
     { "amount" => { "currency" => "USD", "value" => order.total } }
     # Return payment_hash/checkout/swap_data for committed attempts on
     # non-create actions; see the Rails engine for a full repository.
   end,
-  on_checkout_created: ->(order_id:, payment_hash:, checkout:, swap_data: nil, client_ip: nil) {
-    MyPayments.commit!(order_id:, payment_hash:, checkout:, swap_data:, client_ip:)
+  on_checkout_created: ->(reference:, payment_hash:, checkout:, swap_data: nil, client_ip: nil) {
+    MyPayments.commit!(reference:, payment_hash:, checkout:, swap_data:, client_ip:)
   },
   on_paid: ->(event) { MyPayments.settle_once!(event) }
 )

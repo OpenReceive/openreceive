@@ -277,7 +277,7 @@ test("a public swap body conforms to swap-order.schema.json", async () => {
     clock: () => 1000,
   });
   const swap = await openreceive.createSwap({
-    orderId: "swap-schema",
+    reference: "swap-schema",
     amount: { sats: 20_000 },
     payInAsset: "USDT_TRON",
   });
@@ -345,7 +345,7 @@ test("provider-reported fee and refund detail reach the payer-facing swap body",
     clock: () => 1000,
   });
   const swap = await openreceive.createSwap({
-    orderId: "swap-fee",
+    reference: "swap-fee",
     amount: { sats: 20_000 },
     payInAsset: "USDT_TRON",
   });

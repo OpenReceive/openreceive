@@ -28,8 +28,7 @@ export async function createLifecycleStack(options = {}) {
   const settlements = [];
   const host = createHost({
     db,
-    loadOrder: (orderId) => orders.get(orderId) ?? null,
-    amountForOrder: (order) => order.amount,
+    amountFor: (reference) => orders.get(reference)?.amount ?? null,
     onPaid: async (settlement) => {
       settlements.push(settlement);
     },
@@ -65,8 +64,8 @@ export async function createLifecycleStack(options = {}) {
     settlements,
     requests,
     fetchStub,
-    addOrder(orderId, sats = 1234) {
-      orders.set(orderId, { amount: { sats } });
+    addOrder(reference, sats = 1234) {
+      orders.set(reference, { amount: { sats } });
     },
     checkCalls() {
       return requests.filter((entry) => entry.path.endsWith("/payments/check"));

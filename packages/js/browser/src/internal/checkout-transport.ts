@@ -98,7 +98,7 @@ export async function readJsonResponse(
 
 interface NormalizedRequestCheckoutOptions {
   readonly routes: Routes;
-  readonly orderId: string;
+  readonly reference: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
   readonly memo?: string;
@@ -109,11 +109,11 @@ function normalizeRequestCheckoutOptions(
   options: RequestCheckoutOptions,
 ): NormalizedRequestCheckoutOptions {
   const record = options as RequestCheckoutOptions & Record<string, unknown>;
-  const orderId = nonEmptyString(record.orderId ?? record.order_id);
+  const reference = nonEmptyString(record.reference ?? record.reference);
   const metadata = optionalRecord(record.metadata);
   return {
     routes: checkoutRoutes(options.prefix),
-    orderId: orderId ?? "",
+    reference: reference ?? "",
     fetch: options.fetch,
     headers: options.headers,
     ...(options.memo === undefined ? {} : { memo: options.memo }),
@@ -123,8 +123,8 @@ function normalizeRequestCheckoutOptions(
 
 export async function requestCheckout(options: RequestCheckoutOptions): Promise<CheckoutSnapshot> {
   const request = normalizeRequestCheckoutOptions(options);
-  if (request.orderId.length === 0) {
-    throw new Error("OpenReceive checkout creation requires orderId.");
+  if (request.reference.length === 0) {
+    throw new Error("OpenReceive checkout creation requires reference.");
   }
 
   const fetcher = request.fetch ?? globalThis.fetch;
@@ -137,7 +137,7 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
   }
 
   const requestBody = {
-    order_id: request.orderId,
+    reference: request.reference,
     ...(request.memo === undefined ? {} : { memo: request.memo }),
     ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
   };
@@ -171,8 +171,8 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
  */
 export async function prepareCheckout(options: PrepareCheckoutOptions): Promise<CheckoutSnapshot> {
   const request = normalizeRequestCheckoutOptions(options);
-  if (request.orderId.length === 0) {
-    throw new Error("OpenReceive checkout prepare requires orderId.");
+  if (request.reference.length === 0) {
+    throw new Error("OpenReceive checkout prepare requires reference.");
   }
 
   const fetcher = request.fetch ?? globalThis.fetch;
@@ -187,11 +187,11 @@ export async function prepareCheckout(options: PrepareCheckoutOptions): Promise<
       "Content-Type": "application/json",
       ...headers,
     },
-    body: JSON.stringify({ order_id: request.orderId }),
+    body: JSON.stringify({ reference: request.reference }),
   });
   const body = await readJsonResponse(response, "Could not prepare checkout.");
 
-  return checkoutLockSnapshotFromPrepareBody(body, request.orderId);
+  return checkoutLockSnapshotFromPrepareBody(body, request.reference);
 }
 
 export function createStatusFetcher(
@@ -203,9 +203,9 @@ export function createStatusFetcher(
   // hitting /swaps/status after the provider is already terminal.
   let snapshot = options.snapshot;
   const routes = checkoutRoutes(options.prefix);
-  return async (order_id) => {
-    if (order_id.length === 0) {
-      throw new Error("OpenReceive status refresh requires order_id.");
+  return async (reference) => {
+    if (reference.length === 0) {
+      throw new Error("OpenReceive status refresh requires reference.");
     }
 
     const fetcher = options.fetch ?? globalThis.fetch;
@@ -230,7 +230,7 @@ export function createStatusFetcher(
         ...headers,
       },
       body: JSON.stringify({
-        order_id,
+        reference,
         payment_hash: activePaymentHash,
       }),
     });
@@ -276,7 +276,7 @@ export function createStatusFetcher(
             "Content-Type": "application/json",
             ...headers,
           },
-          body: JSON.stringify({ order_id, payment_hash: activePaymentHash }),
+          body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
         });
         const swapBody = asRecord(
           await readJsonResponse(swapResponse, "Could not refresh swap status."),
@@ -351,12 +351,12 @@ function mergeSwapStatusIntoInvoice<
 
 function checkoutLockSnapshotFromPrepareBody(
   body: unknown,
-  fallbackOrderId: string,
+  fallbackReference: string,
 ): CheckoutSnapshot {
   const record = asRecord(body);
-  const orderId = nonEmptyString(record.order_id) ?? fallbackOrderId;
+  const reference = nonEmptyString(record.reference) ?? fallbackReference;
   const amountMsats = requiredSafeInteger(record.amount_msats, "amount_msats");
-  const lockId = `lock:${orderId}`;
+  const lockId = `lock:${reference}`;
   const lockInvoice: CheckoutInvoiceSnapshot = {
     invoice_id: lockId,
     rail: "checkout_lock",
@@ -375,7 +375,7 @@ function checkoutLockSnapshotFromPrepareBody(
   const paymentMethods = normalizePaymentMethods(record.payment_methods);
   return {
     checkout_id: lockId,
-    order_id: orderId,
+    reference: reference,
     status: "open",
     amount_msats: amountMsats,
     ...(fiat !== undefined && fiat.currency.length > 0 ? { fiat } : {}),
@@ -393,7 +393,7 @@ function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
 
 function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
   const paymentHash = requiredString(checkout.payment_hash, "payment_hash");
-  const orderId = requiredString(checkout.order_id, "order_id");
+  const reference = requiredString(checkout.reference, "reference");
   const amountMsats = requiredSafeInteger(checkout.amount_msats, "amount_msats");
   const invoice: CheckoutInvoiceSnapshot = {
     invoice_id: paymentHash,
@@ -412,7 +412,7 @@ function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
   };
   return {
     checkout_id: paymentHash,
-    order_id: orderId,
+    reference: reference,
     status: "open",
     amount_msats: amountMsats,
     active: invoice,

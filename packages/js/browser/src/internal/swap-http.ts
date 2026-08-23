@@ -34,7 +34,7 @@ export async function postJson(
 ): Promise<unknown> {
   const { body } = options;
   const routes = checkoutRoutes(options.prefix);
-  const orderId = nonEmptyString(body.order_id);
+  const reference = nonEmptyString(body.reference);
   const action = nonEmptyString(body.action);
   emitSwapActionLog(options.logger, "requested", body);
 
@@ -42,11 +42,11 @@ export async function postJson(
     const result =
       action === "swap_quote"
         ? await requestJson(options, routes.swapsQuote, {
-            order_id: orderId,
+            reference: reference,
             pay_in_asset: body.pay_in_asset,
           })
         : action === "refund_swap"
-          ? await refundRequest(options, routes, body, orderId)
+          ? await refundRequest(options, routes, body, reference)
           : await requestJson(options, routes.paymentsCheck, withoutAction(body));
     if (action === "start_swap" || action === "refund_swap") {
       emitSwapActionLog(options.logger, "succeeded", body, swapActionResultFields(result));
@@ -101,12 +101,12 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
 
 export async function startSwapRequest(
   options: SwapRequestOptions & {
-    readonly orderId: string;
+    readonly reference: string;
     readonly payInAsset: string;
   },
 ): Promise<CheckoutInvoiceSnapshot> {
   const body = await requestJson(options, checkoutRoutes(options.prefix).swaps, {
-    order_id: options.orderId,
+    reference: options.reference,
     pay_in_asset: options.payInAsset,
   });
   return normalizeSwapStartInvoice(body);
@@ -119,7 +119,7 @@ export async function startSwapRequest(
  */
 export async function requestSwapRefund(
   options: SwapRequestOptions & {
-    readonly orderId?: string;
+    readonly reference?: string;
     readonly invoices: readonly (CheckoutInvoiceSnapshot | null | undefined)[];
     readonly attemptId: string;
     readonly refundAddress: string;
@@ -140,7 +140,7 @@ export async function requestSwapRefund(
     ...(options.logger === undefined ? {} : { logger: options.logger }),
     ...(options.headers === undefined ? {} : { headers: options.headers }),
     body: {
-      ...(options.orderId === undefined ? {} : { order_id: options.orderId }),
+      ...(options.reference === undefined ? {} : { reference: options.reference }),
       payment_hash: payment.payment_hash,
       action: "refund_swap",
       attempt_id: options.attemptId,
@@ -156,9 +156,9 @@ async function refundRequest(
   options: SwapRequestOptions,
   routes: Routes,
   body: Record<string, unknown>,
-  orderId: string | undefined,
+  reference: string | undefined,
 ): Promise<unknown> {
-  if (orderId === undefined) throw new Error("Swap refund requires order_id.");
+  if (reference === undefined) throw new Error("Swap refund requires reference.");
   const refundAddress = nonEmptyString(body.refund_address);
   if (refundAddress === undefined) throw new Error("Swap refund requires refund_address.");
   const paymentHash = nonEmptyString(body.payment_hash);
@@ -166,7 +166,7 @@ async function refundRequest(
   if (body.confirm === true) {
     const status = recordOrEmpty(
       await requestJson(options, routes.swapsRefunds, {
-        order_id: orderId,
+        reference: reference,
         payment_hash: paymentHash,
         refund_address: refundAddress,
       }),
@@ -175,7 +175,7 @@ async function refundRequest(
   }
   const status = recordOrEmpty(
     await requestJson(options, routes.swapsStatus, {
-      order_id: orderId,
+      reference: reference,
       payment_hash: paymentHash,
     }),
   );
@@ -291,7 +291,7 @@ function emitSwapActionLog(
         level,
         event,
         message: `${action === "start_swap" ? "Swap start" : "Swap refund"} ${outcome}.`,
-        order_id: nonEmptyString(body.order_id),
+        reference: nonEmptyString(body.reference),
         pay_in_asset: nonEmptyString(body.pay_in_asset),
         ...(action === "refund_swap" ? { confirm: body.confirm === true } : {}),
         ...extra,

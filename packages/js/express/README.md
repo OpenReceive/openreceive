@@ -4,7 +4,7 @@ Express adapter for `@openreceive/http`.
 
 This package is ESM-only and requires Node >= 22.
 
-The all-in-one form is the happy path: pass the order hooks and a database
+The all-in-one form is the happy path: pass the host hooks and a database
 handle, and the middleware builds the service and host itself.
 
 ```ts
@@ -15,16 +15,15 @@ app.use(
     wallet: { nwc: process.env.NWC_URI! }, // receive-only; your app refuses to start otherwise
     storage: {
       db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
-      onPaid: async ({ orderId, query }) => {
-        await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+      onPaid: async ({ reference, query }) => {
+        await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
       },
     },
-    loadOrder: (orderId) => orders.find(orderId),
-    amountForOrder: (order) => order.amount,
+    amountFor: (reference) => orders.find(reference)?.amount ?? null, // null → 404
     authorize: ({ native, resource }) =>
       orders.ownedBy(
         (native as { session?: { userId?: string } }).session?.userId,
-        resource.orderId,
+        resource.reference,
       ),
   }),
 );
@@ -49,7 +48,7 @@ client IPs from a proxy-set header instead of `req.ip`.
 
 Construct the pieces yourself (shared service, custom repository, tests) and
 pass them in. `createHost` is the persistence step: it owns the
-`openreceive_payments` rows in the host's existing database — per-order commit
+`openreceive_payments` rows in the host's existing database — per-reference commit
 locking, write-once settlement, and the reconciliation state machine — and the
 mounted routes commit one live attempt per rail before payer instructions are
 returned. `swapData` stays server-only. OpenReceive never requires a separate
@@ -64,10 +63,9 @@ const service = await createOpenReceive(); // reads NWC_URI
 
 const host = createHost({
   db,
-  loadOrder: (orderId) => orders.find(orderId),
-  amountForOrder: (order) => order.amount,
-  onPaid: async ({ orderId, query }) => {
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+  amountFor: (reference) => orders.find(reference)?.amount ?? null, // null → 404
+  onPaid: async ({ reference, query }) => {
+    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
   },
 });
 

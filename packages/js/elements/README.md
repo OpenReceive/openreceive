@@ -12,10 +12,10 @@ defineElements();
 ```
 
 ```html
-<openreceive-checkout order-id="order-123"></openreceive-checkout>
+<openreceive-checkout reference="order-123"></openreceive-checkout>
 ```
 
-The element creates the checkout for `order-id`, then renders and polls itself.
+The element creates the checkout for `reference`, then renders and polls itself.
 It dispatches plain DOM `CustomEvent`s (`openreceive-settled`,
 `openreceive-error`, …); the Vue/Svelte/Angular wrapper packages expose those as
 handler props over the shared binding in `src/wrapper-shared.ts`.

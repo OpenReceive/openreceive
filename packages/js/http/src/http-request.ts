@@ -8,7 +8,7 @@ import { HttpError } from "./errors.ts";
 // http-response.ts.
 
 /** Spec-declared length caps (openreceive-http.v1.yaml request schemas). */
-export const MAX_ORDER_ID_LENGTH = 200;
+export const MAX_REFERENCE_LENGTH = 200;
 const MAX_MEMO_LENGTH = 500;
 
 /**
@@ -25,13 +25,13 @@ const MAX_BODY_BYTES = 64 * 1024;
  * so clients cannot come to depend on off-contract behavior.
  */
 const ROUTE_BODY_FIELDS: Record<string, readonly string[]> = {
-  "checkout.prepare": ["order_id"],
-  "checkout.create": ["order_id", "memo", "metadata"],
-  "payment.check": ["order_id", "payment_hash"],
-  "swap.quote": ["order_id", "pay_in_asset"],
-  "swap.create": ["order_id", "pay_in_asset", "memo", "metadata"],
-  "swap.read": ["order_id", "payment_hash"],
-  "swap.refund": ["order_id", "payment_hash", "refund_address"],
+  "checkout.prepare": ["reference"],
+  "checkout.create": ["reference", "memo", "metadata"],
+  "payment.check": ["reference", "payment_hash"],
+  "swap.quote": ["reference", "pay_in_asset"],
+  "swap.create": ["reference", "pay_in_asset", "memo", "metadata"],
+  "swap.read": ["reference", "payment_hash"],
+  "swap.refund": ["reference", "payment_hash", "refund_address"],
 };
 
 export function assertDeclaredFields(routeKind: string, body: Record<string, unknown>): void {

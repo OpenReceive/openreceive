@@ -23,7 +23,7 @@ export const OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS = 3000 as const;
 export const OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS = 60 as const;
 /**
  * Default base path the shipped OpenReceive router is mounted at. When a developer passes
- * only an order id (React `<Checkout orderId>` / `<openreceive-checkout order-id>`), this is
+ * only an order id (React `<Checkout reference>` / `<openreceive-checkout reference>`), this is
  * the prefix every route is derived from — see `checkoutRoutes` in ./routes.ts. It is
  * the only URL input the checkout components accept.
  */
@@ -190,7 +190,7 @@ export function createThemeChangeEvent(theme: ThemeModel): CustomEvent<ThemeChan
 }
 
 export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
-  orderId: "order-id",
+  reference: "reference",
   /**
    * Base path the shipped router is mounted at (default `/openreceive`). The
    * element's ONLY URL input: create, prepare, payment-check and the four swap
@@ -212,7 +212,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   theme: "theme",
   paymentWizard: "payment-wizard",
   /**
-   * Opt into History API URL sync to `{resume-path-prefix}/{order-id}`.
+   * Opt into History API URL sync to `{resume-path-prefix}/{reference}`.
    * Summary fetch always runs in create mode; this only controls URL mutation.
    */
   syncUrl: "sync-url",
@@ -222,7 +222,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * Order id owned by the app router (e.g. Next.js). When set, the element does not
    * push/replace the URL via the History API.
    */
-  routeOrderId: "route-order-id",
+  routeReference: "route-reference",
   /**
    * Base URL of an external bolt11 decoder. When set, the checkout shows a
    * "Decode" link to `{decode-link-url}?invoice={bolt11}`. Omitted (the

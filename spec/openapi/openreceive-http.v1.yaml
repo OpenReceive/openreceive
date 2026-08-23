@@ -3,7 +3,7 @@ info:
   title: OpenReceive host-owned payment HTTP API
   version: 0.4.0
   description: >
-    Mounted receive-checkout routes. The host owns orders; the library owns the openreceive_payments rows (they live in the host's database).
+    Mounted receive-checkout routes. The host owns what is being paid for and its price; the library owns the openreceive_payments rows (they live in the host's database).
     It resolves every checkout amount and stores each payment attempt before a payer response.
 servers:
   - url: /openreceive
@@ -11,9 +11,9 @@ paths:
   /checkouts/prepare:
     post:
       operationId: prepareCheckout
-      summary: Lock the host-resolved order amount without minting Lightning.
+      summary: Lock the host-resolved amount without minting Lightning.
       description: >
-        Resolves the trusted order price to amount_msats and returns swap
+        Resolves the trusted host price to amount_msats and returns swap
         payment_methods. Does not mint a bolt11 or commit an openreceive_payments
         row. Clients show the method picker first; POST /checkouts mints Lightning
         only after the payer selects Bitcoin.
@@ -41,10 +41,10 @@ paths:
   /checkouts:
     post:
       operationId: createCheckout
-      summary: Mint an invoice using the host-resolved order price.
+      summary: Mint an invoice using the host-resolved price.
       description: >
         The request cannot supply an amount. The mounted handler asks the required
-        host integration for the trusted order price, mints an invoice, and returns
+        host integration for the trusted price, mints an invoice, and returns
         payer instructions only after the host persists payment_hash.
       requestBody:
         required: true
@@ -124,7 +124,7 @@ paths:
   /swaps:
     post:
       operationId: createSwap
-      summary: Create a swap using the host-resolved order price.
+      summary: Create a swap using the host-resolved price.
       requestBody:
         required: true
         content:
@@ -185,9 +185,9 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [order_id, payment_hash, refund_address]
+              required: [reference, payment_hash, refund_address]
               properties:
-                order_id: { type: string, minLength: 1, maxLength: 200 }
+                reference: { type: string, minLength: 1, maxLength: 200 }
                 payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
                 refund_address: { type: string, minLength: 1 }
       responses:
@@ -238,15 +238,15 @@ components:
     PrepareCheckoutRequest:
       type: object
       additionalProperties: false
-      required: [order_id]
+      required: [reference]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
     PrepareCheckoutResponse:
       type: object
       additionalProperties: false
-      required: [order_id, amount_msats, payment_methods]
+      required: [reference, amount_msats, payment_methods]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         amount_msats: { type: integer, minimum: 1000, maximum: 9007199254740991 }
         fiat_quote:
           oneOf:
@@ -258,17 +258,17 @@ components:
     CreateCheckoutRequest:
       type: object
       additionalProperties: false
-      required: [order_id]
+      required: [reference]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         memo: { type: string, maxLength: 500 }
         metadata: { type: object, additionalProperties: true }
     Checkout:
       type: object
       additionalProperties: false
-      required: [order_id, payment_hash, bolt11, amount_msats, created_at, expires_at]
+      required: [reference, payment_hash, bolt11, amount_msats, created_at, expires_at]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
         bolt11: { type: string, minLength: 1 }
         amount_msats: { type: integer, minimum: 1000, maximum: 9007199254740991 }
@@ -287,9 +287,9 @@ components:
     PaymentCheckRequest:
       type: object
       additionalProperties: false
-      required: [order_id, payment_hash]
+      required: [reference, payment_hash]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
     PaymentStatus:
       type: string
@@ -373,16 +373,16 @@ components:
     SwapQuoteRequest:
       type: object
       additionalProperties: false
-      required: [order_id, pay_in_asset]
+      required: [reference, pay_in_asset]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         pay_in_asset: { type: string, minLength: 1 }
     CreateSwapRequest:
       type: object
       additionalProperties: false
-      required: [order_id, pay_in_asset]
+      required: [reference, pay_in_asset]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         pay_in_asset: { type: string, minLength: 1 }
         memo: { type: string, maxLength: 500 }
         metadata: { type: object, additionalProperties: true }
@@ -446,7 +446,7 @@ components:
       type: object
       required:
         - payment_hash
-        - order_id
+        - reference
         - provider
         - pay_in_asset
         - deposit_address
@@ -455,7 +455,7 @@ components:
         - provider_expires_at
       properties:
         payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         provider: { type: string, minLength: 1 }
         pay_in_asset: { $ref: '#/components/schemas/SwapPayInAsset' }
         deposit_address: { type: string, minLength: 1 }
@@ -511,9 +511,9 @@ components:
     OrderRequest:
       type: object
       additionalProperties: false
-      required: [order_id, payment_hash]
+      required: [reference, payment_hash]
       properties:
-        order_id: { type: string, minLength: 1, maxLength: 200 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
         payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
     Error:
       type: object

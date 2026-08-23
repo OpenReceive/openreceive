@@ -91,7 +91,7 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
       if (!outDir) throw new Error("--out-dir requires a path.");
       continue;
     }
-    throw new Error(removedOrderFlagMessage(arg) ?? `Unexpected option: ${arg}`);
+    throw new Error(`Unexpected option: ${arg}`);
   }
 
   return {
@@ -127,30 +127,6 @@ export function finalizeScaffoldOptions(
     outDir: partial.outDir,
     force: partial.force,
   };
-}
-
-/**
- * OpenReceive used to render `order_id` to match the host's primary key and
- * emit a foreign key to the host's order table. It no longer reads, locks, or
- * references that table at all, so `order_id` is always TEXT and these flags
- * have nothing left to configure. Name them explicitly instead of reporting a
- * bare "unexpected option", so a stale scripted invocation says why.
- */
-const REMOVED_ORDER_FLAGS = [
-  "--order-model",
-  "--order-table",
-  "--order-id-type",
-  "--skip-foreign-key",
-] as const;
-
-function removedOrderFlagMessage(arg: string): string | undefined {
-  const name = arg.split("=", 1)[0] ?? "";
-  if (!(REMOVED_ORDER_FLAGS as readonly string[]).includes(name)) return undefined;
-  return (
-    `${name} was removed: OpenReceive never reads, locks, or references your ` +
-    "order table, so order_id is always TEXT with no foreign key. Drop the flag. " +
-    "The generated files show how to add a foreign key yourself if you want one."
-  );
 }
 
 function requiredValue(value: string | undefined, flag: string): string {

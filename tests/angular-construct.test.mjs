@@ -49,13 +49,13 @@ test("the Angular component constructs before any input is set", () => {
 
 test("ngOnChanges builds the shell binding once inputs are set", () => {
   const component = constructComponent();
-  component.orderId = "order-construct";
+  component.reference = "order-construct";
   component.metadata = { sku: "sticker-1" };
   component.ngOnChanges();
 
   const shell = component.shell;
   assert.notEqual(shell, null);
-  assert.equal(shell.checkout.attributes["order-id"], "order-construct");
+  assert.equal(shell.checkout.attributes["reference"], "order-construct");
   assert.equal(shell.checkout.attributes.metadata, JSON.stringify({ sku: "sticker-1" }));
   assert.ok(shell.rootAttributes["data-openreceive-theme"]);
   // The shell root is directive-driven: every rootAttributes key must reach the
@@ -65,16 +65,16 @@ test("ngOnChanges builds the shell binding once inputs are set", () => {
 
 test("subsequent input changes rebuild the shell binding", () => {
   const component = constructComponent();
-  component.orderId = "order-first";
+  component.reference = "order-first";
   component.ngOnChanges();
   const first = component.shell;
 
-  component.orderId = "order-second";
+  component.reference = "order-second";
   component.ngOnChanges();
   const second = component.shell;
 
   assert.notEqual(second, first, "input changes must produce a fresh binding");
-  assert.equal(second.checkout.attributes["order-id"], "order-second");
+  assert.equal(second.checkout.attributes["reference"], "order-second");
 });
 
 /** Poll until predicate() is truthy (its value is returned) or fail with `label`. */
@@ -97,7 +97,7 @@ test("the Angular component renders the checkout shell into a real DOM", async (
     const url = new URL(String(input), "http://angular.local");
     calls.push(url.pathname);
     const body = url.pathname.endsWith("/checkouts/prepare")
-      ? { order_id: "order-ng-render", amount_msats: 21_000, payment_methods: [] }
+      ? { reference: "order-ng-render", amount_msats: 21_000, payment_methods: [] }
       : { status: "pending" };
     return { ok: true, status: 200, headers: { get: () => null }, json: async () => body };
   };
@@ -113,7 +113,7 @@ test("the Angular component renders the checkout shell into a real DOM", async (
   });
 
   try {
-    componentRef.setInput("orderId", "order-ng-render");
+    componentRef.setInput("reference", "order-ng-render");
     appRef.attachView(componentRef.hostView);
     componentRef.changeDetectorRef.detectChanges();
 
@@ -125,7 +125,7 @@ test("the Angular component renders the checkout shell into a real DOM", async (
     );
     const element = host.querySelector("openreceive-checkout");
     assert.ok(element, "the wrapper must render the checkout element");
-    assert.equal(element.getAttribute("order-id"), "order-ng-render");
+    assert.equal(element.getAttribute("reference"), "order-ng-render");
 
     // The element really runs: its connected callback prepares the checkout
     // (via the documented /openreceive default prefix) and renders shadow DOM.

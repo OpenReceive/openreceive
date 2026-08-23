@@ -2,8 +2,7 @@
 
 # The committed db/migrate/*_create_openreceive_tables.rb is a snapshot of the
 # openreceive-rails install generator's migration template, rendered for this
-# app (postgres adapter). `order_id` is an opaque string with no foreign key:
-# the engine never reads, writes, locks, or references the host `orders` table.
+# app (postgres adapter).
 # Nothing else notices when the library template changes — the app boots from
 # db/schema.rb — so this check re-renders the template through the generator
 # class it ships in and diffs the result against the committed migration.

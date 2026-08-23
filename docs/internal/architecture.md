@@ -3,7 +3,7 @@
 OpenReceive is a coordinator between two external ledgers: the merchant's receive wallet and,
 when enabled, a swap provider. The host application's database is the application ledger;
 OpenReceive owns the `openreceive_payments` table inside it — one row per attempt, host orders
-unchanged. The host passes a database handle; the library owns the schema, per-order commit
+unchanged. The host passes a database handle; the library owns the schema, per-reference commit
 locking, the status state machine, and write-once settlement.
 
 The durable correlation key is `payment_hash`. The attempt also stores the safe checkout
@@ -22,7 +22,7 @@ object containing provider name/order credentials.
 OpenReceive never serializes it to a browser. Process caches only reduce calls and are never
 correctness state.
 
-Callbacks are at-least-once. Write-once settlement under the per-order lock, with host
+Callbacks are at-least-once. Write-once settlement under the per-reference lock, with host
 fulfillment (`onPaid`) running in the same transaction only for the order's first settled
 attempt, is the replay guard; a sibling second settlement is recorded as
 `duplicate_settlement`.

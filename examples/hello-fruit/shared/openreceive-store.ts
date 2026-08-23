@@ -13,7 +13,7 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { paymentsSchemaSql, type OrderSettlement } from "@openreceive/http";
+import { paymentsSchemaSql, type PaymentSettlement } from "@openreceive/http";
 import type { CreateCheckoutAmount } from "@openreceive/node";
 import type { HelloFruitDemoOrder } from "./demo-order.ts";
 
@@ -155,10 +155,10 @@ export function readHelloFruitHostOrder(orderId: string): HelloFruitStoredOrder 
  * for the order's first settled attempt) and marks the host order paid.
  */
 export async function markHelloFruitOrderPaid(
-  settlement: OrderSettlement,
+  settlement: PaymentSettlement,
 ): Promise<HelloFruitStoredOrder | null> {
   const rows = await settlement.query(`SELECT summary_json, amount_json FROM orders WHERE id = ?`, [
-    settlement.orderId,
+    settlement.reference,
   ]);
   const row = rows[0];
   if (row === undefined) return null;
@@ -169,7 +169,7 @@ export async function markHelloFruitOrderPaid(
   const paidSummary: HelloFruitDemoOrder = { ...summary, status: "paid" };
   await settlement.query(
     `UPDATE orders SET summary_json = ?, status = 'paid', updated_at = ? WHERE id = ?`,
-    [JSON.stringify(paidSummary), Math.floor(Date.now() / 1_000), settlement.orderId],
+    [JSON.stringify(paidSummary), Math.floor(Date.now() / 1_000), settlement.reference],
   );
   return { summary: paidSummary, amount };
 }

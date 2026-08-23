@@ -17,12 +17,6 @@ payment-attempt repository logic (locking, settlement write-once,
 reconciliation) at runtime; the generated files never contain it.
 OpenReceive never opens a database connection or runs migrations.
 
-Nothing here asks about your order table. OpenReceive stores order_id as an
-opaque TEXT string and never reads, locks, or references that table, so its
-name and primary-key type are irrelevant. Every generated file carries a
-comment showing how to keep fulfillment exactly-once — and how to add a
-foreign key yourself, if you want one.
-
 Options:
   --orm <name>              prisma | drizzle | typeorm | sequelize | knex
   --dialect <name>          postgres | sqlite (default: postgres)
@@ -98,7 +92,6 @@ function printPlan(
   stdout.write(`  dialect:      ${options.dialect}\n`);
   stdout.write(`  tables:       ${options.tableName}, ${options.metaTableName}\n`);
   stdout.write(`  out-dir:      ${options.outDir}\n`);
-  stdout.write("  order table:  untouched (order_id is opaque TEXT, no foreign key)\n");
   if (options.dialect === "sqlite") {
     stdout.write(
       "  note:         SQLite uses a single-writer transaction (no Postgres row locks)\n",
@@ -120,7 +113,7 @@ function printSummary(
   stdout.write("  1. Read OPENRECEIVE_PAYMENTS.md\n");
   stdout.write(`  2. Run the schema/migration through your normal ${options.orm} workflow\n`);
   stdout.write(
-    "  3. Wire createHost({ db, loadOrder, amountForOrder, onPaid }) —\n" +
+    "  3. Wire createHost({ db, amountFor, onPaid }) —\n" +
       "     OpenReceive owns the repository logic at runtime; settlement piggybacks\n" +
       "     on mounted routes by default (no background process needed)\n",
   );

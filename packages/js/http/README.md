@@ -2,20 +2,20 @@
 
 Framework-neutral receive-checkout handler. Its normal form requires `service`,
 `authorize`, and the `host` integration. Create bodies never accept payer
-amounts; the host resolver reads the order price, and the commit hook appends a
-payment-attempt row before the invoice is returned.
+amounts; the host's `amountFor` hook is the only price authority, and the
+commit hook appends a payment-attempt row before the invoice is returned.
 
 This package is ESM-only and requires Node >= 22.
 
-`createHost({ db, loadOrder, amountForOrder, onPaid })` builds that
+`createHost({ db, amountFor, onPaid })` builds that
 host integration on the library-owned payment repository inside the host
 application's existing database (pg, node:sqlite, better-sqlite3, or a custom
-adapter). The library owns attempt selection, per-order commit locking,
+adapter). The library owns attempt selection, per-reference commit locking,
 write-once settlement with first-attempt-only fulfillment, and the
 `pending → settled | expired | failed | attention` reconciliation state
 machine (`attention` reads as `pending` on the wire; operators see it only in
 `openreceive_payments.status`). `onPaid` is the settlement hook in both modes: with `db` it receives
-`OrderSettlement` (`orderId` plus a `query` that runs inside the
+`PaymentSettlement` (`reference` plus a `query` that runs inside the
 settlement transaction); with a custom repository it receives the raw
 `SettlementEvent` (`paymentHash`, `paidAt`, `details`). Settlement
 piggybacks on mounted routes by default through the durable `openreceive_meta`

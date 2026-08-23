@@ -30,11 +30,11 @@ function testHost({
     onCheckoutCreated: record,
     onPaid,
     payments: {
-      listForOrder: async (orderId) =>
+      listForReference: async (reference) =>
         attempts
-          .filter((input) => input.orderId === orderId)
+          .filter((input) => input.reference === reference)
           .map((input) => ({
-            orderId: input.orderId,
+            reference: input.reference,
             paymentHash: input.paymentHash.toLowerCase(),
             status: "pending",
             statusReason: null,
@@ -202,7 +202,7 @@ test("HTTP commits payment hash before returning payer instructions", async () =
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ order_id: "order-http" }),
+      body: JSON.stringify({ reference: "order-http" }),
     }),
   );
   assert.equal(created.status, 201);
@@ -216,7 +216,7 @@ test("HTTP commits payment hash before returning payer instructions", async () =
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        order_id: "order-http",
+        reference: "order-http",
         payment_hash: body.checkout.payment_hash,
       }),
     }),
@@ -262,12 +262,12 @@ test("HTTP prepare locks amount without minting or committing an attempt", async
     new Request("http://test/openreceive/checkouts/prepare", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ order_id: "order-prepare" }),
+      body: JSON.stringify({ reference: "order-prepare" }),
     }),
   );
   assert.equal(prepared.status, 200);
   const body = await prepared.json();
-  assert.equal(body.order_id, "order-prepare");
+  assert.equal(body.reference, "order-prepare");
   assert.equal(body.amount_msats, 1_234_000);
   assert.ok(Array.isArray(body.payment_methods));
   assert.equal(body.bolt11, undefined);
@@ -292,7 +292,7 @@ test("HTTP withholds invoice when host persistence fails", async () => {
   const response = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-fail" }),
+      body: JSON.stringify({ reference: "order-fail" }),
     }),
   );
   // Infrastructure failure to persist is a retryable 503, not a payer-blaming
@@ -329,7 +329,7 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
   const request = () =>
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "retry-order" }),
+      body: JSON.stringify({ reference: "retry-order" }),
     });
   const first = await handler(request());
   const second = await handler(request());
@@ -352,10 +352,9 @@ test("host checkout snapshot makes retry independent of wallet reads", async () 
   const rows = [];
   const host = createHost({
     clock: () => 1000,
-    loadOrder: () => ({ total: 10 }),
-    amountForOrder: () => ({ sats: 10 }),
+    amountFor: () => ({ sats: 10 }),
     payments: {
-      listForOrder: async () => rows,
+      listForReference: async () => rows,
       commitAttempt: (input) => {
         rows.push({
           ...paymentInsert(input),
@@ -381,7 +380,7 @@ test("host checkout snapshot makes retry independent of wallet reads", async () 
   const request = () =>
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "snapshot-order" }),
+      body: JSON.stringify({ reference: "snapshot-order" }),
     });
   const first = await handler(request());
   wallet.listTransactions = async () => {
@@ -421,7 +420,7 @@ test("concurrent host-row loser receives no payer instructions", async () => {
       handler(
         new Request("http://test/openreceive/checkouts", {
           method: "POST",
-          body: JSON.stringify({ order_id: "concurrent-order" }),
+          body: JSON.stringify({ reference: "concurrent-order" }),
         }),
       ),
     ),
@@ -462,7 +461,7 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
   const created = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-methods" }),
+      body: JSON.stringify({ reference: "order-methods" }),
     }),
   );
   assert.equal(created.status, 201);
@@ -472,7 +471,7 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        order_id: "order-methods",
+        reference: "order-methods",
         payment_hash: createdBody.checkout.payment_hash,
       }),
     }),
@@ -496,7 +495,7 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        order_id: "order-methods",
+        reference: "order-methods",
         payment_hash: createdBody.checkout.payment_hash,
       }),
     }),
@@ -544,7 +543,7 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   const request = () =>
     new Request("http://test/openreceive/swaps", {
       method: "POST",
-      body: JSON.stringify({ order_id: "swap-http", pay_in_asset: "USDT_TRON" }),
+      body: JSON.stringify({ reference: "swap-http", pay_in_asset: "USDT_TRON" }),
     });
   const first = await handler(request());
   const second = await handler(request());
@@ -567,7 +566,7 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   const statusResponse = await handler(
     new Request("http://test/openreceive/swaps/status", {
       method: "POST",
-      body: JSON.stringify({ order_id: "swap-http", payment_hash: hostPaymentHash }),
+      body: JSON.stringify({ reference: "swap-http", payment_hash: hostPaymentHash }),
     }),
   );
   assert.equal(statusResponse.status, 200);
@@ -577,7 +576,7 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
     new Request("http://test/openreceive/swaps/refunds", {
       method: "POST",
       body: JSON.stringify({
-        order_id: "swap-http",
+        reference: "swap-http",
         payment_hash: hostPaymentHash,
         refund_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
       }),
@@ -654,7 +653,7 @@ const SETTLED_GOLDEN_TRANSACTION = {
   preimage: "1".repeat(64),
 };
 const SETTLED_GOLDEN_CHECKOUT = {
-  orderId: "order-golden-settled",
+  reference: "order-golden-settled",
   paymentHash: SETTLED_GOLDEN_HASH,
   bolt11: "lnbcgoldensettled",
   amountMsats: 1000,
@@ -712,7 +711,7 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
         // settled body is served from that pass result.
         seededAttempts: [
           {
-            orderId: "order-golden-settled",
+            reference: "order-golden-settled",
             paymentHash: SETTLED_GOLDEN_HASH,
             checkout: SETTLED_GOLDEN_CHECKOUT,
           },
@@ -764,7 +763,7 @@ test("a host resolver returning a malformed payment hash is a 500 host bug, not 
     const response = await handler(
       new Request("http://test/openreceive/payments/check", {
         method: "POST",
-        body: JSON.stringify({ order_id: "order-host-bug", payment_hash: "c".repeat(64) }),
+        body: JSON.stringify({ reference: "order-host-bug", payment_hash: "c".repeat(64) }),
       }),
     );
     assert.equal(response.status, 500);
@@ -794,7 +793,7 @@ test("handler extras.native reaches the authorize context", async () => {
   const response = await handler(
     new Request("http://test/openreceive/checkouts/prepare", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-native" }),
+      body: JSON.stringify({ reference: "order-native" }),
     }),
     { native },
   );
@@ -823,7 +822,7 @@ test("handler called without extras leaves the authorize context native undefine
   const response = await handler(
     new Request("http://test/openreceive/checkouts/prepare", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-no-native" }),
+      body: JSON.stringify({ reference: "order-no-native" }),
     }),
   );
   assert.equal(response.status, 200);
@@ -842,15 +841,15 @@ test("the wire contract is snake_case only: camelCase aliases are rejected", asy
     }),
   });
   const response = await handler(
-    new Request("http://test/openreceive/checkouts", {
+    new Request("http://test/openreceive/payments/check", {
       method: "POST",
-      body: JSON.stringify({ orderId: "order-camel" }),
+      body: JSON.stringify({ reference: "order-camel", paymentHash: "a".repeat(64) }),
     }),
   );
   assert.equal(response.status, 400);
   const body = await response.json();
   assert.equal(body.code, "INVALID_REQUEST");
-  assert.match(body.message, /Unexpected request field|order_id is required/);
+  assert.match(body.message, /Unexpected request field|payment_hash is required/);
 });
 
 test("undeclared request fields are rejected, including payment_hash on create", async () => {
@@ -868,20 +867,20 @@ test("undeclared request fields are rejected, including payment_hash on create",
   const hinted = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-hint", payment_hash: "a".repeat(64) }),
+      body: JSON.stringify({ reference: "order-hint", payment_hash: "a".repeat(64) }),
     }),
   );
   assert.equal(hinted.status, 400);
   const stray = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-stray", description_hash: "b".repeat(64) }),
+      body: JSON.stringify({ reference: "order-stray", description_hash: "b".repeat(64) }),
     }),
   );
   assert.equal(stray.status, 400);
 });
 
-test("declared length caps are enforced (order_id 200, memo 500)", async () => {
+test("declared length caps are enforced (reference 200, memo 500)", async () => {
   const service = await createOpenReceive({ client: createTestkitReceiveClient() });
   const handler = createHttpHandler({
     service,
@@ -894,14 +893,14 @@ test("declared length caps are enforced (order_id 200, memo 500)", async () => {
   const longOrder = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "x".repeat(201) }),
+      body: JSON.stringify({ reference: "x".repeat(201) }),
     }),
   );
   assert.equal(longOrder.status, 400);
   const longMemo = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-memo", memo: "m".repeat(501) }),
+      body: JSON.stringify({ reference: "order-memo", memo: "m".repeat(501) }),
     }),
   );
   assert.equal(longMemo.status, 400);
@@ -924,7 +923,7 @@ test("oversized request bodies are rejected 413 before authorize runs", async ()
   const response = await handler(
     new Request("http://test/openreceive/checkouts", {
       method: "POST",
-      body: JSON.stringify({ order_id: "order-big", metadata: { pad: "x".repeat(70_000) } }),
+      body: JSON.stringify({ reference: "order-big", metadata: { pad: "x".repeat(70_000) } }),
     }),
   );
   assert.equal(response.status, 413);
@@ -942,8 +941,8 @@ test("create routes reject payer-supplied amounts", async () => {
     }),
   });
   for (const body of [
-    { order_id: "order-amount", amount: { sats: 1 } },
-    { order_id: "order-amount", amount_msats: 1000 },
+    { reference: "order-amount", amount: { sats: 1 } },
+    { reference: "order-amount", amount_msats: 1000 },
   ]) {
     const response = await handler(
       new Request("http://test/openreceive/checkouts", {
@@ -1028,7 +1027,7 @@ test("wallet failures keep their code and map to 502/503, never a generic 500", 
     const response = await handler(
       new Request("http://test/openreceive/checkouts", {
         method: "POST",
-        body: JSON.stringify({ order_id: "order-outage" }),
+        body: JSON.stringify({ reference: "order-outage" }),
       }),
     );
     assert.equal(response.status, expected.status);
@@ -1060,7 +1059,7 @@ test("GET /rates rejects malformed currencies as input, not as a rates outage", 
 test("a wallet that ignores unpaid:true never flaps a live attempt to not_found", async () => {
   const now = 1_700_000_000;
   const checkout = {
-    orderId: "order-flap",
+    reference: "order-flap",
     paymentHash: "ab".repeat(32),
     bolt11: "lnbcflap",
     amountMsats: 1000,
@@ -1099,14 +1098,16 @@ test("a wallet that ignores unpaid:true never flaps a live attempt to not_found"
         checkout,
       }),
       onCheckoutCreated: () => {},
-      seededAttempts: [{ orderId: checkout.orderId, paymentHash: checkout.paymentHash, checkout }],
+      seededAttempts: [
+        { reference: checkout.reference, paymentHash: checkout.paymentHash, checkout },
+      ],
     }),
   });
   const response = await handler(
     new Request("http://test/openreceive/payments/check", {
       method: "POST",
       body: JSON.stringify({
-        order_id: checkout.orderId,
+        reference: checkout.reference,
         payment_hash: checkout.paymentHash,
       }),
     }),

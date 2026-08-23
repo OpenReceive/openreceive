@@ -17,7 +17,7 @@ import { CheckoutComponent } from "@openreceive/angular/checkout-component";
   standalone: true,
   imports: [CheckoutComponent],
   template: `
-    <openreceive-angular-checkout orderId="order-123" [onSettled]="onSettled" />
+    <openreceive-angular-checkout reference="order-123" [onSettled]="onSettled" />
   `,
 })
 export class CheckoutPageComponent {
@@ -33,7 +33,7 @@ Three names, one checkout: the exported class is `CheckoutComponent`, its
 Angular selector is `openreceive-angular-checkout`, and it renders the
 `<openreceive-checkout>` custom element inside itself (defining it on mount).
 
-Pass `orderId` to let the element create the checkout (create mode), or pass a
+Pass `reference` to let the element create the checkout (create mode), or pass a
 `checkout` snapshot to render one your server already created. Prop names,
 defaults, and the full surface are shared across the wrappers — see
 `docs/internal/wrapper-parity.md` in the repository.

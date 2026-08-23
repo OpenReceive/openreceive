@@ -33,8 +33,7 @@ async function fixture() {
   const host = createHost({
     db,
     clock,
-    loadOrder: (orderId) => orders.get(orderId) ?? null,
-    amountForOrder: (order) => order.amount,
+    amountFor: (reference) => orders.get(reference)?.amount ?? null,
     onPaid: async (settlement) => {
       paid.push(settlement);
     },
@@ -56,9 +55,9 @@ function postJson(path, body) {
   });
 }
 
-async function createCheckout(fix, orderId) {
-  fix.orders.set(orderId, { amount: { sats: 21 } });
-  const response = await fix.handler(postJson("/checkouts", { order_id: orderId }));
+async function createCheckout(fix, reference) {
+  fix.orders.set(reference, { amount: { sats: 21 } });
+  const response = await fix.handler(postJson("/checkouts", { reference: reference }));
   assert.equal(response.status, 201);
   return (await response.json()).checkout;
 }
@@ -74,9 +73,9 @@ test("user A's abandoned checkout settles when user B's later call wins the gate
   await createCheckout(fix, "order-b");
 
   assert.equal(fix.paid.length, 1);
-  assert.equal(fix.paid[0].orderId, "order-a");
+  assert.equal(fix.paid[0].reference, "order-a");
   const row = fix.db
-    .prepare("SELECT status, paid_at FROM openreceive_payments WHERE order_id = ?")
+    .prepare("SELECT status, paid_at FROM openreceive_payments WHERE reference = ?")
     .get("order-a");
   assert.equal(row.status, "settled");
   assert.equal(row.paid_at, 1_005);
@@ -96,7 +95,7 @@ test("a second request inside the interval is gate_busy and costs no wallet walk
   fix.state.now = 1_010;
 
   const first = await fix.handler(
-    postJson("/payments/check", { order_id: "order-a", payment_hash: checkout.payment_hash }),
+    postJson("/payments/check", { reference: "order-a", payment_hash: checkout.payment_hash }),
   );
   assert.equal(first.status, 200);
   const walksAfterFirst = fix.walks.length;
@@ -104,7 +103,7 @@ test("a second request inside the interval is gate_busy and costs no wallet walk
 
   // Same instant (well inside the 2s interval): the loser serves the row.
   const second = await fix.handler(
-    postJson("/payments/check", { order_id: "order-a", payment_hash: checkout.payment_hash }),
+    postJson("/payments/check", { reference: "order-a", payment_hash: checkout.payment_hash }),
   );
   assert.equal(second.status, 200);
   assert.equal(fix.walks.length, walksAfterFirst, "gate_busy must not touch the wallet");
@@ -122,7 +121,7 @@ test("a throwing scan still returns user B's 200", async () => {
   };
 
   fix.orders.set("order-b", { amount: { sats: 21 } });
-  const response = await fix.handler(postJson("/checkouts", { order_id: "order-b" }));
+  const response = await fix.handler(postJson("/checkouts", { reference: "order-b" }));
   assert.equal(response.status, 201);
 });
 
@@ -135,8 +134,7 @@ test("two workers sharing one openreceive_meta run one scan per interval", async
   const workerHost = createHost({
     db: fix.db,
     clock: () => fix.state.now,
-    loadOrder: (orderId) => fix.orders.get(orderId) ?? null,
-    amountForOrder: (order) => order.amount,
+    amountFor: (reference) => fix.orders.get(reference)?.amount ?? null,
     onPaid: async () => undefined,
   });
 
@@ -223,7 +221,7 @@ test("GET /rates never claims the reconcile gate or scans the wallet", async () 
   assert.equal(fix.walks.length, walksBefore);
 
   // A payment route on the same handler still triggers the gated pass.
-  const checked = await fix.handler(postJson("/checkouts/prepare", { order_id: "order-a" }));
+  const checked = await fix.handler(postJson("/checkouts/prepare", { reference: "order-a" }));
   assert.equal(checked.status, 200);
   assert.equal(claims, 1);
 });
@@ -245,7 +243,7 @@ test("payments/check with three pending orders costs one gate claim and at most 
   const walksBefore = fix.walks.length;
 
   const response = await fix.handler(
-    postJson("/payments/check", { order_id: "order-1", payment_hash: checkout.payment_hash }),
+    postJson("/payments/check", { reference: "order-1", payment_hash: checkout.payment_hash }),
   );
   assert.equal(response.status, 200);
   const body = await response.json();
@@ -284,7 +282,7 @@ test("payments/check under gate_busy serves the row; attention reads as pending 
   );
 
   const settledResponse = await fix.handler(
-    postJson("/payments/check", { order_id: "order-settled", payment_hash: settled.payment_hash }),
+    postJson("/payments/check", { reference: "order-settled", payment_hash: settled.payment_hash }),
   );
   assert.equal(settledResponse.status, 200);
   const settledBody = await settledResponse.json();
@@ -293,7 +291,7 @@ test("payments/check under gate_busy serves the row; attention reads as pending 
   assert.equal(settledBody.details, undefined, "the row path omits details");
 
   const stuckResponse = await fix.handler(
-    postJson("/payments/check", { order_id: "order-stuck", payment_hash: stuck.payment_hash }),
+    postJson("/payments/check", { reference: "order-stuck", payment_hash: stuck.payment_hash }),
   );
   assert.equal(stuckResponse.status, 200);
   const stuckBody = await stuckResponse.json();
@@ -367,7 +365,7 @@ test("a custom repository without claimReconcileGate fails construction unless d
     onCheckoutCreated: () => undefined,
     onPaid: async () => undefined,
     payments: {
-      listForOrder: async () => [],
+      listForReference: async () => [],
       commitAttempt: () => undefined,
       listReconcilableAttempts: async () => [],
       recordReconciliation: async () => undefined,

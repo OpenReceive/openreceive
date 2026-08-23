@@ -26,12 +26,12 @@ own route from it: `/checkouts`, `/checkouts/prepare`, `/payments/check`,
 per-route override, and no URL templating. A headless host holds one string.
 
 ```ts
-const snapshot = await prepareCheckout({ orderId, prefix: "/openreceive" });
+const snapshot = await prepareCheckout({ reference, prefix: "/openreceive" });
 const refresh = createStatusFetcher({ prefix: "/openreceive", snapshot });
 const started = await startSwapRequest({
   fetch: globalThis.fetch,
   prefix: "/openreceive",
-  orderId,
+  reference,
   payInAsset: "USDT_TRON",
 });
 ```
@@ -41,7 +41,7 @@ const started = await startSwapRequest({
 Checkout lifecycle:
 
 - `prepareCheckout` / `requestCheckout` — the prepare-then-mint calls (also on
-  the main entry). Both take `{ orderId, prefix }`.
+  the main entry). Both take `{ reference, prefix }`.
 - `createCheckoutState`, `CheckoutState`, `CheckoutSnapshot`,
   `CheckoutInvoiceSnapshot` — engine state and snapshots.
 - `selectCheckoutDisplayInvoice`, `isReusableLightningInvoice` — invoice
@@ -68,7 +68,7 @@ Payment methods and wizard model:
 
 Swap flows:
 
-- `startSwapRequest` (`{ fetch, prefix, orderId, payInAsset }`),
+- `startSwapRequest` (`{ fetch, prefix, reference, payInAsset }`),
   `normalizeSwapStartInvoice`.
 - `createSwapDisplayModel` / `SwapDisplayModel`,
   `swapAssetMatchesRoute`, `swapPickerKey`,

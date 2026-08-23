@@ -6,7 +6,7 @@ const authorize = () => true;
 
 function stubPayments() {
   return {
-    listForOrder: async () => [],
+    listForReference: async () => [],
     commitAttempt: async () => {},
     listReconcilableAttempts: async () => [],
     recordReconciliation: async () => {},
@@ -25,8 +25,7 @@ test("isStackOptions routes composed and flat forms", () => {
     isStackOptions({
       nwc: "nostr+walletconnect://example",
       db: {},
-      loadOrder: async () => null,
-      amountForOrder: () => ({ sats: 1000 }),
+      amountFor: () => ({ sats: 1000 }),
       onPaid: async () => {},
       authorize,
     }),
@@ -36,8 +35,7 @@ test("isStackOptions routes composed and flat forms", () => {
     isStackOptions({
       service: {},
       payments: stubPayments(),
-      loadOrder: async () => null,
-      amountForOrder: () => ({ sats: 1000 }),
+      amountFor: () => ({ sats: 1000 }),
       onPaid: async () => {},
       authorize,
     }),
@@ -66,8 +64,7 @@ test("stack close() during an in-flight boot waits for the boot to finish", asyn
   const stack = createStack({
     wallet: { service },
     storage: { payments: stubPayments(), onPaid: async () => {} },
-    loadOrder: async () => null,
-    amountForOrder: () => ({ sats: 1000 }),
+    amountFor: () => ({ sats: 1000 }),
     authorize,
   });
   let booted = false;
@@ -89,8 +86,7 @@ test("stack close() resolves even when boot fails", async () => {
   const stack = createStack({
     wallet: { service: Promise.reject(new Error("boot failed")) },
     storage: { payments: stubPayments(), onPaid: async () => {} },
-    loadOrder: async () => null,
-    amountForOrder: () => ({ sats: 1000 }),
+    amountFor: () => ({ sats: 1000 }),
     authorize,
   });
   await stack.ready.catch(() => {});

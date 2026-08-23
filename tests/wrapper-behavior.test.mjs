@@ -93,13 +93,13 @@ async function until(predicate, { timeoutMs = 4000, label = "condition" } = {}) 
 }
 
 /** Stub the endpoints a create-mode element hits; records every request path. */
-function stubFetch(orderId) {
+function stubFetch(reference) {
   const calls = [];
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input), "http://wrappers.local");
     calls.push(url.pathname);
     const body = url.pathname.endsWith("/checkouts/prepare")
-      ? { order_id: orderId, amount_msats: 21_000, payment_methods: [] }
+      ? { reference: reference, amount_msats: 21_000, payment_methods: [] }
       : { status: "pending" };
     void init;
     return {
@@ -119,7 +119,7 @@ function stubFetch(orderId) {
  * documented `/openreceive` default prefix, plus the documented themeToggle
  * default (root theme attributes + toggle element).
  */
-async function assertMountedShell(container, orderId, calls) {
+async function assertMountedShell(container, reference, calls) {
   {
     const root = container.querySelector("[data-openreceive-theme]");
     assert.ok(root, "the shell root must carry data-openreceive-theme");
@@ -131,7 +131,7 @@ async function assertMountedShell(container, orderId, calls) {
   }
   const element = container.querySelector("openreceive-checkout");
   assert.ok(element, "the wrapper must render the checkout element");
-  assert.equal(element.getAttribute("order-id"), orderId);
+  assert.equal(element.getAttribute("reference"), reference);
 
   // The element really runs: its connected callback prepares the checkout and
   // renders the shadow tree.
@@ -148,19 +148,19 @@ async function assertMountedShell(container, orderId, calls) {
   );
 }
 
-test("the Vue wrapper mounts: createApp renders the checkout shell for an orderId", async () => {
-  const orderId = "order-vue-mount";
-  const calls = stubFetch(orderId);
+test("the Vue wrapper mounts: createApp renders the checkout shell for an reference", async () => {
+  const reference = "order-vue-mount";
+  const calls = stubFetch(reference);
   const Checkout = await loadVueCheckout();
   const { createApp } = await import("vue");
 
   const container = document.createElement("div");
   document.body.appendChild(container);
   const errors = [];
-  const app = createApp(Checkout, { orderId, onError: (event) => errors.push(event) });
+  const app = createApp(Checkout, { reference, onError: (event) => errors.push(event) });
   try {
     app.mount(container);
-    await assertMountedShell(container, orderId, calls);
+    await assertMountedShell(container, reference, calls);
     assert.deepEqual(errors, [], "mounting must not dispatch openreceive-error");
   } finally {
     app.unmount();
@@ -170,17 +170,17 @@ test("the Vue wrapper mounts: createApp renders the checkout shell for an orderI
 
 // Regression test for Vue's absent-Boolean-prop-to-false coercion: the SFC
 // declares explicit `undefined` defaults so `?? options.* ?? default` chains
-// see "not set" — a bare <Checkout order-id> must render the documented
+// see "not set" — a bare <Checkout reference> must render the documented
 // defaults from docs/internal/wrapper-parity.md.
 test("the mounted Vue wrapper honors the documented boolean prop defaults", async () => {
-  const orderId = "order-vue-defaults";
-  stubFetch(orderId);
+  const reference = "order-vue-defaults";
+  stubFetch(reference);
   const Checkout = await loadVueCheckout();
   const { createApp } = await import("vue");
 
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const app = createApp(Checkout, { orderId });
+  const app = createApp(Checkout, { reference });
   try {
     app.mount(container);
     assert.ok(
@@ -198,9 +198,9 @@ test("the mounted Vue wrapper honors the documented boolean prop defaults", asyn
   }
 });
 
-test("the Svelte wrapper mounts: svelte mount() renders the checkout shell for an orderId", async () => {
-  const orderId = "order-svelte-mount";
-  const calls = stubFetch(orderId);
+test("the Svelte wrapper mounts: svelte mount() renders the checkout shell for an reference", async () => {
+  const reference = "order-svelte-mount";
+  const calls = stubFetch(reference);
   const Checkout = await loadSvelteCheckout();
   const { mount, unmount } = await import(svelteClientUrl);
 
@@ -209,10 +209,10 @@ test("the Svelte wrapper mounts: svelte mount() renders the checkout shell for a
   const errors = [];
   const component = mount(Checkout, {
     target: container,
-    props: { orderId, onError: (event) => errors.push(event) },
+    props: { reference, onError: (event) => errors.push(event) },
   });
   try {
-    await assertMountedShell(container, orderId, calls);
+    await assertMountedShell(container, reference, calls);
     assert.deepEqual(errors, [], "mounting must not dispatch openreceive-error");
   } finally {
     await unmount(component);

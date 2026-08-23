@@ -64,11 +64,11 @@ function findRefundAddressInput(root) {
   );
 }
 
-async function createCheckoutViaHandler(stack, orderId) {
+async function createCheckoutViaHandler(stack, reference) {
   const response = await stack.fetchStub("/openreceive/checkouts", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ order_id: orderId }),
+    body: JSON.stringify({ reference: reference }),
   });
   assert.equal(response.status, 201);
   return (await response.json()).checkout;
@@ -77,7 +77,7 @@ async function createCheckoutViaHandler(stack, orderId) {
 function elementSurface(mode) {
   return {
     name: `element-${mode}`,
-    async mount(stack, orderId) {
+    async mount(stack, reference) {
       const el = document.createElement("openreceive-checkout");
       let settledCount = 0;
       let terminal = false;
@@ -90,14 +90,14 @@ function elementSurface(mode) {
         if (event.detail?.state?.terminal === true) terminal = true;
       });
       if (mode === "snapshot") {
-        const created = await createCheckoutViaHandler(stack, orderId);
+        const created = await createCheckoutViaHandler(stack, reference);
         el.setAttribute("invoice-id", created.payment_hash);
         el.setAttribute("invoice", created.bolt11);
         el.setAttribute("payment-hash", created.payment_hash);
         el.setAttribute("amount-msats", String(created.amount_msats));
         el.setAttribute("expires-at", String(created.expires_at));
       }
-      el.setAttribute("order-id", orderId);
+      el.setAttribute("reference", reference);
       if (mode === "snapshot") {
         // Snapshot mode opts into status polling by passing the mount prefix,
         // exactly like React snapshot mode.
@@ -138,7 +138,7 @@ function elementSurface(mode) {
 function reactSurface(mode) {
   return {
     name: `react-${mode}`,
-    async mount(stack, orderId) {
+    async mount(stack, reference) {
       const container = document.createElement("div");
       document.body.appendChild(container);
       const root = createRoot(container);
@@ -148,7 +148,7 @@ function reactSurface(mode) {
       };
       if (mode === "snapshot") {
         const snapshot = await prepareCheckout({
-          orderId,
+          reference,
           prefix: "/openreceive",
           fetch: stack.fetchStub,
         });
@@ -160,7 +160,7 @@ function reactSurface(mode) {
           }),
         );
       } else {
-        root.render(React.createElement(Checkout, { orderId, onSettled }));
+        root.render(React.createElement(Checkout, { reference, onSettled }));
       }
       const findButton = (text) =>
         [...container.querySelectorAll("button")].find((button) =>
@@ -240,7 +240,7 @@ for (const surface of SURFACES) {
         label: `${surface.name} paid panel`,
       });
       assert.deepEqual(
-        stack.settlements.map((settlement) => settlement.orderId),
+        stack.settlements.map((settlement) => settlement.reference),
         ["order-1"],
       );
       const lastCheck = stack.checkCalls().at(-1);

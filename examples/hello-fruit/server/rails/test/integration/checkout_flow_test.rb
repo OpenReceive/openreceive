@@ -27,14 +27,14 @@ class CheckoutFlowTest < ActionDispatch::IntegrationTest
 
   def create_checkout!(order_id)
     post "/openreceive/checkouts",
-         params: JSON.generate(order_id: order_id), headers: JSON_HEADERS
+         params: JSON.generate(reference: order_id), headers: JSON_HEADERS
     assert_response :created
     response.parsed_body.fetch("checkout")
   end
 
   def check_payment!(order_id, payment_hash)
     post "/openreceive/payments/check",
-         params: JSON.generate(order_id: order_id, payment_hash: payment_hash),
+         params: JSON.generate(reference: order_id, payment_hash: payment_hash),
          headers: JSON_HEADERS
     assert_response :success
     response.parsed_body

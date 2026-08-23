@@ -18,9 +18,9 @@ import {
   type PaymentRepository,
 } from "./payment-repository.ts";
 import type { SqlDatabase } from "./sql-adapters.ts";
-import { createSqlPayments, type OrderSettlementHook } from "./sql-payments.ts";
+import { createSqlPayments, type PaymentSettlementHook } from "./sql-payments.ts";
 
-// The mounted-route host integration: turn a host's order loader plus either a
+// The mounted-route host integration: turn a host's price hook plus either a
 // database handle or a custom repository into the `Host` the handler
 // talks to. The repository contract and its decisions live in
 // payment-repository.ts; the wallet-scan passes live in reconcile-loop.ts.
@@ -37,36 +37,36 @@ export function warnFailure(event: string, prefix: string, error: unknown): void
   console.warn(`[openreceive] ${prefix}: ${String(sanitized.message)}`);
 }
 
-interface CreateOpenReceiveHostBaseOptions<Order> {
-  readonly loadOrder: (
-    orderId: string,
+interface CreateOpenReceiveHostBaseOptions {
+  /**
+   * The trusted price for a reference, or `null` when there is nothing to
+   * pay for (the request is answered 404). Called only where a price is
+   * minted or quoted; the payer never sends an amount.
+   */
+  readonly amountFor: (
+    reference: string,
     context: ResolveCheckoutContext,
-  ) => Order | null | Promise<Order | null>;
-  readonly amountForOrder: (
-    order: Order,
-    context: ResolveCheckoutContext,
-  ) => CreateCheckoutAmount | Promise<CreateCheckoutAmount>;
+  ) => CreateCheckoutAmount | null | Promise<CreateCheckoutAmount | null>;
   readonly clock?: () => number;
 }
 
 /**
  * Default mode: OpenReceive owns the payment-attempt rows in the host
  * application's existing database. `onPaid` runs inside the settlement
- * transaction for the order's first settled attempt only.
+ * transaction for the first settled attempt for a reference only.
  */
-export interface CreateOpenReceiveHostDbOptions<Order>
-  extends CreateOpenReceiveHostBaseOptions<Order> {
+export interface CreateOpenReceiveHostDbOptions extends CreateOpenReceiveHostBaseOptions {
   readonly db: SqlDatabase;
   /** Payment attempts table name. Default `openreceive_payments`. */
   readonly tableName?: string;
-  readonly onPaid: OrderSettlementHook;
+  readonly onPaid: PaymentSettlementHook;
   readonly payments?: never;
 }
 
 /**
  * Settlement context passed to repository-mode `onPaid`: the raw core
  * settlement event (`paymentHash`, `paidAt`, `details`). Unlike db-mode's
- * {@link OrderSettlement} it carries no `orderId` and no
+ * {@link PaymentSettlement} it carries no `reference` and no
  * transactional `query` — the custom repository owns that mapping.
  */
 export type SettlementEvent = NodeSettlementActionInput;
@@ -80,14 +80,13 @@ export type SettlementEventHook = (settlement: SettlementEvent) => void | Promis
  *
  * The settlement hook is `onPaid` in this mode too, but its context type
  * differs from db mode: it receives the raw {@link SettlementEvent}
- * (`paymentHash`, `paidAt`, `details`), with no `orderId` and no transactional
+ * (`paymentHash`, `paidAt`, `details`), with no `reference` and no transactional
  * `query` — unlike db-mode `onPaid`, which runs inside the library's settlement
  * transaction. Write-once is still the library's: repository-mode `onPaid`
  * runs only for the settlement whose `payments.recordSettlement` claim was
  * won, so a redelivered settlement never fulfills twice.
  */
-export interface CreateOpenReceiveHostRepositoryOptions<Order>
-  extends CreateOpenReceiveHostBaseOptions<Order> {
+export interface CreateOpenReceiveHostRepositoryOptions extends CreateOpenReceiveHostBaseOptions {
   readonly payments: PaymentRepository;
   /** Host settlement handler; runs once, for the winning first-settlement claim. */
   readonly onPaid: SettlementEventHook;
@@ -95,9 +94,9 @@ export interface CreateOpenReceiveHostRepositoryOptions<Order>
   readonly tableName?: never;
 }
 
-export type CreateOpenReceiveHostOptions<Order> =
-  | CreateOpenReceiveHostDbOptions<Order>
-  | CreateOpenReceiveHostRepositoryOptions<Order>;
+export type CreateOpenReceiveHostOptions =
+  | CreateOpenReceiveHostDbOptions
+  | CreateOpenReceiveHostRepositoryOptions;
 
 export interface Host {
   readonly resolveCheckout: ResolveCheckoutHook;
@@ -107,21 +106,19 @@ export interface Host {
 }
 
 /**
- * Build the mounted-route host integration around an order loader and either
- * the host database handle (`db`, default) or a custom payment repository
- * (`payments`, advanced). Attempt selection, commit locking, settlement
- * write-once, and reconciliation transitions are library-owned in `db` mode.
+ * Build the mounted-route host integration around the host's price hook and
+ * either the host database handle (`db`, default) or a custom payment
+ * repository (`payments`, advanced). Attempt selection, commit locking,
+ * settlement write-once, and reconciliation transitions are library-owned in
+ * `db` mode.
  */
-export function createHost<Order>(options: CreateOpenReceiveHostOptions<Order>): Host {
-  if (options?.loadOrder === undefined) {
-    throw new TypeError("OpenReceive host requires loadOrder.");
-  }
-  if (options.amountForOrder === undefined) {
-    throw new TypeError("OpenReceive host requires amountForOrder.");
+export function createHost(options: CreateOpenReceiveHostOptions): Host {
+  if (options?.amountFor === undefined) {
+    throw new TypeError("OpenReceive host requires amountFor.");
   }
   if (options.onPaid === undefined) {
     throw new TypeError(
-      "OpenReceive host requires onPaid (per-order settlement context in db mode; the raw " +
+      "OpenReceive host requires onPaid (per-reference settlement context in db mode; the raw " +
         "settlement event in custom repository mode).",
     );
   }
@@ -134,13 +131,13 @@ export function createHost<Order>(options: CreateOpenReceiveHostOptions<Order>):
       ...(options.clock === undefined ? {} : { clock: options.clock }),
     });
     payments = repository;
-    const fulfill = options.onPaid as OrderSettlementHook;
+    const fulfill = options.onPaid as PaymentSettlementHook;
     onPaid = async (input) => {
       await repository.markPaidOnce(input, fulfill);
     };
   } else {
-    if (options.payments?.listForOrder === undefined) {
-      throw new TypeError("OpenReceive host requires db or payments.listForOrder.");
+    if (options.payments?.listForReference === undefined) {
+      throw new TypeError("OpenReceive host requires db or payments.listForReference.");
     }
     if (options.payments.commitAttempt === undefined) {
       throw new TypeError("OpenReceive host requires payments.commitAttempt.");
@@ -173,36 +170,38 @@ export function createHost<Order>(options: CreateOpenReceiveHostOptions<Order>):
   }
 
   const clock = options.clock ?? unixSeconds;
+  // The host is asked only where a price is minted or quoted. Status polls and
+  // refund recovery for committed attempts are answered from OpenReceive's own
+  // rows and never depend on (or wait for) the host's price hook.
+  const priceFor = async (context: ResolveCheckoutContext): Promise<CreateCheckoutAmount> => {
+    const amount = await options.amountFor(context.reference, context);
+    if (amount === null) throw hostError("Unknown reference.", 404, "NOT_FOUND");
+    return amount;
+  };
   const resolveCheckout: ResolveCheckoutHook = async (context) => {
-    const order = await options.loadOrder(context.orderId, context);
-    if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
-
-    // Pricing runs only where a price is minted or quoted. Status polls and
-    // refund recovery for committed attempts must not depend on (or wait for)
-    // the host's pricing callback.
     if (context.action === "swap.quote" || context.action === "checkout.prepare") {
-      return { amount: await options.amountForOrder(order, context) };
+      return { amount: await priceFor(context) };
     }
     const isCreate = context.action === "checkout.create" || context.action === "swap.create";
-    const amount = isCreate ? await options.amountForOrder(order, context) : undefined;
+    const amount = isCreate ? await priceFor(context) : undefined;
 
     const attempts = normalizePayments(
-      context.orderId,
-      await payments.listForOrder(context.orderId),
+      context.reference,
+      await payments.listForReference(context.reference),
     );
     const requestedHash = paymentHashHint(context.input);
 
     if (requestedHash !== undefined) {
       const selected = attempts.find((payment) => payment.paymentHash === requestedHash);
       if (selected === undefined) {
-        throw hostError("Payment attempt not found for this order.", 404, "NOT_FOUND");
+        throw hostError("Payment attempt not found for this reference.", 404, "NOT_FOUND");
       }
       // A hash-hinted CREATE may only re-serve a reusable pending attempt.
       // Without this, a settled or expired attempt would be re-served 201 with
       // stale payer instructions, bypassing the paid/expired guards below.
       if (context.action === "checkout.create" || context.action === "swap.create") {
         if (attempts.some((payment) => payment.status === "settled")) {
-          throw hostError("This order is already paid.", 409, "CONFLICT");
+          throw hostError("This reference is already paid.", 409, "CONFLICT");
         }
         const now = clock();
         if (
@@ -222,7 +221,7 @@ export function createHost<Order>(options: CreateOpenReceiveHostOptions<Order>):
 
     if (context.action === "checkout.create" || context.action === "swap.create") {
       if (attempts.some((payment) => payment.status === "settled")) {
-        throw hostError("This order is already paid.", 409, "CONFLICT");
+        throw hostError("This reference is already paid.", 409, "CONFLICT");
       }
 
       const now = clock();
@@ -296,13 +295,13 @@ function matchesCreateAction(
 }
 
 function normalizePayments(
-  expectedOrderId: string,
+  expectedReference: string,
   values: readonly PaymentRecord[],
 ): readonly PaymentRecord[] {
   return values
     .map((payment) => {
-      if (payment.orderId !== expectedOrderId) {
-        throw new TypeError("Payment repository returned a row for another order.");
+      if (payment.reference !== expectedReference) {
+        throw new TypeError("Payment repository returned a row for another reference.");
       }
       return {
         ...payment,

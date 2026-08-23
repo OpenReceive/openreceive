@@ -19,7 +19,7 @@ test("a preimage-only scripted transaction leaves the attempt pending", async ()
   const openreceive = await createOpenReceive({ client: wallet, clock: () => now });
 
   const checkout = await openreceive.createCheckout({
-    orderId: "order-preimage-only",
+    reference: "order-preimage-only",
     amount: { sats: 1000 },
   });
 
@@ -57,7 +57,7 @@ test("a raw preimage-only wallet row (no state, no settled_at) stays pending", a
   const openreceive = await createOpenReceive({ client: wallet, clock: () => now });
 
   const checkout = await openreceive.createCheckout({
-    orderId: "order-raw-preimage",
+    reference: "order-raw-preimage",
     amount: { sats: 1000 },
   });
   const [minted] = wallet
@@ -97,7 +97,7 @@ test("testkit wallet supports NWC-02 notifications end to end", async () => {
   });
 
   const checkout = await openreceive.createCheckout({
-    orderId: "order-notify",
+    reference: "order-notify",
     amount: { sats: 1000 },
   });
   now = 1100;
@@ -116,7 +116,7 @@ test("testkit wallet supports NWC-02 notifications end to end", async () => {
 
   // Settling without notify emits nothing.
   const second = await openreceive.createCheckout({
-    orderId: "order-silent",
+    reference: "order-silent",
     amount: { sats: 1000 },
   });
   wallet.settleInvoice({ payment_hash: second.paymentHash }, { settled_at: now });
@@ -124,7 +124,7 @@ test("testkit wallet supports NWC-02 notifications end to end", async () => {
 
   await unsubscribe();
   const third = await openreceive.createCheckout({
-    orderId: "order-after-unsubscribe",
+    reference: "order-after-unsubscribe",
     amount: { sats: 1000 },
   });
   wallet.settleInvoice({ payment_hash: third.paymentHash }, { settled_at: now, notify: true });

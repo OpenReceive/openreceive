@@ -82,6 +82,14 @@
       "public": true
     },
     {
+      "slug": "environment-variables",
+      "title": "Environment Variables",
+      "source_path": "docs/guides/environment-variables.md",
+      "category": "reference",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "storage",
       "title": "Payment Storage",
       "source_path": "docs/guides/storage.md",

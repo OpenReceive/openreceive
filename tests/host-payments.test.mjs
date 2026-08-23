@@ -13,7 +13,7 @@ function context(action, input = {}, payInAsset) {
   return {
     action,
     request: new Request("http://test/openreceive"),
-    orderId: "order-1",
+    reference: "order-1",
     input,
     ...(payInAsset === undefined ? {} : { payInAsset }),
   };
@@ -22,7 +22,7 @@ function context(action, input = {}, payInAsset) {
 function payment(character, overrides = {}) {
   const paymentHash = hash(character);
   return {
-    orderId: "order-1",
+    reference: "order-1",
     paymentHash,
     status: "pending",
     statusReason: null,
@@ -30,7 +30,7 @@ function payment(character, overrides = {}) {
     createdAt: 900,
     expiresAt: 1_100,
     checkout: {
-      orderId: "order-1",
+      reference: "order-1",
       paymentHash,
       bolt11: `lnbc-${character}`,
       amountMsats: 1_000,
@@ -44,7 +44,7 @@ function payment(character, overrides = {}) {
 
 function repository(rows) {
   return {
-    listForOrder: async () => rows,
+    listForReference: async () => rows,
     commitAttempt: async () => undefined,
     listReconcilableAttempts: async () => [],
     recordReconciliation: async () => undefined,
@@ -55,8 +55,8 @@ function repository(rows) {
 function host(rows) {
   return createHost({
     clock: () => 1_000,
-    loadOrder: async (orderId) => (orderId === "order-1" ? { total: "10.00" } : null),
-    amountForOrder: (order) => ({ currency: "USD", value: order.total }),
+    amountFor: async (reference) =>
+      reference === "order-1" ? { currency: "USD", value: "10.00" } : null,
     payments: repository(rows),
     onPaid: async () => undefined,
   });
@@ -109,7 +109,7 @@ test("payment status selects the exact attempt only after checking order ownersh
 
   await assert.rejects(
     host(rows).resolveCheckout(context("payment.check", { payment_hash: hash("f") })),
-    /Payment attempt not found for this order/,
+    /Payment attempt not found for this reference/,
   );
 });
 
@@ -243,8 +243,7 @@ test("host pricing runs only when minting or quoting, never on status or refund 
   let priced = 0;
   const paymentHost = createHost({
     clock: () => 1_000,
-    loadOrder: async () => ({ total: "10.00" }),
-    amountForOrder: () => {
+    amountFor: () => {
       priced += 1;
       throw new Error("pricing service down");
     },
@@ -278,37 +277,33 @@ test("host integration remints when the matching attempt is near expiry", async 
   });
 });
 
-test("createHost requires the order hooks and a db or full payments repository", () => {
-  const loadOrder = async () => null;
-  const amountForOrder = () => ({ sats: 1 });
+test("createHost requires the host hooks and a db or full payments repository", () => {
+  const amountFor = () => ({ sats: 1 });
   const onPaid = async () => undefined;
   const payments = repository([]);
 
-  assert.throws(() => createHost({}), /requires loadOrder/);
-  assert.throws(() => createHost({ loadOrder }), /requires amountForOrder/);
-  assert.throws(() => createHost({ loadOrder, amountForOrder }), /requires onPaid/);
+  assert.throws(() => createHost({}), /requires amountFor/);
+  assert.throws(() => createHost({ amountFor }), /requires onPaid/);
   assert.throws(
-    () => createHost({ loadOrder, amountForOrder, onPaid }),
-    /requires db or payments\.listForOrder/,
+    () => createHost({ amountFor, onPaid }),
+    /requires db or payments\.listForReference/,
   );
   assert.throws(
     () =>
       createHost({
-        loadOrder,
-        amountForOrder,
+        amountFor,
         onPaid,
-        payments: { listForOrder: payments.listForOrder },
+        payments: { listForReference: payments.listForReference },
       }),
     /requires payments\.commitAttempt/,
   );
   assert.throws(
     () =>
       createHost({
-        loadOrder,
-        amountForOrder,
+        amountFor,
         onPaid,
         payments: {
-          listForOrder: payments.listForOrder,
+          listForReference: payments.listForReference,
           commitAttempt: payments.commitAttempt,
         },
       }),
@@ -317,11 +312,10 @@ test("createHost requires the order hooks and a db or full payments repository",
   assert.throws(
     () =>
       createHost({
-        loadOrder,
-        amountForOrder,
+        amountFor,
         onPaid,
         payments: {
-          listForOrder: payments.listForOrder,
+          listForReference: payments.listForReference,
           commitAttempt: payments.commitAttempt,
           listReconcilableAttempts: payments.listReconcilableAttempts,
         },
@@ -329,7 +323,7 @@ test("createHost requires the order hooks and a db or full payments repository",
     /requires payments\.recordReconciliation/,
   );
   // A complete custom repository is the documented escape hatch.
-  const built = createHost({ loadOrder, amountForOrder, onPaid, payments });
+  const built = createHost({ amountFor, onPaid, payments });
   assert.equal(built.payments, payments);
 });
 
@@ -341,8 +335,7 @@ test("a custom repository drives the library's write-once settlement claim", asy
   // for the first-settlement claim and calls the host only when it is won.
   const claimResults = [true, false];
   const built = createHost({
-    loadOrder: async () => ({ total: "1.00" }),
-    amountForOrder: () => ({ currency: "USD", value: "1.00" }),
+    amountFor: () => ({ currency: "USD", value: "1.00" }),
     payments: {
       ...repository([]),
       recordSettlement: async (settlement) => {
@@ -370,8 +363,7 @@ test("a custom repository without recordSettlement is refused at construction", 
   assert.throws(
     () =>
       createHost({
-        loadOrder: async () => ({ total: "1.00" }),
-        amountForOrder: () => ({ currency: "USD", value: "1.00" }),
+        amountFor: () => ({ currency: "USD", value: "1.00" }),
         payments: withoutClaim,
         onPaid: async () => assert.fail("settlement must not reach the host unclaimed"),
       }),
@@ -395,10 +387,10 @@ test("payment insert uses provider expiry and keeps swap data server-side", () =
   };
   assert.deepEqual(
     paymentInsert({
-      orderId: "order-1",
+      reference: "order-1",
       paymentHash: hash("a").toUpperCase(),
       checkout: {
-        orderId: "order-1",
+        reference: "order-1",
         paymentHash: hash("a"),
         bolt11: "lnbc1",
         amountMsats: 1_000,
@@ -409,12 +401,12 @@ test("payment insert uses provider expiry and keeps swap data server-side", () =
       swapData,
     }),
     {
-      orderId: "order-1",
+      reference: "order-1",
       paymentHash: hash("a"),
       createdAt: 1_000,
       expiresAt: 1_050,
       checkout: {
-        orderId: "order-1",
+        reference: "order-1",
         paymentHash: hash("a"),
         bolt11: "lnbc1",
         amountMsats: 1_000,
@@ -442,7 +434,7 @@ test("browser status polling carries the displayed payment hash", async () => {
     prefix: "/openreceive",
     snapshot: {
       checkout_id: paymentHash,
-      order_id: "order-1",
+      reference: "order-1",
       status: "open",
       active: invoice,
       invoices: [invoice],
@@ -464,7 +456,7 @@ test("browser status polling carries the displayed payment hash", async () => {
 
   await refresh("order-1");
   assert.deepEqual(requestBody, {
-    order_id: "order-1",
+    reference: "order-1",
     payment_hash: paymentHash,
   });
 });

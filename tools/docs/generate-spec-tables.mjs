@@ -105,7 +105,7 @@ function effectiveObject(schema, schemas) {
   };
 }
 
-// `{ order_id, amount_msats, fiat_quote?, payment_methods }` from an object schema.
+// `{ reference, amount_msats, fiat_quote?, payment_methods }` from an object schema.
 function objectShape(schema, schemas) {
   const { required: requiredList, properties } = effectiveObject(schema, schemas);
   const required = new Set(requiredList);

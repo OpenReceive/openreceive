@@ -95,8 +95,8 @@ export type {
   SqlQuery,
 } from "./sql-adapters.ts";
 export type {
-  OrderSettlement,
-  OrderSettlementHook,
+  PaymentSettlement,
+  PaymentSettlementHook,
   SqlPaymentRepository,
   SqlPaymentsOptions,
 } from "./sql-payments.ts";

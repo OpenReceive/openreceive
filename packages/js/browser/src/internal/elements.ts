@@ -41,8 +41,8 @@ function createModeAttributes(options: CheckoutElementAttributeOptions): Checkou
   if (options.resumePathPrefix !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix] = options.resumePathPrefix;
   }
-  if (options.routeOrderId !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId] = options.routeOrderId;
+  if (options.routeReference !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference] = options.routeReference;
   }
   return attributes;
 }
@@ -85,7 +85,7 @@ function sharedElementAttributes(
  * Attributes for `<openreceive-checkout>` in each of its three modes:
  *
  * - **create** (`snapshot === null`): routing + theming + the create-time options.
- *   The element owns the whole lifecycle from `order-id` (+ optional `prefix`).
+ *   The element owns the whole lifecycle from `reference` (+ optional `prefix`).
  * - **deferred** (a snapshot with no payer bolt11 — amount locked, method grid
  *   showing): the same set, because the element still has a Lightning mint ahead of
  *   it, plus the locked amount.
@@ -96,15 +96,15 @@ export function createCheckoutElementAttributes(
   snapshot: CheckoutSnapshot | null,
   options: CheckoutElementAttributeOptions = {},
 ): CheckoutElementAttributes {
-  // `orderId` is required in create mode because there is no snapshot to read it from.
+  // `reference` is required in create mode because there is no snapshot to read it from.
   if (snapshot === null) {
-    if (options.orderId === undefined || options.orderId.length === 0) {
+    if (options.reference === undefined || options.reference.length === 0) {
       throw new TypeError(
-        "OpenReceive checkout element create mode requires an orderId when no snapshot is given.",
+        "OpenReceive checkout element create mode requires an reference when no snapshot is given.",
       );
     }
     return {
-      [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: options.orderId,
+      [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference]: options.reference,
       ...sharedElementAttributes(options),
       ...createModeAttributes(options),
     };
@@ -114,7 +114,7 @@ export function createCheckoutElementAttributes(
   const bolt11 = displayInvoice?.invoice;
   if (displayInvoice === undefined || typeof bolt11 !== "string") {
     const deferred: CheckoutElementAttributes = {
-      [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
+      [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference]: snapshot.reference,
       ...sharedElementAttributes(options),
       ...createModeAttributes(options),
     };
@@ -126,7 +126,7 @@ export function createCheckoutElementAttributes(
   const invoice = displayInvoice;
   assertDisplayInvoice(bolt11);
   const attributes: CheckoutElementAttributes = {
-    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
+    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference]: snapshot.reference,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId]: invoice.invoice_id,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: bolt11,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail]: invoice.rail,

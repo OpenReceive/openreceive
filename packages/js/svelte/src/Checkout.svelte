@@ -18,10 +18,10 @@ import {
 // React's CheckoutProps are. The duplication is forced, not neglected;
 // tests/wrapper-parity.test.mjs is what keeps it in step.
 // Snapshot mode: pass a `checkout` to render it directly.
-// Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
+// Create mode: omit `checkout` and pass `reference` (+ optional `prefix`); the underlying
 // <openreceive-checkout> element creates the checkout, then renders and polls itself.
 export let checkout: CheckoutSnapshot | undefined = undefined;
-export let orderId: string | undefined = undefined;
+export let reference: string | undefined = undefined;
 export let prefix: string | undefined = undefined;
 export let paymentWizard: boolean | undefined = undefined;
 export let decodeLinkUrl: string | undefined = undefined;
@@ -32,7 +32,7 @@ export let storageKey: string | undefined = undefined;
 export let metadata: Record<string, unknown> | undefined = undefined;
 export let syncUrl: boolean | undefined = undefined;
 export let resumePathPrefix: string | undefined = undefined;
-export let routeOrderId: string | undefined = undefined;
+export let routeReference: string | undefined = undefined;
 export let onCopy: ((event: Event) => void) | undefined = undefined;
 export let onOpenWallet: ((event: Event) => void) | undefined = undefined;
 export let onState: ((event: Event) => void) | undefined = undefined;
@@ -54,18 +54,18 @@ onMount(() => {
 $: validateCheckoutProps({
   framework: "@openreceive/svelte",
   checkout,
-  orderId,
+  reference,
   metadata,
   syncUrl,
   resumePathPrefix,
-  routeOrderId,
+  routeReference,
 });
 
 $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...options,
   themeToggle: themeToggle ?? options.themeToggle ?? true,
   deferThemeResolution: !mounted,
-  ...(orderId === undefined ? {} : { orderId }),
+  ...(reference === undefined ? {} : { reference }),
   ...(prefix === undefined ? {} : { prefix }),
   ...(paymentWizard === undefined ? {} : { paymentWizard }),
   ...(decodeLinkUrl === undefined ? {} : { decodeLinkUrl }),
@@ -74,7 +74,7 @@ $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...(metadata === undefined ? {} : { metadata }),
   ...(syncUrl === undefined ? {} : { syncUrl }),
   ...(resumePathPrefix === undefined ? {} : { resumePathPrefix }),
-  ...(routeOrderId === undefined ? {} : { routeOrderId }),
+  ...(routeReference === undefined ? {} : { routeReference }),
   ...(onCopy === undefined ? {} : { onCopy }),
   ...(onOpenWallet === undefined ? {} : { onOpenWallet }),
   ...(onState === undefined ? {} : { onState }),

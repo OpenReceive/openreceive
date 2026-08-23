@@ -91,14 +91,14 @@ module OpenReceive
         # failure is the wallet's response violating the receive contract, not
         # a 400 the payer caused — so this rescue must not cover the wallet
         # call or its normalization.
-        order_id, expiry, fiat_quote, request = validating_input do
+        reference, expiry, fiat_quote, request = validating_input do
           data = stringify(input)
           # The message names the JS service's camelCase field (requests.ts
-          # "orderId is required."); the accepted input key is snake_case.
-          order_id = required_string(data["order_id"], "orderId")
+          # "reference is required."); the accepted input key is snake_case.
+          reference = required_string(data["reference"], "reference")
           amount_msats, fiat_quote = resolve_amount(data.fetch("amount"))
           expiry = Integer(data["expiry_seconds"] || INVOICE_EXPIRY_SECONDS)
-          metadata = stringify(data["metadata"] || {}).merge("order_id" => order_id)
+          metadata = stringify(data["metadata"] || {}).merge("reference" => reference)
           # NIP-47 caps invoice metadata; reject before any wallet call with
           # the JS service's exact message instead of surfacing the wallet
           # client's own failure as a 502.
@@ -112,7 +112,7 @@ module OpenReceive
           }
           request["description"] = data["memo"] if data["memo"]
           request["description_hash"] = data["description_hash"] if data["description_hash"]
-          [order_id, expiry, fiat_quote, request]
+          [reference, expiry, fiat_quote, request]
         end
         response = call_nwc(:make_invoice, request)
         begin
@@ -137,7 +137,7 @@ module OpenReceive
                   "Error with the backing NWC wallet: it did not honor the requested invoice expiry."
           end
           {
-            "order_id" => order_id,
+            "reference" => reference,
             "payment_hash" => wallet.fetch("payment_hash"),
             "bolt11" => wallet.fetch("invoice"),
             "amount_msats" => wallet.fetch("amount_msats"),
@@ -260,7 +260,7 @@ module OpenReceive
         # input explicitly from validated fields so no payer-supplied key (e.g.
         # "expiry_seconds") can override it or smuggle a different order id.
         checkout = create_checkout(
-          "order_id" => data["order_id"],
+          "reference" => data["reference"],
           "amount" => amount,
           "memo" => data["memo"],
           "metadata" => data["metadata"],
@@ -274,26 +274,26 @@ module OpenReceive
           "version" => 1,
           "provider_order" => order.reject { |key, _| key == "raw" }
         }
-        public_swap(order, checkout.fetch("payment_hash"), checkout.fetch("order_id")).merge(
+        public_swap(order, checkout.fetch("payment_hash"), checkout.fetch("reference")).merge(
           "checkout" => checkout,
           "swap_data" => swap_data
         )
       end
 
-      def get_swap(order_id:, payment_hash:, swap_data:)
+      def get_swap(reference:, payment_hash:, swap_data:)
         recovery = normalize_swap_data(swap_data)
         provider_name = recovery.fetch("provider_order").fetch("provider")
         provider = provider_by_name(provider_name)
         current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
-        public_swap(current, normalize_payment_hash(payment_hash), required_string(order_id, "order_id"))
+        public_swap(current, normalize_payment_hash(payment_hash), required_string(reference, "reference"))
       rescue KeyError => e
         raise ValidationError, e.message
       end
 
-      def refund_swap(order_id:, payment_hash:, swap_data:, refund_address:)
+      def refund_swap(reference:, payment_hash:, swap_data:, refund_address:)
         recovery = normalize_swap_data(swap_data)
         hash = normalize_payment_hash(payment_hash)
-        host_order_id = required_string(order_id, "order_id")
+        host_reference = required_string(reference, "reference")
         address = normalize_refund_address(
           refund_address, recovery.dig("provider_order", "pay_in_asset")
         )
@@ -304,7 +304,7 @@ module OpenReceive
           raise ConflictError, "Swap cannot be refunded from provider state #{current['state']}."
         end
         call_provider(provider, :request_refund, current, address)
-        get_swap(order_id: host_order_id, payment_hash: hash, swap_data: recovery)
+        get_swap(reference: host_reference, payment_hash: hash, swap_data: recovery)
       rescue KeyError => e
         raise ValidationError, e.message
       end
@@ -673,10 +673,10 @@ module OpenReceive
         provider.respond_to?(:name) ? provider.name : provider.class.name
       end
 
-      def public_swap(order, hash, order_id)
+      def public_swap(order, hash, reference)
         {
           "payment_hash" => hash,
-          "order_id" => order_id,
+          "reference" => reference,
           "provider" => order.fetch("provider"),
           "pay_in_asset" => order.fetch("pay_in_asset"),
           "deposit_address" => order.fetch("deposit_address"),

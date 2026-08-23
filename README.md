@@ -67,7 +67,7 @@ talks to a different side of your app, and each has an obvious home:
 | Piece                        | You build it with                                                                                                               | It talks to                                                                 | It lives                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
 | **Wallet client**            | [`createOpenReceive()`][api-createopenreceive]                                                                                  | **your wallet** — mints invoices, reads settlement, holds the NWC code      | server-only, one per process                     |
-| **Order bridge**             | [`createHost()`][api-createopenreceivehost]                                                                                     | **your database** — your order hooks, plus the `openreceive_payments` table | server-only, next to your models                 |
+| **Host**                     | [`createHost()`][api-createopenreceivehost]                                                                                     | **your database** — your hooks, plus the `openreceive_payments` table       | server-only, next to your models                 |
 | **HTTP routes**              | [`openReceiveExpress()`][api-express] (or [Fastify][api-fastify] / [Next][api-next] / [Rails](docs/guides/quickstart-rails.md)) | **the browser** — the endpoints the checkout UI calls                       | mounted on your app by default at `/openreceive` |
 | **Checkout UI** _(optional)_ | [`@openreceive/react`][api-browser] (or vue/svelte/angular/elements)                                                            | **the HTTP routes above** — creates the checkout, polls until paid          | your browser bundle                              |
 
@@ -87,48 +87,51 @@ import { createOpenReceive } from "@openreceive/node";
 // 1. The wallet client. Reads NWC_URI; never let this reach client code.
 const service = await createOpenReceive();
 
-// 2. The order bridge: your database and your order model.
+// 2. The host: your database and your price.
 const host = createHost({
   db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
-  loadOrder: (orderId) => orders.find(orderId),
-  // The authoritative price for that order — never taken from payer input.
-  // OpenReceive converts this exact decimal into the invoice amount.
-  amountForOrder: (order) => ({
-    currency: order.currency,
-    value: order.total.toString(),
-  }),
-  onPaid: async ({ orderId, query }) => {
+  // The authoritative price for a reference (here, your order id) — never
+  // taken from payer input.
+  // OpenReceive converts this exact decimal into the invoice amount; null
+  // means there is nothing to pay for (404).
+  amountFor: async (reference) => {
+    const order = await orders.find(reference);
+    return order ? { currency: order.currency, value: order.total.toString() } : null;
+  },
+  onPaid: async ({ reference, query }) => {
     // Runs inside the settlement transaction, only for the order's first
     // settled attempt. Update the order or insert an outbox row here.
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
   },
 });
 
 // 3. The HTTP routes. `authorize` is your own access check: it runs on every
-//    order-scoped request, because an order id alone does not prove ownership.
+//    reference-scoped request, because a reference alone does not prove ownership.
 app.use(
   openReceiveExpress({
     service,
     host,
     authorize: async ({ action, request, resource }) =>
-      orders.authorize({ request, orderId: resource.orderId, action }),
+      orders.authorize({ request, reference: resource.reference, action }),
   }),
 );
 ```
 
-### The OpenReceive order bridge
+### The OpenReceive host
 
-The order bridge is the server object between your orders and OpenReceive's
-payment attempts: it calls the three hooks you hand it — `loadOrder`,
-`amountForOrder`, `onPaid` — and owns one table, `openreceive_payments`, inside
-your database. Keep your order model unchanged. You run that table's migration
-([`npx openreceive scaffold payments`][api-scaffold] emits it for your ORM);
-the library owns everything else: schema, per-order locking, write-once
-settlement, reconciliation. Each row is one invoice or swap attempt. The only
-link back to your app is the opaque `order_id` string handed to your hooks: no
-foreign key, and OpenReceive never reads your orders table. A row commits
-before the payer sees an invoice, settles once, and fulfills at most once per
-order; to your app an order is simply unpaid or paid.
+The host is the server object between your app and OpenReceive's payment
+attempts: it calls the two hooks you hand it — `amountFor`, `onPaid` — and
+owns one table, `openreceive_payments`, inside your database. You run that
+table's migration ([`npx openreceive scaffold payments`][api-scaffold] emits it
+for your ORM); the library owns everything else: schema, per-reference locking,
+write-once settlement, reconciliation.
+
+The `reference` is a string you choose — your order id, a cart id, a UUID.
+OpenReceive stores it only to group attempts under it and to hand it back to
+`onPaid`; it never looks inside it. Each row is one invoice or swap attempt
+under a reference. A row commits before the payer sees an invoice, settles
+once, and fulfills at most once per reference; to your app an order is simply
+unpaid or paid.
 
 Schema, the attempt state machine, live-attempt rules, and the
 custom-repository escape hatch: [Payment storage](docs/guides/storage.md).
@@ -138,18 +141,19 @@ custom-repository escape hatch: [Payment storage](docs/guides/storage.md).
 [`createOpenReceive()`][api-createopenreceive] reads the receive-only wallet
 code from `NWC_URI`; optional swap providers come from `LSC_URI_PRIMARY` and
 `LSC_URI_BACKUP`. Those are OpenReceive's only secret environment variables.
+See [Environment variables](docs/guides/environment-variables.md).
 
 ### The routes run your `authorize` on every request
 
 The routes never inspect your session. You write one callback,
-[`authorize`][api-authorize] (step 3 above), and it runs on every order-scoped
-request — an order id identifies a row but does not prove the caller owns it.
+[`authorize`][api-authorize] (step 3 above), and it runs on every reference-scoped
+request — a reference identifies a row but does not prove the caller owns it.
 The context carries the `action` (`checkout.create`, `payment.check`, …), the
 Web-standard `request`, and the untrusted `resource` selectors the payer sent;
 return `false` for `403`.
 
-A create request carries an order id, never a price: the order bridge resolves
-the amount from your order. A refused attempt (order already paid, competing
+A create request carries a reference, never a price: your `amountFor` hook
+resolves the amount. A refused attempt (order already paid, competing
 live attempt) is a [`409`][api-errors] with no invoice attached.
 [Authorization](docs/guides/authorization.md) covers the context object,
 framework sessions, and guest orders.
@@ -220,6 +224,7 @@ Start with the [developer guides](docs/guides/README.md):
 - [Price feeds](docs/guides/price-feeds.md)
 - [Automated swaps](docs/guides/automated-swaps.md)
 - [Lightning Swap Connect](docs/guides/lightning-swap-connect.md)
+- [Environment variables](docs/guides/environment-variables.md)
 - [Provider registry](docs/guides/provider-registry.md)
 - [Authorization](docs/guides/authorization.md)
 - [Rate limiting](docs/guides/rate-limiting.md)

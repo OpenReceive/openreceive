@@ -27,7 +27,7 @@ interface SwapAuditLogSource {
 
 export function checkoutLogFields(state: {
   readonly checkout_id?: string;
-  readonly order_id?: string;
+  readonly reference?: string;
   readonly invoice_id?: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
@@ -42,7 +42,7 @@ export function checkoutLogFields(state: {
 }): Record<string, unknown> {
   return compact({
     checkout_id: state.checkout_id,
-    order_id: state.order_id,
+    reference: state.reference,
     invoice_id: state.invoice_id,
     payment_hash: state.payment_hash,
     amount_msats: state.amount_msats,

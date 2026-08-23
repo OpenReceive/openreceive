@@ -84,15 +84,14 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
   const host = createHost({
     db,
     clock: () => now,
-    loadOrder: async (orderId) => ({ orderId }),
-    amountForOrder: () => ({ sats: 1 }),
+    amountFor: () => ({ sats: 1 }),
     onPaid: async (settlement) => settled.push(settlement.paymentHash),
   });
   await host.onCheckoutCreated({
-    orderId: "order-truncated",
+    reference: "order-truncated",
     paymentHash,
     checkout: {
-      orderId: "order-truncated",
+      reference: "order-truncated",
       paymentHash,
       bolt11: "lnbc-truncated",
       amountMsats: 1_000,
@@ -113,7 +112,7 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
   };
   await reconcileHostPayments({ service, host, clock: () => now });
 
-  const row = (await host.payments.listForOrder("order-truncated"))[0];
+  const row = (await host.payments.listForReference("order-truncated"))[0];
   assert.equal(row.status, "pending", "a capped scan must never close a possibly-paid attempt");
   assert.equal(row.statusReason, null);
   assert.deepEqual(settled, []);
@@ -129,7 +128,7 @@ test("a truncated pass leaves an expired attempt pending instead of closing it",
   };
   await reconcileHostPayments({ service: complete, host, clock: () => now });
   assert.deepEqual(settled, [paymentHash]);
-  assert.equal((await host.payments.listForOrder("order-truncated"))[0].status, "settled");
+  assert.equal((await host.payments.listForReference("order-truncated"))[0].status, "settled");
 });
 
 test("the walk stops once every expected hash is accounted for", async () => {

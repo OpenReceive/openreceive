@@ -3,15 +3,9 @@
 require_relative "generated/fulfillment_note"
 
 module OpenReceive
-  # The ONE canonical statement of the order-table boundary and the host's
-  # exactly-once fulfillment duty, rendered wherever the install generator
-  # writes host-facing code.
-  #
-  # OpenReceive treats order_id as an opaque string. It never reads, writes,
-  # locks, or requires a foreign key to the host's order table, and it does not
-  # need to know that table's name or its primary-key type. Everything the
-  # engine serializes, it serializes on rows it owns
-  # (OpenReceivePayment.with_order_lock).
+  # The ONE canonical statement of the host's exactly-once fulfillment duty —
+  # what the engine guarantees about on_paid and where that guarantee stops —
+  # rendered wherever the install generator writes host-facing code.
   #
   # The text lives in spec/data/fulfillment-note.txt and is generated into both
   # this gem and @openreceive/core, so the Rails install generator and the

@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "payment_hash",
-    "order_id",
+    "reference",
     "provider",
     "pay_in_asset",
     "deposit_address",
@@ -19,7 +19,7 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
-    "order_id": {
+    "reference": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200

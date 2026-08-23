@@ -4,9 +4,9 @@
   "title": "OpenReceive Checkout",
   "type": "object",
   "additionalProperties": false,
-  "required": ["order_id", "payment_hash", "bolt11", "amount_msats", "created_at", "expires_at"],
+  "required": ["reference", "payment_hash", "bolt11", "amount_msats", "created_at", "expires_at"],
   "properties": {
-    "order_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "reference": { "type": "string", "minLength": 1, "maxLength": 200 },
     "payment_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "bolt11": { "type": "string", "minLength": 1 },
     "amount_msats": {

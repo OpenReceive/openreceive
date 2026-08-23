@@ -22,7 +22,7 @@ export function toSnakeCase(value: unknown): unknown {
 
 export function httpCheckout(checkout: Checkout): Record<string, unknown> {
   return {
-    order_id: checkout.orderId,
+    reference: checkout.reference,
     payment_hash: checkout.paymentHash,
     bolt11: checkout.bolt11,
     amount_msats: checkout.amountMsats,
@@ -58,14 +58,14 @@ export function paymentCheckFromReconcilePass(checked: PaymentCheck): Record<str
  */
 export async function paymentCheckFromStoredAttempt(
   payments: PaymentRepository,
-  orderId: string,
+  reference: string,
   paymentHash: string,
 ): Promise<Record<string, unknown>> {
-  const rows = await payments.listForOrder(orderId);
+  const rows = await payments.listForReference(reference);
   const record = rows.find((row) => row.paymentHash.toLowerCase() === paymentHash.toLowerCase());
   if (record === undefined) {
     // resolveHostCheckout selected this hash from the same repository moments ago.
-    throw new HttpError(404, "NOT_FOUND", "Payment attempt not found for this order.");
+    throw new HttpError(404, "NOT_FOUND", "Payment attempt not found for this reference.");
   }
   return {
     payment_hash: record.paymentHash.toLowerCase(),

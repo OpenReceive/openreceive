@@ -137,17 +137,17 @@ export async function createSwap(
   return {
     checkout,
     swapData,
-    ...publicSwap(order, checkout.paymentHash, checkout.orderId),
+    ...publicSwap(order, checkout.paymentHash, checkout.reference),
   };
 }
 
 export async function getSwap(context: ServiceContext, input: GetSwapRequest): Promise<PublicSwap> {
   const recovery = parseSwapData(input.swapData);
   const paymentHash = parsePaymentHash(input.paymentHash);
-  const orderId = parseOrderId(input.orderId);
+  const reference = parseReference(input.reference);
   const provider = requireProvider(context, recovery.providerOrder.provider);
   const current = await provider.getStatus(recovery.providerOrder);
-  return publicSwap(current, paymentHash, orderId);
+  return publicSwap(current, paymentHash, reference);
 }
 
 export async function refundSwap(
@@ -156,7 +156,7 @@ export async function refundSwap(
 ): Promise<PublicSwap> {
   const recovery = parseSwapData(input.swapData);
   const paymentHash = parsePaymentHash(input.paymentHash);
-  const orderId = parseOrderId(input.orderId);
+  const reference = parseReference(input.reference);
   const refundAddress = parseRefundAddress(
     input.refundAddress,
     recovery.providerOrder.pay_in_asset,
@@ -172,7 +172,7 @@ export async function refundSwap(
   }
   await provider.requestRefund(current, refundAddress);
   const refreshed = await provider.getStatus(current);
-  return publicSwap(refreshed, paymentHash, orderId);
+  return publicSwap(refreshed, paymentHash, reference);
 }
 
 async function selectProvider(
@@ -246,10 +246,10 @@ function recoveryOrder(order: SwapOrder): SwapOrder {
   return structuredClone(safe);
 }
 
-function publicSwap(order: SwapOrder, paymentHash: string, orderId: string): PublicSwap {
+function publicSwap(order: SwapOrder, paymentHash: string, reference: string): PublicSwap {
   return {
     paymentHash,
-    orderId,
+    reference,
     provider: order.provider,
     payInAsset: order.pay_in_asset,
     depositAddress: order.deposit_address,
@@ -281,10 +281,10 @@ function parsePaymentHash(value: string): string {
   return normalized;
 }
 
-function parseOrderId(value: string): string {
+function parseReference(value: string): string {
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.length > 200) {
-    throw serviceError(400, "INVALID_REQUEST", "orderId is invalid.");
+    throw serviceError(400, "INVALID_REQUEST", "reference is invalid.");
   }
   return normalized;
 }

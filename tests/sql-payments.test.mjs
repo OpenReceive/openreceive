@@ -33,16 +33,16 @@ function swapData(asset, expiresAt = 1_600) {
 }
 
 function checkoutInput(
-  orderId,
+  reference,
   character,
   { createdAt = 900, expiresAt = 1_600, swapData, clientIp } = {},
 ) {
   const paymentHash = hash(character);
   return {
-    orderId,
+    reference,
     paymentHash,
     checkout: {
-      orderId,
+      reference,
       paymentHash,
       bolt11: `lnbc-${character}`,
       amountMsats: 1_000,
@@ -64,7 +64,7 @@ test("commitAttempt is idempotent for a repeated payment hash", async () => {
   const { payments } = sqliteRepository();
   await payments.commitAttempt(checkoutInput("order-1", "a"));
   await payments.commitAttempt(checkoutInput("order-1", "a"));
-  const rows = await payments.listForOrder("order-1");
+  const rows = await payments.listForReference("order-1");
   assert.equal(rows.length, 1);
   assert.equal(rows[0].paymentHash, hash("a"));
   assert.equal(rows[0].status, "pending");
@@ -81,7 +81,7 @@ test("commitAttempt rejects a new attempt once the order settled", async () => {
     payments.commitAttempt(checkoutInput("order-1", "b")),
     (error) => error.status === 409 && /already paid/.test(error.message),
   );
-  assert.equal((await payments.listForOrder("order-1")).length, 1);
+  assert.equal((await payments.listForReference("order-1")).length, 1);
 });
 
 test("commitAttempt conflicts on a reusable same-rail attempt but keeps other rails live", async () => {
@@ -89,19 +89,19 @@ test("commitAttempt conflicts on a reusable same-rail attempt but keeps other ra
   await payments.commitAttempt(checkoutInput("order-1", "a")); // Lightning, 600s of life left
   await assert.rejects(
     payments.commitAttempt(checkoutInput("order-1", "b")),
-    (error) => error.status === 409 && /already in progress for this order/.test(error.message),
+    (error) => error.status === 409 && /already in progress for this reference/.test(error.message),
   );
 
   // A swap on another asset may go live while Lightning stays live.
   await payments.commitAttempt(checkoutInput("order-1", "c", { swapData: swapData("USDT_TRON") }));
   await assert.rejects(
     payments.commitAttempt(checkoutInput("order-1", "d", { swapData: swapData("USDT_TRON") })),
-    /already in progress for this order/,
+    /already in progress for this reference/,
   );
   await payments.commitAttempt(checkoutInput("order-1", "e", { swapData: swapData("USDC_SOL") }));
 
   const statuses = new Map(
-    (await payments.listForOrder("order-1")).map((row) => [row.paymentHash, row.status]),
+    (await payments.listForReference("order-1")).map((row) => [row.paymentHash, row.status]),
   );
   assert.deepEqual(
     statuses,
@@ -118,7 +118,7 @@ test("commitAttempt supersedes a near-expiry same-rail attempt without closing i
   await payments.commitAttempt(checkoutInput("order-1", "a", { expiresAt: 1_040 }));
   await payments.commitAttempt(checkoutInput("order-1", "b", { expiresAt: 1_600 }));
 
-  const rows = await payments.listForOrder("order-1");
+  const rows = await payments.listForReference("order-1");
   const byHash = new Map(rows.map((row) => [row.paymentHash, row]));
   // The superseded invoice is still payable until it expires wallet-side, so
   // it stays pending and keeps its place in the scan set — closing it on the
@@ -145,7 +145,7 @@ test("a superseded attempt still settles when the payer pays the old invoice", a
   });
 
   const byHash = new Map(
-    (await payments.listForOrder("order-1")).map((row) => [row.paymentHash, row]),
+    (await payments.listForReference("order-1")).map((row) => [row.paymentHash, row]),
   );
   assert.equal(byHash.get(hash("a")).status, "settled");
   assert.deepEqual(fulfilled, [hash("a")]);
@@ -159,17 +159,17 @@ test("a superseded attempt is neither reused nor superseded a second time", asyn
   // the superseded 'a' must not be what decides this.
   await assert.rejects(
     () => payments.commitAttempt(checkoutInput("order-1", "c", { expiresAt: 1_700 })),
-    /already in progress for this order/,
+    /already in progress for this reference/,
   );
 
   const byHash = new Map(
-    (await payments.listForOrder("order-1")).map((row) => [row.paymentHash, row]),
+    (await payments.listForReference("order-1")).map((row) => [row.paymentHash, row]),
   );
   assert.equal(byHash.get(hash("a")).statusReason, "superseded");
   assert.equal(byHash.get(hash("a")).status, "pending");
 });
 
-test("markPaidOnce settles write-once and fulfills only the order's first settled attempt", async () => {
+test("markPaidOnce settles write-once and fulfills only the first settled attempt for a reference", async () => {
   const { payments } = sqliteRepository();
   await payments.commitAttempt(checkoutInput("order-1", "a"));
   await payments.commitAttempt(checkoutInput("order-1", "b", { swapData: swapData("USDT_TRON") }));
@@ -182,7 +182,7 @@ test("markPaidOnce settles write-once and fulfills only the order's first settle
       [settlement.paymentHash],
     );
     fulfilled.push({
-      orderId: settlement.orderId,
+      reference: settlement.reference,
       paymentHash: settlement.paymentHash,
       paidAt: settlement.paidAt,
       statusInTransaction: inTx[0].status,
@@ -190,7 +190,7 @@ test("markPaidOnce settles write-once and fulfills only the order's first settle
   });
   assert.deepEqual(fulfilled, [
     {
-      orderId: "order-1",
+      reference: "order-1",
       paymentHash: hash("a"),
       paidAt: 990,
       statusInTransaction: "settled",
@@ -208,7 +208,7 @@ test("markPaidOnce settles write-once and fulfills only the order's first settle
   });
 
   const byHash = new Map(
-    (await payments.listForOrder("order-1")).map((row) => [row.paymentHash, row]),
+    (await payments.listForReference("order-1")).map((row) => [row.paymentHash, row]),
   );
   assert.equal(byHash.get(hash("a")).status, "settled");
   assert.equal(byHash.get(hash("a")).statusReason, null);
@@ -233,14 +233,14 @@ test("markPaidOnce rolls back with the fulfill callback so settlement is replay-
     }),
     /host order update failed/,
   );
-  assert.equal((await payments.listForOrder("order-1"))[0].status, "pending");
+  assert.equal((await payments.listForReference("order-1"))[0].status, "pending");
 
   const fulfilled = [];
   await payments.markPaidOnce({ paymentHash: hash("a"), paidAt: 990 }, async (settlement) => {
     fulfilled.push(settlement.paymentHash);
   });
   assert.deepEqual(fulfilled, [hash("a")]);
-  assert.equal((await payments.listForOrder("order-1"))[0].status, "settled");
+  assert.equal((await payments.listForReference("order-1"))[0].status, "settled");
 });
 
 test("recordReconciliation applies only while pending and never overwrites settled", async () => {
@@ -255,7 +255,7 @@ test("recordReconciliation applies only while pending and never overwrites settl
     observedAt: 2_900,
     reason: "not_found_after_expiry",
   });
-  const transitioned = (await payments.listForOrder("order-1"))[0];
+  const transitioned = (await payments.listForReference("order-1"))[0];
   assert.equal(transitioned.status, "expired");
   assert.equal(transitioned.statusReason, "not_found_after_expiry");
 
@@ -266,7 +266,7 @@ test("recordReconciliation applies only while pending and never overwrites settl
     observedAt: 3_000,
     reason: "wallet_reported_failed",
   });
-  assert.equal((await payments.listForOrder("order-1"))[0].status, "expired");
+  assert.equal((await payments.listForReference("order-1"))[0].status, "expired");
 
   // A settled row is never overwritten by a reconciliation transition.
   await payments.recordReconciliation({
@@ -275,7 +275,7 @@ test("recordReconciliation applies only while pending and never overwrites settl
     observedAt: 3_000,
     reason: "not_found_after_expiry",
   });
-  const settled = (await payments.listForOrder("order-2"))[0];
+  const settled = (await payments.listForReference("order-2"))[0];
   assert.equal(settled.status, "settled");
   assert.equal(settled.statusReason, null);
   assert.equal(settled.paidAt, 990);
@@ -346,11 +346,10 @@ test("one reconciliation pass settles, closes, and flags rows so terminal rows l
   const host = createHost({
     db,
     clock: () => now,
-    loadOrder: async (orderId) => ({ orderId }),
-    amountForOrder: () => ({ sats: 1 }),
+    amountFor: () => ({ sats: 1 }),
     onPaid: async (settlement) => {
       settled.push({
-        orderId: settlement.orderId,
+        reference: settlement.reference,
         paymentHash: settlement.paymentHash,
         paidAt: settlement.paidAt,
       });
@@ -379,9 +378,9 @@ test("one reconciliation pass settles, closes, and flags rows so terminal rows l
 
   assert.equal(scanned.length, 1);
   assert.equal(scanned[0].attempts.length, 4);
-  assert.deepEqual(settled, [{ orderId: "order-a", paymentHash: hash("a"), paidAt: 990 }]);
+  assert.deepEqual(settled, [{ reference: "order-a", paymentHash: hash("a"), paidAt: 990 }]);
 
-  const status = async (orderId) => (await host.payments.listForOrder(orderId))[0];
+  const status = async (reference) => (await host.payments.listForReference(reference))[0];
   assert.equal((await status("order-a")).status, "settled");
   assert.equal((await status("order-b")).status, "failed");
   assert.equal((await status("order-b")).statusReason, "wallet_reported_failed");
@@ -410,8 +409,7 @@ test("reconciliation threads the wallet's explicit transaction state into the po
   const host = createHost({
     db,
     clock: () => now,
-    loadOrder: async (orderId) => ({ orderId }),
-    amountForOrder: () => ({ sats: 1 }),
+    amountFor: () => ({ sats: 1 }),
     onPaid: async () => undefined,
   });
   await host.onCheckoutCreated(checkoutInput("order-e", "e", { createdAt: 40, expiresAt: 50 }));
@@ -436,7 +434,7 @@ test("reconciliation threads the wallet's explicit transaction state into the po
   };
   await reconcileHostPayments({ service, host, clock: () => now });
 
-  const row = async (orderId) => (await host.payments.listForOrder(orderId))[0];
+  const row = async (reference) => (await host.payments.listForReference(reference))[0];
   assert.deepEqual(
     [(await row("order-e")).status, (await row("order-e")).statusReason],
     ["attention", "unsettled_after_expiry"],
@@ -493,7 +491,7 @@ test("pg adapter converts placeholders and serializes commits behind the advisor
     assert.ok(!sql.includes("?"), `pg SQL must use $n placeholders: ${sql}`);
   }
   const select = clientQueries.find((entry) => entry.sql.startsWith("SELECT * FROM"));
-  assert.match(select.sql, /WHERE order_id = \$1/);
+  assert.match(select.sql, /WHERE reference = \$1/);
   const insert = clientQueries.find((entry) => entry.sql.trimStart().startsWith("INSERT"));
   assert.match(
     insert.sql,
@@ -518,12 +516,12 @@ test("host SQL inside the settlement transaction reaches a pg driver untouched",
   const client = {
     async query(sql, params) {
       seen.push({ sql, params });
-      if (sql.startsWith("SELECT order_id")) return { rows: [{ order_id: "order-json" }] };
+      if (sql.startsWith("SELECT reference")) return { rows: [{ reference: "order-json" }] };
       if (sql.startsWith("SELECT * FROM openreceive_payments")) {
         return {
           rows: [
             {
-              order_id: "order-json",
+              reference: "order-json",
               payment_hash: hash("a"),
               status: "pending",
               status_reason: null,
@@ -581,18 +579,18 @@ test("host SQL inside the settlement transaction reaches a pg driver untouched",
 
 test("sqlite adapter serializes concurrent commits instead of throwing", async () => {
   const { payments } = sqliteRepository();
-  // Two different orders committing at once must both succeed (per-order
+  // Two different orders committing at once must both succeed (per-reference
   // serialization, not a single-transaction guard that rejects overlap).
   await Promise.all([
     payments.commitAttempt(checkoutInput("order-conc-a", "a")),
     payments.commitAttempt(checkoutInput("order-conc-b", "b")),
   ]);
-  assert.equal((await payments.listForOrder("order-conc-a")).length, 1);
-  assert.equal((await payments.listForOrder("order-conc-b")).length, 1);
+  assert.equal((await payments.listForReference("order-conc-a")).length, 1);
+  assert.equal((await payments.listForReference("order-conc-b")).length, 1);
 
   // A read racing a commit queues behind it rather than failing.
   const [rows] = await Promise.all([
-    payments.listForOrder("order-conc-c"),
+    payments.listForReference("order-conc-c"),
     payments.commitAttempt(checkoutInput("order-conc-c", "c")),
   ]);
   assert.ok(Array.isArray(rows));
@@ -669,7 +667,7 @@ test("the schema enforces the status and payment-hash invariants at the database
     db
       .prepare(
         `INSERT INTO openreceive_payments
-           (order_id, payment_hash, status, expires_at, created_at, updated_at, inserted_at, checkout_data)
+           (reference, payment_hash, status, expires_at, created_at, updated_at, inserted_at, checkout_data)
          VALUES (?, ?, ?, 1600, 900, 900, 900, '{}')`,
       )
       .run("order-check", paymentHash, status);
@@ -701,7 +699,7 @@ test("the schema records its version and keeps generated index names inside 63 b
     assert.ok(Buffer.byteLength(name, "utf8") <= 63, `${name} exceeds the identifier limit`);
   }
   // Default table names are short enough to keep their readable index names.
-  assert.match(paymentsSchemaSql("postgres"), /openreceive_payments_order_created_idx/);
+  assert.match(paymentsSchemaSql("postgres"), /openreceive_payments_reference_created_idx/);
 });
 
 test("a repository refuses to serve a database written by a newer library", async () => {
@@ -727,7 +725,7 @@ test("listReconcilableAttempts returns an oldest-first batch, not the whole back
   const { db, payments } = sqliteRepository();
   const insert = db.prepare(
     `INSERT INTO openreceive_payments
-       (order_id, payment_hash, status, expires_at, created_at, updated_at, inserted_at, checkout_data)
+       (reference, payment_hash, status, expires_at, created_at, updated_at, inserted_at, checkout_data)
      VALUES (?, ?, 'pending', 1600, ?, 900, 900, '{}')`,
   );
   const total = OPENRECEIVE_RECONCILE_BATCH_SIZE + 5;
@@ -752,7 +750,7 @@ test("a corrupt JSON column names the row instead of throwing a bare SyntaxError
     "{not json",
     hash("a"),
   );
-  await assert.rejects(payments.listForOrder("order-corrupt"), (error) => {
+  await assert.rejects(payments.listForReference("order-corrupt"), (error) => {
     assert.match(error.message, /checkout_data/);
     assert.match(error.message, new RegExp(hash("a")));
     return true;
@@ -797,7 +795,7 @@ test("recordSettlement claims the order's first settlement exactly once", async 
   assert.equal(await payments.recordSettlement({ paymentHash: hash("f"), paidAt: 999 }), false);
 
   const byHash = new Map(
-    (await payments.listForOrder("order-1")).map((row) => [row.paymentHash, row]),
+    (await payments.listForReference("order-1")).map((row) => [row.paymentHash, row]),
   );
   assert.equal(byHash.get(hash("a")).status, "settled");
   assert.equal(byHash.get(hash("a")).statusReason, null);

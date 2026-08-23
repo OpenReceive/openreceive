@@ -19,7 +19,7 @@ const VUE_SFC = "packages/js/vue/src/Checkout.vue";
 
 function shellFixture() {
   return createWrapperCheckoutShellBinding(null, {
-    orderId: "order-mount",
+    reference: "order-mount",
     metadata: { sku: "sticker-1" },
     themeToggle: true,
   });
@@ -27,7 +27,7 @@ function shellFixture() {
 
 test("the shared shell binding is the single source of element attributes", () => {
   const shell = shellFixture();
-  assert.equal(shell.checkout.attributes["order-id"], "order-mount");
+  assert.equal(shell.checkout.attributes["reference"], "order-mount");
   // Create-time metadata must survive into the element attributes: an Angular
   // template that hand-lists attributes silently dropped exactly this.
   assert.equal(shell.checkout.attributes.metadata, JSON.stringify({ sku: "sticker-1" }));
@@ -115,13 +115,13 @@ test("the Angular element bindings apply and prune element attributes", async ()
   let applied = applyElementBindings(
     element,
     {
-      attributes: { "order-id": "order-mount", metadata: '{"sku":"sticker-1"}', theme: undefined },
+      attributes: { reference: "order-mount", metadata: '{"sku":"sticker-1"}', theme: undefined },
       listeners: { "openreceive-settled": handler },
     },
     EMPTY_APPLIED_ELEMENT_BINDINGS,
   );
 
-  assert.equal(attributes.get("order-id"), "order-mount");
+  assert.equal(attributes.get("reference"), "order-mount");
   assert.equal(attributes.get("metadata"), '{"sku":"sticker-1"}');
   assert.equal(attributes.has("theme"), false, "undefined attributes must not be written");
   assert.deepEqual(listeners, [["add", "openreceive-settled", handler]]);
@@ -129,7 +129,7 @@ test("the Angular element bindings apply and prune element attributes", async ()
   // An attribute that disappears from the binding must be removed from the DOM.
   applied = applyElementBindings(
     element,
-    { attributes: { "order-id": "order-mount" }, listeners: {} },
+    { attributes: { reference: "order-mount" }, listeners: {} },
     applied,
   );
   assert.equal(attributes.has("metadata"), false);

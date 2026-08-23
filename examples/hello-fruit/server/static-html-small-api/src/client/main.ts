@@ -504,8 +504,8 @@ function renderCheckout(orderId: string): void {
   });
   // Self-contained: order-id restores summary after refresh; host owns /checkout/:id.
   const checkoutElement = document.createElement(OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
-  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId, orderId);
-  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId, orderId);
+  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference, orderId);
+  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference, orderId);
 
   checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error, (event) => {
     const detail = (event as CustomEvent<{ error?: unknown }>).detail;

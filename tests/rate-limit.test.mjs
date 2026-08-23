@@ -20,7 +20,7 @@ function testHost({ onCheckoutCreated = () => undefined, countAttemptsFromIp } =
     onCheckoutCreated,
     onPaid: async () => undefined,
     payments: {
-      listForOrder: async () => [],
+      listForReference: async () => [],
       commitAttempt: onCheckoutCreated,
       listReconcilableAttempts: async () => [],
       recordReconciliation: async () => undefined,
@@ -37,11 +37,11 @@ async function newService() {
   });
 }
 
-function createRequest(orderId) {
+function createRequest(reference) {
   return new Request("http://test/openreceive/checkouts", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ order_id: orderId }),
+    body: JSON.stringify({ reference: reference }),
   });
 }
 
@@ -124,7 +124,7 @@ test("a capped payer can still re-fetch an already-committed attempt", async () 
   const service = await newService();
   const hash = "a".repeat(64);
   const committed = {
-    orderId: "order-reuse",
+    reference: "order-reuse",
     paymentHash: hash,
     bolt11: "lnbc-reuse",
     amountMsats: 1234000,
@@ -142,7 +142,7 @@ test("a capped payer can still re-fetch an already-committed attempt", async () 
       },
       onPaid: async () => undefined,
       payments: {
-        listForOrder: async () => [],
+        listForReference: async () => [],
         commitAttempt: () => undefined,
         listReconcilableAttempts: async () => [],
         recordReconciliation: async () => undefined,
@@ -190,7 +190,7 @@ test("rateLimiting does not throttle non-create actions", async () => {
     new Request("http://test/openreceive/checkouts/prepare", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ order_id: "order-prepare" }),
+      body: JSON.stringify({ reference: "order-prepare" }),
     }),
     { native: { ip: "203.0.113.9" } },
   );
@@ -230,7 +230,7 @@ test("checkout create stores the client IP on the attempt row", async () => {
   const created = await handler(createRequest("order-ip"), { native: { ip: "203.0.113.9" } });
   assert.equal(created.status, 201);
   const row = db
-    .prepare("SELECT client_ip FROM openreceive_payments WHERE order_id = ?")
+    .prepare("SELECT client_ip FROM openreceive_payments WHERE reference = ?")
     .get("order-ip");
   assert.equal(row.client_ip, "203.0.113.9");
   assert.equal(await payments.countAttemptsFromIp("203.0.113.9", 0), 1);
@@ -241,7 +241,7 @@ test("checkout create stores the client IP on the attempt row", async () => {
   const anonymous = await handler(createRequest("order-anon"));
   assert.equal(anonymous.status, 201);
   const anonymousRow = db
-    .prepare("SELECT client_ip FROM openreceive_payments WHERE order_id = ?")
+    .prepare("SELECT client_ip FROM openreceive_payments WHERE reference = ?")
     .get("order-anon");
   assert.equal(anonymousRow.client_ip, null);
 });
@@ -296,12 +296,12 @@ test("a custom ip extractor both counts and stamps the same IP (SQL counting)", 
       ip: (context) => context.request.headers.get("cf-connecting-ip") ?? undefined,
     },
   });
-  const post = (orderId) =>
+  const post = (reference) =>
     handler(
       new Request("http://test/openreceive/checkouts", {
         method: "POST",
         headers: { "cf-connecting-ip": "198.51.100.7" },
-        body: JSON.stringify({ order_id: orderId }),
+        body: JSON.stringify({ reference: reference }),
       }),
     );
   assert.equal((await post("order-x1")).status, 201);

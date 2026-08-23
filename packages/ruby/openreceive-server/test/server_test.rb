@@ -227,7 +227,7 @@ class StorageFreeServerTest < Minitest::Test
   end
 
   def test_checkout_and_payment_check_are_storage_free
-    checkout = @service.create_checkout("order_id" => "ruby-1", "amount" => { "sats" => 1000 })
+    checkout = @service.create_checkout("reference" => "ruby-1", "amount" => { "sats" => 1000 })
     refute_respond_to @service, :store
     assert_equal "pending", @service.check_payment(
       "payment_hash" => checkout["payment_hash"],
@@ -268,7 +268,7 @@ class StorageFreeServerTest < Minitest::Test
     service = OpenReceive::Server::Service.new(nwc_client: wallet, clock: -> { 1000 }, logger: logger)
 
     error = assert_raises(OpenReceive::Server::WalletContractError) do
-      service.create_checkout("order_id" => "ruby-expiry", "amount" => { "sats" => 1000 })
+      service.create_checkout("reference" => "ruby-expiry", "amount" => { "sats" => 1000 })
     end
 
     assert_equal 600, wallet.last_request.fetch("expiry")
@@ -292,7 +292,7 @@ class StorageFreeServerTest < Minitest::Test
       on_paid: ->(_payment) {}
     )
     status, _headers, body = handler.create_checkout(
-      raw_body: JSON.generate("order_id" => "ruby-http"),
+      raw_body: JSON.generate("reference" => "ruby-http"),
       request: {}, request_id: "req-1"
     )
     assert_equal 201, status
@@ -315,7 +315,7 @@ class StorageFreeServerTest < Minitest::Test
       on_checkout_created: ->(**payment) { committed = payment },
       on_paid: ->(_payment) {}
     )
-    request = { raw_body: JSON.generate("order_id" => "ruby-retry"), request: {} }
+    request = { raw_body: JSON.generate("reference" => "ruby-retry"), request: {} }
     first = handler.create_checkout(**request, request_id: "req-a")
     second = handler.create_checkout(**request, request_id: "req-b")
     assert_equal 201, first.first
@@ -325,7 +325,7 @@ class StorageFreeServerTest < Minitest::Test
   end
 
   def test_handler_checks_the_exact_host_owned_payment_attempt
-    checkout = @service.create_checkout("order_id" => "ruby-check", "amount" => { "sats" => 5 })
+    checkout = @service.create_checkout("reference" => "ruby-check", "amount" => { "sats" => 5 })
     selected_hash = checkout.fetch("payment_hash")
     delivered = []
     handler = OpenReceive::Server::RequestHandler.new(
@@ -345,7 +345,7 @@ class StorageFreeServerTest < Minitest::Test
     @wallet.transactions.first["settled_at"] = 1010
     status, _headers, body = handler.check_payment(
       raw_body: JSON.generate(
-        "order_id" => "ruby-check",
+        "reference" => "ruby-check",
         "payment_hash" => selected_hash
       ),
       request: {},
@@ -369,7 +369,7 @@ class StorageFreeServerTest < Minitest::Test
       clock: -> { 1000 }
     )
     swap = service.create_swap(
-      "order_id" => "ruby-failover",
+      "reference" => "ruby-failover",
       "amount" => { "sats" => 20_000 },
       "pay_in_asset" => "USDT_TRON"
     )
@@ -390,7 +390,7 @@ class StorageFreeServerTest < Minitest::Test
     )
     error = assert_raises(OpenReceive::Server::ServiceError) do
       service.create_swap(
-        "order_id" => "ruby-no-failover",
+        "reference" => "ruby-no-failover",
         "amount" => { "sats" => 20_000 },
         "pay_in_asset" => "USDT_TRON"
       )
@@ -410,20 +410,20 @@ class StorageFreeServerTest < Minitest::Test
       clock: -> { 1000 }
     )
     swap = service.create_swap(
-      "order_id" => "ruby-swap",
+      "reference" => "ruby-swap",
       "amount" => { "sats" => 20_000 },
       "pay_in_asset" => "USDT_TRON"
     )
     stored = JSON.parse(JSON.generate(swap.fetch("swap_data")))
     refute stored.key?("payment_hash")
-    refute stored.key?("order_id")
+    refute stored.key?("reference")
 
     provider.force_refund_required
     assert_equal "refund_required", service.get_swap(
-      order_id: swap.fetch("order_id"), payment_hash: swap.fetch("payment_hash"), swap_data: stored
+      reference: swap.fetch("reference"), payment_hash: swap.fetch("payment_hash"), swap_data: stored
     ).fetch("provider_state")
     refunded = service.refund_swap(
-      order_id: swap.fetch("order_id"),
+      reference: swap.fetch("reference"),
       payment_hash: swap.fetch("payment_hash"),
       swap_data: stored,
       refund_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
@@ -557,14 +557,14 @@ class StorageFreeServerTest < Minitest::Test
       clock: -> { 1000 }
     )
     swap = service.create_swap(
-      "order_id" => "ruby-refund-checksum",
+      "reference" => "ruby-refund-checksum",
       "amount" => { "sats" => 20_000 },
       "pay_in_asset" => "USDT_TRON"
     )
     provider.force_refund_required
     refund = lambda do |address|
       service.refund_swap(
-        order_id: swap.fetch("order_id"),
+        reference: swap.fetch("reference"),
         payment_hash: swap.fetch("payment_hash"),
         swap_data: swap.fetch("swap_data"),
         refund_address: address
@@ -592,10 +592,10 @@ class StorageFreeServerTest < Minitest::Test
   # not a second accepted spelling, it is simply a missing field.
   def test_service_input_keys_are_snake_case_only
     assert_raises(OpenReceive::Server::ValidationError) do
-      @service.create_checkout("orderId" => "ruby-camel", "amount" => { "sats" => 1000 })
+      @service.check_payment("paymentHash" => "1" * 64, "createdAt" => 1000)
     end
     assert_raises(OpenReceive::Server::ValidationError) do
-      @service.check_payment("paymentHash" => "1" * 64, "createdAt" => 1000)
+      @service.check_payment("payment_hash" => "1" * 64, "createdAt" => 1000)
     end
     service = OpenReceive::Server::Service.new(
       nwc_client: @wallet,
@@ -611,7 +611,7 @@ class StorageFreeServerTest < Minitest::Test
     # A payer-supplied "expirySeconds" no longer beats the checkout default:
     # only the snake_case key the swap path passes can set the invoice window.
     checkout = @service.create_checkout(
-      "order_id" => "ruby-camel-expiry", "amount" => { "sats" => 1000 }, "expirySeconds" => 60
+      "reference" => "ruby-camel-expiry", "amount" => { "sats" => 1000 }, "expirySeconds" => 60
     )
     assert_equal 1000 + 600, checkout.fetch("expires_at")
   end
@@ -632,7 +632,7 @@ class StorageFreeServerTest < Minitest::Test
       service.quote_swap("pay_in_asset" => "USDT_TRON")
     end
     assert_raises(OpenReceive::Server::ValidationError) do
-      service.create_swap("order_id" => "ruby-l90", "pay_in_asset" => "USDT_TRON")
+      service.create_swap("reference" => "ruby-l90", "pay_in_asset" => "USDT_TRON")
     end
   end
 
@@ -640,7 +640,7 @@ class StorageFreeServerTest < Minitest::Test
   # transaction's preimage, invoice, and any other non-whitelisted field stay
   # server-side (mirrors the JS publicPaymentDetails whitelist).
   def test_settled_payment_check_exposes_only_public_wallet_details
-    checkout = @service.create_checkout("order_id" => "ruby-public", "amount" => { "sats" => 5 })
+    checkout = @service.create_checkout("reference" => "ruby-public", "amount" => { "sats" => 5 })
     hash = checkout.fetch("payment_hash")
     handler = OpenReceive::Server::RequestHandler.new(
       service: @service,
@@ -656,7 +656,7 @@ class StorageFreeServerTest < Minitest::Test
     row["settled_at"] = 1010
     row["preimage"] = "2" * 64
     status, _headers, body = handler.check_payment(
-      raw_body: JSON.generate("order_id" => "ruby-public", "payment_hash" => hash),
+      raw_body: JSON.generate("reference" => "ruby-public", "payment_hash" => hash),
       request: {},
       request_id: "req-public"
     )
@@ -702,7 +702,7 @@ class StorageFreeServerTest < Minitest::Test
         true
       end
     )
-    raw = JSON.generate("order_id" => "ruby-shape", "payment_hash" => "not-a-hash")
+    raw = JSON.generate("reference" => "ruby-shape", "payment_hash" => "not-a-hash")
     [
       handler.check_payment(raw_body: raw, request: {}, request_id: "req-shape-check"),
       handler.get_swap(raw_body: raw, request: {}, request_id: "req-shape-read"),
@@ -760,7 +760,7 @@ class StorageFreeServerTest < Minitest::Test
   # An over-declared Content-Length is rejected before a single byte is read
   # (mirrors the JS readJsonBody declared-length check).
   def test_rack_over_declared_content_length_is_rejected_before_reading
-    input = RecordingInput.new(JSON.generate("order_id" => "ruby-cap"))
+    input = RecordingInput.new(JSON.generate("reference" => "ruby-cap"))
     status, _headers, body = build_rack_app.call(
       "REQUEST_METHOD" => "POST",
       "PATH_INFO" => "/openreceive/checkouts",
@@ -836,7 +836,7 @@ class StorageFreeServerTest < Minitest::Test
       on_paid: ->(_payment) {}
     )
     status, _headers, body = handler.create_checkout(
-      raw_body: JSON.generate("order_id" => "ruby-persist"),
+      raw_body: JSON.generate("reference" => "ruby-persist"),
       request: {}, request_id: "req-persist"
     )
     assert_equal 503, status
@@ -856,7 +856,7 @@ class StorageFreeServerTest < Minitest::Test
       on_paid: ->(_payment) {}
     )
     status, _headers, body = conflicting.create_checkout(
-      raw_body: JSON.generate("order_id" => "ruby-conflict"),
+      raw_body: JSON.generate("reference" => "ruby-conflict"),
       request: {}, request_id: "req-conflict"
     )
     assert_equal 409, status
@@ -877,7 +877,7 @@ class StorageFreeServerTest < Minitest::Test
     %i[prepare_checkout create_checkout].each do |action|
       status, _headers, body = handler.public_send(
         action,
-        raw_body: JSON.generate("order_id" => "ruby-no-amount"),
+        raw_body: JSON.generate("reference" => "ruby-no-amount"),
         request: {}, request_id: "req-no-amount"
       )
       assert_equal 500, status, action.to_s
@@ -899,7 +899,7 @@ class StorageFreeServerTest < Minitest::Test
     body = nil
     capture_io do
       status, _headers, body = handler.create_checkout(
-        raw_body: JSON.generate("order_id" => "ruby-redacted"),
+        raw_body: JSON.generate("reference" => "ruby-redacted"),
         request: {}, request_id: "req-redacted"
       )
     end
@@ -919,7 +919,7 @@ class StorageFreeServerTest < Minitest::Test
 
   def create_checkout_response(handler, request_id: "req-leak")
     handler.create_checkout(
-      raw_body: JSON.generate("order_id" => "ruby-leak"),
+      raw_body: JSON.generate("reference" => "ruby-leak"),
       request: {}, request_id: request_id
     )
   end
@@ -1108,7 +1108,7 @@ class StorageFreeServerTest < Minitest::Test
       end
     end.new(settled_row)
     settled_checkout = {
-      "order_id" => "order-golden-settled",
+      "reference" => "order-golden-settled",
       "payment_hash" => settled_hash,
       "bolt11" => "lnbcgoldensettled",
       "amount_msats" => 1000,

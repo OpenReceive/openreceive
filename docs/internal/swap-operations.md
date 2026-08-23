@@ -25,7 +25,7 @@ Creation order is fixed:
 If provider creation times out without returning credentials, no deposit address was shown. The
 orphan may expire at the provider; OpenReceive has no local workflow row to reconcile.
 
-`getSwap({ orderId, paymentHash, swapData })` validates the stored object, selects the named provider, calls its current
+`getSwap({ reference, paymentHash, swapData })` validates the stored object, selects the named provider, calls its current
 status endpoint, verifies provider/order identity, and returns a normalized public snapshot.
 Cached provider state is process-local and disposable.
 
@@ -51,12 +51,12 @@ renders it as "Last provider state"); anything needing the true terminal record 
 
 ## Refund safety
 
-The browser sends `order_id`, `payment_hash`, and `refund_address`. The host authorizes order
+The browser sends `reference`, `payment_hash`, and `refund_address`. The host authorizes order
 access, verifies that attempt belongs to it, loads `swap_data`, and then calls:
 
 ```ts
 await openreceive.refundSwap({
-  orderId: order.id,
+  reference: order.id,
   paymentHash: payment.paymentHash,
   swapData: payment.swapData,
   refundAddress,

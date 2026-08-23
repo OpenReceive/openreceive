@@ -1,19 +1,11 @@
 import { FULFILLMENT_NOTE_TEMPLATE } from "./generated/fulfillment-note-text.ts";
 
 /**
- * The ONE canonical statement of the order-table boundary and the host's
- * exactly-once fulfillment duty.
- *
- * OpenReceive treats `order_id` as an opaque string. It never reads, writes,
- * locks, or requires a foreign key to the host's order table, and it does not
- * need to know that table's name or its primary-key type. Everything the
- * library serializes, it serializes on rows it owns.
- *
- * That boundary means the exactly-once guarantee has a documented edge, and
- * this note is where it is documented. Every generated file, migration
- * template, and wiring guide renders these same lines through
- * `fulfillmentNote`, so the guidance shown next to host code can
- * never drift from the guidance shown next to the schema.
+ * The ONE canonical statement of the host's exactly-once fulfillment duty:
+ * what OpenReceive guarantees about `onPaid`, and where that guarantee stops.
+ * Every generated file, migration template, and wiring guide renders these
+ * same lines through `fulfillmentNote`, so the guidance shown next to host
+ * code can never drift from the guidance shown next to the schema.
  *
  * The text itself lives in `spec/data/fulfillment-note.txt` and is generated
  * into both this module and its Ruby twin

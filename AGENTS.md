@@ -11,11 +11,11 @@ small, honest API and a good developer experience.
   the migration through its own workflow; the library owns the schema, locking, settlement
   write-once, and reconciliation state machine. Implementing a custom
   `PaymentRepository` is the documented escape hatch, never the quickstart.
-- The host owns orders and prices. Direct server code passes `{ orderId, amount }`; mounted
+- The host owns orders and prices. Direct server code passes `{ reference, amount }`; mounted
   HTTP handlers resolve the amount from host-owned data and reject payer-supplied amounts.
 - One `openreceive_payments` row per attempt is committed before payer instructions are
-  exposed. An order may have multiple historical attempts; `payment_hash` is globally unique,
-  settlement is write-once per attempt, and fulfillment runs only for the order's first settled
+  exposed. A reference may have multiple historical attempts; `payment_hash` is globally unique,
+  settlement is write-once per attempt, and fulfillment runs only for the reference's first settled
   attempt.
 - Attempts carry an explicit status (`pending`, `settled`, `expired`, `failed`, `attention`).
   Only `pending` attempts are reconciled; closure of an unpaid attempt requires a successful
@@ -31,7 +31,7 @@ small, honest API and a good developer experience.
   (NWC-02 listener + periodic pass) is a separate process. A custom repository without
   `claimReconcileGate` must disable `opportunisticReconcile` explicitly — the default
   settlement path never degrades silently, and process-local memory never backs the gate.
-- A retry or concurrent create serializes per order inside the library repository. An order has
+- A retry or concurrent create serializes per reference inside the library repository. A reference has
   one live payment session; within it, at most one live attempt per rail/asset so a payer can
   switch methods. The host never sees the live/supersede/conflict vocabulary — it sees an order
   as unpaid or paid. Do not add a separately configured OpenReceive idempotency store.
@@ -68,12 +68,12 @@ small, honest API and a good developer experience.
 
 - `@openreceive/http` adapters and the Rails engine ship the route set in
   `spec/openapi/openreceive-http.v1.yaml`.
-- The host keeps authentication. The quickstart host contract is `authorize`, `loadOrder`,
-  `amountForOrder`, and `onPaid` plus a database handle; the library derives
+- The host keeps authentication. The quickstart host contract is `authorize`, `amountFor`,
+  and `onPaid` plus a database handle; the library derives
   `resolveCheckout` / `onCheckoutCreated` and the reconciliation transitions from its own
   repository. The advanced hook surface remains for custom-repository hosts.
 - OpenReceive mints no authentication, recovery, or refund tokens. The host authorizes every
-  request and verifies the requested `payment_hash` belongs to the order before resolving
+  request and verifies the requested `payment_hash` belongs to the reference before resolving
   server-only `swap_data`.
 - `onCheckoutCreated` runs before a create response. Failure returns 409 and withholds the
   invoice or swap instructions.

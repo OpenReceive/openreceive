@@ -10,11 +10,11 @@ order-storage, checkout-read, migration, admin-sweep, or internal workflow route
 
 | Route | Purpose |
 | --- | --- |
-| `POST /openreceive/checkouts/prepare` | Lock the host-resolved order amount without minting Lightning. |
-| `POST /openreceive/checkouts` | Mint an invoice using the host-resolved order price. |
+| `POST /openreceive/checkouts/prepare` | Lock the host-resolved amount without minting Lightning. |
+| `POST /openreceive/checkouts` | Mint an invoice using the host-resolved price. |
 | `POST /openreceive/payments/check` | Verify one host-owned payment attempt against the receive wallet. |
 | `POST /openreceive/swaps/quote` | Obtain a non-binding swap quote. |
-| `POST /openreceive/swaps` | Create a swap using the host-resolved order price. |
+| `POST /openreceive/swaps` | Create a swap using the host-resolved price. |
 | `POST /openreceive/swaps/status` | Refresh provider state using server-only swap data loaded by the host. |
 | `POST /openreceive/swaps/refunds` | Refresh provider state, then request an eligible refund. |
 | `GET /openreceive/rates` | Current process-cached BTC/fiat rates. |
@@ -29,6 +29,6 @@ external invoice/provider creation but before the response; a refused commit (al
 order, competing live attempt) returns 409, an infrastructure failure returns a retryable 503,
 and payer instructions are withheld either way.
 
-Payment/swap reads send `order_id` plus `payment_hash`. The host authorizes the request, verifies
+Payment/swap reads send `reference` plus `payment_hash`. The host authorizes the request, verifies
 the selected attempt belongs to the order, and resolves its server-only `swap_data`;
 OpenReceive mints no browser capability.

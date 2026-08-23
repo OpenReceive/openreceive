@@ -61,11 +61,11 @@ export async function createCheckout(
     priceCurrencies: context.priceCurrencies,
   });
   const expiry = input.expirySeconds ?? OPENRECEIVE_INVOICE_EXPIRY_SECONDS;
-  // order_id is spread last so caller metadata can never override it
+  // reference is spread last so caller metadata can never override it
   // (matches the Ruby server's merge precedence).
   const metadata = {
     ...(input.metadata ?? {}),
-    order_id: input.orderId,
+    reference: input.reference,
   };
   if (Buffer.byteLength(JSON.stringify(metadata), "utf8") > OPENRECEIVE_NWC_METADATA_MAX_BYTES) {
     throw serviceError(400, "INVALID_REQUEST", "metadata is too large for NIP-47.");
@@ -96,7 +96,7 @@ export async function createCheckout(
       "checkout.invoice_expiry.rejected",
       `The wallet did not honor the requested invoice expiry (requested ${expiry}s, got ${expiresAt - createdAt}s). Use a wallet whose make_invoice honors expiry.`,
       {
-        order_id: input.orderId,
+        reference: input.reference,
         payment_hash: walletInvoice.payment_hash.toLowerCase(),
         requested_expiry_seconds: expiry,
         actual_expiry_seconds: expiresAt - createdAt,
@@ -110,7 +110,7 @@ export async function createCheckout(
     );
   }
   return {
-    orderId: input.orderId,
+    reference: input.reference,
     paymentHash: walletInvoice.payment_hash.toLowerCase(),
     bolt11: walletInvoice.invoice,
     amountMsats: toSafeInteger(walletInvoice.amount_msats, "amount_msats"),

@@ -18,7 +18,7 @@ ActiveRecord::Schema.define do
 
   # Mirrors the install generator's migration template.
   create_table :openreceive_payments, force: true do |t|
-    t.string :order_id, null: false
+    t.string :reference, null: false
     t.string :payment_hash, null: false, limit: 64
     t.string :status, null: false, default: "pending"
     t.string :status_reason
@@ -35,7 +35,7 @@ ActiveRecord::Schema.define do
                        name: "openreceive_payments_payment_hash_check"
   end
   add_index :openreceive_payments, :payment_hash, unique: true
-  add_index :openreceive_payments, [:order_id, :created_at]
+  add_index :openreceive_payments, [:reference, :created_at]
   add_index :openreceive_payments, [:status, :created_at]
   add_index :openreceive_payments, [:client_ip, :inserted_at]
 
@@ -121,9 +121,9 @@ module OpenReceivePaymentTestHelpers
     SecureRandom.hex(32)
   end
 
-  def build_checkout(order_id:, hash:, created_at: Time.now.to_i, expires_at: Time.now.to_i + 600)
+  def build_checkout(reference:, hash:, created_at: Time.now.to_i, expires_at: Time.now.to_i + 600)
     {
-      "order_id" => order_id, "payment_hash" => hash, "bolt11" => "lnbc1",
+      "reference" => reference, "payment_hash" => hash, "bolt11" => "lnbc1",
       "amount_msats" => 100_000, "created_at" => created_at, "expires_at" => expires_at
     }
   end
@@ -140,9 +140,9 @@ module OpenReceivePaymentTestHelpers
 
   def commit!(order, hash, expires_at: Time.now.to_i + 600, swap_data: nil)
     OpenReceivePayment.commit_attempt!(
-      order_id: order.id,
+      reference: order.id,
       payment_hash: hash,
-      checkout: build_checkout(order_id: order.id, hash: hash, expires_at: expires_at),
+      checkout: build_checkout(reference: order.id, hash: hash, expires_at: expires_at),
       swap_data: swap_data
     )
   end
@@ -283,7 +283,7 @@ class OpenReceivePaymentModelTest < Minitest::Test
     paid_at = Time.now.to_i
 
     OpenReceivePayment.mark_paid_once!(payment_hash: hash, paid_at: paid_at) do |payment|
-      fulfilled << [payment.order_id, payment.payment_hash]
+      fulfilled << [payment.reference, payment.payment_hash]
     end
     OpenReceivePayment.mark_paid_once!(payment_hash: hash, paid_at: paid_at + 99) do |*|
       fulfilled << :replayed
@@ -366,7 +366,7 @@ class OpenReceivePaymentModelTest < Minitest::Test
     now = Time.now.to_i
     (batch + 5).times do |index|
       OpenReceivePayment.create!(
-        order_id: order.id,
+        reference: order.id,
         payment_hash: format("%064x", index + 1),
         status: "pending",
         expires_at: Time.at(now + 600).utc,
@@ -409,7 +409,7 @@ class OpenReceivePaymentModelTest < Minitest::Test
     commit!(order, hash)
     OpenReceivePayment.mark_paid_once!(payment_hash: hash, paid_at: Time.now.to_i)
     assert_raises(OpenReceivePayment::AttemptConflict) do
-      OpenReceivePayment.selected_for(order_id: order.id, action: "checkout.create")
+      OpenReceivePayment.selected_for(reference: order.id, action: "checkout.create")
     end
   end
 
@@ -503,12 +503,12 @@ class ConfigurationContractTest < Minitest::Test
     refute_respond_to config, :store
     refute_respond_to config, :namespace
     refute_respond_to config, :token_keys
-    assert_respond_to config, :load_order
-    assert_respond_to config, :amount_for_order
+    assert_respond_to config, :amount_for
+    refute_respond_to config, :load_order
     assert_respond_to config, :allow_spend_capable_wallet
   end
 
-  def test_validate_requires_authorize_plus_simple_trio_or_advanced_hooks
+  def test_validate_requires_authorize_plus_amount_for_or_advanced_hooks
     config = OpenReceive::Configuration.new
     config.nwc_client = FakeWallet.new
     assert_raises(OpenReceive::ConfigurationError) { config.validate! }
@@ -518,10 +518,9 @@ class ConfigurationContractTest < Minitest::Test
 
     config.on_paid = ->(_settlement) {}
     error = assert_raises(OpenReceive::ConfigurationError) { config.validate! }
-    assert_match(/load_order and amount_for_order/, error.message)
+    assert_match(/amount_for/, error.message)
 
-    config.load_order = ->(order_id) { Order.find_by(id: order_id) }
-    config.amount_for_order = ->(_order) { { "sats" => 100 } }
+    config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
     assert config.validate!
   end
 
@@ -557,8 +556,7 @@ class EngineHostIntegrationTest < Minitest::Test
     OpenReceive.configure do |config|
       config.authorize = ->(_context) { true }
       config.nwc_client = @wallet
-      config.load_order = ->(order_id) { Order.find_by(id: order_id) }
-      config.amount_for_order = ->(_order) { { "sats" => 100 } }
+      config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
       config.on_paid = ->(settlement) { fulfilled << settlement }
     end
   end
@@ -567,9 +565,9 @@ class EngineHostIntegrationTest < Minitest::Test
     OpenReceive.reset_config!
   end
 
-  def create_checkout(order_id)
+  def create_checkout(reference)
     OpenReceive.config.request_handler.create_checkout(
-      raw_body: JSON.generate("order_id" => order_id), request: {}, request_id: "req-test"
+      raw_body: JSON.generate("reference" => reference), request: {}, request_id: "req-test"
     )
   end
 
@@ -584,7 +582,7 @@ class EngineHostIntegrationTest < Minitest::Test
     assert_equal 1, @wallet.transactions.length
 
     payment = OpenReceivePayment.find_by(payment_hash: hash)
-    assert_equal ["pending", order.id], [payment.status, payment.order_id]
+    assert_equal ["pending", order.id], [payment.status, payment.reference]
   end
 
   def test_unknown_order_is_not_found
@@ -597,7 +595,7 @@ class EngineHostIntegrationTest < Minitest::Test
     order = create_order
     assert_equal 201, create_checkout(order.id).first
 
-    loser = build_checkout(order_id: order.id, hash: unique_hash)
+    loser = build_checkout(reference: order.id, hash: unique_hash)
     error = assert_raises(OpenReceive::Server::ConflictError) do
       # Concurrent creates both resolve as "mint" before either commits. The
       # loser reaches on_checkout_created with a new hash and must stay a 409,
@@ -616,7 +614,7 @@ class EngineHostIntegrationTest < Minitest::Test
 
     check = lambda do
       OpenReceive.config.request_handler.check_payment(
-        raw_body: JSON.generate("order_id" => order.id, "payment_hash" => hash),
+        raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
         request: {}, request_id: "req-check"
       )
     end
@@ -625,7 +623,7 @@ class EngineHostIntegrationTest < Minitest::Test
 
     assert_equal 1, @fulfilled.length
     settlement = @fulfilled.first
-    assert_equal [order.id, hash], [settlement.order_id, settlement.payment_hash]
+    assert_equal [order.id, hash], [settlement.reference, settlement.payment_hash]
     assert_equal "settled", OpenReceivePayment.find_by(payment_hash: hash).status
 
     status, _headers, body = create_checkout(order.id)
@@ -637,9 +635,9 @@ class EngineHostIntegrationTest < Minitest::Test
     OpenReceive.config.rate_limiting = { limit_per_hour: 2 }
     OpenReceive.config.reset_runtime!
     request = { "REMOTE_ADDR" => "203.0.113.7" }
-    create = lambda do |order_id|
+    create = lambda do |reference|
       OpenReceive.config.request_handler.create_checkout(
-        raw_body: JSON.generate("order_id" => order_id), request: request, request_id: "req-rl"
+        raw_body: JSON.generate("reference" => reference), request: request, request_id: "req-rl"
       )
     end
 
@@ -680,7 +678,7 @@ class EngineHostIntegrationTest < Minitest::Test
     OpenReceive.config.reset_runtime!
     create = lambda do
       OpenReceive.config.request_handler.create_checkout(
-        raw_body: JSON.generate("order_id" => create_order.id), request: {}, request_id: "req-anon"
+        raw_body: JSON.generate("reference" => create_order.id), request: {}, request_id: "req-anon"
       )
     end
     # Unattributable traffic is not counted (and must not be blocked wholesale).
@@ -694,9 +692,9 @@ class EngineHostIntegrationTest < Minitest::Test
   def test_rate_limiting_buckets_ipv6_clients_by_their_64
     OpenReceive.config.rate_limiting = { limit_per_hour: 1 }
     OpenReceive.config.reset_runtime!
-    create = lambda do |order_id, remote_addr|
+    create = lambda do |reference, remote_addr|
       OpenReceive.config.request_handler.create_checkout(
-        raw_body: JSON.generate("order_id" => order_id),
+        raw_body: JSON.generate("reference" => reference),
         request: { "REMOTE_ADDR" => remote_addr }, request_id: "req-v6"
       )
     end
@@ -736,8 +734,7 @@ class ReconcileTest < Minitest::Test
     OpenReceive.configure do |config|
       config.authorize = ->(_context) { true }
       config.nwc_client = @wallet
-      config.load_order = ->(order_id) { Order.find_by(id: order_id) }
-      config.amount_for_order = ->(_order) { { "sats" => 100 } }
+      config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
       config.on_paid = ->(settlement) { fulfilled << settlement }
     end
   end
@@ -784,7 +781,7 @@ class ReconcileTest < Minitest::Test
     settled = by_hash.call(settled_hash)
     assert_equal "settled", settled.status
     assert_equal now - 5, settled.paid_at.to_i
-    assert_equal [settled_order.id], @fulfilled.map(&:order_id)
+    assert_equal [settled_order.id], @fulfilled.map(&:reference)
 
     failed = by_hash.call(failed_hash)
     assert_equal %w[failed wallet_reported_failed], [failed.status, failed.status_reason]
@@ -828,7 +825,7 @@ class ReconcileTest < Minitest::Test
     assert_equal "pending", OpenReceivePayment.find_by(payment_hash: unseen_hash).status
     # Rows the truncated walk DID see still settle.
     assert_equal "settled", OpenReceivePayment.find_by(payment_hash: settled_hash).status
-    assert_equal [settled_order.id], @fulfilled.map(&:order_id)
+    assert_equal [settled_order.id], @fulfilled.map(&:reference)
   end
 
   def test_reconcile_pads_the_scan_window_until_by_the_overlap
@@ -915,8 +912,7 @@ class NotificationsTest < Minitest::Test
     OpenReceive.configure do |config|
       config.authorize = ->(_context) { true }
       config.nwc_client = @wallet
-      config.load_order = ->(order_id) { Order.find_by(id: order_id) }
-      config.amount_for_order = ->(_order) { { "sats" => 100 } }
+      config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
       config.on_paid = ->(settlement) { fulfilled << settlement }
     end
   end
@@ -948,7 +944,7 @@ class NotificationsTest < Minitest::Test
     payment = OpenReceivePayment.find_by(payment_hash: hash)
     assert_equal "settled", payment.status
     assert_equal now - 1, payment.paid_at.to_i
-    assert_equal [order.id], @fulfilled.map(&:order_id)
+    assert_equal [order.id], @fulfilled.map(&:reference)
     assert_equal 0, @wallet.list_transactions_calls,
                  "direct settlement must not scan the wallet for that invoice"
     assert_empty OpenReceivePayment.reconcilable_attempts
@@ -972,7 +968,7 @@ class NotificationsTest < Minitest::Test
 
     payment = OpenReceivePayment.find_by(payment_hash: hash)
     assert_equal "settled", payment.status
-    assert_equal [order.id], @fulfilled.map(&:order_id)
+    assert_equal [order.id], @fulfilled.map(&:reference)
     assert_operator @wallet.list_transactions_calls, :>, 0,
                     "a non-final payload must trigger the bounded wallet scan"
   end
@@ -1012,7 +1008,7 @@ class NotificationsTest < Minitest::Test
 
     payment = OpenReceivePayment.find_by(payment_hash: hash)
     assert_equal "settled", payment.status
-    assert_equal [order.id], @fulfilled.map(&:order_id)
+    assert_equal [order.id], @fulfilled.map(&:reference)
   end
 
   def test_other_notification_types_never_wake_reconcile
@@ -1107,7 +1103,7 @@ class NotificationsTest < Minitest::Test
     )
 
     assert_equal "settled", OpenReceivePayment.find_by(payment_hash: hash).status
-    assert_equal [order.id], @fulfilled.map(&:order_id)
+    assert_equal [order.id], @fulfilled.map(&:reference)
   end
 end
 
@@ -1190,8 +1186,7 @@ class NwcRubyAdapterNotificationsTest < Minitest::Test
     OpenReceive.configure do |config|
       config.authorize = ->(_context) { true }
       config.nwc_client = OpenReceive::NwcRubyReceiveClient.new(client: @wallet)
-      config.load_order = ->(order_id) { Order.find_by(id: order_id) }
-      config.amount_for_order = ->(_order) { { "sats" => 100 } }
+      config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
       config.on_paid = ->(settlement) { fulfilled << settlement }
     end
   end
@@ -1217,7 +1212,7 @@ class NwcRubyAdapterNotificationsTest < Minitest::Test
     payment = OpenReceivePayment.find_by(payment_hash: hash)
     assert_equal "settled", payment.status
     assert_equal now - 1, payment.paid_at.to_i
-    assert_equal [order.id], @fulfilled.map(&:order_id)
+    assert_equal [order.id], @fulfilled.map(&:reference)
     assert_equal 0, @wallet.list_transactions_calls,
                  "direct settlement must not scan the wallet for that invoice"
   end
@@ -1274,7 +1269,6 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
   )
 
   TemplateContext = Struct.new(
-    :order_model_name,
     :migration_version,
     :schema_version,
     :payment_hash_check_sql,
@@ -1294,7 +1288,6 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
 
   def setup
     @context = TemplateContext.new(
-      order_model_name: "Order",
       migration_version: "7.1",
       schema_version: OpenReceive::Server::PAYMENTS_SCHEMA_VERSION,
       payment_hash_check_sql: '"payment_hash ~ \'^[0-9a-f]{64}$\'"',
@@ -1308,9 +1301,8 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     assert_includes model, 'self.table_name = "openreceive_payments"'
     assert_includes model, "self.filter_attributes += [:swap_data]"
     assert_includes model, 'super.except("swap_data")'
-    # The per-order lock is OpenReceive's own; the host order table is never
-    # loaded or locked, and there is no order_model to register.
-    assert_includes model, "def self.with_order_lock"
+    # The per-reference lock is OpenReceive's own.
+    assert_includes model, "def self.with_reference_lock"
     assert_includes model, "pg_advisory_xact_lock(hashtextextended(?, ?))"
     refute_includes model, "order.with_lock"
     refute_includes model, "order_class"
@@ -1319,7 +1311,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
 
   def test_migration_has_status_columns_and_many_attempts_per_order
     rendered = @context.render(File.join(TEMPLATE_ROOT, "migration.rb"))
-    assert_includes rendered, "t.string :order_id, null: false"
+    assert_includes rendered, "t.string :reference, null: false"
     assert_includes rendered, 't.string :status, null: false, default: "pending"'
     assert_includes rendered, "t.string :status_reason"
     assert_includes rendered, "add_index :openreceive_payments, :payment_hash, unique: true"
@@ -1330,11 +1322,9 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     # wallet-reported created_at or the moving updated_at.
     assert_includes rendered, "t.datetime :inserted_at, null: false"
     assert_includes rendered, "add_index :openreceive_payments, [:client_ip, :inserted_at]"
-    refute_includes rendered, "[:order_id], unique: true"
-    # The engine never references the host order table. The only REFERENCES in
-    # the file is the commented, opt-in example inside the fulfillment note.
+    refute_includes rendered, "[:reference], unique: true"
     refute_includes rendered, "add_foreign_key"
-    assert_includes rendered, "#     FOREIGN KEY (order_id) REFERENCES orders (id)"
+    refute_includes rendered, "REFERENCES"
     RubyVM::InstructionSequence.compile(rendered)
   end
 
@@ -1362,8 +1352,8 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
   def test_initializer_uses_the_simple_host_contract_and_mentions_reconciliation
     rendered = @context.render(File.join(TEMPLATE_ROOT, "initializer.rb"))
     assert_includes rendered, "config.authorize"
-    assert_includes rendered, "config.load_order = ->(order_id) { Order.find_by(id: order_id) }"
-    assert_includes rendered, "config.amount_for_order"
+    assert_includes rendered, "config.amount_for"
+    refute_includes rendered, "load_order"
     assert_includes rendered, "config.on_paid"
     assert_includes rendered, "OpenReceive::ReconcileJob"
     assert_includes rendered, "openreceive:reconcile"
@@ -1392,7 +1382,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     assert_includes source, "eager-loads this class before after_initialize"
   end
 
-  def test_generator_exposes_skip_options_and_no_order_table_coupling
+  def test_generator_exposes_skip_options_only
     source = File.read(
       File.expand_path(
         "../lib/generators/openreceive/install/install_generator.rb",
@@ -1404,12 +1394,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     assert_includes source, "db/migrate/create_openreceive_tables.rb"
     refute_includes source, "skip_payment_model"
     refute_includes source, "payment.rb"
-    # The order table is out of scope: no key typing, no foreign key, no table
-    # name. Only the model NAME survives, and only to write host-side calls.
-    refute_includes source, "order_primary_key_type"
-    refute_includes source, "skip_foreign_key"
-    refute_includes source, "order_table"
-    assert_includes source, "class_option :order_model"
+    refute_includes source, "order_model"
   end
 end
 
@@ -1424,8 +1409,7 @@ class OpportunisticReconcileTest < Minitest::Test
     OpenReceive.configure do |config|
       config.authorize = ->(_context) { true }
       config.nwc_client = @wallet
-      config.load_order = ->(order_id) { Order.find_by(id: order_id) }
-      config.amount_for_order = ->(_order) { { "sats" => 100 } }
+      config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
       config.on_paid = ->(settlement) { fulfilled << settlement }
     end
   end
@@ -1531,7 +1515,7 @@ class OpportunisticReconcileTest < Minitest::Test
 
     scans = count_wallet_scans!
     status, _headers, body = OpenReceive.config.request_handler.check_payment(
-      raw_body: JSON.generate("order_id" => order.id, "payment_hash" => hash),
+      raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
       request: {}, request_id: "req-pass",
       reconcile_pass: reconcile_pass,
       attempt_status: ->(_hash) { flunk "the pass winner must not fall back to the row" }
@@ -1557,7 +1541,7 @@ class OpportunisticReconcileTest < Minitest::Test
 
     scans = count_wallet_scans!
     status, _headers, body = OpenReceive.config.request_handler.check_payment(
-      raw_body: JSON.generate("order_id" => order.id, "payment_hash" => hash),
+      raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
       request: {}, request_id: "req-busy",
       reconcile_pass: { "reason" => "gate_busy" },
       attempt_status: attempt_status
@@ -1571,7 +1555,7 @@ class OpportunisticReconcileTest < Minitest::Test
 
     OpenReceivePayment.find_by(payment_hash: hash).update!(status: "settled", paid_at: Time.at(now - 5).utc)
     _status, _headers, settled_body = OpenReceive.config.request_handler.check_payment(
-      raw_body: JSON.generate("order_id" => order.id, "payment_hash" => hash),
+      raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
       request: {}, request_id: "req-busy-settled",
       reconcile_pass: { "reason" => "gate_busy" },
       attempt_status: attempt_status
@@ -1626,7 +1610,7 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
 
     assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
       refute_includes content, "<%"
-      assert_includes content, "t.string :order_id, null: false"
+      assert_includes content, "t.string :reference, null: false"
       assert_includes content, "t.datetime :inserted_at, null: false"
       assert_includes content, "add_index :openreceive_payments, [:client_ip, :inserted_at]"
       refute_includes content, "add_foreign_key"
@@ -1640,8 +1624,8 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
 
     assert_file "config/initializers/openreceive.rb" do |content|
       refute_includes content, "<%"
-      assert_includes content, "config.load_order"
-      refute_includes content, "config.order_model"
+      assert_includes content, "config.amount_for"
+      refute_includes content, "load_order"
       # The fulfillment note and the guarded transition it describes.
       assert_includes content, "WHAT YOU MUST GUARANTEE"
       assert_includes content, "AND state = 'awaiting_payment'"
@@ -1677,16 +1661,14 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
     end
   end
 
-  def test_option_run_respects_skip_flags_and_never_types_order_id_from_the_host
+  def test_option_run_respects_skip_flags
     run_generator %w[
-      --order-model=Purchase
       --skip-initializer
       --skip-route
     ]
 
     assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
-      # order_id is opaque text whatever the host's primary key looks like.
-      assert_includes content, "t.string :order_id, null: false"
+      assert_includes content, "t.string :reference, null: false"
       refute_includes content, "add_foreign_key"
       RubyVM::InstructionSequence.compile(content)
     end

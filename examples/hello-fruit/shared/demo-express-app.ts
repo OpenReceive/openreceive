@@ -8,7 +8,7 @@
 import { fileURLToPath } from "node:url";
 import { StaticPriceProvider } from "@openreceive/core";
 import { openReceiveExpress, sendHostRouteError } from "@openreceive/express";
-import { createHost, type OrderSettlement } from "@openreceive/http";
+import { createHost, type PaymentSettlement } from "@openreceive/http";
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
 import { createTestkitReceiveClient, createTestkitSwapProvider } from "@openreceive/testkit";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
@@ -60,11 +60,11 @@ export async function createHelloFruitExpressApp(
   // quickstart uses: the demo shares one service with its own /orders routes.
   // The rules are the same either way:
   // onPaid runs inside the settlement transaction, only for the order's first settled attempt.
-  const onPaid = async (settlement: OrderSettlement) => {
+  const onPaid = async (settlement: PaymentSettlement) => {
     await markHelloFruitOrderPaid(settlement);
     logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
       paymentHash: settlement.paymentHash,
-      orderId: settlement.orderId,
+      orderId: settlement.reference,
     });
   };
   // DEMO_WALLET=testkit swaps ONLY the wallet, swap provider, and price feed
@@ -108,8 +108,7 @@ export async function createHelloFruitExpressApp(
   });
   const host = createHost({
     db: helloFruitHostDb(),
-    loadOrder: (orderId) => readHelloFruitHostOrder(orderId),
-    amountForOrder: (order) => order.amount,
+    amountFor: async (orderId) => (await readHelloFruitHostOrder(orderId))?.amount ?? null,
     onPaid,
   });
 
@@ -148,7 +147,7 @@ export async function createHelloFruitExpressApp(
   const openreceive = openReceiveExpress({
     service,
     authorize: ({ resource }) =>
-      resource.orderId !== undefined && readHelloFruitHostOrder(resource.orderId) !== null,
+      resource.reference !== undefined && readHelloFruitHostOrder(resource.reference) !== null,
     host,
     rateLimiting: options.rateLimiting,
   });
@@ -194,7 +193,7 @@ export async function createHelloFruitExpressApp(
 function injectHelloFruitOrderMemo(body: unknown): void {
   if (typeof body !== "object" || body === null) return;
   const record = body as Record<string, unknown>;
-  if (typeof record.order_id !== "string" || record.memo !== undefined) return;
-  const memo = readHelloFruitHostOrder(record.order_id)?.memo;
+  if (typeof record.reference !== "string" || record.memo !== undefined) return;
+  const memo = readHelloFruitHostOrder(record.reference)?.memo;
   if (memo !== undefined) record.memo = memo;
 }

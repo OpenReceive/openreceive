@@ -25,7 +25,7 @@ import {
   toPgPlaceholders,
 } from "./sql-adapters.ts";
 
-/** Namespacing seed for the postgres per-order advisory lock. */
+/** Namespacing seed for the postgres per-reference advisory lock. */
 const ADVISORY_LOCK_SEED = 8_210_223;
 
 /** The one durable reconcile-gate row every worker shares. */
@@ -70,8 +70,8 @@ export interface SqlPaymentsOptions {
 }
 
 /** Settlement context passed to the host's `onPaid` in library-persistence mode. */
-export interface OrderSettlement {
-  readonly orderId: string;
+export interface PaymentSettlement {
+  readonly reference: string;
   readonly paymentHash: string;
   readonly paidAt: number;
   readonly details?: PaymentDetails;
@@ -81,9 +81,9 @@ export interface OrderSettlement {
    * your database uses (`?` on sqlite, `$1`-style on postgres) — this SQL is
    * yours and reaches the driver exactly as written.
    *
-   * OpenReceive already guarantees this hook fires at most once per order
-   * across its own settlement paths, and it never reads or locks the host's
-   * order table. It cannot see fulfillment triggered anywhere else, though —
+   * OpenReceive already guarantees this hook fires at most once per reference
+   * across its own settlement paths. It cannot see fulfillment triggered
+   * anywhere else, though —
    * an admin action, a second processor, a replayed job — so if any of those
    * exist, guard the transition here rather than assuming exclusivity:
    *
@@ -99,7 +99,7 @@ export interface OrderSettlement {
   readonly query: SqlQuery;
 }
 
-export type OrderSettlementHook = (settlement: OrderSettlement) => void | Promise<void>;
+export type PaymentSettlementHook = (settlement: PaymentSettlement) => void | Promise<void>;
 
 export interface SqlPaymentRepository extends PaymentRepository {
   /**
@@ -112,7 +112,7 @@ export interface SqlPaymentRepository extends PaymentRepository {
    */
   markPaidOnce(
     input: { paymentHash: string; paidAt: number; details?: PaymentDetails },
-    fulfill: OrderSettlementHook,
+    fulfill: PaymentSettlementHook,
   ): Promise<boolean>;
 }
 
@@ -153,26 +153,26 @@ export function createSqlPayments(
   const statement = (sql: string): string =>
     adapter.dialect === "postgres" ? toPgPlaceholders(sql) : sql;
 
-  const lockOrder = async (tx: SqlClient, orderId: string): Promise<void> => {
+  const lockReference = async (tx: SqlClient, reference: string): Promise<void> => {
     // SQLite transactions are single-writer (BEGIN IMMEDIATE); postgres needs a
-    // per-order serialization boundary that does not assume an orders table.
+    // per-reference serialization boundary.
     if (adapter.dialect === "postgres") {
       await tx.query(statement("SELECT pg_advisory_xact_lock(hashtextextended(?, ?))"), [
-        orderId,
+        reference,
         ADVISORY_LOCK_SEED,
       ]);
     }
   };
 
-  const rowsForOrder = async (
+  const rowsForReference = async (
     tx: SqlClient,
-    orderId: string,
+    reference: string,
   ): Promise<readonly PaymentRecord[]> => {
     const rows = await tx.query(
       statement(
-        `SELECT * FROM ${table} WHERE order_id = ? ORDER BY created_at DESC, payment_hash DESC`,
+        `SELECT * FROM ${table} WHERE reference = ? ORDER BY created_at DESC, payment_hash DESC`,
       ),
-      [orderId],
+      [reference],
     );
     return rows.map(recordFromRow);
   };
@@ -207,9 +207,9 @@ export function createSqlPayments(
   };
 
   return {
-    async listForOrder(orderId) {
+    async listForReference(reference) {
       await assertSupportedSchema();
-      return rowsForOrder(adapter, orderId);
+      return rowsForReference(adapter, reference);
     },
 
     async listReconcilableAttempts() {
@@ -277,11 +277,11 @@ export function createSqlPayments(
       const insert = paymentInsert(input);
       const now = clock();
       await adapter.transaction(async (tx) => {
-        await lockOrder(tx, insert.orderId);
-        const existing = await rowsForOrder(tx, insert.orderId);
+        await lockReference(tx, insert.reference);
+        const existing = await rowsForReference(tx, insert.reference);
         if (existing.some((row) => row.paymentHash === insert.paymentHash)) return;
         if (existing.some((row) => row.status === "settled")) {
-          throw hostError("This order is already paid.", 409, "CONFLICT");
+          throw hostError("This reference is already paid.", 409, "CONFLICT");
         }
         // A superseded row stays 'pending' so the wallet scan keeps covering it
         // (see below), but it must never block or be superseded again: only a
@@ -294,7 +294,7 @@ export function createSqlPayments(
           const decision = liveAttemptCommitDecision(row, insert, now);
           if (decision === "conflict") {
             throw hostError(
-              "An unpaid checkout for this payment method is already in progress for this order.",
+              "An unpaid checkout for this payment method is already in progress for this reference.",
               409,
               "CONFLICT",
             );
@@ -316,11 +316,11 @@ export function createSqlPayments(
         }
         await tx.query(
           statement(
-            `INSERT INTO ${table} (order_id, payment_hash, status, paid_at, expires_at, created_at, updated_at, inserted_at, checkout_data, swap_data, client_ip)
+            `INSERT INTO ${table} (reference, payment_hash, status, paid_at, expires_at, created_at, updated_at, inserted_at, checkout_data, swap_data, client_ip)
            VALUES (?, ?, 'pending', NULL, ?, ?, ?, ?, ?, ?, ?)`,
           ),
           [
-            insert.orderId,
+            insert.reference,
             insert.paymentHash,
             insert.expiresAt,
             insert.createdAt,
@@ -376,39 +376,39 @@ export function createSqlPayments(
 
   async function markPaidOnce(
     input: { paymentHash: string; paidAt: number; details?: PaymentDetails },
-    fulfill: OrderSettlementHook,
+    fulfill: PaymentSettlementHook,
   ): Promise<boolean> {
     await assertSupportedSchema();
     const paymentHash = input.paymentHash.toLowerCase();
     return adapter.transaction(async (tx) => {
       const preliminary = await tx.query(
-        statement(`SELECT order_id FROM ${table} WHERE payment_hash = ?`),
+        statement(`SELECT reference FROM ${table} WHERE payment_hash = ?`),
         [paymentHash],
       );
-      const orderId = preliminary[0]?.order_id;
-      if (orderId === undefined) return false;
-      await lockOrder(tx, asString(orderId, "order_id"));
-      const rows = await rowsForOrder(tx, asString(orderId, "order_id"));
+      const reference = preliminary[0]?.reference;
+      if (reference === undefined) return false;
+      await lockReference(tx, asString(reference, "reference"));
+      const rows = await rowsForReference(tx, asString(reference, "reference"));
       const row = rows.find((candidate) => candidate.paymentHash === paymentHash);
       if (row === undefined || row.status === "settled") return false;
-      const firstForOrder = !rows.some((candidate) => candidate.status === "settled");
+      const firstForReference = !rows.some((candidate) => candidate.status === "settled");
       const now = clock();
       await tx.query(
         statement(
           `UPDATE ${table} SET status = 'settled', status_reason = ?, paid_at = ?, updated_at = ? WHERE payment_hash = ?`,
         ),
-        [firstForOrder ? null : "duplicate_settlement", input.paidAt, now, paymentHash],
+        [firstForReference ? null : "duplicate_settlement", input.paidAt, now, paymentHash],
       );
-      if (firstForOrder) {
+      if (firstForReference) {
         await fulfill({
-          orderId: row.orderId,
+          reference: row.reference,
           paymentHash,
           paidAt: input.paidAt,
           ...(input.details === undefined ? {} : { details: input.details }),
           query: tx.query,
         });
       }
-      return firstForOrder;
+      return firstForReference;
     });
   }
 }
@@ -427,7 +427,7 @@ function recordFromRow(row: Record<string, unknown>): PaymentRecord {
   const swapData = row.swap_data;
   const paymentHash = asString(row.payment_hash, "payment_hash");
   return {
-    orderId: asString(row.order_id, "order_id"),
+    reference: asString(row.reference, "reference"),
     paymentHash,
     status: asStatus(row.status),
     statusReason: row.status_reason === undefined ? null : (row.status_reason as string | null),

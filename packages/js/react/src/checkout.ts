@@ -36,12 +36,12 @@ import { PaymentWizard } from "./wizard.ts";
  * - Snapshot mode (`checkout` prop): renders that snapshot directly. `prefix` (default
  *   `/openreceive`) is the mount every route is derived from, so status polling works
  *   with just a prefix — or with nothing at all.
- * - Create mode (`orderId` prop, no `checkout`): the component owns the whole lifecycle — on
+ * - Create mode (`reference` prop, no `checkout`): the component owns the whole lifecycle — on
  *   mount it prepares amount + payment methods against `${prefix}/checkouts/prepare` (no
  *   Lightning mint). Bitcoin selection mints via `${prefix}/checkouts`. Poll/swap send
- *   `order_id` and are authorized by the host.
- * - Opt into `/checkout/:orderId` History API sync with `syncUrl` (skipped when
- *   `routeOrderId` is set — e.g. Next.js already owns the route). Order resume data
+ *   `reference` and are authorized by the host.
+ * - Opt into `/checkout/:reference` History API sync with `syncUrl` (skipped when
+ *   `routeReference` is set — e.g. Next.js already owns the route). Order resume data
  *   remains owned by the host application.
  */
 export function Checkout(props: CheckoutProps): React.ReactElement {
@@ -52,11 +52,11 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
   validateCheckoutProps({
     framework: "@openreceive/react",
     checkout: props.checkout,
-    orderId: props.orderId,
+    reference: props.reference,
     metadata: props.metadata,
     syncUrl: props.syncUrl,
     resumePathPrefix: props.resumePathPrefix,
-    routeOrderId: props.routeOrderId,
+    routeReference: props.routeReference,
   });
   const { checkout } = props;
   if (checkout !== undefined) {
@@ -68,7 +68,7 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
       prefix: props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX,
     });
   }
-  // No snapshot: the validator above already rejected a missing/empty orderId.
+  // No snapshot: the validator above already rejected a missing/empty reference.
   return React.createElement(CheckoutCreate, props);
 }
 
@@ -83,7 +83,7 @@ function CheckoutSnapshotMode(
   props: CheckoutProps & { readonly checkout: CheckoutSnapshot },
 ): React.ReactElement {
   const { checkout } = props;
-  const identity = `${checkout.checkout_id} ${checkout.order_id}`;
+  const identity = `${checkout.checkout_id} ${checkout.reference}`;
   const [current, setCurrent] = React.useState(checkout);
   const lastIdentityRef = React.useRef(identity);
   React.useEffect(() => {
@@ -109,8 +109,8 @@ function CheckoutSnapshotMode(
  * Syncs the URL only when `syncUrl` is set.
  */
 function CheckoutCreate(props: CheckoutProps): React.ReactElement {
-  // orderId presence is guaranteed by the Checkout dispatcher's create-mode branch.
-  const orderId = props.orderId as string;
+  // reference presence is guaranteed by the Checkout dispatcher's create-mode branch.
+  const reference = props.reference as string;
   const resolvedPrefix = props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX;
   const {
     onError,
@@ -120,7 +120,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     classNames,
     syncUrl = false,
     resumePathPrefix = "/checkout",
-    routeOrderId,
+    routeReference,
   } = props;
 
   const [created, setCreated] = React.useState<{
@@ -146,11 +146,11 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // how the new snapshot is published, and where the failure is surfaced.
   const session = useCheckoutSession({
     snapshot: () => createdCheckoutRef.current,
-    orderId: () => orderId,
+    reference: () => reference,
     requestCheckout: (id) =>
       requestCheckout({
         prefix: resolvedPrefix,
-        orderId: id,
+        reference: id,
         ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
         ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
       }),
@@ -163,12 +163,12 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // The host owns order resume data; OpenReceive only owns optional URL synchronization.
   React.useEffect(() => {
     if (syncUrl) {
-      enterCheckoutResumePath(orderId, {
+      enterCheckoutResumePath(reference, {
         pathPrefix: resumePathPrefix,
-        ...(routeOrderId === undefined ? {} : { routeOrderId }),
+        ...(routeReference === undefined ? {} : { routeReference }),
       });
     }
-  }, [syncUrl, orderId, resumePathPrefix, routeOrderId]);
+  }, [syncUrl, reference, resumePathPrefix, routeReference]);
 
   // Prepare on mount (amount lock + methods). Lightning mints only when Bitcoin is selected.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; createFetch/onError are read from refs.
@@ -177,7 +177,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     setCreated({ status: "pending" });
     prepareCheckout({
       prefix: resolvedPrefix,
-      orderId,
+      reference,
       ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
     })
       .then((checkout) => {
@@ -196,7 +196,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [orderId, resolvedPrefix, attempt]);
+  }, [reference, resolvedPrefix, attempt]);
 
   const onSwapStarted = React.useCallback(
     (invoice: CheckoutInvoiceSnapshot) => {
@@ -204,11 +204,11 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         if (current.status !== "ready") return current;
         return {
           status: "ready",
-          checkout: mergeAttemptIntoCheckout(invoice, current.checkout, orderId),
+          checkout: mergeAttemptIntoCheckout(invoice, current.checkout, reference),
         };
       });
     },
-    [orderId],
+    [reference],
   );
 
   if (created.status === "ready" && created.checkout !== undefined) {
@@ -286,7 +286,7 @@ function CheckoutView(
     checkout,
     // Create-mode props are consumed by the Checkout dispatcher / CheckoutCreate wrapper; drop
     // them here so they never leak onto the rendered <section>.
-    orderId: _orderId,
+    reference: _reference,
     // The dispatcher and CheckoutCreate both resolve this before rendering the
     // view, so the default below only guards a direct CheckoutView call.
     prefix = OPENRECEIVE_DEFAULT_PREFIX,
@@ -294,7 +294,7 @@ function CheckoutView(
     createFetch: _createFetch,
     syncUrl: _syncUrl,
     resumePathPrefix: _resumePathPrefix,
-    routeOrderId: _routeOrderId,
+    routeReference: _routeReference,
     onRequestLightning,
     onSwapStarted,
     mintingLightning = false,

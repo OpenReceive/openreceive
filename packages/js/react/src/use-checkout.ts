@@ -15,13 +15,13 @@ import { getCheckoutLogContext } from "./utils.ts";
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";
 
 export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
-  // The hook drives a concrete checkout snapshot. Create mode (passing only an orderId) is
+  // The hook drives a concrete checkout snapshot. Create mode (passing only an reference) is
   // handled by the <Checkout> component wrapper, which creates the checkout and hands the
   // resulting snapshot to this hook — so the hook/logic below stays untouched.
   const checkout = options.checkout;
   if (checkout === undefined) {
     throw new Error(
-      "useCheckout requires a checkout snapshot. Pass orderId to <Checkout> for create mode.",
+      "useCheckout requires a checkout snapshot. Pass reference to <Checkout> for create mode.",
     );
   }
   const [copied, showCopied] = useTransientValue<boolean>(false);
@@ -30,7 +30,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   // would discard polled state (merged swap invoices, payment_methods,
   // paid_at) whenever the parent re-renders with a rebuilt-but-equivalent
   // snapshot object.
-  const incomingIdentity = `${checkout.checkout_id} ${checkout.order_id}`;
+  const incomingIdentity = `${checkout.checkout_id} ${checkout.reference}`;
   const checkoutRef = React.useRef(checkout);
   checkoutRef.current = checkout;
   // biome-ignore lint/correctness/useExhaustiveDependencies: incomingIdentity is the deliberate reset key; the snapshot is read from a ref.
@@ -61,10 +61,10 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   const onOpenWalletRef = React.useRef(options.onOpenWallet);
   onOpenWalletRef.current = options.onOpenWallet;
   const settledAnnouncementRef = React.useRef<{
-    readonly orderId: string;
+    readonly reference: string;
     readonly fired: boolean;
   }>({
-    orderId: snapshot.order_id,
+    reference: snapshot.reference,
     fired: false,
   });
   const logContext = React.useMemo(() => getCheckoutLogContext(state), [state]);
@@ -87,15 +87,15 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   // recreating it and immediately re-polling in a tight loop.
   const snapshotRef = React.useRef(snapshot);
   snapshotRef.current = snapshot;
-  const checkoutIdentity = `${snapshot.checkout_id} ${snapshot.order_id}`;
+  const checkoutIdentity = `${snapshot.checkout_id} ${snapshot.reference}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: checkoutIdentity is an intentional recreate trigger — the effect seeds from snapshotRef, not from checkoutIdentity directly. logger/onError/refreshStatus are read from refs so inline host callbacks cannot restart polling.
   React.useEffect(() => {
     const controller = createCheckoutController({
       snapshot: snapshotRef.current,
       ...(polls
         ? {
-            refreshStatus: async (orderId: string) =>
-              (await refreshStatusRef.current?.(orderId)) ?? null,
+            refreshStatus: async (reference: string) =>
+              (await refreshStatusRef.current?.(reference)) ?? null,
           }
         : {}),
       ...(prefix === undefined ? {} : { prefix }),
@@ -139,24 +139,24 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
 
   React.useEffect(() => {
     const announced = settledAnnouncementRef.current;
-    if (announced.orderId !== snapshot.order_id) {
+    if (announced.reference !== snapshot.reference) {
       settledAnnouncementRef.current = {
-        orderId: snapshot.order_id,
+        reference: snapshot.reference,
         fired: false,
       };
     }
-  }, [snapshot.order_id]);
+  }, [snapshot.reference]);
 
   React.useEffect(() => {
     const announced = settledAnnouncementRef.current;
     if (publicStatus !== "settled" || announced.fired) return;
     settledAnnouncementRef.current = {
-      orderId: snapshot.order_id,
+      reference: snapshot.reference,
       fired: true,
     };
     // UI hint only; server-side fulfillment must use the backend settlement hook.
     onSettledRef.current?.();
-  }, [publicStatus, snapshot.order_id]);
+  }, [publicStatus, snapshot.reference]);
 
   const copyInvoice = React.useCallback(async () => {
     try {

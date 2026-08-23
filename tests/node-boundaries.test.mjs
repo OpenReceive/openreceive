@@ -87,7 +87,7 @@ test("createCheckout fails closed when the wallet ignores the requested expiry",
   });
 
   await assert.rejects(
-    () => openreceive.createCheckout({ orderId: "order-expiry", amount: { sats: 1000 } }),
+    () => openreceive.createCheckout({ reference: "order-expiry", amount: { sats: 1000 } }),
     (error) => {
       assert.equal(error.code, "UNSUPPORTED_METHOD");
       // The buyer-facing message stays short; the requested/actual numbers
@@ -119,7 +119,7 @@ test("createCheckout records the amount the wallet actually minted", async () =>
   // The wallet is trusted, so the checkout carries the wallet's amount rather
   // than the requested one — the ledger row always matches the payer's invoice.
   const checkout = await openreceive.createCheckout({
-    orderId: "order-amount",
+    reference: "order-amount",
     amount: { sats: 1000 },
   });
   assert.equal(checkout.amountMsats, 999_000);
@@ -141,7 +141,7 @@ test("createCheckout accepts a wallet expiry within the small tolerance", async 
   });
 
   const checkout = await openreceive.createCheckout({
-    orderId: "order-expiry-tolerance",
+    reference: "order-expiry-tolerance",
     amount: { sats: 1000 },
   });
   assert.equal(checkout.expiresAt, now + 630);
@@ -157,11 +157,11 @@ test("Node service creates without persistence and verifies by payment_hash", as
   });
 
   const first = await openreceive.createCheckout({
-    orderId: "order-1",
+    reference: "order-1",
     amount: { currency: "USD", value: "10.00" },
   });
   const second = await openreceive.createCheckout({
-    orderId: "order-1",
+    reference: "order-1",
     amount: { currency: "USD", value: "10.00" },
   });
   assert.notEqual(first.paymentHash, second.paymentHash, "host payment repository is the guard");
@@ -201,8 +201,8 @@ test("reconcilePayments batches known attempts into shared list_transactions sca
     clock: () => now,
   });
   const attempts = await Promise.all(
-    ["one", "two", "three"].map((orderId) =>
-      openreceive.createCheckout({ orderId, amount: { sats: 1000 } }),
+    ["one", "two", "three"].map((reference) =>
+      openreceive.createCheckout({ reference, amount: { sats: 1000 } }),
     ),
   );
   now = 1100;
@@ -229,24 +229,24 @@ test("host-serialized swap data recovers provider state and provider state contr
     clock: () => 1000,
   });
   const swap = await openreceive.createSwap({
-    orderId: "swap-1",
+    reference: "swap-1",
     amount: { sats: 20_000 },
     payInAsset: "USDT_TRON",
   });
   assert.equal(swap.swapData.version, 1);
   assert.equal(swap.swapData.paymentHash, undefined);
-  assert.equal(swap.swapData.orderId, undefined);
+  assert.equal(swap.swapData.reference, undefined);
   const storedSwapData = JSON.parse(JSON.stringify(swap.swapData));
 
   provider.forceRefundRequired({ providerOrderId: "testkit-swap-1" });
   const status = await openreceive.getSwap({
-    orderId: swap.orderId,
+    reference: swap.reference,
     paymentHash: swap.paymentHash,
     swapData: storedSwapData,
   });
   assert.equal(status.providerState, "refund_required");
   const refunded = await openreceive.refundSwap({
-    orderId: swap.orderId,
+    reference: swap.reference,
     paymentHash: swap.paymentHash,
     swapData: storedSwapData,
     refundAddress: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
@@ -390,7 +390,7 @@ test("isSensitiveLogKey redacts swap_data and provider credentials", () => {
     assert.equal(isSensitiveLogKey(key), true, `${key} must be sensitive`);
   }
   for (const key of [
-    "order_id",
+    "reference",
     "payment_hash",
     "amount",
     "provider",

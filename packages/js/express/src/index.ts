@@ -63,17 +63,15 @@ interface ExpressAdapterExtras {
 
 export interface ExpressOptions extends CreateOpenReceiveHttpHandlerOptions, ExpressAdapterExtras {}
 
-/** All-in-one form: order hooks + `wallet` + `storage`; the middleware builds service and host. */
-export interface ExpressStackOptions<Order = unknown>
-  extends CreateOpenReceiveStackOptions<Order>,
-    ExpressAdapterExtras {}
+/** All-in-one form: host hooks + `wallet` + `storage`; the middleware builds service and host. */
+export interface ExpressStackOptions extends CreateOpenReceiveStackOptions, ExpressAdapterExtras {}
 
 /**
  * Build an Express middleware that serves the OpenReceive routes under its prefix.
  *
  * Two forms:
- * - All-in-one (the happy path): pass the order hooks and a db handle directly —
- *   `openReceiveExpress({ wallet: { nwc }, storage: { db, onPaid }, loadOrder, amountForOrder, authorize })`.
+ * - All-in-one (the happy path): pass the host hooks and a db handle directly —
+ *   `openReceiveExpress({ wallet: { nwc }, storage: { db, onPaid }, amountFor, authorize })`.
  *   The middleware builds the service and host itself (first request awaits
  *   boot) and exposes `ready`/`close`. It starts no background process:
  *   settlement of abandoned checkouts happens opportunistically through the
@@ -82,8 +80,8 @@ export interface ExpressStackOptions<Order = unknown>
  * - Composed: pass a prebuilt `{ service, host, authorize }` when you construct
  *   the pieces yourself (custom repositories, tests, shared services).
  */
-export function openReceiveExpress<Order = unknown>(
-  options: ExpressOptions | ExpressStackOptions<Order>,
+export function openReceiveExpress(
+  options: ExpressOptions | ExpressStackOptions,
 ): ExpressMiddleware {
   if (isStackOptions(options)) {
     const { trustProxyIpHeader, ...stackOptions } = options;

@@ -56,14 +56,14 @@ export interface CheckoutSessionOptions {
    */
   snapshot(): CheckoutSnapshot | undefined;
   /** The order being paid, read at call time (the element's is an attribute). */
-  orderId(): string | undefined;
+  reference(): string | undefined;
   /**
-   * Mint a Lightning invoice for this order (POST `${prefix}/checkouts`).
+   * Mint a Lightning invoice for this reference (POST `${prefix}/checkouts`).
    * The host closes over its own prefix, metadata and fetch. Answer `undefined`
    * to say "this host cannot mint" — React's payment wizard is such a host: it
    * asks its parent for Lightning through `onRequestLightning` instead.
    */
-  requestCheckout?(orderId: string): Promise<CheckoutSnapshot> | undefined;
+  requestCheckout?(reference: string): Promise<CheckoutSnapshot> | undefined;
   /** Publish a snapshot that now carries the Lightning attempt. */
   onSnapshot?(snapshot: CheckoutSnapshot): void;
   /**
@@ -133,12 +133,12 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     // again; the loser's 409 then surfaced as a wizard error over a perfectly
     // good invoice. `startSwap` guards the same way.
     if (mintingLightning) return;
-    const orderId = options.orderId();
-    if (orderId === undefined || orderId.length === 0) return;
+    const reference = options.reference();
+    if (reference === undefined || reference.length === 0) return;
     const current = options.snapshot();
     if (current !== undefined) {
       // Reuse a bolt11 that still has enough time on the clock rather than
-      // minting a second attempt for the same order. Pinned on both hosts:
+      // minting a second attempt for the same reference. Pinned on both hosts:
       // "re-selecting Bitcoin after the mint reuses the bolt11 …" in
       // tests/element-lifecycle.test.mjs and tests/react-checkout-behavior.test.mjs.
       const reusableLightning = findReusableLightningInvoice(current);
@@ -152,7 +152,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     wizardError = undefined;
     options.onChange();
     try {
-      const pending = options.requestCheckout?.(orderId);
+      const pending = options.requestCheckout?.(reference);
       if (pending === undefined) return;
       const checkout = await pending;
       lightningRequested = true;
@@ -178,9 +178,9 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     const selection = options.swapSelection;
     const prefix = options.swapPrefix?.();
     const fetcher = options.fetch?.();
-    const orderId = options.orderId();
+    const reference = options.reference();
     if (selection === undefined || prefix === undefined || fetcher === undefined) return;
-    if (orderId === undefined || orderId.length === 0) return;
+    if (reference === undefined || reference.length === 0) return;
     // Already holding this asset's deposit instructions: show them again rather
     // than mint a colliding second attempt. Pinned on both hosts:
     // "re-selecting a started swap asset re-opens its panel without a second
@@ -204,7 +204,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       const started = await startSwapRequest({
         fetch: fetcher,
         prefix,
-        orderId,
+        reference,
         payInAsset,
         ...(options.logger === undefined ? {} : { logger: options.logger }),
       });

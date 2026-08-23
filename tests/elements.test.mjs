@@ -395,8 +395,8 @@ test("elements format sat and msat amounts", () => {
 });
 
 test("elements expose a create-mode prefix attribute and creating placeholder", () => {
-  // Create mode is driven by `order-id` (+ optional `prefix`) with no `invoice`.
-  assert.equal(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId, "order-id");
+  // Create mode is driven by `reference` (+ optional `prefix`) with no `invoice`.
+  assert.equal(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference, "reference");
   assert.equal(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix, "prefix");
 
   const dark = renderCheckoutCreatingHtml({ theme: "dark", inlineStyles: false });

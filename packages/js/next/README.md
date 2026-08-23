@@ -4,7 +4,7 @@ Next App Router adapter for the OpenReceive payment HTTP handler.
 
 This package is ESM-only and requires Node >= 22.
 
-The all-in-one form is the happy path: pass the order hooks and a database
+The all-in-one form is the happy path: pass the host hooks and a database
 handle, and the handlers build the service and host themselves.
 
 ```ts
@@ -14,13 +14,12 @@ export const { GET, POST } = openReceiveNextHandlers({
   wallet: { nwc: process.env.NWC_URI! }, // receive-only; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
-    onPaid: async ({ orderId, query }) => {
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+    onPaid: async ({ reference, query }) => {
+      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
     },
   },
-  loadOrder: (orderId) => orders.find(orderId),
-  amountForOrder: (order) => order.amount,
-  authorize: ({ resource }) => orders.viewerOwns(resource.orderId),
+  amountFor: (reference) => orders.find(reference)?.amount ?? null, // null → 404
+  authorize: ({ resource }) => orders.viewerOwns(resource.reference),
 });
 ```
 
@@ -35,7 +34,7 @@ order and drain it from your own worker after commit.
 
 The library owns the `openreceive_payments` rows in the host's existing
 database. It selects the exact attempt for reads and appends attempts under a
-per-order lock before the public response. Settlement piggybacks on the
+per-reference lock before the public response. Settlement piggybacks on the
 mounted routes by default through the durable `openreceive_meta` gate —
 serverless-safe, no background process (`opportunisticReconcile` disables or
 tunes it); `startNotificationWorker` is the optional worker.
@@ -46,7 +45,7 @@ option attributes `rateLimiting` client IPs from a proxy-set header.
 
 Construct the pieces yourself (shared service, custom repository, tests) and
 pass them in. `createHost` is the persistence step: it owns the
-`openreceive_payments` rows — per-order commit locking, write-once settlement,
+`openreceive_payments` rows — per-reference commit locking, write-once settlement,
 and the reconciliation state machine.
 
 ```ts
@@ -58,10 +57,9 @@ const service = await createOpenReceive(); // reads NWC_URI
 
 const host = createHost({
   db,
-  loadOrder: (orderId) => orders.find(orderId),
-  amountForOrder: (order) => order.amount,
-  onPaid: async ({ orderId, query }) => {
-    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+  amountFor: (reference) => orders.find(reference)?.amount ?? null, // null → 404
+  onPaid: async ({ reference, query }) => {
+    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
   },
 });
 

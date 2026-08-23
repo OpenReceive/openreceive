@@ -14,7 +14,7 @@ defineOptions({
 // The props are DERIVED from the shared wrapper surface, not restated: prop
 // names, types, and per-mode applicability live once in
 // @openreceive/elements/wrapper-shared (snapshot mode = `checkout`, create mode
-// = `orderId` + optional `prefix`), and docs/internal/wrapper-parity.md is the
+// = `reference` + optional `prefix`), and docs/internal/wrapper-parity.md is the
 // human-readable contract. `withDefaults` still spells the defaults out — a
 // type carries none.
 const props = withDefaults(defineProps<WrapperCheckoutComponentProps>(), {
@@ -39,17 +39,17 @@ const shell = computed(() => {
   validateCheckoutProps({
     framework: "@openreceive/vue",
     checkout: props.checkout,
-    orderId: props.orderId,
+    reference: props.reference,
     metadata: props.metadata,
     syncUrl: props.syncUrl,
     resumePathPrefix: props.resumePathPrefix,
-    routeOrderId: props.routeOrderId,
+    routeReference: props.routeReference,
   });
   return createWrapperCheckoutShellBinding(props.checkout ?? null, {
     ...props.options,
     themeToggle: props.themeToggle ?? props.options.themeToggle ?? true,
     deferThemeResolution: !mounted.value,
-    ...(props.orderId === undefined ? {} : { orderId: props.orderId }),
+    ...(props.reference === undefined ? {} : { reference: props.reference }),
     ...(props.prefix === undefined ? {} : { prefix: props.prefix }),
     ...(props.paymentWizard === undefined ? {} : { paymentWizard: props.paymentWizard }),
     ...(props.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: props.decodeLinkUrl }),
@@ -58,7 +58,7 @@ const shell = computed(() => {
     ...(props.metadata === undefined ? {} : { metadata: props.metadata }),
     ...(props.syncUrl === undefined ? {} : { syncUrl: props.syncUrl }),
     ...(props.resumePathPrefix === undefined ? {} : { resumePathPrefix: props.resumePathPrefix }),
-    ...(props.routeOrderId === undefined ? {} : { routeOrderId: props.routeOrderId }),
+    ...(props.routeReference === undefined ? {} : { routeReference: props.routeReference }),
     ...(props.onCopy === undefined ? {} : { onCopy: props.onCopy }),
     ...(props.onOpenWallet === undefined ? {} : { onOpenWallet: props.onOpenWallet }),
     ...(props.onState === undefined ? {} : { onState: props.onState }),

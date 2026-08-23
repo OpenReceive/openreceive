@@ -136,7 +136,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
     private lastSnapshotDisplayKey: string | undefined;
     private dismissedSwapInvoiceId: string | null = null;
     private controller: CheckoutController | undefined;
-    private announcedSettledOrderId: string | undefined;
+    private announcedSettledReference: string | undefined;
     /** Last applied state, used to detect countdown-only ticks (partial DOM update). */
     private lastCheckoutState: CheckoutState | undefined;
     /** Refund-address draft survives poll rebuilds of the shadow tree. */
@@ -188,10 +188,10 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
       currentCheckoutSnapshot: () => this.currentCheckoutSnapshot(),
       currentThemeOption: () => this.currentThemeOption(),
       createMetadata: () => this.createMetadata(),
-      syncResumePath: (orderId) => {
-        this.syncResumePath(orderId);
+      syncResumePath: (reference) => {
+        this.syncResumePath(reference);
       },
-      resolvePollPrefix: (orderId) => this.resolvePollPrefix(orderId),
+      resolvePollPrefix: (reference) => this.resolvePollPrefix(reference),
       dispatchError: (error) => {
         this.dispatchError(error);
       },
@@ -202,7 +202,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
 
     static get observedAttributes() {
       return [
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice,
@@ -217,7 +217,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,
       ];
@@ -244,7 +244,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix ||
-        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId;
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference;
       if (displayOnly) {
         this.render();
         this.syncThemeAncestorObserver();
@@ -252,7 +252,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
       }
 
       const createInputChanged =
-        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice;
       if (createInputChanged) {
@@ -278,13 +278,13 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
       this.stopThemeAncestorObserver();
     }
 
-    // Create mode: an `order-id` is set but no `invoice` snapshot is provided. The element
+    // Create mode: an `reference` is set but no `invoice` snapshot is provided. The element
     // owns the whole lifecycle — it creates the checkout against `${prefix}/checkouts`, then
     // polls status against `${prefix}/payments/check` and drives swaps under the prefix.
     private isCreateMode(): boolean {
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      return (invoice === null || invoice === "") && orderId !== null && orderId.length > 0;
+      const reference = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
+      return (invoice === null || invoice === "") && reference !== null && reference.length > 0;
     }
 
     /** Create-time metadata from the JSON `metadata` attribute, when present and valid. */
@@ -302,7 +302,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
     }
 
     /** Order data belongs to the host; this only performs optional History API sync. */
-    private syncResumePath(orderId: string): void {
+    private syncResumePath(reference: string): void {
       const syncUrl = parseBooleanAttribute(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
       );
@@ -310,11 +310,13 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         const resumePathPrefix =
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix) ??
           "/checkout";
-        const routeOrderId =
-          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId) ?? undefined;
-        enterCheckoutResumePath(orderId, {
+        const routeReference =
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference) ?? undefined;
+        enterCheckoutResumePath(reference, {
           pathPrefix: resumePathPrefix,
-          ...(routeOrderId === undefined || routeOrderId.length === 0 ? {} : { routeOrderId }),
+          ...(routeReference === undefined || routeReference.length === 0
+            ? {}
+            : { routeReference }),
         });
       }
     }
@@ -455,9 +457,9 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
           ...(this.latestCheckoutSnapshot?.fiat === undefined
             ? {}
             : { fiat: this.latestCheckoutSnapshot.fiat }),
-          ...(this.latestCheckoutSnapshot?.order_id === undefined
+          ...(this.latestCheckoutSnapshot?.reference === undefined
             ? {}
-            : { orderId: this.latestCheckoutSnapshot.order_id }),
+            : { reference: this.latestCheckoutSnapshot.reference }),
           ...(this.latestCheckoutSnapshot?.checkout_id === undefined
             ? {}
             : { checkoutId: this.latestCheckoutSnapshot.checkout_id }),
@@ -577,7 +579,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
       // polling — the attribute snapshot still describes the pre-swap
       // Lightning attempt.
       const snapshot = latest?.active?.rail === "swap" ? latest : (attributeSnapshot ?? latest);
-      const prefix = this.resolvePollPrefix(snapshot?.order_id);
+      const prefix = this.resolvePollPrefix(snapshot?.reference);
       if (snapshot === undefined) {
         this.stopCheckoutController();
         return;
@@ -623,8 +625,8 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
      * mode: the `prefix` attribute, default `/openreceive`. Answers `undefined`
      * when there is no order to act on — nothing to poll, nothing to swap.
      */
-    private resolvePollPrefix(orderId?: string): string | undefined {
-      const id = orderId ?? this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+    private resolvePollPrefix(reference?: string): string | undefined {
+      const id = reference ?? this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
       if (id === null || id === undefined || id.length === 0) return undefined;
       return (
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ??
@@ -633,7 +635,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
     }
 
     private currentCheckoutSnapshot(): CheckoutSnapshot | undefined {
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+      const reference = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
       const invoiceId = parseElementInvoiceId(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId),
       );
@@ -670,7 +672,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
           ),
           ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
         },
-        { ...(orderId === null ? {} : { order_id: orderId }) },
+        { ...(reference === null ? {} : { reference: reference }) },
       );
     }
 
@@ -705,8 +707,8 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
       this.dispatchEvent(
         createCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state, state),
       );
-      if (state.settled && state.order_id !== this.announcedSettledOrderId) {
-        this.announcedSettledOrderId = state.order_id;
+      if (state.settled && state.reference !== this.announcedSettledReference) {
+        this.announcedSettledReference = state.reference;
         this.dispatchEvent(
           createCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, state),
         );
@@ -1092,15 +1094,15 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
       refundNonce: string,
       confirm: boolean,
     ): Promise<void> {
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      const prefix = this.resolvePollPrefix(orderId ?? undefined);
+      const reference = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
+      const prefix = this.resolvePollPrefix(reference ?? undefined);
       if (prefix === undefined) return;
 
       try {
         this.startedSwapInvoice = await requestSwapRefund({
           fetch: globalThis.fetch,
           prefix,
-          ...(orderId === null ? {} : { orderId }),
+          ...(reference === null ? {} : { reference }),
           invoices: [this.startedSwapInvoice, ...(this.latestCheckoutSnapshot?.invoices ?? [])],
           attemptId,
           refundAddress,

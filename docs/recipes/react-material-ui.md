@@ -8,7 +8,7 @@ the checkout, verifies payment, and owns fulfillment.
 
 ## Create mode (the default integration)
 
-`<Checkout orderId>` prepares, mints, and polls by itself; Material UI comes in
+`<Checkout reference>` prepares, mints, and polls by itself; Material UI comes in
 through the component and class-name slots. Use the slots when your
 design-system button accepts native button props:
 
@@ -17,10 +17,10 @@ import Button from "@mui/material/Button";
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
-export function MaterialOrderCheckout({ orderId }) {
+export function MaterialOrderCheckout({ reference }) {
   return (
     <Checkout
-      orderId={orderId}
+      reference={reference}
       prefix="/openreceive"
       components={{
         Button,

@@ -507,7 +507,7 @@ class FixedFloatProviderTest < Minitest::Test
     end
   end
 
-  def test_get_status_sends_the_stored_order_id_and_token
+  def test_get_status_sends_the_stored_reference_and_token
     provider, calls = make_provider("order" => { "status" => "PENDING" })
     provider.get_status(BASE_ORDER)
     assert_equal({ "id" => "ORDER1", "token" => "TOKEN1" }, calls[0][:body])
@@ -1030,7 +1030,7 @@ class SwapServiceIntegrationTest < Minitest::Test
     )
 
     swap = service.create_swap(
-      "order_id" => "ruby-ff-1", "amount" => { "sats" => 20_000 }, "pay_in_asset" => "USDT_TRON"
+      "reference" => "ruby-ff-1", "amount" => { "sats" => 20_000 }, "pay_in_asset" => "USDT_TRON"
     )
     # The provider-mandated shadow-invoice expiry (1800s) reaches the wallet.
     assert_equal 1800, wallet.last_request.fetch("expiry")
@@ -1050,13 +1050,13 @@ class SwapServiceIntegrationTest < Minitest::Test
     # refund_required/underpaid; then a refund round-trips through /emergency.
     stored = JSON.parse(JSON.generate(swap_data))
     status = service.get_swap(
-      order_id: "ruby-ff-1", payment_hash: swap.fetch("payment_hash"), swap_data: stored
+      reference: "ruby-ff-1", payment_hash: swap.fetch("payment_hash"), swap_data: stored
     )
     assert_equal "refund_required", status.fetch("provider_state")
     assert_equal "underpaid", status.fetch("refund_reason")
 
     refunded = service.refund_swap(
-      order_id: "ruby-ff-1", payment_hash: swap.fetch("payment_hash"),
+      reference: "ruby-ff-1", payment_hash: swap.fetch("payment_hash"),
       swap_data: stored, refund_address: TRX_ADDRESS
     )
     emergency_call = calls.find { |call| call[:emergency] }
@@ -1075,7 +1075,7 @@ class SwapServiceIntegrationTest < Minitest::Test
     swap_data = { "version" => 1, "provider_order" => BASE_ORDER.dup }
     error = assert_raises(OpenReceive::Server::ConflictError) do
       service.refund_swap(
-        order_id: "ruby-ff-2", payment_hash: "7f" * 32,
+        reference: "ruby-ff-2", payment_hash: "7f" * 32,
         swap_data: swap_data, refund_address: TRX_ADDRESS
       )
     end
@@ -1088,13 +1088,13 @@ class SwapServiceIntegrationTest < Minitest::Test
       nwc_client: Wallet.new, swap_providers: [], clock: -> { NOW }
     )
     error = assert_raises(OpenReceive::Server::ValidationError) do
-      service.get_swap(order_id: "x", payment_hash: "7f" * 32, swap_data: { "version" => 2 })
+      service.get_swap(reference: "x", payment_hash: "7f" * 32, swap_data: { "version" => 2 })
     end
     assert_equal "swapData is invalid.", error.message
 
     error = assert_raises(OpenReceive::Server::ServiceError) do
       service.get_swap(
-        order_id: "x", payment_hash: "7f" * 32,
+        reference: "x", payment_hash: "7f" * 32,
         swap_data: { "version" => 1, "provider_order" => BASE_ORDER.dup }
       )
     end
@@ -1143,7 +1143,7 @@ class SwapServiceIntegrationTest < Minitest::Test
   def test_check_payment_wire_body_carries_amount_aware_payment_methods
     service, = build_service("primary.example" => { mode: :ok })
     checkout = {
-      "order_id" => "order-methods", "payment_hash" => "7f" * 32, "bolt11" => "lnbc1",
+      "reference" => "order-methods", "payment_hash" => "7f" * 32, "bolt11" => "lnbc1",
       "amount_msats" => 2_000_000, "created_at" => NOW, "expires_at" => NOW + 600,
       "fiat_quote" => nil
     }
@@ -1157,7 +1157,7 @@ class SwapServiceIntegrationTest < Minitest::Test
       on_paid: ->(_payment) {}
     )
     status, _headers, body = handler.check_payment(
-      raw_body: JSON.generate("order_id" => "order-methods", "payment_hash" => "7f" * 32),
+      raw_body: JSON.generate("reference" => "order-methods", "payment_hash" => "7f" * 32),
       request: {}, request_id: "req-methods"
     )
     assert_equal 200, status

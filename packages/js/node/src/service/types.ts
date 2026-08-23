@@ -89,7 +89,7 @@ export type CreateCheckoutAmount =
   | { readonly currency: string; readonly value: string; readonly sats?: never };
 
 export interface CreateCheckoutRequest {
-  readonly orderId: string;
+  readonly reference: string;
   readonly amount: CreateCheckoutAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;
@@ -107,7 +107,7 @@ export interface CreateCheckoutRequest {
  * `WireCheckout`).
  */
 export interface Checkout {
-  readonly orderId: string;
+  readonly reference: string;
   readonly paymentHash: string;
   readonly bolt11: string;
   readonly amountMsats: number;
@@ -221,7 +221,7 @@ export interface CreateSwapRequest extends CreateCheckoutRequest {
 }
 
 export interface GetSwapRequest {
-  readonly orderId: string;
+  readonly reference: string;
   readonly paymentHash: string;
   readonly swapData: SwapData;
 }
@@ -238,7 +238,7 @@ export interface SwapData {
 
 export interface PublicSwap {
   readonly paymentHash: string;
-  readonly orderId: string;
+  readonly reference: string;
   readonly provider: string;
   readonly payInAsset: SwapPayInAsset;
   readonly depositAddress: string;
@@ -335,7 +335,7 @@ export interface ResolvedCreateAmount {
 }
 
 export interface NormalizedCreateCheckoutRequest {
-  readonly orderId: string;
+  readonly reference: string;
   readonly amount: CreateCheckoutAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;

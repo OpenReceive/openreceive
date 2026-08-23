@@ -48,7 +48,7 @@ export interface CheckoutEventHandlers {
 
 /**
  * Hook inputs. The hook drives a concrete snapshot; create mode belongs to `<Checkout>`,
- * so create options are deliberately absent here — `useCheckout({ orderId })` used to
+ * so create options are deliberately absent here — `useCheckout({ reference })` used to
  * type-check and then always throw.
  */
 export interface UseCheckoutOptions
@@ -179,9 +179,9 @@ export interface CheckoutProps
     // The DOM copy/error handlers are replaced by the OpenReceive ones above.
     Omit<React.HTMLAttributes<HTMLElement>, "children" | "prefix" | "onCopy" | "onError"> {
   /**
-   * Create mode (`orderId`, no `checkout`): the component creates the checkout against
+   * Create mode (`reference`, no `checkout`): the component creates the checkout against
    * `${prefix}/checkouts`, then polls `${prefix}/payments/check`. Later requests carry
-   * `order_id` and the displayed `payment_hash`; the host remains responsible for
+   * `reference` and the displayed `payment_hash`; the host remains responsible for
    * authorization, order display, and routing. This fetch makes those create calls.
    */
   readonly createFetch?: typeof globalThis.fetch;
