@@ -10,7 +10,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
-  OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
   applyCheckoutThemeAttributes,
   applyOpenReceiveThemeAttributes,
   createOpenReceivePaymentWizardModel,
@@ -20,7 +19,6 @@ import {
   createOpenReceiveThemeModel,
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
-  formatOpenReceiveCountdown,
   formatOpenReceiveDepositAmount,
   getOpenReceivePaymentMethodIcon,
   getOpenReceivePaymentStatusText,
@@ -42,7 +40,10 @@ import {
   toggleOpenReceiveStoredThemePreference,
   updateOpenReceivePaymentWizardSelection,
   writeOpenReceiveThemePreference,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { OPENRECEIVE_PROVIDER_PREVIEW_LIMIT } from "../packages/js/browser/src/internal/dom-contract.ts";
+import { formatOpenReceiveCountdown } from "../packages/js/browser/src/internal/checkout-format.ts";
 import { getProvider } from "@openreceive/provider-data";
 import { PaymentWizard, ThemeScope, ThemeToggle } from "@openreceive/react";
 

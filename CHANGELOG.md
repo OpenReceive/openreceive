@@ -6,6 +6,19 @@ OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
 behind.
 
+### One subpath under the UI: `@openreceive/browser/headless`
+
+- `@openreceive/browser/internal` is gone. It was public API with a
+  discouraging name — 130 values and 46 types that `@openreceive/react`,
+  `@openreceive/elements`, and the wrappers imported and nothing documented.
+  Those names now live on `./headless`, the one curated, documented surface
+  the renderers and headless integrations share; 15 names only tests used are
+  no longer exported. `npm run check:example-imports` had nothing left to
+  reject and is removed.
+- The display-boundary rule (formatters throw, display boundaries blank)
+  moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
+  rest of that document was history.
+
 ### `openreceive` is the CLI; the library is `@openreceive/*`
 
 - The unscoped `openreceive` package no longer re-exports the library. It

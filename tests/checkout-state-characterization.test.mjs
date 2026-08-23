@@ -72,7 +72,7 @@ import {
   createOpenReceivePaymentDataEntries,
   createOpenReceiveTransactionDetailsFromState,
   formatOpenReceiveUnixTime,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import { renderCheckoutHtml } from "@openreceive/elements";
 import { Checkout, createCheckoutViewModel } from "@openreceive/react";
 import React from "react";

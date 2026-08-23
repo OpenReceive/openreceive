@@ -11,8 +11,8 @@ export {
 } from "./components.ts";
 export { renderSwapDepositPanel } from "./swap.ts";
 export { ThemeScope, ThemeToggle, useTheme } from "./theme.ts";
-export type { OpenReceiveTransactionDetailsSource } from "@openreceive/browser/internal";
-export { resolveOpenReceiveTransactionDetailRows } from "@openreceive/browser/internal";
+export type { OpenReceiveTransactionDetailsSource } from "@openreceive/browser/headless";
+export { resolveOpenReceiveTransactionDetailRows } from "@openreceive/browser/headless";
 export type { TransactionDetailsProps } from "./transaction-details.ts";
 export { TransactionDetails } from "./transaction-details.ts";
 export type {

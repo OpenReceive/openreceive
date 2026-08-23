@@ -17,11 +17,11 @@ Part of [OpenReceive](https://openreceive.org). Start with the [Node quickstart]
   [Headless checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/headless-checkout.md);
   the hello-fruit rails example is the flagship demo of this style.
 
-The `./internal` subpath is wrapper plumbing for OpenReceive's own packages
-(`@openreceive/elements`, `@openreceive/react`, and the vue/svelte/angular
-wrappers) — unstable, undocumented, and not for end-developer use. It is
-curated symbol-by-symbol rather than a re-export of the package, so a name
-that is not on it is package-private and will move without notice.
+There is no private subpath: `./headless` is both the integration surface and
+the floor under `@openreceive/elements`, `@openreceive/react`, and the
+vue/svelte/angular wrappers. It is curated symbol-by-symbol rather than a
+re-export of the package, so a name that is not on it is package-private and
+will move without notice.
 
 ## Icon assets
 
@@ -56,7 +56,7 @@ files where the resolution lands. Per setup:
 
 To verify a setup, check the DevTools network panel for `…/icons/*.svg`
 requests, or log `openReceivePaymentIconUrls` (exported from
-`@openreceive/browser/internal`) to see every resolved URL.
+`@openreceive/browser/headless`) to see every resolved URL.
 
 `@openreceive/provider-data` follows the same contract for its runtime images
 (`dist/assets/provider-icons`, `dist/assets/pay_tutorials`); the copy recipes

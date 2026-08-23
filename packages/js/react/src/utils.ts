@@ -1,4 +1,4 @@
-import type { OpenReceiveBrowserLogContext } from "@openreceive/browser/internal";
+import type { OpenReceiveBrowserLogContext } from "@openreceive/browser/headless";
 import type * as React from "react";
 
 export function joinClassNames(...values: readonly (string | undefined)[]): string | undefined {

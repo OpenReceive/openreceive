@@ -8,7 +8,7 @@ import {
   openReceiveCheckoutLabels,
   optionalUnixTimeLabel,
   orClasses,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 export const COPY_INVOICE_ICON = `<svg class="${orClasses.copyIcon}" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 11V3.5A1.5 1.5 0 0 1 5 2h5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
 

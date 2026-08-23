@@ -7,7 +7,7 @@ import {
   formatOpenReceiveMsats,
   openReceiveCheckoutElementStyles,
   openReceiveCheckoutLabels,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   defineOpenReceiveElements,

@@ -47,7 +47,7 @@ import {
   toggleOpenReceiveStoredThemeControls,
   updateOpenReceivePaymentWizardSelection,
   updateOpenReceiveSelectedSwapNetworks,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import { createElementCheckoutSession } from "./element-checkout-session.ts";
 import {
   parseElementRail,

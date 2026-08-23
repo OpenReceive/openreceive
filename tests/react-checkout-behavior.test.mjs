@@ -21,7 +21,7 @@ const { useOpenReceiveCheckoutSession } = await import(
   "../packages/js/react/src/checkout-session.ts"
 );
 const { OPENRECEIVE_THEME_STORAGE_KEY, openReceiveCheckoutLabels } = await import(
-  "../packages/js/browser/src/internal.ts"
+  "../packages/js/browser/src/headless.ts"
 );
 
 // Several tests stub globalThis.fetch; restore the real one between tests so a
@@ -412,7 +412,7 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
 });
 
 // The create-mode guards are double-POST guards, not tidiness. They live once,
-// in @openreceive/browser/internal's checkout session, and these two tests are
+// in @openreceive/browser/headless's checkout session, and these two tests are
 // the React half of the pair in tests/element-lifecycle.test.mjs ("double-
 // clicking Bitcoin mints exactly one Lightning invoice" / "double-clicking a
 // swap asset starts exactly one swap"). React had NO guard on the mint at all

@@ -16,7 +16,6 @@
       "@openreceive/angular": ["packages/js/angular/src/index.ts"],
       "@openreceive/browser": ["packages/js/browser/src/index.ts"],
       "@openreceive/browser/headless": ["packages/js/browser/src/headless.ts"],
-      "@openreceive/browser/internal": ["packages/js/browser/src/internal.ts"],
       "@openreceive/core": ["packages/js/core/src/index.ts"],
       "@openreceive/core/contracts": ["packages/js/core/src/contracts.ts"],
       "@openreceive/core/swap-address": ["packages/js/core/src/swap-address.ts"],

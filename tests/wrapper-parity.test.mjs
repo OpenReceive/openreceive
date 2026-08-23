@@ -20,8 +20,8 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_DEFAULT_PREFIX,
-  openReceiveRoutes,
-} from "../packages/js/browser/src/internal.ts";
+} from "../packages/js/browser/src/headless.ts";
+import { openReceiveRoutes } from "../packages/js/browser/src/internal/checkout.ts";
 import { Checkout } from "../packages/js/react/src/index.ts";
 
 const PARITY_DOC = "docs/internal/wrapper-parity.md";

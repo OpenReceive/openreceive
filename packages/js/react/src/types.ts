@@ -13,7 +13,7 @@ import type {
   OpenReceiveThemeModel,
   OpenReceiveThemePreference,
   Status,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 export interface CheckoutData {
   readonly checkout: CheckoutSnapshot;

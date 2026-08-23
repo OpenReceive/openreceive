@@ -30,7 +30,7 @@ import {
   openReceiveSwapPickerKey,
   type OpenReceiveWizardRouteAssetDisplay,
   orClasses,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import type { OpenReceiveElementsSwapOption, OpenReceiveElementsWizardView } from "./views.ts";
 import {
   elementsSwapLimitMessage,

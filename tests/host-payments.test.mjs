@@ -7,7 +7,7 @@ import {
   reconcileOpenReceivePayments,
   startOpenReceiveReconciler,
 } from "../packages/js/http/src/index.ts";
-import { createOpenReceiveStatusFetcher } from "../packages/js/browser/src/internal.ts";
+import { createOpenReceiveStatusFetcher } from "../packages/js/browser/src/headless.ts";
 
 function context(action, input = {}, payInAsset) {
   return {

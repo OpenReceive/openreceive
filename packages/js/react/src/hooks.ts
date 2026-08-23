@@ -4,7 +4,7 @@ import {
   createOpenReceiveTickingValueController,
   createOpenReceiveTransientFeedbackController,
   type OpenReceiveTransientFeedbackController,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 export function useOpenReceiveTransientValue<T>(
   resetValue: T,

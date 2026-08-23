@@ -109,6 +109,27 @@ npm run test:ruby
 
 Before declaring work done, report the exact checks run and any intentional skip.
 
+## Display boundary
+
+One bug class, one rule. A value arrives from a server and crosses a parse boundary that bounds
+its type but not its range; it then reaches a throwing formatter inside a render path, and the
+throw takes the whole panel — frequently the screen the payer reaches after paying. The parse
+boundary is right to be permissive (the panel's job is to report what arrived) and the formatter
+is right to throw (wire construction and validation share it). The join is what must not exist.
+
+FORMATTERS THROW: `formatOpenReceiveMsats` throws `RangeError` on an unusable amount and keeps
+throwing on purpose. DISPLAY BOUNDARIES BLANK: `optionalMsatsLabel` and `optionalUnixTimeLabel`
+(`packages/js/browser/src/internal/checkout-format.ts`) wrap those formatters and return
+`undefined`, so a malformed server value costs one label or one row, never the screen; callers
+keep rendering the raw value beside the blanked label so nothing is hidden from whoever debugs it.
+The predicates behind them are module-private on purpose — a caller reaching for the predicate is
+about to re-implement the boundary.
+
+For a new instance: if the formatter's throw is load-bearing elsewhere, leave it throwing and add
+a boundary; if nothing constructs or validates through it, let the formatter degrade (as
+`formatOpenReceiveUnixTime` does). Express the predicate once, module-private, next to the
+formatter. Keep the raw value visible under a relabelled row.
+
 ## Private boundary
 
 Do not add private openreceive.org application code, infrastructure inventory, host IPs,

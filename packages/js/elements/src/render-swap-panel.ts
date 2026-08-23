@@ -12,7 +12,7 @@ import {
   type OpenReceiveSwapDisplayModel,
   openReceiveSwapOptionLimitMessage,
   orClasses,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import { renderElementSwapCopyDetailHtml } from "./dom-helpers.ts";
 import { renderTransactionDetailsHtml } from "./transaction-details.ts";
 import type { OpenReceiveElementsSwapOption, OpenReceiveElementsWizardView } from "./views.ts";

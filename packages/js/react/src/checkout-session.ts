@@ -1,5 +1,5 @@
 // React's wrapper over the shared create-mode session
-// (`createOpenReceiveCheckoutSession` in @openreceive/browser/internal): the
+// (`createOpenReceiveCheckoutSession` in @openreceive/browser/headless): the
 // same deferred Lightning mint and swap start the custom element runs, with
 // React's publishing (setState) and error surfacing (`onError`) injected.
 //
@@ -18,7 +18,7 @@ import {
   createOpenReceiveCheckoutSession,
   type OpenReceiveCheckoutSession,
   type OpenReceiveCheckoutSessionOptions,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import * as React from "react";
 
 /** `onChange` is React's to supply — it is the re-render. */

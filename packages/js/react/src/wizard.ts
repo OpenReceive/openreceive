@@ -39,7 +39,7 @@ import {
   postOpenReceiveJson,
   requestOpenReceiveSwapRefund,
   updateOpenReceiveSelectedSwapNetworks,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import { recordOrEmpty } from "@openreceive/core";
 import * as React from "react";
 import { useOpenReceiveCheckoutSession } from "./checkout-session.ts";

@@ -12,7 +12,7 @@ import {
   prepareCheckout,
   requestCheckout,
   validateOpenReceiveCheckoutProps,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import * as React from "react";
 import { useOpenReceiveCheckoutSession } from "./checkout-session.ts";
 import {

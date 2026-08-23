@@ -8,7 +8,7 @@ import {
   type OpenReceivePaymentMethod,
   type OpenReceiveQrEncoder,
   type Status,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 export interface CheckoutView {
   readonly invoice_id?: string;

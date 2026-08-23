@@ -123,42 +123,40 @@ function writeImportSmoke(installDir, packages) {
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import * as browserHeadless from "@openreceive/browser/headless";
-import * as browserInternal from "@openreceive/browser/internal";
 import providerRegistryJson from "@openreceive/provider-data/registry.json" with { type: "json" };
 
 const checks = ${JSON.stringify(checks, null, 2)};
 
+// ./headless is the one floor under the renderers AND the headless surface:
+// the renderer plumbing and the curated engine names are both importable...
 assert(
-  typeof browserInternal.createCheckoutController === "function" &&
-    typeof browserInternal.createCheckoutElementAttributes === "function" &&
-    typeof browserInternal.createCheckoutShell === "function" &&
-    typeof browserInternal.createOpenReceiveStatusFetcher === "function" &&
-    typeof browserInternal.validateOpenReceiveCheckoutProps === "function" &&
-    typeof browserInternal.openReceiveCheckoutElementStyles === "string",
-  "@openreceive/browser/internal: framework adapter internals must be importable"
-);
-// The other half of D-1: ./internal is curated, so names the UI packages do not
-// import must NOT be reachable through it. CheckoutWatcher and refreshCheckoutState
-// are engine internals; readOpenReceiveJsonResponse belongs to the main entry.
-assert(
-  browserInternal.CheckoutWatcher === undefined &&
-    browserInternal.refreshCheckoutState === undefined &&
-    browserInternal.readOpenReceiveJsonResponse === undefined,
-  "@openreceive/browser/internal: package-private engine names must stay off the subpath"
-);
-assert(
-  typeof browserHeadless.createCheckoutState === "function" &&
+  typeof browserHeadless.createCheckoutController === "function" &&
+    typeof browserHeadless.createCheckoutElementAttributes === "function" &&
+    typeof browserHeadless.createCheckoutShell === "function" &&
+    typeof browserHeadless.createOpenReceiveStatusFetcher === "function" &&
+    typeof browserHeadless.validateOpenReceiveCheckoutProps === "function" &&
+    typeof browserHeadless.openReceiveCheckoutElementStyles === "string" &&
+    typeof browserHeadless.createCheckoutState === "function" &&
     typeof browserHeadless.createOpenReceivePaymentWizardModel === "function" &&
     typeof browserHeadless.status === "function" &&
     typeof browserHeadless.openReceiveCheckoutLabels === "object" &&
     typeof browserHeadless.orClasses === "object",
-  "@openreceive/browser/headless: curated headless engine surface must be importable"
+  "@openreceive/browser/headless: renderer plumbing and the headless engine surface must be importable"
+);
+// ...and package-private engine names are not. CheckoutWatcher and
+// refreshCheckoutState are engine internals; readOpenReceiveJsonResponse
+// belongs to the main entry.
+assert(
+  browserHeadless.CheckoutWatcher === undefined &&
+    browserHeadless.refreshCheckoutState === undefined &&
+    browserHeadless.readOpenReceiveJsonResponse === undefined,
+  "@openreceive/browser/headless: package-private engine names must stay off the subpath"
 );
 assert(
-  browserInternal.openReceivePaymentIconUrls.lightning.includes("/dist/assets/icons/lightning.svg") &&
-    browserInternal.openReceivePaymentIconUrls.btc.includes("/dist/assets/icons/btc.svg") &&
-    !browserInternal.openReceivePaymentIconUrls.btc.includes("/browser/assets/icons/"),
-  "@openreceive/browser/internal: method icon URLs must resolve to packaged dist assets"
+  browserHeadless.openReceivePaymentIconUrls.lightning.includes("/dist/assets/icons/lightning.svg") &&
+    browserHeadless.openReceivePaymentIconUrls.btc.includes("/dist/assets/icons/btc.svg") &&
+    !browserHeadless.openReceivePaymentIconUrls.btc.includes("/browser/assets/icons/"),
+  "@openreceive/browser/headless: method icon URLs must resolve to packaged dist assets"
 );
 
 const coreRoot = await import("@openreceive/core");

@@ -20,7 +20,6 @@ export {
   deriveCheckoutStateLabels,
   escapeOpenReceiveHtml,
   formatOpenReceiveAmountCaption,
-  formatOpenReceiveCountdown,
   formatOpenReceiveDepositAmount,
   formatOpenReceiveFiatAmount,
   formatOpenReceiveMsats,
@@ -38,7 +37,6 @@ export {
 export {
   createOpenReceiveSwapDisplayModel,
   createOpenReceiveSwapFeeBreakdown,
-  getOpenReceiveSwapConfirmationWaitHint,
   openReceiveSwapAssetMatchesRoute,
   overlayOpenReceiveSwapRefundStaging,
 } from "./checkout-swap-view.ts";

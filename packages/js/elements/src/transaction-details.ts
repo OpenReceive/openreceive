@@ -6,7 +6,7 @@ import {
   openReceiveCheckoutLabels,
   orClasses,
   resolveOpenReceiveTransactionDetailRows,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 import {
   renderElementSwapCopyDetailHtml,

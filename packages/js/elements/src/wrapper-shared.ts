@@ -24,9 +24,9 @@ import {
   type OpenReceiveThemeModel,
   type OpenReceiveThemeToggleElementAttributeOptions,
   type OpenReceiveThemeToggleElementAttributes,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
-// Curated re-exports: only the browser/internal names the wrapper factories
+// Curated re-exports: only the browser/headless names the wrapper factories
 // and components below put in their signatures (E21). The wrappers' curated
 // index files re-export from here; anything not listed stays private
 // element plumbing in @openreceive/browser and @openreceive/elements.
@@ -49,7 +49,7 @@ export type {
   OpenReceiveThemePreference,
   OpenReceiveThemeToggleElementAttributeOptions,
   OpenReceiveThemeToggleElementAttributes,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 // Re-exported under their own names: a wrapper that needs the controller, the
 // standalone shell, or a theme model gets the browser factory itself. The
 // four `createOpenReceiveWrapper*` aliases that used to wrap these one to one
@@ -64,7 +64,7 @@ export {
   // The create/snapshot boundary check: one implementation in the browser floor,
   // called by these wrappers and by @openreceive/react alike (G6a).
   validateOpenReceiveCheckoutProps,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 export type { DefineOpenReceiveElementsOptions } from "./index.ts";
 export { defineOpenReceiveElements } from "./index.ts";
 

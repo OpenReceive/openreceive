@@ -7,7 +7,7 @@ import {
   readOpenReceiveThemePreference,
   writeOpenReceiveThemePreference,
   type OpenReceiveThemePreference,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import { joinClassNames } from "./utils.ts";
 import type {
   ThemeScopeProps,

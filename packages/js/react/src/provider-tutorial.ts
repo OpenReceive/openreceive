@@ -5,7 +5,7 @@ import {
   openReceiveCheckoutLabels,
   type OpenReceiveWizardProviderDisplay,
   orClasses,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import * as React from "react";
 
 export function renderProviderOpenAction(

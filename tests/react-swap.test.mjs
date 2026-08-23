@@ -14,9 +14,10 @@ import {
   createOpenReceiveLightningInvoiceDecodeUrl,
   createOpenReceiveDetailExternalLink,
   getOpenReceiveExplorerNetwork,
-  getOpenReceiveSwapConfirmationWaitHint,
   openReceiveCheckoutLabels,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { getOpenReceiveSwapConfirmationWaitHint } from "../packages/js/browser/src/internal/checkout-swap-view.ts";
 import { TransactionDetails, renderSwapDepositPanel } from "@openreceive/react";
 
 test("swap confirming copy includes network-specific wait guidance", () => {

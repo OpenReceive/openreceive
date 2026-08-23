@@ -36,7 +36,7 @@
     // Packages with extra published subpath entries (see their package.json
     // "exports" / tsconfig paths).
     "packages/js/browser": {
-      "entry": ["src/index.ts", "src/headless.ts", "src/internal.ts"],
+      "entry": ["src/index.ts", "src/headless.ts"],
       "project": ["src/**/*.{ts,tsx,mjs,css}"]
     },
     "packages/js/core": {
@@ -59,7 +59,7 @@
     },
     "packages/js/angular": {
       // The component is a published subpath (./checkout-component).
-      "entry": ["src/index.ts", "src/openreceive-checkout.component.{ts,mjs}"],
+      "entry": ["src/index.ts", "src/openreceive-checkout.component.ts"],
       "project": ["src/**/*.{ts,tsx,mjs}"]
     },
     // vue/svelte single-file components would need knip compilers; their

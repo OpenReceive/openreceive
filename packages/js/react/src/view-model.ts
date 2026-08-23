@@ -4,7 +4,7 @@ import {
   status as deriveStatus,
   type CheckoutSnapshot,
   type Status,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import type { CheckoutData, CheckoutViewModel } from "./types.ts";
 
 /**

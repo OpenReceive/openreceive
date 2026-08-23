@@ -12,7 +12,7 @@ import {
   type CheckoutPhase,
   type CheckoutStatusModel,
   type OpenReceivePaymentDataSource,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
 import { joinClassNames } from "./utils.ts";
 import type {

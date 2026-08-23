@@ -1,4 +1,4 @@
-import { openReceiveCheckoutElementStyles } from "@openreceive/browser/internal";
+import { openReceiveCheckoutElementStyles } from "@openreceive/browser/headless";
 
 /** Inline stylesheet for shadow roots that cannot adopt a constructable sheet. */
 export const openReceiveCheckoutStyleTag = `<style>${openReceiveCheckoutElementStyles}</style>`;

@@ -8,7 +8,7 @@ import {
   type OpenReceiveWizardProviderDisplay,
   type OpenReceiveWizardRouteDisplay,
   orClasses,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 export function renderProviderOpenActionHtml(provider: OpenReceiveWizardProviderDisplay): string {
   if (provider.tutorials.length === 0) {

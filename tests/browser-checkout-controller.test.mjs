@@ -5,13 +5,15 @@ import {
   createCheckoutState,
   createCheckoutElementAttributes,
   createOpenReceiveStatusFetcher,
-  createOpenReceiveSwapFeeBreakdown,
   normalizeSwapStartInvoice,
-  openReceiveRoutes,
   postOpenReceiveJson,
   prepareCheckout,
   requestCheckout,
-} from "../packages/js/browser/src/internal.ts";
+} from "../packages/js/browser/src/headless.ts";
+import {
+  createOpenReceiveSwapFeeBreakdown,
+  openReceiveRoutes,
+} from "../packages/js/browser/src/internal/checkout.ts";
 import { startOpenReceiveSwapRequest } from "../packages/js/browser/src/headless.ts";
 
 // The browser checkout attaches a console logger at INFO; these unit tests do not

@@ -4,7 +4,7 @@ import {
   type OpenReceiveTransactionDetailRow,
   type OpenReceiveTransactionDetailsSource,
   resolveOpenReceiveTransactionDetailRows,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import * as React from "react";
 import { ClipboardIcon } from "./components.ts";
 import { useOpenReceiveTransientValue } from "./hooks.ts";

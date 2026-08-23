@@ -15,7 +15,7 @@ import {
   type OpenReceivePaymentDataSource,
   openReceiveCheckoutLabels,
   orClasses,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 import { COPY_INVOICE_ICON } from "./dom-helpers.ts";
 

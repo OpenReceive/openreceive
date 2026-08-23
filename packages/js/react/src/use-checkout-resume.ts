@@ -1,4 +1,4 @@
-import type { CheckoutState, GuestCheckoutResumeController } from "@openreceive/browser/internal";
+import type { CheckoutState, GuestCheckoutResumeController } from "@openreceive/browser/headless";
 import * as React from "react";
 
 const DEFAULT_RESUME_MISS_MESSAGE = "This checkout link is no longer available. Start a new order.";

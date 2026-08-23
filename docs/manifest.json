@@ -10,14 +10,6 @@
       "public": true
     },
     {
-      "slug": "what-is-openreceive",
-      "title": "What Is OpenReceive",
-      "source_path": "docs/guides/what-is.md",
-      "category": "guide",
-      "audience": "developer",
-      "public": true
-    },
-    {
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "source_path": "docs/guides/quickstart-node.md",
@@ -269,14 +261,6 @@
       "slug": "forbidden-without-approval",
       "title": "Forbidden Without Approval",
       "source_path": "docs/internal/forbidden-without-approval.md",
-      "category": "internal",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "internal-display-boundary-findings",
-      "title": "Display boundary findings: deferred instances",
-      "source_path": "docs/internal/display-boundary-findings.md",
       "category": "internal",
       "audience": "contributor",
       "public": false

@@ -9,7 +9,7 @@ import {
   type CheckoutController,
   type CheckoutSnapshot,
   type CheckoutState,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
 import { getCheckoutLogContext } from "./utils.ts";
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";

@@ -13,7 +13,6 @@
 | `npm run check:public-api` | Diff every publishable package's export surface against the committed snapshot (`tools/validate/public-api.snapshot.json`) — the gate behind the curated adapter/wrapper surfaces. Regenerate a reviewed change with `--update`. | No |
 | `npm run check:vue` | Type-check the Vue wrapper with `vue-tsc`. | No |
 | `npm run check:svelte` | Type-check the Svelte wrapper with `svelte-check`. | No |
-| `npm run check:example-imports` | Reject `@openreceive/*/internal` imports under `examples/`. Part of `test:ci:core`. | No |
 | `npm run validate` | Contract/vector validation plus generated doc-table freshness (spec route/error tables, headless symbol inventory). Vector validation runs here — there is no separate `test:vectors` command. | No |
 | `npm run scan:secrets` | Scan public repo files for likely committed receive-only NWC codes and reject tracked env files. | No |
 | `npm run scan:client-bundles` | Scan generated demo `dist` bundles for browser-side NWC markers after `build:demo`. | No |

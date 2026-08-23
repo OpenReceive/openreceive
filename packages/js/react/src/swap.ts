@@ -13,7 +13,7 @@ import {
   openReceiveSwapOptionLimitMessage,
   orClasses,
   selectCheckoutDisplayInvoice,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 import * as React from "react";
 import { ClipboardIcon, WaitingState } from "./components.ts";
 import { useOpenReceiveTransientValue } from "./hooks.ts";

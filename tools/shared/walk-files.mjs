@@ -8,7 +8,7 @@ import path from "node:path";
  * `filter(entryName, fullPath)` decides whether a file is included (all files
  * when omitted). A missing `dir` yields an empty list.
  *
- * Shared by tools/validate/scan-secrets.mjs, check-example-imports.mjs, and
+ * Shared by tools/validate/scan-secrets.mjs and
  * validate-spec.mjs so the repo has one walker to keep correct.
  */
 export function walkFiles(dir, { ignoreDirs = new Set(), filter } = {}) {

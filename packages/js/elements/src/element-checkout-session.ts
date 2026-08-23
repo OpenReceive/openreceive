@@ -4,7 +4,7 @@
 //
 // The mint and the swap start themselves are NOT here — they are the same
 // decision React makes, so they live once in
-// @openreceive/browser/internal's `createOpenReceiveCheckoutSession` and this
+// @openreceive/browser/headless's `createOpenReceiveCheckoutSession` and this
 // file supplies the element's answers to the two questions that genuinely
 // differ: how a new snapshot reaches the screen (attributes + a shadow rebuild
 // + a re-keyed poll controller) and where a failure is shown (an inline panel
@@ -31,7 +31,7 @@ import {
   type OpenReceiveSwapSelection,
   prepareCheckout,
   requestCheckout,
-} from "@openreceive/browser/internal";
+} from "@openreceive/browser/headless";
 
 /** What the session needs back from the element it drives. */
 export interface ElementCheckoutSessionHost {
