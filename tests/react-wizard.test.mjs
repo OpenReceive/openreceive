@@ -10,22 +10,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
-  applyCheckoutThemeAttributes,
-  applyOpenReceiveThemeAttributes,
   createOpenReceivePaymentWizardModel,
   createOpenReceivePaymentWizardSelection,
-  createOpenReceivePaymentWizardState,
   createOpenReceiveStoredThemeModel,
   createOpenReceiveThemeModel,
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
   formatOpenReceiveDepositAmount,
   getOpenReceivePaymentMethodIcon,
-  getOpenReceivePaymentStatusText,
-  getCheckoutProviderIcon,
-  getCheckoutProviderOpenLabel,
-  getCheckoutProviderTutorials,
-  getOpenReceiveRouteIcon,
   getOpenReceiveRouteNetworkLabel,
   getOpenReceiveNetworkIcon,
   getOpenReceiveSwapOptionIcon,
@@ -34,13 +26,31 @@ import {
   openReceivePaymentMethods,
   buildOpenReceiveMethodGridEntries,
   readOpenReceiveThemePreference,
-  resolveOpenReceiveTheme,
   syncOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemeControls,
-  toggleOpenReceiveStoredThemePreference,
   updateOpenReceivePaymentWizardSelection,
   writeOpenReceiveThemePreference,
 } from "@openreceive/browser/headless";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { applyCheckoutThemeAttributes } from "../packages/js/browser/src/internal/theme.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { applyOpenReceiveThemeAttributes } from "../packages/js/browser/src/internal/theme.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { createOpenReceivePaymentWizardState } from "../packages/js/browser/src/internal/wizard.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { getOpenReceivePaymentStatusText } from "../packages/js/browser/src/internal/wizard.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { getCheckoutProviderIcon } from "../packages/js/browser/src/internal/wizard.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { getCheckoutProviderOpenLabel } from "../packages/js/browser/src/internal/wizard.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { getCheckoutProviderTutorials } from "../packages/js/browser/src/internal/wizard.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { getOpenReceiveRouteIcon } from "../packages/js/browser/src/internal/wizard.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { resolveOpenReceiveTheme } from "../packages/js/browser/src/internal/theme.ts";
+// Test-only: an engine seam no renderer imports, read from its source module.
+import { toggleOpenReceiveStoredThemePreference } from "../packages/js/browser/src/internal/theme.ts";
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { OPENRECEIVE_PROVIDER_PREVIEW_LIMIT } from "../packages/js/browser/src/internal/dom-contract.ts";
 import { formatOpenReceiveCountdown } from "../packages/js/browser/src/internal/checkout-format.ts";
