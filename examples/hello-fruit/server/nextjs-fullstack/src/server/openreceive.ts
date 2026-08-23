@@ -6,7 +6,7 @@ import {
   type OpenReceiveOrderSettlement,
 } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
-import { openReceiveConfig } from "../../../../../../config/openreceive.ts";
+import { openReceiveConfig } from "../../../../shared/openreceive-config.ts";
 import { helloFruitDeliveryFetchResponse } from "../../../../shared/demo-delivery.ts";
 import { createHelloFruitDemoServerLogger } from "../../../../shared/demo-logging.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";

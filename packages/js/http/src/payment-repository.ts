@@ -12,11 +12,11 @@ import type { CheckoutCreatedInput } from "./handler.ts";
 // row block an incoming attempt, and what terminal transition (if any) a
 // reconciliation result justifies.
 //
-// These three functions ARE the settlement state machine. A prior bug orphaned
-// settlements by getting them subtly wrong, so they are pinned by cross-language
-// spec vectors (spec/test-vectors, tests/sql-payments.test.mjs) and the Ruby
-// engine implements the same rules independently. Change them only with the
-// vectors, never to tidy a signature.
+// These three functions ARE the settlement state machine: getting them subtly
+// wrong orphans settlements, so they are pinned by cross-language spec vectors
+// (spec/test-vectors, tests/sql-payments.test.mjs) and the Ruby engine
+// implements the same rules independently. Change them only with the vectors,
+// never to tidy a signature.
 
 /** Seconds of remaining life required before a live attempt is reused instead of reminted. */
 export const OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS = 60 as const;
@@ -29,12 +29,12 @@ export const OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS = 60 as const;
 export const OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS = 900 as const;
 
 /**
- * Lifecycle of one payment attempt. `pending` attempts participate in
- * reconciliation; every other status is terminal for reconciliation purposes.
- * `attention` marks rows that need operator review: the wallet still
+ * Lifecycle of one payment attempt: {@link TransactionSettlementStatus} plus
+ * `attention`. `pending` attempts participate in reconciliation; every other
+ * status is terminal for reconciliation purposes. `attention` marks rows an
+ * operator must review before the attempt moves on: the wallet still
  * explicitly reports an in-flight transaction state long after invoice expiry.
  */
-/** {@link TransactionSettlementStatus} plus `attention`: an operator must look before the attempt moves on. */
 export type OpenReceiveAttemptStatus = TransactionSettlementStatus | "attention";
 
 /**

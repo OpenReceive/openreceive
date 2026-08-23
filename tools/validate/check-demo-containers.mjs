@@ -112,8 +112,8 @@ for (const demo of nodeDemos) {
   expect(/^FROM node:22-bookworm-slim$/m.test(dockerfile), `${dockerfilePath}: must use Node 22`);
   expect(dockerfile.includes("npm ci --no-audit"), `${dockerfilePath}: must use npm ci`);
   expect(
-    dockerfile.includes("COPY config ./config"),
-    `${dockerfilePath}: must copy shared OpenReceive config`,
+    dockerfile.includes("COPY examples/hello-fruit ./examples/hello-fruit"),
+    `${dockerfilePath}: must copy the Hello Fruit tree (carries the shared OpenReceive config)`,
   );
   expect(
     dockerfile.includes("COPY tools/run-with-root-env.mjs ./tools/run-with-root-env.mjs"),

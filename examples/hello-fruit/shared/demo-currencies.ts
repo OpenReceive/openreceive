@@ -17,7 +17,7 @@ export type HelloFruitDirectAmountCurrency = (typeof HELLO_FRUIT_DIRECT_AMOUNT_C
 export type HelloFruitCurrency = string;
 
 /**
- * Currencies the Hello Fruit UI offers. Matches config/openreceive.ts (`USD`)
+ * Currencies the Hello Fruit UI offers. Matches openreceive-config.ts (`USD`)
  * plus direct bitcoin units. Extra fiat belongs in the tracked
  * `priceCurrencies` setting — see docs/guides/price-feeds.md.
  */

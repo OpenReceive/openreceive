@@ -12,7 +12,7 @@ import { createOpenReceiveHost, type OpenReceiveOrderSettlement } from "@openrec
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
 import { createTestkitReceiveClient, createTestkitSwapProvider } from "@openreceive/testkit";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
-import { openReceiveConfig } from "../../../config/openreceive.ts";
+import { openReceiveConfig } from "./openreceive-config.ts";
 import { mountHelloFruitDelivery } from "./demo-delivery.ts";
 import { createHelloFruitDemoServerLogger } from "./demo-logging.ts";
 import { helloFruitDemoWalletMode, readRequiredHelloFruitNwcConnectionString } from "./demo-nwc.ts";

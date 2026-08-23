@@ -31,26 +31,22 @@ export interface OpenReceiveRoutes {
 /**
  * Every route the browser calls, derived from the router's mount prefix.
  *
- * THE INVARIANT, and why this throws instead of defaulting: THERE IS ONE
- * MOUNT. Every route below comes from this one string, so quietly substituting
+ * Throws instead of defaulting because THERE IS ONE MOUNT: quietly substituting
  * a default for a `prefix` that never arrived would split the flow across
  * DIFFERENT deployments — a checkout created against one host, then prepared,
  * polled, swapped and refunded against another. That is a lost payment, not a
- * cosmetic bug, and it surfaces long after the mistake. Fail loudly here, at
- * the one derivation, before the first request goes out.
+ * cosmetic bug, and it surfaces long after the mistake. Every published entry
+ * point (`requestCheckout` / `prepareCheckout`, `createOpenReceiveStatusFetcher`
+ * and the swap calls) derives its routes here, so this one check covers all of
+ * them before the first request goes out.
  *
- * This is the last guard on the path: `requestCheckout` / `prepareCheckout`
- * (main entry), `createOpenReceiveStatusFetcher` and the swap calls (./headless
- * and ./internal) all funnel through this function, so checking here covers
- * every published entry point at once and leaves no copy to drift.
- *
- * NOT REDUNDANT WITH THE TYPES — do not delete it as such. `prefix` is
- * REQUIRED in every options type that carries it, so a TypeScript caller never
- * reaches this throw. It is here for the callers the types do not reach: plain
- * JavaScript integrations, a wrapper handing through an attribute or prop that
- * was never set, and any value that only turns out to be `undefined` at run
- * time. Without it those callers get a `TypeError` from `.replace` on
- * `undefined`, which names neither the option nor the fix.
+ * NOT REDUNDANT WITH THE TYPES. `prefix` is REQUIRED in every options type that
+ * carries it, so a TypeScript caller never reaches this throw. It is here for
+ * the callers the types do not reach: plain JavaScript integrations, a wrapper
+ * handing through an attribute or prop that was never set, and any value that
+ * only turns out to be `undefined` at run time. Without it those callers get a
+ * `TypeError` from `.replace` on `undefined`, which names neither the option
+ * nor the fix.
  */
 export function openReceiveRoutes(prefix: string): OpenReceiveRoutes {
   if (typeof prefix !== "string") {

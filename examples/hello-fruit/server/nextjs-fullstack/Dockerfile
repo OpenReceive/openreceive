@@ -30,7 +30,6 @@ COPY packages ./packages
 COPY tools/package ./tools/package
 COPY tools/run-with-root-env.mjs ./tools/run-with-root-env.mjs
 COPY spec/data/rates ./spec/data/rates
-COPY config ./config
 COPY examples/hello-fruit ./examples/hello-fruit
 RUN npm run build:packages
 RUN npm run build -w @openreceive/example-nextjs-fullstack
