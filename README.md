@@ -6,31 +6,30 @@ Accept Bitcoin payments on your website or app, straight into a wallet you contr
 
 <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="56">
 
-**Bitcoin by default.** Bitcoin is the most neutral settlement currency on the
-internet. Your server issues an invoice from a wallet you already control. The payer settles it, and your server
-approves delivery of the purchase.
+**Bitcoin by default.** Use the internet's neutral settlement currency. Your server issues an invoice. The payer settles the invoice, and your server approves delivery of the purchase.
 
 **Deposit-only by design.** OpenReceive exposes no payment-sending API and
-never holds a key: it connects with a receive-only NWC code. Custody is the job of
-of the [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments)
-and swap provider you choose — not of this library. Choose an NWC provider like [Alby Hub](https://getalby.com/), running on your own hardware, for 100% self-custody.
+never holds a key: it connects with only a spec-compliant receive-only [NWC code](https://github.com/nostr-protocol/nips/blob/master/47.md). Choose an existing
+[NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments) to receive payments, or build your own NWC Service.
+
+For full self-custody, use an NWC provider like [Alby Hub](https://getalby.com/), running on your own hardware.
 
 **Optionally swap in other currencies.** Not every customer holds Bitcoin.
-Configure any swap provider that implements the
-[FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs) and
-checkout offers these pay-in routes, each converted into Bitcoin on the way in.
+Configure any
+[swap provider](https://openreceive.org/set_up_swap_provider) to receive altcoins. Use any swap provider that implements the
+[FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs), or build your own.
 
 Optional Inbound Currencies:
 
-| Pay with                                                                                                  | On network                                                                                                                                                                                                                                                                                        |
-| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="packages/js/browser/src/assets/icons/usdt.svg" alt="USDT" width="28"> &nbsp;**USDT** (Tether)   | <img src="packages/js/browser/src/assets/icons/trx.svg" alt="Tron" width="18"> Tron &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum |
-| <img src="packages/js/browser/src/assets/icons/usdc.svg" alt="USDC" width="28"> &nbsp;**USDC** (USD Coin) | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                  |
-| <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana)      | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana                                                                                                                                                                                                           |
-| <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether)       | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                                                                                                                       |
+| Pay with                                                                                                  | On network                                                                                                                                                                                                                                                                                        | Settles in                                                                                |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| <img src="packages/js/browser/src/assets/icons/usdt.svg" alt="USDT" width="28"> &nbsp;**USDT** (Tether)   | <img src="packages/js/browser/src/assets/icons/trx.svg" alt="Tron" width="18"> Tron &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
+| <img src="packages/js/browser/src/assets/icons/usdc.svg" alt="USDC" width="28"> &nbsp;**USDC** (USD Coin) | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana &nbsp;&nbsp; <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                  | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
+| <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana)      | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana                                                                                                                                                                                                           | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
+| <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether)       | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                                                                                                                       | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
 
-OpenReceive does not transmit money or hold customer funds. It helps your
-backend create invoices and verify settlement — nothing more.
+OpenReceive does not transmit money or hold customer funds. OpenReciev helps your
+backend create invoices and safely verify settlement... nothing more.
 
 ## Quickstart
 
@@ -43,16 +42,16 @@ Pick your stack:
 | BTCPay Server | Coming soon                                         |
 
 Each one is the same loop: your server owns the price and the order, the payer
-gets a Lightning invoice, and your `onPaid` hook runs once inside the settlement
+gets QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the settlement
 transaction.
 
-## Design
+## Paranoid Security Defaults
 
-- **Paranoid security defaults.**
+- OpenReceive cannot spend your funds.
   1. An attacker who gains control of your server has no way to spend your funds:
      all your server holds is a receive-only NWC code.
   2. Every payment settles as a private, immutable Bitcoin Lightning payment, swapped from other
-     currencies as necessary. No funds are held in centrally-controlled, censorable currencies like SOL, USDT, OR USDC.
+     currencies as necessary. No funds are held in centrally-controlled, censorable currencies: ETH, SOL, USDT, and USDC are swapped to Bitcoin instantly.
   3. See [Security](docs/guides/security.md) guide.
 - **Your app owns business state.** Your application owns orders; the library
   owns the `openreceive_payments` rows (they live in your database) — see
@@ -69,7 +68,7 @@ talks to a different side of your app, and each has an obvious home:
 | Piece                        | You build it with                                                                                                               | It talks to                                                                 | It lives                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
 | **Wallet client**            | [`createOpenReceive()`][api-createopenreceive]                                                                                  | **your wallet** — mints invoices, reads settlement, holds the NWC code      | server-only, one per process                     |
-| **Order bridge**             | [`createHost()`][api-createopenreceivehost]                                                                          | **your database** — your order hooks, plus the `openreceive_payments` table | server-only, next to your models                 |
+| **Order bridge**             | [`createHost()`][api-createopenreceivehost]                                                                                     | **your database** — your order hooks, plus the `openreceive_payments` table | server-only, next to your models                 |
 | **HTTP routes**              | [`openReceiveExpress()`][api-express] (or [Fastify][api-fastify] / [Next][api-next] / [Rails](docs/guides/quickstart-rails.md)) | **the browser** — the endpoints the checkout UI calls                       | mounted on your app by default at `/openreceive` |
 | **Checkout UI** _(optional)_ | [`@openreceive/react`][api-browser] (or vue/svelte/angular/elements)                                                            | **the HTTP routes above** — creates the checkout, polls until paid          | your browser bundle                              |
 
@@ -251,5 +250,6 @@ Start with the [developer guides](docs/guides/README.md):
 [api-fastify]: docs/guides/api-reference.md#openreceivefastify
 [api-next]: docs/guides/api-reference.md#nexthandlers
 [api-notifworker]: docs/guides/api-reference.md#startnotificationworker
+[api-onpaid]: docs/guides/api-reference.md#onpaid
 [api-rake-notifications]: docs/guides/api-reference.md#rake-openreceivenotifications
 [api-scaffold]: docs/guides/api-reference.md#openreceive-scaffold-payments

@@ -416,9 +416,11 @@ your application's existing database:
 | `db` | `SqlDatabase` | yes | pg Pool/Client, `node:sqlite` DatabaseSync, better-sqlite3, or a custom [SqlAdapter](#sqladapter). |
 | `loadOrder` | `(orderId, context) => Order \| null` | yes | Load your order; `null` → 404. |
 | `amountForOrder` | `(order, context) => amount` | yes | The trusted price from your data. |
-| `onPaid` | `OrderSettlementHook` | yes | Fulfillment; see below. |
+| `onPaid` | `OrderSettlementHook` | yes | Fulfillment; see [onPaid](#onpaid). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
 | `clock` | `() => number` | no | Unix-seconds clock override. |
+
+#### onPaid
 
 In db mode `onPaid` receives an `OrderSettlement`:
 
