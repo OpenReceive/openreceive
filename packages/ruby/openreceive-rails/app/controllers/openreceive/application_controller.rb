@@ -14,10 +14,15 @@ module OpenReceive
   # [status, headers, body] triple. Controllers and the Rack app therefore cannot drift — the
   # routing/authorize/error semantics live in one place (the server gem's RequestHandler).
   class ApplicationController < OpenReceive.config.parent_controller.constantize
-    # Browser checkout clients POST JSON without a Rails form CSRF token. Host `authorize`
-    # remains the auth boundary (same as Node HTTP adapters). API-only parents
-    # (ActionController::API) have no forgery protection to skip.
-    skip_forgery_protection if respond_to?(:skip_forgery_protection)
+    # The host's forgery protection is inherited, not skipped: whatever
+    # `protect_from_forgery` the parent controller configures applies to the
+    # engine's routes exactly as it applies to the host's own. The shipped
+    # browser client sends `X-CSRF-Token` from `<meta name="csrf-token">`
+    # whenever the page renders `csrf_meta_tags`, so a Rails host needs no
+    # extra wiring; API-only parents (ActionController::API) have no forgery
+    # protection, and the shared handler's JSON-only + same-site gates cover
+    # them. A failed check answers with the shared 403 error contract instead
+    # of the opaque 500 the StandardError rescue below would produce.
 
     # Any OpenReceive call is a settlement trigger (mirrors the JS handler's
     # dispatch): after the route matched and before its own work, run one
@@ -35,6 +40,11 @@ module OpenReceive
     # through Rails.error before the opaque 500 goes on the wire.
     rescue_from StandardError do |error|
       openreceive_respond(openreceive_handler.error_response(error, openreceive_request_id))
+    end
+
+    rescue_from ActionController::InvalidAuthenticityToken do
+      forbidden = Server::ForbiddenError.new("Invalid or missing CSRF token.")
+      openreceive_respond(openreceive_handler.error_response(forbidden, openreceive_request_id))
     end
 
     private

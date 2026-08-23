@@ -126,12 +126,14 @@ table's migration ([`npx openreceive scaffold payments`][api-scaffold] emits it
 for your ORM); the library owns everything else: schema, per-reference locking,
 write-once settlement, reconciliation.
 
-The `reference` is a string you choose — your order id, a cart id, a UUID.
-OpenReceive stores it only to group attempts under it and to hand it back to
-`onPaid`; it never looks inside it. Each row is one invoice or swap attempt
-under a reference. A row commits before the payer sees an invoice, settles
-once, and fulfills at most once per reference; to your app an order is simply
-unpaid or paid.
+The `reference` is a string you choose, and it is the fulfillment identity:
+your order id — one per thing you fulfill, created before checkout, kept
+across retries, never reused. OpenReceive never looks inside it, but `onPaid`
+runs once per reference, a new checkout under a reference that already
+settled is refused with 409, and a fresh id per page load lets one order be
+paid twice. Each row is one invoice or swap attempt under a reference. A row
+commits before the payer sees an invoice, settles once, and fulfills at most
+once per reference; to your app an order is simply unpaid or paid.
 
 Schema, the attempt state machine, live-attempt rules, and the
 custom-repository escape hatch: [Payment storage](docs/guides/storage.md).

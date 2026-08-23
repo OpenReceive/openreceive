@@ -79,9 +79,12 @@ manager has to put the values there first.
 ## Configure the host hooks
 
 The initializer needs three things: authorization, the trusted price, and
-fulfillment. All three receive the `reference` — a string you choose (your
-order id, a cart id, a UUID) that OpenReceive stores only to group attempts
-under and to hand back to `on_paid`; it never looks inside it.
+fulfillment. All three receive the `reference` — a string you choose, and the
+fulfillment identity: your order id, one per thing you fulfill, created before
+checkout, kept across retries, never reused. OpenReceive never looks inside
+it, but `on_paid` runs once per reference, a new checkout under a reference
+that already settled is refused with 409, and a fresh id per page load lets
+one order be paid twice.
 
 ```ruby
 OpenReceive.configure do |config|
@@ -105,6 +108,10 @@ end
 `OpenReceive.configure` sets the three host hooks; `on_paid` runs inside the
 settlement transaction, only for the first settled attempt for a reference.
 → [OpenReceive.configure](api-reference.md#openreceiveconfigure)
+
+The engine inherits your application's `protect_from_forgery`. Keep
+`csrf_meta_tags` in the layout that renders the checkout; the checkout client
+sends `X-CSRF-Token` from it automatically.
 
 The generated initializer ships
 `config.on_paid = OpenReceive::LOGGING_ON_PAID` — a placeholder that only logs

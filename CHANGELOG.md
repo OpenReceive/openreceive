@@ -6,6 +6,24 @@ OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
 behind.
 
+### Cross-site requests are refused by the handler; the Rails engine inherits `protect_from_forgery`
+
+- Every body-bearing route now answers `415` for a body that is not
+  `application/json` and `403` for a request the browser labels
+  `Sec-Fetch-Site: cross-site`, in both engines and before `authorize` runs. A
+  cross-site form cannot set a JSON content type, a cross-origin `fetch` that
+  does is CORS-preflighted (never answered), and the `Sec-Fetch-Site` gate
+  covers the remaining `no-cors` forgery. Golden vectors `11` and `12` pin
+  both refusals; vectors may now declare extra request `headers`.
+- `OpenReceive::ApplicationController` no longer calls
+  `skip_forgery_protection`: the host's `protect_from_forgery` applies to the
+  engine's routes as it does to the host's own, and a failed check is the
+  shared `403` instead of an opaque `500`. The browser client sends
+  `X-CSRF-Token` from `<meta name="csrf-token">` on every request when the
+  page renders one (`csrf_meta_tags`), from one shared `requestHeaders`
+  helper; a host `headers` value still wins. The Rails demo drops its
+  `:null_session` override and runs Rails' default.
+
 ### `reference`, not `order_id`: the host's order is not part of the story
 
 - The grouping key OpenReceive stores is now called `reference` everywhere —
@@ -13,9 +31,9 @@ behind.
   the browser snapshots, the `<Checkout reference>` prop (`route-reference`
   for the element wrappers), `AuthorizeResource.reference`, and the
   settlement passed to `onPaid` / `config.on_paid` (`PaymentSettlement`,
-  formerly `OrderSettlement`). It is a string the host chooses — an order id,
-  a cart id, a UUID — that OpenReceive stores only to group attempts under and
-  to hand back on settlement. Rails hosts recreate the engine tables
+  formerly `OrderSettlement`). It is a string the host chooses — its order
+  id, one per payable thing and never reused — that OpenReceive groups
+  attempts under and fulfills at most once. Rails hosts recreate the engine tables
   (`bin/rails db:reset` on a development database).
 - `loadOrder` + `amountForOrder` collapsed into one hook: `amountFor(reference)`
   returns the trusted price or `null` for a 404 (Rails: `config.amount_for`,

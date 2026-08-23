@@ -2,6 +2,7 @@ import { nonEmptyString, recordOrEmpty } from "@openreceive/core";
 import { optionalSafeInteger } from "./checkout-read.ts";
 import { readJsonResponse } from "./checkout-transport.ts";
 import { resolveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
+import { requestHeaders } from "./request-headers.ts";
 import { type Routes, checkoutRoutes } from "./routes.ts";
 import {
   type CheckoutInvoiceSnapshot,
@@ -202,10 +203,7 @@ async function requestJson(
 ): Promise<unknown> {
   const response = await options.fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers: requestHeaders(options.headers),
     body: JSON.stringify(body),
   });
   return readJsonResponse(response, "OpenReceive request failed.");

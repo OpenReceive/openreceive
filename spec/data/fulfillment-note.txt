@@ -10,6 +10,12 @@ inside that same transaction. A second payment to a second invoice for the
 same order is still recorded - with `status_reason = 'duplicate_settlement'`
 - but never fulfills a second time. You do not need to add a lock for this.
 
+That makes the reference the unit of fulfillment: give every payable order
+its own reference, created before checkout, kept across retries, and never
+reused. A new checkout under a reference that has already settled is refused
+with a 409 rather than fulfilled again; a fresh reference per page load
+leaves one order payable twice.
+
 WHAT YOU MUST GUARANTEE
 
 OpenReceive cannot see fulfillment that happens outside it. If ANY other

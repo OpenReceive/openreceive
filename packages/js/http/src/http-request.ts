@@ -34,10 +34,7 @@ const ROUTE_BODY_FIELDS: Record<string, readonly string[]> = {
   "swap.refund": ["reference", "payment_hash", "refund_address"],
 };
 
-export function assertDeclaredFields(
-  routeKind: string,
-  body: Record<string, unknown>,
-): void {
+export function assertDeclaredFields(routeKind: string, body: Record<string, unknown>): void {
   const allowed = ROUTE_BODY_FIELDS[routeKind];
   if (allowed === undefined) return;
   for (const key of Object.keys(body)) {
@@ -72,21 +69,30 @@ export function rejectPayerAmount(body: Record<string, unknown>): void {
  * Mirrors the Ruby engine's RequestHandler#assert_json_content_type!.
  */
 function assertJsonContentType(request: Request): void {
-  const contentType = (request.headers.get("content-type") ?? "")
-    .split(";")[0]
-    ?.trim();
+  const contentType = (request.headers.get("content-type") ?? "").split(";")[0]?.trim();
   if (contentType !== "application/json") {
-    throw new HttpError(
-      415,
-      "INVALID_REQUEST",
-      "Request content type must be application/json.",
-    );
+    throw new HttpError(415, "INVALID_REQUEST", "Request content type must be application/json.");
   }
 }
 
-export async function readJsonBody(
-  request: Request,
-): Promise<Record<string, unknown>> {
+/**
+ * Browsers label every request with its initiator's relation to the target
+ * (`Sec-Fetch-Site`), and a forged request from another site is always
+ * `cross-site` — including a `mode: "no-cors"` fetch, which the content-type
+ * gate alone cannot see. The mounted routes serve the host's own pages, so a
+ * cross-site POST is refused before the body is read. `same-site` (a sibling
+ * subdomain) and an absent header (non-browser clients, old browsers — the
+ * content-type gate covers those) pass. Mirrors the Ruby engine's
+ * RequestHandler#assert_not_cross_site!.
+ */
+function assertNotCrossSite(request: Request): void {
+  if (request.headers.get("sec-fetch-site")?.trim().toLowerCase() === "cross-site") {
+    throw new HttpError(403, "FORBIDDEN", "Cross-site requests are not accepted.");
+  }
+}
+
+export async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
+  assertNotCrossSite(request);
   assertJsonContentType(request);
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
@@ -95,15 +101,10 @@ export async function readJsonBody(
   const text = await readCappedBodyText(request);
   try {
     const value = text.trim() === "" ? {} : JSON.parse(text);
-    if (value === null || typeof value !== "object" || Array.isArray(value))
-      throw new Error();
+    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error();
     return value as Record<string, unknown>;
   } catch {
-    throw new HttpError(
-      400,
-      "INVALID_REQUEST",
-      "Request body must be a JSON object.",
-    );
+    throw new HttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
   }
 }
 
@@ -124,11 +125,7 @@ async function readCappedBodyText(request: Request): Promise<string> {
     try {
       result = await reader.read();
     } catch {
-      throw new HttpError(
-        400,
-        "INVALID_REQUEST",
-        "Request body must be a JSON object.",
-      );
+      throw new HttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
     }
     if (result.done) break;
     total += result.value.byteLength;
@@ -153,18 +150,13 @@ async function readCappedBodyText(request: Request): Promise<string> {
  * unavailable" the service raises for feed outages. An absent parameter means
  * "the configured set".
  */
-export function ratesCurrencies(
-  raw: string | null,
-): readonly string[] | undefined {
+export function ratesCurrencies(raw: string | null): readonly string[] | undefined {
   if (raw === null) return undefined;
   const currencies = raw
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-  if (
-    currencies.length === 0 ||
-    currencies.some((value) => !/^[A-Za-z]{3}$/.test(value))
-  ) {
+  if (currencies.length === 0 || currencies.some((value) => !/^[A-Za-z]{3}$/.test(value))) {
     throw new HttpError(
       400,
       "INVALID_REQUEST",
@@ -196,23 +188,14 @@ export function optionalCheckoutFields(body: Record<string, unknown>) {
 export function requiredPaymentHash(value: unknown): string {
   const hash = requiredString(value, "payment_hash").toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(hash)) {
-    throw new HttpError(
-      400,
-      "INVALID_REQUEST",
-      "payment_hash must be 64 hexadecimal characters.",
-    );
+    throw new HttpError(400, "INVALID_REQUEST", "payment_hash must be 64 hexadecimal characters.");
   }
   return hash;
 }
 
-export function requiredString(
-  value: unknown,
-  field: string,
-  maxLength?: number,
-): string {
+export function requiredString(value: unknown, field: string, maxLength?: number): string {
   const result = trimmedField(value);
-  if (result === undefined)
-    throw new HttpError(400, "INVALID_REQUEST", `${field} is required.`);
+  if (result === undefined) throw new HttpError(400, "INVALID_REQUEST", `${field} is required.`);
   if (maxLength !== undefined && result.length > maxLength) {
     throw new HttpError(
       400,

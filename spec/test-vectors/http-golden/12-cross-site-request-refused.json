@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "name": "a cross-site request is refused before authorize",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "headers": { "sec-fetch-site": "cross-site" },
+    "body": { "reference": "ord-1" }
+  },
+  "expected": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "FORBIDDEN",
+      "message": "Cross-site requests are not accepted.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "Browsers label a forged request from another site `Sec-Fetch-Site: cross-site` even when it is a no-cors fetch carrying a JSON content type, so the handler refuses it before reading the body. `same-site` and an absent header pass. Runners MUST send `request.headers` verbatim."
+}

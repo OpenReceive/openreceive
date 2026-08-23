@@ -247,6 +247,48 @@ test("the published entry points inherit the prefix guard", async () => {
   );
 });
 
+// A Rails page renders the session's CSRF token into `<meta name="csrf-token">`;
+// the client forwards it as X-CSRF-Token so the engine can inherit the host's
+// protect_from_forgery. Without the meta tag nothing is added, and a host
+// `headers` value for the same name wins.
+test("the client sends X-CSRF-Token from the page's csrf-token meta tag", async () => {
+  const captured = [];
+  const fetcher = async (_url, init) => {
+    captured.push(new Headers(init.headers));
+    return new Response(
+      JSON.stringify({ reference: "order-1", amount_msats: 1, payment_methods: [] }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  };
+  const hadDocument = "document" in globalThis;
+  const previous = globalThis.document;
+  try {
+    globalThis.document = {
+      querySelector: (selector) =>
+        selector === 'meta[name="csrf-token"]' ? { getAttribute: () => "tok-123" } : null,
+    };
+    await prepareCheckout({ prefix: "/openreceive", reference: "order-1", fetch: fetcher });
+    await prepareCheckout({
+      prefix: "/openreceive",
+      reference: "order-1",
+      fetch: fetcher,
+      headers: { "X-CSRF-Token": "host-wins" },
+    });
+    globalThis.document = { querySelector: () => null };
+    await prepareCheckout({ prefix: "/openreceive", reference: "order-1", fetch: fetcher });
+  } finally {
+    if (hadDocument) globalThis.document = previous;
+    else delete globalThis.document;
+  }
+  assert.equal(captured[0].get("x-csrf-token"), "tok-123");
+  assert.equal(captured[0].get("content-type"), "application/json");
+  assert.equal(captured[1].get("x-csrf-token"), "host-wins");
+  assert.equal(captured[2].get("x-csrf-token"), null);
+});
+
 test("deferred-mode element attributes carry the same create-time options as create mode", () => {
   const options = {
     prefix: "/openreceive",

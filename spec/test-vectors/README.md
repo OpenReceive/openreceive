@@ -27,8 +27,11 @@ Formats in use (one per file family):
   `not_found`, so a truncated scan can never close a paid attempt.
 - **`http-golden/*.json`** (`schema_version: 2`) — one HTTP request/response
   expectation per file, run against the JS handler and the Ruby Rack app.
-  `request` is the wire request; an optional `handler` selects a preconfigured
-  handler (e.g. `rate_limited`). `expected` carries the `status`, the FULL
+  `request` is the wire request: `method`, `path`, a JSON `body` (or
+  `body_bytes`, an oversized synthetic body), an optional `content_type`
+  (default `application/json`), and optional extra request `headers`, sent
+  verbatim. An optional `handler` selects a preconfigured handler (e.g.
+  `rate_limited`). `expected` carries the `status`, the FULL
   response `body`, and any `headers` that must be present (names compared
   case-insensitively; other response headers may exist). Both harnesses
   deep-compare the whole body — key set AND values — so an extra or missing

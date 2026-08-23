@@ -300,7 +300,10 @@ test("a custom ip extractor both counts and stamps the same IP (SQL counting)", 
     handler(
       new Request("http://test/openreceive/checkouts", {
         method: "POST",
-        headers: { "cf-connecting-ip": "198.51.100.7" },
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": "198.51.100.7",
+        },
         body: JSON.stringify({ reference: reference }),
       }),
     );

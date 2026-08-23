@@ -5,6 +5,7 @@
 // `prefix` — this module never accepts a route of its own.
 
 import { isRecord, nonEmptyString } from "@openreceive/core";
+import { requestHeaders } from "./request-headers.ts";
 import { type Routes, checkoutRoutes } from "./routes.ts";
 import {
   type CheckoutInvoiceSnapshot,
@@ -146,10 +147,7 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
   const headers = request.headers === undefined ? {} : request.headers;
   const response = await fetcher(request.routes.checkouts, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
+    headers: requestHeaders(headers),
     body: JSON.stringify(requestBody),
   });
   const body = (await readJsonResponse(response, "Could not create checkout.")) as
@@ -183,10 +181,7 @@ export async function prepareCheckout(options: PrepareCheckoutOptions): Promise<
   const headers = request.headers === undefined ? {} : request.headers;
   const response = await fetcher(request.routes.checkoutsPrepare, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
+    headers: requestHeaders(headers),
     body: JSON.stringify({ reference: request.reference }),
   });
   const body = await readJsonResponse(response, "Could not prepare checkout.");
@@ -225,10 +220,7 @@ export function createStatusFetcher(
     }
     const response = await fetcher(routes.paymentsCheck, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
+      headers: requestHeaders(headers),
       body: JSON.stringify({
         reference,
         payment_hash: activePaymentHash,
@@ -272,10 +264,7 @@ export function createStatusFetcher(
       try {
         const swapResponse = await fetcher(routes.swapsStatus, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...headers,
-          },
+          headers: requestHeaders(headers),
           body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
         });
         const swapBody = asRecord(

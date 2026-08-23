@@ -1158,7 +1158,7 @@ class SwapServiceIntegrationTest < Minitest::Test
     )
     status, _headers, body = handler.check_payment(
       raw_body: JSON.generate("reference" => "order-methods", "payment_hash" => "7f" * 32),
-      request: {}, request_id: "req-methods"
+      request: { "CONTENT_TYPE" => "application/json" }, request_id: "req-methods"
     )
     assert_equal 200, status
     usdt = body.fetch("payment_methods").find { |option| option["pay_in_asset"] == "USDT_TRON" }

@@ -48,8 +48,9 @@ const host = createHost({ db, amountFor, onPaid });
 
 - \`amountFor(reference)\` returns the trusted amount — never a payer-supplied
   value — or \`null\` for a 404.
-- \`onPaid\` fires for the first settled attempt for a reference only. Mark the order
-  paid with your own ORM:
+- \`onPaid\` fires for the first settled attempt for a reference only, so give
+  every order its own reference and never reuse one. Mark the order paid with
+  your own ORM:
 
 \`\`\`ts
 const onPaid = async ({ reference }) => {

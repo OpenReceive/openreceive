@@ -17,6 +17,12 @@ vulnerability.
   codes.
 - Frontends never run merchant settlement actions by themselves.
 - Settlement is verified by backend status refresh using NWC `list_transactions`.
+- Body-bearing routes accept `application/json` only (415) and refuse requests
+  the browser labels `Sec-Fetch-Site: cross-site` (403), both before `authorize`
+  runs, so a forged cross-site request never reaches host code with the
+  victim's session. The Rails engine additionally inherits the host's
+  `protect_from_forgery`; the checkout client sends `X-CSRF-Token` from
+  `csrf_meta_tags`.
 - Each checkout is persisted as one library-owned `openreceive_payments` row
   (in the host's database — the host owns orders; ownership rule:
   [Payment storage](docs/guides/storage.md)) before payer instructions are

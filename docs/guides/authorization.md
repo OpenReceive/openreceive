@@ -8,9 +8,10 @@ policy. The adapter builds the wallet client and the host itself.
 import { openReceiveExpress } from "@openreceive/express";
 import { db, orders, sessions } from "./app.ts"; // your existing handle and models
 
-// `reference` is a string you choose — your order id, a cart id, a UUID.
-// OpenReceive stores it only to group payment attempts and to hand it back
-// to these hooks. It never looks inside it.
+// `reference` is a string you choose — your order id: one per thing you
+// fulfill, created before checkout, never reused. OpenReceive never looks
+// inside it, but it fulfills once per reference and refuses a new checkout
+// under a reference that already settled.
 
 async function amountFor(reference: string) {
   // The price for this reference, from YOUR catalog/orders — never from the
@@ -116,8 +117,28 @@ one. If your user lives on `req.session`, read `native`; if you look the
 session up from cookies on the Web Request, read `request`.
 
 Rails applications mount the engine and keep their own authentication and
-`current_user` logic. The engine's JSON checkout routes skip Rails form CSRF
-protection, so `authorize` is the auth boundary there too.
+`current_user` logic. The engine also inherits your `protect_from_forgery`:
+render `csrf_meta_tags` in the layout and the checkout client sends
+`X-CSRF-Token` from it on every request; a failed check is the shared `403`.
+API-only parents (`ActionController::API`) have no forgery protection, and
+the handler's own gates below cover them.
+
+## Cross-site requests
+
+Every body-bearing route is protected against cross-site request forgery by
+the handler itself, in both engines, before `authorize` runs:
+
+- the body must be `application/json` (`415` otherwise). A cross-site HTML
+  form can only send urlencoded, multipart, or `text/plain`, and a cross-origin
+  `fetch` that sets a JSON content type is CORS-preflighted — which the library
+  never answers;
+- a request the browser labels `Sec-Fetch-Site: cross-site` is refused
+  (`403`), which also covers a `no-cors` fetch that forges the content type.
+  `same-site` (a sibling subdomain) and requests without the header
+  (non-browser clients) pass.
+
+Mount OpenReceive on the origin that serves your pages, or a sibling
+subdomain; do not add CORS headers to its prefix.
 
 `amountFor` is the other half of that boundary: the create body cannot contain
 `amount` or `amount_msats`. A payer-supplied amount could only ever be an

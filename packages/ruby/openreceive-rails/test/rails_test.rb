@@ -113,6 +113,9 @@ class FakeWallet
 end
 
 module OpenReceivePaymentTestHelpers
+  # Bare handler calls send the contract type; the content-type gate is tested in the server gem.
+  JSON_REQUEST = { "CONTENT_TYPE" => "application/json" }.freeze
+
   def create_order
     Order.create!
   end
@@ -567,7 +570,7 @@ class EngineHostIntegrationTest < Minitest::Test
 
   def create_checkout(reference)
     OpenReceive.config.request_handler.create_checkout(
-      raw_body: JSON.generate("reference" => reference), request: {}, request_id: "req-test"
+      raw_body: JSON.generate("reference" => reference), request: JSON_REQUEST, request_id: "req-test"
     )
   end
 
@@ -615,7 +618,7 @@ class EngineHostIntegrationTest < Minitest::Test
     check = lambda do
       OpenReceive.config.request_handler.check_payment(
         raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
-        request: {}, request_id: "req-check"
+        request: JSON_REQUEST, request_id: "req-check"
       )
     end
     assert_equal "settled", check.call.last.fetch("status")
@@ -634,7 +637,7 @@ class EngineHostIntegrationTest < Minitest::Test
   def test_rate_limiting_counts_rows_stamps_client_ip_and_exempts_reuse
     OpenReceive.config.rate_limiting = { limit_per_hour: 2 }
     OpenReceive.config.reset_runtime!
-    request = { "REMOTE_ADDR" => "203.0.113.7" }
+    request = JSON_REQUEST.merge("REMOTE_ADDR" => "203.0.113.7")
     create = lambda do |reference|
       OpenReceive.config.request_handler.create_checkout(
         raw_body: JSON.generate("reference" => reference), request: request, request_id: "req-rl"
@@ -678,7 +681,7 @@ class EngineHostIntegrationTest < Minitest::Test
     OpenReceive.config.reset_runtime!
     create = lambda do
       OpenReceive.config.request_handler.create_checkout(
-        raw_body: JSON.generate("reference" => create_order.id), request: {}, request_id: "req-anon"
+        raw_body: JSON.generate("reference" => create_order.id), request: JSON_REQUEST, request_id: "req-anon"
       )
     end
     # Unattributable traffic is not counted (and must not be blocked wholesale).
@@ -695,7 +698,7 @@ class EngineHostIntegrationTest < Minitest::Test
     create = lambda do |reference, remote_addr|
       OpenReceive.config.request_handler.create_checkout(
         raw_body: JSON.generate("reference" => reference),
-        request: { "REMOTE_ADDR" => remote_addr }, request_id: "req-v6"
+        request: JSON_REQUEST.merge("REMOTE_ADDR" => remote_addr), request_id: "req-v6"
       )
     end
 
@@ -1374,11 +1377,15 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     assert_includes rendered, "config.on_paid = OpenReceive::LOGGING_ON_PAID"
   end
 
-  def test_engine_application_controller_skips_forgery_protection
+  # The host's protect_from_forgery applies to the engine's routes unchanged
+  # (the browser client sends X-CSRF-Token from csrf_meta_tags); a failed check
+  # answers with the shared 403 contract, not the StandardError 500.
+  def test_engine_application_controller_inherits_forgery_protection
     source = File.read(
       File.expand_path("../app/controllers/openreceive/application_controller.rb", __dir__)
     )
-    assert_includes source, "skip_forgery_protection"
+    refute_includes source, "skip_forgery_protection"
+    assert_includes source, "rescue_from ActionController::InvalidAuthenticityToken"
     assert_includes source, "eager-loads this class before after_initialize"
   end
 
@@ -1516,7 +1523,7 @@ class OpportunisticReconcileTest < Minitest::Test
     scans = count_wallet_scans!
     status, _headers, body = OpenReceive.config.request_handler.check_payment(
       raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
-      request: {}, request_id: "req-pass",
+      request: JSON_REQUEST, request_id: "req-pass",
       reconcile_pass: reconcile_pass,
       attempt_status: ->(_hash) { flunk "the pass winner must not fall back to the row" }
     )
@@ -1542,7 +1549,7 @@ class OpportunisticReconcileTest < Minitest::Test
     scans = count_wallet_scans!
     status, _headers, body = OpenReceive.config.request_handler.check_payment(
       raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
-      request: {}, request_id: "req-busy",
+      request: JSON_REQUEST, request_id: "req-busy",
       reconcile_pass: { "reason" => "gate_busy" },
       attempt_status: attempt_status
     )
@@ -1556,7 +1563,7 @@ class OpportunisticReconcileTest < Minitest::Test
     OpenReceivePayment.find_by(payment_hash: hash).update!(status: "settled", paid_at: Time.at(now - 5).utc)
     _status, _headers, settled_body = OpenReceive.config.request_handler.check_payment(
       raw_body: JSON.generate("reference" => order.id, "payment_hash" => hash),
-      request: {}, request_id: "req-busy-settled",
+      request: JSON_REQUEST, request_id: "req-busy-settled",
       reconcile_pass: { "reason" => "gate_busy" },
       attempt_status: attempt_status
     )

@@ -403,6 +403,7 @@ module OpenReceive
       end
 
       def parse(raw, route = nil, request: nil)
+        assert_not_cross_site!(request)
         assert_json_content_type!(request)
         text = raw.to_s
         raise PayloadTooLargeError if text.bytesize > MAX_BODY_BYTES
@@ -435,6 +436,28 @@ module OpenReceive
         return if content_type.to_s.split(";").first.to_s.strip.downcase == "application/json"
 
         raise UnsupportedMediaTypeError
+      end
+
+      # Browsers label every request with its initiator's relation to the
+      # target (Sec-Fetch-Site), and a forged request from another site is
+      # always "cross-site" — including a no-cors fetch, which the content-type
+      # gate alone cannot see. The mounted routes serve the host's own pages,
+      # so a cross-site POST is refused before the body is read. "same-site"
+      # (a sibling subdomain) and an absent header (non-browser clients, old
+      # browsers — the content-type gate covers those) pass. Mirrors the JS
+      # handler's assertNotCrossSite.
+      def assert_not_cross_site!(request)
+        site =
+          if request.is_a?(Hash)
+            request["HTTP_SEC_FETCH_SITE"]
+          elsif request.respond_to?(:get_header)
+            request.get_header("HTTP_SEC_FETCH_SITE")
+          elsif request.respond_to?(:headers)
+            request.headers["Sec-Fetch-Site"]
+          end
+        return unless site.to_s.strip.downcase == "cross-site"
+
+        raise ForbiddenError, "Cross-site requests are not accepted."
       end
 
       def assert_declared_fields!(body, route)

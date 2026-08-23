@@ -121,6 +121,9 @@ class FailClosedPreflightTest < Minitest::Test
 end
 
 class StorageFreeServerTest < Minitest::Test
+  # A bare handler call is the contract type; the content-type gate is tested explicitly below.
+  JSON_REQUEST = { "CONTENT_TYPE" => "application/json" }.freeze
+
   SPEC_DIR = File.expand_path("../../../../spec", __dir__)
 
   class Wallet
@@ -293,7 +296,7 @@ class StorageFreeServerTest < Minitest::Test
     )
     status, _headers, body = handler.create_checkout(
       raw_body: JSON.generate("reference" => "ruby-http"),
-      request: {}, request_id: "req-1"
+      request: JSON_REQUEST, request_id: "req-1"
     )
     assert_equal 201, status
     assert_equal body.dig("checkout", "payment_hash"), committed.first.fetch(:payment_hash)
@@ -315,7 +318,7 @@ class StorageFreeServerTest < Minitest::Test
       on_checkout_created: ->(**payment) { committed = payment },
       on_paid: ->(_payment) {}
     )
-    request = { raw_body: JSON.generate("reference" => "ruby-retry"), request: {} }
+    request = { raw_body: JSON.generate("reference" => "ruby-retry"), request: JSON_REQUEST }
     first = handler.create_checkout(**request, request_id: "req-a")
     second = handler.create_checkout(**request, request_id: "req-b")
     assert_equal 201, first.first
@@ -348,7 +351,7 @@ class StorageFreeServerTest < Minitest::Test
         "reference" => "ruby-check",
         "payment_hash" => selected_hash
       ),
-      request: {},
+      request: JSON_REQUEST,
       request_id: "req-check"
     )
     assert_equal 200, status
@@ -657,7 +660,7 @@ class StorageFreeServerTest < Minitest::Test
     row["preimage"] = "2" * 64
     status, _headers, body = handler.check_payment(
       raw_body: JSON.generate("reference" => "ruby-public", "payment_hash" => hash),
-      request: {},
+      request: JSON_REQUEST,
       request_id: "req-public"
     )
     assert_equal 200, status
@@ -704,9 +707,9 @@ class StorageFreeServerTest < Minitest::Test
     )
     raw = JSON.generate("reference" => "ruby-shape", "payment_hash" => "not-a-hash")
     [
-      handler.check_payment(raw_body: raw, request: {}, request_id: "req-shape-check"),
-      handler.get_swap(raw_body: raw, request: {}, request_id: "req-shape-read"),
-      handler.refund_swap(raw_body: raw, request: {}, request_id: "req-shape-refund")
+      handler.check_payment(raw_body: raw, request: JSON_REQUEST, request_id: "req-shape-check"),
+      handler.get_swap(raw_body: raw, request: JSON_REQUEST, request_id: "req-shape-read"),
+      handler.refund_swap(raw_body: raw, request: JSON_REQUEST, request_id: "req-shape-refund")
     ].each do |status, _headers, body|
       assert_equal 400, status
       assert_equal "INVALID_REQUEST", body.fetch("code")
@@ -808,6 +811,7 @@ class StorageFreeServerTest < Minitest::Test
       "REQUEST_METHOD" => "POST",
       "PATH_INFO" => "/openreceive/checkouts",
       "QUERY_STRING" => "",
+      "CONTENT_TYPE" => "application/json",
       "CONTENT_LENGTH" => (MAX_BODY_BYTES + 1).to_s,
       "rack.input" => input
     )
@@ -826,6 +830,7 @@ class StorageFreeServerTest < Minitest::Test
       "REQUEST_METHOD" => "POST",
       "PATH_INFO" => "/openreceive/checkouts",
       "QUERY_STRING" => "",
+      "CONTENT_TYPE" => "application/json",
       "rack.input" => input
     )
     parsed = JSON.parse(body.join)
@@ -880,7 +885,7 @@ class StorageFreeServerTest < Minitest::Test
     )
     status, _headers, body = handler.create_checkout(
       raw_body: JSON.generate("reference" => "ruby-persist"),
-      request: {}, request_id: "req-persist"
+      request: JSON_REQUEST, request_id: "req-persist"
     )
     assert_equal 503, status
     assert_equal "INTERNAL", body.fetch("code")
@@ -900,7 +905,7 @@ class StorageFreeServerTest < Minitest::Test
     )
     status, _headers, body = conflicting.create_checkout(
       raw_body: JSON.generate("reference" => "ruby-conflict"),
-      request: {}, request_id: "req-conflict"
+      request: JSON_REQUEST, request_id: "req-conflict"
     )
     assert_equal 409, status
     assert_equal "CONFLICT", body.fetch("code")
@@ -921,7 +926,7 @@ class StorageFreeServerTest < Minitest::Test
       status, _headers, body = handler.public_send(
         action,
         raw_body: JSON.generate("reference" => "ruby-no-amount"),
-        request: {}, request_id: "req-no-amount"
+        request: JSON_REQUEST, request_id: "req-no-amount"
       )
       assert_equal 500, status, action.to_s
       assert_equal "INTERNAL", body.fetch("code")
@@ -943,7 +948,7 @@ class StorageFreeServerTest < Minitest::Test
     capture_io do
       status, _headers, body = handler.create_checkout(
         raw_body: JSON.generate("reference" => "ruby-redacted"),
-        request: {}, request_id: "req-redacted"
+        request: JSON_REQUEST, request_id: "req-redacted"
       )
     end
     assert_equal 500, status
@@ -963,7 +968,7 @@ class StorageFreeServerTest < Minitest::Test
   def create_checkout_response(handler, request_id: "req-leak")
     handler.create_checkout(
       raw_body: JSON.generate("reference" => "ruby-leak"),
-      request: {}, request_id: request_id
+      request: JSON_REQUEST, request_id: request_id
     )
   end
 
@@ -1189,7 +1194,8 @@ class StorageFreeServerTest < Minitest::Test
         "CONTENT_TYPE" => request.fetch("content_type", "application/json"),
         # `body_bytes` synthesizes an oversized raw body so the vector does not
         # have to inline 64KB of JSON.
-        "rack.input" => StringIO.new(golden_request_body(request))
+        "rack.input" => StringIO.new(golden_request_body(request)),
+        **golden_request_headers(request)
       )
       name = vector.fetch("name")
       assert_equal vector.dig("expected", "status"), status, name
@@ -1202,6 +1208,13 @@ class StorageFreeServerTest < Minitest::Test
       assert_golden_value(JSON.parse(body.join), vector.fetch("expected").fetch("body"), "#{name}: body")
     end
   end
+
+    # Extra request headers a vector declares, as Rack env keys.
+    def golden_request_headers(request)
+      request.fetch("headers", {}).to_h do |name, value|
+        ["HTTP_#{name.upcase.tr('-', '_')}", value]
+      end
+    end
 
     def golden_request_body(request)
       return "x" * Integer(request.fetch("body_bytes")) if request.key?("body_bytes")

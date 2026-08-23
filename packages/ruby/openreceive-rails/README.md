@@ -38,6 +38,11 @@ and reconciles periodically; `OpenReceive::ReconcileJob` and
 unpaid attempt requires a successful wallet scan at or after expiry plus the
 shared grace window — a local clock alone never closes a row.
 
+The engine inherits the host's `protect_from_forgery`: render `csrf_meta_tags`
+and the checkout client sends `X-CSRF-Token` from it. Independently of that,
+the shared handler refuses non-JSON bodies (415) and `Sec-Fetch-Site:
+cross-site` requests (403) before `authorize` runs.
+
 Because the engine cannot see fulfillment that happens outside it,
 `config.on_paid` must be idempotent if any other path can also fulfill an
 order — the generated initializer shows the guarded transition. The receive-only wallet URI loads from `ENV["NWC_URI"]`; your

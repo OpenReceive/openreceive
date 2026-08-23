@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class ApplicationController < ActionController::Base
-  # Match Node demos: JSON checkout clients are not session forms.
-  protect_from_forgery with: :null_session
+  # Rails' default forgery protection applies to the OpenReceive engine's
+  # routes too: the layout renders csrf_meta_tags and both this app's JSON
+  # helpers and the OpenReceive checkout client send X-CSRF-Token from it.
 end
