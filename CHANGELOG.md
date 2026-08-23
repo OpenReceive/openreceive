@@ -19,6 +19,36 @@ behind.
   moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
   rest of that document was history.
 
+### Fewer exports: what nothing outside the package reaches for
+
+- 51 names leave the public surface because no guide, example, smoke check,
+  or other package named them — only tests, which now read the source
+  modules directly. `@openreceive/node` lists its public types explicitly
+  instead of `export type *`, so its service-internal types
+  (`NodeOptions`, `OpenReceiveServiceContext`, `ResolvedCreateAmount`,
+  `NormalizedCreateCheckoutRequest`) stay internal. Gone, by package:
+  - core: the price-feed tuning constants (`OPENRECEIVE_PRICE_FEED_*`,
+    `OPENRECEIVE_*_PRICE_FEED_URL`, `OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS`,
+    `OPENRECEIVE_STATIC_BTC_FIAT_RATES`) — `spec/data/rates/price-sources.json`
+    is their contract; the `*_URL_ENV` names stay.
+  - node: `normalizeNwcWalletError`, `summarizeWalletCapabilities`, the LSC
+    env helpers (`parseLscUri`, `readLscConnectionsFromEnvironment`,
+    `createLscSwapProvidersFromEnvironment`, `LSC_ENV_NAMES`,
+    `LSC_URI_PROTOCOL`), the log-level helpers and
+    `createOpenReceiveConsoleLogger`, `requireNwcFromEnvironment`,
+    `SPEND_CAPABILITY_WARNING_DELAY_MS`, `isOpenReceiveSwapTerminalState`.
+  - http: `resolveSqlAdapter`, `openReceivePaymentInsert`,
+    `openReceiveClientIpBucket`, `OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR`,
+    `OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS`.
+  - browser: the console-logger level helpers and
+    `createOpenReceiveBrowserConsoleLogger`.
+  - elements: `renderCheckoutCreatingHtml`, `renderOpenReceivePaymentWizardHtml`,
+    `wireTransactionDetailsCopy`, `OpenReceiveElementsSwapOption`.
+  - react: `useCheckoutResume` and its option/result types (unused,
+    undocumented); `CheckoutEventHandlers`.
+  - provider-data: `listCryptoRoutes`, `getCryptoRoute`,
+    `listDisqualifiedProviders` (no caller anywhere).
+
 ### The all-in-one options say which mode they are
 
 - `createOpenReceiveStack` and the adapters' all-in-one form take

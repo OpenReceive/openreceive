@@ -1,6 +1,5 @@
 import type { SwapPayInAsset } from "./assets.ts";
 import type { TransientSwapCache } from "./limits-cache.ts";
-import { OPENRECEIVE_SWAP_STATES } from "./state.ts";
 
 export type SwapProviderState =
   | "creating_provider_order"

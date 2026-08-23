@@ -32,11 +32,3 @@ export function readNwcFromEnvironment(options: RequireNwcFromEnvironmentOptions
 
   return value;
 }
-): string {
-  try {
-    return readNwcFromEnvironment(options);
-  } catch (error) {
-    console.error(["", error instanceof Error ? error.message : String(error), ""].join("\n"));
-    process.exit(1);
-  }
-}

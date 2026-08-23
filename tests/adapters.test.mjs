@@ -96,7 +96,6 @@ test("adapters expose the curated http surface, not internals", () => {
     "openReceivePaymentsSchemaSql",
     "openReceiveWebRequest",
     "reconcileOpenReceivePayments",
-    "resolveSqlAdapter",
     "startOpenReceiveReconciler",
   ];
   // The internals stay available where they belong: @openreceive/http.

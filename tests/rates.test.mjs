@@ -394,7 +394,8 @@ test("both live feeds are time-bounded, so a black-holed fallback cannot stall q
 
 test("core rate constants match spec/data/rates/price-sources.json", async () => {
   const { readFileSync } = await import("node:fs");
-  const core = await import("../packages/js/core/src/index.ts");
+  // The feed constants are package-private now; the spec data is their contract.
+  const core = await import("../packages/js/core/src/rates/constants.ts");
   const spec = JSON.parse(readFileSync("spec/data/rates/price-sources.json", "utf8"));
   assert.equal(core.OPENRECEIVE_PRICE_FEED_CACHE_SECONDS, spec.cache_seconds);
   assert.equal(core.OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS, spec.invoice_quote_ttl_seconds);
