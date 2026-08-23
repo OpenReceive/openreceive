@@ -1,21 +1,21 @@
 PATH
   remote: ../../../../packages/ruby/openreceive-rails
   specs:
-    openreceive-rails (0.2.0-alpha.0)
-      openreceive (= 0.2.0-alpha.0)
-      openreceive-server (= 0.2.0-alpha.0)
+    openreceive-rails (0.2.0.pre.alpha.0)
+      openreceive (= 0.2.0.pre.alpha.0)
+      openreceive-server (= 0.2.0.pre.alpha.0)
       rails (>= 8.0)
 
 PATH
   remote: ../../../../packages/ruby/openreceive-server
   specs:
-    openreceive-server (0.2.0-alpha.0)
-      openreceive (= 0.2.0-alpha.0)
+    openreceive-server (0.2.0.pre.alpha.0)
+      openreceive (= 0.2.0.pre.alpha.0)
 
 PATH
   remote: ../../../../packages/ruby/openreceive
   specs:
-    openreceive (0.2.0-alpha.0)
+    openreceive (0.2.0.pre.alpha.0)
       bigdecimal
 
 GEM
@@ -186,21 +186,7 @@ GEM
     nokogiri (1.19.4)
       mini_portile2 (~> 2.8.2)
       racc (~> 1.4)
-    nokogiri (1.19.4-aarch64-linux-gnu)
-      racc (~> 1.4)
-    nokogiri (1.19.4-aarch64-linux-musl)
-      racc (~> 1.4)
-    nokogiri (1.19.4-arm-linux-gnu)
-      racc (~> 1.4)
-    nokogiri (1.19.4-arm-linux-musl)
-      racc (~> 1.4)
     nokogiri (1.19.4-arm64-darwin)
-      racc (~> 1.4)
-    nokogiri (1.19.4-x86_64-darwin)
-      racc (~> 1.4)
-    nokogiri (1.19.4-x86_64-linux-gnu)
-      racc (~> 1.4)
-    nokogiri (1.19.4-x86_64-linux-musl)
       racc (~> 1.4)
     nwc-ruby (0.2.4)
       async (~> 2.10)
@@ -213,12 +199,7 @@ GEM
     openssl (4.0.2)
     package_json (0.2.0)
     pg (1.6.3)
-    pg (1.6.3-aarch64-linux)
-    pg (1.6.3-aarch64-linux-musl)
     pg (1.6.3-arm64-darwin)
-    pg (1.6.3-x86_64-darwin)
-    pg (1.6.3-x86_64-linux)
-    pg (1.6.3-x86_64-linux-musl)
     pkg-config (1.6.5)
     pp (0.6.4)
       prettyprint
@@ -333,17 +314,7 @@ GEM
     zeitwerk (2.8.2)
 
 PLATFORMS
-  aarch64-linux
-  aarch64-linux-gnu
-  aarch64-linux-musl
-  arm-linux-gnu
-  arm-linux-musl
   arm64-darwin
-  ruby
-  x86_64-darwin
-  x86_64-linux
-  x86_64-linux-gnu
-  x86_64-linux-musl
 
 DEPENDENCIES
   bundler-audit

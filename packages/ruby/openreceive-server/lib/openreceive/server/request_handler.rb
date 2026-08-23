@@ -88,8 +88,8 @@ module OpenReceive
       # per-invoice wallet walk and never a second gate claim. Row `attention`
       # serves as `pending` on the wire (operator state, not payer
       # information); the row path never emits `not_found`. Storage-agnostic
-      # callers (Server::RackApp) omit both and keep the direct per-invoice
-      # wallet check.
+      # callers (Server::RackApp) omit both and run a one-attempt
+      # reconcile_payments walk.
       def check_payment(raw_body:, request:, request_id:, reconcile_pass: nil, attempt_status: nil)
         handle(request_id) do
           body = parse(raw_body, "payment.check", request: request)
@@ -231,13 +231,18 @@ module OpenReceive
 
       private
 
-      # Legacy status refresh (no request-level pass supplied): one direct
-      # per-invoice wallet check, delivering settlement inline.
+      # Status refresh with no request-level pass: one-attempt reconcile_payments,
+      # delivering settlement inline. A truncated walk raises WalletUnavailableError
+      # (retryable 503) rather than reporting not_found.
       def checked_via_wallet(hash, checkout)
-        checked = @service.check_payment(
-          "payment_hash" => hash,
-          "created_at" => checkout.fetch("created_at")
-        )
+        checked = @service.reconcile_payments(
+          "attempts" => [{ "payment_hash" => hash, "created_at" => checkout.fetch("created_at") }]
+        ).first
+        if checked.nil?
+          raise OpenReceive::WalletUnavailableError,
+                "payment reconciliation did not complete: the wallet history " \
+                "walk ended before this invoice could be confirmed"
+        end
         if checked["status"] == "settled" && checked["paid_at"]
           @on_paid.call(
             "payment_hash" => checked.fetch("payment_hash"),

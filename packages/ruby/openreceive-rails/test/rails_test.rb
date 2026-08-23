@@ -884,7 +884,7 @@ class NotificationsTest < Minitest::Test
   # lets tests push notifications through the stored handler, and counts
   # list_transactions calls so tests can prove direct settlement never scans.
   class NotifyingWallet < FakeWallet
-    attr_reader :subscribed_types, :list_transactions_calls
+    attr_reader :list_transactions_calls
 
     def initialize
       super
@@ -896,8 +896,7 @@ class NotificationsTest < Minitest::Test
       super
     end
 
-    def subscribe_notifications(notification_types = nil, &handler)
-      @subscribed_types = notification_types
+    def subscribe_notifications(&handler)
       @handler = handler
       :subscribed
     end
@@ -932,7 +931,6 @@ class NotificationsTest < Minitest::Test
     # Deliberately no wallet transaction: only direct settlement can settle.
 
     assert_equal :subscribed, OpenReceive.listen_for_notifications!
-    assert_equal ["payment_received"], @wallet.subscribed_types
 
     # A payload satisfying the settlement rule settles the pending attempt
     # directly over the authenticated notification channel.
@@ -1035,79 +1033,6 @@ class NotificationsTest < Minitest::Test
     assert_match(/ReconcileJob/, error.message)
   end
 
-  # A blocking client: dispatches a queued notification inside the subscribe
-  # call itself, so a handler failure surfaces as an exception from subscribe.
-  class BlockingNotifyingWallet < NotifyingWallet
-    attr_reader :subscribe_calls
-
-    def initialize
-      super
-      @subscribe_calls = []
-    end
-
-    def subscribe_notifications(notification_types = nil, &handler)
-      @subscribe_calls << notification_types
-      handler.call(
-        "notification_type" => "payment_received",
-        "notification" => { "payment_hash" => "00" * 32 }
-      )
-      :ended
-    end
-  end
-
-  class BlockOnlySubscribeWallet < NotifyingWallet
-    def subscribe_notifications(&handler)
-      @handler = handler
-      :subscribed_bare
-    end
-  end
-
-  def test_an_argument_error_from_the_handler_never_resubscribes_without_a_filter
-    now = Time.now.to_i
-    order = create_order
-    hash = unique_hash
-    commit!(order, hash, expires_at: now + 600)
-    wallet = BlockingNotifyingWallet.new
-    OpenReceive.config.nwc_client = wallet
-    OpenReceive.config.reset_runtime!
-
-    singleton = OpenReceive.singleton_class
-    singleton.send(:alias_method, :original_reconcile!, :reconcile!)
-    singleton.send(:define_method, :reconcile!) { |**| raise ArgumentError, "bad handler input" }
-    begin
-      # The hash-only payload falls back to reconcile!, which raises the kind
-      # of ArgumentError the old rescue mistook for a signature mismatch; it
-      # must propagate, never trigger a second unfiltered subscription.
-      error = assert_raises(ArgumentError) { OpenReceive.listen_for_notifications! }
-      assert_equal "bad handler input", error.message
-      assert_equal [["payment_received"]], wallet.subscribe_calls
-    ensure
-      singleton.send(:alias_method, :reconcile!, :original_reconcile!)
-      singleton.send(:remove_method, :original_reconcile!)
-    end
-  end
-
-  def test_a_block_only_subscribe_client_is_called_without_a_type_filter
-    now = Time.now.to_i
-    order = create_order
-    hash = unique_hash
-    commit!(order, hash, expires_at: now + 600)
-    wallet = BlockOnlySubscribeWallet.new
-    OpenReceive.config.nwc_client = wallet
-    OpenReceive.config.reset_runtime!
-
-    assert_equal :subscribed_bare, OpenReceive.listen_for_notifications!
-    wallet.notify(
-      "notification_type" => "payment_received",
-      "notification" => {
-        "type" => "incoming", "payment_hash" => hash, "amount" => 100_000,
-        "state" => "settled", "settled_at" => now - 1
-      }
-    )
-
-    assert_equal "settled", OpenReceivePayment.find_by(payment_hash: hash).status
-    assert_equal [order.id], @fulfilled.map(&:reference)
-  end
 end
 
 class NotificationsWorkerBackoffTest < Minitest::Test

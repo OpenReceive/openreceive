@@ -128,19 +128,19 @@ module OpenReceive
     # client binds notification decryption to the connection's wallet pubkey;
     # a client that skips author verification must not be granted it.
     #
-    # Duck-types the configured NWC client for
-    # `subscribe_notifications`/`subscribeNotifications` (called with the
-    # requested notification types plus a block, falling back to just the
-    # block). Returns whatever the client's subscribe call returns; blocking
-    # clients simply do not return until the subscription ends. Raises
+    # The client contract is one method, `subscribe_notifications(&handler)`,
+    # yielding NWC-02 wire payloads (`notification_type` plus the
+    # transaction-shaped `notification`) — the shape NwcRubyReceiveClient
+    # adapts nwc-ruby's notification object to. The handler filters
+    # `payment_received` itself, like the Node listener: an NWC-02
+    # subscription is not type-filtered, the wallet decides what it publishes.
+    # Returns whatever the client's subscribe call returns; blocking clients
+    # simply do not return until the subscription ends. Raises
     # OpenReceive::ConfigurationError when the client does not support
     # notifications.
     def listen_for_notifications!(overlap_seconds: 60)
       client = config.send(:resolved_nwc_client)
-      subscribe = %i[subscribe_notifications subscribeNotifications].find do |name|
-        client.respond_to?(name)
-      end
-      if subscribe.nil?
+      unless client.respond_to?(:subscribe_notifications)
         raise ConfigurationError,
               "The configured NWC client does not support NWC-02 notifications " \
               "(no subscribe_notifications method). Notifications are optional; " \
@@ -148,23 +148,10 @@ module OpenReceive
               "`bin/rails openreceive:reconcile`."
       end
 
-      handler = lambda do |notification|
+      client.subscribe_notifications do |notification|
         next unless payment_received_notification?(notification)
 
         reconcile!(overlap_seconds: overlap_seconds) unless settle_from_notification!(notification)
-      end
-
-      # Filter-vs-bare dispatch is decided from Method#parameters, never by
-      # rescuing ArgumentError and calling again: an ArgumentError raised by
-      # the handler INSIDE a blocking subscribe call would otherwise trigger a
-      # second subscription with no type filter at all.
-      accepts_types = client.method(subscribe).parameters.any? do |type, _name|
-        %i[req opt rest].include?(type)
-      end
-      if accepts_types
-        client.public_send(subscribe, ["payment_received"], &handler)
-      else
-        client.public_send(subscribe, &handler)
       end
     end
 

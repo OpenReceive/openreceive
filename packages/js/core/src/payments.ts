@@ -1,4 +1,3 @@
-import { OpenReceiveError } from "./errors/index.ts";
 import { DecimalError } from "./money/decimal.ts";
 import type { ListTransactionsRequest, NwcTransaction, ReceiveNwcClient } from "./nwc/client.ts";
 import {
@@ -29,17 +28,6 @@ export interface PaidPayment {
   readonly paymentHash: string;
   readonly paidAt: number;
   readonly details?: PaymentDetails;
-}
-
-export interface CheckPaymentOptions {
-  readonly client: ReceiveNwcClient;
-  readonly paymentHash: string;
-  /** Exact NIP-47 invoice creation time returned by make_invoice. */
-  readonly createdAt: number;
-  readonly clock?: () => number;
-  readonly until?: number;
-  readonly overlapSeconds?: number;
-  readonly maxPages?: number;
 }
 
 interface ScanPaymentsOptions {
@@ -81,30 +69,6 @@ export interface ReconcilePaymentsOptions {
     readonly until: number;
     readonly includeUnpaid: boolean;
   }) => void;
-}
-
-export async function checkPayment(options: CheckPaymentOptions): Promise<PaymentCheck> {
-  const [checked] = await reconcilePaymentAttempts({
-    client: options.client,
-    attempts: [{ paymentHash: options.paymentHash, createdAt: options.createdAt }],
-    clock: options.clock,
-    until: options.until,
-    overlapSeconds: options.overlapSeconds,
-    maxPages: options.maxPages,
-  });
-  if (checked === undefined) {
-    // The only way one attempt yields no result: the wallet-history walk ended
-    // before it could prove the invoice present or absent. That is a scan
-    // failure, not evidence that the payment never arrived — surface it as a
-    // retryable wallet outage (503 on the wire), never a generic 500.
-    throw new OpenReceiveError({
-      code: "WALLET_UNAVAILABLE",
-      message:
-        "payment reconciliation did not complete: the wallet history walk ended before this invoice could be confirmed",
-      retryable: true,
-    });
-  }
-  return checked;
 }
 
 /**

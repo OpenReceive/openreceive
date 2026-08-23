@@ -55,7 +55,6 @@ export {
   redactNwcUri,
 } from "./nwc/client.ts";
 export type {
-  CheckPaymentOptions,
   PaidPayment,
   PaymentCheck,
   PaymentDetails,
@@ -64,7 +63,7 @@ export type {
   ReconcilePaymentsOptions,
 } from "./payments.ts";
 // Storage-free payment verification and reconciliation.
-export { checkPayment, reconcilePaymentAttempts } from "./payments.ts";
+export { reconcilePaymentAttempts } from "./payments.ts";
 // The one canonical statement of the host's exactly-once fulfillment duty,
 // rendered into every generated file, migration template, and wiring guide so
 // the guidance can never drift.

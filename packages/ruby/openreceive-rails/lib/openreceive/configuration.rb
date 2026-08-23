@@ -334,13 +334,7 @@ module OpenReceive
 
     def build_nwc_ruby_client(connection)
       require "nwc_ruby"
-      if defined?(::NwcRuby::Client) && ::NwcRuby::Client.respond_to?(:from_uri)
-        return ::NwcRuby::Client.from_uri(connection)
-      end
-      if defined?(::Nwc::Client)
-        return ::Nwc::Client.new(connection_uri: connection)
-      end
-      raise ConfigurationError, "Install nwc-ruby or configure nwc_client."
+      ::NwcRuby::Client.from_uri(connection)
     rescue LoadError
       raise ConfigurationError, "Install nwc-ruby or configure nwc_client."
     end

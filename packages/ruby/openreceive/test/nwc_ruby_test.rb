@@ -28,46 +28,11 @@ class NwcRubyReceiveClientParamsTest < Minitest::Test
     end
   end
 
-  # A host-supplied client taking one positional OpenReceive request hash.
-  class PositionalClient
-    attr_reader :calls
-
-    def initialize
-      @calls = []
-    end
-
-    def list_transactions(request)
-      @calls << request
-      { "transactions" => [] }
-    end
-  end
-
-  class KeyrestClient
-    attr_reader :calls
-
-    def initialize
-      @calls = []
-    end
-
-    def list_transactions(**params)
-      @calls << params
-      { "transactions" => [] }
-    end
-  end
-
-  # Declares keywords, but none of the window parameters the engine sends.
-  class NarrowClient
-    def list_transactions(limit: nil)
-      _ = limit
-      { "transactions" => [] }
-    end
-  end
-
   def scan_request
     { "type" => "incoming", "limit" => 20, "offset" => 0, "from" => 1_730_000_000, "until" => 1_730_003_600 }
   end
 
-  def test_nip47_until_maps_to_the_keyword_name_the_client_declares
+  def test_nip47_until_maps_to_until_ts
     client = KeywordClient.new
     OpenReceive::NwcRubyReceiveClient.new(client: client).list_transactions(scan_request)
 
@@ -87,23 +52,6 @@ class NwcRubyReceiveClientParamsTest < Minitest::Test
 
     assert_equal [[:make_invoice, { amount: 100_000, description: "coffee", expiry: 600 }]], client.calls
     assert_equal "a" * 64, invoice["payment_hash"]
-  end
-
-  def test_positional_and_keyrest_clients_are_called_the_way_they_are_written
-    positional = PositionalClient.new
-    OpenReceive::NwcRubyReceiveClient.new(client: positional).list_transactions(scan_request)
-    assert_equal [scan_request], positional.calls
-
-    keyrest = KeyrestClient.new
-    OpenReceive::NwcRubyReceiveClient.new(client: keyrest).list_transactions(scan_request)
-    assert_equal [{ type: "incoming", limit: 20, offset: 0, from: 1_730_000_000, until: 1_730_003_600 }],
-                 keyrest.calls
-  end
-
-  def test_a_param_the_client_cannot_express_names_itself
-    adapter = OpenReceive::NwcRubyReceiveClient.new(client: NarrowClient.new)
-    error = assert_raises(ArgumentError) { adapter.list_transactions(scan_request) }
-    assert_match(/does not accept the NIP-47 `from` parameter/, error.message)
   end
 end
 
@@ -140,13 +88,6 @@ class NwcRubyReceiveClientNotificationsTest < Minitest::Test
     end
   end
 
-  # A client with no listener at all (make_invoice/list_transactions only).
-  class SilentClient
-    def make_invoice(**_params)
-      {}
-    end
-  end
-
   def settled_payload(payment_hash)
     {
       "type" => "incoming", "state" => "settled", "invoice" => "lnbc1",
@@ -164,7 +105,7 @@ class NwcRubyReceiveClientNotificationsTest < Minitest::Test
     adapter = OpenReceive::NwcRubyReceiveClient.new(client: client)
 
     seen = []
-    assert_equal :ended, adapter.subscribe_notifications(["payment_received"]) { |n| seen << n }
+    assert_equal :ended, adapter.subscribe_notifications { |n| seen << n }
 
     assert_equal 1, seen.length
     assert_equal "payment_received", seen[0]["notification_type"]
@@ -176,7 +117,7 @@ class NwcRubyReceiveClientNotificationsTest < Minitest::Test
     assert_equal 1_730_000_060, transaction["settled_at"]
   end
 
-  def test_only_the_requested_notification_types_reach_the_handler
+  def test_every_notification_type_is_forwarded_for_the_engine_to_filter
     client = FakeNwcRubyClient.new(
       notifications: [
         FakeNotification.new(type: "payment_sent", data: settled_payload("b" * 64)),
@@ -186,35 +127,11 @@ class NwcRubyReceiveClientNotificationsTest < Minitest::Test
     adapter = OpenReceive::NwcRubyReceiveClient.new(client: client)
 
     seen = []
-    adapter.subscribe_notifications(["payment_received"]) { |n| seen << n }
-
-    assert_equal ["payment_received"], seen.map { |n| n["notification_type"] }
-    assert_equal "c" * 64, seen[0]["notification"]["payment_hash"]
-  end
-
-  def test_wire_shaped_payloads_pass_through_untouched
-    wire = { "notification_type" => "payment_received", "notification" => settled_payload("d" * 64) }
-    client = FakeNwcRubyClient.new(notifications: [wire])
-    adapter = OpenReceive::NwcRubyReceiveClient.new(client: client)
-
-    seen = []
     adapter.subscribe_notifications { |n| seen << n }
 
-    assert_equal [wire], seen
-  end
-
-  def test_adapter_reports_notification_support_only_when_the_client_has_a_listener
-    notifying = OpenReceive::NwcRubyReceiveClient.new(client: FakeNwcRubyClient.new)
-    silent = OpenReceive::NwcRubyReceiveClient.new(client: SilentClient.new)
-
-    assert_respond_to notifying, :subscribe_notifications
-    # A client that cannot notify must not answer: OpenReceive.listen_for_
-    # notifications! duck-types this to raise its "notifications are optional;
-    # keep polling" ConfigurationError instead of failing mid-subscription.
-    refute_respond_to silent, :subscribe_notifications
-    refute silent.respond_to?("subscribe_notifications")
-    assert_raises(NoMethodError) { silent.subscribe_notifications { |_n| nil } }
-    # Unrelated methods still answer normally.
-    assert_respond_to silent, :make_invoice
+    # NWC-02 subscriptions are not type-filtered; the engine's own handler
+    # decides what settles, so the adapter forwards everything translated.
+    assert_equal %w[payment_sent payment_received], seen.map { |n| n["notification_type"] }
+    assert_equal "c" * 64, seen[1]["notification"]["payment_hash"]
   end
 end

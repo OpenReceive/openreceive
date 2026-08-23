@@ -37,7 +37,6 @@ export {
 export { sanitizeEvent } from "./service/logging.ts";
 export type {
   Checkout,
-  CheckPaymentRequest,
   CreateCheckoutAmount,
   CreateCheckoutRequest,
   CreateOpenReceiveOptions,

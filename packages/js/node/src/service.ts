@@ -1,12 +1,10 @@
 import {
-  checkPayment as checkPaymentWithClient,
   formatInvalidNwcMessage,
   formatMissingNwcMessage,
   NwcUriParseError,
   OPENRECEIVE_NWC_CODE_HELP_URL,
   OpenReceiveError,
   parseNwcUri,
-  compact,
   reconcilePaymentAttempts,
   unixSeconds,
 } from "@openreceive/core";
@@ -126,60 +124,6 @@ export async function createOpenReceive(
     priceCurrencies,
     prepareCheckout: (input) => prepareCheckout(context, input),
     createCheckout: (input) => createCheckout(context, input),
-    checkPayment: async (input) => {
-      emitLog(
-        nodeOptions,
-        "debug",
-        "payment.check.requested",
-        "Polling NWC wallet for payment settlement.",
-        compact({
-          payment_hash: input.paymentHash,
-          created_at: input.createdAt,
-          until: input.until,
-          overlap_seconds: input.overlapSeconds,
-        }),
-      );
-      try {
-        const checked = await checkPaymentWithClient({
-          client,
-          clock,
-          paymentHash: input.paymentHash,
-          createdAt: input.createdAt,
-          until: input.until,
-          overlapSeconds: input.overlapSeconds,
-        });
-        const transaction = checked.details?.transaction;
-        emitLog(
-          nodeOptions,
-          checked.status === "settled" ? "info" : "debug",
-          "payment.check.completed",
-          "NWC payment settlement poll completed.",
-          compact({
-            payment_hash: checked.paymentHash,
-            status: checked.status,
-            paid_at: checked.paidAt,
-            paid_at_source: checked.details?.paid_at_source,
-            transaction_state: transaction?.transaction_state,
-            settled_at: transaction?.settled_at,
-            preimage_present: transaction?.preimage !== undefined,
-          }),
-        );
-        return checked;
-      } catch (error) {
-        emitLog(
-          nodeOptions,
-          "error",
-          "payment.check.failed",
-          "NWC payment settlement poll failed.",
-          {
-            payment_hash: input.paymentHash,
-            created_at: input.createdAt,
-            error_message: error instanceof Error ? error.message : String(error),
-          },
-        );
-        throw error;
-      }
-    },
     reconcilePayments: async (input) => {
       emitLog(
         nodeOptions,

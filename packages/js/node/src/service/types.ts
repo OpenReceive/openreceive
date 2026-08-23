@@ -116,13 +116,6 @@ export interface Checkout {
   readonly fiatQuote: RateQuote | null;
 }
 
-export interface CheckPaymentRequest {
-  readonly paymentHash: string;
-  readonly createdAt: number;
-  readonly until?: number;
-  readonly overlapSeconds?: number;
-}
-
 export interface ReconcilePaymentsRequest {
   readonly attempts: readonly {
     readonly paymentHash: string;
@@ -292,7 +285,6 @@ export interface OpenReceive {
     readonly fiatQuote: RateQuote | null;
   }>;
   createCheckout(input: CreateCheckoutRequest): Promise<Checkout>;
-  checkPayment(input: CheckPaymentRequest): Promise<PaymentCheck>;
   reconcilePayments(input: ReconcilePaymentsRequest): Promise<readonly PaymentCheck[]>;
   /**
    * Opt-in NWC-02 notifications: subscribe to wallet `payment_received`

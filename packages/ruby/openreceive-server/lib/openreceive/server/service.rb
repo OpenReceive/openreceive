@@ -152,28 +152,6 @@ module OpenReceive
         end
       end
 
-      def check_payment(input)
-        data = stringify(input)
-        payment_hash, created_at, overlap = validating_input do
-          [normalize_payment_hash(data["payment_hash"]),
-           Integer(data.fetch("created_at")),
-           Integer(data.fetch("overlap_seconds", 60))]
-        end
-        checked = reconcile_payments(
-          "attempts" => [{ "payment_hash" => payment_hash, "created_at" => created_at }],
-          "overlap_seconds" => overlap,
-          "until" => data["until"]
-        ).first
-        if checked.nil?
-          # The only way one attempt yields no result: the wallet-history walk
-          # ended before it could prove the invoice present or absent. That is
-          # a scan failure, not evidence that the payment never arrived.
-          raise "payment reconciliation did not complete: the wallet history " \
-                "walk ended before this invoice could be confirmed"
-        end
-        checked
-      end
-
       # Optional bounds for request-path passes: "max_pages" caps each
       # wallet-history walk (the gated opportunistic pass sends 50, mirroring
       # the JS OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES; default MAX_PAGES), and
