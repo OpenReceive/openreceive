@@ -2,6 +2,16 @@
   "name": "@openreceive/testkit",
   "version": "0.2.0-alpha.0",
   "description": "Internal, unpublished fake NWC wallet and swap provider used by OpenReceive's own test suite.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "checkout",
+    "testkit"
+  ],
   "private": true,
   "type": "module",
   "sideEffects": false,

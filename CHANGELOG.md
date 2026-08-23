@@ -19,6 +19,15 @@ behind.
   moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
   rest of that document was history.
 
+### Maintenance
+
+- `fixedfloat.ts` (1,134 lines, nine jobs) is six modules along the seams
+  its siblings already used — transport, currencies, orders, quote, field
+  readers, and the provider assembly. Move-only: the conformance vectors
+  prove it.
+- The hand-rolled Keccak-256 in the Ruby gem now has known-answer tests
+  (NIST/Keccak digests and the EIP-55 specification addresses).
+
 ### `openreceive` is the CLI; the library is `@openreceive/*`
 
 - The unscoped `openreceive` package no longer re-exports the library. It

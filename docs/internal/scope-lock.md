@@ -18,3 +18,8 @@ Each payment row represents one direct payment attempt or one provider swap atte
 explicit status (`pending | settled | expired | failed | attention`). An order has one live
 payment session with at most one live attempt per rail/asset. Host sessions, fulfillment state,
 and send-payment methods remain outside the product.
+
+The Ruby server is a deliberate second settlement engine, not a port that happens to exist.
+Every provider, rate-source, and settlement-rule change is therefore two implementations plus
+a conformance-vector update, and that cost is accepted knowingly. It is recorded here so the
+decision is re-made on purpose rather than inherited.
