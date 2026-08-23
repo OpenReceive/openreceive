@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import {
-  formatLscUri,
-  parseLscUri,
-  readLscConnectionsFromEnvironment,
-} from "../packages/js/node/src/index.ts";
+import { formatLscUri } from "../packages/js/node/src/index.ts";
+import { parseLscUri, readLscConnectionsFromEnvironment } from "../packages/js/node/src/lsc-uri.ts";
 
 const vectors = JSON.parse(
   await readFile(new URL("../spec/test-vectors/lsc-uri.json", import.meta.url), "utf8"),

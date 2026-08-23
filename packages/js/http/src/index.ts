@@ -60,11 +60,7 @@ export type {
 // exported: hosts see "unpaid or paid", never the live/supersede vocabulary.
 // Custom repositories import the contract types below and implement against
 // the documented invariants instead.
-export {
-  OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
-  OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS,
-  openReceivePaymentInsert,
-} from "./payment-repository.ts";
+export { OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS } from "./payment-repository.ts";
 export type { OpenReceiveReconciler } from "./reconcile-loop.ts";
 export { reconcileOpenReceivePayments, startOpenReceiveReconciler } from "./reconcile-loop.ts";
 export type {
@@ -90,9 +86,7 @@ export type { OpenReceiveIpRateLimitConfig } from "./rate-limit.ts";
 export {
   createOpenReceiveIpRateLimit,
   createProxyRateLimitingConfig,
-  OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR,
   openReceiveClientIp,
-  openReceiveClientIpBucket,
 } from "./rate-limit.ts";
 export type {
   OpenReceiveSqlAdapter,
@@ -100,7 +94,6 @@ export type {
   OpenReceiveSqlDatabase,
   OpenReceiveSqlQuery,
 } from "./sql-adapters.ts";
-export { resolveSqlAdapter } from "./sql-adapters.ts";
 export type {
   OpenReceiveOrderSettlement,
   OpenReceiveOrderSettlementHook,

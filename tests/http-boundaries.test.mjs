@@ -8,8 +8,8 @@ import {
   createOpenReceiveHttpHandler,
   createOpenReceiveHost,
   hostError,
-  openReceivePaymentInsert,
 } from "../packages/js/http/src/index.ts";
+import { openReceivePaymentInsert } from "../packages/js/http/src/payment-repository.ts";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,

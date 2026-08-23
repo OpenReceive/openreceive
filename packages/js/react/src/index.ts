@@ -21,7 +21,6 @@ export type {
   CheckoutClassNames,
   CheckoutComponents,
   CheckoutData,
-  CheckoutEventHandlers,
   CheckoutProps,
   CheckoutProviderProps,
   CheckoutViewModel,
@@ -42,10 +41,5 @@ export type {
   UseThemeResult,
 } from "./types.ts";
 export { CheckoutProvider, useCheckout, useCheckoutContext } from "./use-checkout.ts";
-export type {
-  UseCheckoutResumeOptions,
-  UseCheckoutResumeResult,
-} from "./use-checkout-resume.ts";
-export { useCheckoutResume } from "./use-checkout-resume.ts";
 export { createCheckoutViewModel } from "./view-model.ts";
 export { PaymentWizard } from "./wizard.ts";

@@ -28,7 +28,6 @@ export {
   compareFixedFloatDecimalAmounts,
 } from "./fixedfloat-rates.ts";
 
-export { isOpenReceiveSwapTerminalState } from "./provider.ts";
 export type {
   SwapProviderState,
   SwapAttentionReason,

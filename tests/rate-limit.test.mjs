@@ -3,13 +3,15 @@ import test from "node:test";
 import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
-  OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR,
   createOpenReceiveHttpHandler,
   createOpenReceiveIpRateLimit,
   createOpenReceiveSqlPayments,
   openReceiveClientIp,
-  openReceiveClientIpBucket,
 } from "../packages/js/http/src/index.ts";
+import {
+  OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR,
+  openReceiveClientIpBucket,
+} from "../packages/js/http/src/rate-limit.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
 function testHost({ onCheckoutCreated = () => undefined, countAttemptsFromIp } = {}) {

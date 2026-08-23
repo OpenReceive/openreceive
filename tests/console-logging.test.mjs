@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHostConsoleLogger } from "../packages/js/node/src/index.ts";
+import { createOpenReceiveConsoleLogger } from "../packages/js/node/src/console-logger.ts";
 import {
-  createHostConsoleLogger,
-  createOpenReceiveConsoleLogger,
   parseOpenReceiveLogLevel,
   readOpenReceiveLogLevelFromEnvironment,
   resolveOpenReceiveLogLevel,
-} from "../packages/js/node/src/index.ts";
+} from "../packages/js/node/src/log-level.ts";
+import { createOpenReceiveBrowserConsoleLogger } from "../packages/js/browser/src/internal/console-logger.ts";
 import {
-  createOpenReceiveBrowserConsoleLogger,
   parseOpenReceiveBrowserLogLevel,
   readOpenReceiveBrowserLogLevelFromEnvironment,
-} from "../packages/js/browser/src/index.ts";
+} from "../packages/js/browser/src/internal/log-level.ts";
 
 test("parseOpenReceiveLogLevel accepts DEBUG/INFO/WARN/ERROR case-insensitively", () => {
   assert.equal(parseOpenReceiveLogLevel("DEBUG"), "debug");

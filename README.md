@@ -1,5 +1,7 @@
 # OpenReceive
 
+Freedom tech for inbound payments.
+
 Accept Bitcoin payments on your website or app, straight into a wallet you control.
 
 <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="56">
@@ -9,15 +11,16 @@ internet. Your server issues an invoice from a wallet you already control. The p
 approves delivery of the purchase.
 
 **Deposit-only by design.** OpenReceive exposes no payment-sending API and
-never holds a key: it connects with a receive-only NWC code, and boot fails
-closed when the code can spend. Custody, freezing, and reversal are properties
+never holds a key: it connects with a receive-only NWC code. Custody is the job of
 of the [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments)
-and swap provider you choose — not of this library.
+and swap provider you choose — not of this library. Choose an NWC provider like [Alby Hub](https://getalby.com/), running on your own hardware, for 100% self-custody.
 
 **Optionally swap in other currencies.** Not every customer holds Bitcoin.
 Configure any swap provider that implements the
 [FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs) and
-checkout offers these pay-in routes, each converted into Bitcoin on the way in:
+checkout offers these pay-in routes, each converted into Bitcoin on the way in.
+
+Optional Inbound Currencies:
 
 | Pay with                                                                                                  | On network                                                                                                                                                                                                                                                                                        |
 | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -28,16 +31,6 @@ checkout offers these pay-in routes, each converted into Bitcoin on the way in:
 
 OpenReceive does not transmit money or hold customer funds. It helps your
 backend create invoices and verify settlement — nothing more.
-
-> **Terminology.** **NWC** (Nostr Wallet Connect, specified by **NIP-47**) is the
-> protocol a Lightning wallet exposes so an application can ask it to create
-> invoices and list payments — a receive-only NWC connection string is the only
-> wallet credential OpenReceive needs. A **BOLT11** invoice is the standard
-> Lightning payment request string payers scan or paste. Amounts are counted in
-> **sats** (satoshis, 1/100,000,000 BTC) and **msats** (millisatoshis, 1/1000 sat
-> — the unit on the wire). A **rail** is one way to pay a checkout: Lightning
-> directly, or a **swap** (the payer sends another asset, e.g. USDT, and a swap
-> provider pays the Lightning invoice).
 
 ## Quickstart
 
@@ -60,6 +53,7 @@ transaction.
      all your server holds is a receive-only NWC code.
   2. Every payment settles as a private, immutable Bitcoin Lightning payment, swapped from other
      currencies as necessary. No funds are held in centrally-controlled, censorable currencies like SOL, USDT, OR USDC.
+  3. See [Security](docs/guides/security.md) guide.
 - **Your app owns business state.** Your application owns orders; the library
   owns the `openreceive_payments` rows (they live in your database) — see
   [Payment storage](docs/guides/storage.md). OpenReceive never owns orders,
@@ -116,15 +110,7 @@ const host = createOpenReceiveHost({
 app.use(openReceiveExpress({ service, host, authorize }));
 ```
 
-You usually write none of that. The quickstart passes the same hooks straight
-to the adapter — `openReceiveExpress({ nwc, db, loadOrder, amountForOrder,
-onPaid, authorize })` — and gets the same three objects in one call. Name them
-yourself only when two mounts share one wallet connection, you supply a custom
-payments repository, or a test needs the order bridge without an HTTP server.
-The guides and API reference call them `service` and `host`: the parameter
-names every adapter expects.
-
-### The order bridge owns one table
+### The OpenReceive Order Bridge
 
 The order bridge is the server object between your orders and OpenReceive's
 payment attempts: it calls the three hooks you hand it — `loadOrder`,
@@ -146,10 +132,6 @@ custom-repository escape hatch: [Payment storage](docs/guides/storage.md).
 [`createOpenReceive()`][api-createopenreceive] reads the receive-only wallet
 code from `NWC_URI`; optional swap providers come from `LSC_URI_PRIMARY` and
 `LSC_URI_BACKUP`. Those are OpenReceive's only secret environment variables.
-Your deployment supplies them (the library never loads `.env`), and none of
-them may reach browser code or logs. Boot fails closed when the wallet code
-can spend; the override and what it costs are in
-[Security](docs/guides/security.md).
 
 ### The routes run your `authorize` on every request
 

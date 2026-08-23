@@ -24,16 +24,7 @@ export {
   createGuestOrderFetcher,
   enterCheckoutResumePath,
 } from "./internal/guest-resume.ts";
-export {
-  createHostBrowserConsoleLogger,
-  createOpenReceiveBrowserConsoleLogger,
-  getDefaultOpenReceiveBrowserConsoleLogger,
-  openReceiveBrowserLogLevelOrder,
-  parseOpenReceiveBrowserLogLevel,
-  readOpenReceiveBrowserLogLevelFromEnvironment,
-  resolveOpenReceiveBrowserLogLevel,
-  resolveOpenReceiveBrowserLogger,
-} from "./internal/console-logger.ts";
+export { createHostBrowserConsoleLogger } from "./internal/console-logger.ts";
 
 export type {
   CheckoutController,

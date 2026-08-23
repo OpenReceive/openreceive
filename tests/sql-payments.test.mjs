@@ -10,8 +10,8 @@ import {
   createOpenReceiveSqlPayments,
   openReceivePaymentsSchemaSql,
   reconcileOpenReceivePayments,
-  resolveSqlAdapter,
 } from "../packages/js/http/src/index.ts";
+import { resolveSqlAdapter } from "../packages/js/http/src/sql-adapters.ts";
 // Internal decision table: imported from the module directly (it is
 // deliberately not on the public package surface).
 import { reconciliationTransition } from "../packages/js/http/src/payment-repository.ts";

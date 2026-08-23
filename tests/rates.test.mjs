@@ -3,11 +3,13 @@ import test from "node:test";
 import {
   CachedPriceFeed,
   createCachedLivePriceFeed,
+  StaticPriceProvider,
+} from "../packages/js/core/src/index.ts";
+import {
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
   OPENRECEIVE_PRICE_FEED_FALLBACK_TIMEOUT_MS,
   OPENRECEIVE_PRICE_FEED_PRIMARY_TIMEOUT_MS,
-  StaticPriceProvider,
-} from "../packages/js/core/src/index.ts";
+} from "../packages/js/core/src/rates/constants.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 

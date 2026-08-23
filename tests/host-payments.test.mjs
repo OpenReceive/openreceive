@@ -3,10 +3,10 @@ import test from "node:test";
 import { hash } from "./helpers/factories.mjs";
 import {
   createOpenReceiveHost,
-  openReceivePaymentInsert,
   reconcileOpenReceivePayments,
   startOpenReceiveReconciler,
 } from "../packages/js/http/src/index.ts";
+import { openReceivePaymentInsert } from "../packages/js/http/src/payment-repository.ts";
 import { createOpenReceiveStatusFetcher } from "../packages/js/browser/src/headless.ts";
 
 function context(action, input = {}, payInAsset) {

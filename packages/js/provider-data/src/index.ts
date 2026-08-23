@@ -167,11 +167,7 @@ export function getAsset(symbol: string): AssetIndexEntry | undefined {
   return registry.assets_index.find((asset) => asset.symbol === normalizedSymbol);
 }
 
-export function listCryptoRoutes(): readonly CryptoRoute[] {
-  return registry.crypto_routes;
-}
-
-export function getCryptoRoute(routeId: CryptoRouteId): CryptoRoute | undefined {
+function getCryptoRoute(routeId: CryptoRouteId): CryptoRoute | undefined {
   const normalizedRouteId = normalizeRouteId(routeId);
   return registry.crypto_routes.find((route) => route.id === normalizedRouteId);
 }
@@ -199,10 +195,6 @@ export function getPaymentWizardRoutes(
       ...(asset === undefined ? {} : { asset }),
     },
   ];
-}
-
-export function listDisqualifiedProviders(): readonly DisqualifiedProvider[] {
-  return registry.disqualified_providers;
 }
 
 export function validateRegistry(

@@ -9,8 +9,6 @@ const LSC_QUERY_PARAMETERS = new Set(["key", "secret"]);
 const MAX_LSC_URI_LENGTH = 8_192;
 const MAX_LSC_CREDENTIAL_LENGTH = 2_048;
 
-export type LscEnvironmentName = (typeof LSC_ENV_NAMES)[number];
-
 export interface LscConnection {
   readonly uriProtocol: typeof LSC_URI_PROTOCOL;
   readonly baseUrl: string;

@@ -116,13 +116,6 @@ export function createHostConsoleLogger(
   };
 }
 
-export {
-  openReceiveLogLevelOrder,
-  parseOpenReceiveLogLevel,
-  readOpenReceiveLogLevelFromEnvironment,
-  resolveOpenReceiveLogLevel,
-} from "./log-level.ts";
-
 function formatConsoleLogLine(input: {
   readonly at: string;
   readonly level: OpenReceiveLogLevel;

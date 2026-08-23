@@ -195,10 +195,3 @@ export function resolveOpenReceiveBrowserLogger(
   if (logger !== undefined) return logger;
   return getDefaultOpenReceiveBrowserConsoleLogger();
 }
-
-export {
-  openReceiveBrowserLogLevelOrder,
-  parseOpenReceiveBrowserLogLevel,
-  readOpenReceiveBrowserLogLevelFromEnvironment,
-  resolveOpenReceiveBrowserLogLevel,
-} from "./log-level.ts";

@@ -45,23 +45,11 @@ import {
 } from "./nwc/transport.ts";
 
 export type { WalletPreflightErrorCode } from "./nwc/errors.ts";
-export {
-  normalizeNwcWalletError,
-  ReceiveCheckoutValidationError,
-  WalletPreflightError,
-} from "./nwc/errors.ts";
+export { ReceiveCheckoutValidationError, WalletPreflightError } from "./nwc/errors.ts";
 export type { NwcWalletNotification } from "./nwc/normalize.ts";
-export { summarizeWalletCapabilities } from "./nwc/normalize.ts";
 export type { AlbyNwcCompatibleClient } from "./nwc/transport.ts";
 
 import type { NwcWalletNotification } from "./nwc/normalize.ts";
-
-/**
- * Pause a terminal-facing CLI passes as `spendCapabilityWarningDelayMs` so an
- * operator can read the spend-capability warning before boot continues. The
- * library itself never pauses (its default is `0`).
- */
-export const SPEND_CAPABILITY_WARNING_DELAY_MS = 5_000;
 
 export type NwcWalletNotificationHandler = (notification: NwcWalletNotification) => void;
 

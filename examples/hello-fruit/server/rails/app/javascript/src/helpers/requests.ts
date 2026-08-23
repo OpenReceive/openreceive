@@ -42,7 +42,10 @@ const readBodyMessage = async (response: Response): Promise<string | undefined> 
 };
 
 // Generic: send arbitrary JSON to a Rails controller action.
-export const sendToRailsController = async (data: object, url: string): Promise<any> => {
+/** A Rails JSON body. Callers narrow it; nothing here trusts its shape. */
+export type RailsJson = Record<string, unknown>;
+
+export const sendToRailsController = async (data: object, url: string): Promise<RailsJson> => {
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -66,7 +69,7 @@ export const sendToRailsController = async (data: object, url: string): Promise<
 };
 
 // Helper specifically for GET requests that return JSON.
-export const getJsonFromRails = async (url: string): Promise<any> => {
+export const getJsonFromRails = async (url: string): Promise<RailsJson> => {
   try {
     const response = await fetch(url, {
       method: "GET",

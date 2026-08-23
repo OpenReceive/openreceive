@@ -18,19 +18,15 @@ export {
 export { defineOpenReceiveElements } from "./define-elements.ts";
 export {
   renderCheckoutCreateErrorHtml,
-  renderCheckoutCreatingHtml,
   renderCheckoutHtml,
   renderOpenReceiveThemeToggleHtml,
 } from "./render-checkout.ts";
-export { renderOpenReceivePaymentWizardHtml } from "./render-wizard.ts";
 export {
   createTransactionDetailsElement,
   renderTransactionDetailsHtml,
-  wireTransactionDetailsCopy,
 } from "./transaction-details.ts";
 export type {
   CheckoutView,
   DefineOpenReceiveElementsOptions,
-  OpenReceiveElementsSwapOption,
   OpenReceiveElementsWizardView,
 } from "./views.ts";

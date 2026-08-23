@@ -206,8 +206,3 @@ export interface SwapProvider {
   getStatus(order: SwapOrder): Promise<SwapOrder>;
   requestRefund(order: SwapOrder, refundAddress: string): Promise<void>;
 }
-
-export function isOpenReceiveSwapTerminalState(state: string | undefined): boolean {
-  if (state === undefined) return false;
-  return OPENRECEIVE_SWAP_STATES[state as SwapProviderState]?.terminal === true;
-}

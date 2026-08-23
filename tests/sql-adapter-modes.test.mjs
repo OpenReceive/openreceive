@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { resolveSqlAdapter } from "../packages/js/http/src/index.ts";
+import { resolveSqlAdapter } from "../packages/js/http/src/sql-adapters.ts";
 
 // A pg.Client stand-in: connect() may be called exactly once, and query()
 // calls made before connect() queue indefinitely (pg's real behavior).

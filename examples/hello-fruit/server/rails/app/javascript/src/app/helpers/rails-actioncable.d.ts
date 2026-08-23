@@ -5,10 +5,10 @@ declare module "@rails/actioncable" {
   }
 
   export interface Subscriptions {
-    create(
+    create<Payload = unknown>(
       params: Record<string, unknown>,
       handlers: {
-        received?: (payload: any) => void;
+        received?: (payload: Payload) => void;
         connected?: () => void;
         disconnected?: () => void;
         rejected?: () => void;

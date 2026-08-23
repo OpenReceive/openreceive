@@ -10,7 +10,7 @@ import {
   reconcilePaymentAttempts,
 } from "@openreceive/core";
 import { isValidAddressForSwapNetwork } from "@openreceive/core/swap-address";
-import { normalizeNwcWalletError } from "../packages/js/node/src/index.ts";
+import { normalizeNwcWalletError } from "../packages/js/node/src/nwc/errors.ts";
 import {
   normalizeListTransactionsResult,
   normalizeMakeInvoiceResult,

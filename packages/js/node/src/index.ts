@@ -9,10 +9,7 @@ export type {
 export {
   ReceiveCheckoutValidationError,
   WalletPreflightError,
-  SPEND_CAPABILITY_WARNING_DELAY_MS,
   createNwcReceiveClient,
-  normalizeNwcWalletError,
-  summarizeWalletCapabilities,
 } from "./alby-nwc.ts";
 export type {
   AlbyNwcReceiveClientOptions,
@@ -22,19 +19,11 @@ export type {
   NwcNotificationUnsubscribe,
   WalletPreflightErrorCode,
 } from "./alby-nwc.ts";
-export {
-  LSC_ENV_NAMES,
-  LSC_URI_PROTOCOL,
-  createLscSwapProvidersFromEnvironment,
-  formatLscUri,
-  parseLscUri,
-  readLscConnectionsFromEnvironment,
-} from "./lsc-uri.ts";
+export { formatLscUri } from "./lsc-uri.ts";
 export type {
   CreateLscSwapProvidersOptions,
   FormatLscUriInput,
   LscConnection,
-  LscEnvironmentName,
 } from "./lsc-uri.ts";
 export {
   OpenReceiveConfigError,
@@ -46,11 +35,40 @@ export {
 // (the mounted HTTP layer's default warnings) can reuse it rather than
 // printing raw wallet or provider error text.
 export { sanitizeOpenReceiveEvent } from "./service/logging.ts";
-export type * from "./service/types.ts";
+export type {
+  Checkout,
+  CheckPaymentRequest,
+  CreateCheckoutAmount,
+  CreateCheckoutRequest,
+  CreateOpenReceiveOptions,
+  CreateSwapRequest,
+  EventHandler,
+  GetSwapRequest,
+  ListRatesRequest,
+  ListSwapOptionsRequest,
+  ListSwapOptionsResult,
+  Logger,
+  LoggingOptions,
+  NodeSettlementActionHook,
+  NodeSettlementActionInput,
+  OpenReceive,
+  OpenReceiveLogEvent,
+  OpenReceiveLogLevel,
+  OpenReceiveWalletNotification,
+  OpenReceiveWalletNotificationHandler,
+  PublicSwap,
+  ReconcilePaymentsRequest,
+  SwapCheckout,
+  SwapData,
+  SwapOptions,
+  SwapPaymentMethod,
+  SwapQuoteRequest,
+  SwapQuoteResult,
+  SwapRefundRequest,
+} from "./service/types.ts";
 export {
   fixedFloatCompatibleSwapProvider,
   fixedFloatProvider,
-  isOpenReceiveSwapTerminalState,
   OPENRECEIVE_SWAP_PAY_IN_ASSETS,
   OPENRECEIVE_SWAP_STATES,
 } from "./swap/index.ts";
@@ -65,16 +83,9 @@ export type {
   SwapProviderState,
   SwapQuote,
 } from "./swap/index.ts";
-export { readNwcFromEnvironment, requireNwcFromEnvironment } from "./require-nwc.ts";
+export { readNwcFromEnvironment } from "./require-nwc.ts";
 export type { RequireNwcFromEnvironmentOptions } from "./require-nwc.ts";
-export {
-  createHostConsoleLogger,
-  createOpenReceiveConsoleLogger,
-  openReceiveLogLevelOrder,
-  parseOpenReceiveLogLevel,
-  readOpenReceiveLogLevelFromEnvironment,
-  resolveOpenReceiveLogLevel,
-} from "./console-logger.ts";
+export { createHostConsoleLogger } from "./console-logger.ts";
 export type {
   CreateHostConsoleLoggerOptions,
   CreateOpenReceiveConsoleLoggerOptions,

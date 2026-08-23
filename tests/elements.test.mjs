@@ -11,11 +11,11 @@ import {
 import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   defineOpenReceiveElements,
-  renderCheckoutCreatingHtml,
   renderCheckoutHtml,
-  renderOpenReceivePaymentWizardHtml,
   renderOpenReceiveThemeToggleHtml,
 } from "@openreceive/elements";
+import { renderCheckoutCreatingHtml } from "../packages/js/elements/src/render-checkout.ts";
+import { renderOpenReceivePaymentWizardHtml } from "../packages/js/elements/src/render-wizard.ts";
 
 test("elements render display-safe checkout HTML", () => {
   const html = renderCheckoutHtml({
