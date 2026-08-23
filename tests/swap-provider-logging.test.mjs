@@ -53,7 +53,7 @@ test("createOpenReceive logs FixedFloat API request/response traffic through the
     }
     return Response.json({ code: 1, msg: `unexpected ${url}` }, { status: 500 });
   };
-  const providers = createLscSwapProvidersFromEnvironment(
+  const [provider] = createLscSwapProvidersFromEnvironment(
     { LSC_URI_PRIMARY: lscUri },
     { fetch: mockFetch, now: () => 1_700_000_000 },
   );
@@ -62,7 +62,7 @@ test("createOpenReceive logs FixedFloat API request/response traffic through the
     clock: () => 1_700_000_000,
     env: {},
     logger: (entry) => events.push(entry),
-    swap: { providers },
+    swap: { provider },
   });
 
   try {
@@ -112,7 +112,7 @@ test("FixedFloat network failures still emit a swap.provider.response failure lo
     key: "test-key",
     secret: "test-secret",
   });
-  const providers = createLscSwapProvidersFromEnvironment(
+  const [provider] = createLscSwapProvidersFromEnvironment(
     { LSC_URI_PRIMARY: lscUri },
     {
       fetch: async () => {
@@ -126,7 +126,7 @@ test("FixedFloat network failures still emit a swap.provider.response failure lo
     clock: () => 1_700_000_000,
     env: {},
     logger: (entry) => events.push(entry),
-    swap: { providers },
+    swap: { provider },
   });
 
   try {

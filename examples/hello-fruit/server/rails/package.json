@@ -6,7 +6,7 @@
     "dev": "bin/shakapacker-dev-server",
     "build": "RAILS_ENV=production NODE_ENV=production webpack --config config/webpack/webpack.config.js",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node script/check-wizard-drift.mjs"
+    "test": "node script/check-currency-drift.mjs"
   },
   "dependencies": {
     "@openreceive/browser": "0.2.0-alpha.0",

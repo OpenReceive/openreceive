@@ -273,7 +273,7 @@ test("a public swap body conforms to swap-order.schema.json", async () => {
 
   const openreceive = await createOpenReceive({
     client: createTestkitReceiveClient({ now: () => 1000 }),
-    swap: { providers: [createTestkitSwapProvider({ now: () => 1000 })] },
+    swap: { provider: createTestkitSwapProvider({ now: () => 1000 }) },
     clock: () => 1000,
   });
   const swap = await openreceive.createSwap({
@@ -341,7 +341,7 @@ test("provider-reported fee and refund detail reach the payer-facing swap body",
 
   const openreceive = await createOpenReceive({
     client: createTestkitReceiveClient({ now: () => 1000 }),
-    swap: { providers: [provider] },
+    swap: { provider },
     clock: () => 1000,
   });
   const swap = await openreceive.createSwap({

@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/http",
   "version": "0.2.0-alpha.0",
-  "description": "Framework-neutral HTTP handler for OpenReceive checkout: Web Request/Response routing, host integration, and payment-attempt persistence.",
+  "description": "Framework-neutral (Web Request/Response) HTTP handler for OpenReceive checkout that builds on @openreceive/node and requires its Node runtime: request routing, host integration, and payment-attempt persistence.",
   "keywords": [
     "bitcoin",
     "lightning",

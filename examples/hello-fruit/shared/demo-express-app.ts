@@ -82,7 +82,7 @@ export async function createHelloFruitExpressApp(
       ...openReceiveConfig,
       client: testkit.client,
       priceProviders: [new StaticPriceProvider()],
-      swap: { providers: [testkit.swap] },
+      swap: { provider: testkit.swap },
     });
     logDemo("openreceive.testkit", "Testkit wallet mode: in-memory fakes, no NWC connection.", {
       controlPrefix: "/__testkit",

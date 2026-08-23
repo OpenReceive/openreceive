@@ -49,6 +49,7 @@ export type {
   OpenReceiveBrowserLogLevel,
   OpenReceiveQrOptions as QrOptions,
   OpenWalletOptions,
+  PrepareCheckoutOptions,
   RequestCheckoutOptions,
 } from "./internal/ui.ts";
 export type {

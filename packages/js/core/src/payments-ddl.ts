@@ -42,7 +42,10 @@ export function openReceivePaymentsHashCheckSql(dialect: OpenReceivePaymentsDial
  */
 export function openReceivePaymentsIndexName(tableName: string, suffix: string): string {
   const full = `${tableName}_${suffix}`;
-  if (utf8ByteLength(full) <= MAX_IDENTIFIER_BYTES) return full;
+  // `.length` (UTF-16 units) is exact here: every caller has passed the name
+  // through an ASCII-only identifier check (assertDdlIdentifier below; the
+  // scaffold's assertPaymentsTableName), so units and UTF-8 bytes agree.
+  if (full.length <= MAX_IDENTIFIER_BYTES) return full;
   const digest = hexDigest(full).slice(0, 8);
   const room = MAX_IDENTIFIER_BYTES - suffix.length - digest.length - 2;
   return `${tableName.slice(0, Math.max(1, room))}_${digest}_${suffix}`;
@@ -157,10 +160,6 @@ export function openReceivePaymentsDdlStatements(
     ].join("\n"),
     openReceivePaymentsSeedSql(options.dialect, metaTableName),
   ];
-}
-
-function utf8ByteLength(value: string): number {
-  return new TextEncoder().encode(value).length;
 }
 
 function hexDigest(value: string): string {

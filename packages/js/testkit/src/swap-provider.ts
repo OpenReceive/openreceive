@@ -25,7 +25,7 @@ import {
  * const swap = createTestkitSwapProvider();
  * const or = await createOpenReceive({
  *   client: createTestkitReceiveClient(),
- *   swap: { providers: [swap] },
+ *   swap: { provider: swap },
  * });
  * swap.script("USDT_TRON", ["awaiting_deposit", "confirming", "exchanging", "completed"]);
  * // each getStatus poll advances one step, then holds on the last state

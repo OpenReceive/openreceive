@@ -8,22 +8,24 @@ import {
   CopyInvoiceButton,
   InvoiceSummary,
   PaymentData,
+  PaymentWizard,
   QRCode,
   SatsDetail,
   WaitingState,
 } from "@openreceive/react";
 import { observer } from "mobx-react";
 import type React from "react";
-import { useContext } from "react";
+import { useCallback, useContext } from "react";
+import { openReceivePrefix } from "../helpers/constants.ts";
+import type { CheckoutFlow } from "../stores/CheckoutFlow.ts";
 import { ShopWorkspaceContext } from "../stores/ShopWorkspace.ts";
-import MethodGrid from "./checkout/MethodGrid.tsx";
 
 const rootDataAttribute = { [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "" };
 
 /**
  * The checkout pane: Lightning QR + status on the left, payment info on the
- * right, method wizard below. A straight port of the widget's CheckoutView
- * markup, but every piece of state comes from the CheckoutFlow store.
+ * right, the packaged payment wizard below. A straight port of the widget's
+ * CheckoutView markup, but every piece of state comes from the CheckoutFlow store.
  */
 const CheckoutPanel: React.FC = observer(() => {
   const workspace = useContext(ShopWorkspaceContext);
@@ -146,9 +148,37 @@ const CheckoutPanel: React.FC = observer(() => {
           </div>
         </div>
       )}
-      {!settled && (!expired || swapFocused) ? <MethodGrid /> : null}
+      {!settled && (!expired || swapFocused) ? <CheckoutWizard checkout={checkout} /> : null}
     </section>
   );
 });
 
 export default CheckoutPanel;
+
+/**
+ * The packaged payment wizard — method grid, per-coin network reveal, swap
+ * deposit panel, route/provider step — driven by the store. It renders the
+ * store's snapshot and hands every outcome back as a store action, so polling
+ * and the cable push keep landing in the one sink. Which tile or network the
+ * payer is choosing between is the wizard's own UI state, as in every other
+ * Hello Fruit demo.
+ */
+const CheckoutWizard: React.FC<{ checkout: CheckoutFlow }> = observer(({ checkout }) => {
+  // The wizard subscribes to this in an effect keyed on the callback, so an
+  // inline arrow would re-run it (false, then true) on every render.
+  const onSwapFocusChange = useCallback(
+    (focused: boolean) => checkout.setSwapFocused(focused),
+    [checkout],
+  );
+  return (
+    <PaymentWizard
+      invoice={checkout.lightningInvoice}
+      checkout={checkout.snapshot?.data}
+      prefix={openReceivePrefix()}
+      onRequestLightning={() => checkout.ensureLightning()}
+      onSwapStarted={(invoice) => checkout.applyAttempt(invoice)}
+      onSwapFocusChange={onSwapFocusChange}
+      onError={(error) => checkout.reportError(error)}
+    />
+  );
+});

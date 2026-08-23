@@ -10,6 +10,27 @@ Thanks for helping build OpenReceive. The short version:
 - `npm run check` runs the contract validators and secret scan; `npm run lint`
   and `npm run typecheck` must both be clean.
 
+## Repository layout
+
+- `spec/` — the source of truth: schemas, shared data, test vectors, and the
+  shipped HTTP and event contracts.
+- `packages/js/` — core contracts, the Node NWC wallet client, HTTP routes,
+  Express/Fastify/Next adapters, browser helpers, provider data, testkit,
+  elements, and the React/Vue/Svelte/Angular packages.
+- `packages/ruby/` — the dependency-free core, the Service and Rack app, and
+  the mountable Rails engine: a second settlement implementation checked
+  against the shared vectors.
+- `examples/hello-fruit/server/` — Express, static HTML, Next.js, and Rails
+  demos; demo order models are ordinary application code.
+- `tools/` — validation, conformance, package-smoke, documentation, and
+  live-wallet helpers.
+
+Versions are independent per domain: the workspace/package release version
+([Release process](docs/internal/release-process.md)), the OpenAPI HTTP
+contract (`spec/openapi/openreceive-http.v1.yaml`), and the AsyncAPI event
+contract (`spec/asyncapi/openreceive-events.v1.yaml`) are each versioned inside
+their own file, and none tracks the others.
+
 ## Ground rules
 
 - Read `AGENTS.md` first — it holds the non-negotiable invariants (exact

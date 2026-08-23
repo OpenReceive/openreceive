@@ -5,8 +5,7 @@
 // and the fiat minor-unit widths. The Rails demo is the one client that cannot
 // import it, so it mirrors the constants in Ruby
 // (app/models/create_fruit_order.rb, app/models/money_format.rb). Nothing else
-// notices when one side changes, so this check parses both and compares —
-// same pattern as check-wizard-drift.mjs.
+// notices when one side changes, so this check parses both and compares.
 
 import { readFileSync } from "node:fs";
 import path from "node:path";

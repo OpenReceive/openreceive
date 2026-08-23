@@ -446,6 +446,15 @@ export type CheckoutStatusRefresh = (orderId: string) => Promise<CheckoutSnapsho
 
 export type RequestCheckoutOptions = RequestCheckoutBaseOptions;
 
+/**
+ * `prepareCheckout` posts only the order id — it locks the amount and lists
+ * payment methods without minting — so there is no memo or metadata to carry.
+ */
+export type PrepareCheckoutOptions = Pick<
+  RequestCheckoutBaseOptions,
+  "prefix" | "orderId" | "fetch" | "headers"
+>;
+
 export interface RequestCheckoutBaseOptions {
   /**
    * Base path the shipped router is mounted at (e.g. `/openreceive`). The create and

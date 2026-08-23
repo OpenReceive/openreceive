@@ -24,7 +24,7 @@ export async function createLifecycleStack(options = {}) {
   const service = await createOpenReceive({
     client: wallet,
     clock: now,
-    swap: { providers: [swapProvider] },
+    swap: { provider: swapProvider },
   });
   const db = memoryPaymentsDb();
   const orders = new Map();

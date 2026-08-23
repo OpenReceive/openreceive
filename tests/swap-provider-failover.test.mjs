@@ -87,7 +87,7 @@ function mockProviderFetch(input = {}) {
 async function createService(input) {
   const fetchCalls = [];
   const events = [];
-  const providers = createLscSwapProvidersFromEnvironment(
+  const [provider, ...failoverProviders] = createLscSwapProvidersFromEnvironment(
     {
       LSC_URI_PRIMARY: PRIMARY_URI,
       LSC_URI_BACKUP: BACKUP_URI,
@@ -102,7 +102,7 @@ async function createService(input) {
     clock: () => 1_700_000_000,
     env: {},
     logger: (entry) => events.push(entry),
-    swap: { providers },
+    swap: { provider, failoverProviders },
   });
   return { service, fetchCalls, events };
 }

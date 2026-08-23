@@ -56,7 +56,11 @@ export type { AlbyNwcCompatibleClient } from "./nwc/transport.ts";
 
 import type { NwcWalletNotification } from "./nwc/normalize.ts";
 
-/** Default pause after a spend-capability warning so operators can read it. */
+/**
+ * Pause a terminal-facing CLI passes as `spendCapabilityWarningDelayMs` so an
+ * operator can read the spend-capability warning before boot continues. The
+ * library itself never pauses (its default is `0`).
+ */
 export const SPEND_CAPABILITY_WARNING_DELAY_MS = 5_000;
 
 export type NwcWalletNotificationHandler = (notification: NwcWalletNotification) => void;
@@ -100,7 +104,9 @@ export interface AlbyNwcReceiveClientOptions {
   allowSpendCapableWallet?: boolean;
   /**
    * Pause after warning that the info event advertises spend methods (override
-   * path only). Defaults to {@link SPEND_CAPABILITY_WARNING_DELAY_MS}. Set `0` in tests.
+   * path only). Defaults to `0`: a library must not stall a host's boot. A CLI
+   * with a human at the terminal passes {@link SPEND_CAPABILITY_WARNING_DELAY_MS}
+   * so the warning can be read before output scrolls on.
    */
   spendCapabilityWarningDelayMs?: number;
   /** Sink for the spend-capability warning (override path only). Defaults to `console.error`. */
@@ -144,8 +150,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     this.#requirePreflight = options.requirePreflight ?? true;
     this.#logger = options.logger;
     this.#allowSpendCapableWallet = options.allowSpendCapableWallet ?? false;
-    this.#spendCapabilityWarningDelayMs =
-      options.spendCapabilityWarningDelayMs ?? SPEND_CAPABILITY_WARNING_DELAY_MS;
+    this.#spendCapabilityWarningDelayMs = options.spendCapabilityWarningDelayMs ?? 0;
     this.#spendCapabilityWarning =
       options.spendCapabilityWarning ?? ((message) => console.error(message));
   }

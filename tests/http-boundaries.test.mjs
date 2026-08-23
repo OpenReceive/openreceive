@@ -441,7 +441,7 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
   const provider = createTestkitSwapProvider({ now: () => 1000 });
   const service = await createOpenReceive({
     client: wallet,
-    swap: { providers: [provider] },
+    swap: { provider },
     clock: () => 1000,
   });
   let committed;
@@ -516,7 +516,7 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   const provider = createTestkitSwapProvider({ now: () => 1000 });
   const service = await createOpenReceive({
     client: wallet,
-    swap: { providers: [provider] },
+    swap: { provider },
     clock: () => 1000,
   });
   let hostPaymentHash;

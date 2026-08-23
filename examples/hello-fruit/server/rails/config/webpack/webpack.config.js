@@ -14,25 +14,41 @@ webpackConfig.watchOptions = {
   ignored: ["**/node_modules/**", "**/public/packs/**", "**/public/packs-test/**", "**/tmp/**"],
 };
 
-// shared/demo-browser-logging.ts reads import.meta.env.LOG_LEVEL (a Vite-ism
-// kept for parity with the other Hello Fruit demos).
+// The packaged UI resolves its images at runtime against `import.meta.url`:
+// `new URL("./assets/icons/btc.svg", import.meta.url)` in @openreceive/browser,
+// `./assets/provider-icons/…` and `./assets/pay_tutorials/…` in
+// @openreceive/provider-data. Webpack's default is to freeze `import.meta.url`
+// into the build machine's file:// path of the source module, which no browser
+// can load. So the pack defines it as the URL of the <script> that is running
+// instead: every package module is evaluated synchronously inside the pack's
+// own script (hmr is off), so that is the pack's URL, and the images resolve
+// beside it under /packs/js/assets/… — where CopyPlugin puts them. The Vite
+// demos do the same copy with copy-openreceive-payment-icons-plugin; Vite
+// resolves `import.meta.url` on its own.
+webpackConfig.module.parser = {
+  ...webpackConfig.module.parser,
+  javascript: { ...webpackConfig.module.parser?.javascript, importMeta: false },
+};
 webpackConfig.plugins.push(
   new webpack.DefinePlugin({
+    // shared/demo-browser-logging.ts reads import.meta.env.LOG_LEVEL (a Vite-ism
+    // kept for parity with the other Hello Fruit demos).
     "import.meta.env.LOG_LEVEL": JSON.stringify(process.env.LOG_LEVEL ?? "INFO"),
+    "import.meta.url": "((document.currentScript && document.currentScript.src) || location.href)",
   }),
-  // Packaged payment icons resolve at runtime via
-  // `new URL("./assets/…", import.meta.url)` inside the packaged JS, which
-  // lands next to the emitted chunk (/packs/js/…). Copy them there — the same
-  // job the Vite demos do with copy-openreceive-payment-icons-plugin.
-  // Provider icons and pay-tutorial images are NOT copied: this demo renders
-  // only the method grid and the swap deposit panel, and neither shows a
-  // provider. Re-add them alongside anything that renders the packaged
-  // route/provider step.
   new CopyPlugin({
     patterns: [
       {
         from: path.join(repoRoot, "packages/js/browser/dist/assets/icons"),
         to: "js/assets/icons",
+      },
+      {
+        from: path.join(repoRoot, "packages/js/provider-data/dist/assets/provider-icons"),
+        to: "js/assets/provider-icons",
+      },
+      {
+        from: path.join(repoRoot, "packages/js/provider-data/dist/assets/pay_tutorials"),
+        to: "js/assets/pay_tutorials",
       },
     ],
   }),

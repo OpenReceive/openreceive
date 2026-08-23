@@ -13,6 +13,7 @@ import {
   type CreateOpenReceiveStatusFetcherOptions,
   OPENRECEIVE_REFUND_REVIEW_NONCE,
   type OpenReceiveCheckoutPaymentMethod,
+  type PrepareCheckoutOptions,
   type RequestCheckoutOptions,
 } from "./ui.ts";
 import {
@@ -171,7 +172,7 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
  * Lock the host order amount and load payment methods without minting Lightning.
  * Bitcoin selection later calls {@link requestCheckout} to mint (or reuse) a bolt11.
  */
-export async function prepareCheckout(options: RequestCheckoutOptions): Promise<CheckoutSnapshot> {
+export async function prepareCheckout(options: PrepareCheckoutOptions): Promise<CheckoutSnapshot> {
   const request = normalizeRequestCheckoutOptions(options);
   if (request.orderId.length === 0) {
     throw new Error("OpenReceive checkout prepare requires orderId.");

@@ -34,8 +34,9 @@ import type {
   OpenReceive,
   OpenReceiveLogLevel,
   OpenReceiveServiceContext,
+  SwapOptions,
 } from "./service/types.ts";
-import { TransientSwapCache, SwapProviderWeightBudget } from "./swap/index.ts";
+import { type SwapProvider, SwapProviderWeightBudget, TransientSwapCache } from "./swap/index.ts";
 
 export { OpenReceiveConfigError } from "./config-error.ts";
 export { OpenReceiveServiceError } from "./service/core-utils.ts";
@@ -79,8 +80,9 @@ export async function createOpenReceive(
       env: environment,
     }),
   ];
-  const swapProviders =
-    options.swap?.providers ?? createLscSwapProvidersFromEnvironment(environment, { now: clock });
+  const swapProviders = resolveSwapProviders(options.swap, () =>
+    createLscSwapProvidersFromEnvironment(environment, { now: clock }),
+  );
   const nodeOptions: OpenReceiveServiceContext["options"] = { ...options, client };
   emitLog(
     nodeOptions,
@@ -348,6 +350,22 @@ function requireNwc(value: string | undefined, { subject }: { subject: string })
 }
 
 /** Truthy environment flag: "1", "true", "yes" (case-insensitive). */
+/**
+ * Primary first, then failovers in declaration order — the order the swap
+ * service consults them. Failovers without a primary are a configuration
+ * mistake, not something to guess at.
+ */
+function resolveSwapProviders(
+  swap: SwapOptions | undefined,
+  fromEnvironment: () => readonly SwapProvider[],
+): readonly SwapProvider[] {
+  if (swap?.provider !== undefined) return [swap.provider, ...(swap.failoverProviders ?? [])];
+  if (swap?.failoverProviders !== undefined && swap.failoverProviders.length > 0) {
+    throw new TypeError("swap.failoverProviders requires swap.provider.");
+  }
+  return fromEnvironment();
+}
+
 function isEnvironmentFlagEnabled(value: string | undefined): boolean {
   if (value === undefined) return false;
   return ["1", "true", "yes"].includes(value.trim().toLowerCase());

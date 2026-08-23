@@ -228,7 +228,7 @@ test("host-serialized swap data recovers provider state and provider state contr
   const provider = createTestkitSwapProvider({ now: () => 1000 });
   const openreceive = await createOpenReceive({
     client: wallet,
-    swap: { providers: [provider] },
+    swap: { provider },
     clock: () => 1000,
   });
   const swap = await openreceive.createSwap({

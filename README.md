@@ -29,6 +29,16 @@ checkout offers these pay-in routes, each converted into Bitcoin on the way in:
 OpenReceive does not transmit money or hold customer funds. It helps your
 backend create invoices and verify settlement — nothing more.
 
+> **Terminology.** **NWC** (Nostr Wallet Connect, specified by **NIP-47**) is the
+> protocol a Lightning wallet exposes so an application can ask it to create
+> invoices and list payments — a receive-only NWC connection string is the only
+> wallet credential OpenReceive needs. A **BOLT11** invoice is the standard
+> Lightning payment request string payers scan or paste. Amounts are counted in
+> **sats** (satoshis, 1/100,000,000 BTC) and **msats** (millisatoshis, 1/1000 sat
+> — the unit on the wire). A **rail** is one way to pay a checkout: Lightning
+> directly, or a **swap** (the payer sends another asset, e.g. USDT, and a swap
+> provider pays the Lightning invoice).
+
 ## Quickstart
 
 Pick your stack:
@@ -46,10 +56,9 @@ transaction.
 ## Design
 
 - **Paranoid security defaults.**
-  1. An attacker who controls your server has no way to spend your funds:
-     all your server holds is a receive-only NWC code, and boot fails closed
-     if that code can spend.
-  2. Every payment settles as Bitcoin Lightning, swapped from other
+  1. An attacker who gains control of your server has no way to spend your funds:
+     all your server holds is a receive-only NWC code.
+  2. Every payment settles as an immutable Bitcoin Lightning payment, swapped from other
      currencies as necessary.
 - **Your app owns business state.** Your application owns orders; the library
   owns the `openreceive_payments` rows (they live in your database) — see
@@ -107,245 +116,90 @@ const host = createOpenReceiveHost({
 app.use(openReceiveExpress({ service, host, authorize }));
 ```
 
-You usually write none of that. Passing the hooks straight to the adapter —
-`openReceiveExpress({ nwc, db, loadOrder, amountForOrder, onPaid, authorize })` —
-is the same three server objects in one call, and it is what the
-[quickstart](docs/guides/quickstart-node.md) does. Name them yourself only when
-two mounts share one wallet connection, when you supply a custom payments
-repository, or when a test needs the order bridge without an HTTP server.
+You usually write none of that. The quickstart passes the same hooks straight
+to the adapter — `openReceiveExpress({ nwc, db, loadOrder, amountForOrder,
+onPaid, authorize })` — and gets the same three objects in one call. Name them
+yourself only when two mounts share one wallet connection, you supply a custom
+payments repository, or a test needs the order bridge without an HTTP server.
+The guides and API reference call them `service` and `host`: the parameter
+names every adapter expects.
 
-In code those two server objects are conventionally named `service` and `host`
-— the parameter names every adapter expects — which is why you will see them
-spelled that way throughout the guides and the API reference.
+### The order bridge owns one table
 
-### What the order bridge owns
+Keep your order model unchanged. The order bridge owns `openreceive_payments`
+inside your database — you run its migration
+([`npx openreceive scaffold payments`][api-scaffold] emits it for your ORM) and
+the library owns everything else: schema, per-order locking, write-once
+settlement, reconciliation. Each row is one invoice or swap attempt. The only
+link back to your app is the opaque `order_id` string handed to your hooks: no
+foreign key, and OpenReceive never reads your orders table. A row commits
+before the payer sees an invoice, settles once, and fulfills at most once per
+order; to your app an order is simply unpaid or paid.
 
-Keep your order model unchanged. The order bridge owns one
-`openreceive_payments` table inside your existing database — you run its
-migration through your own workflow ([`npx openreceive scaffold payments`][api-scaffold]
-emits it for your ORM) — along with the schema, per-order commit locking,
-write-once settlement, and the reconciliation state machine.
+Schema, the attempt state machine, live-attempt rules, and the
+custom-repository escape hatch: [Payment storage](docs/guides/storage.md).
 
-`order_id` is the only link back to your app, and it is deliberately a loose
-one: opaque `TEXT` with no foreign key. OpenReceive never reads, writes, locks,
-or joins your orders table — it does not know that table's name or its key
-type. It only hands the string back to [`loadOrder`, `amountForOrder`, and
-`onPaid`][api-createopenreceivehost], so a deleted or renamed order can never
-stall settlement.
-
-Each row is one invoice or swap attempt with a status
-(`pending | settled | expired | failed | attention`) and a `status_reason`. These are
-row statuses; `attention` is an operator state that reads as `pending` on the wire. A
-row is committed before payer instructions are exposed; `payment_hash` is
-globally unique; a settled row is never overwritten; a duplicate sibling
-settlement is recorded with `status_reason = 'duplicate_settlement'` and never
-fulfills twice. An order has one live payment session with at most one live
-attempt per rail/asset so a payer can switch between Lightning and swap assets
-— your app never sees that vocabulary; an order is simply unpaid or paid.
-`swap_data` holds provider credentials and must never reach browser code or
-logs.
-
-Implementing a custom [`OpenReceivePaymentRepository`][api-sqlpayments] is the
-documented advanced escape hatch, not the quickstart. See
-[Payment storage](docs/guides/storage.md).
-
-### What the wallet client needs
+### The wallet client needs two secrets
 
 [`createOpenReceive()`][api-createopenreceive] reads the receive-only wallet
-connection from `NWC_URI`. Optional swap connections come from
-`LSC_URI_PRIMARY` and `LSC_URI_BACKUP`.
-These are the only OpenReceive secret environment variables.
-The library does not load `.env` itself; your application's entry point or deployment
-platform supplies the environment. Pass `nwc` explicitly only for an
-intentional runtime override, such as an isolated test.
-
-Boot preflight fails closed when the wallet advertises spend methods such as
-`pay_invoice`; the explicit override is `allowSpendCapableWallet: true` or
-`OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. See
+code from `NWC_URI`; optional swap providers come from `LSC_URI_PRIMARY` and
+`LSC_URI_BACKUP`. Those are OpenReceive's only secret environment variables.
+Your deployment supplies them (the library never loads `.env`), and none of
+them may reach browser code or logs. Boot fails closed when the wallet code
+can spend; the override and what it costs are in
 [Security](docs/guides/security.md).
 
-### Writing your own checkout route
+### The routes run your `authorize` on every request
 
-Most applications should not do this. Mounting the adapter gives you the routes _and_
-lets the shipped checkout components (`@openreceive/react` and friends) work
-against them with no glue — hand-writing the endpoint opts you out of both, UI
-included. Reach for it when you need a flow the routes do not offer. You then
-drive the same `service` and `host` objects yourself, and the order of the
-three steps matters:
-
-```ts
-// `service` and `host` are the wallet client and order bridge from above.
-// The route around them is yours: your router, your auth, your response.
-app.post("/orders/:id/checkout", async (req, res) => {
-  const order = await orders.find(req.params.id);
-  const user = await sessions.currentUser(req);
-  if (!order || !(await orders.viewerMay(user, order.id, "pay"))) {
-    return res.sendStatus(403);
-  }
-
-  // 1. Mint the invoice. This is a pure wallet call: it persists nothing.
-  const checkout = await service.createCheckout({
-    orderId: order.id,
-    amount: { currency: "USD", value: order.total.toString() },
-  });
-
-  // 2. Commit the attempt row, so reconciliation knows this invoice exists.
-  await host.onCheckoutCreated({
-    orderId: order.id,
-    paymentHash: checkout.paymentHash,
-    checkout,
-  });
-
-  // 3. Only now is it safe to hand the payer their instructions. Since this
-  //    route is yours, so is the payload shape — see the note after the example.
-  res.json({
-    bolt11: checkout.bolt11, // the invoice string — render it as a QR code
-    amount_msats: checkout.amountMsats, // what the wallet must receive to settle
-    expires_at: checkout.expiresAt, // unix seconds; the QR is dead after this
-    payment_hash: checkout.paymentHash, // the selector for later status checks
-  });
-});
-```
-
-Two responsibilities move to you on this path:
-
-- **Authorization.** Normally you hand an `authorize` function to the adapter
-  and it runs on every request. There is no adapter here, so nothing calls it:
-  your handler has to check permissions itself, which is what the `viewerMay`
-  guard above is doing. Leave it out and anyone who can guess an order id can
-  mint an invoice against that order.
-- **Ordering.** Step 1 mints a real, payable invoice at your wallet but writes
-  nothing down; step 2 is what records it. Return — or throw — in between, and
-  a payer can pay an invoice your database has no row for. Reconciliation only
-  scans rows, so that payment settles nothing and `onPaid` never runs.
-
-**A route like this does not serve OpenReceive's `<Checkout>` component.** The
-four fields above are just what a payment page tends to need — they are not a
-contract. Our React/Vue/Svelte/Angular components post to `{prefix}/checkouts`
-and expect the documented `CreateCheckoutResponse`:
-
-```jsonc
-{
-  "checkout": {
-    // all six required; no additional properties allowed
-    "order_id": "...",
-    "payment_hash": "...",
-    "bolt11": "...",
-    "amount_msats": 1250000,
-    "created_at": 1755800000,
-    "expires_at": 1755800600,
-    "fiat_quote": null, // present when the order was priced in fiat
-  },
-}
-```
-
-That is the opt-out named at the top of this section: serve a shape of your own
-and you supply the payment UI too. Serving `CreateCheckoutResponse` verbatim at
-`{prefix}/checkouts` keeps our components working — but that is exactly what
-mounting the adapter already does, for free.
-
-Either way, every field on `checkout` is payer-safe, so a UI of your own can
-take whatever shape it likes. It then polls for settlement — OpenReceive's
-`POST …/payments/check`, or your own route over
-[`service.checkPayment`][api-checkpayment] — until the order flips to paid.
-
-### Who checks the wallet, and when
-
-The wallet client's `checkPayment({ paymentHash, createdAt })` is a pure wallet
-read: it verifies one known attempt with bounded `list_transactions` scans,
-and reconciliation stays batched — never one lookup per invoice. The mounted
-HTTP route `POST …/payments/check` is a different thing: it never runs its own
-per-invoice wallet walk, serving the requested hash from the request's gated
-reconcile pass (or from the stored attempt row when another worker holds the
-gate). Settlement is opportunistic by default: every mounted payment route
-runs one gated pass over `pending` attempts — the durable `openreceive_meta`
-gate collapses all instances to one wallet scan per interval, and `GET …/rates`
-never triggers a scan — delivering verified settlements at least once. No
-background process required.
-
-## Ship the routes, keep your auth
-
-Browser integrations mount `@openreceive/http` through Express, Fastify, Next,
-or Rails. OpenReceive never inspects your session. The order bridge resolves
-authoritative prices, selects committed attempts, and persists new ones; your
-application supplies authorization.
-
-A create request supplies an order ID, never its own price. The order bridge
-resolves the authoritative amount from that order.
-
-That leaves one thing for you to write — the [`authorize`][api-authorize] callback the routes
-call on every request. An order ID identifies a row, but possession of that ID
-is not proof that the caller owns the order:
+The routes never inspect your session. You write one callback,
+[`authorize`][api-authorize], and it runs on every order-scoped request — an
+order id identifies a row but does not prove the caller owns it:
 
 ```ts
 authorize: async ({ action, request, resource }) =>
   orders.authorize({ request, orderId: resource.orderId, action }),
 ```
 
-The attempt row commits before the payer receives the invoice. A refused
-commit (already-paid order, competing live attempt) gets a [`409` response][api-errors] — an
-infrastructure failure a retryable `503` — with no payer instructions either
-way. Rails applications mount the engine and retain their own authentication
-and `current_user` logic. JSON checkout routes skip Rails form CSRF; your
-`authorize` is the auth boundary.
+A create request carries an order id, never a price: the order bridge resolves
+the amount from your order. A refused attempt (order already paid, competing
+live attempt) is a [`409`][api-errors] with no invoice attached.
+[Authorization](docs/guides/authorization.md) covers the context object,
+framework sessions, and guest orders.
 
-## Settlement and swaps
+### Settlement is decided by the wallet
 
-Settlement detection is poll-based: reconciliation scans the wallet with
-bounded `list_transactions` reads over the pending attempts. Optional NWC-02
-notification workers (Node [`startOpenReceiveNotificationWorker`][api-notifworker], Rails
-[`rake openreceive:notifications`][api-rake-notifications]) carry authenticated
-wallet data: a settled `payment_received` payload settles the matching pending
-attempt directly over
-that channel, under the same finality rule as scans — `settled_at` or a wallet
-transaction state of `settled`, never a preimage alone. Anything less (a
-payload without a finality signal, or an unknown payment hash) only wakes a
-bounded scan, and the worker's own periodic pass remains the safety net for
-notifications missed while it was down. Direct settlement assumes the NWC client binds
-notification decryption to the connection's wallet pubkey (the bundled SDK
-does). Closing an unpaid attempt requires a successful
-wallet scan at or after its expiry plus a 900-second grace
-(`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS`, a constant exported by
-`@openreceive/http` — not an environment variable) — a local clock alone never closes
-a row, because a payment could have settled while the application was offline.
-OpenReceive also requires the wallet to honor the requested invoice expiry:
-checkout creation fails closed (beyond a small tolerance) when a wallet mints
-an invoice with a different expiry window.
+Reconciliation is poll-based and opportunistic: every mounted payment route
+runs one gated scan over pending attempts — one wallet scan per interval across
+all your instances — so no background process is required. An attempt settles
+only on the wallet's own finality signal (`settled_at` or state `settled`;
+never a preimage alone, never a swap provider reporting "complete"), and an
+unpaid attempt closes only after a wallet scan past its expiry, never on the
+local clock. Optional [notification workers][api-notifworker] (Rails:
+[`rake openreceive:notifications`][api-rake-notifications]) settle faster
+under the same rule.
 
-Swap recovery is independent of wallet settlement. The payment hash proves
-that the merchant wallet was paid. The payment attempt's server-only `swap_data`
-contains the provider workflow details needed to query an unresolved swap
-after a process restart. OpenReceive never exposes that field through its HTTP
-routes. Refund calls go through your `authorize` and refresh provider state immediately
-before acting.
+Scan gate, multi-instance behavior, and workers:
+[Deploying](docs/guides/deploying.md). Swap recovery, `swap_data`, and refunds:
+[Automated swaps](docs/guides/automated-swaps.md). Internals:
+[Settlement reconciliation](docs/internal/settlement-sweeps.md).
 
-Provider completion by itself never fulfills an order. The receiving wallet's
-settled transaction remains authoritative.
+### Writing your own checkout route
 
-## Repository map
-
-- `spec/` is the source of truth for schemas, shared data, test vectors, and the
-  shipped HTTP contract.
-- `packages/js/` contains the core contracts, Node NWC wallet client, HTTP routes,
-  Express/Fastify/Next adapters, browser helpers, provider data, testkit,
-  elements, and React/Vue/Svelte/Angular packages.
-- `packages/ruby/` contains the dependency-free core, the Service and Rack app,
-  and the mountable Rails engine—a second settlement implementation checked
-  against shared vectors.
-- `examples/hello-fruit/server/` contains Express, static HTML, Next.js, and
-  Rails demos. Demo order models are ordinary application code.
-- `tools/` contains validation, conformance, package-smoke, documentation, and
-  live-wallet helpers.
-
-Version numbers are deliberately independent per domain: the package/workspace
-release is `0.1.1`, the OpenAPI HTTP contract is `0.4.0`, and the AsyncAPI event
-contract is `0.2.0`; each is versioned inside its own file and none of them
-tracks the others.
+Most applications should not: mounting the adapter gives you the routes and
+lets the shipped checkout components work against them with no glue. If you
+need a flow the routes do not offer, drive `service` and `host` yourself —
+mint with [`service.createCheckout`][api-createcheckout], commit with
+`host.onCheckoutCreated`, and only then return the invoice. Skip the commit and
+a payer can pay an invoice your database has no row for; skip `authorize`
+(nothing calls it for you here) and anyone with an order id can mint against
+it. The worked route, the response shape the shipped components expect, and
+the settlement callback:
+[Custom controller integration](docs/internal/custom-controller-integration.md).
 
 ## Run a demo
 
-The Hello Fruit demos let you add products to a cart, create an order, and
-pay its live Lightning invoice:
+The Hello Fruit demos add products to a cart, create an order, and pay its
+live Lightning invoice:
 
 ```sh
 npm run demo node      # Express + React/Vue/Svelte/Angular http://localhost:3000
@@ -354,48 +208,35 @@ npm run demo nextjs    # Next.js fullstack                   http://localhost:30
 npm run demo rails     # Rails + host Postgres               http://localhost:3003
 ```
 
-Each command creates a root `.env` from `.env.example` if missing, validates
-`NWC_URI`, and runs that demo's Docker Compose stack. Set a valid receive-only
-NWC URI from a compatible wallet before checkout creation. Optional automated
-swaps use `LSC_URI_PRIMARY` and `LSC_URI_BACKUP`; provider
-credentials never reach the browser.
+Each needs a receive-only `NWC_URI` in the root `.env`. What the command does,
+what each variant shows, and the host-versus-library line the demos draw:
+[Hello Fruit](examples/hello-fruit/README.md).
 
-Arguments after `--` are forwarded to `docker compose up`, for example:
-
-```sh
-npm run demo node -- -d
-```
-
-## Development status
-
-The full gate keeps schemas, vectors, generated contracts, Node and Ruby
-behavior, package artifacts, demos, secret scans, release metadata, deployment
-templates, and documentation aligned:
+## Development
 
 ```sh
 npm test               # the JS suite
 npm run check          # contracts and secret-safety checks
-npm run test:ci:core   # fast JS/package gate — exactly what CI runs per push
-npm run test:ci        # full deterministic gate, including Ruby and demos
-npm run test:live      # live wallet smoke (Node + Ruby); separate from test:ci
+npm run test:ci        # the full deterministic gate, including Ruby and demos
 ```
+
+[CONTRIBUTING](CONTRIBUTING.md) has setup, ground rules, and the repository
+layout; the [test command map](docs/internal/test-command-map.md) lists every
+command.
 
 ## Product boundary
 
-OpenReceive creates a Lightning invoice and can return payer-side guidance for
-direct Lightning or configured swap routes. Provider routes are suggestions,
-not payment guarantees. The payer chooses and uses third-party services under
-those services' terms.
-
-Browser, mobile, and static frontend code never receive the merchant's
-receive-only NWC code. A live checkout always needs a backend controlled by the
-merchant application.
+OpenReceive creates a Lightning invoice and verifies that it was paid. It does
+not transmit money, hold funds, or hold a key. Swap routes are suggestions, not
+payment guarantees: the payer uses those third-party services under their
+terms ([Provider registry](docs/guides/provider-registry.md)). A live checkout
+always needs a backend you control — the browser never receives the wallet
+code ([Frontend checkout](docs/guides/frontend-checkout.md)).
 
 ## Documentation
 
 Start with the [developer guides](docs/guides/README.md):
 
-- [What is OpenReceive?](docs/guides/what-is.md)
 - [Node quickstart](docs/guides/quickstart-node.md)
 - [Node ORM recipes](docs/guides/node-orms.md)
 - [Rails quickstart](docs/guides/quickstart-rails.md)
@@ -418,8 +259,8 @@ Start with the [developer guides](docs/guides/README.md):
 
 [api-authorize]: docs/guides/api-reference.md#the-authorize-context
 [api-browser]: docs/guides/api-reference.md#browser--react
-[api-checkpayment]: docs/guides/api-reference.md#servicecheckpayment
 [api-createopenreceive]: docs/guides/api-reference.md#createopenreceive
+[api-createcheckout]: docs/guides/api-reference.md#servicecreatecheckout
 [api-createopenreceivehost]: docs/guides/api-reference.md#createopenreceivehost
 [api-errors]: docs/guides/api-reference.md#errors
 [api-express]: docs/guides/api-reference.md#openreceiveexpress
@@ -428,4 +269,3 @@ Start with the [developer guides](docs/guides/README.md):
 [api-notifworker]: docs/guides/api-reference.md#startopenreceivenotificationworker
 [api-rake-notifications]: docs/guides/api-reference.md#rake-openreceivenotifications
 [api-scaffold]: docs/guides/api-reference.md#openreceive-scaffold-payments
-[api-sqlpayments]: docs/guides/api-reference.md#createopenreceivesqlpayments

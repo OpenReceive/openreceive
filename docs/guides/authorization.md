@@ -45,6 +45,10 @@ The context object:
     orders.ownedBy((native as { session?: { userId?: string } }).session?.userId, resource.orderId)
   ```
 
+Rails applications mount the engine and keep their own authentication and
+`current_user` logic. The engine's JSON checkout routes skip Rails form CSRF
+protection, so `authorize` is the auth boundary there too.
+
 `loadOrder` returns your order (or `null` → 404). `amountForOrder` returns the
 authoritative `{ sats }` or `{ currency, value }` price from that order. The create body cannot
 contain `amount` or `amount_msats` — your application resolves the price, so a payer-supplied amount

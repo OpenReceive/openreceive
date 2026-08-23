@@ -11,21 +11,22 @@ round-trip is a `@modelFlow`, and payment state has exactly one sink — a poll
 result and an ActionCable push land in the same idempotent store action, so
 the UI can never flip a settled screen back to "waiting". The visual layer
 stays the shared npm packages: components come from `@openreceive/react`
-(`QRCode`, `WaitingState`, `PaymentData`, `renderSwapDepositPanel`,
-`TransactionDetails`, …) and every class string from
+(`QRCode`, `SatsDetail`, `WaitingState`, `InvoiceSummary`, `PaymentData`,
+`CopyInvoiceButton`, `PaymentWizard`) and every class string from
 `@openreceive/browser`'s `ui-classes` design registry, so the design is
 identical to the other demos.
 
-Exactly two pieces of packaged UI are re-implemented here, because they are the
-two that read store state on every render: the **payment method grid**
-([`MethodGrid.tsx`](app/javascript/src/app/components/checkout/MethodGrid.tsx))
-and the shell around the **swap deposit panel**
-([`SwapPanel.tsx`](app/javascript/src/app/components/checkout/SwapPanel.tsx)).
-The packaged wizard's route/provider/tutorial step is deliberately not ported —
-it is presentation with no store involvement, and the node-express and
-nextjs-fullstack demos mount the packaged `<Checkout>`, which is where that flow
-is demonstrated. Selecting Bitcoin here mints (or reuses) the bolt11 and the
-Lightning pane above the grid is the payment target.
+Nothing from the packaged UI is re-implemented here. The payment wizard —
+method grid, per-coin network reveal, swap deposit panel and the
+route/provider step — is the packaged `PaymentWizard`, mounted by
+[`CheckoutPanel.tsx`](app/javascript/src/app/components/CheckoutPanel.tsx) on
+the store's snapshot. Everything the wizard decides comes back to
+[`CheckoutFlow`](app/javascript/src/app/stores/CheckoutFlow.ts) as a store
+action — a started swap attempt, a request for a Lightning invoice, whether
+its deposit panel has replaced the Lightning pane, and its errors — so
+polling and the cable push keep landing in that one sink. Selecting Bitcoin
+mints (or reuses) the bolt11 and the Lightning pane above the wizard is the
+payment target.
 
 Host persistence is **Postgres** (Docker Compose). Fruit rows live in
 `products` (seeded from [`../../shared/fruits.json`](../../shared/fruits.json));
@@ -61,12 +62,15 @@ Shakapacker (webpack + swc) builds `app/javascript/packs/hello_fruit.js` into
 `public/packs` with content-hashed names; `javascript_pack_tag` /
 `stylesheet_pack_tag` read the manifest. Tailwind (v4 + daisyUI) compiles via
 PostCSS, scanning the demo source plus `@openreceive/browser`'s `ui-classes.ts`
-registry. Packaged payment icons are copied next to the emitted chunk
-(`/packs/js/assets/icons/…`) so the packages' runtime
-`new URL(..., import.meta.url)` resolution works — the same job the Node
-demos do with a Vite copy plugin. Provider icons and pay-tutorial images are
-not copied: nothing this demo renders shows a provider. The HTML shell is `Cache-Control: no-store`;
-content-hashed pack files are immutable.
+registry plus the packaged React wizard's source. Packaged payment icons,
+provider icons and pay-tutorial images are copied next to the emitted chunk
+(`/packs/js/assets/…`) — the same job the Node demos do with a Vite copy
+plugin — and the pack defines `import.meta.url` as the running `<script>`'s
+URL so the packages' `new URL(..., import.meta.url)` resolution lands on them
+(webpack would otherwise freeze it into a build-machine `file://` path); see
+[`config/webpack/webpack.config.js`](config/webpack/webpack.config.js). The
+HTML shell is `Cache-Control: no-store`; content-hashed pack files are
+immutable.
 
 ## Run with Docker
 
@@ -115,19 +119,14 @@ PORT=3003 bin/rails server
 # needs a reachable Postgres (e.g. the compose db service above)
 bin/rails test   # or bin/ci for setup + tests + audits
 
-# from the repo root — client typecheck and the wizard-port drift check
+# from the repo root — client typecheck and the currency-constant drift check
 npm run typecheck -w @openreceive/example-rails
 npm run test -w @openreceive/example-rails
 ```
 
-`npm run test` runs [`script/check-wizard-drift.mjs`](script/check-wizard-drift.mjs).
-The method grid and swap panel here are copies of packaged UI, so the check
-polices both halves of that copy: it fails when `@openreceive/browser/headless`
-gains or renames a wizard export the port does not mirror, and equally when the
-port's list of deliberately-dropped exports goes stale — an exemption for a name
-the package no longer has, one with no reason written down, or one the port has
-quietly started using again. It reads the built `dist`, so run
-`npm run build:packages` first.
+`npm run test` runs [`script/check-currency-drift.mjs`](script/check-currency-drift.mjs)
+(also a `bin/ci` step): the Ruby currency constants mirror
+`shared/demo-currencies.ts`, and the check fails when the two disagree.
 
 The integration tests stub the NWC wallet and the price feed (static
 $50,000/BTC), then exercise the demo's own glue over real routes:

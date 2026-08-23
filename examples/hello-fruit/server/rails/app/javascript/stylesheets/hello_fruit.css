@@ -7,3 +7,6 @@
 /* The OpenReceive checkout design system: every daisyUI/Tailwind class the
    payment UI uses lives in this registry so Tailwind can scan it. */
 @source "../../../../../../../packages/js/browser/src/ui-classes.ts";
+/* The packaged React wizard mounted by CheckoutPanel (the few literal classes
+   it uses beside the registry), as the node-express demo scans it. */
+@source "../../../../../../../packages/js/react/src/**/*.{ts,tsx}";

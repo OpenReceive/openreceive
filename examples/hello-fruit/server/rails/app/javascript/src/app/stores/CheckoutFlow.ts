@@ -7,7 +7,6 @@ import {
   type Status,
 } from "@openreceive/browser";
 import {
-  buildOpenReceiveMethodGridEntries,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutState,
@@ -16,16 +15,7 @@ import {
   createCheckoutStatusModel,
   createOpenReceiveStatusFetcher,
   isReusableLightningInvoice,
-  normalizeSwapStartInvoice,
-  type OpenReceiveCheckoutPaymentMethod,
-  type OpenReceiveMethodGridEntry,
-  type OpenReceiveSwapMethodGroup,
-  openReceivePaymentMethods,
-  openReceiveSwapPickerKey,
-  postOpenReceiveJson,
-  resolveOpenReceivePreservedNetworkSelection,
   selectCheckoutDisplayInvoice,
-  startOpenReceiveSwapRequest,
 } from "@openreceive/browser/headless";
 import { computed } from "mobx";
 import {
@@ -43,16 +33,22 @@ import {
 import { openReceivePrefix } from "../helpers/constants.ts";
 import { logDemo } from "../helpers/logging.ts";
 
-type SwapGroup = OpenReceiveSwapMethodGroup<OpenReceiveCheckoutPaymentMethod>;
-
 const unixNow = (): number => Math.floor(Date.now() / 1000);
 
 /**
  * One payment attempt lifecycle for one order: prepare → (mint Lightning |
- * start swap) → poll until settled/expired. All server round-trips are
- * @modelFlow s; every poll result and every HTTP response lands in the same
+ * fold in a started swap) → poll until settled/expired. All server round-trips
+ * are @modelFlow s; every poll result and every HTTP response lands in the same
  * idempotent snapshot actions, so a late poll can never flip a settled screen
  * back to "waiting" and a slow backend never stacks overlapping requests.
+ *
+ * The payment wizard — method grid, network reveal, swap deposit panel — is
+ * the packaged @openreceive/react PaymentWizard, mounted by CheckoutPanel on
+ * this store's snapshot. Everything it decides comes back here as an action: a
+ * started swap attempt (applyAttempt), a request for a Lightning invoice
+ * (ensureLightning), whether its deposit panel is standing in for the Lightning
+ * pane (setSwapFocused), and its errors (reportError). Which tile or network
+ * the payer is choosing between is the wizard's own UI state.
  */
 @model("helloFruit/CheckoutFlow")
 export class CheckoutFlow extends Model({
@@ -62,17 +58,8 @@ export class CheckoutFlow extends Model({
   /** Whole-checkout snapshot: the single sink for prepare/mint/swap/poll results. */
   snapshot: prop<Frozen<CheckoutSnapshot> | null>(null),
   mintingLightning: prop<boolean>(false),
-  /** Which multi-network coin has its network reveal open ("swap:USDT"), if any. */
-  selectedPickerKey: prop<string | null>(null),
-  /** Chosen network per multi-network coin, keyed by upper-cased group label. */
-  selectedSwapNetworks: prop<Record<string, string>>(() => ({})),
-  /** pay_in_asset of the swap currently being started (grid busy state). */
-  startingAsset: prop<string | null>(null),
-  /** pay_in_asset of the focused swap flow (deposit panel replaces the grid). */
-  focusedSwapAsset: prop<string | null>(null),
-  swapStartError: prop<string | null>(null),
-  /** "Pay with Bitcoin instead" dismissed this swap attempt. */
-  dismissedSwapInvoiceId: prop<string | null>(null),
+  /** The wizard's swap deposit panel has replaced the Lightning pane. */
+  swapFocused: prop<boolean>(false),
   /** Unix seconds, ticked once per second while the checkout is live (countdowns). */
   nowSeconds: prop<number>(() => unixNow()),
 }) {
@@ -116,17 +103,16 @@ export class CheckoutFlow extends Model({
 
   /**
    * READ, never re-derive. `createCheckoutState` already ran the packaged label
-   * rule over this snapshot and shipped the answers on the state, so the port
-   * takes them rather than formatting the raw fields a second time.
+   * rule over this snapshot and shipped the answers on the state, so these take
+   * them rather than formatting the raw fields a second time.
    *
-   * These two used to call `formatOpenReceiveMsats` / `formatOpenReceiveFiatAmount`
+   * They used to call `formatOpenReceiveMsats` / `formatOpenReceiveFiatAmount`
    * here. `formatOpenReceiveMsats` THROWS on an amount that is not a non-negative
    * safe integer — correctly, it is the formatter the wire builders share — and
    * these are @computed s read inside an `observer`, so a server answering with a
    * nonsense `amount_msats` took out the whole checkout panel instead of the one
    * label. The packaged derivation routes the same value through the display
-   * boundary and simply returns undefined, which is the behaviour the port wanted
-   * all along and never has to restate.
+   * boundary and simply returns undefined.
    */
   @computed
   get amountLabel(): string | undefined {
@@ -138,83 +124,17 @@ export class CheckoutFlow extends Model({
     return this.state?.fiatLabel;
   }
 
-  @computed
-  get swapAssetOptions(): readonly OpenReceiveCheckoutPaymentMethod[] {
-    const methods = this.snapshot?.data.payment_methods ?? [];
-    return methods.filter((option) => option.provider.length > 0);
-  }
-
-  @computed
-  get gridEntries(): readonly OpenReceiveMethodGridEntry<OpenReceiveCheckoutPaymentMethod>[] {
-    return buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, this.swapAssetOptions);
-  }
-
   /**
-   * The coin group whose network reveal is open. Only multi-network coins have
-   * one: a single-network coin starts its swap straight from the tile.
+   * The bolt11 the wizard's provider tutorials copy. Read off the snapshot
+   * rather than `state`, which is rebuilt every tick of `nowSeconds` and would
+   * re-render the whole wizard once a second.
    */
   @computed
-  get selectedSwapGroup(): SwapGroup | undefined {
-    const group = this.findSwapGroup(this.selectedPickerKey);
-    return group !== undefined && group.options.length > 1 ? group : undefined;
-  }
-
-  /** Create-time snapshots have no payment_methods until the catalog warms. */
-  @computed
-  get currenciesLoading(): boolean {
-    return (
-      this.snapshot !== null &&
-      this.snapshot.data.payment_methods === undefined &&
-      this.swapAssetOptions.length === 0
-    );
-  }
-
-  @computed
-  get currentSwapInvoice(): CheckoutInvoiceSnapshot | undefined {
-    return this.snapshot?.data.invoices.find(
-      (invoice) =>
-        invoice.rail === "swap" &&
-        invoice.swap !== undefined &&
-        invoice.invoice_id !== this.dismissedSwapInvoiceId,
-    );
-  }
-
-  @computed
-  get activeSwapForFocusedAsset(): CheckoutInvoiceSnapshot | undefined {
-    if (this.focusedSwapAsset === null) return undefined;
-    const invoice = this.currentSwapInvoice;
-    return invoice?.swap?.pay_in_asset === this.focusedSwapAsset ? invoice : undefined;
-  }
-
-  @computed
-  get focusedSwapOption(): OpenReceiveCheckoutPaymentMethod | undefined {
-    if (this.focusedSwapAsset === null) return undefined;
-    return this.swapAssetOptions.find((option) => option.pay_in_asset === this.focusedSwapAsset);
-  }
-
-  /** Payer is inside the focused swap flow — the Lightning pane hides. */
-  @computed
-  get swapFocused(): boolean {
-    return this.focusedSwapAsset !== null;
-  }
-
-  /**
-   * The Bitcoin tile is the live target while the active attempt is a bolt11.
-   * Read off the snapshot rather than `state`, which is rebuilt every tick of
-   * `nowSeconds` and would re-render the whole grid once a second.
-   */
-  @computed
-  get lightningSelected(): boolean {
-    return this.snapshot?.data.active?.rail === "lightning";
-  }
-
-  /** The grid's coin group for a picker key ("swap:USDT"), or undefined. */
-  private findSwapGroup(pickerKey: string | null): SwapGroup | undefined {
-    if (pickerKey === null) return undefined;
-    const entry = this.gridEntries.find(
-      (entry) => entry.kind === "swap" && openReceiveSwapPickerKey(entry.group.label) === pickerKey,
-    );
-    return entry?.kind === "swap" ? entry.group : undefined;
+  get lightningInvoice(): string | undefined {
+    const snapshot = this.snapshot?.data;
+    const invoice =
+      snapshot === undefined ? undefined : selectCheckoutDisplayInvoice(snapshot)?.invoice;
+    return typeof invoice === "string" && invoice.length > 0 ? invoice : undefined;
   }
 
   // ---- snapshot sinks -------------------------------------------------------
@@ -250,36 +170,11 @@ export class CheckoutFlow extends Model({
 
   /**
    * Poll sink. A result that raced a settlement must never flip a paid screen
-   * back to "waiting for payment"; locally staged refund address/nonce survive
-   * poll results that omit them.
+   * back to "waiting for payment".
    */
   @modelAction
   applyPollResult(next: CheckoutSnapshot): void {
-    const current = this.snapshot?.data;
-    if (current !== undefined && (this.settled || this.state?.terminal === true)) return;
-    const previousActive = current?.invoices.find(
-      (invoice) => invoice.invoice_id === next.active?.invoice_id,
-    );
-    const active = next.active;
-    if (
-      active?.swap !== undefined &&
-      previousActive?.swap !== undefined &&
-      (active.swap.refund_address === undefined || active.swap.refund_nonce === undefined)
-    ) {
-      const mergedSwap = {
-        ...active.swap,
-        ...(active.swap.refund_address === undefined &&
-        previousActive.swap.refund_address !== undefined
-          ? { refund_address: previousActive.swap.refund_address }
-          : {}),
-        ...(active.swap.refund_nonce === undefined && previousActive.swap.refund_nonce !== undefined
-          ? { refund_nonce: previousActive.swap.refund_nonce }
-          : {}),
-      };
-      const mergedActive = { ...active, swap: mergedSwap };
-      this.snapshot = frozen({ ...next, active: mergedActive, invoices: [mergedActive] });
-      return;
-    }
+    if (this.snapshot !== null && (this.settled || this.state?.terminal === true)) return;
     this.snapshot = frozen(next);
   }
 
@@ -288,50 +183,10 @@ export class CheckoutFlow extends Model({
     this.nowSeconds = seconds;
   }
 
-  // ---- grid selection -------------------------------------------------------
-
-  /**
-   * Open a coin's network reveal. Carries the payer's network choice across
-   * coins that offer the same one (USDT/Tron → USDC/Tron) via the packaged
-   * resolver, and drops it when the new coin cannot honour it.
-   */
+  /** The wizard entered or left its focused swap flow (PaymentWizard onSwapFocusChange). */
   @modelAction
-  selectSwapGroup(pickerKey: string): void {
-    const previousGroup = this.selectedSwapGroup;
-    this.selectedPickerKey = pickerKey;
-    const nextGroup = this.findSwapGroup(pickerKey);
-    if (nextGroup === undefined || nextGroup.options.length <= 1) return;
-    const preserved = resolveOpenReceivePreservedNetworkSelection({
-      previousGroup,
-      nextGroup,
-      selectedNetworks: this.selectedSwapNetworks,
-    });
-    const groupKey = nextGroup.label.trim().toUpperCase();
-    if (preserved === undefined) {
-      delete this.selectedSwapNetworks[groupKey];
-    } else {
-      this.selectedSwapNetworks[groupKey] = preserved;
-    }
-  }
-
-  @modelAction
-  selectNetwork(groupKey: string, payInAsset: string): void {
-    this.selectedSwapNetworks[groupKey] = payInAsset;
-  }
-
-  /** The Bitcoin tile: close any open network reveal; the caller mints the bolt11. */
-  @modelAction
-  selectLightning(): void {
-    this.selectedPickerKey = null;
-  }
-
-  /** Leave the focused swap flow and restore the default method grid. */
-  @modelAction
-  clearSwapFocus(): void {
-    this.focusedSwapAsset = null;
-    this.selectedPickerKey = null;
-    this.selectedSwapNetworks = {};
-    this.swapStartError = null;
+  setSwapFocused(focused: boolean): void {
+    this.swapFocused = focused;
   }
 
   // ---- server round-trips ---------------------------------------------------
@@ -411,94 +266,6 @@ export class CheckoutFlow extends Model({
     }
   });
 
-  /** Start (or retry) a swap for one pay-in asset; lands on the deposit panel. */
-  @modelFlow
-  startSwap = _async(function* (this: CheckoutFlow, payInAsset: string) {
-    if (this.startingAsset !== null) return;
-    this.startingAsset = payInAsset;
-    this.swapStartError = null;
-    try {
-      const invoice = yield* _await(
-        startOpenReceiveSwapRequest({
-          fetch: globalThis.fetch,
-          prefix: openReceivePrefix(),
-          orderId: this.orderId,
-          payInAsset,
-        }),
-      );
-      this.applyAttempt(invoice);
-      this.focusedSwapAsset = payInAsset;
-      this.dismissedSwapInvoiceId = null;
-      logDemo("swap.started", "Swap deposit address ready.", {
-        orderId: this.orderId,
-        payInAsset,
-      });
-    } catch (error) {
-      // Focus the coin anyway: the failure belongs on its panel, with a retry,
-      // rather than as a toast over a grid that still looks ready.
-      this.focusedSwapAsset = payInAsset;
-      this.setSwapStartError(error);
-      this.reportError(error);
-    } finally {
-      this.startingAsset = null;
-    }
-  });
-
-  @modelAction
-  private setSwapStartError(error: unknown): void {
-    this.swapStartError =
-      error instanceof Error && error.message.length > 0
-        ? error.message
-        : "Could not prepare the payment address. Please try again.";
-  }
-
-  @modelFlow
-  refundSwap = _async(function* (
-    this: CheckoutFlow,
-    attemptId: string,
-    refundAddress: string,
-    refundNonce: string,
-    confirm: boolean,
-  ) {
-    try {
-      const payment = this.snapshot?.data.invoices.find(
-        (invoice) => (invoice.swap?.attempt_id ?? invoice.invoice_id) === attemptId,
-      );
-      if (payment?.payment_hash === undefined) {
-        throw new Error("Swap refund requires the original payment hash.");
-      }
-      const body = yield* _await(
-        postOpenReceiveJson({
-          fetch: globalThis.fetch,
-          prefix: openReceivePrefix(),
-          body: {
-            order_id: this.orderId,
-            payment_hash: payment.payment_hash,
-            action: "refund_swap",
-            attempt_id: attemptId,
-            refund_address: refundAddress,
-            refund_nonce: refundNonce,
-            confirm,
-          },
-        }),
-      );
-      const invoice = normalizeSwapStartInvoice(body);
-      this.applyAttempt(invoice);
-      this.dismissedSwapInvoiceId = null;
-    } catch (error) {
-      this.reportError(error);
-    }
-  });
-
-  /** "Pay with Bitcoin instead" from the deposit panel. */
-  @modelFlow
-  dismissSwapToLightning = _async(function* (this: CheckoutFlow) {
-    const active = this.activeSwapForFocusedAsset;
-    if (active !== undefined) this.dismissedSwapInvoiceId = active.invoice_id;
-    this.clearSwapFocus();
-    yield* _await(this.ensureLightning());
-  });
-
   /**
    * One poll tick: /openreceive/payments/check (+ /swaps/status for a live
    * swap). One request at a time; failures back off (honoring Retry-After);
@@ -574,7 +341,8 @@ export class CheckoutFlow extends Model({
     root.onCheckoutSettled?.(this.orderId);
   }
 
-  private reportError(error: unknown): void {
+  /** Surface a failure (ours or the wizard's) on the page's error banner. */
+  reportError(error: unknown): void {
     const root = getRoot<{ showError?: (message: string) => void }>(this);
     const message = error instanceof Error ? error.message : String(error);
     root.showError?.(message);

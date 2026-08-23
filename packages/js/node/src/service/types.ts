@@ -156,7 +156,18 @@ export type OpenReceiveWalletNotificationHandler = (
 ) => void;
 
 export interface SwapOptions {
-  readonly providers?: readonly SwapProvider[];
+  /**
+   * The provider every catalog, quote, and create goes to while it answers.
+   * Omitted (the normal case), providers come from `LSC_URI_PRIMARY` and
+   * `LSC_URI_BACKUP` in `env`.
+   */
+  readonly provider?: SwapProvider;
+  /**
+   * Consulted in order only when `provider` (or an earlier failover) throws —
+   * a network or API failure. Never used to fill in an asset a healthy
+   * provider simply does not list. Requires `provider`.
+   */
+  readonly failoverProviders?: readonly SwapProvider[];
 }
 
 export interface SwapQuoteRequest {
@@ -315,6 +326,7 @@ export interface OpenReceiveServiceContext {
   readonly clock: () => number;
   readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
   readonly priceCurrencies: readonly string[];
+  /** Primary first, then failovers in order — see {@link SwapOptions}. */
   readonly swapProviders: readonly SwapProvider[];
 }
 

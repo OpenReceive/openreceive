@@ -146,7 +146,7 @@ test("getSwapRefundAddressError returns network-specific copy", () => {
 test("the server refund path rejects an address that fails its network checksum", async () => {
   const openreceive = await createOpenReceive({
     client: createTestkitReceiveClient({ now: () => 1000 }),
-    swap: { providers: [createTestkitSwapProvider({ now: () => 1000 })] },
+    swap: { provider: createTestkitSwapProvider({ now: () => 1000 }) },
     clock: () => 1000,
   });
   try {

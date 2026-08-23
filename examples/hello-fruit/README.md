@@ -19,6 +19,12 @@ payment attempts in separate tables, and none of them configures OpenReceive
 storage — the host passes its own database handle.
 
 Run any of them from the repository root with `npm run demo <node|static|nextjs|rails>`.
+The command creates a root `.env` from `.env.example` if it is missing,
+validates `NWC_URI`, and runs that variant's Docker Compose stack; anything
+after `--` is forwarded to `docker compose up` (`npm run demo node -- -d`).
+Set a receive-only NWC URI before creating a checkout. Optional automated swaps
+read `LSC_URI_PRIMARY` and `LSC_URI_BACKUP`; provider credentials never reach
+the browser.
 
 ## `shared/` — host glue, not library code
 
