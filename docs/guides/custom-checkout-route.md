@@ -28,8 +28,7 @@ session or order.
 | --- | --- |
 | `prepareCheckout({ amount })` | Resolve the charged msats (and any fiat quote) without minting. |
 | `createCheckout({ reference, amount })` | Normalize the host price and mint a wallet invoice. |
-| `checkPayment({ paymentHash, createdAt })` | Verify one payment with bounded wallet-history scans. |
-| `reconcilePayments({ attempts })` | Batch-verify the host's unresolved hashes and creation times. |
+| `reconcilePayments({ attempts })` | Verify one or many known invoices with bounded wallet-history scans. |
 | `listSwapOptions({ amountMsats })` | List configured swap pay-in methods for an invoice amount. |
 | `quoteSwap`, `createSwap`, `getSwap`, `refundSwap` | Create, inspect, and refund host-persisted provider workflows. |
 | `listRates` | Read the cached BTC/fiat rates. (`quoteRates` also exists but is JS-internal plumbing — no HTTP route, no Ruby counterpart.) |
@@ -83,11 +82,10 @@ Terminal attempts remain as history and a later request may append a new row.
 ## Settlement callback
 
 ```ts
-const checked = await openreceive.checkPayment({
-  paymentHash: payment.payment_hash,
-  createdAt: payment.created_at,
+const [checked] = await openreceive.reconcilePayments({
+  attempts: [{ paymentHash: payment.payment_hash, createdAt: payment.created_at }],
 });
-if (checked.status === "settled" && checked.paidAt !== undefined) {
+if (checked?.status === "settled" && checked.paidAt !== undefined) {
   await payments.markPaidOnce(
     { paymentHash: checked.paymentHash, paidAt: checked.paidAt },
     async ({ reference, query }) => {

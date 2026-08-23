@@ -121,6 +121,16 @@ behind.
   - provider-data: `listCryptoRoutes`, `getCryptoRoute`,
     `listDisqualifiedProviders` (no caller anywhere).
 
+### `checkPayment` is gone; `reconcilePayments` is the only wallet-history read
+
+- `service.checkPayment`, `@openreceive/core`'s `checkPayment`, and Ruby
+  `Service#check_payment` were a one-hash wrapper around the same
+  `list_transactions` walk `reconcilePayments` already runs. The mounted
+  `POST /payments/check` route never called them. Check one invoice with
+  `reconcilePayments({ attempts: [{ paymentHash, createdAt }] })`. A truncated
+  walk omits that hash (retry next pass) instead of throwing
+  `WALLET_UNAVAILABLE`.
+
 ### The all-in-one options say which mode they are
 
 - `createOpenReceiveStack` and the adapters' all-in-one form take

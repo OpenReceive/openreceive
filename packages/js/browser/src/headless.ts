@@ -216,22 +216,17 @@ export type {
 } from "./internal/checkout.ts";
 export type { TransactionDetailRow } from "./internal/ui.ts";
 
-// Formatting + labels.
-//
-// THE RULE, restated where the two renderers meet it: FORMATTERS THROW,
-// DISPLAY BOUNDARIES BLANK. `formatMsats` throws a RangeError on an
-// amount that is not a non-negative safe integer, because wire construction
-// and amount validation share it. `optionalUnixTimeLabel` is the same rule
-// with `undefined` in place of the throw: reach for it when the value came
-// from a server, so a field a server should never have sent costs one label,
-// never the payment screen. (./headless documents this pair at length.)
+// Formatting + labels. `formatMsats` throws a RangeError on an amount that is
+// not a non-negative safe integer — wire construction, amount validation and
+// the display sites share it, and a malformed amount from our own server is a
+// bug that must surface. `formatUnixTime` degrades to the raw value instead;
+// nothing constructs or validates through it.
 export {
   escapeHtml,
   formatAmountCaption,
   formatDepositAmount,
   formatMsats,
   formatUnixTime,
-  optionalUnixTimeLabel,
 } from "./internal/checkout.ts";
 export { checkoutLabels } from "./internal/ui.ts";
 
@@ -300,8 +295,7 @@ export { paymentIconUrls } from "./internal/ui.ts";
 
 // Headless-integration extras: the pieces an application driving the engine
 // from its own store needs beyond what the renderers import — the reusable-
-// invoice check, the request error class, the swap start call, and the
-// display boundaries (optionalMsatsLabel beside formatMsats).
+// invoice check, the request error class, and the swap start call.
 export {
   createStatusFetcher,
   isReusableLightningInvoice,
@@ -318,8 +312,5 @@ export {
   normalizeSwapStartInvoice,
   startSwapRequest,
 } from "./internal/swap-http.ts";
-export {
-  formatFiatAmount,
-  optionalMsatsLabel,
-} from "./internal/checkout.ts";
+export { formatFiatAmount } from "./internal/checkout.ts";
 export type { TransactionDetailsInput } from "./internal/ui.ts";

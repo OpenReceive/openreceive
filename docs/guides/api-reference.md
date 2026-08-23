@@ -18,9 +18,7 @@ callback argument — are **Fields of** that type, not a second input list.
 
 ## Wallet client
 
-The object `createOpenReceive()` returns. It is conventionally held in a
-variable named `service` — the parameter name every adapter expects — which
-is why its methods are written `service.…` below.
+The object `createOpenReceive()` returns. Examples below call it `service`.
 
 ### createOpenReceive
 
@@ -55,8 +53,7 @@ errors.
 | `priceCurrencies` | `string[]` | Fiat currencies this wallet client will quote. Default `["USD"]`. |
 | `prepareCheckout` | `function` | Resolve `{ amount }` to millisatoshis without minting an invoice. |
 | `createCheckout` | `function` | Mint a Lightning invoice for an order you own. |
-| `checkPayment` | `function` | Look up one known invoice in the wallet history. |
-| `reconcilePayments` | `function` | Batch-check many pending invoices in one wallet scan. |
+| `reconcilePayments` | `function` | Batch-check pending invoices in one wallet scan. |
 | `subscribeWalletNotifications` | `function?` | Opt-in NWC-02 `payment_received` subscription. Absent when the client cannot notify. |
 | `quoteSwap` | `function` | Quote one pay-in asset for an amount without creating a provider order. See [Automated swaps](automated-swaps.md). |
 | `listSwapOptions` | `function` | List configured swap pay-in methods for an invoice amount. See [Automated swaps](automated-swaps.md). |
@@ -87,7 +84,7 @@ and swap options before create.
 | Name | Type | Meaning |
 | --- | --- | --- |
 | `amountMsats` | `number` | Integer millisatoshis that will be charged (`sats × 1000`, or the fiat quote rounded up to a whole sat then × 1000). Minimum `1000` (1 sat). |
-| `fiatQuote` | `RateQuote \| null` | The locked BTC/fiat quote when `amount` was `{ currency, value }`. `null` when `amount` was already `{ sats }` or Bitcoin-denominated. See [fiatQuote](#fiatquote). |
+| `fiatQuote` | `RateQuote \| null` | The locked BTC/fiat quote when `amount` was `{ currency, value }`. `null` when `amount` was already `{ sats }` or Bitcoin-denominated. See [RateQuote](#ratequote). |
 
 ### service.createCheckout
 
@@ -127,20 +124,17 @@ a pure wallet call — attempt persistence happens in the order bridge
 | `paymentHash` | `string` | 64-character lowercase hex payment hash. Globally unique per attempt; the selector for later check, swap, and refund calls. |
 | `bolt11` | `string` | The Lightning invoice string the payer scans or pastes into a wallet. |
 | `amountMsats` | `number` | Integer millisatoshis encoded on the invoice. Same value the wallet must receive to settle. |
-| `createdAt` | `number` | Integer Unix seconds when the wallet minted the invoice (`make_invoice`'s `created_at`, else the wallet client's clock). Pass this exact value back to `checkPayment`. |
+| `createdAt` | `number` | Integer Unix seconds when the wallet minted the invoice (`make_invoice`'s `created_at`, else the wallet client's clock). Pass this exact value back in `reconcilePayments` attempts. |
 | `expiresAt` | `number` | Integer Unix seconds after which the invoice is no longer payable. Taken from the wallet; must match the requested expiry within 60 seconds. |
-| `fiatQuote` | `RateQuote \| null` | The BTC/fiat quote locked at mint time when you priced in fiat. `null` for `{ sats }` amounts. See [fiatQuote](#fiatquote). |
+| `fiatQuote` | `RateQuote \| null` | The BTC/fiat quote locked at mint time when you priced in fiat. `null` for `{ sats }` amounts. See [RateQuote](#ratequote). |
 
-### fiatQuote
+### RateQuote
 
-Present on `prepareCheckout` and `createCheckout` when your amount was
-`{ currency, value }` in a quoted fiat currency. `null` for `{ sats }` and for
-Bitcoin-denominated `{ currency: "BTC" \| "SAT" \| "SATS", value }`. The quote
-is locked onto the invoice; later price-feed moves do not change
-`amountMsats`. Like every TS surface the quote is camelCase; the HTTP handler
-serializes it snake_case as `fiat_quote` in checkout bodies.
-
-**Fields of** `RateQuote`
+The object in `fiatQuote` on `prepareCheckout` and `createCheckout` when you
+priced in a quoted fiat currency. `null` for `{ sats }` and for
+Bitcoin-denominated `{ currency: "BTC" | "SAT" | "SATS", value }`. Locked onto
+the invoice; later price-feed moves do not change `amountMsats`. HTTP
+serializes the same object as `fiat_quote`.
 
 | Name | Type | Meaning |
 | --- | --- | --- |
@@ -154,30 +148,38 @@ serializes it snake_case as `fiat_quote` in checkout bodies.
 | `asOf` | `number` | Integer Unix seconds when the rate was observed. |
 | `expiresAt` | `number` | Integer Unix seconds when this quote is no longer considered fresh (quote TTL, default 600). |
 
-### service.checkPayment
+### service.reconcilePayments
 
 ```ts
-const check = await service.checkPayment({
-  paymentHash: checkout.paymentHash,
-  createdAt: checkout.createdAt, // the exact value createCheckout returned
+const checks = await service.reconcilePayments({
+  attempts: [{ paymentHash, createdAt }], // one invoice or every pending attempt
   // optional: until, overlapSeconds
 });
 ```
 
-Looks up one known invoice in wallet history. A pure batched wallet read —
-no persistence. `settled` requires `settled_at` or a wallet transaction state
-of `settled`; a preimage alone is never finality.
+Looks up known invoices in wallet history. A pure batched wallet read — no
+persistence. Pass a one-element `attempts` array to check a single invoice.
+`settled` requires `settled_at` or a wallet transaction state of `settled`; a
+preimage alone is never finality. A truncated walk **omits** the hash rather
+than reporting `not_found`, so a caller cannot close a paid attempt from an
+incomplete scan.
 
 **Parameters**
 
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `paymentHash` | `string` | yes | 64-hex payment hash. |
-| `createdAt` | `number` | yes | Exact NIP-47 invoice creation time from `make_invoice`. |
+| `attempts` | `{ paymentHash, createdAt }[]` | yes | Every pending attempt to check. |
 | `until` | `number` | no | Scan upper bound. Default now. |
 | `overlapSeconds` | `number` | no | Scan-window overlap. Default 60. |
 
-**Returns** `PaymentCheck`
+**Returns** `PaymentCheck[]` — one [PaymentCheck](#paymentcheck) per decided
+attempt, in the same order as `attempts` after hash normalization, using at
+most two paged `list_transactions` walks for the whole batch — never a
+per-invoice lookup. Hashes the walk could not prove present or absent are
+omitted. Persistence and settlement delivery belong to
+[reconcileHostPayments](#reconcilehostpayments).
+
+#### PaymentCheck
 
 | Name | Type | Meaning |
 | --- | --- | --- |
@@ -202,51 +204,11 @@ of `settled`; a preimage alone is never finality.
 
 | Name | Type | Meaning |
 | --- | --- | --- |
-| `transaction` | `NwcTransaction` | Clone of the wallet's `list_transactions` row. Contains no connection strings or provider secrets. |
+| `transaction` | `NwcTransaction` | The wallet's [NWC-05 `list_transactions`](https://github.com/nostr-wallet-connect/nwc/blob/main/05.md#list_transactions) row. Contains no connection strings or provider secrets. |
 | `observed_at` | `number` | Integer Unix seconds when this scan observed the row. |
 | `paid_at_source` | `"settled_at" \| "observed_at"` | Present only when settled. `"settled_at"` means `paidAt` came from the wallet; `"observed_at"` means the wallet omitted `settled_at` and the wallet client's clock was used. |
 
-`transaction` fields that matter for settlement (all optional on the wire):
-
-**Fields of** the wallet `transaction` row
-
-| Name | Type | Meaning |
-| --- | --- | --- |
-| `type` | `"incoming" \| "outgoing"?` | Direction. OpenReceive only settles `incoming`. |
-| `invoice` | `string?` | The bolt11 the wallet recorded. |
-| `payment_hash` | `string?` | Hash of this wallet row. |
-| `amount_msats` | `bigint?` | Amount the wallet recorded, in millisatoshis. |
-| `transaction_state` / `state` | `string?` | Wallet transaction state. `"settled"` is a finality signal. |
-| `created_at` | `number?` | Integer Unix seconds the wallet minted the invoice. |
-| `expires_at` | `number?` | Integer Unix seconds the wallet considers the invoice expired. |
-| `settled_at` | `number?` | Integer Unix seconds of wallet settlement. A positive value is a finality signal. |
-| `preimage` | `string?` | Payment preimage. Corroborating evidence only — never enough to settle. |
-| `fees_paid_msats` | `bigint?` | Routing fees the wallet reported, in millisatoshis. |
-| `description` | `string?` | Invoice memo the wallet stored. |
-| `description_hash` | `string?` | 64-hex description hash, when the invoice used one. |
-
-### service.reconcilePayments
-
-```ts
-const checks = await service.reconcilePayments({
-  attempts: [{ paymentHash, createdAt }], // every pending attempt
-  // optional: until, overlapSeconds
-});
-```
-
-**Parameters**
-
-| Name | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `attempts` | `{ paymentHash, createdAt }[]` | yes | Every pending attempt to check. |
-| `until` | `number` | no | Scan upper bound. Default now. |
-| `overlapSeconds` | `number` | no | Scan-window overlap. Default 60. |
-
-**Returns** `PaymentCheck[]` — one [PaymentCheck](#servicecheckpayment) per
-attempt, in the same order as `attempts` after hash normalization, using at
-most two paged `list_transactions` walks for the whole batch — never a
-per-invoice lookup. Pure wallet read; persistence and settlement delivery
-belong to [reconcileHostPayments](#reconcilehostpayments).
+OpenReceive names the millisatoshi fields `amount_msats` and `fees_paid_msats` (the spec says `amount` and `fees_paid`) and accepts `transaction_state` as an alias for `state`. Settlement uses only `incoming` rows, treats a positive `settled_at` or `state`/`transaction_state` of `"settled"` as finality, and treats `preimage` as corroboration only.
 
 ### service.subscribeWalletNotifications
 
@@ -270,7 +232,7 @@ The `notification` argument (not a return value):
 | --- | --- | --- |
 | `type` | `string` | Notification type. The bundled subscription only delivers `payment_received`. |
 | `payment_hash` | `string?` | 64-hex hash when the payload includes one. Unknown or missing hashes only wake a scan. |
-| `transaction` | `NwcTransaction?` | Payload normalized like a `list_transactions` row. A row that satisfies the settlement rule may settle its matching pending attempt directly. |
+| `transaction` | `NwcTransaction?` | Payload normalized like a [NWC-05 `list_transactions`](https://github.com/nostr-wallet-connect/nwc/blob/main/05.md#list_transactions) row. A row that satisfies the settlement rule may settle its matching pending attempt directly. |
 
 **Returns** `() => Promise<void> | void` — call it to unsubscribe. The promise
 rejects with `OpenReceiveError` code `UNSUPPORTED_METHOD` when the wallet

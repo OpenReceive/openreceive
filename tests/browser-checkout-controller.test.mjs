@@ -436,22 +436,11 @@ test("browser checkout log fields never carry the refund nonce, a preimage or a 
   }
 });
 
-// ------------------------------- the swap parse boundary refuses a non-amount --
+// ------------------------------- the optional checkout amount echo -----------
 
-// `normalizeSwapStartInvoice` is the untrusted-wire boundary for a swap start
-// and a swap refund: what it returns becomes a CheckoutInvoiceSnapshot, which
-// every layer above treats as already parsed, and which callers copy onto the
-// checkout-level `amount_msats`.
-//
-// It used to admit `checkout.amount_msats` on `typeof === "number"` alone, so a
-// server could hand back -1, 1.5 or an unsafe integer and have it stored as an
-// amount. The Rails demo then formatted that value in a mobx @computed read
-// inside an `observer` and a RangeError escaped render, taking the whole
-// checkout panel with it. Both ends are now closed, and they are closed
-// DIFFERENTLY on purpose: rejected here at the parse boundary, blanked at the
-// display boundary (see `optionalMsatsLabel`, and the "nonsense amount costs the
-// label" test in checkout-state-characterization). A parse boundary has no
-// screen to protect yet; a poll into a live checkout does.
+// `checkout.amount_msats` on a swap start / refund body is an optional echo of
+// the checkout's own amount, which the client already knows: a safe integer is
+// copied onto the snapshot, and anything else is simply omitted.
 
 function swapStartBody(checkout) {
   return {
@@ -468,26 +457,8 @@ function swapStartBody(checkout) {
   };
 }
 
-test("a swap start payload never yields an amount the checkout would refuse to display", () => {
-  // Not amounts. Every one of these passed the old `typeof === "number"` check.
-  for (const amountMsats of [-1, -21_000, 1.5, Number.MAX_SAFE_INTEGER + 2, Number.NaN, Infinity]) {
-    assert.throws(
-      () => normalizeSwapStartInvoice(swapStartBody({ amount_msats: amountMsats })),
-      /unusable checkout amount/,
-      `amount_msats ${amountMsats} must be refused at the parse boundary`,
-    );
-  }
-
-  // Present but the wrong type is refused too — same as every other field in
-  // this function, where a wrong-typed value throws the payload away.
-  assert.throws(
-    () => normalizeSwapStartInvoice(swapStartBody({ amount_msats: "21000" })),
-    /unusable checkout amount/,
-  );
-});
-
-test("a swap start payload keeps a real amount and tolerates an absent one", () => {
-  // Zero is an amount: falsy, and the obvious thing for a guard to get wrong.
+test("a swap start payload copies a real amount and omits everything else", () => {
+  // Zero is an amount: falsy, and the obvious thing for a copy to get wrong.
   for (const amountMsats of [0, 21_000, Number.MAX_SAFE_INTEGER]) {
     assert.equal(
       normalizeSwapStartInvoice(swapStartBody({ amount_msats: amountMsats })).amount_msats,
@@ -495,10 +466,15 @@ test("a swap start payload keeps a real amount and tolerates an absent one", () 
     );
   }
 
-  // The field is OPTIONAL: the client already knows the checkout's own amount,
-  // so "not echoed" — missing, no `checkout` object at all, or JSON `null` — is
-  // legal and simply carries no amount. Only present-but-not-an-amount is a bug.
-  for (const checkout of [undefined, {}, { amount_msats: null }]) {
+  // The field is OPTIONAL: "not echoed" — missing, no `checkout` object at
+  // all, JSON `null`, or not a safe integer — simply carries no amount.
+  for (const checkout of [
+    undefined,
+    {},
+    { amount_msats: null },
+    { amount_msats: "21000" },
+    { amount_msats: 1.5 },
+  ]) {
     const invoice = normalizeSwapStartInvoice(swapStartBody(checkout));
     assert.equal(invoice.amount_msats, undefined);
     assert.equal(invoice.rail, "swap");
@@ -506,9 +482,7 @@ test("a swap start payload keeps a real amount and tolerates an absent one", () 
   }
 });
 
-test("every amount a swap start admits is one the display boundary will format", () => {
-  // The two boundaries stated as one property, which is the thing that was
-  // actually broken: whatever survives the parse must survive the display.
+test("every amount a swap start copies is one the formatter will format", () => {
   for (const amountMsats of [0, 1_000, 21_000, 999_999_999]) {
     const invoice = normalizeSwapStartInvoice(swapStartBody({ amount_msats: amountMsats }));
     const state = createCheckoutState(

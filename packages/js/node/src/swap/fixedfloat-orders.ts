@@ -1,12 +1,11 @@
 /**
  * FixedFloat order bodies (`/create`, `/order`) → SwapOrder: provider status →
  * OpenReceive state (including the EMERGENCY refund/attention branches),
- * field-by-field fallback to the order already persisted, the USD fee pair, and
- * the deposit-address shape check that gates every address handed to a payer.
+ * field-by-field fallback to the order already persisted, and the USD fee pair.
  */
 
 import { recordOrEmpty, unixSeconds } from "@openreceive/core";
-import { isValidSwapAddressForNetwork, type SwapPayInAsset } from "./assets.ts";
+import type { SwapPayInAsset } from "./assets.ts";
 import {
   optionalNestedString,
   optionalStringArrayField,
@@ -108,18 +107,9 @@ function extractFixedFloatOrderFields(
     emergency,
     refundTxId,
   );
-  // Checked on the same path that produces it, so no deposit address ever reaches
-  // a payer without its network shape being validated first.
-  const depositAddress = requiredOrderField(
-    from,
-    "address",
-    fallback?.deposit_address,
-    "from.address",
-  );
-  assertFixedFloatDepositAddressShape(input.payInAsset, depositAddress);
   return {
     status,
-    depositAddress,
+    depositAddress: requiredOrderField(from, "address", fallback?.deposit_address, "from.address"),
     refundTxId,
     providerOrderId: requiredOrderField(record, "id", fallback?.provider_order_id, "id"),
     providerToken: requiredOrderField(record, "token", fallback?.provider_token, "token"),
@@ -143,15 +133,6 @@ function extractFixedFloatOrderFields(
     emergencyRepeat: readEmergencyRepeat(emergency) ?? fallback?.emergency_repeat,
     fee: readFixedFloatOrderFee(record) ?? fallback?.fee,
   };
-}
-
-function assertFixedFloatDepositAddressShape(
-  payInAsset: SwapPayInAsset,
-  depositAddress: string,
-): void {
-  if (!isValidSwapAddressForNetwork(payInAsset, depositAddress)) {
-    throw new Error("FixedFloat deposit address is not valid for this asset.");
-  }
 }
 
 function normalizeFixedFloatStatus(

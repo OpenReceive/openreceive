@@ -8,7 +8,7 @@ const PAYMENT_HASH = "a".repeat(64);
 // Constructed so no real-looking NWC URI literal exists in the repository.
 const NWC_URI = `nostr+walletconnect://${"a".repeat(64)}?relay=wss://relay.example&secret=${"b".repeat(64)}`;
 
-test("createOpenReceive logs payment.check NWC poll request and result", async () => {
+test("createOpenReceive logs payment.reconcile NWC poll request and result", async () => {
   const events = [];
   const now = 1_700_000_100;
   const wallet = createTestkitReceiveClient({ now: () => now });
@@ -23,29 +23,26 @@ test("createOpenReceive logs payment.check NWC poll request and result", async (
   });
 
   try {
-    const checked = await service.checkPayment({
-      paymentHash: created.payment_hash,
-      createdAt: created.created_at,
+    const [checked] = await service.reconcilePayments({
+      attempts: [{ paymentHash: created.payment_hash, createdAt: created.created_at }],
     });
     assert.equal(checked.status, "settled");
 
-    const requested = events.find((entry) => entry.event === "payment.check.requested");
-    const completed = events.find((entry) => entry.event === "payment.check.completed");
-    assert.ok(requested, "expected payment.check.requested");
+    const requested = events.find((entry) => entry.event === "payment.reconcile.requested");
+    const completed = events.find((entry) => entry.event === "payment.reconcile.completed");
+    assert.ok(requested, "expected payment.reconcile.requested");
     assert.equal(requested.level, "debug");
-    assert.equal(requested.payment_hash, created.payment_hash);
-    assert.equal(requested.created_at, created.created_at);
-    assert.ok(completed, "expected payment.check.completed");
+    assert.equal(requested.attempt_count, 1);
+    assert.ok(completed, "expected payment.reconcile.completed");
     assert.equal(completed.level, "info");
-    assert.equal(completed.status, "settled");
-    assert.equal(completed.payment_hash, created.payment_hash);
-    assert.equal(completed.preimage_present, true);
+    assert.equal(completed.settled_count, 1);
+    assert.equal(completed.attempt_count, 1);
   } finally {
     await service.close();
   }
 });
 
-test("createOpenReceive logs payment.check when the wallet has not settled yet", async () => {
+test("createOpenReceive logs payment.reconcile when the wallet has not settled yet", async () => {
   const events = [];
   const now = 1_700_000_100;
   const wallet = createTestkitReceiveClient({ now: () => now });
@@ -59,17 +56,16 @@ test("createOpenReceive logs payment.check when the wallet has not settled yet",
   });
 
   try {
-    const checked = await service.checkPayment({
-      paymentHash: created.payment_hash,
-      createdAt: created.created_at,
+    const [checked] = await service.reconcilePayments({
+      attempts: [{ paymentHash: created.payment_hash, createdAt: created.created_at }],
     });
     assert.equal(checked.status, "pending");
 
-    const completed = events.find((entry) => entry.event === "payment.check.completed");
-    assert.ok(completed, "expected payment.check.completed");
-    assert.equal(completed.level, "debug");
-    assert.equal(completed.status, "pending");
-    assert.equal(completed.preimage_present, false);
+    const completed = events.find((entry) => entry.event === "payment.reconcile.completed");
+    assert.ok(completed, "expected payment.reconcile.completed");
+    assert.equal(completed.level, "info");
+    assert.equal(completed.pending_count, 1);
+    assert.equal(completed.settled_count, 0);
   } finally {
     await service.close();
   }

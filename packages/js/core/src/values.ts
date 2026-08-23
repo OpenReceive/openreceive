@@ -33,13 +33,8 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * A JSON object, or `{}` when the value is not one — for readers that walk an
  * optional nested shape without branching at every level.
  *
- * ARRAY-EXCLUDING: an array yields `{}`.
- *
- * The ARRAY-PERMITTING readers — NWC relay response normalization and the
- * browser checkout response parser — must not use this: they pass an array
- * through as a record, and they are untrusted-wire parse boundaries where
- * routing through here would silently narrow what they accept. They keep their
- * own local helpers.
+ * ARRAY-EXCLUDING: an array yields `{}`. The NWC reply normalizer and the
+ * browser checkout readers parse through this too.
  */
 export function recordOrEmpty(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};

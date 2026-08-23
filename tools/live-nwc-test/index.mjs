@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { lightningUri } from "@openreceive/browser";
 import {
-  checkPayment,
+  reconcilePaymentAttempts,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   parseNwcUri,
   quoteFiatToMsatsWithPrice,
@@ -226,29 +226,30 @@ if (outcome.status !== "settled") {
 }
 
 /**
- * The wait loop drives the PRODUCTION scan — @openreceive/core's checkPayment
- * (settled-first then inclusive-unpaid walk over padded windows) — so this
- * smoke test proves settlement through the same code path a real host uses,
- * not a re-implemented single-pass query.
+ * The wait loop drives the PRODUCTION scan — @openreceive/core's
+ * reconcilePaymentAttempts (settled-first then inclusive-unpaid walk over
+ * padded windows) — so this smoke test proves settlement through the same
+ * code path a real host uses, not a re-implemented single-pass query.
  */
 async function checkInvoicePayment(client, invoice) {
-  return checkPayment({
+  const [checked] = await reconcilePaymentAttempts({
     client,
-    paymentHash: invoice.payment_hash,
-    createdAt: invoice.created_at ?? Math.floor(Date.now() / 1000),
+    attempts: [
+      {
+        paymentHash: invoice.payment_hash,
+        createdAt: invoice.created_at ?? Math.floor(Date.now() / 1000),
+      },
+    ],
   });
+  return checked;
 }
 
 async function waitForCheckPaymentFinalState({ client, invoice, expiresAt }) {
   while (Math.floor(Date.now() / 1000) <= expiresAt) {
-    let check;
-    try {
-      check = await checkInvoicePayment(client, invoice);
-    } catch (error) {
-      // checkPayment reports a truncated wallet-history walk as a retryable
-      // wallet outage; the next poll simply scans again.
-      if (error?.retryable !== true) throw error;
-      console.log(`Workflow transition: scan_incomplete (${formatErrorMessage(error)})`);
+    const check = await checkInvoicePayment(client, invoice);
+    if (check === undefined) {
+      // A truncated wallet-history walk proves nothing; the next poll scans again.
+      console.log("Workflow transition: scan_incomplete (truncated wallet-history walk)");
       await sleep(2000);
       continue;
     }

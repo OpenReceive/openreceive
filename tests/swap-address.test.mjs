@@ -8,7 +8,6 @@ import {
   swapAddressNetworkForPayInAsset,
 } from "@openreceive/core/swap-address";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
-import { isValidSwapAddressForNetwork } from "../packages/js/node/src/swap/assets.ts";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
@@ -55,7 +54,6 @@ test("Tron addresses must pass Base58Check, not just the T… shape", () => {
   assert.equal(TRX_BAD_CHECKSUM.length, TRX_OTHER.length);
   assert.equal(isValidAddressForSwapNetwork("TRX", TRX_BAD_CHECKSUM), false);
   assert.equal(isValidSwapAddressForPayInAsset("USDT_TRON", TRX_BAD_CHECKSUM), false);
-  assert.equal(isValidSwapAddressForNetwork("USDT_TRON", TRX_BAD_CHECKSUM), false);
   assert.match(
     getSwapRefundAddressError("USDT_TRON", TRX_BAD_CHECKSUM, "Tron") ?? "",
     /Tron address failed its checksum/,
@@ -65,7 +63,6 @@ test("Tron addresses must pass Base58Check, not just the T… shape", () => {
 test("mixed-case Ethereum addresses must pass EIP-55; single-case ones carry no checksum", () => {
   assert.equal(isValidAddressForSwapNetwork("ETH", ETH_BAD_CHECKSUM), false);
   assert.equal(isValidSwapAddressForPayInAsset("USDT_ETH", ETH_BAD_CHECKSUM), false);
-  assert.equal(isValidSwapAddressForNetwork("USDT_ETH", ETH_BAD_CHECKSUM), false);
   assert.match(
     getSwapRefundAddressError("ETH_ETH", ETH_BAD_CHECKSUM, "Ethereum") ?? "",
     /Ethereum address failed its checksum/,
@@ -81,7 +78,6 @@ test("isValidAddressForSwapNetwork rejects truncated Solana addresses", () => {
   assert.equal(SOL_TRUNCATED.length >= 32, true);
   assert.equal(isValidAddressForSwapNetwork("SOL", SOL_TRUNCATED), false);
   assert.equal(isValidSwapAddressForPayInAsset("SOL_SOL", SOL_TRUNCATED), false);
-  assert.equal(isValidSwapAddressForNetwork("SOL_SOL", SOL_TRUNCATED), false);
   assert.match(getSwapRefundAddressError("SOL_SOL", SOL_TRUNCATED, "Solana") ?? "", /full address/);
 });
 
@@ -107,30 +103,13 @@ test("an unknown network is rejected outright, never waved through on length", (
   assert.equal(isValidAddressForSwapNetwork("BTC", ETH_CHECKSUMMED), false);
 });
 
-test("node isValidSwapAddressForNetwork matches shared pay-in-asset checks", () => {
-  for (const asset of [
-    "ETH_ETH",
-    "USDT_ETH",
-    "USDC_ETH",
-    "SOL_SOL",
-    "USDT_SOL",
-    "USDC_SOL",
-    "USDT_TRON",
-  ]) {
-    for (const address of [ETH, ETH_CHECKSUMMED, ETH_BAD_CHECKSUM, SOL, TRX, TRX_BAD_CHECKSUM]) {
-      assert.equal(
-        isValidSwapAddressForNetwork(asset, address),
-        isValidSwapAddressForPayInAsset(asset, address),
-        `${asset} / ${address}`,
-      );
-    }
-  }
-  assert.equal(isValidSwapAddressForNetwork("ETH_ETH", ETH), true);
-  assert.equal(isValidSwapAddressForNetwork("SOL_SOL", SOL), true);
-  assert.equal(isValidSwapAddressForNetwork("USDT_TRON", TRX), true);
-  assert.equal(isValidSwapAddressForNetwork("ETH_ETH", SOL), false);
-  assert.equal(isValidSwapAddressForNetwork("SOL_SOL", ETH), false);
-  assert.equal(isValidSwapAddressForNetwork("USDT_TRON", ETH), false);
+test("shared pay-in-asset checks accept the right network and refuse the rest", () => {
+  assert.equal(isValidSwapAddressForPayInAsset("ETH_ETH", ETH), true);
+  assert.equal(isValidSwapAddressForPayInAsset("SOL_SOL", SOL), true);
+  assert.equal(isValidSwapAddressForPayInAsset("USDT_TRON", TRX), true);
+  assert.equal(isValidSwapAddressForPayInAsset("ETH_ETH", SOL), false);
+  assert.equal(isValidSwapAddressForPayInAsset("SOL_SOL", ETH), false);
+  assert.equal(isValidSwapAddressForPayInAsset("USDT_TRON", ETH), false);
 });
 
 test("getSwapRefundAddressError returns network-specific copy", () => {

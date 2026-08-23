@@ -82,13 +82,6 @@ module OpenReceive
         def lightning_network?(value)
           %w[LN LIGHTNING LIGHTNINGNETWORK BTCLN BTCBOLT11].include?(normalize_network(value))
         end
-
-        # Coarse shape-check of a deposit/refund address against the pay-in
-        # asset's network. Delegates to the core gem's SwapAddress so both
-        # engines share one rule set; callers raise their own error.
-        def valid_swap_address_for_network?(pay_in_asset, address)
-          OpenReceive::SwapAddress.valid_for_network?(info(pay_in_asset).fetch("network"), address)
-        end
       end
     end
   end

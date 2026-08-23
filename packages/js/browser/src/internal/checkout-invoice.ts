@@ -21,23 +21,3 @@ export function assertInvoice(invoice: string): void {
     throw new TypeError("invoice must not be an NWC connection string");
   }
 }
-
-export function assertBrowserPayloadSafe(value: unknown): void {
-  if (typeof value === "string") {
-    if (value.startsWith("nostr+walletconnect://")) {
-      throw new TypeError("OpenReceive browser payload must not include an NWC connection string");
-    }
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) assertBrowserPayloadSafe(item);
-    return;
-  }
-
-  if (value !== null && typeof value === "object") {
-    for (const item of Object.values(value)) {
-      assertBrowserPayloadSafe(item);
-    }
-  }
-}

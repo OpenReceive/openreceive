@@ -200,7 +200,7 @@ test("createSwap trusts the provider's quoted payout amount", async () => {
   assert.equal(order.state, "awaiting_deposit");
 });
 
-test("createSwap rejects a deposit address that is not valid for the pay-in asset", async () => {
+test("createSwap stores the deposit address the provider sent", async () => {
   const { provider } = makeProvider({
     ccies: SAMPLE_CCIES,
     create: {
@@ -208,14 +208,12 @@ test("createSwap rejects a deposit address that is not valid for the pay-in asse
       from: { code: "USDTTRC", amount: "12.5", address: ETH_ADDRESS },
     },
   });
-  await assert.rejects(
-    provider.createSwap({
-      payInAsset: "USDT_TRON",
-      bolt11: BOLT11,
-      invoiceAmountMsats: INVOICE_AMOUNT_MSATS,
-    }),
-    /deposit address is not valid for this asset/,
-  );
+  const order = await provider.createSwap({
+    payInAsset: "USDT_TRON",
+    bolt11: BOLT11,
+    invoiceAmountMsats: INVOICE_AMOUNT_MSATS,
+  });
+  assert.equal(order.deposit_address, ETH_ADDRESS);
 });
 
 test("getStatus maps every recognized FixedFloat status to its provider_state", async () => {

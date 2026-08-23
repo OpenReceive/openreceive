@@ -162,8 +162,21 @@ module OpenReceive
     def normalize_list_transactions_response(response)
       unwrapped = unwrap(response)
       data = OpenReceive.stringify(unwrapped)
-      rows = data["transactions"] || (unwrapped.is_a?(Array) ? unwrapped : [])
-      { "transactions" => Array(rows).map { |row| normalize_transaction(row) } }
+      rows =
+        if data["transactions"].is_a?(Array)
+          data["transactions"]
+        elsif unwrapped.is_a?(Array)
+          unwrapped
+        elsif unwrapped.nil? || (unwrapped.respond_to?(:each_pair) && data.empty?)
+          # A genuinely empty reply is an empty scan.
+          []
+        else
+          # A non-empty reply in a shape we do not recognize must NOT read as
+          # an empty scan: an empty-looking scan at/after expiry+grace closes
+          # pending attempts as expired. Fail the scan loudly instead.
+          raise ArgumentError, "list_transactions returned an unrecognized result shape"
+        end
+      { "transactions" => rows.map { |row| normalize_transaction(row) } }
     end
 
     def normalize_transaction(transaction)

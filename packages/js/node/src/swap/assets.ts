@@ -1,7 +1,4 @@
-import {
-  isValidAddressForSwapNetwork,
-  type SwapAddressNetwork,
-} from "@openreceive/core/swap-address";
+import type { SwapAddressNetwork } from "@openreceive/core/swap-address";
 
 export const OPENRECEIVE_SWAP_PAY_IN_ASSETS = [
   "SOL_SOL",
@@ -132,14 +129,4 @@ export function isLightningNetwork(value: string): boolean {
     normalized === "BTCLN" ||
     normalized === "BTCBOLT11"
   );
-}
-
-/**
- * Coarse shape-check of a deposit/refund address against the pay-in asset's
- * network (format guard, not full checksum validation). Delegates to
- * `@openreceive/core` so browser refund UI and the settlement engine share
- * one rule set; callers throw their own error.
- */
-export function isValidSwapAddressForNetwork(payInAsset: SwapPayInAsset, address: string): boolean {
-  return isValidAddressForSwapNetwork(getSwapAssetInfo(payInAsset).network, address);
 }

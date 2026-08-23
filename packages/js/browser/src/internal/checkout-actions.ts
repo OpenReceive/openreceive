@@ -15,8 +15,8 @@ import {
   type QrOptions,
   type OpenWalletOptions,
 } from "./ui.ts";
+import { recordOrEmpty } from "@openreceive/core";
 import { assertInvoice, createLightningUri } from "./checkout-invoice.ts";
-import { asRecord } from "./checkout-read.ts";
 import { emitBrowserLog } from "./checkout-log.ts";
 
 export async function createQrSvg(invoice: string, options: QrOptions = {}): Promise<string> {
@@ -122,7 +122,7 @@ function getQrEncoder(encoder: QrEncoder | undefined): QrEncoder {
 }
 
 function isQrEncoder(value: unknown): value is QrEncoder {
-  const record = asRecord(value);
+  const record = recordOrEmpty(value);
   // Every object inherits Object.prototype.toString, so probing for `toString`
   // alone accepts anything — and a wrong import would then silently render a QR
   // of "[object Object]". Require the module's own encoder entry points.

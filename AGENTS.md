@@ -109,26 +109,21 @@ npm run test:ruby
 
 Before declaring work done, report the exact checks run and any intentional skip.
 
-## Display boundary
+## Trust model
 
-One bug class, one rule. A value arrives from a server and crosses a parse boundary that bounds
-its type but not its range; it then reaches a throwing formatter inside a render path, and the
-throw takes the whole panel — frequently the screen the payer reaches after paying. The parse
-boundary is right to be permissive (the panel's job is to report what arrived) and the formatter
-is right to throw (wire construction and validation share it). The join is what must not exist.
+Our own server, the configured NWC wallet, and the configured swap provider are trusted. The
+frontend formats what the server sent: a throw in a checkout panel is a bug in our own API
+surfacing, not a display-boundary bug class to defend against. Do not reintroduce
+"untrusted-wire" readers or blanking display wrappers for our own JSON, NWC replies, or
+FixedFloat deposit addresses; adapter work (field aliases, string-to-number coercion) is fine.
 
-FORMATTERS THROW: `formatMsats` throws `RangeError` on an unusable amount and keeps
-throwing on purpose. DISPLAY BOUNDARIES BLANK: `optionalMsatsLabel` and `optionalUnixTimeLabel`
-(`packages/js/browser/src/internal/checkout-format.ts`) wrap those formatters and return
-`undefined`, so a malformed server value costs one label or one row, never the screen; callers
-keep rendering the raw value beside the blanked label so nothing is hidden from whoever debugs it.
-The predicates behind them are module-private on purpose — a caller reaching for the predicate is
-about to re-implement the boundary.
-
-For a new instance: if the formatter's throw is load-bearing elsewhere, leave it throwing and add
-a boundary; if nothing constructs or validates through it, let the formatter degrade (as
-`formatUnixTime` does). Express the predicate once, module-private, next to the
-formatter. Keep the raw value visible under a relabelled row.
+Keep validating what is genuinely untrusted: the payer and browser client (payment_hash shape,
+refund-address checksums, request bodies hitting HTTP handlers), the host amount callback
+(`amount_for` / `amountFor` — the host owns prices), and public price feeds (fail closed on
+missing or stale rates). Invoice expiry keeps its rule: local clock alone never closes a row — a
+successful wallet scan at/after expiry plus the grace window is the close rule, and an
+unrecognized `list_transactions` shape must fail the scan rather than look empty, because an
+empty-looking scan at expiry+grace closes unpaid attempts.
 
 ## Private boundary
 

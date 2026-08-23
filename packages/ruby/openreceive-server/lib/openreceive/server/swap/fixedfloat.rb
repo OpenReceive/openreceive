@@ -507,11 +507,6 @@ module OpenReceive
             self.class.as_record(record["emergency"]),
             refund_tx_id
           )
-          # Read and validate the deposit address BEFORE anything else can
-          # raise: a response that is both missing `id` and carrying a
-          # wrong-network address must still fail with the address error, the
-          # way it did before this method was split.
-          deposit_address = validated_deposit_address(from, pay_in_asset, fallback)
           order = {
             "provider" => @name,
             "provider_order_id" =>
@@ -523,7 +518,10 @@ module OpenReceive
               fallback["provider_token"] ||
               self.class.required_string(record["token"], "token"),
             "pay_in_asset" => pay_in_asset,
-            "deposit_address" => deposit_address,
+            "deposit_address" =>
+              self.class.read_string(from["address"]) ||
+              fallback["deposit_address"] ||
+              self.class.required_string(from["address"], "from.address"),
             "deposit_amount" =>
               self.class.read_string(from["amount"]) ||
               fallback["deposit_amount"] ||
@@ -537,21 +535,6 @@ module OpenReceive
           order.merge!(optional_order_fields(record, normalized_status, refund_tx_id, fallback))
           order["raw"] = data
           order
-        end
-
-        # The only producer of a deposit address. Reading it and checking it
-        # against the pay-in asset's network must never come apart: an address
-        # accepted for the wrong chain sends the payer's funds somewhere
-        # nobody can recover them from.
-        def validated_deposit_address(from, pay_in_asset, fallback)
-          address =
-            self.class.read_string(from["address"]) ||
-            fallback["deposit_address"] ||
-            self.class.required_string(from["address"], "from.address")
-          unless Assets.valid_swap_address_for_network?(pay_in_asset, address)
-            raise "FixedFloat deposit address is not valid for this asset."
-          end
-          address
         end
 
         # Every order field that is OMITTED rather than sent as null when the

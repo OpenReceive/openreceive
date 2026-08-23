@@ -20,6 +20,7 @@ import {
   type TransactionState,
   type ParsedNwcConnection,
   nonEmptyString,
+  recordOrEmpty,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 import { HEX_64 } from "../hex.ts";
@@ -63,9 +64,9 @@ export function summarizeWalletCapabilities(
   rawServiceInfo?: unknown,
 ): WalletCapabilitySummary {
   const unwrappedInfo = unwrapNwcResult(rawInfo);
-  const info = asRecord(unwrappedInfo);
+  const info = recordOrEmpty(unwrappedInfo);
   const serviceInfo =
-    rawServiceInfo === undefined ? undefined : asRecord(unwrapNwcResult(rawServiceInfo));
+    rawServiceInfo === undefined ? undefined : recordOrEmpty(unwrapNwcResult(rawServiceInfo));
   const methods = normalizeStringList(
     info.methods ??
       info.capabilities ??
@@ -182,7 +183,7 @@ function validateOptionalNonNegativeInteger(value: number | undefined, field: st
 }
 
 export function normalizeMakeInvoiceResult(rawResult: unknown): MakeInvoiceResult {
-  const result = asRecord(unwrapNwcResult(rawResult));
+  const result = recordOrEmpty(unwrapNwcResult(rawResult));
   const invoice = requiredString(result.invoice, "invoice");
   const paymentHash = requiredString(result.payment_hash ?? result.paymentHash, "payment_hash");
   if (!HEX_64.test(paymentHash)) {
@@ -207,7 +208,7 @@ export function normalizeMakeInvoiceResult(rawResult: unknown): MakeInvoiceResul
 
 export function normalizeListTransactionsResult(rawResult: unknown): NormalizedListTransactions {
   const unwrapped = unwrapNwcResult(rawResult);
-  const result = asRecord(unwrapped);
+  const result = recordOrEmpty(unwrapped);
   let rawTransactions: readonly unknown[];
   if (Array.isArray(result.transactions)) {
     rawTransactions = result.transactions;
@@ -243,7 +244,7 @@ export function normalizeListTransactionsResult(rawResult: unknown): NormalizedL
 }
 
 export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction {
-  const result = asRecord(rawTransaction);
+  const result = recordOrEmpty(rawTransaction);
   const normalized: NwcTransaction = {};
 
   const type = normalizeTransactionType(result.type);
@@ -299,7 +300,7 @@ export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction
 }
 
 export function normalizeNwcNotification(rawNotification: unknown): NwcWalletNotification {
-  const record = asRecord(rawNotification);
+  const record = recordOrEmpty(rawNotification);
   const type =
     typeof record.notification_type === "string"
       ? record.notification_type
@@ -308,7 +309,7 @@ export function normalizeNwcNotification(rawNotification: unknown): NwcWalletNot
         : typeof record.type === "string"
           ? record.type
           : "unknown";
-  const payload = asRecord(record.notification);
+  const payload = recordOrEmpty(record.notification);
   let transaction: NwcTransaction | undefined;
   if (Object.keys(payload).length > 0) {
     try {
@@ -454,19 +455,7 @@ function byteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
-/**
- * ARRAY-PERMITTING, unlike core's `recordOrEmpty`: a relay that answers with a
- * JSON array is read for named keys rather than discarded, because this is an
- * untrusted-wire parse boundary and every reader below already tolerates a
- * missing key. Do not route its call sites through core's — there are nine,
- * seven here and two more in nwc/transport.ts, which imports this.
- */
-export function asRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null) return {};
-  return value as Record<string, unknown>;
-}
-
 export function unwrapNwcResult(value: unknown): unknown {
-  const record = asRecord(value);
+  const record = recordOrEmpty(value);
   return record.result ?? value;
 }

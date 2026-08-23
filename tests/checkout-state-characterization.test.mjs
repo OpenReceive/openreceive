@@ -73,18 +73,15 @@ import {
   createTransactionDetailsFromState,
   formatUnixTime,
 } from "@openreceive/browser/headless";
-import { renderCheckoutHtml } from "@openreceive/elements";
-import { Checkout, createCheckoutViewModel } from "@openreceive/react";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createCheckoutViewModel } from "@openreceive/react";
 
 const NOW = Math.floor(Date.now() / 1000);
 const hash = (character) => character.repeat(64);
 // PRODUCT CHANGE: the payment-data panel used to print unix seconds with a
 // ".000Z" the transaction-details panel next to it stripped. Both now render
-// through the one display boundary (`optionalUnixTimeLabel`), so both print the
-// stripped form. The milliseconds of a unix-SECONDS value are always zero, so
-// the two labels never carried different information — only different noise.
+// through the one formatter (`formatUnixTime`), so both print the stripped
+// form. The milliseconds of a unix-SECONDS value are always zero, so the two
+// labels never carried different information — only different noise.
 const iso = (unixSeconds) => new Date(unixSeconds * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
 
 /** The browser path, with the clock pinned and logging off. */
@@ -776,31 +773,21 @@ test("divergence (d) RECONCILED: no lightning_uri on a swap attempt", () => {
   assert.equal(browserState(snapshot).lightning_uri, "");
 });
 
-// --------------------------------------------- a malformed amount is one row --
+// ------------------------------------------------- amount labels on the state --
 
-// `formatMsats` throws on a negative, fractional or unsafe amount —
-// correctly, because it is the FORMATTER the wire builders and the amount
-// validators share. Every DISPLAY site therefore goes through the optional
-// wrapper instead, so a server answering with a nonsense `amount_msats` costs
-// exactly the row that would have shown the formatted amount and nothing else.
-// The raw value still rides on the state, and every panel still shows it under
-// its own "Amount (msats)" row, because support needs to see what was actually
-// received.
-//
-// The poll loop calls `createCheckoutState` on every status result, and the
-// SETTLED screen adds two more projections on top of it (the payment-data panel
-// and the transaction-details rows) that a pending screen never renders. All of
-// them are covered here, on all three rails, because a bad amount arriving after
-// settlement is exactly when the payer has already parted with their money.
-const NONSENSE_AMOUNTS = [-1, 1.5, Number.MAX_SAFE_INTEGER + 2];
+// `formatMsats` throws on a negative, fractional or unsafe amount — it is the
+// FORMATTER the wire builders, the amount validators, and the display sites
+// share, and a malformed amount from our own server is a bug that must
+// surface. Every panel also reports the raw value under its own
+// "Amount (msats)" row.
 const RAILS = ["lightning", "swap", "checkout_lock"];
 
-function nonsenseAmountSnapshot({ rail, settled, amountMsats }) {
+function amountSnapshot({ rail, settled, amountMsats }) {
   const attempt = {
-    invoice_id: `or_inv_bad_${rail}`,
+    invoice_id: `or_inv_amount_${rail}`,
     // Only the Lightning rail requires a display bolt11; swap and checkout_lock
     // attempts legitimately carry none.
-    invoice: rail === "lightning" ? "lnbc-bad-amount" : null,
+    invoice: rail === "lightning" ? "lnbc-amount" : null,
     rail,
     payment_hash: hash("e"),
     amount_msats: amountMsats,
@@ -820,8 +807,8 @@ function nonsenseAmountSnapshot({ rail, settled, amountMsats }) {
       : {}),
   };
   return {
-    checkout_id: `or_chk_bad_${rail}`,
-    reference: `order-bad-${rail}`,
+    checkout_id: `or_chk_amount_${rail}`,
+    reference: `order-amount-${rail}`,
     status: settled ? "paid" : "open",
     ...(settled ? { paid_at: NOW - 10 } : {}),
     amount_msats: amountMsats,
@@ -833,82 +820,14 @@ function nonsenseAmountSnapshot({ rail, settled, amountMsats }) {
 /** The value of the row with this label, or undefined when no such row exists. */
 const rowValue = (rows, label) => rows.find((row) => row.label === label)?.value;
 
-test("a nonsense amount costs the label, not the payment screen", () => {
-  for (const amountMsats of NONSENSE_AMOUNTS) {
-    for (const rail of RAILS) {
-      for (const settled of [false, true]) {
-        const where = `${rail}/${settled ? "settled" : "pending"}/${amountMsats}`;
-        const snapshot = nonsenseAmountSnapshot({ rail, settled, amountMsats });
-
-        // 1. The state itself: raw amount kept, label blanked, screen alive.
-        const state = browserState(snapshot);
-        assert.equal(state.amount_msats, amountMsats, where);
-        assert.equal(state.amountLabel, undefined, where);
-        assert.equal(reactModel(snapshot).amountLabel, undefined, where);
-        // A checkout_lock attempt is never a display invoice, so that rail
-        // renders the deferred (nothing-minted-yet) screen whatever the snapshot
-        // says — it has no settled screen to reach. Unrelated to the amount;
-        // read the rendering assertions below off the STATE, not the fixture.
-        assert.equal(state.settled, settled && rail !== "checkout_lock", where);
-
-        // 2. The payment-data panel (`<PaymentData source={checkoutModel}>` and
-        //    the element's payment-data block) — settled-screen only, and the
-        //    site the reviewer found throwing.
-        const entries = createPaymentDataEntries(state);
-        assert.equal(rowValue(entries, "Amount"), undefined, where);
-        assert.equal(rowValue(entries, "Amount (msats)"), String(amountMsats), where);
-
-        // 3. The transaction-details rows (`<TransactionDetails>` / the element
-        //    renderer), which take the same state.
-        const rows = createTransactionDetailsFromState(state);
-        assert.equal(rowValue(rows, "Amount"), undefined, where);
-        assert.equal(rowValue(rows, "Amount (msats)"), String(amountMsats), where);
-
-        // 4. The whole screen, both renderers. These are the assertions that
-        //    fail as a THROW rather than as a mismatch when the guard is missing
-        //    from a display site.
-        const reactHtml = renderToStaticMarkup(
-          React.createElement(Checkout, { checkout: snapshot }),
-        );
-        assert.match(reactHtml, /data-openreceive-checkout/, where);
-
-        // `liveState` is what a mounted element passes after a poll
-        // (define-elements.ts), and `amount_msats` is the attribute the caption
-        // is derived from in create mode — both amount paths at once.
-        const elementHtml = renderCheckoutHtml({
-          invoice: state.invoice,
-          rail: state.rail,
-          payment_hash: state.payment_hash,
-          amount_msats: amountMsats,
-          status: state.settled ? "settled" : "pending",
-          liveState: state,
-        });
-        assert.match(elementHtml, /<section part="root"/, where);
-
-        for (const html of [reactHtml, elementHtml]) {
-          // A blanked label must not leave "undefined" or "NaN" behind where the
-          // amount used to be. The element inlines the compiled stylesheet;
-          // scan the markup only.
-          const markup = html.replace(/<style[\s\S]*?<\/style>/g, "");
-          assert.doesNotMatch(markup, /undefined/, where);
-          assert.doesNotMatch(markup, /NaN/, where);
-          // The settled screen still REPORTS the amount it refused to format.
-          if (state.settled) assert.match(markup, /Amount \(msats\)/, where);
-        }
-      }
-    }
-  }
-});
-
-test("a good amount still formats on every rail and both screens", () => {
-  // The blanking rule above must not blank a legitimate amount — including the
-  // legitimate zero, which is falsy and the obvious thing for a guard to get
-  // wrong.
+test("a good amount formats on every rail and both screens", () => {
+  // Including the legitimate zero, which is falsy and the obvious thing for a
+  // formatter guard to get wrong.
   for (const amountMsats of [0, 1_000, 200_000]) {
     for (const rail of RAILS) {
       for (const settled of [false, true]) {
         const where = `${rail}/${settled ? "settled" : "pending"}/${amountMsats}`;
-        const state = browserState(nonsenseAmountSnapshot({ rail, settled, amountMsats }));
+        const state = browserState(amountSnapshot({ rail, settled, amountMsats }));
         const expected = amountMsats === 1_000 ? "1 sat" : `${amountMsats / 1000} sats`;
         assert.equal(state.amountLabel, expected, where);
         assert.equal(
@@ -924,23 +843,11 @@ test("a good amount still formats on every rail and both screens", () => {
   }
 });
 
-// ------------------------------------------ a malformed timestamp is one row --
+// ---------------------------------------------------- timestamp rows render --
 
-// The SAME rule as the amount block above, one field over. `new Date(ms)` is
-// only defined for |ms| <= 8.64e15 (ECMAScript time range), so a unix-seconds
-// value past 8.64e12 makes `toISOString()` throw `RangeError: Invalid time
-// value`. That is not a hypothetical value: 1e13 is exactly what a server that
-// answers `paid_at` in MILLISECONDS instead of seconds sends, and the transport
-// admits it — `optionalSafeInteger(payment.paid_at)` and
-// `requiredSafeInteger(checkout.expires_at)` bound the TYPE, not the MAGNITUDE
-// (a deliberate decision, recorded in checkout-transport.ts).
-//
-// So the display side has to hold: every timestamp renders through
-// `optionalUnixTimeLabel`, and a value no clock can render costs its own row,
-// which is re-added raw under a "(unix seconds)" label — the same trade the
-// amount rows make with "Amount (msats)". Support has to be able to SEE the
-// unit mistake; the payer must not lose the settled screen to it.
-const BAD_TIMESTAMPS = [1e13, 1e15, Number.MAX_SAFE_INTEGER];
+// Every timestamp renders through the one formatter, `formatUnixTime`, which
+// echoes the raw value for anything no clock can render (`new Date(ms)` is
+// only defined for |ms| <= 8.64e15, the ECMAScript time range).
 
 function timestampSnapshot({ rail, settled, settledAt, expiresAt }) {
   const attempt = {
@@ -978,106 +885,10 @@ function timestampSnapshot({ rail, settled, settledAt, expiresAt }) {
   };
 }
 
-test("a malformed timestamp costs the row, not the payment screen", () => {
-  for (const seconds of BAD_TIMESTAMPS) {
-    for (const rail of RAILS) {
-      for (const settled of [false, true]) {
-        const where = `${rail}/${settled ? "settled" : "pending"}/${seconds}`;
-        const snapshot = timestampSnapshot({
-          rail,
-          settled,
-          settledAt: seconds,
-          expiresAt: seconds,
-        });
-
-        // 1. The state itself: raw timestamps kept, screen alive.
-        //
-        //    A checkout_lock attempt is DEFERRED — nothing minted yet — so
-        //    `createCheckoutState` returns the minimal state with no expiry and
-        //    no settlement at all, whatever the fixture says. Same caveat as the
-        //    amount matrix above: read the row assertions off the STATE.
-        const state = browserState(snapshot);
-        assert.equal(state.settled, settled && rail !== "checkout_lock", where);
-        if (rail === "checkout_lock") {
-          assert.equal(state.expires_at, undefined, where);
-          assert.equal(state.settled_at, undefined, where);
-        } else {
-          assert.equal(state.expires_at, seconds, where);
-          if (state.settled) assert.equal(state.settled_at, seconds, where);
-        }
-
-        // 2. The payment-data panel — the settled-screen projection the
-        //    reviewer found throwing out of its `isoDate` helper.
-        const entries = createPaymentDataEntries(state);
-        if (state.expires_at !== undefined) {
-          assert.equal(rowValue(entries, "Invoice expires at"), undefined, where);
-          assert.equal(
-            rowValue(entries, "Invoice expires at (unix seconds)"),
-            String(seconds),
-            where,
-          );
-        }
-        if (state.settled) {
-          assert.equal(rowValue(entries, "Settled at"), undefined, where);
-          assert.equal(rowValue(entries, "Settled at (unix seconds)"), String(seconds), where);
-        }
-
-        // 3. The transaction-details rows, which throw one level down in
-        //    `formatUnixTime` instead.
-        const rows = createTransactionDetailsFromState(state);
-        if (state.expires_at !== undefined) {
-          assert.equal(rowValue(rows, "Expires at"), undefined, where);
-          assert.equal(rowValue(rows, "Expires at (unix seconds)"), String(seconds), where);
-        }
-        if (state.settled) {
-          assert.equal(rowValue(rows, "Settled at"), undefined, where);
-          assert.equal(rowValue(rows, "Settled at (unix seconds)"), String(seconds), where);
-        }
-        if (state.swap !== undefined) {
-          assert.equal(rowValue(rows, "Provider expires at"), undefined, where);
-          assert.equal(
-            rowValue(rows, "Provider expires at (unix seconds)"),
-            String(seconds),
-            where,
-          );
-        }
-
-        // 4. The whole screen, both renderers — the assertions that fail as a
-        //    THROW rather than a mismatch when a display site is unguarded.
-        const reactHtml = renderToStaticMarkup(
-          React.createElement(Checkout, { checkout: snapshot }),
-        );
-        assert.match(reactHtml, /data-openreceive-checkout/, where);
-
-        const elementHtml = renderCheckoutHtml({
-          invoice: state.invoice,
-          rail: state.rail,
-          payment_hash: state.payment_hash,
-          amount_msats: state.amount_msats,
-          status: state.settled ? "settled" : "pending",
-          liveState: state,
-        });
-        assert.match(elementHtml, /<section part="root"/, where);
-
-        for (const html of [reactHtml, elementHtml]) {
-          // A dropped row must not leave "Invalid Date", "undefined" or "NaN"
-          // behind. The element inlines the compiled stylesheet; scan markup only.
-          const markup = html.replace(/<style[\s\S]*?<\/style>/g, "");
-          assert.doesNotMatch(markup, /undefined/, where);
-          assert.doesNotMatch(markup, /NaN/, where);
-          assert.doesNotMatch(markup, /Invalid Date/, where);
-        }
-      }
-    }
-  }
-});
-
-test("a legitimate timestamp still formats on every rail and both panels", () => {
-  // The guard above must not start blanking valid dates — the whole point of
-  // bounding the magnitude is that everything INSIDE the bound still renders.
-  // The far edge of the ECMAScript time range is included on purpose: it is the
-  // largest value the boundary must still accept, and an off-by-one in the
-  // comparison would blank it.
+test("a legitimate timestamp formats on every rail and both panels", () => {
+  // The far edge of the ECMAScript time range is included on purpose: it is
+  // the largest value the formatter renders as a date, and an off-by-one in
+  // the comparison would degrade it to the raw echo.
   const MAX_DISPLAYABLE = 8.64e12;
   for (const rail of RAILS) {
     for (const settled of [false, true]) {
@@ -1088,9 +899,8 @@ test("a legitimate timestamp still formats on every rail and both panels", () =>
 
       const entries = createPaymentDataEntries(state);
       const rows = createTransactionDetailsFromState(state);
-      // Deferred checkout_lock has no timestamps to render at all (see above);
-      // pinning that here keeps the guard from being credited for a row the
-      // state never carried.
+      // Deferred checkout_lock has no timestamps to render at all: nothing is
+      // minted yet, so the state carries no expiry or settlement.
       if (state.expires_at === undefined) {
         assert.equal(rail, "checkout_lock", where);
         assert.equal(rowValue(entries, "Invoice expires at"), undefined, where);
@@ -1098,22 +908,18 @@ test("a legitimate timestamp still formats on every rail and both panels", () =>
         continue;
       }
       assert.equal(rowValue(entries, "Invoice expires at"), iso(NOW + 600), where);
-      assert.equal(rowValue(entries, "Invoice expires at (unix seconds)"), undefined, where);
       assert.equal(rowValue(rows, "Expires at"), iso(NOW + 600), where);
-      assert.equal(rowValue(rows, "Expires at (unix seconds)"), undefined, where);
       if (state.settled) {
         assert.equal(rowValue(entries, "Settled at"), iso(NOW - 10), where);
-        assert.equal(rowValue(entries, "Settled at (unix seconds)"), undefined, where);
         assert.equal(rowValue(rows, "Settled at"), iso(NOW - 10), where);
       }
       if (state.swap !== undefined) {
         assert.equal(rowValue(rows, "Provider expires at"), iso(NOW + 600), where);
-        assert.equal(rowValue(rows, "Provider expires at (unix seconds)"), undefined, where);
       }
     }
   }
 
-  // The bound itself, at both ends, straight through the barrel formatter.
+  // The formatter's own bound, at both ends.
   assert.equal(formatUnixTime(MAX_DISPLAYABLE), "+275760-09-13T00:00:00Z");
   assert.equal(formatUnixTime(1), "1970-01-01T00:00:01Z");
   // One second past the range is not a date any more, so the formatter answers

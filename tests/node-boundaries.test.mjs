@@ -158,28 +158,26 @@ test("Node service creates without persistence and verifies by payment_hash", as
 
   const first = await openreceive.createCheckout({
     reference: "order-1",
-    amount: { currency: "USD", value: "10.00" },
+    amount: { sats: 1000 },
   });
   const second = await openreceive.createCheckout({
     reference: "order-1",
-    amount: { currency: "USD", value: "10.00" },
+    amount: { sats: 1000 },
   });
   assert.notEqual(first.paymentHash, second.paymentHash, "host payment repository is the guard");
   assert.equal(
     (
-      await openreceive.checkPayment({
-        paymentHash: first.paymentHash,
-        createdAt: first.createdAt,
+      await openreceive.reconcilePayments({
+        attempts: [{ paymentHash: first.paymentHash, createdAt: first.createdAt }],
       })
-    ).status,
+    )[0].status,
     "pending",
   );
 
   now = 1100;
   wallet.settleInvoice({ payment_hash: first.paymentHash }, { settled_at: now });
-  const paid = await openreceive.checkPayment({
-    paymentHash: first.paymentHash,
-    createdAt: first.createdAt,
+  const [paid] = await openreceive.reconcilePayments({
+    attempts: [{ paymentHash: first.paymentHash, createdAt: first.createdAt }],
   });
   assert.equal(paid.status, "settled");
   assert.equal(paid.paidAt, 1100);

@@ -471,19 +471,17 @@ class FixedFloatProviderTest < Minitest::Test
     assert_equal "awaiting_deposit", order.fetch("state")
   end
 
-  def test_create_swap_rejects_a_deposit_address_invalid_for_the_asset
+  def test_create_swap_stores_the_deposit_address_the_provider_sent
     provider, = make_provider(
       "ccies" => SAMPLE_CCIES,
       "create" => CREATE_DATA.merge(
         "from" => { "code" => "USDTTRC", "amount" => "12.5", "address" => ETH_ADDRESS }
       )
     )
-    error = assert_raises(RuntimeError) do
-      provider.create_swap(
-        pay_in_asset: "USDT_TRON", bolt11: BOLT11, invoice_amount_msats: INVOICE_AMOUNT_MSATS
-      )
-    end
-    assert_match(/deposit address is not valid for this asset/, error.message)
+    order = provider.create_swap(
+      pay_in_asset: "USDT_TRON", bolt11: BOLT11, invoice_amount_msats: INVOICE_AMOUNT_MSATS
+    )
+    assert_equal ETH_ADDRESS, order.fetch("deposit_address")
   end
 
   def test_get_status_maps_every_recognized_status_to_its_provider_state

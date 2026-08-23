@@ -113,9 +113,8 @@ test("createOpenReceive attaches a console logger when the host omits logger", a
       logging: { enabled: false },
     });
     try {
-      await service.checkPayment({
-        paymentHash: created.payment_hash,
-        createdAt: created.created_at,
+      await service.reconcilePayments({
+        attempts: [{ paymentHash: created.payment_hash, createdAt: created.created_at }],
       });
     } finally {
       await service.close();
@@ -125,10 +124,10 @@ test("createOpenReceive attaches a console logger when the host omits logger", a
       lines.some(
         (args) =>
           typeof args[0] === "string" &&
-          args[0].includes("payment.check.completed") &&
+          args[0].includes("payment.reconcile.completed") &&
           args[0].includes("[openreceive]"),
       ),
-      "expected default console logger to emit payment.check.completed",
+      "expected default console logger to emit payment.reconcile.completed",
     );
   } finally {
     console.info = previousLog;

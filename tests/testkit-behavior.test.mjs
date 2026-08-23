@@ -28,9 +28,8 @@ test("a preimage-only scripted transaction leaves the attempt pending", async ()
   ]);
 
   now = 1100;
-  const checked = await openreceive.checkPayment({
-    paymentHash: checkout.paymentHash,
-    createdAt: checkout.createdAt,
+  const [checked] = await openreceive.reconcilePayments({
+    attempts: [{ paymentHash: checkout.paymentHash, createdAt: checkout.createdAt }],
   });
   assert.equal(checked.status, "pending");
 
@@ -43,9 +42,8 @@ test("a preimage-only scripted transaction leaves the attempt pending", async ()
 
   // Positive control: the finality signal is what settles the attempt.
   wallet.settleInvoice({ payment_hash: checkout.paymentHash }, { settled_at: now });
-  const settled = await openreceive.checkPayment({
-    paymentHash: checkout.paymentHash,
-    createdAt: checkout.createdAt,
+  const [settled] = await openreceive.reconcilePayments({
+    attempts: [{ paymentHash: checkout.paymentHash, createdAt: checkout.createdAt }],
   });
   assert.equal(settled.status, "settled");
   await openreceive.close();
@@ -78,9 +76,8 @@ test("a raw preimage-only wallet row (no state, no settled_at) stays pending", a
   ]);
 
   now = 1100;
-  const checked = await openreceive.checkPayment({
-    paymentHash: checkout.paymentHash,
-    createdAt: checkout.createdAt,
+  const [checked] = await openreceive.reconcilePayments({
+    attempts: [{ paymentHash: checkout.paymentHash, createdAt: checkout.createdAt }],
   });
   assert.equal(checked.status, "pending");
   await openreceive.close();

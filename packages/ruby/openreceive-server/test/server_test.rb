@@ -232,16 +232,20 @@ class StorageFreeServerTest < Minitest::Test
   def test_checkout_and_payment_check_are_storage_free
     checkout = @service.create_checkout("reference" => "ruby-1", "amount" => { "sats" => 1000 })
     refute_respond_to @service, :store
-    assert_equal "pending", @service.check_payment(
-      "payment_hash" => checkout["payment_hash"],
-      "created_at" => checkout["created_at"]
-    )["status"]
+    assert_equal "pending", @service.reconcile_payments(
+      "attempts" => [{
+        "payment_hash" => checkout["payment_hash"],
+        "created_at" => checkout["created_at"]
+      }]
+    ).first["status"]
     @wallet.transactions.first["transaction_state"] = "settled"
     @wallet.transactions.first["settled_at"] = 1010
-    assert_equal 1010, @service.check_payment(
-      "payment_hash" => checkout["payment_hash"],
-      "created_at" => checkout["created_at"]
-    )["paid_at"]
+    assert_equal 1010, @service.reconcile_payments(
+      "attempts" => [{
+        "payment_hash" => checkout["payment_hash"],
+        "created_at" => checkout["created_at"]
+      }]
+    ).first["paid_at"]
   end
 
   def test_create_checkout_fails_closed_when_wallet_ignores_requested_expiry
@@ -534,17 +538,14 @@ class StorageFreeServerTest < Minitest::Test
     assert_equal 1060, requests.first.fetch("until")
   end
 
-  # payments/check goes through the same truncation-aware walk: a scan that
-  # could not prove the invoice present or absent is a scan failure, never
-  # not_found.
-  def test_check_payment_raises_when_the_walk_cannot_prove_absence
+  # A truncated list_transactions walk omits the hash rather than reporting
+  # not_found, so a caller cannot close a paid attempt from an incomplete scan.
+  def test_reconcile_payments_omits_a_hash_the_walk_cannot_prove
     wallet = PagedWallet.new([filler_page(0)], ignore_offset: true)
-    error = assert_raises(RuntimeError) do
-      paged_service(wallet).check_payment(
-        "payment_hash" => "2" * 64, "created_at" => 1000
-      )
-    end
-    assert_match(/payment reconciliation did not complete/, error.message)
+    results = paged_service(wallet).reconcile_payments(
+      "attempts" => [{ "payment_hash" => "2" * 64, "created_at" => 1000 }]
+    )
+    assert_equal [], results
   end
 
   # The refund address is the last chance to recover a mis-sent deposit: it is
@@ -594,12 +595,6 @@ class StorageFreeServerTest < Minitest::Test
   # ignoring them. The Ruby service takes snake_case only: a camelCase key is
   # not a second accepted spelling, it is simply a missing field.
   def test_service_input_keys_are_snake_case_only
-    assert_raises(OpenReceive::Server::ValidationError) do
-      @service.check_payment("paymentHash" => "1" * 64, "createdAt" => 1000)
-    end
-    assert_raises(OpenReceive::Server::ValidationError) do
-      @service.check_payment("payment_hash" => "1" * 64, "createdAt" => 1000)
-    end
     service = OpenReceive::Server::Service.new(
       nwc_client: @wallet,
       price_provider: nil,
@@ -622,9 +617,6 @@ class StorageFreeServerTest < Minitest::Test
   # Missing required inputs are payer errors: 400 INVALID_REQUEST, never a
   # bare KeyError surfacing as an opaque 500 (matches prepare_checkout).
   def test_missing_inputs_map_to_validation_errors
-    assert_raises(OpenReceive::Server::ValidationError) do
-      @service.check_payment("payment_hash" => "1" * 64)
-    end
     service = OpenReceive::Server::Service.new(
       nwc_client: @wallet,
       price_provider: nil,

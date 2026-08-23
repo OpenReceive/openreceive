@@ -82,8 +82,8 @@ unless ENV["OPENRECEIVE_LIVE_CREATE_INVOICE"] == "1"
 end
 
 # Settlement is proven through the PRODUCTION reconcile path — the server
-# gem's Service#check_payment (settled-first then inclusive-unpaid walk over
-# padded windows via the core scan) — never through a hand-rolled
+# gem's Service#reconcile_payments (settled-first then inclusive-unpaid walk
+# over padded windows via the core scan) — never through a hand-rolled
 # list_transactions query. `npm run test:live:ruby:nwc` puts only the core gem
 # on the load path, so the server gem's lib is added here.
 server_lib = File.join(ROOT, "packages/ruby/openreceive-server/lib")
@@ -106,15 +106,15 @@ invoice = client.make_invoice(
 puts "Created Ruby live invoice payment hash prefix: #{invoice.fetch("payment_hash")[0, 8]}..."
 
 def check_live_payment(service, invoice)
-  service.check_payment(
-    "payment_hash" => invoice.fetch("payment_hash"),
-    "created_at" => invoice.fetch("created_at")
-  )
-rescue RuntimeError => e
-  raise unless e.message.include?("reconciliation did not complete")
+  checked = service.reconcile_payments(
+    "attempts" => [{
+      "payment_hash" => invoice.fetch("payment_hash"),
+      "created_at" => invoice.fetch("created_at")
+    }]
+  ).first
   # A truncated wallet-history walk proves nothing; report it as still pending
   # and let the caller scan again.
-  { "payment_hash" => invoice.fetch("payment_hash"), "status" => "scan_incomplete" }
+  checked || { "payment_hash" => invoice.fetch("payment_hash"), "status" => "scan_incomplete" }
 end
 
 check = check_live_payment(service, invoice)

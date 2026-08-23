@@ -6,8 +6,8 @@
 
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { recordOrEmpty } from "@openreceive/core";
 import { WalletPreflightError } from "./errors.ts";
-import { asRecord } from "./normalize.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -55,7 +55,7 @@ export async function createDefaultAlbyNwcClient(
   const dynamicImport = new Function("specifier", "return import(specifier)") as (
     specifier: string,
   ) => Promise<unknown>;
-  const namespace = asRecord(
+  const namespace = recordOrEmpty(
     await dynamicImport(pathToFileURL(require.resolve("@getalby/sdk/nwc")).href),
   );
   const Constructor = namespace.NWCClient as unknown;
@@ -93,7 +93,7 @@ export async function closeNwcNotificationSubscription(subscription: unknown): P
     await (subscription as () => unknown)();
     return;
   }
-  const record = asRecord(subscription);
+  const record = recordOrEmpty(subscription);
   for (const name of ["unsub", "unsubscribe", "close", "stop"]) {
     const method = record[name];
     if (typeof method === "function") {

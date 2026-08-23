@@ -93,6 +93,20 @@ class OpenReceiveCoreTest < Minitest::Test
     refute OpenReceive::Nwc.normalize_transaction("payment_hash" => "c" * 64, "settled" => false)
       .key?("transaction_state")
   end
+
+  def test_unrecognized_list_transactions_shape_fails_the_scan
+    # An empty-looking scan at/after expiry+grace closes pending attempts as
+    # expired, so a non-empty reply in an unknown shape must raise rather than
+    # read as an empty scan. A genuinely empty reply is an empty scan.
+    assert_equal [], OpenReceive.normalize_list_transactions_response(nil).fetch("transactions")
+    assert_equal [], OpenReceive.normalize_list_transactions_response({}).fetch("transactions")
+    wrapped = OpenReceive.normalize_list_transactions_response("result" => { "transactions" => [] })
+    assert_equal [], wrapped.fetch("transactions")
+    assert_raises(ArgumentError) do
+      OpenReceive.normalize_list_transactions_response("result" => { "rows" => [] })
+    end
+    assert_raises(ArgumentError) { OpenReceive.normalize_list_transactions_response("ok") }
+  end
 end
 
 class OpenReceivePaymentsWalkTest < Minitest::Test

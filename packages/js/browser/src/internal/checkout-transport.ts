@@ -4,7 +4,7 @@
 // CheckoutSnapshot. Every URL comes from ./routes.ts, derived from the caller's
 // `prefix` — this module never accepts a route of its own.
 
-import { isRecord, nonEmptyString } from "@openreceive/core";
+import { isRecord, nonEmptyString, recordOrEmpty } from "@openreceive/core";
 import { requestHeaders } from "./request-headers.ts";
 import { type Routes, checkoutRoutes } from "./routes.ts";
 import {
@@ -17,9 +17,8 @@ import {
   type PrepareCheckoutOptions,
   type RequestCheckoutOptions,
 } from "./ui.ts";
-import { assertBrowserPayloadSafe, assertDisplayInvoice } from "./checkout-invoice.ts";
+import { assertDisplayInvoice } from "./checkout-invoice.ts";
 import {
-  asRecord,
   optionalRecord,
   optionalSafeInteger,
   requiredSafeInteger,
@@ -142,7 +141,6 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     ...(request.memo === undefined ? {} : { memo: request.memo }),
     ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
   };
-  assertBrowserPayloadSafe(requestBody);
 
   const headers = request.headers === undefined ? {} : request.headers;
   const response = await fetcher(request.routes.checkouts, {
@@ -228,25 +226,13 @@ export function createStatusFetcher(
     });
     const body = await readJsonResponse(response, "Could not refresh invoice status.");
 
-    const payment = asRecord(body);
+    const payment = recordOrEmpty(body);
     const next = structuredClone(snapshot);
     if (next.active === undefined) return next;
     const state = nonEmptyString(payment.status) ?? "pending";
     let active = {
       ...next.active,
       transaction_state: state === "not_found" ? "pending" : state,
-      // DECIDED — this boundary bounds the TYPE of a timestamp, not its
-      // MAGNITUDE, and deliberately admits a `paid_at` big enough to be outside
-      // the ECMAScript `Date` range (1e13 = the classic seconds/milliseconds
-      // mix-up). Rejecting it here would mean either throwing, which loses a
-      // whole status poll over one cosmetic field, or dropping it, which erases
-      // the evidence of the unit bug from the panel whose job is to report what
-      // arrived. Neither is worth it, because the damage is already contained
-      // where it lands: every display site formats through
-      // `optionalUnixTimeLabel`, so an unrenderable timestamp costs its own row
-      // and is re-shown raw under a "(unix seconds)" label. Same call the amount
-      // path made — `requiredSafeInteger` still admits any safe-integer
-      // `amount_msats` and `optionalMsatsLabel` blanks the label.
       ...(optionalSafeInteger(payment.paid_at) === undefined
         ? {}
         : { settled_at: optionalSafeInteger(payment.paid_at) }),
@@ -267,7 +253,7 @@ export function createStatusFetcher(
           headers: requestHeaders(headers),
           body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
         });
-        const swapBody = asRecord(
+        const swapBody = recordOrEmpty(
           await readJsonResponse(swapResponse, "Could not refresh swap status."),
         );
         active = mergeSwapStatusIntoInvoice(active, swapBody);
@@ -308,7 +294,6 @@ function mergeSwapStatusIntoInvoice<
   const merged: Record<string, unknown> = { ...swap };
   const providerState = nonEmptyString(status.provider_state);
   if (providerState !== undefined) merged.provider_state = providerState;
-  // Type-bounded only; see the `paid_at` note above.
   const providerExpiresAt = optionalSafeInteger(status.provider_expires_at);
   if (providerExpiresAt !== undefined) merged.provider_expires_at = providerExpiresAt;
   for (const key of [
@@ -342,7 +327,7 @@ function checkoutLockSnapshotFromPrepareBody(
   body: unknown,
   fallbackReference: string,
 ): CheckoutSnapshot {
-  const record = asRecord(body);
+  const record = recordOrEmpty(body);
   const reference = nonEmptyString(record.reference) ?? fallbackReference;
   const amountMsats = requiredSafeInteger(record.amount_msats, "amount_msats");
   const lockId = `lock:${reference}`;
@@ -375,8 +360,8 @@ function checkoutLockSnapshotFromPrepareBody(
 }
 
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
-  const record = asRecord(body);
-  const wrapped = asRecord(record.checkout);
+  const record = recordOrEmpty(body);
+  const wrapped = recordOrEmpty(record.checkout);
   return checkoutSnapshot(wrapped);
 }
 
@@ -392,8 +377,6 @@ function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
     amount_msats: amountMsats,
     transaction_state: "pending",
     workflow_state: "invoice_created",
-    // Type-bounded only, on purpose; see the `paid_at` note above for why the
-    // magnitude is left to the display boundary.
     expires_at: requiredSafeInteger(checkout.expires_at, "expires_at"),
     ...(isRecord(checkout.fiat_quote) || checkout.fiat_quote === null
       ? { fiat_quote: checkout.fiat_quote as CheckoutInvoiceSnapshot["fiat_quote"] }
@@ -417,7 +400,7 @@ function normalizePaymentMethods(value: unknown): readonly CheckoutPaymentMethod
 }
 
 function normalizePaymentMethod(input: unknown): CheckoutPaymentMethod | undefined {
-  const record = asRecord(input);
+  const record = recordOrEmpty(input);
   const payInAsset = nonEmptyString(record.pay_in_asset);
   const label = nonEmptyString(record.label);
   const networkLabel = nonEmptyString(record.network_label);

@@ -646,49 +646,17 @@ test("attributes the element writes never re-enter its own callback", async () =
   }
 });
 
-test("a nonsense amount-msats costs the amount label, not the element", async () => {
-  // The host copies `amount-msats` straight out of a checkout snapshot
-  // (createOpenReceiveCheckoutElementAttributes writes String(amount_msats)), so
-  // this attribute carries SERVER data. It used to be read with the strict
-  // integer parser, which threw inside render() and took the whole payment
-  // screen down over a number the payer could do nothing about.
+test("amount-msats renders on the settled screen and a non-number carries no amount", async () => {
+  // `createOpenReceiveCheckoutElementAttributes` writes `amount-msats` from a
+  // checkout snapshot; readElementAmountMsats reads it leniently so create
+  // mode can omit it — an attribute that is no number at all simply carries no
+  // amount rather than rendering NaN.
   const fetchStub = createFetchStub({
     "/payments/check": () => ({ status: "settled", paid_at: Math.floor(Date.now() / 1000) }),
   });
   globalThis.fetch = fetchStub;
   const paymentHash = "f".repeat(64);
   const element = mount({
-    reference: "order-bad-amount",
-    prefix: "/openreceive",
-    "invoice-id": paymentHash,
-    invoice: `lnbc-${paymentHash}`,
-    "payment-hash": paymentHash,
-    "amount-msats": "-1",
-    status: "settled",
-  });
-
-  try {
-    await flush(4);
-    const html = element.shadowRoot?.innerHTML ?? "";
-    assert.match(html, /<section part="root"/, "the element must still render");
-    // The formatted amount is gone; the raw value is still reported.
-    assert.doesNotMatch(html, /-1 msats/);
-    assert.match(html, /Amount \(msats\)/);
-    assert.match(html, />-1</);
-
-    // An attribute that is no number at all is dropped rather than shown.
-    element.setAttribute("amount-msats", "not-a-number");
-    await flush(4);
-    const junk = element.shadowRoot?.innerHTML ?? "";
-    assert.match(junk, /<section part="root"/);
-    assert.doesNotMatch(junk, /NaN/);
-  } finally {
-    element.remove();
-  }
-
-  // The rule must not blank a GOOD amount on this rail: same element, same
-  // settled screen, a legitimate value.
-  const good = mount({
     reference: "order-good-amount",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
@@ -697,118 +665,59 @@ test("a nonsense amount-msats costs the amount label, not the element", async ()
     "amount-msats": "21000",
     status: "settled",
   });
+
   try {
     await flush(4);
-    assert.match(good.shadowRoot?.innerHTML ?? "", /21 sats \(21000 msats\)/);
+    assert.match(element.shadowRoot?.innerHTML ?? "", /21 sats \(21000 msats\)/);
+
+    element.setAttribute("amount-msats", "not-a-number");
+    await flush(4);
+    const junk = element.shadowRoot?.innerHTML ?? "";
+    assert.match(junk, /<section part="root"/);
+    assert.doesNotMatch(junk, /NaN/);
   } finally {
-    good.remove();
+    element.remove();
   }
 });
 
-test("a hostile expires-at costs the countdown, not the element", async () => {
-  // `expires-at` carries SERVER data, exactly as `amount-msats` does:
-  // createOpenReceiveCheckoutElementAttributes writes String(invoice.expires_at),
-  // and the only bound on the way in is a TYPE bound — swap-http.ts checks
-  // `typeof provider_expires_at !== "number"`, checkout-transport.ts's
-  // optional/requiredSafeInteger admit negatives. Read back with the strict
-  // integer parser it threw RangeError inside render() (and again inside
-  // currentCheckoutSnapshot), and nothing wraps render(), so one bad timestamp
-  // blanked the whole payment screen and every wrapper built on it.
+test("a missing or non-numeric expires-at costs the countdown, not the element", async () => {
+  // Create mode legitimately omits `expires-at`, so readElementExpiresAt reads
+  // it leniently: missing, empty, or no number at all answers undefined rather
+  // than throwing inside render().
   const fetchStub = createFetchStub({
     "/payments/check": () => ({ status: "pending" }),
   });
   globalThis.fetch = fetchStub;
   const paymentHash = "c".repeat(64);
   const element = mount({
-    reference: "order-bad-expiry",
+    reference: "order-no-expiry",
     prefix: "/openreceive",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
     "payment-hash": paymentHash,
     "amount-msats": "21000",
-    "expires-at": "-1",
+    "expires-at": "not-a-number",
   });
-
-  /** Assert the countdown row is gone and the pay pane the payer needs is not. */
-  const expectCountdownGoneScreenIntact = (html, label) => {
-    assert.match(html, /<section part="root"/, `${label}: the element must still render`);
-    // The rest of the screen is intact — the amount the payer must send is the
-    // whole point of the screen and does not depend on the expiry.
-    assert.match(html, /21 sats/, `${label}: the amount must survive`);
-    assert.doesNotMatch(html, /Invoice expires in/, `${label}: no countdown row`);
-    assert.doesNotMatch(html, /NaN/, `${label}: nothing renders NaN`);
-    // Belt and braces on the one failure this test exists to prevent: an
-    // absurd countdown is worse than no countdown, and it renders as a
-    // five-plus-digit minute figure ("29759354970:54").
-    assert.doesNotMatch(html, /\d{5,}:\d\d/, `${label}: no absurd countdown`);
-  };
 
   try {
     await flush(4);
-    // A negative expiry describes no deadline.
-    expectCountdownGoneScreenIntact(element.shadowRoot?.innerHTML ?? "", "-1");
-
+    const html = element.shadowRoot?.innerHTML ?? "";
+    assert.match(html, /<section part="root"/, "the element must still render");
+    assert.match(html, /21 sats/, "the amount must survive");
+    assert.doesNotMatch(html, /Invoice expires in/, "no countdown row");
     // currentCheckoutSnapshot() reads the same attribute on the poll path, so a
     // rendered screen is not proof on its own: polling must survive it too.
     await until(() => fetchStub.pathCount("/payments/check") > 0, {
-      label: "status request past a hostile expires-at",
+      label: "status request without a usable expires-at",
     });
-
-    // An attribute that is no number at all is dropped rather than shown.
-    element.setAttribute("expires-at", "not-a-number");
-    await flush(4);
-    expectCountdownGoneScreenIntact(element.shadowRoot?.innerHTML ?? "", "not-a-number");
-
-    // THE UNIT MISTAKE, in the two shapes it actually arrives in — the reason
-    // this attribute needs a DEADLINE bound and not only the label's
-    // renderability bound. Both of these are inside the ECMAScript `Date`
-    // range (a millisecond timestamp today is ~1.79e12, well under the 8.64e12
-    // ceiling), so `optionalUnixTimeLabel` alone KEEPS them, and the countdown
-    // that came out read "29759354970:54" — twenty-nine billion minutes.
-    const seconds = Math.floor(Date.now() / 1000) + 900;
-    element.setAttribute("expires-at", String(seconds * 1000));
-    await flush(4);
-    expectCountdownGoneScreenIntact(
-      element.shadowRoot?.innerHTML ?? "",
-      "the real expiry sent in milliseconds",
-    );
-
-    element.setAttribute("expires-at", String(Date.now()));
-    await flush(4);
-    expectCountdownGoneScreenIntact(
-      element.shadowRoot?.innerHTML ?? "",
-      "Date.now() handed over verbatim",
-    );
-
-    // Microseconds overshoot far enough to fail the renderability bound too;
-    // asserted here so the two bounds are known to agree, not to compete.
-    element.setAttribute("expires-at", String(seconds * 1_000_000));
-    await flush(4);
-    expectCountdownGoneScreenIntact(element.shadowRoot?.innerHTML ?? "", "microseconds");
-
-    // ...and so is a value past the ECMAScript `Date` range entirely, which is
-    // all the renderability bound was ever able to catch on its own.
-    element.setAttribute("expires-at", "1e15");
-    await flush(4);
-    const outOfRange = element.shadowRoot?.innerHTML ?? "";
-    expectCountdownGoneScreenIntact(outOfRange, "past the Date range");
-
-    // Every hostile value above cost the countdown ROW and nothing else: the
-    // pane the payer actually pays from is still on the screen throughout.
-    assert.match(outOfRange, /part="qr"/);
-    assert.match(outOfRange, /Bitcoin Lightning invoice/);
-    assert.match(outOfRange, /Waiting for payment/);
   } finally {
     element.remove();
   }
 });
 
 test("an expires-at already in the past still reaches the expired screen", async () => {
-  // The edge the deadline bound must not eat. A past deadline is not
-  // implausible — it is the expired screen's whole input — so only the FUTURE
-  // side of the window is bounded. Sibling of the renderCheckoutHtml case in
-  // tests/elements.test.mjs, on the ATTRIBUTE path, which is the one
-  // readElementExpiresAt guards.
+  // A past deadline is the expired screen's whole input. Sibling of the
+  // renderCheckoutHtml case in tests/elements.test.mjs, on the ATTRIBUTE path.
   globalThis.fetch = createFetchStub({
     "/payments/check": () => ({ status: "pending" }),
   });
