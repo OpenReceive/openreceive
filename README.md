@@ -28,8 +28,8 @@ Optional Inbound Currencies:
 | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana)      | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana                                                                                                                                                                                                           | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
 | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether)       | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                                                                                                                       | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
 
-OpenReceive does not transmit money or hold customer funds. OpenReciev helps your
-backend create invoices and safely verify settlement... nothing more.
+OpenReceive does not transmit money or hold customer funds. OpenReceive only helps your
+backend create invoices and safely verify settlement.
 
 ## Quickstart
 
@@ -41,8 +41,8 @@ Pick your stack:
 | Ruby on Rails | [Rails quickstart](docs/guides/quickstart-rails.md) |
 | BTCPay Server | Coming soon                                         |
 
-Each one is the same loop: your server owns the price and the order, the payer
-gets QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the settlement
+On all platforms: Your server owns the price and the order, the payer
+getsa QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the settlement
 transaction.
 
 ## Paranoid Security Defaults
