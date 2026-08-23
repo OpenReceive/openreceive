@@ -92,9 +92,10 @@ export interface AlbyNwcReceiveClientOptions {
   requirePreflight?: boolean;
   logger?: NwcEndpointLogger;
   /**
-   * Explicit override: boot even when the wallet info event advertises spend
-   * methods such as `pay_invoice`. Defaults to `false`, which makes preflight
-   * fail closed on a spend-capable connection.
+   * Explicit override: boot even when the connection advertises spend methods
+   * such as `pay_invoice` — in `get_info.methods`, or in the kind-13194 info
+   * event when the client exposes no `get_info`. Defaults to `false`, which
+   * makes preflight fail closed on a spend-capable connection.
    */
   allowSpendCapableWallet?: boolean;
   /**
@@ -127,6 +128,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
   #allowSpendCapableWallet: boolean;
   #spendCapabilityWarningDelayMs: number;
   #spendCapabilityWarning: (message: string) => void;
+  #closed = false;
 
   constructor(options: AlbyNwcReceiveClientOptions) {
     this.#connectionString = options.connectionString;
@@ -170,57 +172,47 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
 
   async preflight(): Promise<WalletCapabilitySummary> {
     const client = await this.getClient();
-    // Prefer the NIP-47 info event (kind 13194) via getWalletServiceInfo when available.
-    const usesInfoEvent = typeof client.getWalletServiceInfo === "function";
-    const infoMethod = usesInfoEvent ? "getWalletServiceInfo" : "get_info";
-    this.#log(
-      "debug",
-      usesInfoEvent ? "nwc.info_event.requested" : "nwc.get_info.requested",
-      usesInfoEvent
-        ? "Fetching NWC wallet info event (kind 13194)."
-        : "Calling NWC wallet get_info.",
-      { method: infoMethod },
-    );
-    const startedAt = Date.now();
-    let rawInfo: unknown;
-    try {
-      rawInfo =
-        usesInfoEvent && client.getWalletServiceInfo !== undefined
-          ? await client.getWalletServiceInfo()
-          : await callRequiredMethod(client, ["getInfo", "get_info"], {});
-    } catch (error) {
-      const normalized = normalizeNwcWalletError(error);
+    // NIP-47 keeps two lists apart. `get_info.methods` is what THIS connection
+    // may call; the kind-13194 info event advertises the wallet service at
+    // large, plus its encryption modes. Receive-only is proved from the
+    // connection's own list — a service that also serves spend-capable apps
+    // still hands out receive-only connections — and the event supplies
+    // encryption. The event stands in for the method list only when the
+    // client exposes no get_info.
+    const hasGetInfo =
+      typeof client.getInfo === "function" || typeof client.get_info === "function";
+    const hasInfoEvent = typeof client.getWalletServiceInfo === "function";
+    const rawInfo =
+      hasGetInfo || !hasInfoEvent
+        ? await this.#fetchWalletInfo("get_info", () =>
+            callRequiredMethod(client, ["getInfo", "get_info"], {}),
+          )
+        : undefined;
+    const rawServiceInfo = hasInfoEvent
+      ? await this.#fetchWalletInfo("info_event", () =>
+          (client.getWalletServiceInfo as () => Promise<unknown>)(),
+        )
+      : undefined;
+    if (rawInfo === undefined) {
       this.#log(
-        "error",
-        usesInfoEvent ? "nwc.info_event.failed" : "nwc.get_info.failed",
-        usesInfoEvent
-          ? "NWC wallet info event (kind 13194) fetch failed."
-          : "NWC wallet get_info failed.",
-        {
-          method: infoMethod,
-          duration_ms: Date.now() - startedAt,
-          error_code: normalized.code,
-          error_message: normalized.message,
-        },
+        "warn",
+        "nwc.info_event.methods_fallback",
+        "NWC client exposes no get_info; proving receive-only from the service-wide info event (kind 13194) rather than this connection's own method list.",
       );
-      throw normalized;
     }
-    const summary = summarizeWalletCapabilities(this.#connection, rawInfo);
-
-    this.#log(
-      "debug",
-      usesInfoEvent ? "nwc.info_event.completed" : "nwc.get_info.completed",
-      usesInfoEvent
-        ? "NWC wallet info event (kind 13194) loaded."
-        : "NWC wallet get_info completed.",
-      {
-        method: infoMethod,
-        duration_ms: Date.now() - startedAt,
-        methods: summary.methods,
-        receive_checkout_ready: summary.receiveCheckoutReady,
-        spend_capability_advertised: summary.spendCapabilityAdvertised,
-      },
+    const summary = summarizeWalletCapabilities(
+      this.#connection,
+      rawInfo ?? rawServiceInfo,
+      rawServiceInfo,
     );
+
+    this.#log("debug", "nwc.preflight.summarized", "NWC wallet capabilities summarized.", {
+      methods_source: rawInfo === undefined ? "info_event" : "get_info",
+      methods: summary.methods,
+      encryption: summary.encryption,
+      receive_checkout_ready: summary.receiveCheckoutReady,
+      spend_capability_advertised: summary.spendCapabilityAdvertised,
+    });
 
     if (!summary.receiveCheckoutReady) {
       throw new WalletPreflightError(
@@ -246,7 +238,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
         this.#log(
           "error",
           "nwc.spend_capability_advertised",
-          "NWC info event advertises send-payment methods; refusing to boot without an explicit override.",
+          "NWC connection advertises send-payment methods; refusing to boot without an explicit override.",
           { methods: spendMethods },
         );
         throw new WalletPreflightError(
@@ -261,7 +253,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
       this.#log(
         "error",
         "nwc.spend_capability_advertised",
-        "NWC info event advertises send-payment methods; continuing because the spend-capable override is set.",
+        "NWC connection advertises send-payment methods; continuing because the spend-capable override is set.",
         { methods: spendMethods },
       );
       try {
@@ -506,8 +498,43 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     };
   }
 
+  async #fetchWalletInfo(
+    source: "get_info" | "info_event",
+    call: () => Promise<unknown>,
+  ): Promise<unknown> {
+    const method = source === "get_info" ? "get_info" : "getWalletServiceInfo";
+    const label = source === "get_info" ? "get_info" : "info event (kind 13194)";
+    this.#log("debug", `nwc.${source}.requested`, `Fetching NWC wallet ${label}.`, { method });
+    const startedAt = Date.now();
+    try {
+      const raw = await call();
+      this.#log("debug", `nwc.${source}.completed`, `NWC wallet ${label} loaded.`, {
+        method,
+        duration_ms: Date.now() - startedAt,
+      });
+      return raw;
+    } catch (error) {
+      const normalized = normalizeNwcWalletError(error);
+      this.#log("error", `nwc.${source}.failed`, `NWC wallet ${label} fetch failed.`, {
+        method,
+        duration_ms: Date.now() - startedAt,
+        error_code: normalized.code,
+        error_message: normalized.message,
+      });
+      throw normalized;
+    }
+  }
+
   async close(): Promise<void> {
-    await this.#client?.close?.();
+    if (this.#closed) return;
+    this.#closed = true;
+    // An in-flight getClient finishes constructing the client after a bare
+    // close would have returned; wait for it so the relay socket never leaks
+    // — the discipline stack.ts applies one layer up.
+    const client = this.#client ?? (await this.#clientPromise?.catch(() => undefined));
+    this.#client = undefined;
+    this.#clientPromise = undefined;
+    await client?.close?.();
   }
 
   private async ensurePreflight(): Promise<void> {
@@ -524,6 +551,9 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
   }
 
   private async getClient(): Promise<AlbyNwcCompatibleClient> {
+    if (this.#closed) {
+      throw new Error("OpenReceive NWC receive client is closed; create a new client.");
+    }
     if (this.#client !== undefined) return this.#client;
 
     // Memoize the in-flight promise so concurrent first calls share one client

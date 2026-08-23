@@ -51,12 +51,21 @@ export interface NormalizedListTransactions extends ListTransactionsResult {
   readonly skippedRows: number;
 }
 
+/**
+ * `rawInfo` is the method list that governs this connection (NIP-47
+ * `get_info`, or the kind-13194 info event when that is all the client has).
+ * `rawServiceInfo`, when given, is the info event: encryption is negotiated
+ * service-wide, so its modes win over anything in `rawInfo`.
+ */
 export function summarizeWalletCapabilities(
   connection: ParsedNwcConnection,
   rawInfo: unknown,
+  rawServiceInfo?: unknown,
 ): WalletCapabilitySummary {
   const unwrappedInfo = unwrapNwcResult(rawInfo);
   const info = asRecord(unwrappedInfo);
+  const serviceInfo =
+    rawServiceInfo === undefined ? undefined : asRecord(unwrapNwcResult(rawServiceInfo));
   const methods = normalizeStringList(
     info.methods ??
       info.capabilities ??
@@ -64,7 +73,11 @@ export function summarizeWalletCapabilities(
       info.supportedMethods ??
       (typeof unwrappedInfo === "string" ? unwrappedInfo : undefined),
   ).map(normalizeNwcMethodName);
-  const encryption = chooseEncryptionMode(normalizeStringList(info.encryption ?? info.encryptions));
+  const encryption = chooseEncryptionMode(
+    normalizeStringList(
+      serviceInfo?.encryption ?? serviceInfo?.encryptions ?? info.encryption ?? info.encryptions,
+    ),
+  );
   const spendMethods = spendMethodsIn(methods);
   const missingMethods = REQUIRED_RECEIVE_METHODS.filter((method) => !methods.includes(method));
   const warnings = spendMethods.map(

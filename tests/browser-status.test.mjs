@@ -10,10 +10,22 @@ test("status follows transaction_state and the expiry clock", () => {
   assert.equal(status({ transaction_state: "settled" }), "settled");
   assert.equal(status({ transaction_state: "failed" }), "failed");
   assert.equal(status({ transaction_state: "expired" }), "expired");
-  assert.equal(status({ transaction_state: "pending", expires_at: 2_000 }, { now: 1_000 }), "pending");
-  assert.equal(status({ transaction_state: "pending", expires_at: 2_000 }, { now: 2_000 }), "expired");
+  assert.equal(
+    status({ transaction_state: "pending", expires_at: 2_000 }, { now: 1_000 }),
+    "pending",
+  );
+  assert.equal(
+    status({ transaction_state: "pending", expires_at: 2_000 }, { now: 2_000 }),
+    "expired",
+  );
   // A string expiry is read as seconds; an unreadable one leaves the invoice pending.
-  assert.equal(status({ transaction_state: "pending", expires_at: "2000" }, { now: 2_500 }), "expired");
-  assert.equal(status({ transaction_state: "pending", expires_at: "soon" }, { now: 2_500 }), "pending");
+  assert.equal(
+    status({ transaction_state: "pending", expires_at: "2000" }, { now: 2_500 }),
+    "expired",
+  );
+  assert.equal(
+    status({ transaction_state: "pending", expires_at: "soon" }, { now: 2_500 }),
+    "pending",
+  );
   assert.equal(status({}, { now: 1 }), "pending");
 });

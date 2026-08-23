@@ -6,6 +6,19 @@ OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
 behind.
 
+### Wallet preflight proves receive-only from the connection's own list
+
+- Receive-only is proved from NIP-47 `get_info.methods` — what this
+  connection may call — rather than the kind-13194 info event, which
+  advertises the wallet service at large. A receive-only connection on a
+  service that also serves spend-capable apps now boots; a connection whose
+  own list carries `pay_invoice` is still refused. The event still supplies
+  encryption modes, and stands in for the method list only when the client
+  exposes no `get_info` (logged as `nwc.info_event.methods_fallback`). Ruby
+  already read `get_info` first; both engines now agree.
+- `AlbyNwcReceiveClient.close()` waits for an in-flight client construction,
+  closes the relay client exactly once, and makes later calls reject.
+
 ### Naming: camelCase TypeScript, `Checkout` everywhere
 
 - Server-side TypeScript surfaces are all camelCase now: the `authorize`

@@ -346,6 +346,37 @@ test("concurrent first NWC calls share one client and one preflight", async () =
   assert.equal(getInfoCalls, 1, "concurrent first calls must share one preflight");
 });
 
+test("close() waits for an in-flight client, closes it once, and rejects later calls", async () => {
+  let closeCalls = 0;
+  const wallet = {
+    getInfo: async () => ({ methods: ["make_invoice", "list_transactions"] }),
+    makeInvoice: async () => ({
+      invoice: "lnbc10n1closed",
+      payment_hash: "d".repeat(64),
+      amount: 1000,
+    }),
+    close: async () => {
+      closeCalls += 1;
+    },
+  };
+  const client = createNwcReceiveClient({
+    connectionString: VALID_NWC,
+    clientFactory: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return wallet;
+    },
+  });
+  // Start constructing the client, then close before the factory resolves: the
+  // client that lands a moment later must still be closed, not leaked.
+  const inFlight = client.makeInvoice({ amount_msats: 1000n }).catch(() => undefined);
+  await client.close();
+  assert.equal(closeCalls, 1, "close() must wait for the in-flight client and close it");
+  await client.close();
+  assert.equal(closeCalls, 1, "close() is idempotent");
+  await assert.rejects(() => client.makeInvoice({ amount_msats: 1000n }), /closed/);
+  await inFlight;
+});
+
 test("isSensitiveLogKey redacts swap_data and provider credentials", () => {
   for (const key of [
     "swap_data",

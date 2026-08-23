@@ -142,6 +142,57 @@ test("preflight warns and continues only with the explicit spend-capable overrid
   );
 });
 
+// NIP-47 keeps the kind-13194 info event (what the wallet SERVICE offers) apart
+// from get_info.methods (what THIS connection may call). A receive-only
+// connection on a service that also serves spend-capable apps must boot.
+test("preflight proves receive-only from get_info.methods, not the service-wide event", async () => {
+  let infoEventCalls = 0;
+  const client = createNwcReceiveClient({
+    connectionString: VALID_NWC,
+    client: {
+      getWalletServiceInfo: async () => {
+        infoEventCalls += 1;
+        return {
+          capabilities: ["make_invoice", "list_transactions", "pay_invoice"],
+          encryptions: ["nip44_v2"],
+          notifications: [],
+        };
+      },
+      getInfo: async () => ({ methods: ["make_invoice", "list_transactions"] }),
+    },
+    spendCapabilityWarningDelayMs: 0,
+  });
+
+  const summary = await client.preflight();
+  assert.equal(summary.spendCapabilityAdvertised, false);
+  assert.deepEqual(summary.methods, ["make_invoice", "list_transactions"]);
+  // Encryption is negotiated service-wide, so it still comes from the event.
+  assert.equal(summary.encryption, "nip44_v2");
+  assert.equal(infoEventCalls, 1);
+});
+
+test("preflight refuses a connection whose own get_info.methods carries pay_invoice", async () => {
+  const client = createNwcReceiveClient({
+    connectionString: VALID_NWC,
+    client: {
+      getWalletServiceInfo: async () => ({
+        capabilities: ["make_invoice", "list_transactions"],
+        encryptions: ["nip44_v2"],
+      }),
+      getInfo: async () => ({ methods: ["make_invoice", "list_transactions", "pay_invoice"] }),
+    },
+    spendCapabilityWarningDelayMs: 0,
+  });
+
+  await assert.rejects(
+    () => client.preflight(),
+    (error) => {
+      assert.equal(error.code, "spend_capability_advertised");
+      return true;
+    },
+  );
+});
+
 test("createOpenReceive wraps a spend-capable refusal in WALLET_PREFLIGHT_FAILED", async () => {
   await withEnv(
     { NWC_URI: VALID_NWC, OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC: undefined },
