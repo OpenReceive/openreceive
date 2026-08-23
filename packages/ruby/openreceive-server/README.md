@@ -2,7 +2,7 @@
 
 Storage-free Ruby service and Rack handler. Configure a receive-only NWC client. The host
 authorizes requests, resolves order amounts, commits payment hashes before responding, and
-consumes at-least-once verified payment events by hash. Service boot fails closed when the
+consumes at-least-once verified payment events by hash. The service refuses to start when the
 NWC connection advertises spend methods (`pay_invoice`/`multi_pay_invoice`) unless
 `allow_spend_capable_wallet` or `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC` overrides it; the
 shared reconciliation decision table lives in `OpenReceive::Server::Reconciliation`.

@@ -178,12 +178,12 @@
       "public": false
     },
     {
-      "slug": "custom-controller-integration",
-      "title": "Custom Controller Integration",
-      "source_path": "docs/internal/custom-controller-integration.md",
-      "category": "architecture",
-      "audience": "contributor",
-      "public": false
+      "slug": "custom-checkout-route",
+      "title": "Writing Your Own Checkout Route",
+      "source_path": "docs/guides/custom-checkout-route.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
     },
     {
       "slug": "swap-operations",

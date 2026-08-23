@@ -80,8 +80,8 @@ A complete runnable example app is the Rails Hello Fruit demo, `npm run demo rai
 ([`examples/hello-fruit/server/rails`](../../examples/hello-fruit/server/rails)).
 
 Supply the receive-only wallet connection as `ENV["NWC_URI"]`. Never put it in
-browser code, logs, or assets. Boot fails closed when the code advertises spend
-methods such as `pay_invoice`; the explicit override is
+browser code, logs, or assets. Your application refuses to start when the code
+advertises spend methods such as `pay_invoice`; the explicit override is
 `config.allow_spend_capable_wallet = true` or
 `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` ([Security](security.md)).
 
@@ -112,8 +112,8 @@ inside the settlement transaction, only for the order's first settled attempt.
 The generated initializer ships
 `config.on_paid = OpenReceive::LOGGING_ON_PAID` — a placeholder that only logs
 the settlement and fulfills nothing. Replace it with your real fulfillment (as
-above); the engine warns at every boot while the placeholder is still
-configured, because orders would otherwise be recorded as settled without ever
+above); the engine warns every time your application boots while the
+placeholder is still configured, because orders would otherwise be recorded as settled without ever
 being fulfilled.
 
 The amount always comes from your own order record; payer-supplied amounts are
@@ -125,10 +125,10 @@ For public web shops, opt into the per-IP invoice cap with
 share one IP. → [Rate limiting](rate-limiting.md#rails)
 
 In production the engine builds the wallet client — and runs its receive-only
-preflight — eagerly at boot, so a missing `NWC_URI`, a dead relay, or a
-spend-capable wallet stops the deploy instead of surfacing as customer-facing
-500s on the first checkout. Outside production (tests, consoles) boot stays
-lazy so no live wallet is needed.
+preflight — eagerly when your application boots, so a missing `NWC_URI`, a
+dead relay, or a spend-capable wallet stops the deploy instead of surfacing as
+customer-facing 500s on the first checkout. Outside production (tests,
+consoles) the client is built lazily so no live wallet is needed.
 
 ## Render the checkout
 

@@ -20,12 +20,13 @@ The quickstart host contract is `config.authorize`, `config.load_order`,
 `config.amount_for_order`, and `config.on_paid` (run inside the settlement
 transaction, only for the order's first settled attempt). The generated
 initializer starts with the `OpenReceive::LOGGING_ON_PAID` placeholder, which
-only logs settlements — the engine warns at every boot until it is replaced.
+only logs settlements — the engine warns every time your application boots
+until it is replaced.
 Hosts with a custom repository may instead configure `resolve_checkout` and
 `on_checkout_created` together as the advanced escape hatch. In production the
-engine builds the service (and its wallet preflight) eagerly at boot, so a
-missing `NWC_URI` or a spend-capable wallet stops the deploy instead of
-surfacing as checkout-time 500s.
+engine builds the service (and its wallet preflight) eagerly when your
+application boots, so a missing `NWC_URI` or a spend-capable wallet stops the
+deploy instead of surfacing as checkout-time 500s.
 
 Settlement runs on the request path by default: every engine route runs one
 opportunistic reconcile pass, serialized across all Puma workers by that
@@ -43,8 +44,8 @@ serialize on an OpenReceive-owned per-order lock. `--order-model` only names
 the model the generated initializer calls. Because the engine cannot see
 fulfillment that happens outside it, `config.on_paid` must be idempotent if any
 other path can also fulfill an order — the generated initializer shows the
-guarded transition. The receive-only wallet URI loads from `ENV["NWC_URI"]`; boot
-fails closed when the connection advertises spend methods unless
+guarded transition. The receive-only wallet URI loads from `ENV["NWC_URI"]`; your
+application refuses to start when the connection advertises spend methods unless
 `config.allow_spend_capable_wallet` or `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC`
 overrides it. Keep ordinary settings such as `config.price_currencies` in
 `config/initializers/openreceive.rb`.

@@ -1,12 +1,26 @@
-> **Advanced escape hatch.** Almost every host should use `<Checkout>` / the custom
-> element instead. This integration bypasses the shipped controller wiring and takes on its
-> lifecycle responsibilities (re-keying polling after swaps, backoff, settled-state handling).
+# Writing your own checkout route
 
-# Custom controller integration
+> **Advanced escape hatch.** Almost every application should mount the shipped
+> adapter instead: it gives you the routes, and the shipped checkout components
+> (`<Checkout>` / the custom element) work against them with no glue. Bypassing
+> it also means taking over the controller's lifecycle responsibilities
+> (re-keying polling after swaps, backoff, settled-state handling).
 
-Most applications should mount the shipped HTTP handler. Use a custom controller only when the
-host needs to own the complete route surface or creates checkouts directly from server code.
-OpenReceive service methods do not authenticate callers and never read a host session or order.
+Write your own route only when you need a flow the shipped routes do not
+offer, or when you create checkouts directly from server code. You then drive
+`service` and `host` yourself, and the order of operations is the whole
+contract:
+
+1. **Check access yourself.** Nothing calls your `authorize` here, so without a
+   check anyone holding an order id can mint invoices against it.
+2. **Mint** with [`service.createCheckout`](api-reference.md#servicecreatecheckout).
+3. **Commit the attempt row** — `host.onCheckoutCreated`, or the repository's
+   `commitAttempt` as in the route below.
+4. **Only then return the invoice.** Skip the commit and a payer can pay an
+   invoice your database has no row for.
+
+OpenReceive service methods do not authenticate callers and never read your
+session or order.
 
 ## Service surface
 
@@ -110,4 +124,4 @@ const current = await openreceive.getSwap({
 
 For normative HTTP shapes, use the
 [OpenAPI contract](../../spec/openapi/openreceive-http.v1.yaml) and
-[Shipped Routes](shipped-routes.md).
+[Shipped Routes](../internal/shipped-routes.md).

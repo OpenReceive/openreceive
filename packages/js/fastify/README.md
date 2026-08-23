@@ -11,7 +11,7 @@ hooks and a database handle, and it builds the service and host itself.
 import { openReceiveFastify } from "@openreceive/fastify";
 
 await fastify.register(openReceiveFastify, {
-  wallet: { nwc: process.env.NWC_URI! }, // receive-only; boot fails closed otherwise
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
     onPaid: async ({ orderId, query }) => {

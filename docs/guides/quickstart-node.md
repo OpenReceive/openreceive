@@ -53,9 +53,9 @@ LSC_URI_BACKUP=
    [openreceive.org](https://openreceive.org))
    → `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP` if you have one).
 
-Never put these values in browser code. Boot fails closed if the NWC code also
-advertises spend methods such as `pay_invoice`; mint a receive-only code
-([Security](security.md)).
+Never put these values in browser code. Your application refuses to start if
+the NWC code also advertises spend methods such as `pay_invoice`; mint a
+receive-only code ([Security](security.md)).
 
 ## 4. Wire OpenReceive
 
@@ -71,7 +71,7 @@ import { db, orders, sessions } from "./app.ts"; // your existing database handl
 const app = express();
 app.use(express.json());
 const openreceive = openReceiveExpress({
-  wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; boot fails closed otherwise
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
     onPaid: async ({ orderId, query }) => {
@@ -97,7 +97,7 @@ app.use(openreceive);
 // checkout for everyone: app.set("trust proxy", 1)  (see the rate-limiting guide)
 ```
 
-The middleware boots lazily (the first request awaits wallet preflight) and
+The middleware runs wallet preflight lazily (the first request awaits it) and
 runs the opportunistic reconcile on every OpenReceive request; restarts and
 payers who close the page are covered because any later call wins the gate and
 settles their invoices. `authorize` runs on every request with

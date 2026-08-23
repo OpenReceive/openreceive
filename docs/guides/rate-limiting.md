@@ -68,7 +68,8 @@ rateLimiting: {
 ```
 
 Advanced knobs, rarely needed: `actions` (which of the two invoice-minting
-actions to throttle — other actions are rejected at boot, because row counting
+actions to throttle — other actions are rejected when the handler is
+constructed, because row counting
 counts mints and a throttle on anything else could never trigger), `ip`
 (custom client-IP extractor), and `countAttemptsFromIp` (custom counting).
 
@@ -87,7 +88,7 @@ they were already given.
 
 Persistent counting is **required**. If the payment repository cannot count
 (`countAttemptsFromIp` is missing) and the config supplies no custom counter,
-the handler throws at construction — your server fails at boot with a clear
+the handler throws at construction — your server fails to start with a clear
 message instead of silently degrading. There is deliberately no in-memory
 fallback: per-process counts reset on restart and multiply per instance behind
 a load balancer, which silently weakens a security control. Applications on the

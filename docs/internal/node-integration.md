@@ -140,7 +140,7 @@ return checkout;
 
 For retry recovery, return the selected attempt's stored `checkout` snapshot
 (`host.payments.listForOrder`). Full custom-controller patterns are in
-[Custom Controller Integration](custom-controller-integration.md).
+[Writing your own checkout route](../guides/custom-checkout-route.md).
 
 ## Mounted routes
 

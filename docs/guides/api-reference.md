@@ -28,7 +28,7 @@ const service = await createOpenReceive(options?: CreateOpenReceiveOptions): Pro
 | --- | --- | --- | --- |
 | `nwc` | `string` | no | Explicit receive-only NWC URI; normal applications read `NWC_URI` instead. |
 | `env` | `Record<string, string \| undefined>` | no | Environment source for `NWC_URI`, `LSC_URI_PRIMARY`, `LSC_URI_BACKUP`. Default `process.env`. |
-| `allowSpendCapableWallet` | `boolean` | no | Explicit override to boot on a wallet advertising spend methods. Default `false`; also settable via `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
+| `allowSpendCapableWallet` | `boolean` | no | Explicit override that lets your application start on a wallet advertising spend methods. Default `false`; also settable via `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
 | `priceFetch` | `SimplePriceFetch` | no | Fiat price fetch override for `{ currency, value }` amounts. Defaults to global `fetch` against the live feeds; when no sufficiently recent rate is available, fiat-priced creation refuses with a retryable 503 (no mock fallback). |
 | `clock` | `() => number` | no | Unix-seconds clock override (tests). |
 | `swap` | `{ provider?, failoverProviders? }` | no | Explicit primary swap provider plus ordered failovers, consulted only when the primary throws — never to fill assets it omits. Omitted, read from `LSC_URI_PRIMARY` / `LSC_URI_BACKUP`. |
@@ -708,7 +708,7 @@ reconcile gate, `createHost`, rate-limit internals) live only on
 (`npm run check:public-api` pins these surfaces).
 
 **All-in-one form** (the happy path): order hooks plus `wallet` and `storage`. The
-adapter builds the wallet client and order bridge itself; boot is lazy (the first request
+adapter builds the wallet client and order bridge itself; startup is lazy (the first request
 awaits wallet preflight). The Express middleware and the Next handler expose
 `ready` (a promise) and `close()` (closes the owned wallet client); the Fastify plugin
 exposes neither, because it registers an `onClose` hook that shuts the stack
@@ -1019,8 +1019,8 @@ simplified `config/initializers/openreceive.rb`, and the engine route mount at
 PostgreSQL, SQLite, and MySQL (`mysql2`/`trilogy`) are supported. The
 `OpenReceivePayment` model is engine-owned — no model file is generated. The
 generated initializer ships `config.on_paid = OpenReceive::LOGGING_ON_PAID`, a
-logging placeholder that fulfills nothing; the engine warns at every boot
-while it is still configured.
+logging placeholder that fulfills nothing; the engine warns every time your
+application boots while it is still configured.
 
 The engine never reads, writes, locks, or references your order table:
 `order_id` is stored as a string with no foreign key, and commit/settlement
@@ -1051,7 +1051,7 @@ The quickstart order bridge:
 | `config.rate_limiting` | `true` or `Hash` | no | Opt-in per-IP invoice cap, mirroring the JS `rateLimiting` option: off by default; `true` caps invoice creation at 60 per client IP per rolling hour, counted from the engine-owned `openreceive_payments` rows; or `{ limit_per_hour:, limit_per_day: }`. Mutually exclusive with `config.rate_limit`. See [Rate limiting](rate-limiting.md). |
 | `config.rate_limit` | `->(context)` | no | Custom rate-limit hook; same context as `config.authorize`. Return `false` (or raise the engine's rate-limited error) for `429`. |
 | `config.client_ip` | `->(request)` | no | Client-IP extractor for rate limiting and row stamping. Default: `ActionDispatch::Request#ip`, which honors the app's trusted-proxy configuration. |
-| `config.allow_spend_capable_wallet` | `Boolean` | no | Explicit override for a spend-capable NWC code; boot otherwise fails closed. Also `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
+| `config.allow_spend_capable_wallet` | `Boolean` | no | Explicit override for a spend-capable NWC code; your application otherwise refuses to start. Also `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
 
 `on_paid` runs inside the settlement transaction through the engine's
 write-once `mark_paid_once!`, only for the order's first settled attempt;

@@ -65,12 +65,12 @@ Both workers scan through the same gate and the same write-once settlement
 path as the request-path pass, so running one alongside many web instances is
 safe.
 
-## Boot behavior
+## When your application boots
 
-Boot preflight fails closed on a missing or spend-capable NWC connection. On
-Node the adapters boot lazily (the first request awaits preflight); use the
-middleware's `ready` promise in a deploy health check to surface failures at
-rollout. The Rails engine builds the wallet client — and runs preflight — eagerly in
+Wallet preflight fails closed on a missing or spend-capable NWC connection:
+your application does not start with one. On Node the adapters run preflight
+lazily (the first request awaits it); use the middleware's `ready` promise in
+a deploy health check to surface failures at rollout. The Rails engine builds the wallet client — and runs preflight — eagerly in
 production, so a bad `NWC_URI`, a dead relay, or a spend-capable wallet stops
 the deploy instead of surfacing as customer-facing 500s on the first checkout.
 

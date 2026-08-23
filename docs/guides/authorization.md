@@ -9,7 +9,7 @@ bridge itself:
 import { openReceiveExpress } from "@openreceive/express";
 
 app.use(openReceiveExpress({
-  wallet: { nwc: process.env.NWC_URI! }, // receive-only; boot fails closed otherwise
+  wallet: { nwc: process.env.NWC_URI! }, // receive-only; your app refuses to start otherwise
   storage: {
     db, // your existing database handle
     onPaid: async ({ orderId, query }) => {
