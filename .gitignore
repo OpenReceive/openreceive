@@ -39,3 +39,6 @@ tools/live-nwc-test/expected_capabilities.json
 
 # Playwright artifacts
 tests/e2e/test-results/
+
+# Prisma client for the test:orms lane; `npm run test:orms` regenerates it.
+tests/orms/generated/

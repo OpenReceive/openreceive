@@ -27,7 +27,7 @@ function shellFixture() {
 
 test("the shared shell binding is the single source of element attributes", () => {
   const shell = shellFixture();
-  assert.equal(shell.checkout.attributes["reference"], "order-mount");
+  assert.equal(shell.checkout.attributes.reference, "order-mount");
   // Create-time metadata must survive into the element attributes: an Angular
   // template that hand-lists attributes silently dropped exactly this.
   assert.equal(shell.checkout.attributes.metadata, JSON.stringify({ sku: "sticker-1" }));

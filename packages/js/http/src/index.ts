@@ -94,6 +94,8 @@ export type {
   SqlDatabase,
   SqlQuery,
 } from "./sql-adapters.ts";
+export type { KnexLike, PrismaLike, SqlDialect, TypeOrmLike } from "./orm-adapters.ts";
+export { knexDb, prismaDb, typeOrmDb } from "./orm-adapters.ts";
 export type {
   PaymentSettlement,
   PaymentSettlementHook,

@@ -69,6 +69,24 @@ jobs:
       - run: npm run build:packages
       - run: npm run test:e2e
 
+  # Real-ORM adapter lane: knex, typeorm, and prisma each drive the payments
+  # repository through their @openreceive/http factory (knexDb / prismaDb /
+  # typeOrmDb) on sqlite. The per-push unit tests pin the factories against
+  # fakes shaped like the documented driver behavior; this lane proves them
+  # against the actual ORMs, so a raw-API change in an ORM surfaces here
+  # instead of in an integrator's checkout.
+  orm-adapters:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:orms
+
   # Full Rails Hello Fruit demo (host-owned Postgres, like its compose stack).
   # bin/ci runs setup against the service database, the stubbed-wallet
   # integration tests, and the gem audit (no importmap audit: the browser

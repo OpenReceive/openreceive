@@ -6,6 +6,34 @@ OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
 behind.
 
+### ORM handles wrap in one call: `knexDb`, `prismaDb`, `typeOrmDb`
+
+- `@openreceive/http` ships a named `SqlAdapter` factory per ORM whose handle
+  `createSqlPayments` cannot accept directly. The parameter types are
+  structural (no ORM dependency); `dialect` stays a required argument. The
+  guide's copy-paste recipes are gone — and the shipped `prismaDb` fixes a bug
+  the Prisma recipe carried: only `^select` statements ran through
+  `$queryRawUnsafe`, so an `UPDATE … RETURNING` fulfillment claim (the
+  guide's own `onPaid` example) lost its rows and never fulfilled.
+- `npm run test:orms` proves the factories against the real ORMs: knex,
+  typeorm, and prisma (7, via its better-sqlite3 driver adapter) each drive
+  the payments repository — commit, write-once settlement, reconcile-gate
+  CAS — on sqlite. Weekly `orm-adapters` job in `demos.yml`; the ORMs are
+  devDependencies only. The no-database-driver gate now checks the root
+  workspace manifest on its runtime dependencies (package and example
+  manifests stay strict in full) so the lane's sqlite driver can exist at
+  dev time.
+
+### The browser's swap requests no longer throw `Illegal invocation`
+
+- Every swap route call (`/swaps`, `/swaps/quote`, `/swaps/status`,
+  `/swaps/refunds`) invoked the caller's fetch as a method of its options
+  object, rebinding `this` — and `window.fetch`, the default, throws
+  `Illegal invocation` for any `this` but the window. The swap flow was
+  broken in real browsers across all four wrappers; the e2e swap specs catch
+  it now. Checkout and status requests always bare-called a local and were
+  unaffected.
+
 ### Cross-site requests are refused by the handler; the Rails engine inherits `protect_from_forgery`
 
 - Every body-bearing route now answers `415` for a body that is not

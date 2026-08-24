@@ -258,6 +258,14 @@
       "public": false
     },
     {
+      "slug": "headless-surface",
+      "title": "Headless Surface Inventory",
+      "source_path": "docs/internal/headless-surface.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "release-process",
       "title": "Release Process",
       "source_path": "docs/internal/release-process.md",

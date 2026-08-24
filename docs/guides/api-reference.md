@@ -1049,6 +1049,23 @@ interface SqlAdapter {
 `[]` for non-SELECT). `transaction` must provide real atomicity — settlement
 write-once and fulfillment both run inside it.
 
+### knexDb / prismaDb / typeOrmDb
+
+```ts
+createHost({ db: knexDb(knex, "postgres") });      // or prismaDb(prisma, …),
+createHost({ db: typeOrmDb(dataSource, "sqlite") }); // typeOrmDb(dataSource, …)
+```
+
+Named `SqlAdapter` factories for the ORM handles `createSqlPayments` cannot
+accept directly. The parameter types (`KnexLike`, `PrismaLike`, `TypeOrmLike`)
+are structural, so no ORM dependency is added. `dialect` (`SqlDialect`) is
+required — nothing on the handles states it reliably. Each factory owns its
+ORM's raw-query quirks: `knexDb` normalizes the per-driver result shape,
+`prismaDb` routes statements between `$queryRawUnsafe` and `$executeRawUnsafe`
+(`RETURNING` counts as row-returning), and `typeOrmDb` queries through the
+transaction's own `EntityManager`. See
+[Node ORM recipes](node-orms.md) for the wiring guide.
+
 ### PaymentRecord
 
 One `openreceive_payments` row as returned by `payments.listForReference`.

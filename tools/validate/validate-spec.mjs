@@ -254,18 +254,24 @@ function validateStorageFreeTree() {
       `${relative} must not exist (OpenReceive ships no separate store)`,
     );
   }
-  const manifests = [
-    "package.json",
-    ...walk("packages", "package.json"),
-    ...walk("examples", "package.json"),
-  ];
+  const driverPattern = /"(?:pg|sqlite3|better-sqlite3|@types\/pg)"/;
+  const manifests = [...walk("packages", "package.json"), ...walk("examples", "package.json")];
   for (const manifest of manifests) {
     const text = JSON.stringify(readJson(manifest));
     assert(
-      !/"(?:pg|sqlite3|better-sqlite3|@types\/pg)"/.test(text),
+      !driverPattern.test(text),
       `${manifest}: OpenReceive must not depend on a database driver`,
     );
   }
+  // The root workspace manifest is checked on its runtime dependencies only:
+  // the test:orms lane carries real ORMs and their sqlite driver as
+  // devDependencies precisely to test against them, and nothing dev-only
+  // ships. Package and example manifests above stay strict in full.
+  const rootManifest = readJson("package.json");
+  assert(
+    !driverPattern.test(JSON.stringify(rootManifest.dependencies ?? {})),
+    "package.json: OpenReceive must not depend on a database driver at runtime",
+  );
   const envExample = readFileSync(path.join(root, ".env.example"), "utf8");
   const envNames = [...envExample.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((match) => match[1]);
   assert(

@@ -18,107 +18,66 @@ You never hand-write a payment repository. OpenReceive owns the
 | node:sqlite            | the `DatabaseSync` directly                                 |
 | better-sqlite3         | the `Database` directly                                     |
 | Drizzle                | the underlying driver (`pg` Pool or better-sqlite3) directly |
-| Prisma, Knex, TypeORM  | a small custom adapter (recipes below)                      |
-| Sequelize              | a separate `pg` Pool to the same database, or an adapter like TypeORM's |
+| Prisma                 | `prismaDb(prisma, dialect)` from `@openreceive/http`        |
+| Knex                   | `knexDb(knex, dialect)` from `@openreceive/http`            |
+| TypeORM                | `typeOrmDb(dataSource, dialect)` from `@openreceive/http`   |
+| Sequelize              | a separate `pg` Pool to the same database, or a hand-rolled adapter modeled on `typeOrmDb` |
 
 A custom adapter is `{ dialect, query, transaction }`
 (`SqlAdapter`): `dialect` is `"postgres"` or `"sqlite"`, `query`
 runs one statement with `?` placeholders and returns SELECT rows (`[]`
 otherwise), and `transaction` runs a callback against a transactional client.
-Postgres drivers need `?` rewritten to `$1`-style.
+Postgres drivers need `?` rewritten to `$1`-style. You only write one for a
+stack the factories below don't cover.
 
-## Prisma
+## Prisma, Knex, TypeORM
 
-```ts
-import type { PrismaClient } from "@prisma/client";
-import type { SqlAdapter, SqlQuery } from "@openreceive/http";
-
-type Tx = Pick<PrismaClient, "$queryRawUnsafe" | "$executeRawUnsafe">;
-
-export function prismaDb(
-  prisma: PrismaClient,
-  dialect: "postgres" | "sqlite", // match your Prisma datasource provider
-): SqlAdapter {
-  // SQL arrives already written for `dialect` — pass it through verbatim.
-  const queryOn = (tx: Tx): SqlQuery => async (sql, params = []) => {
-    if (/^\s*select/i.test(sql)) {
-      return (await tx.$queryRawUnsafe(sql, ...params)) as Record<string, unknown>[];
-    }
-    await tx.$executeRawUnsafe(sql, ...params);
-    return [];
-  };
-  return {
-    dialect,
-    query: queryOn(prisma),
-    transaction: (run) => prisma.$transaction((tx) => run({ query: queryOn(tx) })),
-  };
-}
-```
-
-## Knex
-
-Knex already uses `?` bindings; only the result shape differs per driver.
+`@openreceive/http` ships a named factory per ORM. The parameter types are
+structural, so no ORM dependency is added and your existing handle passes
+straight in. `dialect` is a required argument because nothing on the handles
+states it reliably — for Prisma, match your datasource provider:
 
 ```ts
-import type { Knex } from "knex";
-import type { SqlAdapter, SqlQuery } from "@openreceive/http";
+import { knexDb, prismaDb, typeOrmDb } from "@openreceive/http";
 
-export function knexDb(knex: Knex, dialect: "postgres" | "sqlite"): SqlAdapter {
-  const queryOn = (executor: Knex | Knex.Transaction): SqlQuery =>
-    async (sql, params = []) => {
-      // SQL arrives already written for `dialect`; only the RESULT shape differs.
-      const result = await executor.raw(sql, [...params] as Knex.RawBinding[]);
-      // The sqlite3 driver resolves the rows array itself; pg wraps them in
-      // `{ rows }`. Reaching into `result[0]` returns the first ROW on sqlite,
-      // which breaks every repository read.
-      return dialect === "sqlite"
-        ? (result as Record<string, unknown>[])
-        : ((result as { rows?: Record<string, unknown>[] }).rows ?? []);
-    };
-  return {
-    dialect,
-    query: queryOn(knex),
-    transaction: (run) => knex.transaction((trx) => run({ query: queryOn(trx) })),
-  };
-}
+createHost({ db: prismaDb(prisma, "postgres"), ... });
+createHost({ db: knexDb(knex, "sqlite"), ... });
+createHost({ db: typeOrmDb(dataSource, "postgres"), ... });
 ```
 
-## TypeORM
+What each factory settles so you don't have to:
 
-```ts
-import type { DataSource } from "typeorm";
-import type { SqlAdapter, SqlQuery } from "@openreceive/http";
-
-export function typeOrmDb(
-  dataSource: DataSource,
-  dialect: "postgres" | "sqlite",
-): SqlAdapter {
-  // SQL arrives already written for `dialect` — pass it through verbatim.
-  const queryOn = (runner: { query(sql: string, params?: unknown[]): Promise<unknown> }): SqlQuery =>
-    async (sql, params = []) =>
-      ((await runner.query(sql, [...params])) ?? []) as Record<string, unknown>[];
-  return {
-    dialect,
-    query: queryOn(dataSource),
-    // Run through the transaction's own manager. Falling back to `dataSource`
-    // would execute settlement statements outside the transaction.
-    transaction: (run) => dataSource.transaction((manager) => run({ query: queryOn(manager) })),
-  };
-}
-```
+- `knexDb` normalizes the per-driver result shape: the pg driver wraps rows in
+  `{ rows }`, the sqlite3 driver resolves the rows array itself.
+- `prismaDb` routes each statement to `$queryRawUnsafe` or `$executeRawUnsafe`
+  by whether it returns rows — including `RETURNING` clauses, which the
+  `onPaid` claim below depends on.
+- `typeOrmDb` runs transaction statements through the transaction's own
+  `EntityManager`, never the `DataSource` — falling back would execute
+  settlement statements outside the transaction.
 
 ## Schema and `onPaid`
 
 The scaffolded migration renders the canonical DDL in `@openreceive/core`
-(`payments-ddl.ts` — the same source `paymentsSchemaSql(dialect)`
-renders, so the two cannot drift): `reference` indexed but not unique,
-`payment_hash` unique (64-lowercase-hex CHECK), `status` (CHECK over the five
-statuses) + `status_reason`, `paid_at`, `expires_at`, exact wallet
-`created_at`, locally-clocked `updated_at`, write-once `inserted_at`,
-`checkout_data`, server-only `swap_data`, and
-nullable `client_ip` (with its `(client_ip, inserted_at)` index — DB-backed
-rate limiting counts on it). Keep every column. See
-[Payment storage](storage.md).
+(`payments-ddl.ts` — the same source `paymentsSchemaSql(dialect)` renders, so
+the two cannot drift). Keep every column:
+
+| Column          | Notes                                                        |
+| --------------- | ------------------------------------------------------------ |
+| `reference`     | Indexed but not unique.                                       |
+| `payment_hash`  | Unique; CHECK enforces 64 lowercase hex.                      |
+| `status`        | CHECK over the five statuses.                                 |
+| `status_reason` | Nullable operator-facing detail.                              |
+| `paid_at`       | Nullable, write-once.                                         |
+| `expires_at`    | Required.                                                     |
+| `created_at`    | The wallet's exact mint time.                                 |
+| `updated_at`    | Locally clocked.                                              |
+| `inserted_at`   | Write-once.                                                   |
+| `checkout_data` | The payer-safe JSON snapshot (BOLT11, amount, timestamps).    |
+| `swap_data`     | Server-only — never reaches a serializer, log, or browser.    |
+| `client_ip`     | Nullable, with its `(client_ip, inserted_at)` index — DB-backed rate limiting counts on it. |
+
+See [Payment storage](storage.md) for the full column semantics.
 
 The same file also creates `openreceive_meta` (`key`, `value`, `rev`) in the
 same database — one migration, both tables — and, where the ORM's migration

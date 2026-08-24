@@ -1,0 +1,19 @@
+// Schema for the test:orms lane only. The tests drive the payments repository
+// through $queryRawUnsafe/$executeRawUnsafe, so the one model exists to keep
+// `prisma generate` happy; the real tables come from paymentsSchemaSql.
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model OpenreceiveMeta {
+  key   String @id
+  value String
+  rev   Int
+
+  @@map("openreceive_meta")
+}

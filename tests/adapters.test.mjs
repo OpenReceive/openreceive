@@ -41,7 +41,6 @@ async function newService() {
 function fakeExpressRequest({ url, body, protocol = "http", ip }) {
   return {
     method: "POST",
-    headers: { "content-type": "application/json" },
     originalUrl: url,
     url,
     protocol,
@@ -181,7 +180,6 @@ test("express middleware works sub-mounted under app.use('/api', ...)", async ()
   await middleware(
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
       baseUrl: "/api",
       originalUrl: "/api/openreceive/checkouts",
       url: "/openreceive/checkouts",
@@ -224,7 +222,6 @@ test("a JSON body no parser read names the missing body parser", async () => {
   await middleware(
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
       originalUrl: "/openreceive/checkouts",
       url: "/openreceive/checkouts",
       protocol: "http",
@@ -292,7 +289,6 @@ test("express trustProxyIpHeader reads x-forwarded-for for the limiter", async (
   await middleware(
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
       originalUrl: "/openreceive/checkouts",
       url: "/openreceive/checkouts",
       protocol: "http",

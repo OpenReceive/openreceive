@@ -55,7 +55,7 @@ test("ngOnChanges builds the shell binding once inputs are set", () => {
 
   const shell = component.shell;
   assert.notEqual(shell, null);
-  assert.equal(shell.checkout.attributes["reference"], "order-construct");
+  assert.equal(shell.checkout.attributes.reference, "order-construct");
   assert.equal(shell.checkout.attributes.metadata, JSON.stringify({ sku: "sticker-1" }));
   assert.ok(shell.rootAttributes["data-openreceive-theme"]);
   // The shell root is directive-driven: every rootAttributes key must reach the
@@ -74,7 +74,7 @@ test("subsequent input changes rebuild the shell binding", () => {
   const second = component.shell;
 
   assert.notEqual(second, first, "input changes must produce a fresh binding");
-  assert.equal(second.checkout.attributes["reference"], "order-second");
+  assert.equal(second.checkout.attributes.reference, "order-second");
 });
 
 /** Poll until predicate() is truthy (its value is returned) or fail with `label`. */

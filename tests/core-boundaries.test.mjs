@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  DecimalError,
-  reconcilePaymentAttempts,
-} from "../packages/js/core/src/index.ts";
+import { DecimalError, reconcilePaymentAttempts } from "../packages/js/core/src/index.ts";
 
 const hash = (value) => value.toString(16).padStart(64, "0");
 

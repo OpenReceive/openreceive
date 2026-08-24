@@ -4,10 +4,6 @@ Lightning Swap Connect is OpenReceive's compact, server-only format for
 configuring an authenticated swap API endpoint. One URI replaces a provider's
 HTTPS base URL, API key, and API secret.
 
-The `lightning+swapconnect` scheme is not registered with IANA and must not be
-treated as an interoperable standard outside software that explicitly
-implements this document.
-
 ## Example
 
 ```text
@@ -16,11 +12,11 @@ lightning+swapconnect://swap.example/v1?key=example-key&secret=example-secret
 
 The example resolves to:
 
-| Value | Result |
-| --- | --- |
+| Value              | Result                     |
+| ------------------ | -------------------------- |
 | HTTPS API base URL | `https://swap.example/v1/` |
-| API key | `example-key` |
-| API secret | `example-secret` |
+| API key            | `example-key`              |
+| API secret         | `example-secret`           |
 
 LSC is not an NWC replacement. NWC connects OpenReceive to the receive-only
 Lightning wallet. LSC connects OpenReceive to an optional service that accepts
@@ -36,14 +32,14 @@ lightning+swapconnect://host[/path]?key=KEY&secret=SECRET
 
 The components are:
 
-| Component | Required | Meaning |
-| --- | --- | --- |
-| Scheme | Yes | Exactly `lightning+swapconnect` |
-| Host | Yes | Swap provider HTTPS host |
-| Port | No | Explicit HTTPS port |
-| Path | No | Swap provider API base path; `/` is the default |
-| `key` | Yes | Provider API key |
-| `secret` | Yes | Provider API secret |
+| Component | Required | Meaning                                         |
+| --------- | -------- | ----------------------------------------------- |
+| Scheme    | Yes      | Exactly `lightning+swapconnect`                 |
+| Host      | Yes      | Swap provider HTTPS host                        |
+| Port      | No       | Explicit HTTPS port                             |
+| Path      | No       | Swap provider API base path; `/` is the default |
+| `key`     | Yes      | Provider API key                                |
+| `secret`  | Yes      | Provider API secret                             |
 
 The URI must not contain user information or a fragment. Each required query
 parameter must appear exactly once. Unknown parameters are rejected so that a
@@ -101,14 +97,3 @@ NWC intentionally defines a connection URI for a client and wallet service with
 cryptographic keys. LSC packages conventional HTTPS API credentials; it does
 not add end-to-end encryption beyond TLS and does not define a provider
 authorization handshake.
-
-## Compatibility and registration
-
-The syntax follows the generic URI model in
-[RFC 3986](https://www.rfc-editor.org/rfc/rfc3986). Custom scheme names have
-registration and collision considerations described by
-[RFC 7595](https://www.rfc-editor.org/rfc/rfc7595). NWC's established URI shape
-is documented by [NIP-47](https://nips.nostr.com/47).
-
-Implementations claiming LSC v0.1 compatibility must pass
-[`spec/test-vectors/lsc-uri.json`](../../spec/test-vectors/lsc-uri.json).
