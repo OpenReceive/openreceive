@@ -14,6 +14,7 @@ COPY examples/hello-fruit/server/static-html-small-api/package.json \
 COPY examples/hello-fruit/server/rails/package.json \
   ./examples/hello-fruit/server/rails/package.json
 COPY tools/package ./tools/package
+COPY tools/shared ./tools/shared
 COPY tools/run-with-root-env.mjs ./tools/run-with-root-env.mjs
 COPY spec/data/rates ./spec/data/rates
 RUN npm ci --no-audit

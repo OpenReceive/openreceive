@@ -28,6 +28,7 @@ RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 
 COPY packages ./packages
 COPY tools/package ./tools/package
+COPY tools/shared ./tools/shared
 COPY tools/run-with-root-env.mjs ./tools/run-with-root-env.mjs
 COPY spec/data/rates ./spec/data/rates
 COPY examples/hello-fruit ./examples/hello-fruit
