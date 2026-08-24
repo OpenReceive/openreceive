@@ -202,7 +202,11 @@ async function requestJson(
   url: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const response = await options.fetch(url, {
+  // Bare call on a local, never `options.fetch(...)`: invoking window.fetch as
+  // a method of the options object rebinds `this` and the browser throws
+  // "Illegal invocation".
+  const fetcher = options.fetch;
+  const response = await fetcher(url, {
     method: "POST",
     headers: requestHeaders(options.headers),
     body: JSON.stringify(body),

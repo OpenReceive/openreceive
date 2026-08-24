@@ -12,20 +12,64 @@ skips NWC entirely when one is supplied:
 ```ts
 import { createOpenReceive } from "@openreceive/node";
 import type { ReceiveNwcClient } from "@openreceive/node";
+import { StaticPriceProvider } from "@openreceive/core";
+
+// Settle an invoice from a test by putting its payment hash in here.
+const settledAt = new Map<string, number>();
+
+let minted = 0;
+const myFakeClient: ReceiveNwcClient = {
+  async preflight() {
+    return {
+      walletPubkey: "f".repeat(64),
+      relays: [],
+      methods: ["make_invoice", "list_transactions"],
+      encryption: undefined,
+      spendCapabilityAdvertised: false,
+      receiveCheckoutReady: true,
+      warnings: [],
+    };
+  },
+  async makeInvoice({ amount_msats, expiry }) {
+    const payment_hash = String(++minted).padStart(64, "0");
+    const created_at = Math.floor(Date.now() / 1000);
+    return {
+      invoice: `lnbcfake${payment_hash}`, // never decoded; any string works
+      payment_hash,
+      amount_msats,
+      created_at,
+      // Honor the requested expiry: creation rejects an invoice whose real
+      // payable window deviates from the request by more than 60 seconds.
+      expires_at: created_at + (expiry ?? 600),
+    };
+  },
+  async listTransactions() {
+    return {
+      transactions: [...settledAt].map(([payment_hash, settled_at]) => ({
+        type: "incoming" as const,
+        payment_hash,
+        settled_at,
+      })),
+    };
+  },
+};
 
 const service = await createOpenReceive({
-  client: myFakeClient, // implements ReceiveNwcClient
+  client: myFakeClient,
   priceProviders: [new StaticPriceProvider()],
 });
 ```
 
 Any object implementing `ReceiveNwcClient` works: mint
 deterministic invoices from `makeInvoice`, report settlement from
-`lookupInvoice`/`listTransactions`, and your whole integration — HTTP routes,
+`listTransactions`, and your whole integration — HTTP routes,
 persistence, reconcile, `onPaid` — runs the production code paths against it.
-Settlement follows the real rule: a transaction settles on a finality signal
-(`settled_at`, a settled state, or a settled/paid boolean), never on the mere
-presence of a preimage.
+With the fake above, `settledAt.set(checkout.paymentHash,
+Math.floor(Date.now() / 1000))` marks an attempt paid; the next
+`/payments/check` poll or reconcile pass settles it through the production
+rules. Settlement follows the real rule: a transaction settles on a finality
+signal (`settled_at`, a settled state, or a settled/paid boolean), never on
+the mere presence of a preimage.
 
 For fiat pricing without a network, pass
 `priceProviders: [new StaticPriceProvider()]` (from `@openreceive/core`).

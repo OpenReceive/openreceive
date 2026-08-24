@@ -49,6 +49,12 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}/rates`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // Play the demo's console (boot, testkit, on_paid) and OpenReceive's
+    // INFO lines (reconcile completions) next to the list reporter. Playwright
+    // swallows stdout by default. LOG_LEVEL=DEBUG on the command adds mint /
+    // NWC / swap detail; leave the default INFO so CI stays readable.
+    stdout: "pipe",
+    stderr: "pipe",
     env: {
       DEMO_WALLET: "testkit",
       OPENRECEIVE_DEMO_DB: databaseDir,
