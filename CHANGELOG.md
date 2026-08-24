@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.2.1 - Unreleased
+
 ## 0.2.1
 
 First test publish to NPM and RubyGems
