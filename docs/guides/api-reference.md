@@ -1078,18 +1078,56 @@ browser packages take. Every route they call is derived from it: `/checkouts`,
 `/swaps/refunds`. There is no per-route override, so a checkout cannot be created
 against one mount and settled against another.
 
-| Symbol | Package | What it does |
-| --- | --- | --- |
-| `prepareCheckout({ reference, prefix, fetch?, headers? })` | `@openreceive/browser` | POST `/checkouts/prepare`: locks the amount + returns payment methods without minting. |
-| `requestCheckout({ reference, prefix, fetch?, headers?, memo?, metadata? })` | `@openreceive/browser` | POST `/checkouts`: mints (or reuses) a bolt11 and returns the snapshot. |
-| `<Checkout>` | `@openreceive/react` | Self-contained checkout. Create mode: `reference` + `prefix`. Snapshot mode: `checkout` (+ `prefix` for polling; `prefix` defaults to `/openreceive`, so a bare snapshot polls). `polling={false}` renders without status polling and leaves the swap flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`, `paymentWizard`, `themeToggle` (default `true`), `defaultTheme`, `storageKey`, `decodeLinkUrl`, `components`, `classNames`, `syncUrl`, `resumePathPrefix`, `routeReference`, `metadata`, `createFetch`. Prop names and defaults are shared with the Vue, Svelte and Angular wrappers. |
-| `useCheckout(options)` | `@openreceive/react` | The hook behind `<Checkout>` for custom layouts; it drives a concrete `checkout` snapshot (create mode belongs to `<Checkout>`). Unlike the component it does **not** default `prefix`: pass `prefix` to poll `/payments/check`, or omit it (or pass `polling: false`) to render the snapshot without polling. Returns the live snapshot, `status`, countdown labels, `statusTitle`/`statusDetail`, and `copyInvoice`/`openWallet`/`reloadState`/`retry`/`cancel`. |
-| `PaymentWizard` | `@openreceive/react` | The method picker + swap deposit flow rendered inside `<Checkout>`; usable standalone with `checkout`, `prefix`, and `onSwapStarted`; omit `prefix` and it renders the method grid only, since it has no swap backend to call. |
-| `<openreceive-checkout>` | `@openreceive/elements` | The custom element behind the non-React wrappers. Create mode: `reference` + `prefix` attributes. Snapshot mode: `invoice`/`invoice-id`/`payment-hash`/... attributes. Polling knobs: `polling="false"` renders without status polling; `poll-interval-ms` tunes the interval. Events (all seven): `openreceive-copy`, `openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`, `openreceive-provider-copy`, `openreceive-start-over`, `openreceive-error`. |
-
 Failed status polls back off exponentially (honoring the server's `Retry-After`), and
 transport failures are thrown as `BrowserRequestError` carrying
 `status`/`code`/`retryable`/`retryAfterSeconds`.
+
+### prepareCheckout
+
+From `@openreceive/browser`: `prepareCheckout({ reference, prefix, fetch?, headers? })`.
+POST `/checkouts/prepare`: locks the amount + returns payment methods without minting.
+
+### requestCheckout
+
+From `@openreceive/browser`:
+`requestCheckout({ reference, prefix, fetch?, headers?, memo?, metadata? })`.
+POST `/checkouts`: mints (or reuses) a bolt11 and returns the snapshot.
+
+### `<Checkout>`
+
+From `@openreceive/react`. Self-contained checkout. Create mode: `reference` + `prefix`.
+Snapshot mode: `checkout` (+ `prefix` for polling; `prefix` defaults to `/openreceive`, so a
+bare snapshot polls). `polling={false}` renders without status polling and leaves the swap
+flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onState`,
+`onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`,
+`paymentWizard`, `themeToggle` (default `true`), `defaultTheme`, `storageKey`,
+`decodeLinkUrl`, `components`, `classNames`, `syncUrl`, `resumePathPrefix`,
+`routeReference`, `metadata`, `createFetch`. Prop names and defaults are shared with the
+Vue, Svelte and Angular wrappers.
+
+### useCheckout
+
+From `@openreceive/react`: `useCheckout(options)`. The hook behind `<Checkout>` for custom
+layouts; it drives a concrete `checkout` snapshot (create mode belongs to `<Checkout>`).
+Unlike the component it does **not** default `prefix`: pass `prefix` to poll
+`/payments/check`, or omit it (or pass `polling: false`) to render the snapshot without
+polling. Returns the live snapshot, `status`, countdown labels, `statusTitle`/`statusDetail`,
+and `copyInvoice`/`openWallet`/`reloadState`/`retry`/`cancel`.
+
+### PaymentWizard
+
+From `@openreceive/react`. The method picker + swap deposit flow rendered inside
+`<Checkout>`; usable standalone with `checkout`, `prefix`, and `onSwapStarted`; omit
+`prefix` and it renders the method grid only, since it has no swap backend to call.
+
+### `<openreceive-checkout>`
+
+From `@openreceive/elements`. The custom element behind the non-React wrappers. Create
+mode: `reference` + `prefix` attributes. Snapshot mode: `invoice`/`invoice-id`/
+`payment-hash`/... attributes. Polling knobs: `polling="false"` renders without status
+polling; `poll-interval-ms` tunes the interval. Events (all seven): `openreceive-copy`,
+`openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`,
+`openreceive-provider-copy`, `openreceive-start-over`, `openreceive-error`.
 
 ## CLI
 

@@ -14,8 +14,9 @@ swaps / settlement beyond the integrator happy path.
 9. [Test Command Map](test-command-map.md) - focused validation commands.
 10. [Package Ownership Map](package-ownership.md) - package ownership lanes.
 11. [Framework Wrapper Parity](wrapper-parity.md) - the prop/default/event contract all four wrappers share.
-12. [Release Process](release-process.md) - release gate, workflow skeletons, and tags.
-13. [Forbidden Without Approval](forbidden-without-approval.md) - changes that need explicit approval.
+12. [Headless Surface Inventory](headless-surface.md) - generated list of every `@openreceive/browser/headless` export.
+13. [Release Process](release-process.md) - release gate, workflow skeletons, and tags.
+14. [Forbidden Without Approval](forbidden-without-approval.md) - changes that need explicit approval.
 
 The custom-route escape hatch moved to the developer guides:
 [Writing your own checkout route](../guides/custom-checkout-route.md).

@@ -13,7 +13,7 @@
 // integration (a demo under examples/, or docs/guides) needs it. A test that
 // drives an engine seam imports the source module directly. Adding a name is a
 // public-API change (tools/validate/public-api.snapshot.json) and changes the
-// generated inventory in docs/guides/headless-checkout.md.
+// generated inventory in docs/internal/headless-surface.md.
 //
 // Everything not listed is package-private and free to move: the modules
 // behind internal/checkout.ts and internal/ui.ts, the wire parsers, the
