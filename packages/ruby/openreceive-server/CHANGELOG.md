@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 - Unreleased
+## 0.2.1 - 2026-08-24
 
 The Ruby gems release in lockstep with the npm workspace version. The full
 release narrative lives in the repository-root

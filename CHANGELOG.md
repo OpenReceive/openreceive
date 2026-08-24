@@ -1,8 +1,6 @@
 # Changelog
 
-## 0.2.1 - Unreleased
-
-## 0.2.1
+## 0.2.1 - 2026-08-24
 
 First test publish to NPM and RubyGems
 
