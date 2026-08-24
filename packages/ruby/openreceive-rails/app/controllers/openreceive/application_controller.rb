@@ -24,13 +24,18 @@ module OpenReceive
     # them. A failed check answers with the shared 403 error contract instead
     # of the opaque 500 the StandardError rescue below would produce.
 
-    # Any OpenReceive call is a settlement trigger (mirrors the JS handler's
+    # Any PAYMENT call is a settlement trigger (mirrors the JS handler's
     # dispatch): after the route matched and before its own work, run one
-    # durably gated reconcile pass. Every mounted route participates, including
-    # unauthenticated GET /rates. maybe_reconcile! never raises; a failed scan
-    # must not fail this request. payments/check consumes this pass result —
-    # exactly one gate claim per request. Host-only routes never auto-run this;
-    # hosts call OpenReceive.maybe_reconcile! from their own code instead.
+    # durably gated reconcile pass. maybe_reconcile! never raises; a failed
+    # scan must not fail this request. payments/check consumes this pass
+    # result — exactly one gate claim per request. Host-only routes never
+    # auto-run this; hosts call OpenReceive.maybe_reconcile! from their own
+    # code instead.
+    #
+    # Unauthenticated GET /rates is deliberately EXEMPT (RatesController skips
+    # this filter, matching the JS handler's early return for route.kind
+    # "rates"): crawlers and health checks must not consume the wallet-scan
+    # budget.
     around_action :openreceive_opportunistic_reconcile
 
     # Any exception the thin adapter layer itself raises (body cap, render)
@@ -50,6 +55,11 @@ module OpenReceive
     private
 
     def openreceive_opportunistic_reconcile
+      # The body cap runs FIRST, matching the JS handler's dispatch order: an
+      # anonymous oversized POST is refused without a database read, without
+      # claiming the reconcile gate, and without triggering a wallet scan. The
+      # read is memoized, so the action reuses it.
+      openreceive_raw_body
       @openreceive_reconcile_pass = OpenReceive.maybe_reconcile!
       yield
     end
@@ -71,6 +81,12 @@ module OpenReceive
     # rejected before any read, and the read itself stops one byte past the cap so a chunked body
     # can never stream unbounded input into memory.
     def openreceive_raw_body
+      return @openreceive_raw_body if defined?(@openreceive_raw_body)
+
+      @openreceive_raw_body = openreceive_read_raw_body
+    end
+
+    def openreceive_read_raw_body
       max_bytes = Server::RequestHandler::MAX_BODY_BYTES
       raise Server::PayloadTooLargeError if request.get_header("CONTENT_LENGTH").to_i > max_bytes
 

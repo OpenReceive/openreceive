@@ -12,10 +12,11 @@ Formats in use (one per file family):
   keys (`rule`, `decision`, `algorithm`, …) document the behavior under test:
   `fiat-to-msats.usd`, `amount-boundaries`, `settlement-detection`,
   `make-invoice-validation`, `nwc-uri-parse`, `nwc-request-response`,
-  `error-normalization`, `swap-address` (checksum validation of refund/deposit
-  addresses), `rate-limit-window` (which timestamp column the per-IP budget
-  counts on — `inserted_at` — plus the `(client_ip, inserted_at)` index and
-  window-membership cases).
+  `error-normalization`, `nwc-info` (NIP-47 info events normalized into receive
+  capabilities and an encryption mode), `swap-address` (checksum validation of
+  refund/deposit addresses), `rate-limit-window` (which timestamp column the
+  per-IP budget counts on — `inserted_at` — plus the
+  `(client_ip, inserted_at)` index and window-membership cases).
 - **`version` + `valid`/`invalid`** — `lsc-uri`: parse expectations for valid
   `lightning+swapconnect://` URIs and a list of URIs that must be refused.
 - **`expiry_grace_seconds` + `vectors`** — `attempt-reconciliation`: the
@@ -52,8 +53,5 @@ Formats in use (one per file family):
   tables live in `tests/http-boundaries.test.mjs` and
   `packages/ruby/openreceive-server/test/server_test.rb` and must stay
   identical — change both together.
-- **Bare objects** — `nwc-info.json` (a sample NIP-47 info event payload
-  consumed by the preflight tests).
-
 `provider-route.*.json` files (`request` + `expected`) describe provider wizard
 routes and are consumed by the provider-data tests.

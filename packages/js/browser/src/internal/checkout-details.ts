@@ -17,7 +17,7 @@ import {
   formatPaymentHashLabel,
   formatUnixTime,
 } from "./checkout-format.ts";
-import { createDetailExternalLink } from "./checkout-links.ts";
+import { createDetailExternalLink, type DetailLinkKind } from "./checkout-links.ts";
 import { createSwapFeeBreakdown, getSwapAssetDisplay } from "./checkout-swap-view.ts";
 
 /**
@@ -27,15 +27,25 @@ import { createSwapFeeBreakdown, getSwapAssetDisplay } from "./checkout-swap-vie
 export function createTransactionDetails(input: TransactionDetailsInput): TransactionDetailRow[] {
   const rows: TransactionDetailRow[] = [];
   const payInAsset = input.swap?.pay_in_asset;
-  const push = (label: string, value: string | undefined, copyValue?: string) => {
+  // `kind` says what the value IS; the label is only shown. A row with no kind
+  // carries no external link.
+  const push = (
+    label: string,
+    value: string | undefined,
+    copyValue?: string,
+    kind?: DetailLinkKind,
+  ) => {
     if (value === undefined || value === "") return;
     const linkValue = copyValue ?? value;
-    const link = createDetailExternalLink({
-      label,
-      value: linkValue,
-      ...(payInAsset === undefined ? {} : { payInAsset }),
-      ...(input.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: input.decodeLinkUrl }),
-    });
+    const link =
+      kind === undefined
+        ? undefined
+        : createDetailExternalLink({
+            kind,
+            value: linkValue,
+            ...(payInAsset === undefined ? {} : { payInAsset }),
+            ...(input.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: input.decodeLinkUrl }),
+          });
     rows.push({
       label,
       value,
@@ -59,7 +69,7 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
   push("Fiat", fiat);
 
   if (typeof input.invoice === "string" && input.invoice.length > 0) {
-    push("Lightning invoice", formatInvoiceLabel(input.invoice), input.invoice);
+    push("Lightning invoice", formatInvoiceLabel(input.invoice), input.invoice, "invoice");
   }
   if (input.payment_hash !== undefined) {
     push("Payment hash", formatPaymentHashLabel(input.payment_hash), input.payment_hash);
@@ -87,7 +97,7 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
     push("Pay-in asset", swap.pay_in_asset);
     push("Asset", asset.assetLabel);
     push("Network", asset.networkLabel);
-    push("Deposit address", swap.deposit_address);
+    push("Deposit address", swap.deposit_address, undefined, "address");
     push("Deposit memo", swap.deposit_memo);
     push("Deposit amount", formatDepositAmount(swap.deposit_amount));
     if (swap.deposit_received_amount !== undefined) {
@@ -103,10 +113,10 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
     if (swap.provider_expires_at !== undefined) {
       push("Provider expires at", formatUnixTime(swap.provider_expires_at));
     }
-    push("Deposit transaction", swap.deposit_tx_id);
+    push("Deposit transaction", swap.deposit_tx_id, undefined, "tx");
     push("Lightning payout", swap.payout_tx_id);
-    push("Refund address", swap.refund_address);
-    push("Refund transaction", swap.refund_tx_id);
+    push("Refund address", swap.refund_address, undefined, "address");
+    push("Refund transaction", swap.refund_tx_id, undefined, "tx");
     const feeBreakdown = createSwapFeeBreakdown(swap.fee);
     if (feeBreakdown !== undefined) {
       push("Cart total", feeBreakdown.cartTotal);

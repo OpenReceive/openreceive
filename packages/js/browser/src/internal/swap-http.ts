@@ -3,13 +3,8 @@ import { optionalSafeInteger } from "./checkout-read.ts";
 import { readJsonResponse } from "./checkout-transport.ts";
 import { resolveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
 import { requestHeaders } from "./request-headers.ts";
-import { type Routes, checkoutRoutes } from "./routes.ts";
-import {
-  type CheckoutInvoiceSnapshot,
-  OPENRECEIVE_REFUND_REVIEW_NONCE,
-  type BrowserLoggerOption,
-  type BrowserLogLevel,
-} from "./ui.ts";
+import { checkoutRoutes, type Routes } from "./routes.ts";
+import type { BrowserLoggerOption, BrowserLogLevel, CheckoutInvoiceSnapshot } from "./ui.ts";
 
 /**
  * What every swap call needs: the fetch to use, and the mount `prefix` its
@@ -27,8 +22,10 @@ export interface SwapRequestOptions {
  * POST JSON through the mounted swap route set.
  *
  * `action` selects the route client-side and is never sent: the shipped schemas
- * are `additionalProperties: false`, so an extra key is a 400. An action this
- * function does not route posts to `${prefix}/payments/check`.
+ * are `additionalProperties: false`, so an extra key is a 400. Only the actions
+ * listed here are routed — an unrecognized one throws rather than silently
+ * posting to `${prefix}/payments/check`. Swap starts go through
+ * `startSwapRequest`, which owns the /swaps route and its audit events.
  */
 export async function postJson(
   options: SwapRequestOptions & { readonly body: Record<string, unknown> },
@@ -37,6 +34,9 @@ export async function postJson(
   const routes = checkoutRoutes(options.prefix);
   const reference = nonEmptyString(body.reference);
   const action = nonEmptyString(body.action);
+  if (action !== undefined && action !== "swap_quote" && action !== "refund_swap") {
+    throw new Error(`Unrecognized checkout action ${action}.`);
+  }
   emitSwapActionLog(options.logger, "requested", body);
 
   try {
@@ -49,7 +49,7 @@ export async function postJson(
         : action === "refund_swap"
           ? await refundRequest(options, routes, body, reference)
           : await requestJson(options, routes.paymentsCheck, withoutAction(body));
-    if (action === "start_swap" || action === "refund_swap") {
+    if (action === "refund_swap") {
       emitSwapActionLog(options.logger, "succeeded", body, swapActionResultFields(result));
     }
     return result;
@@ -78,7 +78,7 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
     throw new Error("Swap response did not include provider instructions.");
   }
   // Optional echo of the checkout's own amount, which the client already knows.
-  const amountMsats = optionalSafeInteger(checkout.amount_msats);
+  const amountMsats = optionalSafeInteger(checkout.amount_msats, "amount_msats");
   return {
     invoice_id: paymentHash,
     rail: "swap",
@@ -101,23 +101,42 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
   };
 }
 
+/**
+ * Start a swap on the mounted /swaps route. This is the only swap-start path,
+ * so the swap.start.* audit events are emitted here — routing it through
+ * postJson would log a start while posting somewhere else.
+ */
 export async function startSwapRequest(
   options: SwapRequestOptions & {
     readonly reference: string;
     readonly payInAsset: string;
   },
 ): Promise<CheckoutInvoiceSnapshot> {
-  const body = await requestJson(options, checkoutRoutes(options.prefix).swaps, {
+  const logBody = {
+    action: "start_swap",
     reference: options.reference,
     pay_in_asset: options.payInAsset,
-  });
-  return normalizeSwapStartInvoice(body);
+  };
+  emitSwapActionLog(options.logger, "requested", logBody);
+  try {
+    const body = await requestJson(options, checkoutRoutes(options.prefix).swaps, {
+      reference: options.reference,
+      pay_in_asset: options.payInAsset,
+    });
+    emitSwapActionLog(options.logger, "succeeded", logBody, swapActionResultFields(body));
+    return normalizeSwapStartInvoice(body);
+  } catch (error) {
+    emitSwapActionLog(options.logger, "failed", logBody, {
+      error_message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /**
  * Review-or-confirm a swap refund for one attempt: locates the attempt's
  * payment hash among the known invoices, posts the refund action, and returns
- * the normalized swap invoice (with the staged refund address/nonce on review).
+ * the normalized swap invoice (with the staged refund address on review).
  */
 export async function requestSwapRefund(
   options: SwapRequestOptions & {
@@ -125,7 +144,6 @@ export async function requestSwapRefund(
     readonly invoices: readonly (CheckoutInvoiceSnapshot | null | undefined)[];
     readonly attemptId: string;
     readonly refundAddress: string;
-    readonly refundNonce: string;
     readonly confirm: boolean;
   },
 ): Promise<CheckoutInvoiceSnapshot> {
@@ -147,7 +165,6 @@ export async function requestSwapRefund(
       action: "refund_swap",
       attempt_id: options.attemptId,
       refund_address: options.refundAddress,
-      refund_nonce: options.refundNonce,
       confirm: options.confirm,
     },
   });
@@ -181,15 +198,11 @@ async function refundRequest(
       payment_hash: paymentHash,
     }),
   );
-  return {
-    swap: {
-      ...status,
-      refund_address: refundAddress,
-      // Confirmation is a browser UX step. Authorization and provider-state refresh
-      // happen on the host when the confirmed refund request is submitted.
-      refund_nonce: OPENRECEIVE_REFUND_REVIEW_NONCE,
-    },
-  };
+  // Review, not submit: the staged address rides back on the snapshot so the
+  // panel can show it for confirmation. Confirmation is a browser UX step —
+  // authorization and provider-state refresh happen on the host when the
+  // confirmed refund request is submitted.
+  return { swap: { ...status, refund_address: refundAddress } };
 }
 
 function withoutAction(body: Record<string, unknown>): Record<string, unknown> {
@@ -229,8 +242,6 @@ function copyOptionalSwapFields(
     "attempt_id",
     "provider_order_id",
     "refund_address",
-    "refund_nonce",
-    "refund_nonce_expires_at",
     "attention_reason",
     "deposit_received_amount",
     "fee",

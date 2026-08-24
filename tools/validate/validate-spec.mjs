@@ -225,9 +225,18 @@ function validateContracts() {
     asyncapi.components.messages.paymentSettled.name === "payment.settled",
     "payment event name drifted",
   );
+  // One payload, two spellings: the JS engine emits camelCase and the Ruby
+  // engine snake_case, so the schema is a oneOf over both branches. Pin the
+  // FIELDS on each branch — that is the contract; the casing follows the host
+  // language.
   assert(
-    JSON.stringify(asyncapi.components.schemas.PaidPayment.required) ===
-      JSON.stringify(["paymentHash", "paidAt"]),
+    JSON.stringify(
+      asyncapi.components.schemas.PaidPayment.oneOf?.map((branch) => branch.required),
+    ) ===
+      JSON.stringify([
+        ["paymentHash", "paidAt"],
+        ["payment_hash", "paid_at"],
+      ]),
     "paid event shape drifted",
   );
 }

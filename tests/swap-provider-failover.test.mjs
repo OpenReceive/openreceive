@@ -188,3 +188,53 @@ test("healthy primary that omits an asset does not fall through to backup", asyn
     await service.close();
   }
 });
+
+// Two different unavailable answers, and the difference is not cosmetic: the
+// label is cached per amount for up to 60s, so "not configured" during a
+// provider blip outlasts the blip and reads as a permanent capability gap.
+test("all providers down reads as unreachable, not unconfigured", async () => {
+  const { service } = await createService({
+    hostBehavior: {
+      "primary.example": { mode: "down" },
+      "backup.example": { mode: "down" },
+    },
+  });
+  try {
+    const options = await service.listSwapOptions({ amountMsats: 20_000_000 });
+    assert.ok(options.options.length > 0);
+    for (const option of options.options) {
+      assert.equal(option.available, false);
+      assert.equal(option.provider, "");
+      assert.equal(option.unavailableReason, "provider_unreachable");
+      assert.equal(option.unavailableMessage, "The swap provider is temporarily unreachable.");
+    }
+  } finally {
+    await service.close();
+  }
+});
+
+// A healthy provider that simply does not list an asset IS a configuration
+// gap, and keeps saying so.
+test("an asset absent from a healthy provider's catalog reads as unconfigured", async () => {
+  const { service } = await createService({
+    hostBehavior: {
+      "primary.example": {
+        mode: "ok",
+        ccies: [
+          { code: "SOL", coin: "SOL", network: "SOL", recv: true, send: true },
+          { code: "BTCLN", coin: "BTC", network: "LIGHTNING", recv: false, send: true },
+        ],
+      },
+      "backup.example": { mode: "ok" },
+    },
+  });
+  try {
+    const options = await service.listSwapOptions({ amountMsats: 20_000_000 });
+    const usdt = options.options.find((option) => option.payInAsset === "USDT_TRON");
+    assert.equal(usdt?.unavailableReason, "provider_unconfigured");
+    const sol = options.options.find((option) => option.payInAsset === "SOL_SOL");
+    assert.equal(sol?.available, true);
+  } finally {
+    await service.close();
+  }
+});

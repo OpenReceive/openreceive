@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
 import { fixedFloatProvider } from "../packages/js/node/src/swap/fixedfloat.ts";
+import { SwapProviderWeightBudget } from "../packages/js/node/src/swap/weight-budget.ts";
 
 const NOW = 1_700_000_000;
 const API_KEY = "test-api-key";
@@ -123,18 +124,22 @@ test("createSwap sends a signed fixed-rate create request and maps the order", a
   assert.deepEqual(order.raw, CREATE_DATA);
 });
 
-test("createSwap falls back to the injected clock when the order omits expiration", async () => {
-  // L14 regression guard: the fallback must use the injected `now`, not Date.now().
+test("createSwap fails when the order omits expiration", async () => {
+  // No invented deadline: the provider states the expiry. A create body without
+  // one is a provider contract break, and fabricating a 10-minute window would
+  // hand the payer a deadline the provider never agreed to.
   const { provider } = makeProvider({
     ccies: SAMPLE_CCIES,
     create: { ...CREATE_DATA, time: {} },
   });
-  const order = await provider.createSwap({
-    payInAsset: "USDT_TRON",
-    bolt11: BOLT11,
-    invoiceAmountMsats: INVOICE_AMOUNT_MSATS,
-  });
-  assert.equal(order.expires_at, NOW + 600);
+  await assert.rejects(
+    provider.createSwap({
+      payInAsset: "USDT_TRON",
+      bolt11: BOLT11,
+      invoiceAmountMsats: INVOICE_AMOUNT_MSATS,
+    }),
+    /FixedFloat order is missing time.expiration/,
+  );
 });
 
 test("createSwap backfills the swap fee from /price when create omits USD values", async () => {
@@ -424,7 +429,6 @@ test("HTTP 429 marks the weight budget rate limited", async () => {
     markRateLimited: async () => {
       rateLimited += 1;
     },
-    canReserve: async () => true,
   });
   await assert.rejects(provider.getStatus(BASE_ORDER), (error) => {
     assert.equal(error.name, "FixedFloatApiError");
@@ -434,4 +438,29 @@ test("HTTP 429 marks the weight budget rate limited", async () => {
   });
   assert.deepEqual(reserved, ["order"]);
   assert.equal(rateLimited, 1);
+});
+
+// The weight window rolls; the 429 backoff does NOT ride along with it. A 429
+// marked at second 59 was forgiven one second later, so a rate-limited provider
+// could be hammered again almost immediately.
+test("a rate-limit backoff outlives the weight window it started in", async () => {
+  let now = 1_000;
+  const budget = new SwapProviderWeightBudget("fixedfloat", () => now);
+  await budget.reserve("order");
+  now = 1_059;
+  await budget.markRateLimited();
+  await assert.rejects(() => budget.reserve("order"), /in backoff until/);
+
+  // Window rolls at second 60 and clears the used weight...
+  now = 1_061;
+  const denied = await budget.reserve("create").then(
+    () => undefined,
+    (error) => error,
+  );
+  assert.match(String(denied?.message), /in backoff until/);
+  assert.equal(denied?.denial?.reason, "backoff");
+
+  // ...and the backoff expires on its own clock (1_059 + 60).
+  now = 1_120;
+  await budget.reserve("create");
 });

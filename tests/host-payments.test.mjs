@@ -73,6 +73,8 @@ test("host integration allows multiple expired attempts and reuses the one live 
     amount: { currency: "USD", value: "10.00" },
     paymentHash: hash("c"),
     checkout: payment("c").checkout,
+    // Carried so payments/check serves the row path without a second read.
+    attemptStatus: { status: "pending", paidAt: null },
   });
 });
 
@@ -121,7 +123,7 @@ test("host integration fails closed when repository corruption exposes two live 
       (thrown) => thrown,
     );
   assert.equal(error.status, 409);
-  assert.match(error.message, /unpaid checkouts in progress/);
+  assert.match(error.message, /multiple unpaid checkouts in progress/);
   // The forbidden internal vocabulary never reaches the payer.
   assert.doesNotMatch(error.message, /live|supersede/i);
 });
@@ -138,6 +140,7 @@ test("a pending superseded row never blocks its live replacement from being reus
     amount: { currency: "USD", value: "10.00" },
     paymentHash: hash("b"),
     checkout: payment("b").checkout,
+    attemptStatus: { status: "pending", paidAt: null },
   });
 });
 

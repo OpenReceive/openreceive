@@ -68,13 +68,14 @@ test("@openreceive/node runtime never imports a database driver", () => {
   }
 });
 
-test("createCheckout fails closed when the wallet ignores the requested expiry", async () => {
+// A wallet with its own expiry clamp must still be usable for plain checkouts:
+// the ledger row stores the wallet's expires_at, so reuse buffering,
+// reconciliation, and expiry+grace all stay consistent with the real invoice.
+test("createCheckout records a clamped wallet expiry instead of refusing", async () => {
   const now = 1000;
   const wallet = createTestkitReceiveClient({ now: () => now });
-  const requested = [];
   const originalMakeInvoice = wallet.makeInvoice.bind(wallet);
   wallet.makeInvoice = async (request) => {
-    requested.push(request);
     const invoice = await originalMakeInvoice(request);
     // Simulate wallets that ignore expiry and mint a 60-minute invoice.
     return { ...invoice, expires_at: now + 3600 };
@@ -86,22 +87,80 @@ test("createCheckout fails closed when the wallet ignores the requested expiry",
     onEvent: (event) => events.push(event),
   });
 
+  const checkout = await openreceive.createCheckout({
+    reference: "order-expiry",
+    amount: { sats: 1000 },
+  });
+  assert.equal(checkout.expiresAt, now + 3600);
+  const adjusted = events.find((event) => event.event === "checkout.invoice_expiry.adjusted");
+  assert.equal(adjusted?.level, "warn");
+  assert.equal(adjusted?.requested_expiry_seconds, 600);
+  assert.equal(adjusted?.actual_expiry_seconds, 3600);
+  await openreceive.close();
+});
+
+// The swap path is the one that REQUIRES a floor: its shadow invoice must
+// outlive the provider order, so an invoice the wallet cut short strands a
+// deposit the payer already sent.
+test("createCheckout fails closed when the wallet undercuts a required expiry", async () => {
+  const now = 1000;
+  const wallet = createTestkitReceiveClient({ now: () => now });
+  const requested = [];
+  const originalMakeInvoice = wallet.makeInvoice.bind(wallet);
+  wallet.makeInvoice = async (request) => {
+    requested.push(request);
+    const invoice = await originalMakeInvoice(request);
+    // A wallet capping every invoice at 10 minutes, under the 30 asked for.
+    return { ...invoice, expires_at: now + 600 };
+  };
+  const events = [];
+  const openreceive = await createOpenReceive({
+    client: wallet,
+    clock: () => now,
+    onEvent: (event) => events.push(event),
+  });
+
   await assert.rejects(
-    () => openreceive.createCheckout({ reference: "order-expiry", amount: { sats: 1000 } }),
+    () =>
+      openreceive.createCheckout({
+        reference: "order-expiry",
+        amount: { sats: 1000 },
+        expirySeconds: 1800,
+      }),
     (error) => {
       assert.equal(error.code, "UNSUPPORTED_METHOD");
       // The buyer-facing message stays short; the requested/actual numbers
       // belong to the checkout.invoice_expiry.rejected log event instead.
       assert.match(error.message, /backing NWC wallet.*did not honor the requested invoice expiry/);
-      assert.doesNotMatch(error.message, /600|3600/);
+      assert.doesNotMatch(error.message, /600|1800/);
       return true;
     },
   );
-  assert.equal(requested[0]?.expiry, 600);
+  assert.equal(requested[0]?.expiry, 1800);
   const rejection = events.find((event) => event.event === "checkout.invoice_expiry.rejected");
   assert.equal(rejection?.level, "error");
-  assert.equal(rejection?.requested_expiry_seconds, 600);
-  assert.equal(rejection?.actual_expiry_seconds, 3600);
+  assert.equal(rejection?.requested_expiry_seconds, 1800);
+  assert.equal(rejection?.actual_expiry_seconds, 600);
+  await openreceive.close();
+});
+
+// A wallet that mints LONGER than a required floor is fine: the shadow invoice
+// still outlives the provider order.
+test("a wallet minting longer than a required expiry is accepted", async () => {
+  const now = 1000;
+  const wallet = createTestkitReceiveClient({ now: () => now });
+  const originalMakeInvoice = wallet.makeInvoice.bind(wallet);
+  wallet.makeInvoice = async (request) => {
+    const invoice = await originalMakeInvoice(request);
+    return { ...invoice, expires_at: now + 3600 };
+  };
+  const openreceive = await createOpenReceive({ client: wallet, clock: () => now });
+  const checkout = await openreceive.createCheckout({
+    reference: "order-expiry-long",
+    amount: { sats: 1000 },
+    expirySeconds: 1800,
+  });
+  assert.equal(checkout.expiresAt, now + 3600);
   await openreceive.close();
 });
 

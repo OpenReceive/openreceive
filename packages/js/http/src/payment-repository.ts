@@ -125,6 +125,15 @@ export interface PaymentRepository {
    * covered by later passes.
    */
   listReconcilableAttempts(): Promise<readonly ReconcilableAttempt[]>;
+  /**
+   * The `pending` attempt for one payment hash, or undefined when the hash is
+   * unknown or already terminal. Direct settlement from an NWC notification
+   * needs a by-hash answer: `listReconcilableAttempts` is an oldest-first
+   * batch, so a notified attempt behind a backlog would look unknown. A
+   * repository that omits this falls back to batch membership, which delays
+   * notified settlements past a batch-sized backlog.
+   */
+  findPendingAttempt?(paymentHash: string): Promise<ReconcilableAttempt | undefined>;
   commitAttempt(input: CheckoutCreatedInput): void | Promise<void>;
   recordReconciliation(transition: ReconciliationTransition): void | Promise<void>;
   /**

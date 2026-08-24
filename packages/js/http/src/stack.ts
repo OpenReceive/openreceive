@@ -1,11 +1,9 @@
 import { compact } from "@openreceive/core";
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
-import type { CreateOpenReceiveHttpHandlerOptions, HttpHandler } from "./handler.ts";
+import { createRequestId, errorResponse, HttpError } from "./errors.ts";
+import type { CreateHttpHandlerOptions, HttpHandler } from "./handler.ts";
 import { createHttpHandler } from "./handler.ts";
-import type {
-  CreateOpenReceiveHostDbOptions,
-  CreateOpenReceiveHostRepositoryOptions,
-} from "./host-payments.ts";
+import type { CreateHostDbOptions, CreateHostRepositoryOptions } from "./host-payments.ts";
 import { createHost } from "./host-payments.ts";
 import { normalizePrefix } from "./router.ts";
 
@@ -39,14 +37,22 @@ export type StackWallet =
  * wrong signature is a type error rather than a runtime surprise.
  */
 export type StackStorage =
-  | Pick<CreateOpenReceiveHostDbOptions, "db" | "tableName" | "onPaid" | "payments">
-  | Pick<CreateOpenReceiveHostRepositoryOptions, "payments" | "onPaid" | "db" | "tableName">;
+  | Pick<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments">
+  | Pick<CreateHostRepositoryOptions, "payments" | "onPaid" | "db" | "tableName">;
 
-export interface CreateOpenReceiveStackOptions
-  extends Omit<CreateOpenReceiveHttpHandlerOptions, "service" | "host">,
-    Omit<CreateOpenReceiveHostDbOptions, "db" | "tableName" | "onPaid" | "payments"> {
+export interface CreateStackOptions
+  extends Omit<CreateHttpHandlerOptions, "service" | "host">,
+    Omit<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments"> {
   readonly wallet: StackWallet;
   readonly storage: StackStorage;
+  /**
+   * Where the one boot-failure line goes. Boot happens before any service
+   * exists, so this is the only sink @openreceive/http can offer; it defaults
+   * to `console.error`. The message only ever carries `error.message` — a
+   * boot-time wallet error object carries a raw cause that has passed through
+   * none of the redaction the service wires for every other line.
+   */
+  readonly onBootFailure?: (message: string) => void;
 }
 
 export interface Stack {
@@ -61,8 +67,8 @@ export interface Stack {
   close(): Promise<void>;
 }
 
-export function createStack(options: CreateOpenReceiveStackOptions): Stack {
-  const { wallet, storage, amountFor, clock, ...handlerOptions } = options;
+export function createStack(options: CreateStackOptions): Stack {
+  const { wallet, storage, amountFor, clock, onBootFailure, ...handlerOptions } = options;
   // The storage branch reaches the host factory as the mode it is — a
   // repository stays repository mode, a database handle stays db mode — and
   // its `onPaid` already has the type of that branch.
@@ -92,14 +98,35 @@ export function createStack(options: CreateOpenReceiveStackOptions): Stack {
   // only: a boot-time wallet error object carries its raw cause, which has
   // passed through none of the redaction the host wired for every other line.
   boot.catch((error: unknown) => {
-    console.error(
-      "OpenReceive stack failed to start:",
-      error instanceof Error ? error.message : String(error),
-    );
+    const message = `OpenReceive stack failed to start: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
+    if (onBootFailure === undefined) console.error(message);
+    else onBootFailure(message);
   });
 
-  const handle = async (request: Request, extras?: { native?: unknown }): Promise<Response> =>
-    (await boot)(request, extras);
+  const handle = async (request: Request, extras?: { native?: unknown }): Promise<Response> => {
+    let booted: HttpHandler;
+    try {
+      booted = await boot;
+    } catch {
+      // A boot failure is the wallet being unavailable, not this request being
+      // wrong. Rethrowing hands express/fastify a raw error whose text bypasses
+      // every redaction rule and shows the payer the host's generic error page
+      // instead of the OpenReceive JSON error contract. The cause already
+      // reached the one sanitized console line above.
+      return errorResponse(
+        new HttpError(
+          503,
+          "WALLET_UNAVAILABLE",
+          "The payment service is not available. Please try again shortly.",
+          { retryable: true },
+        ),
+        createRequestId(),
+      );
+    }
+    return booted(request, extras);
+  };
   const handler = handle as HttpHandler;
   Object.defineProperties(handler, {
     prefix: { value: prefix, enumerable: true },
@@ -126,10 +153,10 @@ export function createStack(options: CreateOpenReceiveStackOptions): Stack {
  * the all-in-one path and blaming the caller for omitting nwc/db/onPaid.
  */
 export function isStackOptions(
-  options: CreateOpenReceiveHttpHandlerOptions | CreateOpenReceiveStackOptions,
-): options is CreateOpenReceiveStackOptions {
+  options: CreateHttpHandlerOptions | CreateStackOptions,
+): options is CreateStackOptions {
   if ((options as { host?: unknown }).host !== undefined) return false;
-  const flat = options as CreateOpenReceiveStackOptions;
+  const flat = options as CreateStackOptions;
   if (flat.wallet !== undefined || flat.storage !== undefined || flat.amountFor !== undefined) {
     return true;
   }

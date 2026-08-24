@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const GEM_NAMES = ["openreceive", "openreceive-server", "openreceive-rails"];
 
@@ -153,7 +154,10 @@ function assertGemNotPublished(root, name, version) {
   // publish, but an already-published version must.
   let output;
   try {
-    output = run("gem", ["search", "--remote", "--exact", "--all", name], root);
+    // --prerelease is required: RubyGems excludes prereleases from search by
+    // default, and prereleases are exactly what this repo mints. Release
+    // versions still appear with --all --prerelease.
+    output = run("gem", ["search", "--remote", "--exact", "--all", "--prerelease", name], root);
   } catch {
     console.error(`warning: could not query RubyGems for ${name}; continuing`);
     return;
@@ -239,9 +243,11 @@ function main() {
   throw new Error(`Unknown gem release command: ${command}\n${usage()}`);
 }
 
+// fileURLToPath, not `new URL(...).pathname`: the latter keeps percent-encoding,
+// so a repo path containing a space compared unequal and the CLI silently did
+// nothing.
 const invokedDirectly =
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === new URL(import.meta.url).pathname;
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
   try {

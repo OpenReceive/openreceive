@@ -65,11 +65,16 @@ export function rejectPayerAmount(body: Record<string, unknown>): void {
  * content type (only urlencoded, multipart, or text/plain), and a
  * cross-origin fetch that does is non-simple and CORS-preflighted — which the
  * library never answers — so a forged request carrying the victim's session
- * can never present a JSON body here. Parameters and charset are ignored.
+ * can never present a JSON body here. Parameters and charset are ignored, and
+ * the media type is case-folded (RFC 2045 media types are case-insensitive, so
+ * "Application/JSON" is the same type).
  * Mirrors the Ruby engine's RequestHandler#assert_json_content_type!.
  */
 function assertJsonContentType(request: Request): void {
-  const contentType = (request.headers.get("content-type") ?? "").split(";")[0]?.trim();
+  const contentType = (request.headers.get("content-type") ?? "")
+    .split(";")[0]
+    ?.trim()
+    .toLowerCase();
   if (contentType !== "application/json") {
     throw new HttpError(415, "INVALID_REQUEST", "Request content type must be application/json.");
   }

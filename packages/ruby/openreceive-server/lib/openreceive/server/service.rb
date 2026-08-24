@@ -81,8 +81,15 @@ module OpenReceive
 
         normalized_amount = normalize_swap_amount_msats(amount_msats)
         catalog = resolve_swap_provider_catalog
+        # Providers ARE configured (checked above), so an empty catalog means
+        # every one of them failed its fetch — an outage, not a configuration
+        # gap. Mirrors the JS listSwapOptions ruling.
+        catalog_unreachable = catalog.empty?
         Swap::Assets.list_info.map do |asset|
-          swap_catalog_option(asset, normalized_amount, catalog[asset.fetch("pay_in_asset")])
+          swap_catalog_option(
+            asset, normalized_amount, catalog[asset.fetch("pay_in_asset")],
+            catalog_unreachable: catalog_unreachable
+          )
         end
       end
 
@@ -91,12 +98,13 @@ module OpenReceive
         # failure is the wallet's response violating the receive contract, not
         # a 400 the payer caused — so this rescue must not cover the wallet
         # call or its normalization.
-        reference, expiry, fiat_quote, request = validating_input do
+        reference, expiry, required_expiry, fiat_quote, request = validating_input do
           data = stringify(input)
-          # The message names the JS service's camelCase field (requests.ts
-          # "reference is required."); the accepted input key is snake_case.
           reference = required_string(data["reference"], "reference")
           amount_msats, fiat_quote = resolve_amount(data.fetch("amount"))
+          # A caller-supplied expiry_seconds is a FLOOR (only the swap path sets
+          # it); the library default is a request the wallet may clamp.
+          required_expiry = !data["expiry_seconds"].nil?
           expiry = Integer(data["expiry_seconds"] || INVOICE_EXPIRY_SECONDS)
           metadata = stringify(data["metadata"] || {}).merge("reference" => reference)
           # NIP-47 caps invoice metadata; reject before any wallet call with
@@ -112,29 +120,41 @@ module OpenReceive
           }
           request["description"] = data["memo"] if data["memo"]
           request["description_hash"] = data["description_hash"] if data["description_hash"]
-          [reference, expiry, fiat_quote, request]
+          [reference, expiry, required_expiry, fiat_quote, request]
         end
         response = call_nwc(:make_invoice, request)
         begin
           wallet = OpenReceive.normalize_make_invoice_response(response)
           created_at = wallet["created_at"] || @clock.call
-          # The wallet must honor the requested expiry. An invoice whose real
-          # payable window differs from our ledger row would either die under the
-          # payer early or stay payable after reconciliation closed the attempt,
-          # so a wallet that ignores `expiry` (beyond a small tolerance) fails
-          # checkout creation.
+          # The ledger row stores the wallet's OWN expires_at, so reuse
+          # buffering, reconciliation, and the expiry+grace close rule all stay
+          # consistent with the real invoice even when the wallet clamps expiry
+          # to its own min/max. A deviation is therefore a warning on the plain
+          # checkout path — refusing would lock every such wallet out entirely.
+          #
+          # A caller-supplied expiry is a FLOOR: only the swap path sets one,
+          # because the shadow invoice must outlive the provider order. A short
+          # invoice fails there. Mirrors the JS create_checkout ruling.
           requested_expires_at = created_at + expiry
           expires_at = wallet["expires_at"] || requested_expires_at
+          shortfall = requested_expires_at - expires_at
           if (expires_at - requested_expires_at).abs > INVOICE_EXPIRY_TOLERANCE_SECONDS
             # The detailed diagnostic is logged, never sent: the wire carries
             # the same short form as the JS service.
-            @logger&.error(
-              "checkout.invoice_expiry.rejected: The wallet did not honor the " \
-              "requested invoice expiry (requested #{expiry}s, got " \
-              "#{expires_at - created_at}s). Use a wallet whose make_invoice honors expiry."
+            if required_expiry && shortfall > INVOICE_EXPIRY_TOLERANCE_SECONDS
+              @logger&.error(
+                "checkout.invoice_expiry.rejected: The wallet did not honor the " \
+                "required invoice expiry (required #{expiry}s, got " \
+                "#{expires_at - created_at}s). Use a wallet whose make_invoice honors expiry."
+              )
+              raise WalletContractError,
+                    "Error with the backing NWC wallet: it did not honor the requested invoice expiry."
+            end
+            @logger&.warn(
+              "checkout.invoice_expiry.adjusted: The wallet clamped the requested " \
+              "invoice expiry (requested #{expiry}s, got #{expires_at - created_at}s); " \
+              "the wallet's own expiry is recorded on the attempt."
             )
-            raise WalletContractError,
-                  "Error with the backing NWC wallet: it did not honor the requested invoice expiry."
           end
           {
             "reference" => reference,
@@ -168,6 +188,11 @@ module OpenReceive
            Integer(row.fetch("created_at") { row.fetch("createdAt") })]
         end
         overlap = Integer(data.fetch("overlap_seconds", 60))
+        # A negative overlap would SHRINK both window ends instead of padding
+        # them, hiding exactly the rows the padding exists to catch. Mirrors
+        # the JS reconcilePaymentAttempts guard.
+        raise ArgumentError, "overlap_seconds must be a non-negative integer" if overlap.negative?
+
         from = [expected.values.min - overlap, 0].max
         # Both ends of the window are padded: `from` against a wallet clock
         # that lags, `until` against one that runs ahead — an unpadded `until`
@@ -211,8 +236,8 @@ module OpenReceive
         quote = stringify(call_provider(provider, :quote,
           "pay_in_asset" => asset, "invoice_amount_msats" => amount_msats))
         {
-          "provider" => quote["provider"] || provider_name(provider),
-          "pay_asset" => quote["pay_asset"] || asset,
+          "provider" => quote.fetch("provider"),
+          "pay_asset" => quote.fetch("pay_asset"),
           "available" => quote.fetch("available"),
           "pay_amount" => quote["pay_amount"],
           "minimum_pay_amount" => quote["minimum_pay_amount"],
@@ -292,7 +317,9 @@ module OpenReceive
         currencies = Array(stringify(input)["currencies"] || @price_currencies).map { |value| value.to_s.strip.upcase }
         currencies.each do |currency|
           unless /\A[A-Z]{3}\z/.match?(currency)
-            raise ValidationError, "currencies entries must be three-letter fiat codes"
+            # Same message as the JS service's payer currencies path; the wire
+            # shape check already fired in the request handler.
+            raise ValidationError, "Invalid currencies entry: #{currency}."
           end
           unless @price_currencies.include?(currency)
             raise ValidationError,
@@ -440,7 +467,7 @@ module OpenReceive
           provider.attach_swap_cache(cache) if provider.respond_to?(:attach_swap_cache)
           if provider.respond_to?(:attach_weight_budget)
             provider.attach_weight_budget(
-              Swap::SwapProviderWeightBudget.new(provider_name(provider), @clock)
+              Swap::SwapProviderWeightBudget.new(provider.name, @clock)
             )
           end
         end
@@ -466,23 +493,33 @@ module OpenReceive
           by_asset = {}
           catalog.each do |item|
             row = stringify(item)
-            by_asset[row["pay_asset"]] = row.merge("provider" => provider_name(provider))
+            by_asset[row["pay_asset"]] = row.merge("provider" => provider.name)
           end
           return by_asset
         end
         {}
       end
 
-      def swap_catalog_option(asset, amount_msats, provider_asset)
+      # `catalog_unreachable` separates a transient provider outage from a
+      # configuration gap. It matters because the unavailable label is cached
+      # per amount for up to 60s: telling a payer "not configured" during a
+      # provider blip outlasts the blip.
+      def swap_catalog_option(asset, amount_msats, provider_asset, catalog_unreachable: false)
         if provider_asset.nil?
+          reason, message =
+            if catalog_unreachable
+              ["provider_unreachable", "The swap provider is temporarily unreachable."]
+            else
+              ["provider_unconfigured", "Automated swaps are not configured for this asset."]
+            end
           return {
             "pay_in_asset" => asset.fetch("pay_in_asset"),
             "label" => asset.fetch("label"),
             "network_label" => asset.fetch("network_label"),
             "provider" => "",
             "available" => false,
-            "unavailable_reason" => "provider_unconfigured",
-            "unavailable_message" => "Automated swaps are not configured for this asset."
+            "unavailable_reason" => reason,
+            "unavailable_message" => message
           }
         end
 
@@ -620,7 +657,7 @@ module OpenReceive
         @swap_providers.each do |provider|
           begin
             supported = call_provider(provider, :supported_pay_in_assets)
-            return provider if provider_supports_asset?(supported, asset)
+            return provider if Array(supported).include?(asset)
 
             # Healthy provider that omits this asset — do not fall through.
             raise unsupported_swap_asset_error(asset)
@@ -638,17 +675,9 @@ module OpenReceive
         ServiceError.new(503, "INTERNAL", "No configured swap provider supports #{asset}.")
       end
 
-      def provider_supports_asset?(supported, asset)
-        Array(supported).include?(asset) || (supported.respond_to?(:include?) && supported.include?(asset))
-      end
-
       def provider_by_name(name)
-        @swap_providers.find { |provider| provider_name(provider) == name } ||
+        @swap_providers.find { |provider| provider.name == name } ||
           raise(ServiceError.new(503, "INTERNAL", "Swap provider #{name} is not configured."))
-      end
-
-      def provider_name(provider)
-        provider.respond_to?(:name) ? provider.name : provider.class.name
       end
 
       def public_swap(order, hash, reference)
@@ -726,9 +755,13 @@ module OpenReceive
         raise ValidationError, e.message
       end
 
+      # Same message as the JS service's requests.ts ("reference is required."),
+      # trailing period included: a direct-service caller sees identical text on
+      # both engines, not only through the handler (whose own `required` check
+      # fires first on the mounted routes).
       def required_string(value, field)
         text = value.to_s.strip
-        raise ValidationError, "#{field} is required" if text.empty?
+        raise ValidationError, "#{field} is required." if text.empty?
         text
       end
 

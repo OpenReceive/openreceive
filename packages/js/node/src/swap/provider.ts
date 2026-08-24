@@ -181,15 +181,7 @@ export interface SwapProvider {
   attachWeightBudget?(budget: {
     reserve(path: string): Promise<void>;
     markRateLimited(): Promise<void>;
-    canReserve(path: string): Promise<boolean>;
   }): void;
-  /**
-   * Whether this provider can accept an outbound API call of the given path
-   * without exceeding its shared weight budget. Used by provider selection to
-   * fail over to the next configured provider when the preferred one is limited.
-   * When omitted, the provider is treated as always available.
-   */
-  canAcceptRequest?(path: string): Promise<boolean>;
   supportedPayInAssets(): Promise<Set<SwapPayInAsset>>;
   payInAssetCatalog?(): Promise<readonly SwapProviderAsset[]>;
   invoiceExpirySeconds?(input: { readonly payInAsset: SwapPayInAsset }): number;

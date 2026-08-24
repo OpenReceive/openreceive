@@ -129,8 +129,10 @@ starting rather than deferring the failure to a customer's first checkout. Node 
 `ConfigError` (`WALLET_PREFLIGHT_FAILED`) before
 [`createOpenReceive()`](api-reference.md#createopenreceive) resolves — the
 [framework adapters](api-reference.md#framework-adapters) run preflight lazily
-(the first request awaits it), so await their `ready` promise in a deploy
-health check; the Rails engine runs the same preflight eagerly in production
+(the first request awaits it), so await it in a deploy health check: the
+Express middleware and the Next handler expose a `ready` promise, and on
+Fastify `await fastify.ready()` covers it (the plugin exposes no `ready` of its
+own). The Rails engine runs the same preflight eagerly in production
 ([When your application boots](deploying.md#when-your-application-boots)).
 Tests can [inject a fake wallet client](host-testing.md#inject-a-fake-wallet-client)
 to skip NWC and preflight entirely.

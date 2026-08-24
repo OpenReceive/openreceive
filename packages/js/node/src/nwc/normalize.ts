@@ -19,6 +19,7 @@ import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   type TransactionState,
   type ParsedNwcConnection,
+  type ReceiveNwcClient,
   nonEmptyString,
   recordOrEmpty,
   type WalletCapabilitySummary,
@@ -240,7 +241,27 @@ export function normalizeListTransactionsResult(rawResult: unknown): NormalizedL
       skippedRows += 1;
     }
   }
+  // ALL rows unusable is the unrecognized-shape case wearing a different hat:
+  // a non-empty wallet page that yields nothing is indistinguishable from an
+  // empty wallet, and an empty-looking scan at expiry+grace closes pending
+  // attempts as expired. Fail the scan instead — the per-row skip tolerance
+  // above still covers the mixed page reconciliation actually depends on.
+  if (transactions.length === 0 && skippedRows > 0) {
+    throw new TypeError("list_transactions returned no usable rows");
+  }
   return { transactions, skippedRows };
+}
+
+/**
+ * A wallet client that also supports NWC-02 notifications. Declared rather than
+ * duck-typed: both concrete clients (Alby, testkit) implement it, and core's
+ * ReceiveNwcClient stays the minimum receive contract for custom clients that
+ * only poll.
+ */
+export interface NotifyingReceiveNwcClient extends ReceiveNwcClient {
+  subscribeNotifications?(
+    handler: (notification: NwcWalletNotification) => void,
+  ): Promise<() => Promise<void> | void>;
 }
 
 export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction {
@@ -250,19 +271,24 @@ export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction
   const type = normalizeTransactionType(result.type);
   if (type !== undefined) normalized.type = type;
 
-  // Per-field tolerance: a wallet's odd field (empty string, float timestamp,
-  // unparsable amount) degrades to "field absent" rather than rejecting the
-  // row — settlement classification already treats missing fields safely.
+  // ABSENT means absent — a wallet's empty string, and a row minted by another
+  // app through the same wallet, legitimately carry no hash, amount, or state.
+  // PRESENT but unusable is different: the wallet is trusted, so a value it
+  // did send and we cannot read is a row we do not understand. Such a row
+  // throws, and the caller skips and counts it (one quirky row must not
+  // livelock reconciliation) — but a page where EVERY row throws fails the
+  // scan, because an empty-looking scan at expiry+grace closes attempts.
   const invoice = nonEmptyString(result.invoice);
   if (invoice !== undefined) normalized.invoice = invoice;
   const paymentHash = nonEmptyString(result.payment_hash ?? result.paymentHash);
-  if (paymentHash !== undefined) normalized.payment_hash = paymentHash;
-  try {
-    if (result.amount_msats !== undefined || result.amount !== undefined) {
-      normalized.amount_msats = toBigInt(result.amount_msats ?? result.amount, "amount_msats");
+  if (paymentHash !== undefined) {
+    if (!/^[0-9a-fA-F]{64}$/.test(paymentHash)) {
+      throw new TypeError("payment_hash must be 64 hexadecimal characters");
     }
-  } catch {
-    // Unparsable amount: leave the field absent.
+    normalized.payment_hash = paymentHash;
+  }
+  if (result.amount_msats !== undefined || result.amount !== undefined) {
+    normalized.amount_msats = toBigInt(result.amount_msats ?? result.amount, "amount_msats");
   }
 
   // Map common wallet-library field spellings to OpenReceive's normalized
@@ -275,11 +301,11 @@ export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction
     normalized.transaction_state = transactionState;
   }
 
-  const createdAt = optionalUnixSeconds(result.created_at ?? result.createdAt);
+  const createdAt = optionalUnixSeconds(result.created_at ?? result.createdAt, "created_at");
   if (createdAt !== undefined) normalized.created_at = createdAt;
-  const expiresAt = optionalUnixSeconds(result.expires_at ?? result.expiresAt);
+  const expiresAt = optionalUnixSeconds(result.expires_at ?? result.expiresAt, "expires_at");
   if (expiresAt !== undefined) normalized.expires_at = expiresAt;
-  const settledAt = optionalUnixSeconds(result.settled_at ?? result.settledAt);
+  const settledAt = optionalUnixSeconds(result.settled_at ?? result.settledAt, "settled_at");
   if (settledAt !== undefined) normalized.settled_at = settledAt;
 
   const preimage = nonEmptyString(result.preimage);
@@ -288,12 +314,8 @@ export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction
   if (description !== undefined) normalized.description = description;
   const descriptionHash = nonEmptyString(result.description_hash ?? result.descriptionHash);
   if (descriptionHash !== undefined) normalized.description_hash = descriptionHash;
-  try {
-    if (result.fees_paid !== undefined || result.feesPaid !== undefined) {
-      normalized.fees_paid_msats = toBigInt(result.fees_paid ?? result.feesPaid, "fees_paid");
-    }
-  } catch {
-    // Unparsable fee: leave the field absent.
+  if (result.fees_paid !== undefined || result.feesPaid !== undefined) {
+    normalized.fees_paid_msats = toBigInt(result.fees_paid ?? result.feesPaid, "fees_paid");
   }
 
   return normalized;
@@ -416,8 +438,15 @@ function parseOptionalInteger(value: unknown, fieldName: string): number | undef
  * wallets report fractional settled_at) and degrades anything unusable to
  * undefined instead of rejecting the row.
  */
-function optionalUnixSeconds(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+/**
+ * Absent stays absent; present must be a non-negative number. Sub-second
+ * precision is a real wallet quirk and floors rather than failing the row.
+ */
+function optionalUnixSeconds(value: unknown, fieldName: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new TypeError(`${fieldName} must be a non-negative number of Unix seconds`);
+  }
   return Math.floor(value);
 }
 

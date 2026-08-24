@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "name": "a live attempt on the same rail refuses the create with one agreed string",
+  "handler": "live_attempt_conflict",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": { "reference": "order-live-conflict" }
+  },
+  "expected": {
+    "status": 409,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "CONFLICT",
+      "message": "An unpaid checkout for this payment method is already in progress for this reference.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "One payer-facing string per situation. The single-live refusal is worded here; the multi-live case (a repository exposing two live attempts for one rail) uses the separate 'multiple unpaid checkouts in progress' wording. Both are phrased with `reference`, never `order`, and the internal live/supersede vocabulary never reaches the payer."
+}

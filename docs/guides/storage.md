@@ -25,7 +25,7 @@ as a migration for your ORM. Every column must stay:
 ```text
 openreceive_payments
   id             primary key
-  reference       required, indexed TEXT; many attempts per reference
+  reference      required, indexed TEXT; many attempts per reference
   payment_hash   required, unique, 64 lowercase hex (CHECK)
   status         required, default 'pending' (CHECK: the five statuses below)
   status_reason  nullable operator-facing detail
@@ -88,6 +88,15 @@ so when a payer reloads the checkout page, OpenReceive re-serves the same
 invoice from this row instead of calling the wallet again — the page keeps
 working even while the wallet is unreachable. Never serialize or log
 `swap_data`.
+
+**One engine per table.** The two engines write the same FIELDS but not the
+same schema: the JS DDL stores timestamps as unix-seconds `BIGINT`s and
+`checkout_data`/`swap_data` as `TEXT`, while the Rails engine's migration uses
+`datetime` columns and `t.json` — and the JS engine serializes `swap_data` with
+camelCase keys where the Ruby engine uses snake_case. Attempt and swap recovery
+is therefore per-engine: point each engine at its own `openreceive_payments`
+table. The two share the reconcile-gate ALGORITHM (the same advisory-lock seed
+over `openreceive_meta`), not one physical table.
 
 `client_ip` is the adapter-attributed payer IP at invoice creation (null when
 none was attributable). It backs the opt-in per-IP

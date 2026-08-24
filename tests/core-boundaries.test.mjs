@@ -105,7 +105,7 @@ test("a truncated scan omits the hash rather than reporting not_found", async ()
   assert.deepEqual(results, []);
 });
 
-test("malformed reconcile inputs throw the 400-mapped DecimalError", async () => {
+test("malformed reconcile inputs throw the 400-mapped RangeError", async () => {
   const client = {
     async preflight() {
       return {};
@@ -119,9 +119,11 @@ test("malformed reconcile inputs throw the 400-mapped DecimalError", async () =>
   };
   const inputError = (options) =>
     assert.rejects(reconcilePaymentAttempts({ client, ...options }), (error) => {
-      assert.ok(error instanceof DecimalError);
       // The Node service maps payer/host input errors to 400 by RangeError.
       assert.ok(error instanceof RangeError);
+      // These are host config, not money math: DecimalError would mislead a
+      // type-catcher and couple payments.ts to the money module.
+      assert.ok(!(error instanceof DecimalError));
       return true;
     });
   await inputError({ attempts: [{ paymentHash: "nope", createdAt: 100 }] });

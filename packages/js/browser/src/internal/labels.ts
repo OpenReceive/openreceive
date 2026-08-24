@@ -51,6 +51,37 @@ export const checkoutLabels = {
   viewOnExplorer: "Explorer",
   decodeInvoice: "Decode",
   wrongCurrencyOrNetworkTitle: "Wrong currency or network = lost funds",
+  // Payer-facing copy the two renderers (React elements, element HTML) both
+  // emit. The dual-renderer architecture is deliberate; duplicated strings are
+  // not — the drift it already caused was React's hardcoded "Preparing..." next
+  // to the element's `preparingPayment`. tests/wrapper-parity.test.mjs holds the
+  // line.
+  swapStartFailedTitle: "Could not prepare the payment address",
+  tryAgain: "Try again",
+  payWithLightningInstead: "Pay with Lightning instead",
+  supportReviewNeeded: "This payment needs support review.",
+  preparingPaymentAddress: "Preparing payment address",
+  preparingPaymentAddressDetail: "Getting your {asset} payment address…",
+  createPaymentAddress: "Create {asset} ({network}) payment address",
+  paymentBreakdown: "Payment breakdown",
+  cartTotal: "Cart total",
+  youSend: "You send",
+  swapAndNetworkFees: "Swap + network fees",
+  refundAddressPlaceholder: "{network} refund address",
+  reviewRefundAddress: "Review refund address",
+  confirmRefund: "Confirm refund",
+  confirmRefundTo: "Confirm refund to {address}.",
+  submitting: "Submitting...",
+  tutorialBack: "Back",
+  tutorialNext: "Next",
+  tutorialClose: "Close",
+  /** Out-of-range swap asset: both renderers build this panel from one model. */
+  swapUnavailableTitle: "{asset} unavailable",
+  swapUnavailableFallback: "{asset} is not available for this amount.",
+  swapUnavailableMinimumOnly: "Minimum {minimum} {asset}.",
+  swapUnavailableRange: "Accepted range: {minimum}–{maximum} {asset}.",
+  swapUnavailableHint:
+    "Choose another asset above, or pay the Lightning invoice at the top of this page.",
   /** Shown on the refund screen so the payer can return after closing the tab. */
   refundReturnWarning:
     "Bookmark this page, or copy its URL. You need it to return to this refund screen.",

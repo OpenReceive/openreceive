@@ -2,6 +2,7 @@ import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   createDetailExternalLink,
+  type DetailLinkKind,
   createSwapDisplayModel,
   createTransactionDetails,
   createQrPayloadSvg,
@@ -10,6 +11,7 @@ import {
   type QrEncoder,
   type SwapDisplayModel,
   checkoutLabels,
+  createSwapUnavailableModel,
   swapOptionLimitMessage,
   orClasses,
   selectCheckoutDisplayInvoice,
@@ -69,8 +71,10 @@ export function renderSwapActions(options: {
             type: "button",
           },
           options.startingAsset === option.pay_in_asset
-            ? "Preparing..."
-            : `Create ${option.label} (${option.network_label}) payment address`,
+            ? checkoutLabels.preparingPayment
+            : checkoutLabels.createPaymentAddress
+                .replace("{asset}", option.label)
+                .replace("{network}", option.network_label),
         ),
       );
     }),
@@ -78,10 +82,7 @@ export function renderSwapActions(options: {
 }
 
 /** Inline swap-start failure with retry — never an endless preparing spinner. */
-export function renderSwapStartError(
-  message: string,
-  onRetry: (() => void) | undefined,
-): React.ReactElement {
+export function renderSwapStartError(message: string, onRetry: () => void): React.ReactElement {
   return React.createElement(
     "section",
     {
@@ -93,20 +94,18 @@ export function renderSwapStartError(
       React.createElement(
         "strong",
         { className: orClasses.swapHeadingTitle },
-        "Could not prepare the payment address",
+        checkoutLabels.swapStartFailedTitle,
       ),
       React.createElement("p", { className: orClasses.swapWarning }, message),
-      onRetry === undefined
-        ? null
-        : React.createElement(
-            "button",
-            {
-              className: orClasses.btn,
-              type: "button",
-              onClick: onRetry,
-            },
-            "Try again",
-          ),
+      React.createElement(
+        "button",
+        {
+          className: orClasses.btn,
+          type: "button",
+          onClick: onRetry,
+        },
+        checkoutLabels.tryAgain,
+      ),
     ),
   );
 }
@@ -119,8 +118,8 @@ export function renderSwapPreparing(assetLabel: string): React.ReactElement {
     },
     React.createElement(WaitingState, {
       waiting: true,
-      statusTitle: "Preparing payment address",
-      statusDetail: `Getting your ${assetLabel} payment address…`,
+      statusTitle: checkoutLabels.preparingPaymentAddress,
+      statusDetail: checkoutLabels.preparingPaymentAddressDetail.replace("{asset}", assetLabel),
     }),
   );
 }
@@ -129,16 +128,9 @@ export function renderSwapUnavailable(
   quote: SwapOptionDisplay,
   checkout: CheckoutSnapshot | undefined,
 ): React.ReactElement {
-  const detail =
-    swapOptionLimitMessage(quote, checkout) ??
-    quote.unavailable_message ??
-    `${quote.label} is not available for this amount.`;
-  const range =
-    quote.minimum_pay_amount === undefined
-      ? undefined
-      : quote.maximum_pay_amount === undefined
-        ? `Minimum ${quote.minimum_pay_amount} ${quote.label}.`
-        : `Accepted range: ${quote.minimum_pay_amount}–${quote.maximum_pay_amount} ${quote.label}.`;
+  // Copy and range arithmetic live in @openreceive/browser so this panel and
+  // the element's read the same model.
+  const model = createSwapUnavailableModel(quote, checkout);
   return React.createElement(
     "section",
     {
@@ -149,23 +141,13 @@ export function renderSwapUnavailable(
       {
         className: orClasses.swapHeading,
       },
-      React.createElement(
-        "strong",
-        { className: orClasses.swapHeadingTitle },
-        `${quote.label} unavailable`,
-      ),
+      React.createElement("strong", { className: orClasses.swapHeadingTitle }, model.title),
     ),
-    React.createElement("p", { className: orClasses.swapWarning }, detail),
-    range === undefined
+    React.createElement("p", { className: orClasses.swapWarning }, model.detail),
+    model.range === undefined
       ? null
-      : React.createElement("p", { className: orClasses.swapWarning }, range),
-    React.createElement(
-      "p",
-      {
-        className: orClasses.swapProgress,
-      },
-      "Choose another asset above, or pay the Lightning invoice at the top of this page.",
-    ),
+      : React.createElement("p", { className: orClasses.swapWarning }, model.range),
+    React.createElement("p", { className: orClasses.swapProgress }, model.hint),
   );
 }
 
@@ -177,12 +159,7 @@ export function renderSwapDepositPanel(options: {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly logger?: BrowserLogger | false;
   readonly onError?: (error: unknown) => void;
-  readonly onRefund: (
-    attemptId: string,
-    refundAddress: string,
-    refundNonce: string,
-    confirm: boolean,
-  ) => Promise<void>;
+  readonly onRefund: (attemptId: string, refundAddress: string, confirm: boolean) => Promise<void>;
   readonly onBackToLightning: () => void;
 }): React.ReactElement | null {
   const display = createSwapDisplayModel(
@@ -198,7 +175,7 @@ export function renderSwapDepositPanel(options: {
       onClick: options.onBackToLightning,
       type: "button",
     },
-    "Pay with Lightning instead",
+    checkoutLabels.payWithLightningInstead,
   );
   const heading = React.createElement(
     "div",
@@ -243,6 +220,7 @@ export function renderSwapDepositPanel(options: {
         ? []
         : renderSwapCopyRow("Deposit transaction", display.depositTxId, {
             ...options,
+            kind: "tx",
             payInAsset: display.payInAsset,
           })),
       ...(display.payoutTxId === undefined
@@ -377,7 +355,7 @@ export function renderSwapDepositPanel(options: {
         payInAsset: display.payInAsset,
         networkLabel: display.networkLabel,
         submittedRefundAddress: display.refundAddress,
-        refundNonce: display.refundNonce,
+        refundAllowed: display.refundAllowed,
         onRefund: options.onRefund,
         onError: options.onError,
       }),
@@ -403,12 +381,14 @@ export function renderSwapDepositPanel(options: {
           ? null
           : renderSwapCopyRow("Refund address", display.refundAddress, {
               ...options,
+              kind: "address",
               payInAsset: display.payInAsset,
             }),
         display.refundTxId === undefined
           ? null
           : renderSwapCopyRow("Refund transaction", display.refundTxId, {
               ...options,
+              kind: "tx",
               payInAsset: display.payInAsset,
             }),
       ),
@@ -417,67 +397,79 @@ export function renderSwapDepositPanel(options: {
     );
   }
 
-  if (display.state === "attention" || display.state === "failed") {
+  // `deposit` is the EXPLICIT branch and support-review is the fallback,
+  // matching the element's renderer. Inverted, a future SwapDisplayModel state
+  // would render as a payable deposit screen in React and as support-review in
+  // the element — drift by construction.
+  if (display.state === "deposit") {
     return React.createElement(
       "section",
       {
         className: orClasses.swapPanel,
       },
-      heading,
       React.createElement(
         "p",
-        { className: orClasses.swapWarning },
-        "This payment needs support review.",
+        {
+          className: orClasses.swapInstruction,
+        },
+        "Pay ",
+        React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
+        " to this address",
       ),
-      renderSwapSupportDetails(display, options),
+      renderSwapNetworkWarning(display),
+      React.createElement(
+        "div",
+        {
+          className: orClasses.swapDepositLayout,
+        },
+        React.createElement(SwapPayloadQRCode, {
+          payload: display.qrPayload,
+          encoder: options.encoder,
+          onError: options.onError,
+        }),
+        React.createElement(
+          "div",
+          {
+            className: orClasses.swapDepositSide,
+          },
+          React.createElement(
+            "dl",
+            {
+              className: orClasses.swapDetails,
+            },
+            // Explorer stays hidden until payment completes (tx ids / settled details).
+            // No explorer link on the LIVE deposit row: the address has nothing on
+            // chain yet, and sending the payer to a third-party explorer mid-payment
+            // is not something this pane does. The settled/refund panes link theirs.
+            renderSwapCopyRow("Address", display.depositAddress, {
+              ...options,
+              selectable: true,
+            }),
+            memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
+            renderSwapCopyRow("Amount", display.depositAmount, { ...options, selectable: true }),
+          ),
+          waitingCard(display.countdownLabel),
+          renderSwapFeeBreakdown(display.feeBreakdown),
+        ),
+      ),
       backButton,
     );
   }
 
+  // Fallback: any state without an explicit branch above (including a future
+  // one) lands on support review rather than a payable deposit screen.
   return React.createElement(
     "section",
     {
       className: orClasses.swapPanel,
     },
+    heading,
     React.createElement(
       "p",
-      {
-        className: orClasses.swapInstruction,
-      },
-      "Pay ",
-      React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
-      " to this address",
+      { className: orClasses.swapWarning },
+      checkoutLabels.supportReviewNeeded,
     ),
-    renderSwapNetworkWarning(display),
-    React.createElement(
-      "div",
-      {
-        className: orClasses.swapDepositLayout,
-      },
-      React.createElement(SwapPayloadQRCode, {
-        payload: display.qrPayload,
-        encoder: options.encoder,
-        onError: options.onError,
-      }),
-      React.createElement(
-        "div",
-        {
-          className: orClasses.swapDepositSide,
-        },
-        React.createElement(
-          "dl",
-          {
-            className: orClasses.swapDetails,
-          },
-          // Explorer stays hidden until payment completes (tx ids / settled details).
-          renderSwapCopyRow("Address", display.depositAddress, options),
-          memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
-          renderSwapCopyRow("Amount", display.depositAmount, options),
-        ),
-        waitingCard(display.countdownLabel),
-        renderSwapFeeBreakdown(display.feeBreakdown),
-      ),
-    ),
+    renderSwapSupportDetails(display, options),
     backButton,
   );
 }
@@ -590,26 +582,30 @@ function renderSwapFeeBreakdown(
   return React.createElement(
     "div",
     { className: orClasses.swapBreakdown },
-    React.createElement("p", { className: orClasses.swapBreakdownTitle }, "Payment breakdown"),
+    React.createElement(
+      "p",
+      { className: orClasses.swapBreakdownTitle },
+      checkoutLabels.paymentBreakdown,
+    ),
     React.createElement(
       "dl",
       { className: joinClassNames(orClasses.swapDetails, orClasses.swapBreakdownRows) },
       React.createElement(
         "dt",
         { key: "cart-label", className: orClasses.swapDetailsDt },
-        "Cart total",
+        checkoutLabels.cartTotal,
       ),
       React.createElement("dd", { key: "cart-value" }, breakdown.cartTotal),
       React.createElement(
         "dt",
         { key: "send-label", className: orClasses.swapDetailsDt },
-        "You send",
+        checkoutLabels.youSend,
       ),
       React.createElement("dd", { key: "send-value" }, breakdown.youSend),
       React.createElement(
         "dt",
         { key: "fee-label", className: orClasses.swapDetailsDt },
-        "Swap + network fees",
+        checkoutLabels.swapAndNetworkFees,
       ),
       React.createElement("dd", { key: "fee-value" }, feeValue),
     ),
@@ -622,25 +618,31 @@ function renderSwapCopyRow(
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
+    /** What the value IS. Omitted, the row carries no external link. */
+    readonly kind?: DetailLinkKind;
     readonly payInAsset?: string;
     readonly href?: string;
     readonly hrefLabel?: string;
+    /** Render the value in a selectable input rather than a code block. */
+    readonly selectable?: boolean;
   },
   displayValue: string = value,
 ): readonly React.ReactElement[] {
   const link =
     options.href === undefined
-      ? createDetailExternalLink({
-          label,
-          value,
-          ...(options.payInAsset === undefined ? {} : { payInAsset: options.payInAsset }),
-        })
+      ? options.kind === undefined
+        ? undefined
+        : createDetailExternalLink({
+            kind: options.kind,
+            value,
+            ...(options.payInAsset === undefined ? {} : { payInAsset: options.payInAsset }),
+          })
       : {
           href: options.href,
           hrefLabel: options.hrefLabel ?? checkoutLabels.viewOnExplorer,
         };
   const valueField =
-    label === "Address" || label === "Amount"
+    options.selectable === true
       ? React.createElement("input", {
           className: orClasses.swapDetailsInput,
           type: "text",
@@ -775,13 +777,8 @@ function SwapRefundForm(props: {
   readonly payInAsset: string;
   readonly networkLabel: string;
   readonly submittedRefundAddress?: string;
-  readonly refundNonce?: string;
-  readonly onRefund: (
-    attemptId: string,
-    refundAddress: string,
-    refundNonce: string,
-    confirm: boolean,
-  ) => Promise<void>;
+  readonly refundAllowed: boolean;
+  readonly onRefund: (attemptId: string, refundAddress: string, confirm: boolean) => Promise<void>;
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
   const [refundAddress, setRefundAddress] = React.useState(
@@ -798,7 +795,7 @@ function SwapRefundForm(props: {
     address.length > 0 &&
     props.submittedRefundAddress !== undefined &&
     props.submittedRefundAddress === address;
-  const disabled = submitting || props.refundNonce === undefined;
+  const disabled = submitting || !props.refundAllowed;
   const showError = showAddressError && addressError !== undefined;
   return React.createElement(
     "form",
@@ -807,13 +804,13 @@ function SwapRefundForm(props: {
       noValidate: true,
       onSubmit: (event) => {
         event.preventDefault();
-        if (addressError !== undefined || props.refundNonce === undefined) {
+        if (addressError !== undefined || !props.refundAllowed) {
           setShowAddressError(true);
           return;
         }
         setSubmitting(true);
         void props
-          .onRefund(props.attemptId, address, props.refundNonce, confirm)
+          .onRefund(props.attemptId, address, confirm)
           .catch(props.onError)
           .finally(() => setSubmitting(false));
       },
@@ -825,7 +822,7 @@ function SwapRefundForm(props: {
           {
             className: orClasses.swapWarning,
           },
-          `Confirm refund to ${props.submittedRefundAddress}.`,
+          checkoutLabels.confirmRefundTo.replace("{address}", props.submittedRefundAddress),
         ),
     React.createElement("input", {
       autoComplete: "off",
@@ -839,7 +836,7 @@ function SwapRefundForm(props: {
       onBlur: () => {
         if (refundAddress.trim().length > 0) setShowAddressError(true);
       },
-      placeholder: `${props.networkLabel} refund address`,
+      placeholder: checkoutLabels.refundAddressPlaceholder.replace("{network}", props.networkLabel),
       required: true,
       type: "text",
       value: refundAddress,
@@ -870,7 +867,11 @@ function SwapRefundForm(props: {
         disabled,
         type: "submit",
       },
-      submitting ? "Submitting..." : confirm ? "Confirm refund" : "Review refund address",
+      submitting
+        ? checkoutLabels.submitting
+        : confirm
+          ? checkoutLabels.confirmRefund
+          : checkoutLabels.reviewRefundAddress,
     ),
   );
 }

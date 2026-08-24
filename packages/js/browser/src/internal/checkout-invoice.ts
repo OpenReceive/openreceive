@@ -17,7 +17,11 @@ export function assertInvoice(invoice: string): void {
     throw new TypeError("invoice must be a non-empty BOLT11 string");
   }
 
-  if (invoice.startsWith("nostr+walletconnect://")) {
+  // Scheme only, no slashes: core's parseNwcUri accepts both
+  // "nostr+walletconnect://pubkey?..." and the slashless
+  // "nostr+walletconnect:pubkey?...", so matching on "://" would let the
+  // second form through to a QR or a clipboard.
+  if (invoice.toLowerCase().startsWith("nostr+walletconnect:")) {
     throw new TypeError("invoice must not be an NWC connection string");
   }
 }

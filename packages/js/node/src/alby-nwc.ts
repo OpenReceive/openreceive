@@ -139,8 +139,17 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
     this.#logger = options.logger;
     this.#allowSpendCapableWallet = options.allowSpendCapableWallet ?? false;
     this.#spendCapabilityWarningDelayMs = options.spendCapabilityWarningDelayMs ?? 0;
+    // The banner goes through the HOST'S sink by default, the same one the
+    // structured nwc.spend_capability_advertised event beside it uses —
+    // console.error only when the host wired no logger at all. An explicit
+    // `spendCapabilityWarning` still wins: this warning is loud on purpose,
+    // and a host may want it somewhere its log level cannot hide it.
     this.#spendCapabilityWarning =
-      options.spendCapabilityWarning ?? ((message) => console.error(message));
+      options.spendCapabilityWarning ??
+      ((message) => {
+        if (this.#logger === undefined) console.error(message);
+        else this.#log("error", "nwc.spend_capability_warning", message);
+      });
   }
 
   #log(
@@ -403,7 +412,10 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
         transaction_count: result.transactions.length,
       },
     );
-    return { transactions: result.transactions };
+    return {
+      transactions: result.transactions,
+      ...(result.skippedRows === 0 ? {} : { skippedRows: result.skippedRows }),
+    };
   }
 
   /**

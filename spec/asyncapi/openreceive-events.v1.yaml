@@ -29,10 +29,26 @@ components:
         $ref: '#/components/schemas/PaidPayment'
   schemas:
     PaidPayment:
-      type: object
-      additionalProperties: false
-      required: [paymentHash, paidAt]
-      properties:
-        paymentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
-        paidAt: { type: integer, minimum: 0 }
-        details: { type: object, additionalProperties: true }
+      description: >
+        The settled-payment payload. Each engine spells it in its own
+        convention — JS camelCase (paymentHash/paidAt), Ruby snake_case
+        (payment_hash/paid_at) — so both spellings are listed, the same way
+        spec/schemas/swap-data.schema.json documents that split. The FIELDS are
+        the contract; the casing follows the host language.
+      oneOf:
+        - title: JS engine (camelCase)
+          type: object
+          additionalProperties: false
+          required: [paymentHash, paidAt]
+          properties:
+            paymentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+            paidAt: { type: integer, minimum: 0 }
+            details: { type: object, additionalProperties: true }
+        - title: Ruby engine (snake_case)
+          type: object
+          additionalProperties: false
+          required: [payment_hash, paid_at]
+          properties:
+            payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+            paid_at: { type: integer, minimum: 0 }
+            details: { type: object, additionalProperties: true }

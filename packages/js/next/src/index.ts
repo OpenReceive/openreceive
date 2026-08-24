@@ -1,6 +1,6 @@
 import {
-  type CreateOpenReceiveHttpHandlerOptions,
-  type CreateOpenReceiveStackOptions,
+  type CreateHttpHandlerOptions,
+  type CreateStackOptions,
   createHttpHandler,
   createStack,
   createProxyRateLimitingConfig,
@@ -54,12 +54,10 @@ interface NextAdapterExtras {
   readonly trustProxyIpHeader?: boolean | string;
 }
 
-export interface NextHandlersOptions
-  extends CreateOpenReceiveHttpHandlerOptions,
-    NextAdapterExtras {}
+export interface NextHandlersOptions extends CreateHttpHandlerOptions, NextAdapterExtras {}
 
 /** All-in-one form: host hooks + `wallet` + `storage`; the adapter builds service and host. */
-export interface NextStackOptions extends CreateOpenReceiveStackOptions, NextAdapterExtras {}
+export interface NextStackOptions extends CreateStackOptions, NextAdapterExtras {}
 
 /**
  * Build Next.js App Router GET/POST handlers for the OpenReceive routes.

@@ -37,12 +37,9 @@
 // silently stops asserting is exactly the failure those tests exist to catch.
 //
 // SEE ALSO ./lifecycle-harness.mjs, which exports `until()` and
-// `installFastTimers()`. Near-identical hand-rolled copies of `until` still
-// live in angular-construct.test.mjs:77, element-lifecycle.test.mjs:34 and
-// wrapper-behavior.test.mjs:85 (they differ only in defaulting to a 4s deadline
-// and a fixed 5ms step, both expressible as options on the shared one). All
-// three are owned by the frontend track, so they are listed here for that track
-// rather than migrated from here.
+// `installFastTimers()`. The DOM-lifecycle tests import that `until` and pass
+// their own `{ timeoutMs: 4000, stepMs: 5 }`; there are no hand-rolled copies
+// left.
 import { DatabaseSync } from "node:sqlite";
 import { paymentsSchemaSql } from "../../packages/js/http/src/index.ts";
 

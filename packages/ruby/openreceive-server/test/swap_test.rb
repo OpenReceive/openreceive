@@ -408,14 +408,19 @@ class FixedFloatProviderTest < Minitest::Test
     assert_equal CREATE_DATA, order.fetch("raw")
   end
 
-  def test_create_swap_falls_back_to_the_injected_clock_when_order_omits_expiration
+  # No invented deadline: the provider states the expiry. A create body without
+  # one is a provider contract break, and fabricating a 10-minute window would
+  # hand the payer a deadline the provider never agreed to.
+  def test_create_swap_fails_when_the_order_omits_expiration
     provider, = make_provider(
       "ccies" => SAMPLE_CCIES, "create" => CREATE_DATA.merge("time" => {})
     )
-    order = provider.create_swap(
-      pay_in_asset: "USDT_TRON", bolt11: BOLT11, invoice_amount_msats: INVOICE_AMOUNT_MSATS
-    )
-    assert_equal NOW + 600, order.fetch("expires_at")
+    error = assert_raises(RuntimeError) do
+      provider.create_swap(
+        pay_in_asset: "USDT_TRON", bolt11: BOLT11, invoice_amount_msats: INVOICE_AMOUNT_MSATS
+      )
+    end
+    assert_equal "FixedFloat order is missing time.expiration.", error.message
   end
 
   def test_create_swap_backfills_the_fee_from_price_when_create_omits_usd_values
@@ -657,7 +662,6 @@ class FixedFloatProviderTest < Minitest::Test
     budget = Object.new
     budget.define_singleton_method(:reserve) { |path| reserved << path }
     budget.define_singleton_method(:mark_rate_limited) { rate_limited += 1 }
-    budget.define_singleton_method(:can_reserve?) { |_path| true }
     provider.attach_weight_budget(budget)
     error = assert_raises(SWAP::FixedFloatApiError) { provider.get_status(BASE_ORDER) }
     assert_equal "rate_limited", error.kind
@@ -769,23 +773,25 @@ class SwapWeightBudgetTest < Minitest::Test
   def test_budget_meters_create_weight_and_backs_off_on_rate_limits
     now = 1_000
     budget = SWAP::SwapProviderWeightBudget.new("fixedfloat", -> { now })
-    assert budget.can_reserve?("create")
-    # create weighs 50 against a 150 gate: the third create exhausts it.
-    budget.reserve("create")
-    budget.reserve("create")
-    budget.reserve("create")
-    refute budget.can_reserve?("create")
+    # create weighs 50 against a 150 gate: the fourth create exhausts it.
+    3.times { budget.reserve("create") }
     error = assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
     assert SWAP.weight_budget_error?(error)
+    assert_equal "exhausted", error.denial.fetch("reason")
     # Small calls still fit under the 200 soft cap...
     budget.reserve("order")
-    # ...until a provider 429 marks the budget rate limited (backoff).
+    # ...until a provider 429 marks the budget rate limited, late in the window.
+    now = 1_059
     budget.mark_rate_limited
-    refute budget.can_reserve?("order")
     assert_raises(SWAP::WeightBudgetError) { budget.reserve("order") }
-    # The window rolls after 60s and the budget resets.
+    # The weight window rolls at second 60, but the 60s backoff does NOT ride
+    # along with it: a 429 at second 59 must not be forgiven one second later.
     now = 1_061
-    assert budget.can_reserve?("create")
+    backoff = assert_raises(SWAP::WeightBudgetError) { budget.reserve("create") }
+    assert_equal "backoff", backoff.denial.fetch("reason")
+    # It expires on its own clock (1_059 + 60).
+    now = 1_120
+    budget.reserve("create")
   end
 end
 
@@ -949,15 +955,24 @@ class SwapServiceIntegrationTest < Minitest::Test
            "backup must stay idle when primary answered"
   end
 
-  def test_all_providers_down_soft_fails_to_unconfigured_options
+  # Providers ARE configured here, they are just down — so the payer is told
+  # "temporarily unreachable", not "not configured". The label is cached per
+  # amount for up to 60s, so the wrong one outlasts the outage that caused it.
+  def test_all_providers_down_soft_fails_to_unreachable_options
     service, = build_service(
       "primary.example" => { mode: :down }, "backup.example" => { mode: :down }
     )
     options = service.list_swap_options(amount_msats: INVOICE_AMOUNT_MSATS)
     assert_equal SWAP::Assets::PAY_IN_ASSETS.length, options.length
     assert(options.all? { |option| option.fetch("provider") == "" })
-    assert(options.all? { |option| option.fetch("unavailable_reason") == "provider_unconfigured" })
+    assert(options.all? { |option| option.fetch("unavailable_reason") == "provider_unreachable" })
+    assert(
+      options.all? do |option|
+        option.fetch("unavailable_message") == "The swap provider is temporarily unreachable."
+      end
+    )
   end
+
 
   def test_quote_swap_produces_the_wire_shape
     service, = build_service("primary.example" => { mode: :ok })

@@ -37,9 +37,9 @@ async function withHelloFruitOrderMemo(request: Request): Promise<Request> {
   }
   if (typeof body !== "object" || body === null) return request;
   const record = { ...(body as Record<string, unknown>) };
-  if (typeof record.order_id !== "string" || record.memo !== undefined) return request;
+  if (typeof record.reference !== "string" || record.memo !== undefined) return request;
   // httpOptions() booted the host store before this runs.
-  const memo = readHelloFruitHostOrder(record.order_id)?.memo;
+  const memo = readHelloFruitHostOrder(record.reference)?.memo;
   if (memo === undefined) return request;
 
   record.memo = memo;

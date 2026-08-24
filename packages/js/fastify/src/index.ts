@@ -1,6 +1,6 @@
 import {
-  type CreateOpenReceiveHttpHandlerOptions,
-  type CreateOpenReceiveStackOptions,
+  type CreateHttpHandlerOptions,
+  type CreateStackOptions,
   createHttpHandler,
   createStack,
   createProxyRateLimitingConfig,
@@ -77,12 +77,10 @@ interface FastifyAdapterExtras {
   readonly trustProxyIpHeader?: boolean | string;
 }
 
-export interface FastifyHandlerOptions
-  extends CreateOpenReceiveHttpHandlerOptions,
-    FastifyAdapterExtras {}
+export interface FastifyHandlerOptions extends CreateHttpHandlerOptions, FastifyAdapterExtras {}
 
 /** All-in-one form: host hooks + `wallet` + `storage`; the plugin builds service and host. */
-export interface FastifyStackOptions extends CreateOpenReceiveStackOptions, FastifyAdapterExtras {}
+export interface FastifyStackOptions extends CreateStackOptions, FastifyAdapterExtras {}
 
 /**
  * Two forms: the all-in-one happy path (host hooks + `wallet` + `storage`; the
@@ -162,7 +160,7 @@ export function sendHostRouteError(reply: FastifyReplyLike, error: unknown): boo
 function resolveHandlerPrefix(
   instancePrefix: string,
   optionsPrefix: string | undefined,
-): Pick<CreateOpenReceiveHttpHandlerOptions, "prefix"> {
+): Pick<CreateHttpHandlerOptions, "prefix"> {
   if (instancePrefix === "") return {};
   const registerPrefix = normalizeFastifyPrefix(optionsPrefix);
   if (registerPrefix === "") return {};

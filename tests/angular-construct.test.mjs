@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { until } from "./helpers/lifecycle-harness.mjs";
 // Registered before the DOM-render test dynamically imports
 // @angular/platform-browser (the static imports below never touch the DOM).
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -77,17 +78,6 @@ test("subsequent input changes rebuild the shell binding", () => {
   assert.equal(second.checkout.attributes.reference, "order-second");
 });
 
-/** Poll until predicate() is truthy (its value is returned) or fail with `label`. */
-async function until(predicate, { timeoutMs = 4000, label = "condition" } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const value = predicate();
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${label}`);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
-
 test("the Angular component renders the checkout shell into a real DOM", async () => {
   // The mount test the construction tests could not be: the JIT compiler
   // renders the inline template into happy-dom, ngAfterViewInit defines the
@@ -130,6 +120,8 @@ test("the Angular component renders the checkout shell into a real DOM", async (
     // The element really runs: its connected callback prepares the checkout
     // (via the documented /openreceive default prefix) and renders shadow DOM.
     await until(() => element.shadowRoot?.innerHTML.length > 0, {
+      timeoutMs: 4000,
+      stepMs: 5,
       label: "checkout shadow render",
     });
     assert.ok(

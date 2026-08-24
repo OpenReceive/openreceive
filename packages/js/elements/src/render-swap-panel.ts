@@ -51,7 +51,11 @@ export function renderElementSwapActionsHtml(
           ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(option.pay_in_asset)}"`}
           ${disabled ? 'disabled aria-disabled="true"' : ""}
           type="button"
-        >Create ${escapeHtml(option.label)} (${escapeHtml(option.network_label)}) payment address</button>
+        >${escapeHtml(
+          checkoutLabels.createPaymentAddress
+            .replace("{asset}", option.label)
+            .replace("{network}", option.network_label),
+        )}</button>
         </div>
       `;
         })
@@ -85,7 +89,7 @@ export function renderElementSwapPanelHtml(
   const display = createSwapDisplayModel(invoice);
   if (display === undefined) return "";
   const backButton = `
-    <button part="swap-back" class="${orClasses.swapBack}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">Pay with Lightning instead</button>
+    <button part="swap-back" class="${orClasses.swapBack}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">${escapeHtml(checkoutLabels.payWithLightningInstead)}</button>
   `;
   const supportDetails = renderElementSwapSupportDetailsHtml(display);
   const heading = `
@@ -132,9 +136,11 @@ export function renderElementSwapPanelHtml(
           <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
           <div part="swap-deposit-side" class="${orClasses.swapDepositSide}">
             <dl part="swap-details" class="${orClasses.swapDetails}">
-              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
+              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress, {
+                selectable: true,
+              })}
               ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
-              ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
+              ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount, { selectable: true })}
             </dl>
             ${waitingStatus}
             ${feeBreakdown}
@@ -150,7 +156,7 @@ export function renderElementSwapPanelHtml(
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
         <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId, display.depositTxId, display.payInAsset)}
+          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId, { kind: "tx", payInAsset: display.payInAsset })}
           ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
           ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
         </dl>
@@ -203,13 +209,13 @@ export function renderElementSwapPanelHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundPayInAsset}="${escapeHtml(display.payInAsset)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNetworkLabel}="${escapeHtml(display.networkLabel)}"
-            ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
+            ${display.refundAllowed ? `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAllowed}="true"` : ""}
           >
             <input
               class="${orClasses.swapRefundInput}"
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
               name="refund_address"
-              placeholder="${escapeHtml(display.networkLabel)} refund address"
+              placeholder="${escapeHtml(checkoutLabels.refundAddressPlaceholder.replace("{network}", display.networkLabel))}"
               type="text"
               autocomplete="off"
               required
@@ -222,7 +228,7 @@ export function renderElementSwapPanelHtml(
               role="alert"
             ></p>
             <p part="swap-refund-hint" class="${orClasses.swapRefundHint}">Make sure you control this ${escapeHtml(display.networkLabel)} address. Refunds sent to the wrong address usually cannot be recovered.</p>
-            <button class="${orClasses.btn}" type="submit">Review refund address</button>
+            <button class="${orClasses.btn}" type="submit">${escapeHtml(checkoutLabels.reviewRefundAddress)}</button>
           </form>
         `
             : `
@@ -233,16 +239,16 @@ export function renderElementSwapPanelHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundPayInAsset}="${escapeHtml(display.payInAsset)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNetworkLabel}="${escapeHtml(display.networkLabel)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm}="true"
-            ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
+            ${display.refundAllowed ? `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAllowed}="true"` : ""}
           >
-            <p part="swap-warning" class="${orClasses.swapWarning}">Confirm refund to ${escapeHtml(stagedRefundAddress)}.</p>
+            <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(checkoutLabels.confirmRefundTo.replace("{address}", stagedRefundAddress))}</p>
             <input
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
               name="refund_address"
               type="hidden"
               value="${escapeHtml(stagedRefundAddress)}"
             >
-            <button class="${orClasses.btn}" type="submit">Confirm refund</button>
+            <button class="${orClasses.btn}" type="submit">${escapeHtml(checkoutLabels.confirmRefund)}</button>
           </form>
         `
         }
@@ -259,8 +265,8 @@ export function renderElementSwapPanelHtml(
         ${heading}
         ${refundFacts}
         <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress, display.refundAddress, display.payInAsset)}
-          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, display.refundTxId, display.payInAsset)}
+          ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress, { kind: "address", payInAsset: display.payInAsset })}
+          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, { kind: "tx", payInAsset: display.payInAsset })}
         </dl>
         ${supportDetails}
         ${renderElementSwapRefundReturnWarningHtml()}
@@ -271,7 +277,7 @@ export function renderElementSwapPanelHtml(
   return `
     <section part="swap-panel" class="${orClasses.swapPanel}">
       ${heading}
-      <p part="swap-warning" class="${orClasses.swapWarning}">This payment needs support review.</p>
+      <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(checkoutLabels.supportReviewNeeded)}</p>
       ${supportDetails}
       ${backButton}
     </section>
@@ -389,13 +395,13 @@ function renderElementSwapFeeBreakdownHtml(
       : `${breakdown.fee} (${breakdown.feePercent})`;
   return `
     <div part="swap-breakdown" class="${orClasses.swapBreakdown}">
-      <p part="swap-breakdown-title" class="${orClasses.swapBreakdownTitle}">Payment breakdown</p>
+      <p part="swap-breakdown-title" class="${orClasses.swapBreakdownTitle}">${escapeHtml(checkoutLabels.paymentBreakdown)}</p>
       <dl part="swap-details" class="${orClasses.swapBreakdownRows}">
-        <dt>Cart total</dt>
+        <dt>${escapeHtml(checkoutLabels.cartTotal)}</dt>
         <dd>${escapeHtml(breakdown.cartTotal)}</dd>
-        <dt>You send</dt>
+        <dt>${escapeHtml(checkoutLabels.youSend)}</dt>
         <dd>${escapeHtml(breakdown.youSend)}</dd>
-        <dt>Swap + network fees</dt>
+        <dt>${escapeHtml(checkoutLabels.swapAndNetworkFees)}</dt>
         <dd>${escapeHtml(feeValue)}</dd>
       </dl>
     </div>
@@ -418,9 +424,9 @@ function renderElementSwapSupportDetailsHtml(
       <summary class="${orClasses.swapSupportTitle}">Payment details</summary>
       <div class="${orClasses.swapSupportContent}">
         <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId, display.depositTxId, display.payInAsset)}
+          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId, { kind: "tx", payInAsset: display.payInAsset })}
           ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
-          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, display.refundTxId, display.payInAsset)}
+          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, { kind: "tx", payInAsset: display.payInAsset })}
           ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
         </dl>
       </div>

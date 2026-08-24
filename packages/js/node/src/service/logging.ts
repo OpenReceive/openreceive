@@ -105,9 +105,13 @@ export function isSensitiveLogKey(key: string): boolean {
 export function redactSecrets(value: string): string {
   return (
     value
-      .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
+      // Scheme only, no slashes: parseNwcUri accepts both
+      // "nostr+walletconnect://pubkey?..." and the slashless
+      // "nostr+walletconnect:pubkey?...", and the secret rides in the query
+      // either way.
+      .replace(/nostr\+walletconnect:[^\s"'`<>]+/g, "[REDACTED_NWC]")
       // Lightning Swap Connect credential URI: host, key, and secret in one string.
-      .replace(/lightning\+swapconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_LSC]")
+      .replace(/lightning\+swapconnect:[^\s"'`<>]+/g, "[REDACTED_LSC]")
       // `key=` is half an LSC credential pair on its own, so it is redacted
       // wherever it appears in a query string, not only inside a full URI.
       .replace(/([?&](?:token|secret|key)=)[^&\s"'`<>]+/gi, "$1[REDACTED]")

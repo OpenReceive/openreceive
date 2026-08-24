@@ -9,7 +9,7 @@ swaps / settlement beyond the integrator happy path.
 4. [Swap Operations](swap-operations.md) - host swap data, provider state, and refunds.
 5. [Settlement Sweeps](settlement-sweeps.md) - host-payment reconciliation and low-traffic drivers.
 6. [Deployment State](deployment-storage.md) - host-row guarantees and multi-instance rules.
-7. [Scope Lock](scope-lock.md) - v0.1 release boundary.
+7. [Scope Lock](scope-lock.md) - the library-owned persistence boundary.
 8. [Conformance](conformance.md) - schemas, vectors, gates, mock wallet, and live wallet smoke.
 9. [Test Command Map](test-command-map.md) - focused validation commands.
 10. [Package Ownership Map](package-ownership.md) - package ownership lanes.

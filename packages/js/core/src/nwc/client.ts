@@ -186,6 +186,14 @@ export interface NwcTransaction {
 
 export interface ListTransactionsResult {
   transactions: NwcTransaction[];
+  /**
+   * Rows on this page the client could not normalize, and therefore dropped.
+   * A mixed page is tolerated so one quirky row cannot livelock reconciliation;
+   * a page where EVERY row is unusable fails the scan instead, because an
+   * empty-looking scan at expiry+grace closes pending attempts. Reported so a
+   * caller can see the tolerance being exercised rather than infer it.
+   */
+  skippedRows?: number;
 }
 
 export interface ReceiveNwcClient {

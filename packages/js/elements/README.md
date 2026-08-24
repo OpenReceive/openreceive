@@ -22,7 +22,8 @@ defineElements();
 The element creates the checkout for `reference`, then renders and polls itself.
 It dispatches plain DOM `CustomEvent`s (`openreceive-settled`,
 `openreceive-error`, …); the Vue/Svelte/Angular wrapper packages expose those as
-handler props over the shared binding in `src/wrapper-shared.ts`.
+handler props over the shared binding at
+`@openreceive/elements/wrapper-shared`.
 
 ## Icon assets
 

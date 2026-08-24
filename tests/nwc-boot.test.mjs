@@ -323,26 +323,25 @@ test("the client's public connection view never carries the secret", () => {
   assert.doesNotMatch(client.connection.redacted, new RegExp("b".repeat(64)));
 });
 
-test("one malformed wallet row degrades or is skipped; the scan still succeeds", async () => {
+// The two defensible tolerances, and nothing more. A float `settled_at` is a
+// real interop quirk (wallets stamp sub-second precision), and
+// list_transactions legitimately returns rows minted by OTHER apps through the
+// same wallet — those carry no fields we require. Junk in a field the wallet
+// DID send (a "not-hex" hash, a "NaN-ish" amount) is not something to survive:
+// the wallet is trusted, so that row is skipped and counted.
+test("a float timestamp is floored and an unrelated row keeps the scan usable", async () => {
   const rows = [
-    // Good settled row.
+    // Our own settled row, with a sub-second wallet timestamp.
     {
       type: "incoming",
       payment_hash: "c".repeat(64),
       amount: 1000,
-      settled_at: 1000.5, // float timestamp: floored, not fatal
+      settled_at: 1000.5,
       state: "settled",
       preimage: "d".repeat(64),
     },
-    // Quirky row: empty strings, bad hash, unparsable amount.
-    {
-      type: "incoming",
-      payment_hash: "not-hex",
-      invoice: "",
-      preimage: "",
-      amount: "NaN-ish",
-      settled_at: "soon",
-    },
+    // Another app's row through the same wallet: no hash, no amount, no state.
+    { type: "incoming", created_at: 900 },
   ];
   const client = createNwcReceiveClient({
     connectionString: VALID_NWC,
@@ -354,10 +353,29 @@ test("one malformed wallet row degrades or is skipped; the scan still succeeds",
   const result = await client.listTransactions({});
   assert.equal(result.transactions.length, 2);
   assert.equal(result.transactions[0].settled_at, 1000); // floored
-  // The quirky row survives with unusable fields degraded to absent.
-  assert.equal(result.transactions[1].invoice, undefined);
-  assert.equal(result.transactions[1].amount_msats, undefined);
-  assert.equal(result.transactions[1].settled_at, undefined);
+  assert.equal(result.transactions[1].payment_hash, undefined);
+  assert.equal(result.skippedRows, undefined);
+});
+
+test("a page where every row is unusable fails the scan, like an unrecognized shape", async () => {
+  // An empty-looking scan at expiry+grace closes pending attempts as expired,
+  // so "non-empty page, nothing usable" must never read as "empty wallet".
+  const client = createNwcReceiveClient({
+    connectionString: VALID_NWC,
+    client: {
+      getWalletServiceInfo: async () => ({ methods: ["make_invoice", "list_transactions"] }),
+      list_transactions: async () => ({
+        transactions: [{ payment_hash: "not-hex" }, { amount: "NaN-ish" }],
+      }),
+    },
+  });
+  await assert.rejects(
+    () => client.listTransactions({}),
+    (error) => {
+      assert.match(String(error.message), /no usable rows|Wallet/i);
+      return true;
+    },
+  );
 });
 
 test("an unrecognized non-empty list_transactions reply fails the scan loudly", async () => {

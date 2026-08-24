@@ -180,8 +180,10 @@ test("browser builds block explorer and Lightning decode links for transaction d
     `${decodeLinkUrl}?invoice=${encodeURIComponent(invoice)}`,
   );
 
+  // `kind` says what the value IS, so a renamed (or localized) display label
+  // can never silently kill a row's explorer or decode link.
   const addressLink = createDetailExternalLink({
-    label: "Refund address",
+    kind: "address",
     value: "0x019a427c0080c402e6B311B2D2A3538BEE4fc743",
     payInAsset: "ETH_ETH",
   });
@@ -191,9 +193,9 @@ test("browser builds block explorer and Lightning decode links for transaction d
     "https://etherscan.io/address/0x019a427c0080c402e6B311B2D2A3538BEE4fc743",
   );
 
-  assert.equal(createDetailExternalLink({ label: "Lightning invoice", value: invoice }), undefined);
+  assert.equal(createDetailExternalLink({ kind: "invoice", value: invoice }), undefined);
   const decodeLink = createDetailExternalLink({
-    label: "Lightning invoice",
+    kind: "invoice",
     value: invoice,
     decodeLinkUrl,
   });

@@ -69,8 +69,10 @@ safe.
 
 Wallet preflight fails closed on a missing or spend-capable NWC connection:
 your application does not start with one. On Node the adapters run preflight
-lazily (the first request awaits it); use the middleware's `ready` promise in
-a deploy health check to surface failures at rollout. The Rails engine builds the wallet client — and runs preflight — eagerly in
+lazily (the first request awaits it); await it in a deploy health check to
+surface failures at rollout — the Express middleware and the Next handler
+expose a `ready` promise, and on Fastify `await fastify.ready()` covers it
+(the plugin exposes no `ready` of its own). The Rails engine builds the wallet client — and runs preflight — eagerly in
 production, so a bad `NWC_URI`, a dead relay, or a spend-capable wallet stops
 the deploy instead of surfacing as customer-facing 500s on the first checkout.
 
@@ -92,6 +94,20 @@ reconciliation pass (or a `payments/check`) records it; if it is stuck,
 resolve it wallet-side. Swap attempts flagged `attention` carry the provider
 context in their swap status (`attention_reason`, `deposit_received_amount`,
 `emergency_repeat`).
+
+### Where boot failures go
+
+Adapter boot happens before any service exists, so it has no service logger to
+write to. The failure surfaces three ways, and you want at least the first two:
+
+- Every subsequent request answers `503 WALLET_UNAVAILABLE` in the OpenReceive
+  JSON error contract — never the raw boot error, whose text has passed
+  through none of the redaction the service applies elsewhere.
+- `await ready` (Express, Next) or `await fastify.ready()` rejects, which is
+  what a deploy health check should await.
+- One line goes to `console.error` by default. Pass `onBootFailure` in the
+  all-in-one adapter options to route it into your own logger instead; it
+  receives the message only, for the same redaction reason.
 
 See [Payment storage](storage.md) for the schema and state machine, and
 [Rate limiting](rate-limiting.md) for the per-IP cap's proxy configuration.

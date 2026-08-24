@@ -1,7 +1,7 @@
 import {
   createHost,
   mapHostRouteError,
-  type CreateOpenReceiveHttpHandlerOptions,
+  type CreateHttpHandlerOptions,
   type Host,
   type PaymentSettlement,
 } from "@openreceive/http";
@@ -33,7 +33,7 @@ async function ensureHostStore(): Promise<void> {
   await storePromise;
 }
 
-export async function httpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
+export async function httpOptions(): Promise<CreateHttpHandlerOptions> {
   const [service, host] = await Promise.all([getOpenReceive(), getHost()]);
   return {
     service,

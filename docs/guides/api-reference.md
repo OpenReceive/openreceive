@@ -466,7 +466,7 @@ held in a variable named `host`.
 ### createHost
 
 ```ts
-const host = createHost(options: CreateOpenReceiveHostOptions): Host
+const host = createHost(options: CreateHostOptions): Host
 ```
 
 Default (`db`) mode — OpenReceive owns the `openreceive_payments` rows inside
@@ -480,7 +480,8 @@ your application's existing database:
 | `amountFor` | `(reference, context) => amount \| null` | yes | The trusted price for a reference, from your data, or `null` → 404. Called only where a price is minted or quoted. |
 | `onPaid` | `PaymentSettlementHook` | yes | Fulfillment; see [onPaid](#onpaid). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
-| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
+| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 
 #### onPaid
 
@@ -494,7 +495,7 @@ In db mode `onPaid` receives a `PaymentSettlement` (callback argument, not a ret
 | `paymentHash` | `string` | 64-character lowercase hex hash of the settled attempt. |
 | `paidAt` | `number` | Integer Unix seconds of settlement (`settled_at`, else the observation time). |
 | `details` | `PaymentDetails?` | Wallet row that proved settlement. See [PaymentDetails](#paymentdetails). |
-| `query` | `(sql, params?) => Promise<rows>` | Runs SQL inside the settlement transaction (`?` placeholders). Use it for writes that must commit atomically with settlement (e.g. an outbox row). |
+| `query` | `(sql, params?) => Promise<rows>` | Runs SQL inside the settlement transaction. Write it for your own dialect (`?` on sqlite, `$1`-style on postgres) — it reaches the driver verbatim. Use it for writes that must commit atomically with settlement (e.g. an outbox row). |
 
 It runs inside the settlement transaction, only for the order's first settled
 attempt (write-once; a duplicate sibling settlement records
@@ -506,6 +507,14 @@ Write through the supplied `query`. It is the only handle inside the settlement
 transaction: an ORM call made here uses that ORM's own connection, so it commits
 separately and can survive a rolled-back settlement (or be lost when settlement
 commits and it does not).
+
+**On Rails this handle does not exist, and its absence is not an omission.**
+The Rails engine wraps the `on_paid` block in an ActiveRecord transaction, so
+plain ActiveRecord inside the block is already transactional — there is nothing
+to thread through. `PaymentSettlement` there carries `reference`,
+`payment_hash`, `paid_at` and `details`, and no `query`. A host porting between
+the engines only has to know which side supplies the transaction: JS hands you
+a handle, Rails wraps your block.
 
 Keep `onPaid` to database writes. Anything that reaches outside the
 transaction — an email, a webhook, a shipping call — survives a rollback and
@@ -623,7 +632,8 @@ never call this.
 | `pollIntervalMs` | `number` | no | Default 5000; `RangeError` below 250. |
 | `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
 | `signal` | `AbortSignal` | no | External stop signal. |
-| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
+| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 | `onError` | `(error) => void` | no | Observes per-pass failures. Default: deduplicated `console.warn`. |
 
 **Returns** `Reconciler`. Every pass goes through the durable
@@ -658,7 +668,7 @@ environment variable — per pass, so a backlog drains over
 successive passes), scan the wallet once for the
 batch (`maxPages` caps the paged walks), deliver settlements through
 `host.onPaid` (at least once; write-once in the repository), persist terminal
-transitions, and return the per-hash [PaymentCheck](#servicecheckpayment)
+transitions, and return the per-hash [PaymentCheck](#paymentcheck)
 results of the pass. Closing an unpaid attempt
 requires a successful wallet scan at or after expiry plus the 900-second grace
 (`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS`) — a local clock alone never
@@ -685,7 +695,8 @@ const result = await maybeReconcilePayments({
 | `scanTimeoutMs` | `number` | no | Bound on the awaited pass. Default `OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS` (9000). |
 | `maxPages` | `number` | no | Page cap per wallet walk. Default `OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES` (50). |
 | `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
-| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
+| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 | `onError` | `(error) => void` | no | Observes failed scans. Default: `console.warn`. |
 
 The gated pass behind the handler's default request-path opportunistic
@@ -700,7 +711,7 @@ throws: a failed or timed-out scan reports to `onError` and returns
 stampede.
 
 **Returns** `{ reason: "ran", checks }` (the per-hash
-[PaymentCheck](#servicecheckpayment) results) or
+[PaymentCheck](#paymentcheck) results) or
 `{ reason: "no_pending" | "gate_busy" | "scan_failed" }`.
 
 ### startNotificationListener
@@ -826,15 +837,16 @@ down with the app:
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `wallet` | `{ nwc }` \| `{ service }` | yes | The wallet: a receive-only NWC connection string (the adapter builds and owns the client) or a prebuilt `OpenReceive` / `Promise<OpenReceive>` (you own its lifecycle). |
-| `storage` | `{ db, onPaid, tableName? }` \| `{ payments, onPaid }` | yes | Where attempts live, which decides what `onPaid` receives: the host database handle [createHost](#createhost) takes, with the per-reference `PaymentSettlement`; or a custom [PaymentRepository](#paymentrepository), with the raw `SettlementEvent`. |
+| `storage` | `{ db, onPaid, tableName? }` \| `{ payments, onPaid }` | yes | Where attempts live, which decides what `onPaid` receives: the host database handle [createHost](#createhost) takes, with the per-reference `PaymentSettlement`; or a custom `PaymentRepository` (see [Storage: the escape hatch](storage.md#escape-hatch)), with the raw `SettlementEvent`. |
 | `amountFor` | | yes | Same hook as [createHost](#createhost). |
 | `authorize` | `Authorize` | yes | Your policy; see [the authorize context](#the-authorize-context). |
 | `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | Request-path settlement pass on every mounted payment route (`GET …/rates` never triggers it); on by default through the durable `openreceive_meta` gate. `false` disables; `{ minIntervalSeconds }` tunes. |
-| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
+| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 | `rateLimiting` / `rateLimitHook` / `prefix` | | no | As below. |
 | `trustProxyIpHeader` | `boolean \| string` | no | Adapter extra on all three adapters: client-IP attribution for `rateLimiting` behind a reverse proxy. `true` reads the first hop of `x-forwarded-for`; a string names another trusted header (e.g. `"cf-connecting-ip"`). Only safe when your own proxy sets the header. |
 
-**Composed form** (`CreateOpenReceiveHttpHandlerOptions`) for shared wallet clients,
+**Composed form** (`CreateHttpHandlerOptions`) for shared wallet clients,
 custom repositories, and tests:
 
 **Parameters**
@@ -882,7 +894,7 @@ How the bodies map to the Node objects above: `POST …/checkouts` returns
 [Checkout](#servicecreatecheckout) in snake_case (the generated
 `WireCheckout`); `POST …/checkouts/prepare`
 returns the prepare result plus [swap options](#servicelistswapoptions);
-`POST …/payments/check` returns [PaymentCheck](#servicecheckpayment) plus
+`POST …/payments/check` returns [PaymentCheck](#paymentcheck) plus
 `payment_methods` (the same swap-option list; empty when Lightning is the only
 rail — served from a handler-local 60-second warm cache so ~3s status polls do
 not walk the provider catalog on every request); `POST …/swaps/quote` returns
@@ -926,6 +938,48 @@ Every error status above returns the OpenReceive error body `{ code, message, re
 | `POST …/swaps/refunds` | `400`, `403`, `404`, `405`, `409`, `413`, `415`, `429`, `500`, `502`, `503` |
 | `GET …/rates` | `400`, `405`, `500`, `501`, `503` |
 <!-- /generated:route-errors -->
+
+#### Error codes: who retries, and whose bug
+
+`retryable` rides on the body when it contradicts the code's own default. The
+"Whose bug" column is the one to route on: a `yours` row belongs in your error
+tracker, a `payer` row does not.
+
+| Code | Typical status | Retryable | Whose bug | Means |
+| --- | --- | --- | --- | --- |
+| `INVALID_REQUEST` | 400, 413, 415 | no | payer / integrator | Malformed body, unknown field, payer-supplied amount, oversized body, wrong content type. |
+| `UNAUTHORIZED` | 401 | no | payer | Your `authorize` refused an unauthenticated caller. |
+| `FORBIDDEN` | 403 | no | payer | Your `authorize` refused, or the browser labelled the request `Sec-Fetch-Site: cross-site`. |
+| `NOT_FOUND` | 404 | no | payer | Unknown reference (your `amountFor` returned `null`), unknown attempt, or no route. |
+| `CONFLICT` | 409 | no | payer | Already paid, a live attempt on the same rail, a non-reusable attempt, or `onCheckoutCreated` refused. |
+| `RATE_LIMITED` | 429 | **yes** (`Retry-After`) | payer | Per-IP invoice cap. Never applied to status polls or quotes. |
+| `INTERNAL` | 500, 502, 503 | **yes** at 503 | **yours** (500) / provider (502, 503) | 500 is a host-integration or library bug — log it. 502/503 are the wallet or swap provider; retry. |
+| `WALLET_UNAVAILABLE` | 503 | **yes** | wallet / infra | The wallet client cannot answer, including a failed adapter boot. |
+| `UNSUPPORTED_METHOD` | 502 | no | wallet | The wallet does not honor part of the receive contract (e.g. it ignores the requested invoice expiry). |
+| `TIMEOUT` | 503 | **yes** | wallet / provider | An outbound call ran out of time. |
+| `INVOICE_EXPIRED` | 409 | no | payer | The addressed invoice is past its expiry. |
+| `NOT_IMPLEMENTED` | 501 | no | integrator | The route needs configuration you did not supply (e.g. `GET /rates` with no price provider). |
+| `QUOTA_EXCEEDED`, `RESTRICTED`, `UNSUPPORTED_ENCRYPTION`, `OTHER` | 502, 503 | varies | wallet | Passed through from the wallet's own NIP-47 error codes. |
+
+#### Status vocabularies: who sees which
+
+Five different "status" words appear across the stack. They are NOT the same
+enum, and each has exactly one audience:
+
+| Vocabulary | Values | Who reads it | Where it lives |
+| --- | --- | --- | --- |
+| **Attempt status** | `pending`, `settled`, `expired`, `failed`, `attention` | **Operator** (and your database) | The `openreceive_payments.status` column. `attention` is the one that wants a human; it reads as `pending` on the wire. See [Storage](storage.md#attempt-state-machine). |
+| **Payment check status** | `pending`, `settled`, `expired`, `failed`, `not_found` | **Host** polling `payments/check` | The wire answer for one hash. `not_found` means the scanned window did not contain it — never "unpaid". |
+| **NWC transaction state** | `pending`, `settled`, `expired`, `failed`, `accepted` | **Library**, internally | The wallet's own word for a row, normalized at the client boundary. Hosts do not branch on it. |
+| **Checkout snapshot status** | `open`, `paid`, `expired` | **Payer UI** | The coarse state a browser snapshot carries for the whole checkout. |
+| **Checkout phase** | `invoice_created`, `verifying`, `settled`, `expired`, `failed`, `cancelled` | **Payer UI** | What the panel is showing right now, for one attempt. Presentational only — nothing server-side reads it. |
+| **Swap provider state** | `creating_provider_order`, `awaiting_deposit`, `confirming`, `exchanging`, `paying_invoice`, `completed`, `expired`, `refund_required`, `refund_pending`, `refunded`, `attention`, `failed` | **Payer UI** (swap panel) | The provider's progress. Never settlement authority: `completed` does not fulfill an order — only the wallet sweep does. See [Automated swaps](automated-swaps.md#provider-state-after-settlement). |
+
+`deriveStatus(invoice)` is the browser's one-word verdict for an attempt
+(`pending` | `settled` | `expired` | `failed`) — the same four words as the
+payment check, minus `not_found`, because a snapshot always has an attempt.
+It is derived from the server's `transaction_state`: the browser never
+re-derives "settled" from `settled_at`.
 
 ### openReceiveExpress
 
@@ -980,7 +1034,8 @@ const payments = createSqlPayments(db, options?): SqlPaymentRepository
 | `db` | `SqlDatabase` | yes | pg Pool/Client, SQLite handle, or an [SqlAdapter](#sqladapter). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
 | `metaTableName` | `string` | no | Durable reconcile-gate key/value table. Default `openreceive_meta`. |
-| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
+| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 
 The library-owned repository behind `createHost({ db })`, exposed for advanced
 integrations. Owns per-reference commit locking (SQLite `BEGIN IMMEDIATE`,
@@ -1000,7 +1055,7 @@ order's first settled attempt and never overwrites a settled row.
 | `recordSettlement` | `(settlement) => boolean \| Promise<boolean>` | The write-once settlement claim: record the attempt settled and return whether THIS call won the claim. Repository-mode `onPaid` runs only when it returns `true`, so a redelivered event fulfills exactly once. Required. |
 | `countAttemptsFromIp` | `(clientIp, sinceUnixSeconds) => number \| Promise<number>` | Attempt rows for this IP at or after that time. Backs opt-in `rateLimiting`. |
 | `claimReconcileGate` | `({ now, intervalSeconds }) => boolean \| Promise<boolean>` | Atomically claim the durable `openreceive_meta` scan gate (optimistic CAS shared by every process on the database). `true` = run a wallet scan now; `false` = another worker scanned within the interval. |
-| `markPaidOnce` | `(input, fulfill) => Promise<void>` | Write-once settlement: set `paid_at` / `settled` once and run `fulfill` only for the first settled attempt for a reference. |
+| `markPaidOnce` | `(input, fulfill) => Promise<boolean>` | Write-once settlement: set `paid_at` / `settled` once and run `fulfill` only for the first settled attempt for a reference. **Resolves `true` only for the call that won that first-settlement claim** — later calls (a redelivered notification, a sibling attempt) record the settlement, skip `fulfill`, and resolve `false`. A direct caller drives its own idempotency off that boolean. |
 
 `claimReconcileGate` is part of the custom-repository contract too: a custom
 `PaymentRepository` must implement it (as a durable CAS — never an
@@ -1045,25 +1100,29 @@ interface SqlAdapter {
 }
 ```
 
-`query` takes `?` placeholders and returns SELECT rows (`Record<string, unknown>[]`;
-`[]` for non-SELECT). `transaction` must provide real atomicity — settlement
-write-once and fulfillment both run inside it.
+`query` receives each statement already written for the adapter's declared
+dialect (`?` on sqlite, `$1`-style on postgres) and must pass it to the driver
+VERBATIM — nothing rewrites placeholders, in either direction. It returns
+SELECT rows (`Record<string, unknown>[]`; `[]` for non-SELECT). `transaction`
+must provide real atomicity — settlement write-once and fulfillment both run
+inside it.
 
-### knexDb / prismaDb / typeOrmDb
+### knexDb / prismaDb / typeOrmDb / sequelizeDb
 
 ```ts
-createHost({ db: knexDb(knex, "postgres") });      // or prismaDb(prisma, …),
-createHost({ db: typeOrmDb(dataSource, "sqlite") }); // typeOrmDb(dataSource, …)
+createHost({ db: knexDb(knex, "postgres") });        // or prismaDb(prisma, …),
+createHost({ db: typeOrmDb(dataSource, "sqlite") }); // sequelizeDb(sequelize, …)
 ```
 
 Named `SqlAdapter` factories for the ORM handles `createSqlPayments` cannot
-accept directly. The parameter types (`KnexLike`, `PrismaLike`, `TypeOrmLike`)
-are structural, so no ORM dependency is added. `dialect` (`SqlDialect`) is
-required — nothing on the handles states it reliably. Each factory owns its
-ORM's raw-query quirks: `knexDb` normalizes the per-driver result shape,
-`prismaDb` routes statements between `$queryRawUnsafe` and `$executeRawUnsafe`
-(`RETURNING` counts as row-returning), and `typeOrmDb` queries through the
-transaction's own `EntityManager`. See
+accept directly. The parameter types (`KnexLike`, `PrismaLike`, `TypeOrmLike`,
+`SequelizeLike`) are structural, so no ORM dependency is added. `dialect`
+(`SqlDialect`) is required — nothing on the handles states it reliably. Each
+factory owns its ORM's raw-query quirks: `knexDb` normalizes the per-driver
+result shape, `prismaDb` routes statements between `$queryRawUnsafe` and
+`$executeRawUnsafe` (`RETURNING` counts as row-returning), `typeOrmDb` queries
+through the transaction's own `EntityManager`, and `sequelizeDb` binds through
+`bind` and threads the managed transaction into every statement inside it. See
 [Node ORM recipes](node-orms.md) for the wiring guide.
 
 ### PaymentRecord
@@ -1257,6 +1316,11 @@ OpenReceive.configure do |config|
   #   settlement.details      — wallet-observed details Hash (transaction
   #                             snapshot, observed_at, paid_at_source — the
   #                             same shape JS delivers to onPaid), or nil
+  # There is deliberately no `query` handle here: the engine wraps this block
+  # in an ActiveRecord transaction, so plain ActiveRecord IS the transactional
+  # write. (The JS engine hands `onPaid` a `query` because nothing wraps it
+  # there.) Same rule as JS otherwise: database writes only — anything
+  # reaching outside the transaction survives a rollback and runs again.
   config.on_paid = lambda do |settlement|
     Order.find(settlement.reference).update!(status: "paid")
   end
@@ -1278,9 +1342,10 @@ OpenReceive.configure do |config|
   # configuration.
   # config.client_ip = ->(request) { request.headers["CF-Connecting-IP"] }
 
-  # Request-path settlement pass on every engine route, ON by default through
-  # the durable openreceive_meta gate shared by all Puma workers. Set false
-  # when a dedicated worker owns scanning (required with a custom repository).
+  # Request-path settlement pass on every engine PAYMENT route (unauthenticated
+  # GET /rates never triggers it), ON by default through the durable
+  # openreceive_meta gate shared by all Puma workers. Set false when a
+  # dedicated worker owns scanning (required with a custom repository).
   # config.opportunistic_reconcile = false
   # config.opportunistic_reconcile = { min_interval_seconds: 10 }
 

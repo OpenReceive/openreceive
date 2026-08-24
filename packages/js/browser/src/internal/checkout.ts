@@ -1,10 +1,10 @@
 // Barrel for the browser checkout engine, split by concern in G2a. This list is
-// the engine's cross-module surface: what the twelve modules below let each
-// other, ../headless.ts, ../index.ts and ../internal.ts import. It is NOT the
-// published surface — since D-1 both ../internal.ts and ../headless.ts name
-// their exports one by one, so adding a line here shares a symbol inside the
-// package without publishing it. The modules export more than this for their
-// immediate neighbours; that stays inside the package too.
+// the engine's cross-module surface: what the eleven modules below let each
+// other, ../headless.ts and ../index.ts import. It is NOT the published
+// surface — both entry points name their exports one by one, so adding a line
+// here shares a symbol inside the package without publishing it. The modules
+// export more than this for their immediate neighbours; that stays inside the
+// package too.
 
 // ./checkout-ticker.ts — transient feedback + countdown tickers
 export {
@@ -57,7 +57,6 @@ export {
   createStatusFetcher,
   BrowserRequestError,
   prepareCheckout,
-  readJsonResponse,
   requestCheckout,
 } from "./checkout-transport.ts";
 // ./routes.ts — every route derived from the one `prefix` the caller gives.

@@ -28,6 +28,23 @@ Optional Inbound Currencies:
 | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana)      | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana                                                                                                                                                                                                           | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
 | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether)       | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                                                                                                                       | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
 
+## Install
+
+```sh
+# Node: an HTTP adapter for your framework, plus the checkout UI for yours
+npm install @openreceive/express @openreceive/react
+```
+
+Swap `@openreceive/express` for `@openreceive/fastify` or `@openreceive/next`,
+and `@openreceive/react` for `@openreceive/vue`, `@openreceive/svelte`,
+`@openreceive/angular`, or `@openreceive/elements` (framework-free custom
+element). On Rails:
+
+```ruby
+# Gemfile
+gem "openreceive-rails"
+```
+
 ## Quickstart
 
 Pick your stack:
@@ -39,10 +56,10 @@ Pick your stack:
 | BTCPay Server | Coming soon                                         |
 
 On all platforms: Your server owns the price and the order, the payer
-getsa QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the settlement
+gets a QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the settlement
 transaction.
 
-## Paranoid Security Defaults
+## Security defaults
 
 - OpenReceive does not transmit money or hold customer funds. OpenReceive only helps your
   backend create payment QR codes and safely verify settlement.

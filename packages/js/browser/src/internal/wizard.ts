@@ -180,10 +180,7 @@ export function getNetworkIcon(networkLabel: string): string {
  * Network marks (Tron/Solana/Ethereum) belong only in the network reveal via
  * {@link getNetworkIcon}.
  */
-export function getSwapOptionIcon(option: {
-  readonly label: string;
-  readonly network_label?: string;
-}): string {
+export function getSwapOptionIcon(option: { readonly label: string }): string {
   return getAssetIcon(option.label.trim().toLowerCase());
 }
 
@@ -474,6 +471,71 @@ export function updateSelectedSwapNetworks<
 export interface SwapLimitContext {
   readonly amount_msats: number;
   readonly fiat?: { readonly currency: string; readonly value: string };
+}
+
+/**
+ * The generated DOM ids for one network group's disclosure panel and its
+ * heading. ONE helper so `aria-controls` and `aria-labelledby` cannot disagree
+ * — between the two renderers, or between the two ids inside one of them (the
+ * element used to sanitize the panel id and not the heading id; React
+ * sanitized neither).
+ */
+export function wizardNetworkGroupIds(groupKey: string): {
+  readonly panelId: string;
+  readonly headingId: string;
+} {
+  const slug = groupKey.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  return { panelId: `network-panel-${slug}`, headingId: `network-heading-${slug}` };
+}
+
+/**
+ * The out-of-range swap panel, as data. Both renderers build the same panel
+ * from this: the element writes HTML, React writes elements, and neither one
+ * owns the copy or the range arithmetic.
+ */
+export interface SwapUnavailableModel {
+  readonly title: string;
+  readonly detail: string;
+  /** Accepted pay-in range, when the provider reported limits. */
+  readonly range?: string;
+  readonly hint: string;
+}
+
+export function createSwapUnavailableModel(
+  option: Pick<
+    CheckoutPaymentMethod,
+    | "label"
+    | "available"
+    | "unavailable_reason"
+    | "unavailable_message"
+    | "minimum_invoice_amount_msats"
+    | "maximum_invoice_amount_msats"
+    | "minimum_pay_amount"
+    | "maximum_pay_amount"
+  >,
+  checkout: SwapLimitContext | undefined,
+): SwapUnavailableModel {
+  const detail =
+    swapOptionLimitMessage(option, checkout) ??
+    option.unavailable_message ??
+    checkoutLabels.swapUnavailableFallback.replace("{asset}", option.label);
+  const range =
+    option.minimum_pay_amount === undefined
+      ? undefined
+      : option.maximum_pay_amount === undefined
+        ? checkoutLabels.swapUnavailableMinimumOnly
+            .replace("{minimum}", option.minimum_pay_amount)
+            .replace("{asset}", option.label)
+        : checkoutLabels.swapUnavailableRange
+            .replace("{minimum}", option.minimum_pay_amount)
+            .replace("{maximum}", option.maximum_pay_amount)
+            .replace("{asset}", option.label);
+  return {
+    title: checkoutLabels.swapUnavailableTitle.replace("{asset}", option.label),
+    detail,
+    ...(range === undefined ? {} : { range }),
+    hint: checkoutLabels.swapUnavailableHint,
+  };
 }
 
 /**

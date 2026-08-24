@@ -445,7 +445,7 @@ test("elements refund screen warns to bookmark the checkout URL", () => {
   assert.match(html, /Refund needed/);
   assert.match(html, /Payment details/);
   assert.match(html, /part="swap-refund-return"/);
-  assert.match(html, /data-or-swap-refund-nonce="confirm"/);
+  assert.match(html, /data-or-swap-refund-allowed="true"/);
   assert.match(html, /Review refund address/);
   assert.ok(html.includes(checkoutLabels.refundReturnWarning));
   assert.ok(html.indexOf("Payment details") < html.indexOf(checkoutLabels.refundReturnWarning));

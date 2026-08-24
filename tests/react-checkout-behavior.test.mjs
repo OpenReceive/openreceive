@@ -506,7 +506,16 @@ test("the checkout session survives a re-render, so a second start is refused", 
   const heldStart = new Promise((resolve) => {
     releaseStart = resolve;
   });
-  const fetchStub = async (_input, _init) => {
+  const fetchStub = async (input, _init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    // The session quotes before it starts; only the START is the held request
+    // this guard is about.
+    if (url.pathname.endsWith("/swaps/quote")) {
+      return new Response(
+        JSON.stringify({ quote: { pay_asset: "SOL_SOL", label: "SOL", available: true } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
     swapStarts += 1;
     await heldStart;
     return new Response(
@@ -664,7 +673,15 @@ test("re-selecting a started swap asset re-opens its panel without a second star
 test("the session refuses a second start for an asset it already holds instructions for", async () => {
   let swapStarts = 0;
   const paymentHash = "f".repeat(64);
-  const fetchStub = async (_input, _init) => {
+  const fetchStub = async (input, _init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    // The session quotes before it starts; only the START is counted here.
+    if (url.pathname.endsWith("/swaps/quote")) {
+      return new Response(
+        JSON.stringify({ quote: { pay_asset: "SOL_SOL", label: "SOL", available: true } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
     swapStarts += 1;
     return new Response(
       JSON.stringify({

@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.description =
     "A mountable Rails engine that ships OpenReceive's receive-only checkout routes into a " \
     "Rails app. Engine controllers inherit from the host's ApplicationController (keeping its " \
-    "authentication and current_user; JSON routes skip Rails form CSRF), delegate to the " \
-    "openreceive-server Service, and " \
+    "authentication, current_user, and forgery protection; the shared handler adds JSON-only " \
+    "and same-site gates), delegate to the openreceive-server Service, and " \
     "obey host-supplied authorization, amount-resolution, and settlement hooks. The engine owns " \
     "the OpenReceivePayment attempt model, its status state machine, settlement write-once, and " \
     "reconciliation (OpenReceive.reconcile!, OpenReceive::ReconcileJob, rake openreceive:reconcile); " \

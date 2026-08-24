@@ -2,7 +2,7 @@
   "name": "openreceive-workspace",
   "version": "0.2.0-alpha.0",
   "private": true,
-  "description": "OpenReceive v0.1 receive-checkout reference path",
+  "description": "OpenReceive receive-checkout reference path",
   "license": "MIT",
   "type": "module",
   "workspaces": [
@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build:docs": "node tools/docs/build-index.mjs",
-    "build:demo": "npm run build -w @openreceive/example-node-express && npm run build -w @openreceive/example-static-html-small-api && npm run build -w @openreceive/example-nextjs-fullstack",
+    "build:demo": "npm run build -w @openreceive/example-node-express && npm run build -w @openreceive/example-static-html-small-api && npm run build -w @openreceive/example-nextjs-fullstack && npm run build -w @openreceive/example-rails",
     "demo": "node --import tsx tools/run-demo.mjs",
     "generate:models": "node tools/codegen/generate-js-models.mjs",
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",

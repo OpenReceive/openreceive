@@ -46,9 +46,6 @@ export const OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV = "OPENRECEIVE_PRICE_FEED_PR
 export const OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV =
   "OPENRECEIVE_PRICE_FEED_FALLBACK_URL" as const;
 
-// Process-local key used by the disposable quote cache.
-export const OPENRECEIVE_PRICE_FEED_CACHE_META_KEY = "price_feed:bitcoin" as const;
-
 export const OPENRECEIVE_MIN_AMOUNT_SATS = 1n;
 export const OPENRECEIVE_MAX_AMOUNT_SATS = 9_007_199_254_740n;
 export const OPENRECEIVE_MIN_AMOUNT_MSATS = 1000n;

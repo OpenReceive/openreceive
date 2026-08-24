@@ -2,11 +2,16 @@
 // display model, the refund staging overlay, provider-state labels and
 // details, and the asset/route matching the wizard selection needs.
 
-import { formatDecimal, unixSeconds } from "@openreceive/core";
+import {
+  type Decimal,
+  formatDecimal,
+  parseDecimal,
+  payInAssetNetwork,
+  unixSeconds,
+} from "@openreceive/core";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutInvoiceSwapFee,
-  OPENRECEIVE_REFUND_REVIEW_NONCE,
   checkoutLabels,
   type SwapDisplayModel,
   type SwapFeeBreakdown,
@@ -15,7 +20,6 @@ import {
   formatCountdown,
   formatDepositAmount,
   formatFiatAmount,
-  optionalDecimal,
   rescaleHalfUp,
   roundedDiv,
 } from "./checkout-format.ts";
@@ -32,9 +36,19 @@ export function createSwapFeeBreakdown(
   if (fee === undefined) return undefined;
   // Exact decimal math on the shared money engine — never binary floats, even
   // for display-only fiat values.
-  const payIn = optionalDecimal(fee.pay_in_fiat);
-  const payout = optionalDecimal(fee.payout_fiat);
-  if (payIn === undefined || payout === undefined || payout.units <= 0n) return undefined;
+  // Hiding the fee row on an unreadable figure is a PRODUCT choice — a
+  // breakdown that cannot be computed is worse than no breakdown — so the
+  // parse is caught here, at the row boundary, and nowhere else.
+  let payIn: Decimal;
+  let payout: Decimal;
+  try {
+    payIn = parseDecimal(fee.pay_in_fiat);
+    payout = parseDecimal(fee.payout_fiat);
+  } catch {
+    return undefined;
+  }
+  // Distinct from the parse above: this one guards our own division below.
+  if (payout.units <= 0n) return undefined;
   // Align to one scale, subtract exactly.
   const scale = Math.max(payIn.scale, payout.scale);
   const payInUnits = payIn.units * 10n ** BigInt(scale - payIn.scale);
@@ -73,7 +87,7 @@ export function createSwapDisplayModel(
   // invoice's settled transaction_state — never the provider's `completed` state (see
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
   // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
-  const settled = invoice.transaction_state === "settled" || invoice.settled_at !== undefined;
+  const settled = invoice.transaction_state === "settled";
   const feeBreakdown = createSwapFeeBreakdown(swap.fee);
 
   return {
@@ -107,11 +121,7 @@ export function createSwapDisplayModel(
     ...(swap.deposit_tx_id === undefined ? {} : { depositTxId: swap.deposit_tx_id }),
     ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
     ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
-    ...(swap.refund_nonce !== undefined
-      ? { refundNonce: swap.refund_nonce }
-      : swap.provider_state === "refund_required"
-        ? { refundNonce: OPENRECEIVE_REFUND_REVIEW_NONCE }
-        : {}),
+    refundAllowed: swap.provider_state === "refund_required",
     ...(swap.refund_tx_id === undefined ? {} : { refundTxId: swap.refund_tx_id }),
     ...(swap.refund_reason === undefined ? {} : { refundReason: swap.refund_reason }),
     ...(swap.deposit_received_amount === undefined
@@ -145,17 +155,15 @@ export function overlaySwapRefundStaging(
     return invoice;
   }
   if (local.invoice_id !== invoice.invoice_id) return invoice;
+  // The staged refund ADDRESS is the review marker: it is present locally after
+  // the payer reviews and absent from the server's view until they confirm.
   const refund_address = invoiceSwap.refund_address ?? localSwap.refund_address;
-  const refund_nonce = invoiceSwap.refund_nonce ?? localSwap.refund_nonce;
-  if (refund_address === invoiceSwap.refund_address && refund_nonce === invoiceSwap.refund_nonce) {
-    return invoice;
-  }
+  if (refund_address === invoiceSwap.refund_address) return invoice;
   return {
     ...invoice,
     swap: {
       ...invoiceSwap,
       ...(refund_address === undefined ? {} : { refund_address }),
-      ...(refund_nonce === undefined ? {} : { refund_nonce }),
     },
   };
 }
@@ -286,9 +294,7 @@ function getSwapRefundReasonDetail(
  * chain congestion and provider policy can take longer.
  */
 export function getSwapConfirmationWaitHint(payInAsset: string): string {
-  const network = payInAsset.includes("_")
-    ? (payInAsset.split("_").at(-1) ?? payInAsset)
-    : payInAsset;
+  const network = payInAssetNetwork(payInAsset);
   if (network === "TRON") return "Confirmation usually takes 1–3 minutes.";
   if (network === "SOL") return "Confirmation usually takes under a minute.";
   if (network === "ETH") return "Confirmation often takes 5–15 minutes.";
@@ -318,7 +324,7 @@ export function getSwapAssetDisplay(payInAsset: string): {
   readonly assetLabel: string;
   readonly networkLabel: string;
 } {
-  const [asset, network] = payInAsset.split("_");
+  const network = payInAssetNetwork(payInAsset);
   const networkLabel =
     network === "TRON"
       ? "Tron"
@@ -328,17 +334,30 @@ export function getSwapAssetDisplay(payInAsset: string): {
           ? "Ethereum"
           : (network ?? payInAsset);
   return {
-    assetLabel: asset ?? payInAsset,
+    assetLabel: payInAsset.split("_")[0] ?? payInAsset,
     networkLabel,
   };
 }
 
+/**
+ * The QR the payer scans for a swap deposit.
+ *
+ * AMOUNT-PREFILL POLICY: only the NATIVE-COIN rails carry an amount
+ * (`ethereum:…?value=`, `solana:…?amount=`). Token rails (USDT_TRON, USDT_ETH,
+ * USDC_ETH, …) deliberately encode the bare deposit address: the EIP-681
+ * token-transfer form is parsed inconsistently across wallets, and a wallet
+ * that mis-parses it shows a broken request rather than no prefill. For those
+ * rails the panel's "send exactly X" is the amount of record.
+ *
+ * The one thing this never does is silently drop a prefill it was supposed to
+ * emit: a deposit_amount from our own server that will not convert throws, and
+ * the panel's error surface shows it. An amount-LESS payment URI is the worst
+ * outcome of the three, because the wallet then lets the payer type any amount.
+ */
 function createSwapQrPayload(swap: NonNullable<CheckoutInvoiceSnapshot["swap"]>): string {
   if (swap.pay_in_asset === "ETH_ETH") {
     const wei = decimalAmountToIntegerString(swap.deposit_amount, 18);
-    return wei === undefined
-      ? swap.deposit_address
-      : `ethereum:${swap.deposit_address}?value=${wei}`;
+    return `ethereum:${swap.deposit_address}?value=${wei}`;
   }
   if (swap.pay_in_asset === "SOL_SOL") {
     const amount = formatDepositAmount(swap.deposit_amount);
@@ -347,9 +366,11 @@ function createSwapQrPayload(swap: NonNullable<CheckoutInvoiceSnapshot["swap"]>)
   return swap.deposit_address;
 }
 
-function decimalAmountToIntegerString(amount: string, decimals: number): string | undefined {
-  const parsed = optionalDecimal(amount);
-  if (parsed === undefined || parsed.scale > decimals) return undefined;
+function decimalAmountToIntegerString(amount: string, decimals: number): string {
+  const parsed = parseDecimal(amount);
+  if (parsed.scale > decimals) {
+    throw new RangeError(`deposit_amount is more precise than ${decimals} decimals: ${amount}`);
+  }
   return (parsed.units * 10n ** BigInt(decimals - parsed.scale)).toString();
 }
 

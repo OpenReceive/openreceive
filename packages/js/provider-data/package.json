@@ -40,13 +40,11 @@
   ],
   "scripts": {
     "build": "tsup && node ../../../tools/package/copy-static.mjs src dist data/openreceive-providers.v4.json:openreceive-providers.v4.json assets",
-    "prepack": "npm run build",
-    "prepublishOnly": "npm run build"
+    "prepack": "npm run build"
   },
   "engines": {
     "node": ">=22"
   },
-  "devDependencies": {},
   "homepage": "https://openreceive.org",
   "publishConfig": {
     "access": "public"

@@ -137,8 +137,6 @@ export interface CheckoutInvoiceSwapSnapshot {
   readonly deposit_tx_id?: string;
   readonly payout_tx_id?: string;
   readonly refund_address?: string;
-  readonly refund_nonce?: string;
-  readonly refund_nonce_expires_at?: number;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
   readonly attention_reason?: string;
@@ -199,7 +197,13 @@ export interface SwapDisplayModel {
   readonly depositTxId?: string;
   readonly payoutTxId?: string;
   readonly refundAddress?: string;
-  readonly refundNonce?: string;
+  /**
+   * Whether the refund form may be submitted. The review-then-confirm gate is
+   * entirely client-side: OpenReceive mints no refund tokens, the server sends
+   * none, and the confirmed request carries only reference, payment_hash, and
+   * refund_address.
+   */
+  readonly refundAllowed: boolean;
   readonly refundTxId?: string;
   readonly refundReason?: string;
   readonly depositReceivedAmount?: string;

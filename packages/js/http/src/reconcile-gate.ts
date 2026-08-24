@@ -34,7 +34,7 @@ export type OpportunisticReconcileResult =
   | { readonly reason: "ran"; readonly checks: readonly PaymentCheck[] }
   | { readonly reason: "no_pending" | "gate_busy" | "scan_failed" };
 
-export interface MaybeReconcileOpenReceivePaymentsOptions {
+export interface MaybeReconcilePaymentsOptions {
   readonly service: OpenReceive;
   readonly host: Host;
   /** Gate interval floor. Default (and minimum) 2 seconds. */
@@ -95,7 +95,7 @@ function intervalForInvoiceAge(elapsedSeconds: number): number {
  * routes never auto-run it).
  */
 export async function maybeReconcilePayments(
-  input: MaybeReconcileOpenReceivePaymentsOptions,
+  input: MaybeReconcilePaymentsOptions,
 ): Promise<OpportunisticReconcileResult> {
   // A missing gate is a wiring error, not a transient failure: propagate it
   // (the HTTP handler already refuses to construct in this state) instead of
@@ -128,6 +128,9 @@ export async function maybeReconcilePayments(
       reconcileHostPayments({
         service: input.service,
         host: input.host,
+        // Already read above to size the gate interval; the pass scans that
+        // exact batch rather than repeating the query on the request path.
+        attempts,
         overlapSeconds: input.overlapSeconds,
         maxPages: input.maxPages ?? OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
         ...compact({ clock: input.clock }),

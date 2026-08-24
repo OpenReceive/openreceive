@@ -607,7 +607,7 @@ class EngineHostIntegrationTest < Minitest::Test
     end
     assert_equal 409, error.status
     assert_equal "CONFLICT", error.code
-    assert_match(/live payment attempt/, error.message)
+    assert_match(/already in progress for this reference/, error.message)
   end
 
   def test_settlement_fulfills_once_and_blocks_further_creates

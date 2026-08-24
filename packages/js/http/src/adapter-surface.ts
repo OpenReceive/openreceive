@@ -1,8 +1,15 @@
 // Curated adapter surface: the @openreceive/http pieces a host wires an adapter
-// with — the handler/stack factories, their options/context types, the error
-// classes, and the generated wire body types. Host-integration internals (the
-// SQL payment repository, reconcile gate, host factory plumbing) stay in
-// @openreceive/http; import them from there when composing your own host.
+// with — the handler/stack factories, their options/context types, and the
+// error classes.
+//
+// The generated Wire* request/response body types are deliberately NOT here.
+// An adapter host names the factory, its options, and the hooks; it never
+// constructs a wire body — the handler owns that side. They stay importable
+// from @openreceive/http for the rare host that types a proxy.
+//
+// Host-integration internals (the SQL payment repository, reconcile gate, host
+// factory plumbing) stay in @openreceive/http too; import them from there when
+// composing your own host.
 // tools/validate/check-public-api.mjs pins this surface.
 //
 // @openreceive/express, @openreceive/fastify and @openreceive/next each are
@@ -13,8 +20,8 @@ export type {
   CheckoutCreatedHook,
   CheckoutCreatedInput,
   CreateCheckoutAmount,
-  CreateOpenReceiveHttpHandlerOptions,
-  CreateOpenReceiveStackOptions,
+  CreateHttpHandlerOptions,
+  CreateStackOptions,
   OpenReceive,
   Authorize,
   AuthorizeAction,
@@ -33,20 +40,6 @@ export type {
   Stack,
   StackStorage,
   StackWallet,
-  WireCheckout,
-  WireCreateCheckoutRequest,
-  WireCreateCheckoutResponse,
-  WireCreateSwapRequest,
-  WireCreateSwapResponse,
-  WireError,
-  WireOrderRequest,
-  WirePaymentCheck,
-  WirePaymentCheckRequest,
-  WirePaymentStatus,
-  WirePrepareCheckoutRequest,
-  WirePrepareCheckoutResponse,
-  WireRefundSwapRequest,
-  WireSwapQuoteRequest,
   PaymentCheck,
   ResolveCheckoutContext,
   ResolveCheckoutHook,

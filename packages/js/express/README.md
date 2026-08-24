@@ -16,6 +16,8 @@ app.use(
     storage: {
       db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
       onPaid: async ({ reference, query }) => {
+        // Host SQL reaches your driver VERBATIM: `?` on sqlite as shown,
+        // `$1` on postgres. Nothing rewrites placeholders.
         await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
       },
     },
@@ -55,6 +57,15 @@ locking, write-once settlement, and the reconciliation state machine — and the
 mounted routes commit one live attempt per rail before payer instructions are
 returned. `swapData` stays server-only. OpenReceive never requires a separate
 database or Redis.
+
+Composing needs `@openreceive/http` and `@openreceive/node` as direct
+dependencies of your app — they are transitive dependencies of this adapter, so
+under pnpm or any strict-resolution install, importing them without adding them
+fails:
+
+```sh
+npm install @openreceive/http @openreceive/node
+```
 
 ```ts
 import { openReceiveExpress } from "@openreceive/express";

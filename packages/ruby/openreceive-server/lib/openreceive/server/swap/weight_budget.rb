@@ -9,6 +9,15 @@ module OpenReceive
       # Marked (weight_budget?) so quote classification can map it to
       # provider_rate_limited, mirroring the JS weightBudget error tag.
       class WeightBudgetError < StandardError
+        # The denial diagnostics (provider, path, reason, used/cost/gate,
+        # window start, backoff) ride the error itself.
+        attr_reader :denial
+
+        def initialize(message, denial = {})
+          super(message)
+          @denial = denial
+        end
+
         def weight_budget?
           true
         end
@@ -25,10 +34,9 @@ module OpenReceive
         DEFAULT_WEIGHT = 1
         BACKOFF_SECONDS = 60
 
-        def initialize(provider_id, clock, on_denied: nil)
+        def initialize(provider_id, clock)
           @provider_id = provider_id
           @clock = clock
-          @on_denied = on_denied
           @window_start = clock.call
           @used = 0
           @backoff_until = nil
@@ -37,16 +45,6 @@ module OpenReceive
 
         def weight_for_path(path)
           path == "create" ? CREATE_WEIGHT : DEFAULT_WEIGHT
-        end
-
-        def can_reserve?(path)
-          @monitor.synchronize do
-            roll_window
-            now = @clock.call
-            return false if !@backoff_until.nil? && @backoff_until > now
-
-            @used + weight_for_path(path) <= gate(path)
-          end
         end
 
         def reserve(path)
@@ -79,36 +77,37 @@ module OpenReceive
 
         private
 
+        # The weight window rolls; the 429 backoff does NOT ride along with it.
+        # Clearing it here cut a backoff arbitrarily short — mark_rate_limited
+        # at second 59 of the window was forgiven one second later — so the
+        # backoff expires on its own clock, checked in reserve. Mirrors JS.
         def roll_window
           now = @clock.call
           return if now - @window_start < WINDOW_SECONDS
 
           @window_start = now
           @used = 0
-          @backoff_until = nil
         end
 
         def gate(path)
           path == "create" ? CREATE_GATE : SOFT_CAP
         end
 
+        # The denial carries its own diagnostics on the raised error: there is
+        # no observer hook, because there was never a caller for one. Mirrors JS.
         def deny(path, reason, cost, limit, message)
-          begin
-            @on_denied&.call(
-              "provider" => @provider_id,
-              "path" => path,
-              "reason" => reason,
-              "message" => message,
-              "used" => @used,
-              "cost" => cost,
-              "gate" => limit,
-              "window_start" => @window_start,
-              **(@backoff_until.nil? ? {} : { "backoff_until" => @backoff_until })
-            )
-          rescue StandardError
-            # Diagnostics never affect provider behavior.
-          end
-          raise WeightBudgetError, message
+          denial = {
+            "provider" => @provider_id,
+            "path" => path,
+            "reason" => reason,
+            "message" => message,
+            "used" => @used,
+            "cost" => cost,
+            "gate" => limit,
+            "window_start" => @window_start,
+            **(@backoff_until.nil? ? {} : { "backoff_until" => @backoff_until })
+          }
+          raise WeightBudgetError.new(message, denial)
         end
       end
     end

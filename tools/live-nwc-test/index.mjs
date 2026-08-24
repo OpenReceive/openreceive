@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lightningUri } from "@openreceive/browser";
+import { createLightningUri } from "@openreceive/browser";
 import {
   reconcilePaymentAttempts,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
@@ -34,7 +34,10 @@ const expectedCapabilitiesPath =
   process.env.OPENRECEIVE_EXPECTED_CAPABILITIES ??
   path.join(currentDir, "expected_capabilities.json");
 const productPath = path.join(repoRoot, "examples/hello-fruit/shared/product.json");
-const shouldRequestLiveInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE !== "0";
+// Opt-IN, matching the Ruby smoke: `npm run test:live:nwc` with NWC_URI set
+// used to mint a real invoice on the JS side and stop after preflight on the
+// Ruby side, so one command meant two different things per engine.
+const shouldRequestLiveInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE === "1";
 const waitForPayment = process.env.OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT === "1";
 const supportedProfiles = new Set(["rizful", "alby", "zeus", "custom"]);
 const fruitsPath = path.join(repoRoot, "examples/hello-fruit/shared/fruits.json");
@@ -101,7 +104,7 @@ function assertCapabilities(summary, expected, walletProfile) {
 async function renderTerminalQr(invoice) {
   try {
     const qr = await import("qrcode");
-    return await qr.default.toString(lightningUri(invoice), {
+    return await qr.default.toString(createLightningUri(invoice), {
       type: "terminal",
       small: true,
       errorCorrectionLevel: "M",
@@ -162,7 +165,7 @@ if (summary.spendCapabilityAdvertised) {
 }
 
 if (!shouldRequestLiveInvoice) {
-  console.log("OPENRECEIVE_LIVE_CREATE_INVOICE=0; stopping after preflight.");
+  console.log("OPENRECEIVE_LIVE_CREATE_INVOICE is not 1; stopping after preflight.");
   process.exit(0);
 }
 

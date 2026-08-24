@@ -109,7 +109,7 @@ module OpenReceive
       { "reason" => "ran", "checks" => checks }
     rescue StandardError => e
       openreceive_logger&.warn(
-        "[openreceive] opportunistic reconcile failed (will retry): #{sanitized_failure_message(e)}"
+        "[openreceive] opportunistic reconcile failed (will retry): #{sanitize_failure_message(e)}"
       )
       { "reason" => "scan_failed" }
     end
@@ -166,6 +166,17 @@ module OpenReceive
       [previous_delay * 2, NOTIFICATIONS_MAX_BACKOFF_SECONDS].min
     end
 
+    # Failure text can embed wallet credentials (an NWC URI inside a connect
+    # error); redact them before the message reaches the host log, mirroring
+    # the JS redactSecrets URI patterns. Public because the long-lived
+    # `openreceive:notifications` worker — the process most likely to see a
+    # connect error — logs failures of its own.
+    def sanitize_failure_message(error)
+      "#{error.class}: #{error.message}"
+        .gsub(/nostr\+walletconnect:[^\s"'`<>]+/, "[REDACTED_NWC]")
+        .gsub(/lightning\+swapconnect:[^\s"'`<>]+/, "[REDACTED_LSC]")
+    end
+
     private
 
     # Rails.logger when the engine runs inside Rails; nil in bare-gem tests.
@@ -174,15 +185,6 @@ module OpenReceive
       return nil unless defined?(::Rails) && ::Rails.respond_to?(:logger)
 
       ::Rails.logger
-    end
-
-    # Failure text can embed wallet credentials (an NWC URI inside a connect
-    # error); redact them before the message reaches the host log, mirroring
-    # the JS redactSecrets URI patterns.
-    def sanitized_failure_message(error)
-      "#{error.class}: #{error.message}"
-        .gsub(%r{nostr\+walletconnect://[^\s"'`<>]+}, "[REDACTED_NWC]")
-        .gsub(%r{lightning\+swapconnect://[^\s"'`<>]+}, "[REDACTED_LSC]")
     end
 
     # One failing settlement (a raising on_paid, a host data problem)
@@ -197,7 +199,7 @@ module OpenReceive
     rescue StandardError => e
       openreceive_logger&.warn(
         "[openreceive] settlement for #{checked.fetch('payment_hash')} failed " \
-        "(will retry next pass): #{sanitized_failure_message(e)}"
+        "(will retry next pass): #{sanitize_failure_message(e)}"
       )
     end
 
@@ -209,7 +211,10 @@ module OpenReceive
         expires_at: attempt.fetch("expires_at"),
         status: checked.fetch("status"),
         observed_at: observed_at,
-        transaction_state: wallet_transaction["state"] || wallet_transaction["transaction_state"]
+        # The row here is the service's NORMALIZED output, which carries
+        # "transaction_state" only — the raw wallet's "state" spelling was
+        # already resolved at the client boundary.
+        transaction_state: wallet_transaction["transaction_state"]
       )
       return if transition.nil?
 

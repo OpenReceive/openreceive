@@ -9,7 +9,6 @@ import {
   unixSeconds,
 } from "@openreceive/core";
 import { createNwcReceiveClient } from "./alby-nwc.ts";
-import type { NwcNotificationUnsubscribe, NwcWalletNotificationHandler } from "./alby-nwc.ts";
 import { ConfigError } from "./config-error.ts";
 import { createLscSwapProvidersFromEnvironment } from "./lsc-uri.ts";
 import { attachLogging } from "./service/file-logger.ts";
@@ -186,14 +185,11 @@ export async function createOpenReceive(
       }
     },
     subscribeWalletNotifications: async (handler) => {
-      // Duck-typed: only wallet clients that support NWC-02 notifications
-      // (e.g. AlbyNwcReceiveClient over @getalby/sdk) expose this method.
-      const notificationClient = client as typeof client & {
-        subscribeNotifications?: (
-          handler: NwcWalletNotificationHandler,
-        ) => Promise<NwcNotificationUnsubscribe>;
-      };
-      if (typeof notificationClient.subscribeNotifications !== "function") {
+      // Declared on NotifyingReceiveNwcClient, not duck-typed: the method is
+      // optional because core's ReceiveNwcClient stays the minimum receive
+      // contract for custom clients that only poll.
+      const subscribe = client.subscribeNotifications;
+      if (typeof subscribe !== "function") {
         throw new OpenReceiveError({
           code: "UNSUPPORTED_METHOD",
           message:
@@ -207,7 +203,7 @@ export async function createOpenReceive(
         "wallet.notifications.subscribe.requested",
         "Subscribing to NWC-02 payment_received wallet notifications.",
       );
-      const unsubscribe = await notificationClient.subscribeNotifications((notification) => {
+      const unsubscribe = await subscribe.call(client, (notification) => {
         // Log only the type and payment hash — never the notification payload.
         emitLog(
           nodeOptions,
@@ -288,7 +284,6 @@ function requireNwc(value: string | undefined, { subject }: { subject: string })
   return value.trim();
 }
 
-/** Truthy environment flag: "1", "true", "yes" (case-insensitive). */
 /**
  * Primary first, then failovers in declaration order — the order the swap
  * service consults them. Failovers without a primary are a configuration
@@ -305,9 +300,24 @@ function resolveSwapProviders(
   return fromEnvironment();
 }
 
+/**
+ * Truthy environment flag: "1", "true", "yes" (case-insensitive).
+ *
+ * A value that is SET but unrecognized warns before reading as off — a typo
+ * like "truee" must not silently mean "unset" on the one flag that overrides
+ * the spend-capable wallet refusal. Mirrors the Ruby service's warning.
+ */
 function isEnvironmentFlagEnabled(value: string | undefined): boolean {
   if (value === undefined) return false;
-  return ["1", "true", "yes"].includes(value.trim().toLowerCase());
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes"].includes(normalized)) return true;
+  if (normalized.length > 0) {
+    console.warn(
+      `[openreceive] Unrecognized OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC value ${JSON.stringify(value)}; ` +
+        "treating it as disabled. Use 1/true/yes to enable.",
+    );
+  }
+  return false;
 }
 
 async function preflight(client: ServiceContext["options"]["client"]): Promise<void> {

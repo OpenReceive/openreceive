@@ -153,12 +153,6 @@ module OpenReceive
           nil
         end
 
-        def can_accept_request(path)
-          return true if @weight_budget.nil?
-
-          @weight_budget.can_reserve?(path)
-        end
-
         def supported_pay_in_assets
           resolve_currencies.fetch("pay_in").keys
         end
@@ -502,11 +496,21 @@ module OpenReceive
             self.class.read_nested_string(record, %w[back tx id]) ||
             self.class.read_nested_string(record, %w[refund tx id]) ||
             fallback["refund_tx_id"]
-          normalized_status = self.class.normalize_status(
-            self.class.read_string(record["status"]) || fallback["state"] || "NEW",
-            self.class.as_record(record["emergency"]),
-            refund_tx_id
-          )
+          raw_status = self.class.read_string(record["status"])
+          # A thin poll body with no "status" keeps the state we already
+          # persisted VERBATIM. normalize_status speaks FixedFloat statuses,
+          # not OpenReceive states — re-normalizing "awaiting_deposit" would
+          # map it to attention. Mirrors the JS persistedStatus branch.
+          normalized_status =
+            if raw_status.nil? && !fallback.empty?
+              self.class.persisted_status(fallback)
+            else
+              self.class.normalize_status(
+                raw_status || "NEW",
+                self.class.as_record(record["emergency"]),
+                refund_tx_id
+              )
+            end
           order = {
             "provider" => @name,
             "provider_order_id" =>
@@ -526,10 +530,13 @@ module OpenReceive
               self.class.read_string(from["amount"]) ||
               fallback["deposit_amount"] ||
               self.class.required_string(from["amount"], "from.amount"),
+            # No invented deadline: the provider states the expiry, and on a thin
+            # poll body the one we already persisted stands. A create body with
+            # neither is a provider contract break.
             "expires_at" =>
-              self.class.read_unix_seconds(time["expiration"]) ||
-              fallback["expires_at"] ||
-              (@now.call + 600),
+              self.class.required_expires_at(
+                self.class.read_unix_seconds(time["expiration"]) || fallback["expires_at"]
+              ),
             "state" => normalized_status.fetch("state")
           }
           order.merge!(optional_order_fields(record, normalized_status, refund_tx_id, fallback))
@@ -558,11 +565,13 @@ module OpenReceive
               normalized_status["refund_reason"] ||
               (self.class.refund_path_state?(normalized_status.fetch("state")) ? fallback["refund_reason"] : nil),
             "deposit_received_amount" =>
-              self.class.read_decimal_amount(self.class.read_nested_string(record, %w[from tx amount])) ||
-              fallback["deposit_received_amount"],
+              self.class.read_decimal_amount(
+                self.class.read_nested_string(record, %w[from tx amount]), "from.tx.amount"
+              ) || fallback["deposit_received_amount"],
             "refund_amount" =>
-              self.class.read_decimal_amount(self.class.read_nested_string(record, %w[back amount])) ||
-              fallback["refund_amount"],
+              self.class.read_decimal_amount(
+                self.class.read_nested_string(record, %w[back amount]), "back.amount"
+              ) || fallback["refund_amount"],
             "emergency_repeat" =>
               emergency_repeat.nil? ? fallback["emergency_repeat"] : emergency_repeat,
             "fee" => self.class.read_order_fee(record) || fallback["fee"]
@@ -667,10 +676,31 @@ module OpenReceive
             %w[refund_required refund_pending refunded].include?(state)
           end
 
-          def read_decimal_amount(value)
+          # Absent means absent; present-but-unparsable is a provider contract
+          # break and raises rather than dropping the amount from the order.
+          def read_decimal_amount(value, label)
             return nil if value.nil?
+            unless /\A[0-9]+(\.[0-9]+)?\z/.match?(value)
+              raise "FixedFloat #{label} is not a decimal amount."
+            end
 
-            /\A[0-9]+(\.[0-9]+)?\z/.match?(value) ? value : nil
+            value
+          end
+
+          def required_expires_at(expires_at)
+            raise "FixedFloat order is missing time.expiration." if expires_at.nil?
+
+            expires_at
+          end
+
+          # The persisted order's own state fields, carried through a thin poll body.
+          def persisted_status(fallback)
+            {
+              "state" => fallback["state"],
+              "attention" => fallback["attention"],
+              "attention_reason" => fallback["attention_reason"],
+              "refund_reason" => fallback["refund_reason"]
+            }.compact
           end
 
           def read_currencies(data)

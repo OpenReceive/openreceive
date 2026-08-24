@@ -30,20 +30,12 @@ export class SwapProviderWeightBudget {
   constructor(
     private readonly providerId: string,
     private readonly now: () => number,
-    private readonly onDenied?: (denial: SwapWeightBudgetDenial) => void,
   ) {
     this.#windowStart = now();
   }
 
   weightForPath(path: string): number {
     return path === "create" ? SWAP_PROVIDER_CREATE_WEIGHT : SWAP_PROVIDER_DEFAULT_WEIGHT;
-  }
-
-  async canReserve(path: string): Promise<boolean> {
-    this.#rollWindow();
-    const now = this.now();
-    if (this.#backoffUntil !== undefined && this.#backoffUntil > now) return false;
-    return this.#used + this.weightForPath(path) <= this.#gate(path);
   }
 
   async reserve(path: string): Promise<void> {
@@ -78,18 +70,24 @@ export class SwapProviderWeightBudget {
     this.#backoffUntil = now + SWAP_PROVIDER_WEIGHT_BACKOFF_SECONDS;
   }
 
+  // The weight window rolls; the 429 backoff does NOT ride along with it.
+  // Clearing it here cut a backoff arbitrarily short — markRateLimited() at
+  // second 59 of the window was forgiven one second later — so the backoff
+  // expires on its own clock, checked in reserve().
   #rollWindow(): void {
     const now = this.now();
     if (now - this.#windowStart < SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS) return;
     this.#windowStart = now;
     this.#used = 0;
-    this.#backoffUntil = undefined;
   }
 
   #gate(path: string): number {
     return path === "create" ? SWAP_PROVIDER_CREATE_WEIGHT_GATE : SWAP_PROVIDER_WEIGHT_SOFT_CAP;
   }
 
+  // The denial carries its own diagnostics on the thrown error: there is no
+  // observer hook, because there was never a caller for one — the service maps
+  // a weight-budget throw to a retryable 503 and logs it there.
   #deny(
     path: string,
     reason: SwapWeightBudgetDenialReason,
@@ -97,30 +95,33 @@ export class SwapProviderWeightBudget {
     gate: number,
     message: string,
   ): never {
-    try {
-      this.onDenied?.(
-        compact({
-          provider: this.providerId,
-          path,
-          reason,
-          message,
-          used: this.#used,
-          cost,
-          gate,
-          window_start: this.#windowStart,
-          backoff_until: this.#backoffUntil,
-        }),
-      );
-    } catch {
-      // Diagnostics never affect provider behavior.
-    }
-    throw weightBudgetError(message);
+    throw weightBudgetError(
+      message,
+      compact({
+        provider: this.providerId,
+        path,
+        reason,
+        message,
+        used: this.#used,
+        cost,
+        gate,
+        window_start: this.#windowStart,
+        backoff_until: this.#backoffUntil,
+      }),
+    );
   }
 }
 
-function weightBudgetError(message: string): Error & { readonly weightBudget: true } {
-  const error = new Error(message) as Error & { readonly weightBudget: true };
+function weightBudgetError(
+  message: string,
+  denial: SwapWeightBudgetDenial,
+): Error & { readonly weightBudget: true; readonly denial: SwapWeightBudgetDenial } {
+  const error = new Error(message) as Error & {
+    readonly weightBudget: true;
+    readonly denial: SwapWeightBudgetDenial;
+  };
   Object.defineProperty(error, "weightBudget", { value: true });
+  Object.defineProperty(error, "denial", { value: denial, enumerable: true });
   return error;
 }
 

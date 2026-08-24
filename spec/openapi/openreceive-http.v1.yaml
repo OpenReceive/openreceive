@@ -162,7 +162,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: '#/components/schemas/PaymentCheckRequest'
       responses:
         '200':
           description: Provider-derived swap state.
@@ -515,13 +515,6 @@ components:
         bitcoin:
           type: object
           additionalProperties: { type: string }
-    OrderRequest:
-      type: object
-      additionalProperties: false
-      required: [reference, payment_hash]
-      properties:
-        reference: { type: string, minLength: 1, maxLength: 200 }
-        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
     Error:
       type: object
       additionalProperties: false

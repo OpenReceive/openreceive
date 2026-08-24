@@ -40,9 +40,11 @@ payment-check and four swap routes are all derived from it by one function
 (`checkoutRoutes`, `packages/js/browser/src/internal/routes.ts`), so a
 checkout cannot be created against one mount and settled against another. There
 used to be five more ways to say the same thing — `checkoutUrl` (string or
-`(reference) => string`), `{reference}` / `{reference}` templating, and an `orderUrl`
+`(orderId) => string`), `{orderId}` / `{order_id}` templating, and an `orderUrl`
 prop / `order-url` attribute that was really the mounted `/payments/check`
-route — and all of them are gone. To turn polling off, pass `polling={false}`
+route — and all of them are gone. (Those names are historical: they describe
+removed syntax from before the `order_id` → `reference` rename, so they are
+deliberately NOT renamed here.) To turn polling off, pass `polling={false}`
 (React) or `polling="false"` (the element); to drop swaps, pass
 `paymentWizard={false}`.
 
@@ -61,7 +63,7 @@ Mode rules:
   `<Checkout>` itself). Where it surfaces follows each framework's prop plumbing: Vue
   validates inside its `computed` shell binding and Svelte inside its reactive
   statement, so the throw does come out of that read; Angular validates in
-  `ngOnChanges` — once per input change, never once per change-detection pass. An
+  `ngOnChanges` — once per input change, never once per change-detection pass. A
   `reference` of `""` counts as absent and is rejected the same way.
 - The create-only props do nothing in snapshot mode. Each wrapper warns once when
   one is passed with a `checkout` present.
@@ -91,9 +93,11 @@ than quietly growing a fourth copy.
 
 Deriving the Vue props means the shipped SFC's `defineProps` type is imported, so
 the consuming toolchain must be able to resolve types across packages —
-`@vue/compiler-sfc` does that with TypeScript's resolver, which is why Vue lists
-TypeScript as the peer requirement for imported prop types. An unresolvable type
-is a loud compile error, never a silently dropped prop.
+`@vue/compiler-sfc` does that with TypeScript's resolver, which is why
+`@openreceive/vue` declares `typescript` as an OPTIONAL peer: a JavaScript-only
+Vue app needs nothing, and a TypeScript one is told what resolves the imported
+prop type. An unresolvable type is a loud compile error, never a silently
+dropped prop.
 
 ## Where the create-mode flow lives
 
@@ -117,14 +121,29 @@ difference between a custom element and a React tree:
 - **Error surfacing.** `onError`, plus the `wizardError` / `swapStartError`
   strings the session holds for whichever host renders them inline.
 
-Two of the session's five fields gate a request — `mintingLightning` and
+### The quote step
+
+`startSwap` QUOTES the pay-in asset before it starts (`POST /swaps/quote`), and
+starts only when the quote confirms the amount is in range. This lives in the
+shared session, not in either wrapper: React used to quote in its own
+`useCallback` and the element started directly, so the same out-of-range amount
+was an accepted-range panel in React and a generic swap-start error in the
+element.
+
+An unavailable quote lands in `session.swapQuotes[payInAsset]` and both hosts
+render it through one model, `createSwapUnavailableModel` in
+`@openreceive/browser` — same title, same detail, same accepted range, same
+hint. React renders it as `renderSwapUnavailable`; the element renders it as
+`renderElementSwapUnavailableHtml`. Neither owns the copy.
+
+Two of the session's six fields gate a request — `mintingLightning` and
 `startingSwapAsset`, both read in return-early conditions, both covering only the
 window while the request is in flight. The already-completed window is guarded off
 state that outlives the request: `ensureLightning` reuses a bolt11 with time left
 on it, and `startSwap` re-shows an asset's deposit instructions instead of starting
 a second attempt. The remaining three decide nothing about requests: `wizardError`
-and `swapStartError` are the payer-facing strings the catch paths set, and
-`lightningRequested` is a render flag.
+and `swapStartError` are the payer-facing strings the catch paths set,
+`lightningRequested` is a render flag, and `swapQuotes` is the quote cache above.
 
 Both renderers are held to all four gates, in `tests/element-lifecycle.test.mjs`
 and `tests/react-checkout-behavior.test.mjs`. The in-flight pair: a second Bitcoin
@@ -145,7 +164,7 @@ values; the element wrappers pass the DOM `CustomEvent` for the named element ev
 | Handler | Element event | React payload |
 | --- | --- | --- |
 | `onCopy` | `openreceive-copy` | `()` |
-| `onOpenWallet` | `openreceive-open-wallet` | `(uri: string)` |
+| `onOpenWallet` | `openreceive-open-wallet` [^open-wallet] | `(uri: string)` |
 | `onState` | `openreceive-state` | `(state: CheckoutState)` |
 | `onSettled` | `openreceive-settled` | `()` |
 | `onProviderCopy` | `openreceive-provider-copy` | `(providerId: string)` |
@@ -153,6 +172,14 @@ values; the element wrappers pass the DOM `CustomEvent` for the named element ev
 | `onError` | `openreceive-error` | `(error: unknown)` |
 
 `onSettled` is a UI hint. Fulfillment runs from the backend settlement hook.
+
+[^open-wallet]: Fires only from host-supplied UI. No shipped renderer emits an
+    open-wallet affordance — React's is the opt-in `OpenWalletButton` slot, and
+    the element has no built-in one, so a host that wants this event renders its
+    own control and calls `openWallet` (or, on the element, dispatches the event
+    itself). The element used to carry a click handler for a `part="open"`
+    button no renderer produced; it was deleted rather than left as a promise
+    the element could not keep.
 
 ## Server rendering
 

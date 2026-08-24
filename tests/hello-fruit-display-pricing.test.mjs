@@ -149,23 +149,22 @@ test("a /rates payload with no bitcoin map leaves the shop rendering", async () 
   }
 });
 
-test("the rates parse boundary keeps the usable currencies and drops the rest", () => {
+// Shape adaptation, not validation: /rates is the demo's own endpoint over the
+// trusted service's listRates. The one real engine difference is the value
+// type — the JS service serializes rates as JSON numbers, the Ruby service as
+// decimal strings — so numbers become strings and keys are lowercased.
+test("the rates adapter lowercases keys and coerces numbers to strings", () => {
   assert.deepEqual(
     parseHelloFruitBtcFiatRates({
-      bitcoin: {
-        usd: "100000",
-        eur: 90000, // a JSON number is usable; the money engine wants the string
-        gbp: "0", // a zero price is a feed outage, not a rate
-        jpy: "0.1e8", // BigDecimal#to_s form the money engine cannot parse
-        chf: null,
-        bitcoin: "1", // not a three-letter currency code
-      },
+      bitcoin: { usd: "100000", EUR: 90000 },
     }),
     { bitcoin: { usd: "100000", eur: "90000" } },
   );
 });
 
-test("the rates parse boundary answers undefined for every unusable body", () => {
+// Rates arriving LATE is the case every caller handles, so a body with no
+// bitcoin map yet answers the same "rates are not loaded" value.
+test("the rates adapter answers undefined until a bitcoin map arrives", () => {
   for (const payload of [
     undefined,
     null,
@@ -175,13 +174,12 @@ test("the rates parse boundary answers undefined for every unusable body", () =>
     { bitcoin: null },
     { bitcoin: [] },
     { bitcoin: {} },
-    { bitcoin: { usd: "unavailable" } },
     { rates: { bitcoin: { usd: "100000" } } }, // already unwrapped by the caller
   ]) {
     assert.equal(
       parseHelloFruitBtcFiatRates(payload),
       undefined,
-      `expected no usable rates from ${JSON.stringify(payload) ?? "undefined"}`,
+      `expected no rates from ${JSON.stringify(payload) ?? "undefined"}`,
     );
   }
 });

@@ -23,7 +23,13 @@
     "@openreceive/elements": "0.2.0-alpha.0"
   },
   "peerDependencies": {
+    "typescript": ">=5.0.0",
     "vue": ">=3.4.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "exports": {
     ".": {

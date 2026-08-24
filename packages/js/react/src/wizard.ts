@@ -2,11 +2,12 @@
 // route/asset pickers, and the breadcrumb trail. The deposit panel lives in
 // ./swap.ts and the provider tutorial modal in ./provider-tutorial.ts.
 import {
+  assetButtonClasses,
   buildMethodGridEntries,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
+  checkoutLabels,
   copyInvoice as copyInvoiceHelper,
-  createCheckoutProviderCopyEvent,
   createPaymentWizardController,
   createPaymentWizardModel,
   createWizardRouteAssetDisplays,
@@ -18,32 +19,30 @@ import {
   getPaymentMethodIcon,
   getSwapOptionIcon,
   getWizardEmptyMessage,
-  assetButtonClasses,
-  checkoutLabels,
   networkButtonClasses,
   networkCheckClasses,
   networkMobileRevealClasses,
   networkSummaryIconClasses,
-  paymentAccentId,
+  orClasses,
+  overlaySwapRefundStaging,
   type PaymentMethod,
-  paymentMethods,
   type PaymentWizardController,
   type PaymentWizardSelection,
+  paymentAccentId,
+  paymentMethods,
+  requestSwapRefund,
   swapAssetMatchesRoute,
   swapGroupLimitOption,
   swapOptionLimitMessage,
   swapPickerKey,
-  type WizardRouteAssetDisplay,
-  orClasses,
-  overlaySwapRefundStaging,
-  postJson,
-  requestSwapRefund,
   updateSelectedSwapNetworks,
+  type WizardRouteAssetDisplay,
+  wizardNetworkGroupIds,
 } from "@openreceive/browser/headless";
-import { recordOrEmpty } from "@openreceive/core";
 import * as React from "react";
 import { useCheckoutSession } from "./checkout-session.ts";
 import { useTickingUnixSeconds } from "./hooks.ts";
+import { ProviderTutorialModal, renderProviderOpenAction } from "./provider-tutorial.ts";
 import {
   renderSwapActions,
   renderSwapDepositPanel,
@@ -51,9 +50,8 @@ import {
   renderSwapStartError,
   renderSwapUnavailable,
 } from "./swap.ts";
-import type { SwapOptionDisplay, SwapOptionsResult, PaymentWizardProps } from "./types.ts";
+import type { PaymentWizardProps, SwapOptionDisplay, SwapOptionsResult } from "./types.ts";
 import { joinClassNames } from "./utils.ts";
-import { ProviderTutorialModal, renderProviderOpenAction } from "./provider-tutorial.ts";
 
 export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const [selection, setSelection] = React.useState<PaymentWizardSelection>(() =>
@@ -67,7 +65,6 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
   const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<string | null>(null);
-  const [swapQuotes, setSwapQuotes] = React.useState<Record<string, SwapOptionDisplay>>({});
   // When a swap provider is configured, each pay-in coin is promoted to a top-level
   // choice. Selecting one jumps straight to its deposit address, bypassing the
   // country/route/provider steps. Null means the standard method grid is shown.
@@ -135,39 +132,8 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     [checkout, startedSwapInvoice, dismissedSwapInvoiceId],
   );
   const now = useTickingUnixSeconds(currentSwapInvoice !== undefined);
-  const quoteSwap = React.useCallback(
-    async (payInAsset: string): Promise<SwapOptionDisplay | undefined> => {
-      const prefix = props.prefix;
-      if (prefix === undefined || reference === undefined || fetcher === undefined) {
-        return undefined;
-      }
-      try {
-        const body = await postJson({
-          fetch: fetcher,
-          prefix,
-          body: {
-            reference: reference,
-            action: "swap_quote",
-            pay_in_asset: payInAsset,
-          },
-        });
-        const quote = normalizeSwapQuote(body);
-        if (quote !== undefined) {
-          setSwapQuotes((current) => ({ ...current, [payInAsset]: quote }));
-        }
-        return quote;
-      } catch (error) {
-        // A failed quote must not strand the payer on the preparing spinner: it
-        // surfaces inline with the retry button, and only that explicit retry —
-        // never this effect — may attempt the swap again.
-        session.failSwapStart(error);
-        return undefined;
-      }
-    },
-    [props.prefix, reference, fetcher, session],
-  );
-  // Enter the focused flow for a pay-in coin. The effect below quotes it first and only
-  // starts the swap when the quote confirms the amount is in range.
+  // Enter the focused flow for a pay-in coin. The effect below calls the shared
+  // session, which quotes first and starts only when the amount is in range.
   const selectSwapAsset = React.useCallback(
     (payInAsset: string) => {
       if (props.prefix === undefined) return;
@@ -178,7 +144,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     [props.prefix, session],
   );
   const refundSwap = React.useCallback(
-    async (attemptId: string, refundAddress: string, refundNonce: string, confirm: boolean) => {
+    async (attemptId: string, refundAddress: string, confirm: boolean) => {
       const prefix = props.prefix;
       if (prefix === undefined || reference === undefined || fetcher === undefined) {
         return;
@@ -191,7 +157,6 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           invoices: [startedSwapInvoice, ...(checkout?.invoices ?? [])],
           attemptId,
           refundAddress,
-          refundNonce,
           confirm,
           ...(props.logger === undefined ? {} : { logger: props.logger }),
         });
@@ -255,9 +220,10 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           ? stickySwapInvoiceRef.current
           : undefined;
 
-  // Selecting a top-level coin quotes it FIRST (to confirm the amount is in range) and,
-  // when available, starts the swap so the payer lands on the deposit address. A start
-  // that fails leaves its entry in the attempted set, so this effect never re-POSTs
+  // Selecting a top-level coin hands the asset to the shared session, which
+  // quotes it first (to confirm the amount is in range) and, when available,
+  // starts the swap so the payer lands on the deposit address. A start that
+  // fails leaves its entry in the attempted set, so this effect never re-POSTs
   // /swaps on its own — recovery is the payer's explicit retry button.
   React.useEffect(() => {
     if (selectedSwapAsset === null) return;
@@ -265,24 +231,16 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     if (activeSwapForAsset !== undefined) return;
     if (autoSwapAttemptedRef.current.has(selectedSwapAsset)) return;
     autoSwapAttemptedRef.current.add(selectedSwapAsset);
-    const asset = selectedSwapAsset;
-    let cancelled = false;
-    void (async () => {
-      const quote = await quoteSwap(asset);
-      if (cancelled || quote === undefined || !quote.available) return;
-      await startSwap(asset);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedSwapAsset, activeSwapForAsset, props.prefix, quoteSwap, startSwap]);
+    void startSwap(selectedSwapAsset);
+  }, [selectedSwapAsset, activeSwapForAsset, props.prefix, startSwap]);
 
   const selectedSwapOption =
     selectedSwapAsset === null
       ? undefined
       : (swapAssetOptions.find((option) => option.pay_in_asset === selectedSwapAsset) ??
-        swapQuotes[selectedSwapAsset]);
-  const selectedSwapQuote = selectedSwapAsset === null ? undefined : swapQuotes[selectedSwapAsset];
+        session.swapQuotes[selectedSwapAsset]);
+  const selectedSwapQuote =
+    selectedSwapAsset === null ? undefined : session.swapQuotes[selectedSwapAsset];
   const selectedSwapLabel = selectedSwapOption?.label ?? "this coin";
 
   if (selectedSwapAsset !== null) {
@@ -306,15 +264,10 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
             className: orClasses.wizardResults,
           },
           swapStartError !== undefined && activeSwapForAsset === undefined
-            ? renderSwapStartError(
-                swapStartError,
-                selectedSwapAsset === null
-                  ? undefined
-                  : () => {
-                      autoSwapAttemptedRef.current.delete(selectedSwapAsset);
-                      void startSwap(selectedSwapAsset);
-                    },
-              )
+            ? renderSwapStartError(swapStartError, () => {
+                autoSwapAttemptedRef.current.delete(selectedSwapAsset);
+                void startSwap(selectedSwapAsset);
+              })
             : activeSwapForAsset !== undefined
               ? renderSwapDepositPanel({
                   invoice: activeSwapForAsset,
@@ -547,10 +500,12 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                 logger: props.logger,
                 logContext: props.logContext,
               });
-              globalThis.dispatchEvent?.(
-                createCheckoutProviderCopyEvent(activeTutorialProvider.id),
-              );
+              // Both handlers, matching the element (which dispatches both
+              // openreceive-provider-copy and openreceive-copy for one tutorial
+              // copy). The globalThis CustomEvent this used to dispatch had no
+              // listener anywhere and was never part of the contract.
               props.onProviderCopy?.(activeTutorialProvider.id);
+              props.onCopy?.();
               setActiveTutorial({
                 providerId: activeTutorialProvider.id,
                 index: 0,
@@ -651,13 +606,13 @@ function renderCompactPaymentMethodSelector(options: {
       selectedAsset === undefined
         ? undefined
         : group.options.find((option) => option.pay_in_asset === selectedAsset);
-    const panelId = `network-panel-${groupKey.toLowerCase()}`;
+    const { panelId, headingId } = wizardNetworkGroupIds(groupKey);
     return React.createElement(
       "div",
       {
         id: panelId,
         role: "group",
-        "aria-labelledby": `network-heading-${groupKey.toLowerCase()}`,
+        "aria-labelledby": headingId,
         className: mobile ? networkMobileRevealClasses(accent) : orClasses.methodNetworkReveal,
       },
       React.createElement(
@@ -669,7 +624,7 @@ function renderCompactPaymentMethodSelector(options: {
           React.createElement(
             "h3",
             {
-              id: `network-heading-${groupKey.toLowerCase()}`,
+              id: headingId,
               className: orClasses.methodNetworkHeading,
             },
             formatChooseNetworkHeading(group.label),
@@ -684,7 +639,7 @@ function renderCompactPaymentMethodSelector(options: {
           "div",
           {
             role: "group",
-            "aria-labelledby": `network-heading-${groupKey.toLowerCase()}`,
+            "aria-labelledby": headingId,
             className: orClasses.methodNetworkGrid,
           },
           group.options.map((option) => {
@@ -851,7 +806,7 @@ function renderCompactPaymentMethodSelector(options: {
             ? (swapGroupLimitOption(group.options) ?? activeOption)
             : activeOption;
           const limitMessage = swapOptionLimitMessage(limitOption, options.checkout);
-          const panelId = `network-panel-${groupKey.toLowerCase()}`;
+          const { panelId } = wizardNetworkGroupIds(groupKey);
 
           return React.createElement(
             "div",
@@ -1071,13 +1026,6 @@ function swapOptionsForRoute(
 
 // The pay-in asset to auto-advance to a deposit address, or undefined when the payer
 // should still choose (multi-network stablecoins, no swap configured).
-function normalizeSwapQuote(body: unknown): SwapOptionDisplay | undefined {
-  const quote = recordOrEmpty(recordOrEmpty(body).quote ?? body);
-  const payInAsset = quote.pay_in_asset ?? quote.pay_asset;
-  return typeof payInAsset === "string"
-    ? ({ ...quote, pay_in_asset: payInAsset } as unknown as SwapOptionDisplay)
-    : undefined;
-}
 
 function selectCurrentSwapInvoice(
   checkout: CheckoutSnapshot | undefined,

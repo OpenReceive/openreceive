@@ -353,9 +353,10 @@ function CheckoutView(
   // Settled: paying affordances (QR, copy, decode, wizard) drop out; a green "Payment
   // received" status plus the payment-data panel take their place.
   const settled = checkoutModel.status === "settled";
-  // Hide the Lightning pane when: a swap deposit panel is focused, no bolt11 has been
-  // minted yet (deferred create-mode or checkout_lock snapshot), or the invoice expired.
-  // Never hide when expired — the "Start over" button still lives in the LN section.
+  // The QR pane needs a minted bolt11, no focused swap deposit panel, and an
+  // unexpired invoice. Expiry removes the PANE but keeps the LN section, because
+  // that is where the "Start over" button lives — which is what `hideLightning`
+  // below (the whole-section switch) spells out.
   const showLightning = !!checkoutModel.invoice && !swapFocused && !expired;
   // Settled and expired keep the payment layout: after a swap deposit settles,
   // swapFocused is still true and would otherwise blank the whole widget.
@@ -585,6 +586,7 @@ function CheckoutView(
                   amount_msats: checkoutModel.amount_msats,
                 }),
                 onProviderCopy,
+                onCopy,
                 onRequestLightning,
                 onSwapStarted,
               })

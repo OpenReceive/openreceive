@@ -30,7 +30,7 @@ export {
 export type {
   CheckoutCreatedHook,
   CheckoutCreatedInput,
-  CreateOpenReceiveHttpHandlerOptions,
+  CreateHttpHandlerOptions,
   HttpHandler,
   ResolveCheckoutContext,
   ResolveCheckoutHook,
@@ -38,9 +38,9 @@ export type {
 } from "./handler.ts";
 export { createHttpHandler } from "./handler.ts";
 export type {
-  CreateOpenReceiveHostDbOptions,
-  CreateOpenReceiveHostOptions,
-  CreateOpenReceiveHostRepositoryOptions,
+  CreateHostDbOptions,
+  CreateHostOptions,
+  CreateHostRepositoryOptions,
   Host,
   SettlementEvent,
   SettlementEventHook,
@@ -72,7 +72,7 @@ export {
   startNotificationWorker,
 } from "./notifications.ts";
 export type {
-  MaybeReconcileOpenReceivePaymentsOptions,
+  MaybeReconcilePaymentsOptions,
   OpportunisticReconcileResult,
 } from "./reconcile-gate.ts";
 export {
@@ -94,8 +94,14 @@ export type {
   SqlDatabase,
   SqlQuery,
 } from "./sql-adapters.ts";
-export type { KnexLike, PrismaLike, SqlDialect, TypeOrmLike } from "./orm-adapters.ts";
-export { knexDb, prismaDb, typeOrmDb } from "./orm-adapters.ts";
+export type {
+  KnexLike,
+  PrismaLike,
+  SequelizeLike,
+  SqlDialect,
+  TypeOrmLike,
+} from "./orm-adapters.ts";
+export { knexDb, prismaDb, sequelizeDb, typeOrmDb } from "./orm-adapters.ts";
 export type {
   PaymentSettlement,
   PaymentSettlementHook,
@@ -109,7 +115,7 @@ export {
   paymentsSchemaSql,
 } from "./sql-payments.ts";
 export type {
-  CreateOpenReceiveStackOptions,
+  CreateStackOptions,
   Stack,
   StackStorage,
   StackWallet,

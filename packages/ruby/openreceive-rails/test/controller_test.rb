@@ -8,6 +8,7 @@ require "openreceive/rails"
 require "action_controller"
 
 require_relative "../app/controllers/openreceive/application_controller"
+require_relative "../app/controllers/openreceive/rates_controller"
 
 # Minimal receive-only wallet so Configuration#request_handler can boot a Service.
 class ControllerFakeWallet
@@ -28,6 +29,45 @@ end
 class OpenReceiveBoomController < OpenReceive::ApplicationController
   def boom
     raise "kaput internal detail"
+  end
+end
+
+# Counts opportunistic-reconcile passes so a test can prove which routes claim
+# the gate. Subclasses the real rates controller so its skip_around_action is
+# the thing under test, not a re-declaration.
+class OpenReceiveCountingRatesController < OpenReceive::RatesController
+  class << self
+    attr_accessor :passes
+  end
+  self.passes = 0
+
+  private
+
+  def openreceive_opportunistic_reconcile
+    self.class.passes += 1
+    super
+  end
+end
+
+class OpenReceiveCountingEchoController < OpenReceive::ApplicationController
+  class << self
+    attr_accessor :passes
+  end
+  self.passes = 0
+
+  def echo
+    openreceive_respond(
+      [200,
+       { "content-type" => "application/json; charset=utf-8", "x-request-id" => openreceive_request_id },
+       { "ok" => true }]
+    )
+  end
+
+  private
+
+  def openreceive_opportunistic_reconcile
+    self.class.passes += 1
+    super
   end
 end
 
@@ -180,5 +220,24 @@ class EngineControllerAdapterTest < Minitest::Test
     assert_equal true, report[:handled]
   ensure
     Rails.error.unsubscribe(subscriber) if Rails.error.respond_to?(:unsubscribe)
+  end
+
+  # Unauthenticated GET /rates must not consume the wallet-scan budget:
+  # crawlers and health checks hit it freely. The JS handler returns before its
+  # opportunistic pass for route.kind "rates"; the engine skips the filter.
+  def test_rates_never_claims_the_reconcile_gate_but_payment_routes_do
+    OpenReceiveCountingRatesController.passes = 0
+    OpenReceiveCountingEchoController.passes = 0
+
+    rates_env = build_env(StringIO.new(""))
+    rates_env["REQUEST_METHOD"] = "GET"
+    rates_env["PATH_INFO"] = "/openreceive/rates"
+    dispatch(OpenReceiveCountingRatesController, :index, rates_env)
+    assert_equal 0, OpenReceiveCountingRatesController.passes,
+                 "GET /rates must not run the opportunistic reconcile pass"
+
+    dispatch(OpenReceiveCountingEchoController, :echo, build_env(StringIO.new("{}"), content_length: "2"))
+    assert_equal 1, OpenReceiveCountingEchoController.passes,
+                 "a payment route still runs exactly one pass"
   end
 end

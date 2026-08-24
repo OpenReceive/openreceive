@@ -1,4 +1,3 @@
-import { DecimalError } from "./money/decimal.ts";
 import type { ListTransactionsRequest, NwcTransaction, ReceiveNwcClient } from "./nwc/client.ts";
 import {
   type TransactionSettlementStatus,
@@ -89,9 +88,12 @@ export async function reconcilePaymentAttempts(
   options: ReconcilePaymentsOptions,
 ): Promise<readonly PaymentCheck[]> {
   if (options.attempts.length === 0) return [];
+  // Caller misuse, not payer input: these options come from host config, so
+  // they are RangeErrors (the CachedPriceFeed constructor convention), never
+  // the money module's DecimalError.
   const overlapSeconds = options.overlapSeconds ?? 60;
   if (!Number.isSafeInteger(overlapSeconds) || overlapSeconds < 0) {
-    throw new DecimalError("overlapSeconds must be a non-negative safe integer");
+    throw new RangeError("overlapSeconds must be a non-negative safe integer");
   }
   const expected = new Map(
     options.attempts.map((attempt) => [
@@ -222,7 +224,7 @@ function safeTransaction(transaction: NwcTransaction): NwcTransaction {
 function normalizePaymentHash(value: string): string {
   const normalized = value.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(normalized)) {
-    throw new DecimalError("paymentHash must be 64 hexadecimal characters");
+    throw new RangeError("paymentHash must be 64 hexadecimal characters");
   }
   return normalized;
 }
@@ -230,7 +232,7 @@ function normalizePaymentHash(value: string): string {
 function normalizeMaxPages(value: number | undefined): number {
   if (value === undefined) return 10_000;
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new DecimalError("maxPages must be a positive safe integer");
+    throw new RangeError("maxPages must be a positive safe integer");
   }
   return value;
 }
@@ -249,7 +251,7 @@ function normalizedTransactionHash(transaction: NwcTransaction): string | undefi
 
 function normalizeUnix(value: number, field: string): number {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new DecimalError(`${field} must be a non-negative safe integer`);
+    throw new RangeError(`${field} must be a non-negative safe integer`);
   }
   return value;
 }

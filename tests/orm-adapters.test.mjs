@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { paymentsSchemaSql } from "../packages/js/http/src/index.ts";
-import { knexDb, prismaDb, typeOrmDb } from "../packages/js/http/src/orm-adapters.ts";
+import { knexDb, prismaDb, sequelizeDb, typeOrmDb } from "../packages/js/http/src/orm-adapters.ts";
 
 // ---------------------------------------------------------------------------
 // knexDb — the per-driver RESULT shape is the whole reason the factory exists:
@@ -208,4 +208,51 @@ test("knexDb over sqlite runs writes, reads, and rollback against the payments s
     await adapter.query(`SELECT key FROM openreceive_meta WHERE key = ?`, ["k2"]),
     [],
   );
+});
+
+// sequelizeDb — two things differ from every sibling: parameters ride under
+// `bind` rather than positionally, and the transaction is carried on the SAME
+// instance through an options key instead of a separate executor object. Get
+// the second one wrong and settlement statements run outside the transaction.
+function sequelizeShim(rows) {
+  const calls = [];
+  return {
+    calls,
+    async query(sql, options) {
+      calls.push({ sql, options });
+      // Sequelize resolves [rows, metadata] for a SELECT, metadata for a write.
+      return /^\s*select/i.test(sql) ? [rows, { rowCount: rows.length }] : [undefined, {}];
+    },
+    async transaction(run) {
+      return await run("TX");
+    },
+  };
+}
+
+test("sequelizeDb binds parameters through `bind`, never positionally", async () => {
+  const sequelize = sequelizeShim([{ id: 1 }]);
+  const rows = await sequelizeDb(sequelize, "postgres").query("SELECT 1 WHERE id = $1", [7]);
+  assert.deepEqual(rows, [{ id: 1 }]);
+  assert.deepEqual(sequelize.calls[0].options.bind, [7]);
+  assert.equal(sequelize.calls[0].options.transaction, undefined);
+});
+
+test("sequelizeDb reads rows out of Sequelize's [rows, metadata] pair", async () => {
+  const sequelize = sequelizeShim([{ key: "k" }]);
+  const adapter = sequelizeDb(sequelize, "sqlite");
+  assert.deepEqual(await adapter.query("SELECT key FROM t"), [{ key: "k" }]);
+  // A write resolves metadata only: no rows, not a crash.
+  assert.deepEqual(await adapter.query("UPDATE t SET x = ?", [1]), []);
+});
+
+test("sequelizeDb threads the managed transaction into every statement inside it", async () => {
+  const sequelize = sequelizeShim([]);
+  await sequelizeDb(sequelize, "postgres").transaction(async (tx) => {
+    await tx.query("UPDATE t SET x = $1", [1]);
+    await tx.query("SELECT x FROM t");
+  });
+  assert.equal(sequelize.calls.length, 2);
+  for (const call of sequelize.calls) {
+    assert.equal(call.options.transaction, "TX", "a statement escaped the transaction");
+  }
 });

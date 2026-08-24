@@ -116,3 +116,47 @@ export function typeOrmDb(dataSource: TypeOrmLike, dialect: SqlDialect): SqlAdap
     transaction: (run) => dataSource.transaction((manager) => run({ query: queryOn(manager) })),
   };
 }
+
+/** The raw-query slice of a Sequelize instance or a managed Transaction. */
+export interface SequelizeExecutorLike {
+  query(
+    sql: string,
+    options?: { readonly bind?: readonly unknown[]; readonly transaction?: unknown },
+  ): Promise<unknown>;
+}
+
+/** Structural view of a Sequelize instance. */
+export interface SequelizeLike extends SequelizeExecutorLike {
+  transaction<T>(run: (transaction: unknown) => Promise<T>): Promise<T>;
+}
+
+/**
+ * Wrap a Sequelize instance.
+ *
+ * Sequelize takes bind parameters under `bind` (not positional arguments) and
+ * carries the transaction on the SAME instance via an options key rather than
+ * a separate executor object — so the transaction callback threads the
+ * managed transaction back into every statement. Without that, settlement
+ * statements would run outside the transaction on the instance's own pool.
+ *
+ * `sequelize.query` resolves `[rows, metadata]` for a SELECT and metadata
+ * alone for a write, so a non-array result reads as no rows.
+ */
+export function sequelizeDb(sequelize: SequelizeLike, dialect: SqlDialect): SqlAdapter {
+  const queryOn =
+    (transaction?: unknown): SqlQuery =>
+    async (sql, params = []) => {
+      const result = await sequelize.query(sql, {
+        bind: [...params],
+        ...(transaction === undefined ? {} : { transaction }),
+      });
+      const rows = Array.isArray(result) ? result[0] : undefined;
+      return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+    };
+  return {
+    dialect,
+    query: queryOn(),
+    transaction: (run) =>
+      sequelize.transaction((transaction) => run({ query: queryOn(transaction) })),
+  };
+}

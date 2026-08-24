@@ -1,3 +1,15 @@
+# Weekly DRIFT DETECTION, not extra coverage. Every command here also runs on
+# every push (ci.yml): the value is that the weekly run executes them against
+# inputs that FLOAT while the repo stands still —
+#
+#   - `ubuntu-latest`, which GitHub re-images periodically, and
+#   - the `ruby:3.4` container tag, which picks up patch releases.
+#
+# Node and every npm dependency are pinned (.nvmrc, `npm ci` on the lockfile),
+# so a green push run says nothing about those two. Adding a NEW check here
+# rather than to ci.yml would be a mistake: it would run weekly instead of
+# per-push.
+
 name: Conformance
 
 on:
@@ -13,6 +25,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A strict subset of ci.yml's per-push gate, re-run on whatever
+  # `ubuntu-latest` currently is.
   js-conformance:
     runs-on: ubuntu-latest
     timeout-minutes: 20

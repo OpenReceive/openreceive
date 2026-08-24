@@ -26,12 +26,23 @@ export function requiredString(value: unknown, fieldName: string): string {
   return text;
 }
 
-export function optionalSafeInteger(value: unknown): number | undefined {
-  return Number.isSafeInteger(value) && typeof value === "number" ? value : undefined;
+/**
+ * An optional integer field from our own server. ABSENT means absent; PRESENT
+ * but not a safe integer throws, exactly like the required reader below.
+ * Returning undefined for a mistyped value made real fields vanish silently —
+ * a dropped `paid_at` hid the settlement timestamp, a dropped
+ * `provider_expires_at` kept a stale swap deadline on screen.
+ */
+export function optionalSafeInteger(value: unknown, fieldName = "integer"): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new TypeError(`OpenReceive checkout response ${fieldName} must be a safe integer.`);
+  }
+  return value;
 }
 
 export function requiredSafeInteger(value: unknown, fieldName: string): number {
-  const integer = optionalSafeInteger(value);
+  const integer = optionalSafeInteger(value, fieldName);
   if (integer === undefined) {
     throw new TypeError(`OpenReceive checkout response requires ${fieldName}.`);
   }

@@ -3,6 +3,7 @@
 // picks between them. Every URL is built from an allowlisted network, never
 // from provider text.
 
+import { payInAssetNetwork } from "@openreceive/core";
 import { checkoutLabels } from "./ui.ts";
 
 /** Deposit networks that have a public block explorer in OpenReceive UI. */
@@ -13,10 +14,7 @@ export type ExplorerNetwork = "ETH" | "SOL" | "TRON";
  * Returns undefined for unknown or Lightning-only values.
  */
 export function getExplorerNetwork(payInAsset: string | undefined): ExplorerNetwork | undefined {
-  if (payInAsset === undefined || payInAsset === "") return undefined;
-  const network = payInAsset.includes("_")
-    ? (payInAsset.split("_").at(-1) ?? payInAsset)
-    : payInAsset;
+  const network = payInAsset === undefined ? undefined : payInAssetNetwork(payInAsset);
   if (network === "ETH" || network === "SOL" || network === "TRON") return network;
   return undefined;
 }
@@ -80,11 +78,18 @@ export function createLightningInvoiceDecodeUrl(
   return `${base}${separator}invoice=${encodeURIComponent(bolt11)}`;
 }
 
+/** What a detail row's value IS, which decides the link it can carry. */
+export type DetailLinkKind = "invoice" | "address" | "tx";
+
 /**
  * External link metadata for a swap/transaction detail row (explorer or decode).
+ *
+ * `kind` is explicit, never inferred from the row's display label: dispatching
+ * on English strings meant renaming a label — or localizing one — silently
+ * killed its explorer or decode link, with nothing to notice.
  */
 export function createDetailExternalLink(options: {
-  readonly label: string;
+  readonly kind: DetailLinkKind;
   readonly value: string;
   readonly payInAsset?: string;
   /** Host-configured bolt11 decoder. Omitted, no decode link is offered. */
@@ -92,22 +97,13 @@ export function createDetailExternalLink(options: {
 }): { readonly href: string; readonly hrefLabel: string } | undefined {
   const value = options.value.trim();
   if (value === "") return undefined;
-  if (options.label === "Lightning invoice") {
+  if (options.kind === "invoice") {
     const href = createLightningInvoiceDecodeUrl(value, options.decodeLinkUrl);
     return href === undefined ? undefined : { href, hrefLabel: checkoutLabels.decodeInvoice };
   }
-  const kind =
-    options.label === "Deposit address" ||
-    options.label === "Refund address" ||
-    options.label === "Address"
-      ? "address"
-      : options.label === "Deposit transaction" || options.label === "Refund transaction"
-        ? "tx"
-        : undefined;
-  if (kind === undefined) return undefined;
   const href = createBlockExplorerUrl({
     payInAsset: options.payInAsset,
-    kind,
+    kind: options.kind,
     value,
   });
   return href === undefined ? undefined : { href, hrefLabel: checkoutLabels.viewOnExplorer };

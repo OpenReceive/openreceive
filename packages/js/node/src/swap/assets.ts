@@ -18,7 +18,6 @@ export interface SwapAssetInfo {
   readonly network_label: string;
   readonly coin: string;
   readonly network: SwapAddressNetwork;
-  readonly expiry_seconds: number;
 }
 
 const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
@@ -28,7 +27,6 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
     network_label: "Solana",
     coin: "SOL",
     network: "SOL",
-    expiry_seconds: 900,
   },
   USDT_TRON: {
     pay_in_asset: "USDT_TRON",
@@ -36,7 +34,6 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
     network_label: "Tron",
     coin: "USDT",
     network: "TRX",
-    expiry_seconds: 900,
   },
   USDT_SOL: {
     pay_in_asset: "USDT_SOL",
@@ -44,7 +41,6 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
     network_label: "Solana",
     coin: "USDT",
     network: "SOL",
-    expiry_seconds: 900,
   },
   USDC_SOL: {
     pay_in_asset: "USDC_SOL",
@@ -52,7 +48,6 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
     network_label: "Solana",
     coin: "USDC",
     network: "SOL",
-    expiry_seconds: 900,
   },
   ETH_ETH: {
     pay_in_asset: "ETH_ETH",
@@ -60,7 +55,6 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
     network_label: "Ethereum",
     coin: "ETH",
     network: "ETH",
-    expiry_seconds: 1800,
   },
   USDT_ETH: {
     pay_in_asset: "USDT_ETH",
@@ -68,7 +62,6 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
     network_label: "Ethereum",
     coin: "USDT",
     network: "ETH",
-    expiry_seconds: 1800,
   },
   USDC_ETH: {
     pay_in_asset: "USDC_ETH",
@@ -76,7 +69,6 @@ const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
     network_label: "Ethereum",
     coin: "USDC",
     network: "ETH",
-    expiry_seconds: 1800,
   },
 } as const;
 

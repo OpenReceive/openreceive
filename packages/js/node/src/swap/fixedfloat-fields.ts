@@ -60,7 +60,18 @@ export function readUnixSeconds(value: unknown): number | undefined {
     : undefined;
 }
 
-export function readDecimalAmountString(value: string | undefined): string | undefined {
+/**
+ * A provider-reported decimal amount. Absent means absent; present-but-unparsable
+ * is a provider contract break and throws rather than silently dropping the
+ * amount out of the normalized order.
+ */
+export function readDecimalAmountString(
+  value: string | undefined,
+  label: string,
+): string | undefined {
   if (value === undefined) return undefined;
-  return /^[0-9]+(\.[0-9]+)?$/.test(value) ? value : undefined;
+  if (!/^[0-9]+(\.[0-9]+)?$/.test(value)) {
+    throw new Error(`FixedFloat ${label} is not a decimal amount.`);
+  }
+  return value;
 }

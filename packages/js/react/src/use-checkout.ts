@@ -15,15 +15,11 @@ import { getCheckoutLogContext } from "./utils.ts";
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";
 
 export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
-  // The hook drives a concrete checkout snapshot. Create mode (passing only an reference) is
-  // handled by the <Checkout> component wrapper, which creates the checkout and hands the
-  // resulting snapshot to this hook — so the hook/logic below stays untouched.
+  // The hook drives a concrete checkout snapshot, which UseCheckoutOptions
+  // requires. Create mode (passing only a reference) is handled by the
+  // <Checkout> component wrapper, which creates the checkout and hands the
+  // resulting snapshot to this hook.
   const checkout = options.checkout;
-  if (checkout === undefined) {
-    throw new Error(
-      "useCheckout requires a checkout snapshot. Pass reference to <Checkout> for create mode.",
-    );
-  }
   const [copied, showCopied] = useTransientValue<boolean>(false);
   const [latestSnapshot, setLatestSnapshot] = React.useState<CheckoutSnapshot>(checkout);
   // Reset ONLY when the snapshot's identity changes. Keying on object identity

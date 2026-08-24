@@ -1,7 +1,7 @@
 import type { PaymentDetails } from "@openreceive/core";
 import type { Checkout, PaymentCheck, SwapCheckout } from "@openreceive/node";
 import { bigintToJsonNumber, HttpError } from "./errors.ts";
-import type { PaymentRepository } from "./payment-repository.ts";
+import type { AttemptStatus, PaymentRepository } from "./payment-repository.ts";
 
 // The response half of the HTTP wire boundary: the internal camelCase shapes
 // turned into the published snake_case bodies, and the deliberate narrowing
@@ -60,15 +60,25 @@ export async function paymentCheckFromStoredAttempt(
   payments: PaymentRepository,
   reference: string,
   paymentHash: string,
+  /**
+   * The row's status as the resolver already read it. The built-in host
+   * carries it on `ResolvedHostCheckout`, so this route — the
+   * highest-frequency one — reads the rows once per request instead of twice.
+   * Absent only for a custom `resolveCheckout` that does not supply it.
+   */
+  resolvedStatus?: { readonly status: AttemptStatus; readonly paidAt: number | null },
 ): Promise<Record<string, unknown>> {
-  const rows = await payments.listForReference(reference);
-  const record = rows.find((row) => row.paymentHash.toLowerCase() === paymentHash.toLowerCase());
+  const record =
+    resolvedStatus ??
+    (await payments.listForReference(reference)).find(
+      (row) => row.paymentHash.toLowerCase() === paymentHash.toLowerCase(),
+    );
   if (record === undefined) {
     // resolveHostCheckout selected this hash from the same repository moments ago.
     throw new HttpError(404, "NOT_FOUND", "Payment attempt not found for this reference.");
   }
   return {
-    payment_hash: record.paymentHash.toLowerCase(),
+    payment_hash: paymentHash.toLowerCase(),
     status: record.status === "attention" ? "pending" : record.status,
     ...(record.paidAt === null ? {} : { paid_at: record.paidAt }),
   };
@@ -91,9 +101,11 @@ function publicPaymentDetails(details: PaymentDetails): Record<string, unknown> 
     ...(transaction === undefined
       ? {}
       : {
+          // `transaction_state` only: the NWC client normalizes every wallet
+          // spelling to it at the boundary, so no row here ever carries a bare
+          // `state`. Ruby's PUBLIC_TRANSACTION_FIELDS already omitted it.
           transaction: pick([
             "payment_hash",
-            "state",
             "transaction_state",
             "amount_msats",
             "fees_paid_msats",

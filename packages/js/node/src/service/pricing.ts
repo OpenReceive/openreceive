@@ -23,11 +23,14 @@ export async function listRates(
   context: ServiceContext,
   input: ListRatesRequest = {},
 ): Promise<BtcFiatRateMapWithSource["rates"]> {
+  // The payer's `currencies` is request input, not host config: a malformed
+  // entry is a 400, never the retryable 503 a feed outage earns. Normalized
+  // outside the try so its ConfigError cannot fall through mapPriceError.
+  const currencies =
+    input.currencies === undefined
+      ? context.priceCurrencies
+      : payerPriceCurrencies(input.currencies);
   try {
-    const currencies =
-      input.currencies === undefined
-        ? context.priceCurrencies
-        : normalizePriceCurrencies(input.currencies, "listRates currencies");
     for (const currency of currencies) {
       assertAllowedFiatCurrency(currency, context.priceCurrencies);
     }
@@ -56,6 +59,22 @@ export async function quoteRates(
     });
   } catch (error) {
     throw mapPriceError(error);
+  }
+}
+
+/**
+ * The payer-supplied `currencies` filter on GET /rates. Same normalization as
+ * host config, different blame: a ConfigError here means the request was
+ * malformed, so it becomes a 400 (what the Ruby engine already answers).
+ */
+function payerPriceCurrencies(rawCurrencies: readonly string[]): readonly string[] {
+  try {
+    return normalizePriceCurrencies(rawCurrencies, "currencies");
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      throw serviceError(400, "INVALID_REQUEST", error.message);
+    }
+    throw error;
   }
 }
 

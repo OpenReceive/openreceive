@@ -36,14 +36,11 @@ export function renderTransactionDetailsHtml(
         <dl part="swap-details" class="${orClasses.swapDetails}">
           ${rows
             .map((row) =>
-              renderElementSwapCopyDetailHtml(
-                row.label,
-                row.copyValue ?? row.value,
-                row.value,
-                undefined,
-                row.href,
-                row.hrefLabel,
-              ),
+              renderElementSwapCopyDetailHtml(row.label, row.copyValue ?? row.value, {
+                displayValue: row.value,
+                ...(row.href === undefined ? {} : { href: row.href }),
+                ...(row.hrefLabel === undefined ? {} : { hrefLabel: row.hrefLabel }),
+              }),
             )
             .join("")}
         </dl>

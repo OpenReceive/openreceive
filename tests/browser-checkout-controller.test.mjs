@@ -177,8 +177,8 @@ test("swap routes derive from the mount prefix and never carry the action key", 
     pay_in_asset: "USDT_TRON",
   });
 
-  // Anything else posts to the payment-check route — still without `action`, which
-  // the shipped schemas reject as an unknown property.
+  // A body with no `action` posts to the payment-check route — still without
+  // `action`, which the shipped schemas reject as an unknown property.
   const plainFetch = jsonFetch({ status: "pending" });
   await postJson({
     fetch: plainFetch,
@@ -186,7 +186,6 @@ test("swap routes derive from the mount prefix and never carry the action key", 
     body: {
       reference: "order-1",
       payment_hash: hash("a"),
-      action: "status",
     },
   });
   assert.equal(plainFetch.requests[0].url, "/openreceive/payments/check");
@@ -194,6 +193,17 @@ test("swap routes derive from the mount prefix and never carry the action key", 
     reference: "order-1",
     payment_hash: hash("a"),
   });
+
+  // An action postJson does not route is a caller bug, not a silent post to
+  // payments/check under a name that says otherwise.
+  await assert.rejects(
+    postJson({
+      fetch: jsonFetch({ status: "pending" }),
+      prefix: "/openreceive",
+      body: { reference: "order-1", action: "status" },
+    }),
+    /Unrecognized checkout action status/,
+  );
 });
 
 test("a trailing slash on the prefix does not double up in a derived route", () => {
@@ -343,11 +353,11 @@ test("swap fee breakdown stays exact on the shared decimal engine", () => {
       feePercent: "5.5%",
     },
   );
-  // Provider strings are untrusted: junk hides the row instead of throwing.
-  assert.equal(
-    createSwapFeeBreakdown({ currency: "USD", pay_in_fiat: "n/a", payout_fiat: "1.00" }),
-    undefined,
-  );
+  // The fee is a display EXTRA, so an absent figure hides the row rather than
+  // failing the panel. This is optionality, not distrust of the trusted chain.
+  assert.equal(createSwapFeeBreakdown(undefined), undefined);
+  // A zero payout is the division guard, not a parse: it defends our own
+  // fee/payout arithmetic below.
   assert.equal(
     createSwapFeeBreakdown({ currency: "USD", pay_in_fiat: "1.00", payout_fiat: "0" }),
     undefined,
@@ -371,9 +381,9 @@ function logKeys(value) {
 
 // The browser log-field builders are an allowlist, not a redaction pass:
 // sanitizeBrowserLogEntry only scrubs secret/token/authorization/cookie/nwc, so
-// nothing downstream would stop a raw refund nonce, preimage or bolt11 from
-// reaching a log sink. This is the assertion that stops it.
-test("browser checkout log fields never carry the refund nonce, a preimage or a raw bolt11", () => {
+// nothing downstream would stop a raw preimage or bolt11 from reaching a log
+// sink. This is the assertion that stops it.
+test("browser checkout log fields never carry a preimage or a raw bolt11", () => {
   const entries = [];
   const bolt11 = "lnbc1secretinvoicepayload";
   const preimage = hash("f");
@@ -397,8 +407,6 @@ test("browser checkout log fields never carry the refund nonce, a preimage or a 
       provider_state: "refund_required",
       provider_expires_at: 2_000,
       refund_address: "TRefund",
-      refund_nonce: "nonce-must-never-be-logged",
-      refund_nonce_expires_at: 3_000,
       refund_reason: "under_paid",
       attention: true,
       attention_reason: "manual_review",
@@ -416,7 +424,7 @@ test("browser checkout log fields never carry the refund nonce, a preimage or a 
   assert.ok(entries.length >= 2, "create and refresh must both emit a checkout log entry");
   for (const entry of entries) {
     const keys = logKeys(entry);
-    for (const forbidden of ["refund_nonce", "preimage", "invoice", "lightning_uri"]) {
+    for (const forbidden of ["preimage", "invoice", "lightning_uri"]) {
       assert.ok(
         !keys.includes(forbidden),
         `${entry.event} must not log a ${forbidden} field: ${JSON.stringify(entry)}`,
@@ -425,14 +433,7 @@ test("browser checkout log fields never carry the refund nonce, a preimage or a 
     for (const value of logStringValues(entry)) {
       assert.ok(!value.includes(bolt11), `${entry.event} leaked the raw bolt11`);
       assert.ok(!value.includes(preimage), `${entry.event} leaked the preimage`);
-      assert.ok(
-        !value.includes("nonce-must-never-be-logged"),
-        `${entry.event} leaked the refund nonce`,
-      );
     }
-    // The nonce is reported as presence only — that field is the whole point.
-    assert.equal(entry.refund_nonce_present, true);
-    assert.equal(entry.refund_nonce_expires_at, 3_000);
   }
 });
 
@@ -467,18 +468,21 @@ test("a swap start payload copies a real amount and omits everything else", () =
   }
 
   // The field is OPTIONAL: "not echoed" — missing, no `checkout` object at
-  // all, JSON `null`, or not a safe integer — simply carries no amount.
-  for (const checkout of [
-    undefined,
-    {},
-    { amount_msats: null },
-    { amount_msats: "21000" },
-    { amount_msats: 1.5 },
-  ]) {
+  // all, or JSON `null` — simply carries no amount.
+  for (const checkout of [undefined, {}, { amount_msats: null }]) {
     const invoice = normalizeSwapStartInvoice(swapStartBody(checkout));
     assert.equal(invoice.amount_msats, undefined);
     assert.equal(invoice.rail, "swap");
     assert.equal(invoice.payment_hash, hash("e"));
+  }
+
+  // Optional means ABSENT may be absent — not that a present-but-mistyped
+  // amount from our own server quietly becomes no amount at all.
+  for (const checkout of [{ amount_msats: "21000" }, { amount_msats: 1.5 }]) {
+    assert.throws(
+      () => normalizeSwapStartInvoice(swapStartBody(checkout)),
+      /amount_msats must be a safe integer/,
+    );
   }
 });
 

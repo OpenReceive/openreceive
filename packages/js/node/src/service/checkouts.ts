@@ -83,18 +83,29 @@ export async function createCheckout(
   // the amount recorded on the checkout, so the ledger row always matches the
   // invoice the payer is shown (the Ruby engine does the same).
   const createdAt = walletInvoice.created_at ?? now;
-  // The wallet must honor the requested expiry. An invoice whose real payable
-  // window differs from our ledger row would either die under the payer early
-  // or stay payable after reconciliation closed the attempt, so a wallet that
-  // ignores `expiry` (beyond a small tolerance) fails checkout creation.
+  // The ledger row stores the wallet's OWN expires_at, so reuse buffering,
+  // reconciliation, and the expiry+grace close rule all stay consistent with
+  // the real invoice even when the wallet clamps expiry to its own min/max. A
+  // deviation is therefore a warning on the plain checkout path, not a refusal
+  // — refusing would lock every such wallet out of checkouts entirely.
+  //
+  // A caller-supplied `expirySeconds` is different: it is a FLOOR. Only the
+  // swap path sets it, from provider.invoiceExpirySeconds, because the shadow
+  // invoice must outlive the provider order — an invoice that dies first
+  // strands a deposit the payer has already sent. A short invoice fails there.
   const requestedExpiresAt = createdAt + expiry;
   const expiresAt = walletInvoice.expires_at ?? requestedExpiresAt;
+  const shortfall = requestedExpiresAt - expiresAt;
   if (Math.abs(expiresAt - requestedExpiresAt) > OPENRECEIVE_INVOICE_EXPIRY_TOLERANCE_SECONDS) {
+    const requiredFloor =
+      input.expirySeconds !== undefined && shortfall > OPENRECEIVE_INVOICE_EXPIRY_TOLERANCE_SECONDS;
     emitLog(
       context.options,
-      "error",
-      "checkout.invoice_expiry.rejected",
-      `The wallet did not honor the requested invoice expiry (requested ${expiry}s, got ${expiresAt - createdAt}s). Use a wallet whose make_invoice honors expiry.`,
+      requiredFloor ? "error" : "warn",
+      requiredFloor ? "checkout.invoice_expiry.rejected" : "checkout.invoice_expiry.adjusted",
+      requiredFloor
+        ? `The wallet did not honor the required invoice expiry (required ${expiry}s, got ${expiresAt - createdAt}s). Use a wallet whose make_invoice honors expiry.`
+        : `The wallet clamped the requested invoice expiry (requested ${expiry}s, got ${expiresAt - createdAt}s); the wallet's own expiry is recorded on the attempt.`,
       {
         reference: input.reference,
         payment_hash: walletInvoice.payment_hash.toLowerCase(),
@@ -103,11 +114,13 @@ export async function createCheckout(
         tolerance_seconds: OPENRECEIVE_INVOICE_EXPIRY_TOLERANCE_SECONDS,
       },
     );
-    throw serviceError(
-      502,
-      "UNSUPPORTED_METHOD",
-      "Error with the backing NWC wallet: it did not honor the requested invoice expiry.",
-    );
+    if (requiredFloor) {
+      throw serviceError(
+        502,
+        "UNSUPPORTED_METHOD",
+        "Error with the backing NWC wallet: it did not honor the requested invoice expiry.",
+      );
+    }
   }
   return {
     reference: input.reference,

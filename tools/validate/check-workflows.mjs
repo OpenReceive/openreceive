@@ -112,15 +112,36 @@ function readWorkflow(relativePath) {
   }
 }
 
+/**
+ * Every command a workflow runs, INCLUDING the ones inside the local composite
+ * actions it uses. Without following `uses: ./.github/actions/*`, extracting a
+ * shared setup block would silently drop its commands out of the per-workflow
+ * expectations below — the check would keep passing while it stopped checking.
+ */
 function workflowCommands(workflow) {
   const commands = [];
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const job of Object.values(jobs)) {
     for (const step of job.steps ?? []) {
       if (typeof step.run === "string") commands.push(step.run);
+      if (typeof step.uses === "string" && step.uses.startsWith("./")) {
+        commands.push(...localActionCommands(step.uses));
+      }
     }
   }
   return commands;
+}
+
+function localActionCommands(uses) {
+  for (const filename of ["action.yml", "action.yaml"]) {
+    const actionPath = path.join(root, uses.slice(2), filename);
+    if (!existsSync(actionPath)) continue;
+    const action = parseYaml(readFileSync(actionPath, "utf8"));
+    return (action.runs?.steps ?? [])
+      .map((step) => step.run)
+      .filter((run) => typeof run === "string");
+  }
+  throw new Error(`local action ${uses} has no action.yml`);
 }
 
 function containerImage(job) {

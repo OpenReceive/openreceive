@@ -43,30 +43,7 @@ jobs:
       NWC_URI: ""
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      # Browser binaries are cached keyed on the locked @playwright/test
-      # version: a Playwright bump re-downloads, everything else reuses.
-      - name: Read Playwright version
-        id: playwright-version
-        run: |
-          echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-      # The demo's vite dev server (the Playwright webServer) resolves
-      # @openreceive/* to the packages' built dists; tsx only covers the
-      # demo's own TypeScript, so the dists must exist before the run.
-      - run: npm run build:packages
+      - uses: ./.github/actions/setup-playwright
       - run: npm run test:e2e
 
   # Real-ORM adapter lane: knex, typeorm, and prisma each drive the payments
@@ -89,8 +66,9 @@ jobs:
 
   # Full Rails Hello Fruit demo (host-owned Postgres, like its compose stack).
   # bin/ci runs setup against the service database, the stubbed-wallet
-  # integration tests, and the gem audit (no importmap audit: the browser
-  # client is the Shakapacker bundle, audited by the workspace npm tooling).
+  # integration tests, and the gem audit. No importmap audit: the browser
+  # client is the Shakapacker bundle, which the hello-fruit job above builds
+  # (build:demo) and scans for secret/testkit markers (scan:client-bundles).
   hello-fruit-rails:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -111,9 +89,4 @@ jobs:
           --health-retries 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          working-directory: examples/hello-fruit/server/rails
-          bundler-cache: true
-      - run: bin/ci
-        working-directory: examples/hello-fruit/server/rails
+      - uses: ./.github/actions/rails-ci

@@ -1,5 +1,6 @@
 import {
   createDetailExternalLink,
+  type DetailLinkKind,
   createTransientFeedbackController,
   escapeHtml,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
@@ -111,21 +112,30 @@ export function wireSwapSelectAllInputs(root: ParentNode): void {
 export function renderElementSwapCopyDetailHtml(
   label: string,
   value: string,
-  displayValue: string = value,
-  payInAsset?: string,
-  href?: string,
-  hrefLabel?: string,
+  options: {
+    readonly displayValue?: string;
+    /** What the value IS. Omitted, the row carries no external link. */
+    readonly kind?: DetailLinkKind;
+    readonly payInAsset?: string;
+    readonly href?: string;
+    readonly hrefLabel?: string;
+    /** Render the value in a selectable input rather than a code block. */
+    readonly selectable?: boolean;
+  } = {},
 ): string {
+  const displayValue = options.displayValue ?? value;
   const link =
-    href === undefined
-      ? createDetailExternalLink({
-          label,
-          value,
-          ...(payInAsset === undefined ? {} : { payInAsset }),
-        })
+    options.href === undefined
+      ? options.kind === undefined
+        ? undefined
+        : createDetailExternalLink({
+            kind: options.kind,
+            value,
+            ...(options.payInAsset === undefined ? {} : { payInAsset: options.payInAsset }),
+          })
       : {
-          href,
-          hrefLabel: hrefLabel ?? checkoutLabels.viewOnExplorer,
+          href: options.href,
+          hrefLabel: options.hrefLabel ?? checkoutLabels.viewOnExplorer,
         };
   const external =
     link === undefined
@@ -138,7 +148,7 @@ export function renderElementSwapCopyDetailHtml(
         target="_blank"
       >${escapeHtml(link.hrefLabel)}</a>`;
   const valueField =
-    label === "Address" || label === "Amount"
+    options.selectable === true
       ? `<input
           class="${orClasses.swapDetailsInput}"
           type="text"

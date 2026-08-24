@@ -30,10 +30,10 @@ import {
   OPENRECEIVE_PAYMENT_WIZARD_SELECTORS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   type BrowserLoggerOption,
   paymentMethods,
-  openWallet,
   orClasses,
   overlaySwapRefundStaging,
   parseBooleanAttribute,
@@ -65,21 +65,14 @@ import {
   renderThemeToggleHtml,
 } from "./render-checkout.ts";
 import {
-  type DefineOpenReceiveElementsOptions,
+  type DefineElementsOptions,
   type ElementsSwapOption,
   parseElementInvoiceId,
   parseElementStatus,
   transactionStateFromStatus,
 } from "./views.ts";
 
-const DEFAULT_TAG_NAME = "openreceive-checkout";
-
-/**
- * Shown to the payer and carried by the error event when `invoice-id` is present
- * but blank. Names the attribute, because the fix is always in the host's data.
- */
-const UNIDENTIFIED_INVOICE_MESSAGE =
-  "This checkout could not be displayed: its invoice-id is empty, so the payment cannot be tracked.";
+const DEFAULT_TAG_NAME = OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME;
 
 function markElementConfirmButtonBusy(button: HTMLButtonElement): void {
   button.disabled = true;
@@ -118,7 +111,7 @@ function checkoutSnapshotDisplayKey(snapshot: CheckoutSnapshot): string {
  * from your page's JS; order relative to the markup does not matter, and
  * calling it again skips tags that are already defined.
  */
-export function defineElements(options: DefineOpenReceiveElementsOptions = {}): void {
+export function defineElements(options: DefineElementsOptions = {}): void {
   const registry = options.registry ?? globalThis.customElements;
   const HTMLElementCtor = globalThis.HTMLElement;
   const tagName = options.tagName ?? DEFAULT_TAG_NAME;
@@ -155,12 +148,6 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
     private refundAddressDraftSelectionEnd: number | null = null;
     /** Tutorial provider whose dialog was last focused, so re-renders don't re-steal focus. */
     private focusedTutorialProviderId: string | null = null;
-    /**
-     * The unusable `invoice-id` the error event has already been fired for, so a
-     * host listener that reacts by touching attributes re-enters render() at most
-     * once. Cleared as soon as a usable id arrives.
-     */
-    private unidentifiedInvoiceIdSignal: string | undefined;
     /**
      * Create mode's whole request lifecycle — prepare-once, the deferred
      * Lightning mint, the swap start — plus the guard that keeps attributes the
@@ -229,6 +216,7 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl,
       ];
     }
 
@@ -253,10 +241,24 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix ||
-        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference;
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl;
       if (displayOnly) {
         this.render();
         this.syncThemeAncestorObserver();
+        return;
+      }
+
+      // Polling attributes change WHAT the controller does, in both modes: a
+      // create-mode element that returned before startCheckoutController here
+      // ignored polling="false" until the next snapshot re-key.
+      const pollingChanged =
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs;
+      if (pollingChanged) {
+        this.render();
+        this.syncThemeAncestorObserver();
+        this.startCheckoutController();
         return;
       }
 
@@ -287,27 +289,44 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
       this.stopThemeAncestorObserver();
     }
 
-    // Create mode: an `reference` is set but no `invoice` snapshot is provided. The element
-    // owns the whole lifecycle — it creates the checkout against `${prefix}/checkouts`, then
-    // polls status against `${prefix}/payments/check` and drives swaps under the prefix.
+    // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element
+    // owns the whole lifecycle — it prepares the checkout against
+    // `${prefix}/checkouts/prepare` (locking the amount without minting), mints a Lightning
+    // invoice only when the payer picks Bitcoin, then polls status against
+    // `${prefix}/payments/check` and drives swaps under the prefix.
     private isCreateMode(): boolean {
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
       const reference = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
       return (invoice === null || invoice === "") && reference !== null && reference.length > 0;
     }
 
-    /** Create-time metadata from the JSON `metadata` attribute, when present and valid. */
+    /**
+     * Create-time metadata from the JSON `metadata` attribute.
+     *
+     * Read lazily, at mint time — which is why `metadata` is deliberately NOT a
+     * create input: a host that changes it after mount is picked up by the next
+     * mint, and re-keying the prepared checkout for it would orphan the
+     * prepared attempt for nothing.
+     *
+     * Host-authored like `poll-interval-ms`, and ruled the same way: a value
+     * that is not a JSON object is a host typo and must be heard, not silently
+     * dropped from the create request.
+     */
     private createMetadata(): Record<string, unknown> | undefined {
       const raw = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.metadata);
       if (raw === null || raw.length === 0) return undefined;
+      let parsed: unknown;
       try {
-        const parsed = JSON.parse(raw);
-        return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
-          ? (parsed as Record<string, unknown>)
-          : undefined;
-      } catch {
-        return undefined;
+        parsed = JSON.parse(raw);
+      } catch (error) {
+        throw new TypeError(
+          `metadata must be a JSON object: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new TypeError("metadata must be a JSON object");
+      }
+      return parsed as Record<string, unknown>;
     }
 
     /** Order data belongs to the host; this only performs optional History API sync. */
@@ -380,57 +399,22 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         return;
       }
 
-      // An invoice the element cannot IDENTIFY. `invoice-id` is server data
-      // (elements.ts writes `invoice.invoice_id` verbatim), and an empty one used
-      // to throw out of here from inside `createCheckoutSnapshotFromInvoice` —
-      // leaving an empty shadow root, which is the one outcome that tells nobody
-      // anything: the host sees no event and the payer sees a blank box.
-      //
-      // It does not degrade to "render the payment screen without the status
-      // row", the way a bad `amount-msats` or `expires-at` degrades. Those cost a
-      // label while the attempt stays identified; this one costs the identity
-      // itself, and `currentCheckoutSnapshot` needs it to build the snapshot the
-      // poll controller runs on. Rendering the QR anyway would show a payable
-      // invoice that this element can never confirm — it would take the payer's
-      // money and keep saying "waiting". Better to say so.
-      //
-      // Skipped in create mode, where a blank `invoice-id` is normally the
-      // deferred state the creating/create-error panes above own. That is not
-      // the whole story: once `deferredReady` is true those panes are skipped,
-      // so a create-mode element that has prepared but has no usable
-      // `invoice-id` reaches neither them nor this guard, and a missing
-      // display invoice still throws from createCheckoutState. That path is a
-      // pre-existing gap, not one this guard closes — it is written up in
-      // docs/internal/display-boundary-findings.md rather than papered over
-      // with a condition that would also swallow the ordinary deferred state.
-      const invoiceIdAttr = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId);
-      const invoiceId = parseElementInvoiceId(invoiceIdAttr);
-      if (invoiceIdAttr !== null && invoiceId === undefined && !this.isCreateMode()) {
-        const { root, inlineStyles } = this.prepareShadowRoot();
-        root.innerHTML = renderCheckoutCreateErrorHtml(UNIDENTIFIED_INVOICE_MESSAGE, {
-          theme: this.resolveTheme(),
-          inlineStyles,
-          // Nothing to re-run: only the host can replace the attribute.
-          retry: false,
-        });
-        // The panel is the payer's signal; this is the host's, on the same
-        // channel every other element failure uses. Guarded so a listener that
-        // reacts by touching attributes cannot re-enter render() into a loop —
-        // one dispatch per distinct bad value, and the guard is armed BEFORE the
-        // listener can run.
-        if (this.unidentifiedInvoiceIdSignal !== invoiceIdAttr) {
-          this.unidentifiedInvoiceIdSignal = invoiceIdAttr;
-          this.dispatchError(new TypeError(UNIDENTIFIED_INVOICE_MESSAGE));
-        }
-        return;
-      }
-      this.unidentifiedInvoiceIdSignal = undefined;
+      const invoiceId = parseElementInvoiceId(
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId),
+      );
 
       const invoice = invoiceAttr ?? "";
       const lightningRequested =
         !this.isCreateMode() || this.session.lightningRequested || invoice.length > 0;
       const decodeLinkUrl =
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl) ?? undefined;
+      // The shared session quotes before it starts, so an out-of-range amount
+      // arrives here as an unavailable quote — the same pane React shows.
+      const selectedQuote =
+        this.selectedSwapAsset === null
+          ? undefined
+          : this.session.swapQuotes[this.selectedSwapAsset];
+      const unavailableSwapQuote = selectedQuote?.available === false ? selectedQuote : undefined;
       const { root, inlineStyles } = this.prepareShadowRoot();
       root.innerHTML = renderCheckoutHtml({
         inlineStyles,
@@ -488,6 +472,10 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
           ...(this.session.swapStartError === undefined
             ? {}
             : { swapStartError: this.session.swapStartError }),
+          ...(unavailableSwapQuote === undefined ? {} : { unavailableSwapQuote }),
+          ...(this.latestCheckoutSnapshot === undefined
+            ? {}
+            : { swapLimitContext: this.latestCheckoutSnapshot }),
           ...(this.session.wizardError === undefined
             ? {}
             : { wizardError: this.session.wizardError }),
@@ -507,20 +495,6 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
             })
             .catch((error) => this.dispatchError(error));
         });
-
-        root
-          .querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.open)
-          ?.addEventListener("click", (event) => {
-            event.preventDefault();
-            try {
-              this.controller?.openWallet() ?? openWallet({ invoice, logger: options.logger });
-              this.dispatchEvent(
-                createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet),
-              );
-            } catch (error) {
-              this.dispatchError(error);
-            }
-          });
       }
 
       root
@@ -649,13 +623,14 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId),
       );
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
-      // The same identity test render() applies, for the same reason: an attempt
-      // with no id cannot be a snapshot. Answering undefined stops the poll
-      // controller rather than throwing out of connectedCallback — this runs
-      // AFTER render() has already put the failure panel up.
+      // The same create-mode discriminator render() applies: with no invoice-id
+      // there is no attempt to build a snapshot from, and undefined simply
+      // leaves the poll controller with nothing to poll.
       if (invoiceId === undefined || invoice === null) return undefined;
       const amountMsats = readElementAmountMsats(this);
       const expiresAt = readElementExpiresAt(this);
+      const fiatQuote = readElementFiatQuote(this);
+      const paymentHash = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash);
       // The ONLY path from raw HTML attributes to a snapshot (declarative / SSR
       // usage). The attributes describe one attempt; the checkout around it is
       // invented by createCheckoutSnapshotFromInvoice.
@@ -664,17 +639,9 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
           invoice_id: invoiceId,
           invoice,
           rail: parseElementRail(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail)),
-          ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
-            ? {}
-            : {
-                payment_hash:
-                  this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ??
-                  undefined,
-              }),
+          ...(paymentHash === null ? {} : { payment_hash: paymentHash }),
           ...(amountMsats === undefined ? {} : { amount_msats: amountMsats }),
-          ...(readElementFiatQuote(this) === undefined
-            ? {}
-            : { fiat_quote: readElementFiatQuote(this) }),
+          ...(fiatQuote === undefined ? {} : { fiat_quote: fiatQuote }),
           transaction_state: transactionStateFromStatus(
             parseElementStatus(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status)) ??
               "pending",
@@ -1007,20 +974,19 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
         form.addEventListener("submit", (event) => {
           event.preventDefault();
           const attemptId = form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm);
-          const refundNonce = form.getAttribute(
-            OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce,
-          );
+          const refundAllowed =
+            form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAllowed) === "true";
           const confirm =
             form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm) === "true";
           const refundAddress = input instanceof HTMLInputElement ? input.value.trim() : "";
-          if (attemptId === null || refundNonce === null) return;
+          if (attemptId === null || !refundAllowed) return;
           const error = validateRefundAddress(refundAddress, true);
           if (error !== undefined) {
             setRefundAddressError(error);
             return;
           }
           setRefundAddressError(undefined);
-          void this.refundSwap(attemptId, refundAddress, refundNonce, confirm);
+          void this.refundSwap(attemptId, refundAddress, confirm);
         });
       });
 
@@ -1100,7 +1066,6 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
     private async refundSwap(
       attemptId: string,
       refundAddress: string,
-      refundNonce: string,
       confirm: boolean,
     ): Promise<void> {
       const reference = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
@@ -1115,7 +1080,6 @@ export function defineElements(options: DefineOpenReceiveElementsOptions = {}): 
           invoices: [this.startedSwapInvoice, ...(this.latestCheckoutSnapshot?.invoices ?? [])],
           attemptId,
           refundAddress,
-          refundNonce,
           confirm,
           logger: options.logger,
         });

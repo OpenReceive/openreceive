@@ -95,8 +95,10 @@ module OpenReceive
         "This payment route is temporarily unavailable."
       end
 
-      # Mirrors classifyFixedFloatQuoteError: map a quote-path failure to a
-      # SwapAvailabilityReason.
+      # Map a quote-path failure to a SwapAvailabilityReason. The Ruby quote
+      # math reads its limits with fetch, so unlike the JS twin (whose
+      # pair math returns an unavailable quote instead of raising) this path
+      # is reachable and keeps its classifier.
       def classify_fixedfloat_quote_error(error)
         return "provider_rate_limited" if weight_budget_error?(error)
 

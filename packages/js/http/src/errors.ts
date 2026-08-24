@@ -106,7 +106,14 @@ export class HostError extends Error {
   }
 }
 
-/** Convenience factory for a host validation error (default 400 INVALID_REQUEST). */
+/**
+ * Convenience factory for a host validation error (default 400 INVALID_REQUEST).
+ *
+ * `retryable` rides along only when it CONTRADICTS the code's own default —
+ * spelling out `retryable: false` on a CONFLICT restates what the shared error
+ * contract already says, and it was the one field that made the JS engine's
+ * conflict bodies differ from the Ruby engine's.
+ */
 export function hostError(
   message: string,
   status = 400,
@@ -115,7 +122,7 @@ export function hostError(
   return new HostError(status, {
     code,
     message,
-    retryable: false,
+    ...(isRetryableErrorCode(code) ? { retryable: false } : {}),
   });
 }
 

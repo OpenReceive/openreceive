@@ -35,7 +35,7 @@ Use the release helper for repeatable npm releases:
 
 ```sh
 npm run release:plan -- --version patch
-npm run release:prepare -- --version 0.1.1
+npm run release:prepare -- --version 0.2.0-alpha.1
 npm run release:publish -- --tag latest
 ```
 
@@ -105,7 +105,7 @@ The release owner also checks:
 For a prepare preview without editing files:
 
 ```sh
-npm run release:prepare -- --version 0.1.1 --dry-run
+npm run release:prepare -- --version 0.2.0-alpha.1 --dry-run
 ```
 
 For a publish rehearsal that builds exact tarballs but asks npm not to publish:

@@ -1,7 +1,7 @@
 import { unixSeconds } from "@openreceive/core";
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
 import { type Host, warnFailure } from "./host-payments.ts";
-import { reconciliationTransition } from "./payment-repository.ts";
+import { type ReconcilableAttempt, reconciliationTransition } from "./payment-repository.ts";
 import { maybeReconcilePayments } from "./reconcile-gate.ts";
 
 // The wallet-scan side of settlement: one bounded pass over the pending attempts
@@ -39,9 +39,16 @@ export async function reconcileHostPayments(input: {
   readonly overlapSeconds?: number;
   readonly maxPages?: number;
   readonly clock?: () => number;
+  /**
+   * The pending attempts to scan, when the caller already listed them. The
+   * opportunistic gate does — it sizes the gate interval from the same batch —
+   * so passing it here saves a second identical read on every winning pass,
+   * which is the request path.
+   */
+  readonly attempts?: readonly ReconcilableAttempt[];
 }): Promise<readonly PaymentCheck[]> {
   const clock = input.clock ?? unixSeconds;
-  const attempts = await input.host.payments.listReconcilableAttempts();
+  const attempts = input.attempts ?? (await input.host.payments.listReconcilableAttempts());
   if (attempts.length === 0) return [];
   const byHash = new Map(
     attempts.map((attempt) => [attempt.paymentHash.toLowerCase(), attempt] as const),
@@ -61,14 +68,24 @@ export async function reconcileHostPayments(input: {
       const attempt = byHash.get(checked.paymentHash.toLowerCase());
       if (attempt === undefined) continue;
       if (checked.status === "settled") {
-        // A settled result without paidAt is malformed; retry it next pass.
-        if (checked.paidAt !== undefined) {
-          await input.host.onPaid({
-            paymentHash: checked.paymentHash,
-            paidAt: checked.paidAt,
-            details: checked.details,
-          });
+        // A settled result without paidAt is our own service violating its own
+        // contract. The row stays pending and the next pass retries it — but
+        // LOUDLY: silent, this repeats every pass forever and the operator's
+        // first symptom is an order that never fulfills, with clean logs.
+        if (checked.paidAt === undefined) {
+          failures.push(
+            new Error(
+              `settled reconcile result for ${checked.paymentHash} carried no paidAt; ` +
+                "the attempt stays pending and will be retried",
+            ),
+          );
+          continue;
         }
+        await input.host.onPaid({
+          paymentHash: checked.paymentHash,
+          paidAt: checked.paidAt,
+          details: checked.details,
+        });
         continue;
       }
       const walletTransaction = checked.details?.transaction;

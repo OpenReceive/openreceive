@@ -176,13 +176,27 @@ test("a worker pass inside the gate interval never touches the wallet", async ()
   const walksAfterWeb = fix.walks.length;
 
   // The polling worker starts inside the interval: its passes are gate_busy.
+  // Counted, not slept on — a fixed wall-clock sleep against a real 250ms
+  // timer both costs that time on every run and couples the assertion to
+  // scheduler timing.
+  let busyPasses = 0;
+  const claim = fix.host.payments.claimReconcileGate.bind(fix.host.payments);
+  fix.host.payments.claimReconcileGate = async (input) => {
+    const claimed = await claim(input);
+    if (!claimed) busyPasses += 1;
+    return claimed;
+  };
   const reconciler = await startReconciler({
     service: fix.service,
     host: fix.host,
     pollIntervalMs: 250,
     clock: () => fix.state.now,
   });
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  await until(() => busyPasses >= 2, {
+    timeoutMs: 2_000,
+    stepMs: 10,
+    label: "two gate_busy worker passes",
+  });
   assert.equal(fix.walks.length, walksAfterWeb, "worker + web must not double-scan");
 
   // Once the interval elapses, the worker wins the gate and scans.

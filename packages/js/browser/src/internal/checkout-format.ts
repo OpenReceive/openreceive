@@ -3,7 +3,7 @@
 // hash / timestamp / invoice, and the HTML escaper every string renderer runs
 // values through. Pure functions over values — nothing here reads a snapshot.
 
-import { ceilDiv, formatDecimal, type Decimal, parseDecimal } from "@openreceive/core";
+import { ceilDiv, formatDecimal, isBitcoinAmountCurrency, parseDecimal } from "@openreceive/core";
 
 export function formatCountdown(seconds: number): string {
   const safeSeconds = Math.max(0, Math.trunc(seconds));
@@ -21,20 +21,6 @@ export function formatCountdown(seconds: number): string {
 export function formatDepositAmount(amount: string): string {
   if (!/^[0-9]+(?:\.[0-9]+)?$/.test(amount) || !amount.includes(".")) return amount;
   return amount.replace(/0+$/, "").replace(/\.$/, "");
-}
-
-/**
- * Exported for ./checkout-swap-view.ts, which shares the same money engine.
- * Parses with the shared money engine but returns undefined instead of
- * throwing, so the caller can skip the row on a non-numeric string.
- */
-export function optionalDecimal(value: string): Decimal | undefined {
-  if (typeof value !== "string") return undefined;
-  try {
-    return parseDecimal(value);
-  } catch {
-    return undefined;
-  }
 }
 
 /** Integer division rounded half up. */
@@ -98,7 +84,9 @@ export function formatFiatAmount(
 ): string | undefined {
   if (fiat?.currency === undefined || fiat.value === undefined) return undefined;
   if (fiat.currency === "BTC") return `${fiat.value} BTC`;
-  if (fiat.currency === "SATS") return `${fiat.value} sats`;
+  // "SAT" and "SATS" are one currency to core's isBitcoinAmountCurrency, so
+  // they render alike here rather than "SAT" falling through as pseudo-fiat.
+  if (isBitcoinAmountCurrency(fiat.currency)) return `${fiat.value} sats`;
   return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
 }
 
@@ -151,7 +139,9 @@ export function formatSwapLimit(
     return undefined;
   }
   const fiat = checkout.fiat;
-  if (fiat !== undefined && fiat.currency !== "SATS" && fiat.currency !== "BTC") {
+  // Only genuinely fiat-denominated checkouts scale: a bitcoin denomination
+  // (BTC/SAT/SATS, per core) is already the sat figure below.
+  if (fiat !== undefined && !isBitcoinAmountCurrency(fiat.currency)) {
     const scaled = scaleFiatLimitExact({
       fiatValue: fiat.value,
       amountMsats: checkout.amount_msats,
@@ -180,8 +170,10 @@ function scaleFiatLimitExact(input: {
   readonly limitMsats: number;
   readonly rounding: "ceil" | "floor";
 }): string | undefined {
-  const fiat = optionalDecimal(input.fiatValue);
-  if (fiat === undefined || fiat.units <= 0n) return undefined;
+  // Our own server's fiat value: parseDecimal throws on a malformed one rather
+  // than quietly degrading the whole limit to sats.
+  const fiat = parseDecimal(input.fiatValue);
+  if (fiat.units <= 0n) return undefined;
   const outScale = 2;
   // result_units_at_2dp = round(fiat_units * limit / amount * 10^(2 - fiatScale))
   const numerator = fiat.units * BigInt(input.limitMsats) * 10n ** BigInt(outScale);

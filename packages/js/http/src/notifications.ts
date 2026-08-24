@@ -102,6 +102,21 @@ export async function startNotificationListener(input: {
   };
 
   /**
+   * Is this hash still a pending attempt? Asked by hash where the repository
+   * can answer that way — `listReconcilableAttempts` is an oldest-first batch,
+   * so a notified attempt sitting behind a batch-sized backlog would read as
+   * unknown and lose exactly the shortcut notifications exist to provide.
+   */
+  const isPendingAttempt = async (paymentHash: string): Promise<boolean> => {
+    const payments = input.host.payments;
+    if (payments.findPendingAttempt !== undefined) {
+      return (await payments.findPendingAttempt(paymentHash)) !== undefined;
+    }
+    const attempts = await payments.listReconcilableAttempts();
+    return attempts.some((attempt) => attempt.paymentHash.toLowerCase() === paymentHash);
+  };
+
+  /**
    * Settle one notified payment directly when the payload proves finality and
    * the hash is a known pending attempt; otherwise fall back to a bounded
    * reconciliation scan. Settling removes the attempt from the pending set, so
@@ -119,8 +134,7 @@ export async function startNotificationListener(input: {
         wakeReconciliation();
         return;
       }
-      const attempts = await input.host.payments.listReconcilableAttempts();
-      if (!attempts.some((attempt) => attempt.paymentHash.toLowerCase() === paymentHash)) {
+      if (!(await isPendingAttempt(paymentHash))) {
         // Unknown or already-terminal hash: only a bounded scan may act on it.
         wakeReconciliation();
         return;

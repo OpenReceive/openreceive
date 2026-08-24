@@ -33,15 +33,13 @@ function fileUrlFromPath(path: string): string {
 /**
  * Resolve a payment icon against this module's URL.
  *
- * - Source (`src/internal/`): `../assets/icons/`
+ * - Source (`src/internal/`, where this module lives): `../assets/icons/`
  * - Packaged `dist/*.js`: `./assets/icons/`
  * - Host Vite/Rollup app chunks under `/assets/*.js`: `./icons/` (demos copy
  *   package icons next to the emitted JS so URLs are `/assets/icons/*.svg`)
  */
 function paymentIconRoot(): string {
-  if (moduleUrl.includes("/src/internal/") || moduleUrl.includes("/src/assets/")) {
-    return moduleUrl.includes("/src/internal/") ? "../assets/icons/" : "./icons/";
-  }
+  if (moduleUrl.includes("/src/internal/")) return "../assets/icons/";
   try {
     const { pathname } = new URL(moduleUrl);
     if (/\/assets\/[^/]+\.js$/i.test(pathname)) return "./icons/";

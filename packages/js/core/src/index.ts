@@ -1,7 +1,5 @@
-// NWC client
-
-export type { ErrorBody, ErrorCode } from "./errors/index.ts";
 // Errors
+export type { ErrorBody, ErrorCode } from "./errors/index.ts";
 export {
   isErrorCode,
   isRetryableErrorCode,
@@ -28,6 +26,7 @@ export {
   parseDecimal,
   sumAmounts,
 } from "./money/decimal.ts";
+// NWC client
 export type {
   ListTransactionsRequest,
   ListTransactionsResult,
@@ -127,6 +126,7 @@ export {
   getSwapRefundAddressError,
   isValidAddressForSwapNetwork,
   isValidSwapAddressForPayInAsset,
+  payInAssetNetwork,
   swapAddressNetworkForPayInAsset,
 } from "./swap/address.ts";
 // Shared value primitives — the one clock, the two record readers, the

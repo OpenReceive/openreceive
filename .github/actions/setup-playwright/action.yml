@@ -1,0 +1,39 @@
+name: Set up Playwright
+description: >-
+  Node + npm ci + a Chromium install cached on the locked @playwright/test
+  version, then the package dists the demo's vite server resolves
+  @openreceive/* against. Shared by ci.yml's e2e-smoke and demos.yml's
+  e2e-matrix so the two lanes cannot drift.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+    - run: npm ci
+      shell: bash
+    # Browser binaries are cached keyed on the locked @playwright/test
+    # version: a Playwright bump re-downloads, everything else reuses.
+    - name: Read Playwright version
+      id: playwright-version
+      shell: bash
+      run: |
+        echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+    - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: npx playwright install chromium --with-deps
+      shell: bash
+    - if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: npx playwright install-deps chromium
+      shell: bash
+    # The demo's vite dev server (the Playwright webServer) resolves
+    # @openreceive/* to the packages' built dists; tsx only covers the demo's
+    # own TypeScript, so the dists must exist before the run.
+    - run: npm run build:packages
+      shell: bash

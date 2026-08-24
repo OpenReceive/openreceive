@@ -28,11 +28,6 @@ export const OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS = 60 as const;
  * the only URL input the checkout components accept.
  */
 export const OPENRECEIVE_DEFAULT_PREFIX = "/openreceive" as const;
-/**
- * Browser-only token for the refund-address review step. Host authorization and
- * the provider refund call happen only after the payer confirms.
- */
-export const OPENRECEIVE_REFUND_REVIEW_NONCE = "confirm" as const;
 export const OPENRECEIVE_COPY_FEEDBACK_MS = 1800 as const;
 export const OPENRECEIVE_PROVIDER_PREVIEW_LIMIT = 4 as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME = "openreceive-checkout" as const;
@@ -83,7 +78,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   pickerContinue: "data-or-picker-continue",
   swapRefundForm: "data-or-swap-refund-form",
   swapRefundAddress: "data-or-swap-refund-address",
-  swapRefundNonce: "data-or-swap-refund-nonce",
+  swapRefundAllowed: "data-or-swap-refund-allowed",
   swapRefundConfirm: "data-or-swap-refund-confirm",
   swapRefundPayInAsset: "data-or-swap-refund-pay-in-asset",
   swapRefundNetworkLabel: "data-or-swap-refund-network-label",
@@ -109,7 +104,6 @@ export const OPENRECEIVE_CHECKOUT_DATA_SELECTORS = attributeSelectors(
 );
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PARTS = {
   copy: "copy",
-  open: "open",
   startOver: "start-over",
 } as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS = partSelectors(

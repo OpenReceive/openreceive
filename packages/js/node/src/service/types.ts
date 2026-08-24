@@ -3,12 +3,12 @@ import type {
   BtcFiatRateMapWithSource,
   MoneyAmount,
   RateQuote,
-  ReceiveNwcClient,
   SourcedPriceProvider,
   PaidPayment,
   PaymentCheck,
   SimplePriceFetch,
 } from "@openreceive/core";
+import type { NotifyingReceiveNwcClient } from "../nwc/normalize.ts";
 import type {
   SwapFee,
   SwapOrder,
@@ -59,7 +59,7 @@ export interface LoggingOptions {
 }
 
 export interface NodeOptions {
-  readonly client: ReceiveNwcClient;
+  readonly client: NotifyingReceiveNwcClient;
   readonly priceProviders?: readonly SourcedPriceProvider[];
   readonly priceCurrencies?: readonly string[];
   readonly swap?: SwapOptions;
@@ -70,7 +70,7 @@ export interface NodeOptions {
 }
 
 export interface CreateOpenReceiveOptions extends Omit<NodeOptions, "client"> {
-  readonly client?: ReceiveNwcClient;
+  readonly client?: NotifyingReceiveNwcClient;
   /** Explicit override. Normal applications read the receive-only URI from NWC_URI. */
   readonly nwc?: string;
   /** Environment source for NWC_URI, LSC_URI_PRIMARY, and LSC_URI_BACKUP. Defaults to process.env. */

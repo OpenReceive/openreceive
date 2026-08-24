@@ -62,12 +62,18 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   const settled = statusLabel === "settled";
   // Settled always shows the payment layout: after a swap deposit settles, the
   // selected swap asset would otherwise keep hiding it and blank the whole widget.
+  const swapFocused = (view.wizard?.selectedSwapAsset ?? null) !== null;
   const hideLightning =
-    !settled &&
-    (view.lightningRequested === false ||
-      ((view.wizard?.selectedSwapAsset ?? null) !== null && !expired));
+    !settled && (view.lightningRequested === false || (swapFocused && !expired));
+  // Expired keeps the wizard when a swap is FOCUSED, matching React
+  // (checkout.ts: `!expired || swapFocused`). Dropping it mid-swap kicked a
+  // payer who had already sent a deposit back to the Lightning "Start over"
+  // pane, hiding the swap panel's own expired/refund states — the one place
+  // that can tell them what happens to their funds.
   const wizard =
-    expired || settled || view.payment_wizard === false ? "" : renderPaymentWizardHtml(view.wizard);
+    (expired && !swapFocused) || settled || view.payment_wizard === false
+      ? ""
+      : renderPaymentWizardHtml(view.wizard);
   const copyButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" class="${orClasses.btn}" type="button">${COPY_INVOICE_ICON}<span ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopyLabel}>${escapeHtml(checkoutLabels.copyInvoice)}</span></button>`;
   const decodeInvoice =
     view.invoice.trim() !== ""
@@ -149,27 +155,18 @@ function styleTag(inlineStyles: boolean | undefined): string {
  * The element's ONE failure panel: inline message, never an endless spinner and
  * never an empty shadow root.
  *
- * It was written for the create-mode prepare failure and it is not limited to
- * one — a checkout the element cannot identify uses it too. `retry` is what
- * separates them, and it is not decoration: the button is only honest when
- * something is actually re-runnable. A prepare failure is (the payer clicks and
- * the element POSTs again); attributes carrying an unusable `invoice_id` are not
- * — `applyCheckoutElementAttributes` only ever SETS attributes, so a retry could
- * not clear the bad one, and the panel would just reappear. Pass `retry: false`
- * there and the payer gets the reason without a button that does nothing.
+ * It shows the create-mode prepare failure, which is always re-runnable — the
+ * payer clicks and the element POSTs again — so the panel always carries the
+ * retry button.
  */
 export function renderCheckoutCreateErrorHtml(
   message: string,
   options: RenderOpenReceiveStyleOptions & {
     readonly theme?: "light" | "dark";
-    readonly retry?: boolean;
   } = {},
 ): string {
   const resolvedTheme = options.theme ?? "light";
-  const retryButton =
-    options.retry === false
-      ? ""
-      : `<button part="retry" class="${orClasses.btn}" type="button">Try again</button>`;
+  const retryButton = `<button part="retry" class="${orClasses.btn}" type="button">Try again</button>`;
   return `
     ${styleTag(options.inlineStyles)}
     <section part="root" data-theme="${escapeHtml(resolvedTheme)}" class="${orClasses.root}" data-openreceive-create-error>

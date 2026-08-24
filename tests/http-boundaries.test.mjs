@@ -418,7 +418,7 @@ test("concurrent host-row loser receives no payer instructions", async () => {
         // handler must pass that through untouched.
         if (committed !== undefined && committed !== paymentHash)
           throw hostError(
-            "This order already has a live payment attempt for the same method.",
+            "An unpaid checkout for this payment method is already in progress for this reference.",
             409,
             "CONFLICT",
           );
@@ -440,7 +440,7 @@ test("concurrent host-row loser receives no payer instructions", async () => {
   assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
   const loser = await responses.find((response) => response.status === 409).json();
   assert.equal(loser.checkout, undefined);
-  assert.match(loser.message, /live payment attempt/);
+  assert.match(loser.message, /already in progress for this reference/);
 });
 
 test("HTTP payment check includes swap payment_methods from the provider catalog", async () => {
@@ -748,6 +748,23 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       }),
     }),
   };
+  // A repository refusing a second live attempt on the same rail. Both engines
+  // answer with ONE agreed string; the vector is what keeps them from drifting
+  // apart per-engine again.
+  handlers.live_attempt_conflict = createHttpHandler({
+    service,
+    authorize: () => true,
+    host: testHost({
+      resolveCheckout: () => ({ amount: { sats: 1 } }),
+      onCheckoutCreated: () => {
+        throw hostError(
+          "An unpaid checkout for this payment method is already in progress for this reference.",
+          409,
+          "CONFLICT",
+        );
+      },
+    }),
+  });
   for (const filename of readdirSync("spec/test-vectors/http-golden").sort()) {
     const vector = JSON.parse(readFileSync(`spec/test-vectors/http-golden/${filename}`, "utf8"));
     assert.equal(vector.schema_version, 2, `${filename}: schema_version`);

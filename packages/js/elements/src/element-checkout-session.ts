@@ -28,6 +28,7 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
   type BrowserLoggerOption,
+  type CheckoutPaymentMethod,
   type SwapSelection,
   prepareCheckout,
   requestCheckout,
@@ -65,6 +66,8 @@ export interface ElementCheckoutSession {
   readonly mintingLightning: boolean;
   /** In-flight swap create; a second click must not mint a colliding attempt. */
   readonly startingSwapAsset: string | null;
+  /** Quotes observed per pay-in asset; an unavailable one drives the range pane. */
+  readonly swapQuotes: Readonly<Record<string, CheckoutPaymentMethod>>;
   /** True while the element is writing attributes it owns. */
   readonly applyingOwnAttributes: boolean;
   createCheckout(): Promise<void>;
@@ -188,7 +191,16 @@ export function createElementCheckoutSession(
     if (reference === undefined) return;
     const prefix = currentPrefix();
     const key = `${prefix}::${reference}`;
-    if (creating || createdKey === key) return;
+    if (creating) return;
+    if (createdKey === key) {
+      // Already prepared for this key — a re-mount (framework re-parenting,
+      // appendChild moves) reaches this path after disconnectedCallback stopped
+      // the controller, so restart polling instead of returning silently. An
+      // active swap is never written back as an invoice attribute: without this
+      // a paid deposit would never be confirmed after the move.
+      host.startCheckoutController();
+      return;
+    }
     creating = true;
     createdKey = key;
     session.resetLightningRequest();
@@ -268,6 +280,9 @@ export function createElementCheckoutSession(
     },
     get startingSwapAsset() {
       return session.startingSwapAsset;
+    },
+    get swapQuotes() {
+      return session.swapQuotes;
     },
     get applyingOwnAttributes() {
       return applyingOwnAttributes > 0;

@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "name": "the JSON content-type gate case-folds the media type",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "content_type": "Application/JSON; charset=UTF-8",
+    "body": {}
+  },
+  "expected": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "reference is required.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "RFC 2045 media types are case-insensitive, so an uppercased content type must pass the gate in both engines and fail on the body instead. Vector 11 covers the refusal side; this one pins that the gate is not accidentally case-sensitive."
+}

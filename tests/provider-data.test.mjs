@@ -314,3 +314,16 @@ test("the provider icon map matches the assets directory exactly", async () => {
     !readdirSync("packages/js/provider-data/src/assets/provider-icons").includes("manifest.json"),
   );
 });
+
+// Same shape, same pin: the tutorial map is one filename list too, so the same
+// drift check applies.
+test("the pay tutorial map matches the assets directory exactly", async () => {
+  const { readdirSync } = await import("node:fs");
+  const { OPENRECEIVE_PAY_TUTORIAL_FILES } = await import(
+    "../packages/js/provider-data/src/pay-tutorials.ts"
+  );
+  const onDisk = readdirSync("packages/js/provider-data/src/assets/pay_tutorials")
+    .filter((file) => file.endsWith(".webp"))
+    .sort();
+  assert.deepEqual([...OPENRECEIVE_PAY_TUTORIAL_FILES].sort(), onDisk);
+});

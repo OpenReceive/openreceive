@@ -108,7 +108,6 @@ const WIRE_SCHEMA_NAMES = [
   "SwapCheckout",
   "CreateSwapResponse",
   "RatesResponse",
-  "OrderRequest",
   "Error",
 ];
 

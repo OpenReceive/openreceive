@@ -11,9 +11,21 @@ const distCss = path.join(browserRoot, "dist/styles.css");
 const srcCss = path.join(browserRoot, "src/styles.css");
 const generatedDir = path.join(browserRoot, "src/generated");
 const generatedTs = path.join(generatedDir, "compiled-styles.ts");
-// Wrapper packages ship the same compiled sheet as a real file: a runtime
-// `@import "@openreceive/browser/styles.css"` only resolves under a bundler,
-// so a plain <link> to the wrapper stylesheet would 404 the import.
+// Two shapes, on purpose — tools/validate/package-smoke.mjs pins both.
+//
+// elements and react ship the compiled sheet as a REAL FILE, because their
+// stylesheet has to work without a bundler: `<link rel="stylesheet"
+// href=".../@openreceive/elements/styles.css">` is the drop-in story, and a
+// runtime `@import "@openreceive/browser/styles.css"` (a bare specifier) would
+// 404 there. A self-contained file also means no bundler needs its export map
+// resolved for it (Next's CSS resolver, for one, does not read export maps).
+//
+// vue, svelte and angular ship the one-line `@import` forwarder instead: their
+// SFC/component formats are bundler-only by construction, so the specifier
+// always resolves and there is nothing to duplicate.
+//
+// Neither copy can go stale: both are written HERE, from the one Tailwind
+// compile below, on every package build, under a "do not edit" stamp.
 const wrapperCssTargets = [
   path.join(root, "packages/js/elements/src/styles.css"),
   path.join(root, "packages/js/react/src/styles.css"),

@@ -206,7 +206,7 @@ PLATFORMS
 
 DEPENDENCIES
   minitest (>= 5.0)
-  rails (>= 7.1)
+  rails (>= 8.0)
   sqlite3 (>= 2.1)
 
 BUNDLED WITH

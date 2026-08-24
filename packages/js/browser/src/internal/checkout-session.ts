@@ -27,13 +27,19 @@
 // reason there are two renderers, so it stays an injected callback rather than
 // a branch in here.
 
+import { recordOrEmpty } from "@openreceive/core";
 import {
   findReusableLightningInvoice,
   mergeAttemptIntoSnapshot,
   mergeMintedCheckout,
 } from "./checkout-merge.ts";
-import { startSwapRequest } from "./swap-http.ts";
-import type { CheckoutInvoiceSnapshot, CheckoutSnapshot, BrowserLoggerOption } from "./ui.ts";
+import { postJson, startSwapRequest } from "./swap-http.ts";
+import type {
+  BrowserLoggerOption,
+  CheckoutInvoiceSnapshot,
+  CheckoutPaymentMethod,
+  CheckoutSnapshot,
+} from "./ui.ts";
 
 /**
  * The swap attempt the wizard is showing. It stays host state — the element's
@@ -99,22 +105,41 @@ export interface CheckoutSession {
   readonly mintingLightning: boolean;
   /** In-flight swap create; a second click must not mint a colliding attempt. */
   readonly startingSwapAsset: string | null;
+  /**
+   * Quotes observed for each pay-in asset, keyed by `pay_in_asset`. An entry
+   * with `available: false` is why `startSwap` stopped before starting, and
+   * carries the accepted range the host renders in its unavailable panel.
+   */
+  readonly swapQuotes: Readonly<Record<string, CheckoutPaymentMethod>>;
   ensureLightning(): Promise<void>;
+  /**
+   * Quote the pay-in asset, then start the swap when the quote confirms the
+   * amount is in range. Both steps live HERE so the element and React behave
+   * identically: an out-of-range amount is an unavailable quote in
+   * {@link swapQuotes}, not a generic swap-start error.
+   */
   startSwap(payInAsset: string): Promise<void>;
   /** A new order is being prepared: Lightning is deferred again. */
   resetLightningRequest(): void;
   /** The payer left the focused swap flow, so the failure they left goes too. */
   clearSwapStartError(): void;
-  /**
-   * Surface a failure that happened on the way to a deposit address but not in
-   * `startSwap` itself — React quotes the pay-in asset first, and a failed
-   * quote must not strand the payer on the preparing spinner.
-   */
-  failSwapStart(error: unknown): void;
 }
 
 const SWAP_START_FAILED = "Could not prepare the payment address. Please try again.";
 const MINT_FAILED = "Could not create the Lightning invoice. Please try again.";
+
+/**
+ * A swap-quote body keyed by its pay-in asset. The route echoes the asset as
+ * `pay_asset`; the checkout grid keys methods by `pay_in_asset`, so the alias
+ * is resolved once, here.
+ */
+function normalizeSwapQuote(body: unknown): CheckoutPaymentMethod | undefined {
+  const quote = recordOrEmpty(recordOrEmpty(body).quote ?? body);
+  const payInAsset = quote.pay_in_asset ?? quote.pay_asset;
+  return typeof payInAsset === "string"
+    ? ({ ...quote, pay_in_asset: payInAsset } as unknown as CheckoutPaymentMethod)
+    : undefined;
+}
 
 /** The server's payer-facing text travels on the thrown error; keep it. */
 function payerFacingMessage(error: unknown, fallback: string): string {
@@ -127,6 +152,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
   let lightningRequested = false;
   let mintingLightning = false;
   let startingSwapAsset: string | null = null;
+  let swapQuotes: Record<string, CheckoutPaymentMethod> = {};
 
   async function ensureLightning(): Promise<void> {
     // A second click while the first mint is in flight would POST /checkouts
@@ -145,6 +171,9 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       if (reusableLightning !== undefined) {
         lightningRequested = true;
         options.onSnapshot?.(mergeAttemptIntoSnapshot(reusableLightning, current));
+        // Same as every other state mutation here: `lightningRequested` is a
+        // render flag, so the host has to be told to re-render for it.
+        options.onChange();
         return;
       }
     }
@@ -201,6 +230,11 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     options.onChange();
 
     try {
+      // Quote FIRST. An amount outside the provider's range is a normal answer,
+      // not a failure: it becomes an unavailable entry in `swapQuotes` and the
+      // host shows its accepted range, rather than a generic start error.
+      const quote = await quoteSwapAsset(payInAsset, prefix, fetcher, reference);
+      if (quote !== undefined && quote.available === false) return;
       const started = await startSwapRequest({
         fetch: fetcher,
         prefix,
@@ -246,6 +280,29 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     }
   }
 
+  /**
+   * POST the swap quote for one pay-in asset and remember the answer.
+   * `undefined` means the server sent a body this reader cannot key by asset,
+   * which is treated as "no opinion" and lets the start proceed.
+   */
+  async function quoteSwapAsset(
+    payInAsset: string,
+    prefix: string,
+    fetcher: typeof globalThis.fetch,
+    reference: string,
+  ): Promise<CheckoutPaymentMethod | undefined> {
+    const body = await postJson({
+      fetch: fetcher,
+      prefix,
+      ...(options.logger === undefined ? {} : { logger: options.logger }),
+      body: { reference, action: "swap_quote", pay_in_asset: payInAsset },
+    });
+    const quote = normalizeSwapQuote(body);
+    if (quote === undefined) return undefined;
+    swapQuotes = { ...swapQuotes, [quote.pay_in_asset]: quote };
+    return quote;
+  }
+
   function failSwapStart(error: unknown): void {
     swapStartError = payerFacingMessage(error, SWAP_START_FAILED);
     options.onError(error);
@@ -268,6 +325,9 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     get startingSwapAsset() {
       return startingSwapAsset;
     },
+    get swapQuotes() {
+      return swapQuotes;
+    },
     ensureLightning,
     startSwap,
     resetLightningRequest() {
@@ -276,6 +336,5 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     clearSwapStartError() {
       swapStartError = undefined;
     },
-    failSwapStart,
   };
 }

@@ -176,7 +176,29 @@ module OpenReceive
           # pending attempts as expired. Fail the scan loudly instead.
           raise ArgumentError, "list_transactions returned an unrecognized result shape"
         end
-      { "transactions" => rows.map { |row| normalize_transaction(row) } }
+      # One quirky wallet row must never reject the whole scan: reconciliation
+      # depends on every pass succeeding, and a rejected scan can neither
+      # settle nor close pending attempts (a permanent livelock while the bad
+      # row stays inside the scan window). Bad rows are skipped and counted.
+      # Mirrors the JS normalizeListTransactionsResult policy.
+      transactions = []
+      skipped_rows = 0
+      rows.each do |row|
+        transactions << normalize_transaction(row)
+      rescue StandardError
+        skipped_rows += 1
+      end
+      # ALL rows unusable is the unrecognized-shape case wearing a different
+      # hat: a non-empty page that yields nothing is indistinguishable from an
+      # empty wallet, and an empty-looking scan at expiry+grace closes pending
+      # attempts as expired.
+      if transactions.empty? && skipped_rows.positive?
+        raise ArgumentError, "list_transactions returned no usable rows"
+      end
+
+      result = { "transactions" => transactions }
+      result["skipped_rows"] = skipped_rows if skipped_rows.positive?
+      result
     end
 
     def normalize_transaction(transaction)
@@ -184,7 +206,7 @@ module OpenReceive
       {
         "type" => data["type"],
         "invoice" => data["invoice"],
-        "payment_hash" => (data["payment_hash"] || data["paymentHash"])&.downcase,
+        "payment_hash" => optional_payment_hash(data["payment_hash"] || data["paymentHash"]),
         "amount_msats" => optional_integer(data["amount_msats"] || data["amount"]),
         "transaction_state" => transaction_state(data),
         "created_at" => optional_integer(data["created_at"] || data["createdAt"]),
@@ -425,6 +447,19 @@ module OpenReceive
 
     def optional_integer(value)
       value.nil? ? nil : Integer(value)
+    end
+
+    # ABSENT means absent — a row minted by another app through the same wallet
+    # legitimately carries no hash. PRESENT but not a 64-hex string is a row we
+    # do not understand; it raises so the scan skips and counts it, mirroring
+    # the JS normalizeNwcTransaction ruling.
+    def optional_payment_hash(value)
+      return nil if value.nil? || value == ""
+
+      hash = value.to_s.downcase
+      raise ArgumentError, "payment_hash must be 64 hexadecimal characters" unless /\A[0-9a-f]{64}\z/.match?(hash)
+
+      hash
     end
 
     def present?(value)

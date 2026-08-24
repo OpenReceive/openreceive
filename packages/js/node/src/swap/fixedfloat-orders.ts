@@ -4,7 +4,7 @@
  * field-by-field fallback to the order already persisted, and the USD fee pair.
  */
 
-import { recordOrEmpty, unixSeconds } from "@openreceive/core";
+import { recordOrEmpty } from "@openreceive/core";
 import type { SwapPayInAsset } from "./assets.ts";
 import {
   optionalNestedString,
@@ -27,7 +27,6 @@ export interface FixedFloatOrderInput {
   readonly payInAsset: SwapPayInAsset;
   /** The order we already persisted, when this is a poll rather than a create. */
   readonly fallback?: SwapOrder;
-  readonly now?: () => number;
 }
 
 /**
@@ -86,6 +85,30 @@ function requiredOrderField(
   return optionalStringField(record, field) ?? fallback ?? requiredString(record[field], label);
 }
 
+function requiredExpiresAt(expiresAt: number | undefined): number {
+  if (expiresAt === undefined) {
+    throw new Error("FixedFloat order is missing time.expiration.");
+  }
+  return expiresAt;
+}
+
+/** The persisted order's own state fields, carried through a thin poll body. */
+function persistedStatus(fallback: SwapOrder): {
+  readonly state: SwapProviderState;
+  readonly attention?: boolean;
+  readonly attention_reason?: SwapAttentionReason;
+  readonly refund_reason?: SwapRefundReason;
+} {
+  return {
+    state: fallback.state,
+    ...(fallback.attention === undefined ? {} : { attention: fallback.attention }),
+    ...(fallback.attention_reason === undefined
+      ? {}
+      : { attention_reason: fallback.attention_reason }),
+    ...(fallback.refund_reason === undefined ? {} : { refund_reason: fallback.refund_reason }),
+  };
+}
+
 /**
  * Read a FixedFloat order body, resolving every field against what we already
  * persisted. Extraction and fallback are deliberately one step, not two: a thin
@@ -102,11 +125,15 @@ function extractFixedFloatOrderFields(
     optionalNestedString(record, ["back", "tx", "id"]) ??
     optionalNestedString(record, ["refund", "tx", "id"]) ??
     fallback?.refund_tx_id;
-  const status = normalizeFixedFloatStatus(
-    optionalStringField(record, "status") ?? fallback?.state ?? "NEW",
-    emergency,
-    refundTxId,
-  );
+  const rawStatus = optionalStringField(record, "status");
+  // A thin poll body with no `status` keeps the state we already persisted
+  // VERBATIM. Re-normalizing it would be a category error: `fallback.state` is
+  // an OpenReceive SwapProviderState, and normalizeFixedFloatStatus only speaks
+  // FixedFloat statuses — it would map "awaiting_deposit" to attention.
+  const status =
+    rawStatus === undefined && fallback !== undefined
+      ? persistedStatus(fallback)
+      : normalizeFixedFloatStatus(rawStatus ?? "NEW", emergency, refundTxId);
   return {
     status,
     depositAddress: requiredOrderField(from, "address", fallback?.deposit_address, "from.address"),
@@ -114,18 +141,22 @@ function extractFixedFloatOrderFields(
     providerOrderId: requiredOrderField(record, "id", fallback?.provider_order_id, "id"),
     providerToken: requiredOrderField(record, "token", fallback?.provider_token, "token"),
     depositAmount: requiredOrderField(from, "amount", fallback?.deposit_amount, "from.amount"),
-    expiresAt:
-      readUnixSeconds(recordOrEmpty(record.time).expiration) ??
-      fallback?.expires_at ??
-      (input.now ?? unixSeconds)() + 600,
+    // No invented deadline: the provider states the expiry, and on a thin poll
+    // body the one we already persisted stands. A create body without either is
+    // a provider contract break, not something to paper over with now + 10min.
+    expiresAt: requiredExpiresAt(
+      readUnixSeconds(recordOrEmpty(record.time).expiration) ?? fallback?.expires_at,
+    ),
     depositMemo: optionalStringField(from, "tag") ?? fallback?.deposit_memo,
     depositTxId: optionalNestedString(record, ["from", "tx", "id"]) ?? fallback?.deposit_tx_id,
     payoutTxId: optionalNestedString(record, ["to", "tx", "id"]) ?? fallback?.payout_tx_id,
     depositReceivedAmount:
-      readDecimalAmountString(optionalNestedString(record, ["from", "tx", "amount"])) ??
-      fallback?.deposit_received_amount,
+      readDecimalAmountString(
+        optionalNestedString(record, ["from", "tx", "amount"]),
+        "from.tx.amount",
+      ) ?? fallback?.deposit_received_amount,
     refundAmount:
-      readDecimalAmountString(optionalNestedString(record, ["back", "amount"])) ??
+      readDecimalAmountString(optionalNestedString(record, ["back", "amount"]), "back.amount") ??
       fallback?.refund_amount,
     refundReason:
       status.refund_reason ??

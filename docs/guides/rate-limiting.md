@@ -38,11 +38,11 @@ supply a custom `rateLimitHook` that exempts authenticated terminals.
 
 ## Defaults
 
-`rateLimiting: true` means:
+Rate limiting is **off** unless you set `rateLimiting`. With
+`rateLimiting: true`:
 
 | Setting | Default |
 | --- | --- |
-| Enabled | **No** — only when `rateLimiting` is set |
 | Hourly cap | 60 invoice creations per IP per rolling hour |
 | Daily cap | none (hourly only) |
 | Throttled actions | `checkout.create`, `swap.create` — status polling and quotes are never throttled |

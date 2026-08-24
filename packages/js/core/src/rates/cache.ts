@@ -10,10 +10,9 @@
  */
 
 import { type BtcFiatRateMap, PriceFeedError } from "../money/decimal.ts";
-import { nonEmptyString, unixSeconds } from "../values.ts";
+import { unixSeconds } from "../values.ts";
 import {
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
-  OPENRECEIVE_PRICE_FEED_CACHE_META_KEY,
   OPENRECEIVE_PRICE_FEED_CACHE_SECONDS,
   OPENRECEIVE_PRICE_FEED_CLOCK_SKEW_SECONDS,
 } from "./constants.ts";
@@ -29,25 +28,6 @@ import {
   providerHasGetAllBtcFiatRates,
   type SimplePriceFetch,
 } from "./types.ts";
-
-type MaybePromise<T> = T | Promise<T>;
-
-interface MetaRow {
-  readonly key: string;
-  readonly value: string;
-  readonly rev: number;
-}
-
-// Process-local cache surface. This is intentionally not injectable: price
-// caching is disposable and OpenReceive has no storage configuration.
-interface PriceFeedCacheMap {
-  getMeta(key: string): MaybePromise<MetaRow | undefined>;
-  casMeta(
-    key: string,
-    value: string,
-    expectedRev: number | null,
-  ): MaybePromise<{ status: "ok" | "conflict"; row: MetaRow }>;
-}
 
 interface PriceFeedCacheEntry {
   rates: BtcFiatRateMap;
@@ -88,12 +68,15 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
   // Representative source for the bare SourcedPriceProvider view;
   // the true origin is reported per-call by getBtcFiatRatesWithSource.
   readonly source: LivePriceSourceId = "primary";
-  readonly #cache: PriceFeedCacheMap;
+  // Plain in-process state. Price caching is disposable and OpenReceive has no
+  // storage configuration, so this is a field on one object that only this
+  // class writes — not a store that can be raced, replaced, or corrupted. The
+  // single-fetcher guarantee is #inFlight below, not a revision number.
+  #state: PriceFeedCacheState | undefined;
   readonly #currencies: readonly string[];
   readonly #primary: SourcedPriceProvider;
   readonly #fallback: SourcedPriceProvider;
   readonly #cacheSeconds: number;
-  readonly #cacheKey: string;
   readonly #clock: () => number;
   #inFlight?: Promise<PriceFeedCacheEntry>;
 
@@ -115,12 +98,10 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
         `CachedPriceFeed cacheSeconds must not exceed the ${OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS}s invoice quote TTL`,
       );
     }
-    this.#cache = createTransientPriceFeedCache();
     this.#currencies = [...options.currencies];
     this.#primary = options.primary;
     this.#fallback = options.fallback;
     this.#cacheSeconds = cacheSeconds;
-    this.#cacheKey = OPENRECEIVE_PRICE_FEED_CACHE_META_KEY;
     this.#clock = options.clock ?? unixSeconds;
   }
 
@@ -136,7 +117,7 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
     currencies: readonly string[],
   ): Promise<BtcFiatRateMapWithSource> {
     const now = this.#clock();
-    const claimed = await this.#readOrClaimRefresh(now);
+    const claimed = this.#readOrClaimRefresh(now);
     const resolved = claimed.status === "served" ? claimed.entry : await claimed.pending;
     return {
       source: resolved.source,
@@ -149,13 +130,7 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
   // currency.
   async healthCheck(currencies?: readonly string[]): Promise<BtcFiatRateMapWithSource> {
     const now = this.#clock();
-    const meta = await this.#cache.getMeta(this.#cacheKey);
-    const previousEntry = parsePriceFeedCacheState(meta?.value)?.entry;
-    const resolved = await this.#trackedRefresh(
-      now,
-      meta === undefined ? null : meta.rev,
-      previousEntry,
-    );
+    const resolved = await this.#trackedRefresh(now, this.#state?.entry);
     return {
       source: resolved.source,
       rates:
@@ -165,74 +140,51 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
     };
   }
 
-  async #readOrClaimRefresh(now: number): Promise<PriceFeedRefreshClaim> {
-    let meta = await this.#cache.getMeta(this.#cacheKey);
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const state = parsePriceFeedCacheState(meta?.value);
-      const freshEntry = this.#freshEntry(state, now);
-      if (freshEntry !== undefined) {
-        return {
-          status: "served",
-          entry: freshEntry,
-        };
-      }
-
-      // Stale-while-revalidate is bounded by the invoice quote TTL: a rate
-      // observed longer ago than a quote may live must never price a new
-      // invoice — fail closed instead of serving it.
-      const usableEntry = this.#quotableEntry(state, now);
-
-      if (this.#isRecent(state?.refresh_failed_at, now)) {
-        // One failed refresh must not hard-down quoting for the whole backoff
-        // while a still-quotable observation is in hand.
-        if (usableEntry !== undefined) {
-          return { status: "served", entry: usableEntry };
-        }
-        throw new PriceFeedError(
-          `price feed refresh already failed within ${this.#cacheSeconds}s${
-            state?.refresh_error === undefined ? "" : `: ${state.refresh_error}`
-          }`,
-        );
-      }
-
-      if (this.#isRecent(state?.refresh_started_at, now)) {
-        if (usableEntry !== undefined) {
-          return { status: "served", entry: usableEntry };
-        }
-        // Cold cache: join the refresh already running in this process rather
-        // than failing every concurrent caller but the one that claimed it.
-        const pending = this.#inFlight;
-        if (pending !== undefined) {
-          return { status: "pending", pending };
-        }
-        throw new PriceFeedError(
-          `price feed refresh already started within ${this.#cacheSeconds}s`,
-        );
-      }
-
-      const claim = await this.#cache.casMeta(
-        this.#cacheKey,
-        serializePriceFeedCacheState({
-          entry: state?.entry,
-          refresh_started_at: now,
-        }),
-        meta === undefined ? null : meta.rev,
-      );
-
-      if (claim.status === "ok") {
-        // Publish the in-flight promise in the same tick the claim lands, so a
-        // caller that observes refresh_started_at always finds it to join.
-        return {
-          status: "pending",
-          pending: this.#trackedRefresh(now, claim.row.rev, state?.entry),
-        };
-      }
-
-      meta = claim.row.rev < 0 ? undefined : claim.row;
+  #readOrClaimRefresh(now: number): PriceFeedRefreshClaim {
+    const state = this.#state;
+    const freshEntry = this.#freshEntry(state, now);
+    if (freshEntry !== undefined) {
+      return { status: "served", entry: freshEntry };
     }
 
-    throw new PriceFeedError("price feed cache changed too often while claiming refresh");
+    // Stale-while-revalidate is bounded by the invoice quote TTL: a rate
+    // observed longer ago than a quote may live must never price a new
+    // invoice — fail closed instead of serving it.
+    const usableEntry = this.#quotableEntry(state, now);
+
+    if (this.#isRecent(state?.refresh_failed_at, now)) {
+      // One failed refresh must not hard-down quoting for the whole backoff
+      // while a still-quotable observation is in hand.
+      if (usableEntry !== undefined) {
+        return { status: "served", entry: usableEntry };
+      }
+      throw new PriceFeedError(
+        `price feed refresh already failed within ${this.#cacheSeconds}s${
+          state?.refresh_error === undefined ? "" : `: ${state.refresh_error}`
+        }`,
+      );
+    }
+
+    if (this.#isRecent(state?.refresh_started_at, now)) {
+      if (usableEntry !== undefined) {
+        return { status: "served", entry: usableEntry };
+      }
+      // Cold cache: join the refresh already running rather than failing every
+      // concurrent caller but the one that claimed it.
+      const pending = this.#inFlight;
+      if (pending !== undefined) {
+        return { status: "pending", pending };
+      }
+      throw new PriceFeedError(`price feed refresh already started within ${this.#cacheSeconds}s`);
+    }
+
+    // Claim the refresh. Synchronous from the freshness read to this write, so
+    // no second caller can interleave and start a duplicate fetch.
+    this.#state = {
+      ...(state?.entry === undefined ? {} : { entry: state.entry }),
+      refresh_started_at: now,
+    };
+    return { status: "pending", pending: this.#trackedRefresh(now, state?.entry) };
   }
 
   /**
@@ -275,10 +227,9 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
 
   #trackedRefresh(
     now: number,
-    expectedRev: number | null,
     previousEntry: PriceFeedCacheEntry | undefined,
   ): Promise<PriceFeedCacheEntry> {
-    const pending = this.#refresh(now, expectedRev, previousEntry);
+    const pending = this.#refresh(now, previousEntry);
     this.#inFlight = pending;
     const clear = () => {
       if (this.#inFlight === pending) this.#inFlight = undefined;
@@ -289,7 +240,6 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
 
   async #refresh(
     now: number,
-    expectedRev: number | null,
     previousEntry: PriceFeedCacheEntry | undefined,
   ): Promise<PriceFeedCacheEntry> {
     const failures: string[] = [];
@@ -298,7 +248,7 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
         const rates = await this.#fetchProviderRates(provider);
         const source = provider.source as LivePriceSourceId;
         const entry: PriceFeedCacheEntry = { rates, source, fetched_at: now };
-        await this.#writeCacheState({ entry }, expectedRev);
+        this.#state = { entry };
         return entry;
       } catch (error) {
         failures.push(
@@ -308,15 +258,12 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
     }
 
     const error = new PriceFeedError(`all price feeds failed: ${failures.join("; ")}`);
-    await this.#writeCacheState(
-      {
-        entry: previousEntry,
-        refresh_started_at: now,
-        refresh_failed_at: now,
-        refresh_error: error.message,
-      },
-      expectedRev,
-    );
+    this.#state = {
+      ...(previousEntry === undefined ? {} : { entry: previousEntry }),
+      refresh_started_at: now,
+      refresh_failed_at: now,
+      refresh_error: error.message,
+    };
     throw error;
   }
 
@@ -328,92 +275,6 @@ export class CachedPriceFeed implements ResolvedPriceProvider, PriceFeedHealthCh
     }
     return provider.getBtcFiatRates(this.#currencies);
   }
-
-  async #writeCacheState(state: PriceFeedCacheState, expectedRev: number | null): Promise<void> {
-    // A concurrent writer winning the CAS is fine; later callers observe it.
-    await this.#cache.casMeta(this.#cacheKey, serializePriceFeedCacheState(state), expectedRev);
-  }
-}
-
-function parsePriceFeedCacheState(value: string | undefined): PriceFeedCacheState | undefined {
-  if (value === undefined) return undefined;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return undefined;
-  }
-
-  if (parsed === null || typeof parsed !== "object") return undefined;
-  const record = parsed as Record<string, unknown>;
-  const entry = parsePriceFeedCacheEntry(record);
-  const refreshStartedAt = optionalCacheTimestamp(record.refresh_started_at);
-  const refreshFailedAt = optionalCacheTimestamp(record.refresh_failed_at);
-  const refreshError = nonEmptyString(record.refresh_error);
-
-  if (entry === undefined && refreshStartedAt === undefined && refreshFailedAt === undefined) {
-    return undefined;
-  }
-
-  return {
-    ...(entry === undefined ? {} : { entry }),
-    ...(refreshStartedAt === undefined ? {} : { refresh_started_at: refreshStartedAt }),
-    ...(refreshFailedAt === undefined ? {} : { refresh_failed_at: refreshFailedAt }),
-    ...(refreshError === undefined ? {} : { refresh_error: refreshError }),
-  };
-}
-
-function parsePriceFeedCacheEntry(
-  record: Record<string, unknown>,
-): PriceFeedCacheEntry | undefined {
-  const fetchedAt = record.fetched_at;
-  const source = record.source;
-  const rates = record.rates;
-
-  if (
-    !isCacheTimestamp(fetchedAt) ||
-    (source !== "primary" && source !== "fallback") ||
-    rates === null ||
-    typeof rates !== "object" ||
-    typeof (rates as { bitcoin?: unknown }).bitcoin !== "object" ||
-    (rates as { bitcoin?: unknown }).bitcoin === null
-  ) {
-    return undefined;
-  }
-
-  return {
-    rates: rates as BtcFiatRateMap,
-    source,
-    fetched_at: fetchedAt as number,
-  };
-}
-
-function serializePriceFeedCacheState(state: PriceFeedCacheState): string {
-  return JSON.stringify({
-    ...(state.entry === undefined
-      ? {}
-      : {
-          rates: state.entry.rates,
-          source: state.entry.source,
-          fetched_at: state.entry.fetched_at,
-        }),
-    ...(state.refresh_started_at === undefined
-      ? {}
-      : { refresh_started_at: state.refresh_started_at }),
-    ...(state.refresh_failed_at === undefined
-      ? {}
-      : { refresh_failed_at: state.refresh_failed_at }),
-    ...(state.refresh_error === undefined ? {} : { refresh_error: state.refresh_error }),
-  });
-}
-
-function optionalCacheTimestamp(value: unknown): number | undefined {
-  return isCacheTimestamp(value) ? value : undefined;
-}
-
-function isCacheTimestamp(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 // Wires the hard-coded (or overridden) feeds to a disposable local cache.
@@ -442,26 +303,6 @@ export function createCachedLivePriceFeed(options: {
     cacheSeconds: options.cacheSeconds,
     clock: options.clock,
   });
-}
-
-function createTransientPriceFeedCache(): PriceFeedCacheMap {
-  let row: MetaRow | undefined;
-  return {
-    getMeta(key) {
-      return row?.key === key ? structuredClone(row) : undefined;
-    },
-    casMeta(key, value, expectedRev) {
-      const actualRev = row?.key === key ? row.rev : null;
-      if (actualRev !== expectedRev) {
-        return {
-          status: "conflict",
-          row: structuredClone(row ?? { key, value: "", rev: -1 }),
-        };
-      }
-      row = { key, value, rev: (actualRev ?? 0) + 1 };
-      return { status: "ok", row: structuredClone(row) };
-    },
-  };
 }
 
 /**

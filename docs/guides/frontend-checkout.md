@@ -27,8 +27,11 @@ only the order-creation route above and the authorization these requests pass th
 Browser & React API surface (full reference in
 [api-reference.md → Browser & React](api-reference.md#browser--react)):
 
-- [`prepareCheckout(options)`](api-reference.md#preparecheckout) / [`requestCheckout(options)`](api-reference.md#requestcheckout) — direct calls when you build your
-  own UI. Options: `reference`, `prefix`, `fetch`, `headers`, `memo`, `metadata`.
+- [`prepareCheckout(options)`](api-reference.md#preparecheckout) — lock the
+  amount without minting. Options: `reference`, `prefix`, `fetch?`, `headers?`.
+- [`requestCheckout(options)`](api-reference.md#requestcheckout) — mint the
+  Lightning invoice. Same options, plus `memo?` and `metadata?`: those two ride
+  on the create request, which is why prepare does not take them.
 - [`<Checkout>`](api-reference.md#checkout) props — `reference` (create mode) or `checkout` (snapshot mode), `prefix`,
   the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
   `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`, `paymentWizard`,

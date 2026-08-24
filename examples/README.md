@@ -69,10 +69,11 @@ integration this way.
   repository-root `.env` by server code only; no variant ships it to a bundle.
 - **Demos import the shared `@openreceive/*` UI — they never fork it.** When a
   demo needs different markup, it composes the packaged components and class
-  registries rather than copying them. The one hand-written port (the Rails
-  method grid and swap panel, kept because they are what proves
-  `@openreceive/browser/headless` drives a checkout from a non-React store) is
-  guarded by a drift check; see
+  registries rather than copying them. The Rails variant is not an exception:
+  it mounts the packaged `PaymentWizard` and friends from `@openreceive/react`
+  and drives them from mobx-keystone stores, which is what proves the headless
+  engine drives a checkout from a non-React store. The only thing it mirrors is
+  the demo currency data, guarded by a drift check; see
   [`hello-fruit/README.md`](hello-fruit/README.md).
 - **Product data has one source.** `hello-fruit/shared/fruits.json` is the
   catalog for all four variants; nothing re-declares fruit ids, prices, or

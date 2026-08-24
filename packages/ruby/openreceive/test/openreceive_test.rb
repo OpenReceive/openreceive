@@ -25,8 +25,9 @@ class OpenReceiveCoreTest < Minitest::Test
 
   def test_parse_nwc_uri_accepts_the_opaque_form_without_slashes
     # Wallets also emit `nostr+walletconnect:<pubkey>?...` (no `//`); JS's
-    # WHATWG URL parses it, so the Ruby engine must too. A shared
-    # nwc-uri-parse vector should pin this once the vector wave lands.
+    # WHATWG URL parses it, so the Ruby engine must too. The shared
+    # nwc-uri-parse vector pins the same form across both engines; this local
+    # test keeps the Ruby-side failure message readable.
     wallet = "a" * 64
     secret = "b" * 64
     uri = "nostr+walletconnect:#{wallet}?relay=wss%3A%2F%2Frelay.example.com&secret=#{secret}&lud16=pay%40example.com"

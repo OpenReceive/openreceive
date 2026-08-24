@@ -6,7 +6,61 @@ OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
 behind.
 
-### ORM handles wrap in one call: `knexDb`, `prismaDb`, `typeOrmDb`
+### Second audit sweep
+
+A second full-repo audit fixed 24 correctness bugs, removed 22 trust-model
+violations, closed 7 wrapper-parity gaps, and finished the `order_id` →
+`reference` rename. The behavior changes worth knowing:
+
+- **Settlement.** A notified `payment_received` now checks pendingness BY HASH
+  (`payments.findPendingAttempt`) instead of membership in the oldest-200
+  batch, so a notified settlement no longer waits for a backlog to drain.
+  A reconcile result that reports `settled` with no `paidAt` is reported as a
+  failure instead of skipped silently, and the request-path reconcile pass now
+  runs AFTER the body's cheap refusals so an anonymous garbage POST cannot
+  claim the gate. Rails exempts unauthenticated `GET /rates` from the pass,
+  matching the JS handler.
+- **Wallet scans.** A `list_transactions` page whose rows are all unusable now
+  fails the scan in both engines rather than reading as an empty wallet — an
+  empty-looking scan at expiry+grace closes unpaid attempts. Within a page, a
+  row whose PRESENT fields cannot be read (a non-hex `payment_hash`, an
+  unparsable amount) is skipped and counted; absent fields still mean absent.
+- **Invoice expiry.** A wallet that clamps expiry no longer fails every
+  checkout: the ledger stores the wallet's own `expires_at` and logs
+  `checkout.invoice_expiry.adjusted`. A caller-supplied `expirySeconds` (only
+  the swap path sets one) stays a hard floor, and only when the wallet comes
+  in short.
+- **Swaps.** Provider transport failures on `/swaps`, `/swaps/status` and
+  `/swaps/refunds` map to 502/503 instead of a generic 500. A provider order
+  without an expiry fails the create rather than inventing a 10-minute window,
+  and a provider amount that is present-but-unparsable throws instead of
+  vanishing. When every configured provider fails its catalog fetch, methods
+  report `provider_unreachable`, not `provider_unconfigured`. A 429 backoff no
+  longer resets when the weight window rolls.
+- **Checkout UI.** `startSwap` now quotes before it starts, in the SHARED
+  session, so React and the custom element behave identically — an
+  out-of-range amount is an accepted-range panel in both, built from one
+  `createSwapUnavailableModel`. Expired-mid-swap keeps the wizard in both. The
+  refund review gate is explicitly client-side: `refund_nonce` and
+  `refund_nonce_expires_at` are gone from the browser wire types (the server
+  never sent them), and `SwapDisplayModel` carries `refundAllowed: boolean`.
+  A swap deposit QR that cannot encode its amount now throws instead of
+  silently degrading to an amount-less payment URI.
+- **Renames.** Option types match their factories (`CreateHostOptions`,
+  `CreateStackOptions`, `CreateHttpHandlerOptions`, `DefineElementsOptions`,
+  …). `@openreceive/browser` exports `createLightningUri` / `createQrSvg` /
+  `createQrPngDataUrl` under those names on both entry points, and no longer
+  exports the internal `readJsonResponse`. The adapter packages no longer
+  re-export the 14 generated `Wire*` body types (still on
+  `@openreceive/http`). Ad-hoc app-route console loggers are
+  `createAppConsoleLogger` / `createAppBrowserConsoleLogger`, so `Host` names
+  only the persistence object.
+- **New.** `createStack` takes `onBootFailure`, and a failed boot answers
+  `503 WALLET_UNAVAILABLE` in the error contract instead of rethrowing the raw
+  cause. `payInAssetNetwork` in `@openreceive/core` owns the
+  `pay_in_asset` → network split that four call sites re-derived.
+
+### ORM handles wrap in one call: `knexDb`, `prismaDb`, `typeOrmDb`, `sequelizeDb`
 
 - `@openreceive/http` ships a named `SqlAdapter` factory per ORM whose handle
   `createSqlPayments` cannot accept directly. The parameter types are
@@ -15,6 +69,15 @@ behind.
   the Prisma recipe carried: only `^select` statements ran through
   `$queryRawUnsafe`, so an `UPDATE … RETURNING` fulfillment claim (the
   guide's own `onPaid` example) lost its rows and never fulfilled.
+- `sequelizeDb` closes the last gap: Sequelize was a first-class scaffold flag
+  whose only documented wiring was "open a second `pg` Pool to the same
+  database, or hand-roll an adapter". It binds parameters through Sequelize's
+  `bind` option and threads the managed transaction into every statement
+  inside it — Sequelize carries the transaction on the same instance, so a
+  hand-rolled adapter that missed that ran settlement outside the transaction.
+- The scaffold's wiring guide no longer prints hand-rolled `SqlAdapter`
+  snippets for Prisma/Knex/TypeORM/Sequelize; each section is now the shipped
+  factory in one line.
 - `npm run test:orms` proves the factories against the real ORMs: knex,
   typeorm, and prisma (7, via its better-sqlite3 driver adapter) each drive
   the payments repository — commit, write-once settlement, reconcile-gate
@@ -92,9 +155,12 @@ behind.
   the renderers and headless integrations share; 15 names only tests used are
   no longer exported. `npm run check:example-imports` had nothing left to
   reject and is removed.
-- The display-boundary rule (formatters throw, display boundaries blank)
-  moved from `docs/internal/display-boundary-findings.md` into AGENTS.md; the
-  rest of that document was history.
+- `docs/internal/display-boundary-findings.md` was deleted. Its
+  display-boundary rule (formatters throw, display boundaries blank) is
+  superseded by the AGENTS.md trust model: our own server, the configured NWC
+  wallet, and the configured swap provider are trusted, and a throw in a
+  checkout panel is our own API surfacing, not a display-boundary bug class to
+  defend against.
 
 ### The OpenReceive prefix is gone; the import path is the namespace
 
@@ -255,8 +321,8 @@ behind.
   `btcFiatPrice`/`amountSats`/`amountMsats`/`asOf`/`expiresAt`. The wire
   itself stays snake_case.
 - The minted invoice is `Checkout` at every layer: the service type `Checkout`
-  (was `CheckoutInvoice`), the generated wire body type
-  `OpenReceiveWireCheckout` (from the OpenAPI document, shipped by
+  (was `CheckoutInvoice`), the generated wire body type `WireCheckout` (was
+  `OpenReceiveWireCheckout`; from the OpenAPI document, shipped by
   `@openreceive/http`), and the browser's client-held snapshot type
   `CheckoutSnapshot`.
 - The advanced rate-limit hook option is `rateLimitHook` (was `rateLimit`), so
@@ -265,20 +331,22 @@ behind.
 ### `onPaid` in both host modes (`onSettlement` removed)
 
 - The settlement hook is `onPaid` in BOTH host modes; `onSettlement` no longer
-  exists. db mode receives `OpenReceiveOrderSettlement` (`orderId` plus the
-  transactional `query`); custom-repository mode receives
-  `OpenReceiveSettlementEvent` (`paymentHash`/`paidAt`/`details`), with
+  exists. db mode receives `PaymentSettlement` (was
+  `OpenReceiveOrderSettlement`: `reference`, was `orderId`, plus the
+  transactional `query`); custom-repository mode receives `SettlementEvent`
+  (was `OpenReceiveSettlementEvent`: `paymentHash`/`paidAt`/`details`), with
   write-once still enforced by the library.
 
 ### Curated exports and the public-api gate
 
 - `@openreceive/express`, `@openreceive/fastify`, and `@openreceive/next`
   re-export only the curated `@openreceive/http` surface: handler/stack
-  factories, the error surface, the notification worker, the
-  options/context/hook types, and the generated `OpenReceiveWire*` wire body
-  types. Host-integration internals — the SQL payment repository, the
-  reconcile gate, `createOpenReceiveHost`, the rate-limit helpers — live only
-  on `@openreceive/http` (and `openreceive/http`).
+  factories, the error surface, the notification worker, and the
+  options/context/hook types. The generated `Wire*` body types (was
+  `OpenReceiveWire*`) and the host-integration internals — the SQL payment
+  repository, the reconcile gate, `createHost` (was `createOpenReceiveHost`),
+  the rate-limit helpers — live only on `@openreceive/http` (and
+  `openreceive/http`).
 - The UI wrappers export only the wrapper factories plus props/theme types,
   and `@openreceive/core` no longer exports internal formatting helpers
   (`satsToFiatValue`, `formatBtcFromSats`, …).
@@ -289,9 +357,10 @@ behind.
 ### Scan topology
 
 - Every scan entry point — the opportunistic request-path pass, the
-  notification worker's periodic pass, and `startOpenReceiveReconciler` —
-  claims the durable `openreceive_meta` reconcile gate, so all of them share
-  the one NWC scan budget. Unauthenticated `GET /rates` never triggers a scan.
+  notification worker's periodic pass, and `startReconciler` (was
+  `startOpenReceiveReconciler`) — claims the durable `openreceive_meta`
+  reconcile gate, so all of them share the one NWC scan budget.
+  Unauthenticated `GET /rates` never triggers a scan.
 - `payments/check` serves `payment_methods` from a 60-second per-amount warm
   cache instead of one provider call per poll.
 - Superseded rows are excluded from live-attempt matching, and the 409 create
@@ -362,9 +431,8 @@ behind.
 
 ### CI
 
-- Per-push `rails-example` job; `check:example-imports` and `check:public-api`
-  run per push; wrapper type checks (`vue-tsc`, `svelte-check`) and real
-  wrapper mount tests.
+- Per-push `rails-example` job; `check:public-api` runs per push; wrapper type
+  checks (`vue-tsc`, `svelte-check`) and real wrapper mount tests.
 
 ## 0.1.1 - 2026-08-18
 

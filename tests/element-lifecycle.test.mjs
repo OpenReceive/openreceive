@@ -11,6 +11,15 @@ const test = (await import("node:test")).default;
 // Imported after DOM registration: the package touches window/document when the
 // element classes are defined.
 const { defineElements } = await import("../packages/js/elements/src/index.ts");
+const { until } = await import("./helpers/lifecycle-harness.mjs");
+
+/**
+ * This file's `until` defaults (4s, 5ms) over the shared helper — the three
+ * copies of this loop that used to live in the DOM-lifecycle tests differed
+ * only in those two numbers.
+ */
+const untilLocal = (predicate, options = {}) =>
+  until(predicate, { timeoutMs: 4000, stepMs: 5, ...options });
 
 const qrRequests = [];
 const qrEncoder = {
@@ -29,17 +38,6 @@ const originalFetch = globalThis.fetch;
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
-
-/** Poll until predicate() is truthy (its value is returned) or fail with `label`. */
-async function until(predicate, { timeoutMs = 4000, label = "condition" } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const value = predicate();
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${label}`);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
 
 /** Let queued microtasks and timers settle. */
 async function flush(times = 6) {
@@ -123,7 +121,7 @@ test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => 
   const element = mount({ reference: "order-1", prefix: "/openreceive" });
 
   try {
-    const bitcoin = await until(
+    const bitcoin = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
       { label: "Bitcoin method tile" },
     );
@@ -139,7 +137,7 @@ test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => 
     );
 
     mint.resolve(checkoutBody("order-1", 21_000, "a".repeat(64)));
-    await until(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
+    await untilLocal(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
     assert.equal(fetchStub.pathCount("/checkouts"), 1);
     assert.doesNotMatch(element.shadowRoot?.innerHTML ?? "", /Could not create the Lightning/);
   } finally {
@@ -166,23 +164,23 @@ test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting a
   const element = mount({ reference: "order-reuse-ln", prefix: "/openreceive" });
 
   try {
-    const bitcoin = await until(
+    const bitcoin = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
       { label: "Bitcoin method tile" },
     );
     bitcoin.click();
-    await until(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
+    await untilLocal(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
     assert.equal(fetchStub.pathCount("/checkouts"), 1);
 
     // Back to the grid. This breadcrumb deliberately does not dismiss anything
     // (only "back to Lightning" out of a swap panel does), so the bolt11 the
     // payer is holding is still theirs to pay.
-    const breadcrumb = await until(
+    const breadcrumb = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-breadcrumb="method"]'),
       { label: "method breadcrumb" },
     );
     breadcrumb.click();
-    const again = await until(
+    const again = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
       { label: "method grid again" },
     );
@@ -202,7 +200,7 @@ test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting a
   }
 });
 
-test("an reference change mid-prepare wins over the request it superseded", async () => {
+test("a reference change mid-prepare wins over the request it superseded", async () => {
   const firstPrepare = deferred();
   const fetchStub = createFetchStub({
     "/checkouts/prepare": (body) =>
@@ -213,14 +211,14 @@ test("an reference change mid-prepare wins over the request it superseded", asyn
   const element = mount({ reference: "order-1", prefix: "/openreceive" });
 
   try {
-    await until(() => fetchStub.pathCount("/checkouts/prepare") === 1, {
+    await untilLocal(() => fetchStub.pathCount("/checkouts/prepare") === 1, {
       label: "first prepare",
     });
     element.setAttribute("reference", "order-2");
     // The first order's response lands after the swap; it must not be applied.
     firstPrepare.resolve(prepareBody("order-1", 1_000));
 
-    await until(() => element.getAttribute("amount-msats") === "2000", {
+    await untilLocal(() => element.getAttribute("amount-msats") === "2000", {
       label: "order-2 attributes",
     });
     assert.equal(element.getAttribute("reference"), "order-2");
@@ -255,7 +253,9 @@ test("a status transition the element wrote does not restart the controller", as
   });
 
   try {
-    await until(() => element.getAttribute("status") === "settled", { label: "settled status" });
+    await untilLocal(() => element.getAttribute("status") === "settled", {
+      label: "settled status",
+    });
     await flush();
     assert.equal(
       fetchStub.pathCount("/payments/check"),
@@ -285,11 +285,11 @@ test("a slow QR encode never paints over a newer invoice", async () => {
   });
 
   try {
-    await until(() => qrRequests.some((request) => request.payload.includes("lnbc-first")), {
+    await untilLocal(() => qrRequests.some((request) => request.payload.includes("lnbc-first")), {
       label: "first QR encode",
     });
     element.setAttribute("invoice", "lnbc-second");
-    await until(() => qrRequests.some((request) => request.payload.includes("lnbc-second")), {
+    await untilLocal(() => qrRequests.some((request) => request.payload.includes("lnbc-second")), {
       label: "second QR encode",
     });
     await flush(2);
@@ -331,7 +331,7 @@ test("checkout and theme-toggle shadow roots share one adopted stylesheet", asyn
   document.body.appendChild(toggle);
 
   try {
-    const root = await until(() => element.shadowRoot, { label: "checkout shadow root" });
+    const root = await untilLocal(() => element.shadowRoot, { label: "checkout shadow root" });
     assert.equal(root.adoptedStyleSheets.length, 1);
     assert.equal(root.querySelector("style"), null, "styles must not be inlined per render");
     assert.equal(toggle.shadowRoot?.adoptedStyleSheets.length, 1);
@@ -369,7 +369,7 @@ test("a cosmetic theme flip re-renders without restarting the poll controller", 
   });
 
   try {
-    await until(() => fetchStub.pathCount("/payments/check") > 0, {
+    await untilLocal(() => fetchStub.pathCount("/payments/check") > 0, {
       label: "initial status request",
     });
     await flush(4);
@@ -408,7 +408,7 @@ test("a failed prepare plus a theme flip never re-prepares", async () => {
   const element = mount({ reference: "order-prepare-fail", prefix: "/openreceive" });
 
   try {
-    await until(() => prepareCalls === 1, { label: "failed prepare attempt" });
+    await untilLocal(() => prepareCalls === 1, { label: "failed prepare attempt" });
     await flush(4);
 
     element.setAttribute("theme", "dark");
@@ -446,13 +446,13 @@ test('polling="false" renders the snapshot without any status requests', async (
   });
 
   try {
-    await until(() => element.shadowRoot?.innerHTML.length > 0, { label: "snapshot render" });
+    await untilLocal(() => element.shadowRoot?.innerHTML.length > 0, { label: "snapshot render" });
     await flush(6);
     assert.equal(fetchStub.pathCount("/payments/check"), 0);
 
     // Turning polling back on is a polling-affecting change: the controller restarts.
     element.setAttribute("polling", "true");
-    await until(() => fetchStub.pathCount("/payments/check") > 0, {
+    await untilLocal(() => fetchStub.pathCount("/payments/check") > 0, {
       label: "status request after enabling polling",
     });
   } finally {
@@ -474,6 +474,22 @@ function prepareBodyWithSwapAsset(reference, payInAsset) {
         available: true,
       },
     ],
+  };
+}
+
+// The shared checkout session quotes a pay-in asset before it starts the swap,
+// so every swap fixture answers /swaps/quote. An available quote is the normal
+// answer; an unavailable one drives the accepted-range pane instead of a start.
+function swapQuoteBody(payInAsset, overrides = {}) {
+  return {
+    quote: {
+      pay_asset: payInAsset,
+      label: payInAsset.split("_")[0],
+      network_label: "Solana",
+      provider: "fixedfloat",
+      available: true,
+      ...overrides,
+    },
   };
 }
 
@@ -502,6 +518,7 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
   const paymentHash = "c".repeat(64);
   const fetchStub = createFetchStub({
     "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-1", "SOL_SOL"),
+    "/swaps/quote": (body) => swapQuoteBody(body.pay_in_asset),
     "/swaps": () => start.promise,
     "/payments/check": () => ({ status: "pending" }),
   });
@@ -509,7 +526,7 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
   const element = mount({ reference: "order-swap-1", prefix: "/openreceive" });
 
   try {
-    const asset = await until(
+    const asset = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
       { label: "SOL swap-start button" },
     );
@@ -530,7 +547,7 @@ test("double-clicking a swap asset starts exactly one swap", async () => {
     );
 
     start.resolve(swapStartBody("SOL_SOL", paymentHash));
-    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+    await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
       label: "deposit panel",
     });
     assert.equal(fetchStub.pathCount("/swaps"), 1);
@@ -558,6 +575,7 @@ test("re-selecting a started swap asset re-opens its panel without a second star
   const paymentHash = "e".repeat(64);
   const fetchStub = createFetchStub({
     "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-reselect", "SOL_SOL"),
+    "/swaps/quote": (body) => swapQuoteBody(body.pay_in_asset),
     "/swaps": () => swapStartBody("SOL_SOL", paymentHash),
     "/payments/check": () => ({ status: "pending" }),
   });
@@ -565,22 +583,22 @@ test("re-selecting a started swap asset re-opens its panel without a second star
   const element = mount({ reference: "order-swap-reselect", prefix: "/openreceive" });
 
   try {
-    const asset = await until(
+    const asset = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
       { label: "SOL swap-start button" },
     );
     asset.click();
-    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+    await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
       label: "deposit panel",
     });
     assert.equal(fetchStub.pathCount("/swaps"), 1);
 
-    const breadcrumb = await until(
+    const breadcrumb = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-breadcrumb="swap-asset"]'),
       { label: "swap breadcrumb" },
     );
     breadcrumb.click();
-    const again = await until(
+    const again = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
       { label: "asset grid again" },
     );
@@ -620,7 +638,7 @@ test("attributes the element writes never re-enter its own callback", async () =
   const element = mount({ reference: "order-reentry", prefix: "/openreceive" });
 
   try {
-    await until(() => element.getAttribute("amount-msats") === "21000", {
+    await untilLocal(() => element.getAttribute("amount-msats") === "21000", {
       label: "create-mode attributes",
     });
     await flush(6);
@@ -707,7 +725,7 @@ test("a missing or non-numeric expires-at costs the countdown, not the element",
     assert.doesNotMatch(html, /Invoice expires in/, "no countdown row");
     // currentCheckoutSnapshot() reads the same attribute on the poll path, so a
     // rendered screen is not proof on its own: polling must survive it too.
-    await until(() => fetchStub.pathCount("/payments/check") > 0, {
+    await untilLocal(() => fetchStub.pathCount("/payments/check") > 0, {
       label: "status request without a usable expires-at",
     });
   } finally {
@@ -767,7 +785,7 @@ test("a legitimate expires-at still drives the countdown", async () => {
   });
 
   try {
-    const countdown = await until(
+    const countdown = await untilLocal(
       () => element.shadowRoot?.querySelector('[part="countdown"] strong'),
       { label: "countdown" },
     );
@@ -778,13 +796,12 @@ test("a legitimate expires-at still drives the countdown", async () => {
   }
 });
 
-// The third server-written attribute, and the one that is not a label.
-// `createCheckoutElementAttributes` writes `invoice-id` straight from
-// `invoice.invoice_id`, so an empty one threw TypeError from inside render() —
-// after `prepareShadowRoot()` had already cleared it — and the payer was left
-// looking at an empty shadow root while the host heard nothing at all.
-test("a hostile invoice-id costs the payment screen, not the shadow root", async () => {
-  for (const hostile of ["", " ", "\t\n"]) {
+// A blank `invoice-id` is the create-mode discriminator, not a failure: it
+// simply means no attempt yet. It renders the payment screen with no status row
+// and no polling, like any other missing optional attribute — the server is
+// trusted to send a real id when there is one.
+test("a blank invoice-id renders the payment screen without a status row", async () => {
+  for (const blank of ["", " ", "\t\n"]) {
     const fetchStub = createFetchStub({
       "/payments/check": () => ({ status: "pending" }),
     });
@@ -793,57 +810,32 @@ test("a hostile invoice-id costs the payment screen, not the shadow root", async
     const errors = [];
     element.addEventListener("openreceive-error", (event) => errors.push(event.detail.error));
     for (const [name, value] of Object.entries({
-      reference: "order-unidentified",
       prefix: "/openreceive",
       invoice: `lnbc-${"a".repeat(64)}`,
       "amount-msats": "21000",
-      "invoice-id": hostile,
+      "invoice-id": blank,
     })) {
       element.setAttribute(name, value);
     }
 
     try {
-      // Mounting must not throw: this is the line that used to.
       document.body.appendChild(element);
       await flush(4);
 
-      const label = `invoice-id ${JSON.stringify(hostile)}`;
+      const label = `invoice-id ${JSON.stringify(blank)}`;
       const html = element.shadowRoot?.innerHTML ?? "";
-      assert.notEqual(html, "", `${label} left an empty shadow root`);
-      assert.match(html, /<section part="root"/, `${label} rendered no root section`);
-
-      // The element's own failure panel, not a new one invented for this case.
-      assert.match(html, /data-openreceive-create-error/, `${label} skipped the failure panel`);
-      assert.match(html, /role="alert"/);
-      assert.match(html, /invoice-id is empty/);
-
-      // No QR: an attempt this element cannot identify is one it can never
-      // confirm, so it must not show a payable invoice and then go quiet.
-      assert.doesNotMatch(html, /part="qr"/, `${label} showed an untrackable QR`);
-      // ...and no retry button, because only the host can replace the attribute.
-      assert.doesNotMatch(html, /part="retry"/, `${label} offered a dead retry`);
-
-      // The host's half of the signal, on the channel every other element
-      // failure already uses.
-      assert.equal(errors.length, 1, `${label} dispatched ${errors.length} error events`);
-      assert.match(String(errors[0]?.message), /invoice-id is empty/);
-
-      // And it does not poll an attempt it has no id for.
+      assert.match(html, /part="qr"/, `${label} hid the payment screen`);
+      assert.doesNotMatch(html, /data-openreceive-create-error/, `${label} showed a failure panel`);
+      assert.equal(errors.length, 0, `${label} dispatched ${errors.length} error events`);
+      // Nothing to poll: there is no attempt id to ask about.
       assert.equal(fetchStub.pathCount("/payments/check"), 0, `${label} polled anyway`);
 
-      // Recovery: the panel is a verdict on the attribute, not a latch. A real
-      // id brings back the payment screen AND the poll it suppressed — the
-      // element must not be left permanently silent by one bad render.
+      // A real id brings the status row and the poll with it.
       element.setAttribute("invoice-id", "b".repeat(64));
       await flush(4);
-      const healed = element.shadowRoot?.innerHTML ?? "";
-      assert.doesNotMatch(healed, /data-openreceive-create-error/, `${label} stayed failed`);
-      assert.match(healed, /part="qr"/);
-      assert.match(healed, /Bitcoin Lightning invoice/);
-      assert.match(healed, /21 sats/);
       assert.ok(
         fetchStub.pathCount("/payments/check") > 0,
-        `${label} never resumed polling after recovery`,
+        `${label} never started polling once identified`,
       );
     } finally {
       element.remove();
@@ -874,6 +866,7 @@ test("retrying a failed swap start replaces the error with the preparing spinner
   let starts = 0;
   const fetchStub = createFetchStub({
     "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-swap-retry", "SOL_SOL"),
+    "/swaps/quote": (body) => swapQuoteBody(body.pay_in_asset),
     "/swaps": () => {
       starts += 1;
       if (starts === 1) throw new Error("Swap provider is unavailable.");
@@ -885,17 +878,23 @@ test("retrying a failed swap start replaces the error with the preparing spinner
   const element = mount({ reference: "order-swap-retry", prefix: "/openreceive" });
 
   try {
-    const asset = await until(
+    const asset = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
       { label: "SOL swap-start button" },
     );
     asset.click();
-    await until(() => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."), {
-      label: "inline swap-start failure",
-    });
-    const tryAgain = await until(() => element.shadowRoot?.querySelector('[part="swap-retry"]'), {
-      label: "retry button",
-    });
+    await untilLocal(
+      () => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."),
+      {
+        label: "inline swap-start failure",
+      },
+    );
+    const tryAgain = await untilLocal(
+      () => element.shadowRoot?.querySelector('[part="swap-retry"]'),
+      {
+        label: "retry button",
+      },
+    );
     tryAgain.click();
     await flush(2);
     const html = element.shadowRoot?.innerHTML ?? "";
@@ -907,7 +906,7 @@ test("retrying a failed swap start replaces the error with the preparing spinner
     // gone re-keys a poll controller onto a detached element and the process
     // never exits.
     retry.resolve(swapStartBody("SOL_SOL", "d".repeat(64)));
-    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+    await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
       label: "deposit panel after retry",
     });
   } finally {
@@ -928,6 +927,7 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
         ["SOL_SOL", "Solana"],
         ["ETH_ETH", "Ethereum"],
       ]),
+    "/swaps/quote": (body) => swapQuoteBody(body.pay_in_asset),
     "/swaps": (body) => {
       starts += 1;
       if (body.pay_in_asset === "SOL_SOL") return swapStartBody("SOL_SOL", "e".repeat(64));
@@ -940,27 +940,30 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
   const element = mount({ reference: "order-two-coins", prefix: "/openreceive" });
 
   try {
-    const sol = await until(
+    const sol = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'),
       { label: "SOL swap-start button" },
     );
     sol.click();
-    await until(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
+    await untilLocal(() => element.shadowRoot?.innerHTML.includes("SoLDeposit"), {
       label: "SOL deposit panel",
     });
-    const back = await until(
+    const back = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-breadcrumb="swap-asset"]'),
       { label: "switch-payment-method breadcrumb" },
     );
     back.click();
-    const eth = await until(
+    const eth = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-swap-start="ETH_ETH"]'),
       { label: "ETH swap-start button" },
     );
     eth.click();
-    await until(() => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."), {
-      label: "ETH swap-start failure",
-    });
+    await untilLocal(
+      () => element.shadowRoot?.innerHTML.includes("Swap provider is unavailable."),
+      {
+        label: "ETH swap-start failure",
+      },
+    );
     assert.equal(starts, 2);
     assert.doesNotMatch(
       element.shadowRoot?.innerHTML ?? "",

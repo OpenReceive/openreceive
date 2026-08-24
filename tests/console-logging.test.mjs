@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createHostConsoleLogger } from "../packages/js/node/src/index.ts";
+import { createAppConsoleLogger } from "../packages/js/node/src/index.ts";
 import { createConsoleLogger } from "../packages/js/node/src/console-logger.ts";
 import {
   parseLogLevel,
@@ -68,9 +68,9 @@ test("createConsoleLogger emits timestamped LEVEL-prefixed lines and filters by 
   assert.deepEqual(lines[0].args[1], { status: "settled" });
 });
 
-test("createHostConsoleLogger includes timestamps and honors minLevel", () => {
+test("createAppConsoleLogger includes timestamps and honors minLevel", () => {
   const lines = [];
-  const log = createHostConsoleLogger({
+  const log = createAppConsoleLogger({
     prefix: "hello-fruit:test:server",
     minLevel: "warn",
     now: () => new Date("2026-07-30T00:01:58.332Z"),

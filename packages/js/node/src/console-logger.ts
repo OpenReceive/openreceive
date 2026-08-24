@@ -2,7 +2,7 @@ import { compact } from "@openreceive/core";
 import { logLevelOrder, readLogLevelFromEnvironment, resolveLogLevel } from "./log-level.ts";
 import type { LogEvent, Logger, LogLevel } from "./service/types.ts";
 
-export interface CreateOpenReceiveConsoleLoggerOptions {
+export interface CreateConsoleLoggerOptions {
   /** Prefix before the event, e.g. `openreceive:my-app`. Default `openreceive`. */
   readonly prefix?: string;
   /**
@@ -21,7 +21,7 @@ export interface CreateOpenReceiveConsoleLoggerOptions {
  *
  * Format: `[ISO8601] LEVEL [prefix] event: message { fields }`
  */
-export function createConsoleLogger(options: CreateOpenReceiveConsoleLoggerOptions = {}): Logger {
+export function createConsoleLogger(options: CreateConsoleLoggerOptions = {}): Logger {
   const prefix = options.prefix ?? "openreceive";
   const target = options.console ?? console;
   const now = options.now ?? (() => new Date());
@@ -56,14 +56,14 @@ export function createConsoleLogger(options: CreateOpenReceiveConsoleLoggerOptio
   };
 }
 
-export type HostConsoleLogger = (
+export type AppConsoleLogger = (
   event: string,
   message: string,
   fields?: Record<string, unknown>,
   level?: LogLevel,
 ) => void;
 
-export interface CreateHostConsoleLoggerOptions {
+export interface CreateAppConsoleLoggerOptions {
   /** Prefix before the event, e.g. `hello-fruit:node-express:server`. */
   readonly prefix: string;
   /**
@@ -75,9 +75,7 @@ export interface CreateHostConsoleLoggerOptions {
 }
 
 /** Ad-hoc `(event, message, fields?, level?)` console logger for host app routes. */
-export function createHostConsoleLogger(
-  options: CreateHostConsoleLoggerOptions,
-): HostConsoleLogger {
+export function createAppConsoleLogger(options: CreateAppConsoleLoggerOptions): AppConsoleLogger {
   const target = options.console ?? console;
   const now = options.now ?? (() => new Date());
 

@@ -90,7 +90,7 @@ export function renderTutorialModalHtml(
             class="${orClasses.tutorialClose}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}=""
             type="button"
-            aria-label="Close"
+            aria-label="${escapeHtml(checkoutLabels.tutorialClose)}"
           >X</button>
         </div>
         ${body}
@@ -111,14 +111,14 @@ export function renderTutorialModalHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${previousIndex}"
             type="button"
             ${stepIndex === 0 ? "disabled" : ""}
-          >Back</button>
+          >${escapeHtml(checkoutLabels.tutorialBack)}</button>
           <button
             part="tutorial-nav"
             class="${orClasses.btn}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${isFinalStep ? "" : escapeHtml(provider.id)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${nextIndex}"
             type="button"
-          >${escapeHtml(isFinalStep ? checkoutLabels.tutorialExit : "Next")}</button>
+          >${escapeHtml(isFinalStep ? checkoutLabels.tutorialExit : checkoutLabels.tutorialNext)}</button>
         </div>
       </div>
     </div>

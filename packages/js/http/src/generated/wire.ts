@@ -224,12 +224,6 @@ export type WireRatesResponse = {
   readonly bitcoin: Record<string, string>;
 };
 
-/** Wire shape of the OpenAPI `OrderRequest` schema (snake_case JSON body). */
-export type WireOrderRequest = {
-  readonly reference: string;
-  readonly payment_hash: string;
-};
-
 /** Wire shape of the OpenAPI `Error` schema (snake_case JSON body). */
 export type WireError = {
   readonly code:

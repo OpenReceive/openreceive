@@ -26,6 +26,22 @@ Refunds are authorized by your application and pass the row's `reference`, `paym
 refund address. The wallet client refreshes provider state immediately before requesting the refund
 and refuses states other than `refund_required`.
 
+## Deposit QR amount prefill
+
+Only the **native-coin** rails encode an amount in the QR the payer scans:
+`ETH_ETH` emits `ethereum:<address>?value=<wei>` and `SOL_SOL` emits
+`solana:<address>?amount=<sol>`. Token rails — `USDT_TRON`, `USDT_ETH`,
+`USDC_ETH`, and any future ERC-20/TRC-20 asset — encode the **bare deposit
+address**: the EIP-681 token-transfer form is parsed inconsistently across
+wallets, and a wallet that mis-parses it shows the payer a broken request
+rather than no prefill. On those rails the panel's "send exactly X" line is the
+amount of record.
+
+What never happens is a silent downgrade. A `deposit_amount` the checkout
+cannot convert raises, and the payer sees the panel's error surface — an
+amount-less payment URI would be worse than either alternative, because the
+wallet then lets the payer type any amount against a fixed-rate order.
+
 ## Provider state after settlement
 
 Once the wallet reports the shadow invoice settled, the order's outcome can no longer change,

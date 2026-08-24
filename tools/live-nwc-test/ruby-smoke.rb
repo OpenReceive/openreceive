@@ -65,7 +65,9 @@ end
 raw_client = NwcRuby::Client.from_uri(nwc)
 client = OpenReceive::NwcRubyReceiveClient.new(client: raw_client, connection_uri: nwc)
 info = client.preflight
-methods = info["methods"] || raw_client.respond_to?(:capabilities) && raw_client.capabilities || []
+# preflight always reports the advertised methods; a smoke run that proceeded
+# with [] would fail later with a misleading "missing required methods".
+methods = info.fetch("methods")
 
 missing_methods = expected.fetch("required_methods").reject { |method| methods.include?(method) }
 unless missing_methods.empty?

@@ -232,6 +232,25 @@ export function createSqlPayments(
       );
     },
 
+    async findPendingAttempt(paymentHash) {
+      await assertSupportedSchema();
+      // By hash, not by batch position: a notified settlement must not wait for
+      // a backlog to drain past it (payment_hash is unique).
+      const rows = await adapter.query(
+        statement(
+          `SELECT payment_hash, created_at, expires_at FROM ${table} WHERE payment_hash = ? AND status = 'pending'`,
+        ),
+        [paymentHash.toLowerCase()],
+      );
+      const row = rows[0];
+      if (row === undefined) return undefined;
+      return {
+        paymentHash: asString(row.payment_hash, "payment_hash"),
+        createdAt: asInteger(row.created_at, "created_at"),
+        expiresAt: asInteger(row.expires_at, "expires_at"),
+      };
+    },
+
     async claimReconcileGate({ now, intervalSeconds }) {
       await assertSupportedSchema();
       // Optimistic CAS over the shared openreceive_meta row: every worker on

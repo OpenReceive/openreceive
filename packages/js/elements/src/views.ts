@@ -8,6 +8,7 @@ import {
   type PaymentMethod,
   type QrEncoder,
   type Status,
+  type SwapLimitContext,
 } from "@openreceive/browser/headless";
 
 export interface CheckoutView {
@@ -82,13 +83,21 @@ export interface ElementsWizardView {
   readonly activeTutorialCopied?: boolean;
   /** Swap-start failure rendered inline in the deposit slot with a retry button. */
   readonly swapStartError?: string;
+  /**
+   * The quote for the selected pay-in asset when it came back unavailable, so
+   * the deposit slot shows the accepted range instead of a generic error.
+   * Matches React's `renderSwapUnavailable` pane.
+   */
+  readonly unavailableSwapQuote?: CheckoutPaymentMethod;
+  /** Checkout context the unavailable panel converts invoice-side limits with. */
+  readonly swapLimitContext?: SwapLimitContext;
   /** Wizard-level failure (e.g. Lightning mint) rendered inline. */
   readonly wizardError?: string;
 }
 
 export type ElementsSwapOption = CheckoutPaymentMethod;
 
-export interface DefineOpenReceiveElementsOptions {
+export interface DefineElementsOptions {
   readonly tagName?: string;
   readonly themeToggleTagName?: string;
   readonly registry?: CustomElementRegistry;
@@ -97,28 +106,14 @@ export interface DefineOpenReceiveElementsOptions {
 }
 
 /**
- * `invoice-id` READ AS AN IDENTITY, not as a label — the third server-written
- * attribute the strictness ruling in ./dom-helpers.ts has to cover.
+ * `invoice-id` as the CREATE-MODE DISCRIMINATOR: present and non-blank means
+ * the host handed this element an existing attempt; null, empty, or
+ * whitespace-only means there is no attempt yet.
  *
- * `createCheckoutElementAttributes` writes it straight from `invoice.invoice_id`
- * (browser/src/internal/elements.ts), so a server that answers with `""` puts an
- * empty string in the attribute. That reached `createCheckoutSnapshotFromInvoice`,
- * whose `requiredString` threw INSIDE `render()` — and nothing wraps `render()`,
- * so the shadow root stayed empty: no invoice, no error, no signal.
- *
- * `requiredString` is right to throw; it is a parse boundary and other callers
- * depend on it. The judgement belongs HERE, one hop earlier, where the element
- * still has somewhere to put the answer.
- *
- * The rule differs from the lenient NUMBER readers next door, and deliberately.
- * A malformed `amount-msats` costs its label because the payment is still
- * identified; a blank `invoice-id` is not a bad label, it is NO IDENTITY — the
- * element cannot seed a state for the attempt, cannot build the snapshot the
- * poll controller needs, and so can never tell the payer their money arrived.
- * A whitespace-only id is the same nothing wearing a coat (`nonEmptyString` does
- * not trim, so `" "` sails through the parse boundary and becomes a junk id that
- * `createCheckoutSnapshotFromInvoice` then also copies into `checkout_id` and
- * `reference`), so it is rejected by the same test.
+ * Whitespace counts as absent because `nonEmptyString` does not trim, so `" "`
+ * would otherwise sail through the parse boundary and become a junk id that
+ * `createCheckoutSnapshotFromInvoice` copies into `checkout_id` and
+ * `reference` too.
  *
  * A usable id is returned RAW, exactly as the number readers keep their value
  * raw: trimming it here would silently mint an id that matches nothing the
@@ -135,10 +130,9 @@ export function parseElementInvoiceId(value: string | null): string | undefined 
  * undefined in create mode, where no attempt exists yet and the renderer must
  * not show an attempt's status block.
  *
- * An unusable `invoice_id` answers undefined for the same reason and by the same
- * test ({@link parseElementInvoiceId}): the element decides what a view with no
- * identity looks like, and this exported renderer must not throw at a standalone
- * caller who passed one through.
+ * A blank `invoice_id` answers undefined by the same test
+ * ({@link parseElementInvoiceId}): no id means no attempt to show a status
+ * block for.
  */
 export function createElementCheckoutState(view: CheckoutView): CheckoutState | undefined {
   const invoiceId = parseElementInvoiceId(view.invoice_id ?? null);

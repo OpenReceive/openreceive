@@ -5,18 +5,6 @@
 // `prefix` — this module never accepts a route of its own.
 
 import { isRecord, nonEmptyString, recordOrEmpty } from "@openreceive/core";
-import { requestHeaders } from "./request-headers.ts";
-import { type Routes, checkoutRoutes } from "./routes.ts";
-import {
-  type CheckoutInvoiceSnapshot,
-  type CheckoutSnapshot,
-  type CheckoutStatusRefresh,
-  type CreateOpenReceiveStatusFetcherOptions,
-  OPENRECEIVE_REFUND_REVIEW_NONCE,
-  type CheckoutPaymentMethod,
-  type PrepareCheckoutOptions,
-  type RequestCheckoutOptions,
-} from "./ui.ts";
 import { assertDisplayInvoice } from "./checkout-invoice.ts";
 import {
   optionalRecord,
@@ -25,6 +13,17 @@ import {
   requiredString,
 } from "./checkout-read.ts";
 import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
+import { requestHeaders } from "./request-headers.ts";
+import { checkoutRoutes, type Routes } from "./routes.ts";
+import type {
+  CheckoutInvoiceSnapshot,
+  CheckoutPaymentMethod,
+  CheckoutSnapshot,
+  CheckoutStatusRefresh,
+  CreateOpenReceiveStatusFetcherOptions,
+  PrepareCheckoutOptions,
+  RequestCheckoutOptions,
+} from "./ui.ts";
 
 /**
  * Typed transport error for OpenReceive browser requests. Carries the server's
@@ -32,6 +31,13 @@ import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
  * callers can back off instead of blind fixed-interval retries — and so hosts
  * can distinguish "retry" from "bug".
  */
+/**
+ * Consecutive /swaps/status failures before the swap panel says so. One or two
+ * blips are ordinary; a run of them means the payer is looking at frozen
+ * provider state.
+ */
+const SWAP_STATUS_FAILURE_LIMIT = 3 as const;
+
 export class BrowserRequestError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -75,6 +81,16 @@ export async function readJsonResponse(
   try {
     body = await response.json();
   } catch {
+    // Only a NON-OK body may be non-JSON: that is the proxy HTML 502 case this
+    // tolerance exists for. An OK response from our own server that is not JSON
+    // is a real failure, and swallowing it here resurfaced downstream as a
+    // mislabeled "checkout response requires payment_hash".
+    if (response.ok) {
+      throw new BrowserRequestError(`${fallbackMessage} The server returned a non-JSON body.`, {
+        status: response.status,
+        retryable: false,
+      });
+    }
     body = undefined;
   }
   if (!response.ok) {
@@ -108,9 +124,8 @@ interface NormalizedRequestCheckoutOptions {
 function normalizeRequestCheckoutOptions(
   options: RequestCheckoutOptions,
 ): NormalizedRequestCheckoutOptions {
-  const record = options as RequestCheckoutOptions & Record<string, unknown>;
-  const reference = nonEmptyString(record.reference ?? record.reference);
-  const metadata = optionalRecord(record.metadata);
+  const reference = nonEmptyString(options.reference);
+  const metadata = optionalRecord(options.metadata);
   return {
     routes: checkoutRoutes(options.prefix),
     reference: reference ?? "",
@@ -195,6 +210,8 @@ export function createStatusFetcher(
   // otherwise the terminal-state guard below never fires and every tick keeps
   // hitting /swaps/status after the provider is already terminal.
   let snapshot = options.snapshot;
+  // Consecutive /swaps/status failures on this fetcher. Reset by any success.
+  let swapStatusFailures = 0;
   const routes = checkoutRoutes(options.prefix);
   return async (reference) => {
     if (reference.length === 0) {
@@ -230,12 +247,11 @@ export function createStatusFetcher(
     const next = structuredClone(snapshot);
     if (next.active === undefined) return next;
     const state = nonEmptyString(payment.status) ?? "pending";
+    const paidAt = optionalSafeInteger(payment.paid_at, "paid_at");
     let active = {
       ...next.active,
       transaction_state: state === "not_found" ? "pending" : state,
-      ...(optionalSafeInteger(payment.paid_at) === undefined
-        ? {}
-        : { settled_at: optionalSafeInteger(payment.paid_at) }),
+      ...(paidAt === undefined ? {} : { settled_at: paidAt }),
     };
     // A live swap needs the provider's state too: "confirming"/"exchanging"
     // progress, expiry, and critically refund_required can only come from
@@ -257,9 +273,24 @@ export function createStatusFetcher(
           await readJsonResponse(swapResponse, "Could not refresh swap status."),
         );
         active = mergeSwapStatusIntoInvoice(active, swapBody);
-      } catch {
-        // Live swap state is an enrichment; the shadow-invoice status above
-        // still lands even when the provider read fails this tick.
+        swapStatusFailures = 0;
+      } catch (error) {
+        // Live swap state is an enrichment: one blip must not break the tick,
+        // and the shadow-invoice status above still lands. But /swaps/status is
+        // the ONLY source of refund_required (see the comment above), so a
+        // persistent failure would freeze the panel on a stale
+        // awaiting_deposit forever and never show a refund the payer must act
+        // on. Surface a definitive failure at once and a repeated one after
+        // SWAP_STATUS_FAILURE_LIMIT ticks.
+        swapStatusFailures += 1;
+        const definitive = error instanceof BrowserRequestError && error.retryable === false;
+        const swap = active.swap;
+        if (swap !== undefined && (definitive || swapStatusFailures >= SWAP_STATUS_FAILURE_LIMIT)) {
+          active = {
+            ...active,
+            swap: { ...swap, attention: true, attention_reason: "swap_status_unavailable" },
+          };
+        }
       }
     }
     const paymentMethods = normalizePaymentMethods(payment.payment_methods);
@@ -294,7 +325,7 @@ function mergeSwapStatusIntoInvoice<
   const merged: Record<string, unknown> = { ...swap };
   const providerState = nonEmptyString(status.provider_state);
   if (providerState !== undefined) merged.provider_state = providerState;
-  const providerExpiresAt = optionalSafeInteger(status.provider_expires_at);
+  const providerExpiresAt = optionalSafeInteger(status.provider_expires_at, "provider_expires_at");
   if (providerExpiresAt !== undefined) merged.provider_expires_at = providerExpiresAt;
   for (const key of [
     "deposit_tx_id",
@@ -304,18 +335,11 @@ function mergeSwapStatusIntoInvoice<
     "refund_amount",
     "deposit_received_amount",
     "refund_address",
-    "refund_nonce",
     "attention_reason",
   ]) {
     if (typeof status[key] === "string") merged[key] = status[key];
   }
   if (typeof status.attention === "boolean") merged.attention = status.attention;
-  if (
-    (providerState === "refund_required" || merged.provider_state === "refund_required") &&
-    merged.refund_nonce === undefined
-  ) {
-    merged.refund_nonce = OPENRECEIVE_REFUND_REVIEW_NONCE;
-  }
   return {
     ...invoice,
     swap: merged as unknown as NonNullable<CheckoutInvoiceSnapshot["swap"]>,
@@ -328,7 +352,10 @@ function checkoutLockSnapshotFromPrepareBody(
   fallbackReference: string,
 ): CheckoutSnapshot {
   const record = recordOrEmpty(body);
-  const reference = nonEmptyString(record.reference) ?? fallbackReference;
+  // One reader style for one response from our own server: the prepare body's
+  // own reference is authoritative, and the caller's value is the fallback only
+  // when the server omitted it entirely.
+  const reference = requiredString(record.reference ?? fallbackReference, "reference");
   const amountMsats = requiredSafeInteger(record.amount_msats, "amount_msats");
   const lockId = `lock:${reference}`;
   const lockInvoice: CheckoutInvoiceSnapshot = {
@@ -338,21 +365,24 @@ function checkoutLockSnapshotFromPrepareBody(
     transaction_state: "pending",
     workflow_state: "invoice_created",
   };
+  // No String() coercion of our own wire fields: the pair is included only when
+  // BOTH halves are really there, so a malformed quote cannot paper itself over
+  // as an empty-string currency that the spread below then silently drops.
   const fiatQuote = record.fiat_quote;
+  const fiatRecord = isRecord(fiatQuote) && isRecord(fiatQuote.fiat) ? fiatQuote.fiat : undefined;
+  const fiatCurrency = nonEmptyString(fiatRecord?.currency);
+  const fiatValue = nonEmptyString(fiatRecord?.value);
   const fiat =
-    isRecord(fiatQuote) && isRecord(fiatQuote.fiat)
-      ? {
-          currency: String(fiatQuote.fiat.currency ?? ""),
-          value: String(fiatQuote.fiat.value ?? ""),
-        }
-      : undefined;
+    fiatCurrency === undefined || fiatValue === undefined
+      ? undefined
+      : { currency: fiatCurrency, value: fiatValue };
   const paymentMethods = normalizePaymentMethods(record.payment_methods);
   return {
     checkout_id: lockId,
     reference: reference,
     status: "open",
     amount_msats: amountMsats,
-    ...(fiat !== undefined && fiat.currency.length > 0 ? { fiat } : {}),
+    ...(fiat === undefined ? {} : { fiat }),
     active: lockInvoice,
     invoices: [lockInvoice],
     ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
@@ -394,52 +424,52 @@ function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
 
 function normalizePaymentMethods(value: unknown): readonly CheckoutPaymentMethod[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  return value
-    .map(normalizePaymentMethod)
-    .filter((method): method is CheckoutPaymentMethod => method !== undefined);
+  return value.map(normalizePaymentMethod);
 }
 
-function normalizePaymentMethod(input: unknown): CheckoutPaymentMethod | undefined {
+/**
+ * One payment-methods entry from our own server. A method missing a required
+ * field THROWS rather than vanishing from the grid: a silently dropped method
+ * is a payment route the payer never sees and nobody ever hears about, which is
+ * exactly the failure the trust model says to surface instead of swallow.
+ */
+function normalizePaymentMethod(input: unknown): CheckoutPaymentMethod {
   const record = recordOrEmpty(input);
-  const payInAsset = nonEmptyString(record.pay_in_asset);
-  const label = nonEmptyString(record.label);
-  const networkLabel = nonEmptyString(record.network_label);
-  // Empty provider means the asset is known but no LSC provider offered it.
-  const provider = typeof record.provider === "string" ? record.provider : undefined;
-  if (
-    payInAsset === undefined ||
-    label === undefined ||
-    networkLabel === undefined ||
-    provider === undefined
-  ) {
-    return undefined;
+  // Empty provider means the asset is known but no LSC provider offered it, so
+  // this one is required-but-possibly-empty rather than required-non-empty.
+  const provider = record.provider;
+  if (typeof provider !== "string") {
+    throw new TypeError("payment method provider must be a string");
   }
+  const unavailableReason = nonEmptyString(record.unavailable_reason);
+  const unavailableMessage = nonEmptyString(record.unavailable_message);
+  const payAmount = nonEmptyString(record.pay_amount);
+  const minimumPayAmount = nonEmptyString(record.minimum_pay_amount);
+  const maximumPayAmount = nonEmptyString(record.maximum_pay_amount);
+  const minimumInvoiceAmountMsats = optionalSafeInteger(
+    record.minimum_invoice_amount_msats,
+    "minimum_invoice_amount_msats",
+  );
+  const maximumInvoiceAmountMsats = optionalSafeInteger(
+    record.maximum_invoice_amount_msats,
+    "maximum_invoice_amount_msats",
+  );
   return {
-    pay_in_asset: payInAsset,
-    label,
-    network_label: networkLabel,
+    pay_in_asset: requiredString(record.pay_in_asset, "pay_in_asset"),
+    label: requiredString(record.label, "label"),
+    network_label: requiredString(record.network_label, "network_label"),
     provider,
     available: record.available === true,
-    ...(nonEmptyString(record.unavailable_reason) === undefined
+    ...(unavailableReason === undefined ? {} : { unavailable_reason: unavailableReason }),
+    ...(unavailableMessage === undefined ? {} : { unavailable_message: unavailableMessage }),
+    ...(payAmount === undefined ? {} : { pay_amount: payAmount }),
+    ...(minimumPayAmount === undefined ? {} : { minimum_pay_amount: minimumPayAmount }),
+    ...(maximumPayAmount === undefined ? {} : { maximum_pay_amount: maximumPayAmount }),
+    ...(minimumInvoiceAmountMsats === undefined
       ? {}
-      : { unavailable_reason: nonEmptyString(record.unavailable_reason) }),
-    ...(nonEmptyString(record.unavailable_message) === undefined
+      : { minimum_invoice_amount_msats: minimumInvoiceAmountMsats }),
+    ...(maximumInvoiceAmountMsats === undefined
       ? {}
-      : { unavailable_message: nonEmptyString(record.unavailable_message) }),
-    ...(nonEmptyString(record.pay_amount) === undefined
-      ? {}
-      : { pay_amount: nonEmptyString(record.pay_amount) }),
-    ...(nonEmptyString(record.minimum_pay_amount) === undefined
-      ? {}
-      : { minimum_pay_amount: nonEmptyString(record.minimum_pay_amount) }),
-    ...(nonEmptyString(record.maximum_pay_amount) === undefined
-      ? {}
-      : { maximum_pay_amount: nonEmptyString(record.maximum_pay_amount) }),
-    ...(optionalSafeInteger(record.minimum_invoice_amount_msats) === undefined
-      ? {}
-      : { minimum_invoice_amount_msats: optionalSafeInteger(record.minimum_invoice_amount_msats) }),
-    ...(optionalSafeInteger(record.maximum_invoice_amount_msats) === undefined
-      ? {}
-      : { maximum_invoice_amount_msats: optionalSafeInteger(record.maximum_invoice_amount_msats) }),
+      : { maximum_invoice_amount_msats: maximumInvoiceAmountMsats }),
   };
 }

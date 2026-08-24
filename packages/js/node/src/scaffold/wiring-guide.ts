@@ -192,75 +192,43 @@ function dbSection(options: ScaffoldPaymentsOptions): string {
 }
 
 function prismaDbSection(options: ScaffoldPaymentsOptions): string {
-  return `Prisma keeps its connection pool private, so pass a small custom
-\`SqlAdapter\` built from \`$transaction\` + \`$queryRawUnsafe\`. Set
-\`dialect\` to match your Prisma datasource provider. ${PLACEHOLDER_NOTE}
+  return `Prisma keeps its connection pool private, so it needs an adapter —
+\`prismaDb\` is the shipped one. It routes each statement to
+\`$queryRawUnsafe\` or \`$executeRawUnsafe\` by whether it returns rows;
+hand-rolling that router is where custom Prisma adapters go wrong. Set the
+dialect to match your Prisma datasource provider. ${PLACEHOLDER_NOTE}
 
 \`\`\`ts
 import { PrismaClient } from "@prisma/client";
-import type { SqlAdapter, SqlQuery } from "@openreceive/http";
+import { prismaDb } from "@openreceive/http";
 
 const prisma = new PrismaClient();
-const queryOn =
-  (client: {
-    $queryRawUnsafe(sql: string, ...params: unknown[]): Promise<unknown>;
-  }): SqlQuery =>
-  async (sql, params = []) =>
-    (await client.$queryRawUnsafe(sql, ...params)) as Record<string, unknown>[];
-
-export const db: SqlAdapter = {
-  dialect: "${options.dialect}", // match your Prisma datasource provider
-  query: queryOn(prisma),
-  transaction: (run) => prisma.$transaction((tx) => run({ query: queryOn(tx) })),
-};
+export const db = prismaDb(prisma, "${options.dialect}");
 \`\`\``;
 }
 
 function knexDbSection(options: ScaffoldPaymentsOptions): string {
-  const rows = isSqlite(options)
-    ? `    // Knex sqlite3 returns SELECT rows directly.
-    return (await executor.raw(sql, [...params])) as Record<string, unknown>[];`
-    : `    const result = await executor.raw(sql, [...params]);
-    return (result as { rows: Record<string, unknown>[] }).rows ?? [];`;
-  return `Wrap your Knex instance in a small custom adapter built from
-\`knex.transaction\` + \`knex.raw\`. ${PLACEHOLDER_NOTE}
+  return `Knex needs an adapter — \`knexDb\` is the shipped one, and it
+already handles the sqlite-versus-postgres difference in what \`raw\`
+returns. ${PLACEHOLDER_NOTE}
 
 \`\`\`ts
-import type { Knex } from "knex";
-import type { SqlAdapter, SqlQuery } from "@openreceive/http";
+import { knexDb } from "@openreceive/http";
 import { knex } from "./db.ts"; // your configured Knex instance
 
-const queryOn =
-  (executor: Knex | Knex.Transaction): SqlQuery =>
-  async (sql, params = []) => {
-${rows}
-  };
-
-export const db: SqlAdapter = {
-  dialect: "${options.dialect}",
-  query: queryOn(knex),
-  transaction: (run) => knex.transaction((trx) => run({ query: queryOn(trx) })),
-};
+export const db = knexDb(knex, "${options.dialect}");
 \`\`\``;
 }
 
 function typeOrmDbSection(options: ScaffoldPaymentsOptions): string {
-  return `Wrap your initialized DataSource in a small custom adapter built from
-\`dataSource.transaction\` + \`manager.query\`. ${PLACEHOLDER_NOTE}
+  return `TypeORM needs an adapter — \`typeOrmDb\` is the shipped one, built
+on \`dataSource.transaction\` + \`manager.query\`. ${PLACEHOLDER_NOTE}
 
 \`\`\`ts
-import type { SqlAdapter, SqlQuery } from "@openreceive/http";
+import { typeOrmDb } from "@openreceive/http";
 import { dataSource } from "./data-source.ts"; // your initialized DataSource
-const queryOn =
-  (runner: { query(sql: string, params?: unknown[]): Promise<unknown> }): SqlQuery =>
-  async (sql, params = []) =>
-    ((await runner.query(sql, [...params])) ?? []) as Record<string, unknown>[];
 
-export const db: SqlAdapter = {
-  dialect: "${options.dialect}",
-  query: queryOn(dataSource),
-  transaction: (run) => dataSource.transaction((manager) => run({ query: queryOn(manager) })),
-};
+export const db = typeOrmDb(dataSource, "${options.dialect}");
 \`\`\``;
 }
 
@@ -293,22 +261,15 @@ ${snippet}`;
 }
 
 function sequelizeDbSection(options: ScaffoldPaymentsOptions): string {
-  const snippet = isSqlite(options)
-    ? `\`\`\`ts
-import { DatabaseSync } from "node:sqlite"; // or better-sqlite3
+  return `Sequelize needs an adapter — \`sequelizeDb\` is the shipped one. It
+binds parameters through Sequelize's \`bind\` option and threads the managed
+transaction into every statement inside it, so settlement never runs outside
+the transaction. ${PLACEHOLDER_NOTE}
 
-export const db = new DatabaseSync("app.db"); // same file Sequelize uses
-\`\`\``
-    : `\`\`\`ts
-import { Pool } from "pg";
+\`\`\`ts
+import { sequelizeDb } from "@openreceive/http";
+import { sequelize } from "./db.ts"; // your configured Sequelize instance
 
-export const db = new Pool({ connectionString: process.env.DATABASE_URL });
+export const db = sequelizeDb(sequelize, "${options.dialect}");
 \`\`\``;
-  const handle = isSqlite(options)
-    ? "sqlite users open the same database file with better-sqlite3 or `node:sqlite` and pass that Database"
-    : "pg users pass a `pg` Pool pointed at the same database";
-  return `Sequelize does not expose a raw handle the library can bind to, so open
-one extra handle to the same database and pass it as \`db\`: ${handle}.
-
-${snippet}`;
 }

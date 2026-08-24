@@ -451,8 +451,8 @@ async function createOrder(): Promise<void> {
       cartQuantity: items.reduce((total, item) => total + item.quantity, 0),
       productIds: items.map((item) => item.fruit.id),
     });
-    // App route: build + persist the order. The <openreceive-checkout order-id> element below then
-    // creates the checkout against the mounted /openreceive/checkouts route and drives it itself.
+    // App route: build + persist the order. The <openreceive-checkout reference> element below
+    // then prepares the checkout against the mounted /openreceive routes and drives it itself.
     const response = await fetch("/orders", {
       method: "POST",
       headers: {
@@ -504,7 +504,7 @@ function renderCheckout(orderId: string): void {
   logDemo("checkout.render", "Rendering self-contained OpenReceive checkout element.", {
     orderId,
   });
-  // Self-contained: order-id restores summary after refresh; host owns /checkout/:id.
+  // Self-contained: reference restores the summary after a refresh; host owns /checkout/:id.
   const checkoutElement = document.createElement(OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference, orderId);
   checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference, orderId);

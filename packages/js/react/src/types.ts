@@ -47,12 +47,12 @@ export interface CheckoutEventHandlers {
 }
 
 /**
- * Hook inputs. The hook drives a concrete snapshot; create mode belongs to `<Checkout>`,
- * so create options are deliberately absent here — `useCheckout({ reference })` used to
- * type-check and then always throw.
+ * Hook inputs. The hook drives a concrete snapshot, so `checkout` is REQUIRED:
+ * create mode belongs to `<Checkout>`, and both `useCheckout({ reference })`
+ * and `useCheckout({})` used to type-check and then always throw.
  */
 export interface UseCheckoutOptions
-  extends Partial<CheckoutData>,
+  extends CheckoutData,
     Omit<CheckoutEventHandlers, "onProviderCopy" | "onStartOver"> {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
@@ -280,6 +280,12 @@ export interface PaymentWizardProps {
   readonly onSwapStarted?: (invoice: CheckoutInvoiceSnapshot) => void;
   /** Called with the provider id after the payer copies the invoice from a provider tutorial. */
   readonly onProviderCopy?: (providerId: string) => void;
+  /**
+   * Called for the same tutorial copy, without the provider id — the plain
+   * "the invoice was copied" signal. Both fire, matching the element, which
+   * dispatches `openreceive-provider-copy` and `openreceive-copy` together.
+   */
+  readonly onCopy?: () => void;
 }
 
 export type SwapOptionDisplay = CheckoutPaymentMethod;

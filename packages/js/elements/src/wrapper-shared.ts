@@ -65,7 +65,7 @@ export {
   // called by these wrappers and by @openreceive/react alike (G6a).
   validateCheckoutProps,
 } from "@openreceive/browser/headless";
-export type { DefineOpenReceiveElementsOptions } from "./index.ts";
+export type { DefineElementsOptions } from "./index.ts";
 export { defineElements } from "./index.ts";
 
 /**

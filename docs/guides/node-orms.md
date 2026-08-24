@@ -21,16 +21,23 @@ You never hand-write a payment repository. OpenReceive owns the
 | Prisma                 | `prismaDb(prisma, dialect)` from `@openreceive/http`        |
 | Knex                   | `knexDb(knex, dialect)` from `@openreceive/http`            |
 | TypeORM                | `typeOrmDb(dataSource, dialect)` from `@openreceive/http`   |
-| Sequelize              | a separate `pg` Pool to the same database, or a hand-rolled adapter modeled on `typeOrmDb` |
+| Sequelize              | `sequelizeDb(sequelize, dialect)` from `@openreceive/http`   |
 
-A custom adapter is `{ dialect, query, transaction }`
-(`SqlAdapter`): `dialect` is `"postgres"` or `"sqlite"`, `query`
-runs one statement with `?` placeholders and returns SELECT rows (`[]`
-otherwise), and `transaction` runs a callback against a transactional client.
-Postgres drivers need `?` rewritten to `$1`-style. You only write one for a
-stack the factories below don't cover.
+A custom adapter is `{ dialect, query, transaction }` (`SqlAdapter`):
+`dialect` is `"postgres"` or `"sqlite"`, `query` runs one statement and returns
+SELECT rows (`[]` otherwise), and `transaction` runs a callback against a
+transactional client.
 
-## Prisma, Knex, TypeORM
+**Host SQL reaches the driver verbatim.** The library renders each statement in
+the dialect you declared — `?` on sqlite, `$1`-style on postgres — so an
+adapter passes SQL through as written. A custom adapter must not rewrite
+placeholders either: renumbering `?` to `$1` would corrupt statements that were
+already correct, which is exactly the failure `prismaDb`'s statement router
+exists to prevent. See [Storage](storage.md).
+
+You only write a custom adapter for a stack the factories below don't cover.
+
+## Prisma, Knex, TypeORM, Sequelize
 
 `@openreceive/http` ships a named factory per ORM. The parameter types are
 structural, so no ORM dependency is added and your existing handle passes
@@ -38,11 +45,12 @@ straight in. `dialect` is a required argument because nothing on the handles
 states it reliably — for Prisma, match your datasource provider:
 
 ```ts
-import { knexDb, prismaDb, typeOrmDb } from "@openreceive/http";
+import { knexDb, prismaDb, sequelizeDb, typeOrmDb } from "@openreceive/http";
 
 createHost({ db: prismaDb(prisma, "postgres"), ... });
 createHost({ db: knexDb(knex, "sqlite"), ... });
 createHost({ db: typeOrmDb(dataSource, "postgres"), ... });
+createHost({ db: sequelizeDb(sequelize, "postgres"), ... });
 ```
 
 What each factory settles so you don't have to:
@@ -55,6 +63,11 @@ What each factory settles so you don't have to:
 - `typeOrmDb` runs transaction statements through the transaction's own
   `EntityManager`, never the `DataSource` — falling back would execute
   settlement statements outside the transaction.
+- `sequelizeDb` binds parameters through Sequelize's `bind` option and threads
+  the managed transaction into every statement inside it — Sequelize carries
+  the transaction on the same instance, so without that, settlement statements
+  would run on the instance's own pool outside the transaction. It also reads
+  rows out of the `[rows, metadata]` pair a SELECT resolves.
 
 ## Schema and `onPaid`
 
@@ -89,7 +102,7 @@ touches it.
 
 `onPaid({ reference, paymentHash, paidAt, details?, query })` runs inside the
 library's settlement transaction, only for the first settled attempt for a reference.
-Use `query` (same `?` placeholders) to update your order or insert an outbox
+Use `query` (statements written for your own dialect) to update your order or insert an outbox
 row transactionally — do not use your ORM's separate connection there. Never
 map `swap_data` into an API serializer, log, or browser bundle.
 

@@ -138,13 +138,29 @@ export function isValidAddressForSwapNetwork(network: string, address: string): 
 }
 
 /**
+ * The chain-network suffix of an OpenReceive `pay_in_asset` code, uppercased:
+ * `USDT_ETH` → `"ETH"`, `SOL_SOL` → `"SOL"`, `USDT_TRON` → `"TRON"`. A code
+ * with no suffix answers itself (`"lightning"` → `"LIGHTNING"`).
+ *
+ * ONE owner for this split. Four places used to re-derive it with four inline
+ * network tables — the address checksum rule, the explorer link, the network
+ * label, and the confirmation-wait hint — so a new rail meant finding all four.
+ * Callers layer their own vocabulary on the result: this returns the raw
+ * suffix, not any one of their enums.
+ */
+export function payInAssetNetwork(payInAsset: string): string | undefined {
+  if (payInAsset === "") return undefined;
+  return payInAsset.split("_").at(-1)?.toUpperCase();
+}
+
+/**
  * Resolve the address network from an OpenReceive `pay_in_asset` code
  * (`USDT_ETH` → ETH, `USDT_TRON` → TRX, `SOL_SOL` → SOL).
  */
 export function swapAddressNetworkForPayInAsset(
   payInAsset: string,
 ): SwapAddressNetwork | undefined {
-  const suffix = payInAsset.split("_").at(-1)?.toUpperCase();
+  const suffix = payInAssetNetwork(payInAsset);
   return suffix === undefined ? undefined : normalizeSwapAddressNetwork(suffix);
 }
 

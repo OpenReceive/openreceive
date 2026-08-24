@@ -18,8 +18,6 @@ interface SwapAuditLogSource {
   readonly attention?: boolean;
   readonly attention_reason?: string;
   readonly refund_reason?: string;
-  readonly refund_nonce?: string;
-  readonly refund_nonce_expires_at?: number;
   readonly refund_tx_id?: string;
   readonly deposit_tx_id?: string;
   readonly payout_tx_id?: string;
@@ -59,10 +57,8 @@ export function checkoutLogFields(state: {
 
 /**
  * This list is an ALLOWLIST, not a redaction pass: whatever is named here
- * reaches a log sink verbatim. `refund_nonce_present` is deliberate — the
- * nonce authorizes a refund payout, so only its presence may be logged, never
- * its value, and the same goes for the preimage and the raw bolt11.
- * tests/browser-checkout-controller.test.mjs holds that line.
+ * reaches a log sink verbatim — which is why the preimage and the raw bolt11
+ * are absent. tests/browser-checkout-controller.test.mjs holds that line.
  */
 function swapAuditLogFields(swap: SwapAuditLogSource | undefined): Record<string, unknown> {
   if (swap === undefined) return {};
@@ -75,8 +71,6 @@ function swapAuditLogFields(swap: SwapAuditLogSource | undefined): Record<string
     attention: swap.attention,
     attention_reason: swap.attention_reason,
     refund_reason: swap.refund_reason,
-    refund_nonce_present: swap.refund_nonce !== undefined,
-    refund_nonce_expires_at: swap.refund_nonce_expires_at,
     refund_tx_id: swap.refund_tx_id,
     deposit_tx_id: swap.deposit_tx_id,
     payout_tx_id: swap.payout_tx_id,
@@ -94,18 +88,15 @@ export function emitBrowserSwapTransition(
 
   const previousState = previousSwap?.provider_state;
   const nextState = nextSwap.provider_state;
-  const previousNonce = previousSwap?.refund_nonce !== undefined;
-  const nextNonce = nextSwap.refund_nonce !== undefined;
   const previousAttention = previousSwap?.attention_reason;
   const nextAttention = nextSwap.attention_reason;
   const previousSettled = previous?.settled === true || previous?.paid === true;
   const nextSettled = next.settled === true || next.paid === true;
 
   const stateChanged = previousState !== nextState;
-  const nonceChanged = previousNonce !== nextNonce;
   const attentionChanged = previousAttention !== nextAttention;
   const settlementChanged = previousSettled !== nextSettled;
-  if (!stateChanged && !nonceChanged && !attentionChanged && !settlementChanged) return;
+  if (!stateChanged && !attentionChanged && !settlementChanged) return;
 
   const level: BrowserLogLevel =
     nextState === "attention" || nextSwap.attention === true

@@ -347,28 +347,34 @@ test("wiring guide shows the library host wiring and the optional worker", () =>
 });
 
 test("wiring guide gives per-ORM db guidance and adapter snippets", () => {
+  // The three ORMs that need an adapter get the SHIPPED factory, never a
+  // hand-rolled copy of it. The hand-rolled Prisma recipe routed every
+  // statement through $queryRawUnsafe — exactly the bug prismaDb's statement
+  // router exists to avoid — so a host that copied it got a subtly broken
+  // settlement path.
   const prismaPg = guideFile(renderFor("prisma", "postgres")).contents;
-  assert.match(prismaPg, /\$transaction/);
-  assert.match(prismaPg, /\$queryRawUnsafe/);
-  assert.match(prismaPg, /dialect: "postgres"/);
+  assert.match(prismaPg, /import \{ prismaDb \} from "@openreceive\/http"/);
+  assert.match(prismaPg, /prismaDb\(prisma, "postgres"\)/);
   assert.match(prismaPg, /verbatim/);
   assert.match(prismaPg, /plain objects/);
-  // The library renders its own statements per dialect, so no recipe may
-  // renumber placeholders — doing so would corrupt host SQL.
+  // No recipe may build its own adapter, and none may renumber placeholders:
+  // the library renders statements per dialect and host SQL reaches the driver
+  // as written.
+  assert.doesNotMatch(prismaPg, /SqlAdapter = \{/);
   assert.doesNotMatch(prismaPg, /numbered\(/);
 
   const prismaSqlite = guideFile(renderFor("prisma", "sqlite")).contents;
-  assert.match(prismaSqlite, /dialect: "sqlite"/);
+  assert.match(prismaSqlite, /prismaDb\(prisma, "sqlite"\)/);
   assert.doesNotMatch(prismaSqlite, /numbered\(/);
 
   const knexGuide = guideFile(renderFor("knex", "postgres")).contents;
-  assert.match(knexGuide, /knex\.transaction/);
-  assert.match(knexGuide, /\.raw\(/);
+  assert.match(knexGuide, /knexDb\(knex, "postgres"\)/);
   assert.match(knexGuide, /verbatim/);
+  assert.doesNotMatch(knexGuide, /SqlAdapter = \{/);
 
   const typeormGuide = guideFile(renderFor("typeorm", "postgres")).contents;
-  assert.match(typeormGuide, /dataSource\.transaction/);
-  assert.match(typeormGuide, /queryOn\(manager\)/);
+  assert.match(typeormGuide, /typeOrmDb\(dataSource, "postgres"\)/);
+  assert.doesNotMatch(typeormGuide, /SqlAdapter = \{/);
 
   const drizzlePg = guideFile(renderFor("drizzle", "postgres")).contents;
   assert.match(drizzlePg, /underlying driver handle/);
@@ -377,11 +383,14 @@ test("wiring guide gives per-ORM db guidance and adapter snippets", () => {
   const drizzleSqlite = guideFile(renderFor("drizzle", "sqlite")).contents;
   assert.match(drizzleSqlite, /db: sqlite/);
 
+  // Sequelize is first-class now: the shipped sequelizeDb, not a second pool
+  // opened against the same database.
   const sequelizePg = guideFile(renderFor("sequelize", "postgres")).contents;
-  assert.match(sequelizePg, /new Pool\(/);
+  assert.match(sequelizePg, /sequelizeDb\(sequelize, "postgres"\)/);
+  assert.doesNotMatch(sequelizePg, /new Pool\(/);
 
   const sequelizeSqlite = guideFile(renderFor("sequelize", "sqlite")).contents;
-  assert.match(sequelizeSqlite, /DatabaseSync|better-sqlite3/);
+  assert.match(sequelizeSqlite, /sequelizeDb\(sequelize, "sqlite"\)/);
 });
 
 test("sqlite schemas use sqlite constructs", () => {

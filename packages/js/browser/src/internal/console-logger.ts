@@ -104,7 +104,7 @@ function redactBrowserSecrets(value: string): string {
     .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
-export interface CreateOpenReceiveBrowserConsoleLoggerOptions {
+export interface CreateBrowserConsoleLoggerOptions {
   /** Prefix before the event, e.g. `openreceive:my-app:client`. Default `openreceive`. */
   readonly prefix?: string;
   /**
@@ -125,7 +125,7 @@ export interface CreateOpenReceiveBrowserConsoleLoggerOptions {
  * Format: `[ISO8601] LEVEL [prefix] event: message { fields }`
  */
 export function createBrowserConsoleLogger(
-  options: CreateOpenReceiveBrowserConsoleLoggerOptions = {},
+  options: CreateBrowserConsoleLoggerOptions = {},
 ): BrowserLogger {
   const prefix = options.prefix ?? "openreceive";
   const write = createConsoleWriter(options);
@@ -136,14 +136,14 @@ export function createBrowserConsoleLogger(
   };
 }
 
-export type HostBrowserConsoleLogger = (
+export type AppBrowserConsoleLogger = (
   event: string,
   message: string,
   fields?: Record<string, unknown>,
   level?: BrowserLogLevel,
 ) => void;
 
-export interface CreateHostBrowserConsoleLoggerOptions {
+export interface CreateAppBrowserConsoleLoggerOptions {
   readonly prefix: string;
   /**
    * Minimum level to emit. Default: `LOG_LEVEL` from the environment, or `info`.
@@ -154,9 +154,9 @@ export interface CreateHostBrowserConsoleLoggerOptions {
 }
 
 /** Ad-hoc `(event, message, fields?, level?)` console logger for host browser apps. */
-export function createHostBrowserConsoleLogger(
-  options: CreateHostBrowserConsoleLoggerOptions,
-): HostBrowserConsoleLogger {
+export function createAppBrowserConsoleLogger(
+  options: CreateAppBrowserConsoleLoggerOptions,
+): AppBrowserConsoleLogger {
   const write = createConsoleWriter(options);
 
   return (event, message, fields = {}, level = "info") => {

@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "name": "a malformed currencies entry on GET /rates is payer input, not a feed outage",
+  "request": {
+    "method": "GET",
+    "path": "/openreceive/rates?currencies=USDT"
+  },
+  "expected": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "currencies must be a comma-separated list of three-letter currency codes.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "The shape of the payer's ?currencies filter is checked at the wire boundary in both engines. A malformed entry must never reach the price-feed path, whose failure mode is the retryable 503 rates-unavailable error."
+}

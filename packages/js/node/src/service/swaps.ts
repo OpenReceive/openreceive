@@ -1,5 +1,6 @@
 import { isValidSwapAddressForPayInAsset } from "@openreceive/core";
 import {
+  classifySwapTransportFailure,
   type getSwapAssetInfo,
   isSwapPayInAsset,
   listSwapAssetInfo,
@@ -46,10 +47,14 @@ export async function listSwapOptions(
 
   const amountMsats = parseAmountMsats(input.amountMsats);
   const providerCatalog = await resolveSwapProviderCatalog(context, providers);
+  // Providers ARE configured (checked above), so an empty catalog means every
+  // one of them failed its fetch — an outage, not a configuration gap.
+  const catalogUnreachable = providerCatalog.size === 0;
   const options = listSwapAssetInfo().map((asset) =>
     swapCatalogOption({
       asset,
       amountMsats,
+      catalogUnreachable,
       providerAsset: providerCatalog.get(asset.pay_in_asset),
     }),
   );
@@ -114,6 +119,32 @@ export async function quoteSwap(
   };
 }
 
+/**
+ * Run one outbound provider call, mapping its transport failures to the
+ * 502/503 the swap routes declare. A provider outage or 429 is not an
+ * OpenReceive bug, and without this it reaches errorResponse as neither a
+ * ServiceError nor a wallet error and reads as a generic 500.
+ */
+async function throughProvider<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const failure = classifySwapTransportFailure(error);
+    if (failure === undefined) throw error;
+    if (failure === "refused") {
+      throw serviceError(502, "INTERNAL", "The swap provider refused this request.");
+    }
+    throw serviceError(
+      503,
+      "INTERNAL",
+      failure === "rate_limited"
+        ? "The swap provider is rate limited. Please try again shortly."
+        : "The swap provider is temporarily unreachable. Please try again shortly.",
+      { retryable: true },
+    );
+  }
+}
+
 export async function createSwap(
   context: ServiceContext,
   input: CreateSwapRequest,
@@ -125,11 +156,13 @@ export async function createSwap(
   // declared CreateCheckoutRequest fields.
   const { payInAsset: _payInAsset, ...checkoutRequest } = input;
   const checkout = await createCheckout(context, { ...checkoutRequest, expirySeconds });
-  const order = await provider.createSwap({
-    payInAsset,
-    bolt11: checkout.bolt11,
-    invoiceAmountMsats: checkout.amountMsats,
-  });
+  const order = await throughProvider(() =>
+    provider.createSwap({
+      payInAsset,
+      bolt11: checkout.bolt11,
+      invoiceAmountMsats: checkout.amountMsats,
+    }),
+  );
   const swapData: SwapData = {
     version: 1,
     providerOrder: recoveryOrder(order),
@@ -146,7 +179,7 @@ export async function getSwap(context: ServiceContext, input: GetSwapRequest): P
   const paymentHash = parsePaymentHash(input.paymentHash);
   const reference = parseReference(input.reference);
   const provider = requireProvider(context, recovery.providerOrder.provider);
-  const current = await provider.getStatus(recovery.providerOrder);
+  const current = await throughProvider(() => provider.getStatus(recovery.providerOrder));
   return publicSwap(current, paymentHash, reference);
 }
 
@@ -162,7 +195,7 @@ export async function refundSwap(
     recovery.providerOrder.pay_in_asset,
   );
   const provider = requireProvider(context, recovery.providerOrder.provider);
-  const current = await provider.getStatus(recovery.providerOrder);
+  const current = await throughProvider(() => provider.getStatus(recovery.providerOrder));
   if (current.state !== "refund_required") {
     throw serviceError(
       409,
@@ -170,8 +203,8 @@ export async function refundSwap(
       `Swap cannot be refunded from provider state ${current.state}.`,
     );
   }
-  await provider.requestRefund(current, refundAddress);
-  const refreshed = await provider.getStatus(current);
+  await throughProvider(() => provider.requestRefund(current, refundAddress));
+  const refreshed = await throughProvider(() => provider.getStatus(current));
   return publicSwap(refreshed, paymentHash, reference);
 }
 
@@ -373,6 +406,13 @@ function swapCatalogOption(input: {
   readonly asset: ReturnType<typeof getSwapAssetInfo>;
   readonly amountMsats: number;
   readonly providerAsset?: SwapProviderAsset & { readonly provider: string };
+  /**
+   * True when providers ARE configured but none answered its catalog fetch —
+   * a transient outage, not a configuration gap. The distinction matters: the
+   * unavailable label is cached per amount for up to 60s, so telling a payer
+   * "not configured" during a provider blip outlasts the blip.
+   */
+  readonly catalogUnreachable: boolean;
 }): SwapPaymentMethod {
   const { asset, amountMsats, providerAsset } = input;
   if (providerAsset === undefined) {
@@ -382,8 +422,15 @@ function swapCatalogOption(input: {
       networkLabel: asset.network_label,
       provider: "",
       available: false,
-      unavailableReason: "provider_unconfigured",
-      unavailableMessage: "Automated swaps are not configured for this asset.",
+      ...(input.catalogUnreachable
+        ? {
+            unavailableReason: "provider_unreachable" as const,
+            unavailableMessage: "The swap provider is temporarily unreachable.",
+          }
+        : {
+            unavailableReason: "provider_unconfigured" as const,
+            unavailableMessage: "Automated swaps are not configured for this asset.",
+          }),
     };
   }
 

@@ -46,7 +46,7 @@ Checkout lifecycle:
   `CheckoutInvoiceSnapshot` — engine state and snapshots.
 - `selectCheckoutDisplayInvoice`, `isReusableLightningInvoice` — invoice
   display selection.
-- `status` / `Status`, `createCheckoutStatusModel`, `CheckoutStatusModel`,
+- `deriveStatus` / `Status`, `createCheckoutStatusModel`, `CheckoutStatusModel`,
   `createStatusFetcher` (`{ prefix, snapshot }`),
   `OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS` — status derivation and polling.
 - `postJson`, `BrowserRequestError` — the HTTP helper and

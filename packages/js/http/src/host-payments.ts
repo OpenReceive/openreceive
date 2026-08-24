@@ -55,7 +55,7 @@ interface CreateOpenReceiveHostBaseOptions {
  * application's existing database. `onPaid` runs inside the settlement
  * transaction for the first settled attempt for a reference only.
  */
-export interface CreateOpenReceiveHostDbOptions extends CreateOpenReceiveHostBaseOptions {
+export interface CreateHostDbOptions extends CreateOpenReceiveHostBaseOptions {
   readonly db: SqlDatabase;
   /** Payment attempts table name. Default `openreceive_payments`. */
   readonly tableName?: string;
@@ -86,7 +86,7 @@ export type SettlementEventHook = (settlement: SettlementEvent) => void | Promis
  * runs only for the settlement whose `payments.recordSettlement` claim was
  * won, so a redelivered settlement never fulfills twice.
  */
-export interface CreateOpenReceiveHostRepositoryOptions extends CreateOpenReceiveHostBaseOptions {
+export interface CreateHostRepositoryOptions extends CreateOpenReceiveHostBaseOptions {
   readonly payments: PaymentRepository;
   /** Host settlement handler; runs once, for the winning first-settlement claim. */
   readonly onPaid: SettlementEventHook;
@@ -94,9 +94,7 @@ export interface CreateOpenReceiveHostRepositoryOptions extends CreateOpenReceiv
   readonly tableName?: never;
 }
 
-export type CreateOpenReceiveHostOptions =
-  | CreateOpenReceiveHostDbOptions
-  | CreateOpenReceiveHostRepositoryOptions;
+export type CreateHostOptions = CreateHostDbOptions | CreateHostRepositoryOptions;
 
 export interface Host {
   readonly resolveCheckout: ResolveCheckoutHook;
@@ -112,7 +110,7 @@ export interface Host {
  * settlement write-once, and reconciliation transitions are library-owned in
  * `db` mode.
  */
-export function createHost(options: CreateOpenReceiveHostOptions): Host {
+export function createHost(options: CreateHostOptions): Host {
   if (options?.amountFor === undefined) {
     throw new TypeError("OpenReceive host requires amountFor.");
   }
@@ -185,10 +183,7 @@ export function createHost(options: CreateOpenReceiveHostOptions): Host {
     const isCreate = context.action === "checkout.create" || context.action === "swap.create";
     const amount = isCreate ? await priceFor(context) : undefined;
 
-    const attempts = normalizePayments(
-      context.reference,
-      await payments.listForReference(context.reference),
-    );
+    const attempts = normalizePayments(await payments.listForReference(context.reference));
     const requestedHash = paymentHashHint(context.input);
 
     if (requestedHash !== undefined) {
@@ -199,6 +194,11 @@ export function createHost(options: CreateOpenReceiveHostOptions): Host {
       // A hash-hinted CREATE may only re-serve a reusable pending attempt.
       // Without this, a settled or expired attempt would be re-served 201 with
       // stale payer instructions, bypassing the paid/expired guards below.
+      //
+      // UNREACHABLE OVER HTTP: assertDeclaredFields rejects `payment_hash` on
+      // checkout.create / swap.create, so only a caller invoking this
+      // resolveCheckout directly (not through the mounted handler) can get
+      // here. Kept because such a caller can, not because the wire can.
       if (context.action === "checkout.create" || context.action === "swap.create") {
         if (attempts.some((payment) => payment.status === "settled")) {
           throw hostError("This reference is already paid.", 409, "CONFLICT");
@@ -232,7 +232,7 @@ export function createHost(options: CreateOpenReceiveHostOptions): Host {
       );
       if (matching.length > 1) {
         throw hostError(
-          "This order already has unpaid checkouts in progress for this payment method; wait for them to expire before creating another.",
+          "This reference has multiple unpaid checkouts in progress for this payment method; wait for them to expire before creating another.",
           409,
           "CONFLICT",
         );
@@ -265,6 +265,9 @@ function resolvedPayment(
     ...(amount === undefined ? {} : { amount }),
     paymentHash: payment.paymentHash,
     checkout: structuredClone(payment.checkout),
+    // Carried so `payments/check` can serve the row path without re-listing
+    // the rows this resolver just read.
+    attemptStatus: { status: payment.status, paidAt: payment.paidAt },
     ...(payment.swapData === undefined || payment.swapData === null
       ? {}
       : { swapData: payment.swapData }),
@@ -294,28 +297,25 @@ function matchesCreateAction(
   return payment.swapData?.providerOrder.pay_in_asset === payInAsset;
 }
 
-function normalizePayments(
-  expectedReference: string,
-  values: readonly PaymentRecord[],
-): readonly PaymentRecord[] {
+function normalizePayments(values: readonly PaymentRecord[]): readonly PaymentRecord[] {
   return values
-    .map((payment) => {
-      if (payment.reference !== expectedReference) {
-        throw new TypeError("Payment repository returned a row for another reference.");
-      }
-      return {
-        ...payment,
-        paymentHash: normalizePaymentHash(payment.paymentHash),
-      };
-    })
+    .map((payment) => ({
+      ...payment,
+      paymentHash: storedPaymentHash(payment.paymentHash),
+    }))
     .sort(
       (left, right) =>
         right.createdAt - left.createdAt || right.paymentHash.localeCompare(left.paymentHash),
     );
 }
 
+/**
+ * The request body's `payment_hash`, when it carries one. Only `payment.check`,
+ * `swap.read` and `swap.refund` may declare it (see ROUTE_BODY_FIELDS); the
+ * wire is snake_case, so there is no camelCase alias to read.
+ */
 function paymentHashHint(input: Readonly<Record<string, unknown>>): string | undefined {
-  const value = input.payment_hash ?? input.paymentHash;
+  const value = input.payment_hash;
   if (value === undefined) return undefined;
   if (typeof value !== "string") {
     throw hostError("payment_hash must be a string.", 400, "INVALID_REQUEST");
@@ -323,10 +323,29 @@ function paymentHashHint(input: Readonly<Record<string, unknown>>): string | und
   return normalizePaymentHash(value);
 }
 
+/** The payer's `payment_hash` hint: malformed input is a payer 400. */
 function normalizePaymentHash(value: string): string {
   const normalized = value.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(normalized)) {
     throw hostError("payment_hash must be 64 hexadecimal characters.", 400, "INVALID_REQUEST");
+  }
+  return normalized;
+}
+
+/**
+ * A hash read back out of the repository. Malformed here means the STORED row
+ * is wrong — a repository or storage bug — so it must not surface as a
+ * payer-blaming 400. Same distinction the handler's hostPaymentHash makes for
+ * resolver-supplied hashes.
+ */
+function storedPaymentHash(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(normalized)) {
+    throw hostError(
+      "The payment repository returned a row with a malformed payment hash.",
+      500,
+      "INTERNAL",
+    );
   }
   return normalized;
 }

@@ -248,37 +248,43 @@ class StorageFreeServerTest < Minitest::Test
     ).first["paid_at"]
   end
 
-  def test_create_checkout_fails_closed_when_wallet_ignores_requested_expiry
-    wallet = Class.new do
-      attr_reader :last_request
+  # A wallet with its own expiry clamp must still be usable for plain checkouts:
+  # the ledger row stores the wallet's expires_at, so reuse buffering,
+  # reconciliation, and expiry+grace all stay consistent with the real invoice.
+  def test_create_checkout_records_a_clamped_wallet_expiry_instead_of_refusing
+    wallet = clamping_wallet(4600)
+    logged = []
+    logger = Object.new
+    logger.define_singleton_method(:warn) { |message| logged << message }
+    service = OpenReceive::Server::Service.new(nwc_client: wallet, clock: -> { 1000 }, logger: logger)
 
-      def make_invoice(request)
-        @last_request = request
-        hash = "a" * 64
-        {
-          "invoice" => "ln-long-expiry",
-          "payment_hash" => hash,
-          "amount_msats" => request.fetch("amount_msats"),
-          "created_at" => 1000,
-          # Simulate wallets that ignore expiry and mint a 60-minute invoice.
-          "expires_at" => 4600
-        }
-      end
+    checkout = service.create_checkout("reference" => "ruby-expiry", "amount" => { "sats" => 1000 })
 
-      def list_transactions(_request)
-        { "transactions" => [] }
-      end
-    end.new
+    assert_equal 600, wallet.last_request.fetch("expiry")
+    assert_equal 4600, checkout.fetch("expires_at")
+    assert_equal 1, logged.length
+    assert_match(/invoice_expiry.adjusted/, logged.first)
+    assert_match(/requested 600s, got 3600s/, logged.first)
+  end
+
+  # The swap path is the one that REQUIRES a floor: its shadow invoice must
+  # outlive the provider order, so an invoice the wallet cut short strands a
+  # deposit the payer already sent.
+  def test_create_checkout_fails_closed_when_wallet_undercuts_a_required_expiry
+    wallet = clamping_wallet(1600)
     logged = []
     logger = Object.new
     logger.define_singleton_method(:error) { |message| logged << message }
+    logger.define_singleton_method(:warn) { |message| logged << message }
     service = OpenReceive::Server::Service.new(nwc_client: wallet, clock: -> { 1000 }, logger: logger)
 
     error = assert_raises(OpenReceive::Server::WalletContractError) do
-      service.create_checkout("reference" => "ruby-expiry", "amount" => { "sats" => 1000 })
+      service.create_checkout(
+        "reference" => "ruby-expiry", "amount" => { "sats" => 1000 }, "expiry_seconds" => 1800
+      )
     end
 
-    assert_equal 600, wallet.last_request.fetch("expiry")
+    assert_equal 1800, wallet.last_request.fetch("expiry")
     assert_equal 502, error.status
     assert_equal "UNSUPPORTED_METHOD", error.code
     # JS-parity wire copy: the short form goes on the wire, the detailed
@@ -286,7 +292,45 @@ class StorageFreeServerTest < Minitest::Test
     assert_equal "Error with the backing NWC wallet: it did not honor the requested invoice expiry.",
                  error.message
     assert_equal 1, logged.length
-    assert_match(/requested 600s, got 3600s/, logged.first)
+    assert_match(/required 1800s, got 600s/, logged.first)
+  end
+
+  # A wallet that mints LONGER than a required floor is fine: the shadow
+  # invoice still outlives the provider order.
+  def test_create_checkout_accepts_a_wallet_minting_longer_than_a_required_expiry
+    service = OpenReceive::Server::Service.new(
+      nwc_client: clamping_wallet(4600), clock: -> { 1000 }
+    )
+    checkout = service.create_checkout(
+      "reference" => "ruby-expiry-long", "amount" => { "sats" => 1000 }, "expiry_seconds" => 1800
+    )
+    assert_equal 4600, checkout.fetch("expires_at")
+  end
+
+  # A wallet that mints its own expires_at regardless of the requested expiry.
+  def clamping_wallet(expires_at)
+    Class.new do
+      attr_reader :last_request
+
+      def initialize(expires_at)
+        @expires_at = expires_at
+      end
+
+      def make_invoice(request)
+        @last_request = request
+        {
+          "invoice" => "ln-clamped-expiry",
+          "payment_hash" => "a" * 64,
+          "amount_msats" => request.fetch("amount_msats"),
+          "created_at" => 1000,
+          "expires_at" => @expires_at
+        }
+      end
+
+      def list_transactions(_request)
+        { "transactions" => [] }
+      end
+    end.new(expires_at)
   end
 
   def test_handler_commits_before_returning_invoice
@@ -891,7 +935,7 @@ class StorageFreeServerTest < Minitest::Test
       resolve_checkout: ->(**_context) { { "amount" => { "sats" => 5 } } },
       on_checkout_created: lambda do |**_payment|
         raise OpenReceive::Server::ConflictError,
-              "This order already has a live payment attempt for the same method."
+              "An unpaid checkout for this payment method is already in progress for this reference."
       end,
       on_paid: ->(_payment) {}
     )
@@ -901,7 +945,7 @@ class StorageFreeServerTest < Minitest::Test
     )
     assert_equal 409, status
     assert_equal "CONFLICT", body.fetch("code")
-    assert_match(/live payment attempt/, body.fetch("message"))
+    assert_match(/already in progress for this reference/, body.fetch("message"))
   end
 
   # A host order resolved without an amount is a host-integration bug: 500
@@ -1165,10 +1209,24 @@ class StorageFreeServerTest < Minitest::Test
       on_checkout_created: ->(**_payment) {},
       on_paid: ->(_payment) {}
     )
+    # A repository refusing a second live attempt on the same rail. Both
+    # engines answer with ONE agreed string; the vector is what keeps them
+    # from drifting apart per-engine again.
+    live_conflict_app = OpenReceive::Server::RackApp.new(
+      service: @service,
+      authorize: ->(_context) { true },
+      resolve_checkout: ->(**_context) { { "amount" => { "sats" => 1 } } },
+      on_checkout_created: lambda do |**_payment|
+        raise OpenReceive::Server::ConflictError,
+              "An unpaid checkout for this payment method is already in progress for this reference."
+      end,
+      on_paid: ->(_payment) {}
+    )
     apps = {
       "default" => build_app.call(nil),
       "rate_limited" => build_app.call(->(_context) { false }),
-      "settled_check" => settled_app
+      "settled_check" => settled_app,
+      "live_attempt_conflict" => live_conflict_app
     }
     golden_paths = Dir[File.join(SPEC_DIR, "test-vectors/http-golden/*.json")].sort
     refute_empty golden_paths
@@ -1177,10 +1235,12 @@ class StorageFreeServerTest < Minitest::Test
       assert_equal 2, vector["schema_version"], "#{path}: schema_version"
       request = vector.fetch("request")
       app = apps.fetch(vector["handler"] || "default")
+      # `path` is the wire path, so a vector may carry a query string.
+      path, _, query_string = request.fetch("path").partition("?")
       status, headers, body = app.call(
         "REQUEST_METHOD" => request.fetch("method"),
-        "PATH_INFO" => request.fetch("path"),
-        "QUERY_STRING" => "",
+        "PATH_INFO" => path,
+        "QUERY_STRING" => query_string,
         # The content-type gate is the CSRF-equivalent on body-bearing routes;
         # vectors default to the contract type and opt out to test the refusal.
         "CONTENT_TYPE" => request.fetch("content_type", "application/json"),
@@ -1201,17 +1261,17 @@ class StorageFreeServerTest < Minitest::Test
     end
   end
 
-    # Extra request headers a vector declares, as Rack env keys.
-    def golden_request_headers(request)
-      request.fetch("headers", {}).to_h do |name, value|
-        ["HTTP_#{name.upcase.tr('-', '_')}", value]
-      end
+  # Extra request headers a vector declares, as Rack env keys.
+  def golden_request_headers(request)
+    request.fetch("headers", {}).to_h do |name, value|
+      ["HTTP_#{name.upcase.tr('-', '_')}", value]
     end
+  end
 
-    def golden_request_body(request)
-      return "x" * Integer(request.fetch("body_bytes")) if request.key?("body_bytes")
-      request.key?("body") ? JSON.generate(request["body"]) : ""
-    end
+  def golden_request_body(request)
+    return "x" * Integer(request.fetch("body_bytes")) if request.key?("body_bytes")
+    request.key?("body") ? JSON.generate(request["body"]) : ""
+  end
 end
 
 # Mirrors the JS clientIpBucket cases in

@@ -17,11 +17,14 @@ import {
   validateCheckoutProps,
 } from "../packages/js/elements/src/wrapper-shared.ts";
 import {
+  checkoutLabels,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_DEFAULT_PREFIX,
 } from "../packages/js/browser/src/headless.ts";
 import { checkoutRoutes } from "../packages/js/browser/src/internal/checkout.ts";
+import { createSwapUnavailableModel } from "../packages/js/browser/src/internal/wizard.ts";
+import { renderPaymentWizardHtml } from "../packages/js/elements/src/render-wizard.ts";
 import { Checkout } from "../packages/js/react/src/index.ts";
 
 const PARITY_DOC = "docs/internal/wrapper-parity.md";
@@ -177,7 +180,7 @@ test("the shared binding subscribes to every element event, including open-walle
 test("missing mode props fail at the boundary with one clear error", () => {
   assert.throws(
     () => validateCheckoutProps({ framework: "@openreceive/test" }),
-    /requires a checkout snapshot or an reference/,
+    /requires a checkout snapshot or a reference/,
   );
   // The shared factory used to be the first thing to notice, throwing from inside a
   // computed/reactive read (in Angular, once per change-detection pass).
@@ -217,7 +220,7 @@ test("React runs its mode props through the same boundary check as the wrappers"
     () => Checkout({}),
     (error) =>
       error instanceof TypeError &&
-      /@openreceive\/react Checkout requires a checkout snapshot or an reference/.test(
+      /@openreceive\/react Checkout requires a checkout snapshot or a reference/.test(
         error.message,
       ),
   );
@@ -353,5 +356,111 @@ test("the theme is resolved from the default until the wrapper mounts", () => {
     angular: SOURCES.angular,
   })) {
     assert.match(read(file), /deferThemeResolution/, `${name} resolves the theme before mount`);
+  }
+});
+
+// C1/C6: the out-of-range swap pane is one model in @openreceive/browser. Both
+// renderers must build it from that model, not from copy of their own — the
+// drift this catches is real: React showed the accepted range and the element
+// showed a generic swap-start error for the same amount.
+test("both renderers build the unavailable swap pane from the shared model", () => {
+  const quote = {
+    pay_in_asset: "USDT_TRON",
+    label: "USDT",
+    network_label: "Tron",
+    provider: "fixedfloat",
+    available: false,
+    unavailable_reason: "amount_too_small",
+    minimum_pay_amount: "5.00",
+    maximum_pay_amount: "5000.00",
+  };
+  const model = createSwapUnavailableModel(quote, undefined);
+  assert.equal(model.title, "USDT unavailable");
+  assert.equal(model.range, "Accepted range: 5.00–5000.00 USDT.");
+
+  const elementHtml = renderPaymentWizardHtml({
+    selectedSwapAsset: "USDT_TRON",
+    swapOptions: [quote],
+    unavailableSwapQuote: quote,
+  });
+  for (const line of [model.title, model.detail, model.range, model.hint]) {
+    assert.ok(elementHtml.includes(line), `the element pane is missing "${line}"`);
+  }
+
+  // React's renderer reads the same model; assert it names the shared factory
+  // rather than restating the copy.
+  const reactSource = readFileSync("packages/js/react/src/swap.ts", "utf8");
+  assert.match(reactSource, /createSwapUnavailableModel\(quote, checkout\)/);
+  for (const literal of ["unavailable`", "Accepted range:", "Choose another asset above"]) {
+    assert.ok(
+      !reactSource.includes(literal),
+      `React must not restate the unavailable-pane copy: ${literal}`,
+    );
+  }
+});
+
+// C6: the two renderers are deliberately separate implementations, but the
+// payer-facing STRINGS are one declaration in @openreceive/browser. The drift
+// this catches already happened: React's route swap buttons showed a hardcoded
+// "Preparing..." while the element used checkoutLabels.preparingPayment.
+test("both renderers read the shared payer-facing strings, not copies", () => {
+  const SHARED_KEYS = [
+    "swapStartFailedTitle",
+    "tryAgain",
+    "payWithLightningInstead",
+    "supportReviewNeeded",
+    "preparingPaymentAddress",
+    "preparingPaymentAddressDetail",
+    "createPaymentAddress",
+    "paymentBreakdown",
+    "cartTotal",
+    "youSend",
+    "swapAndNetworkFees",
+    "refundAddressPlaceholder",
+    "reviewRefundAddress",
+    "confirmRefund",
+    "confirmRefundTo",
+    "tutorialBack",
+    "tutorialNext",
+    "tutorialClose",
+  ];
+  const reactSource = [
+    "packages/js/react/src/swap.ts",
+    "packages/js/react/src/wizard.ts",
+    "packages/js/react/src/provider-tutorial.ts",
+  ]
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+  const elementSource = [
+    "packages/js/elements/src/render-swap-panel.ts",
+    "packages/js/elements/src/render-wizard.ts",
+    "packages/js/elements/src/render-provider-tutorial.ts",
+  ]
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+
+  for (const key of SHARED_KEYS) {
+    assert.ok(checkoutLabels[key] !== undefined, `checkoutLabels is missing the shared key ${key}`);
+    assert.ok(
+      reactSource.includes(`checkoutLabels.${key}`),
+      `React must read checkoutLabels.${key} instead of restating it`,
+    );
+    assert.ok(
+      elementSource.includes(`checkoutLabels.${key}`),
+      `the element must read checkoutLabels.${key} instead of restating it`,
+    );
+    // And neither renderer may keep the literal alongside the label.
+    const literal = checkoutLabels[key];
+    if (!literal.includes("{")) {
+      for (const [name, source] of [
+        ["React", reactSource],
+        ["the element", elementSource],
+      ]) {
+        assert.ok(
+          !source.includes(`"${literal}"`) && !source.includes(`>${literal}<`),
+          `${name} still restates the literal for ${key}: ${literal}`,
+        );
+      }
+    }
   }
 });

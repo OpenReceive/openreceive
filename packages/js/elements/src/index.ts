@@ -27,6 +27,6 @@ export {
 } from "./transaction-details.ts";
 export type {
   CheckoutView,
-  DefineOpenReceiveElementsOptions,
+  DefineElementsOptions,
   ElementsWizardView,
 } from "./views.ts";

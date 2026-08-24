@@ -26,7 +26,7 @@ const PUBLIC_PACKAGE_NAMES = OPENRECEIVE_PUBLIC_PACKAGE_NAMES;
 const PUBLIC_PACKAGE_SET = new Set(PUBLIC_PACKAGE_NAMES);
 const VERSION_INCREMENTS = new Set(["major", "minor", "patch"]);
 const SEMVER_PATTERN =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function parseArgs(argv) {
   const args = {
@@ -95,13 +95,36 @@ function assertSemver(version, label = "version") {
   assert(SEMVER_PATTERN.test(version), `${label} must be a semver version, got ${version}`);
 }
 
+// npm's semver `inc` rules, spelled out because the release surface is a
+// prerelease line: incrementing a prerelease RELEASES it when the increment
+// is already reached by dropping the tag (patch of 0.2.0-alpha.0 is 0.2.0),
+// and otherwise increments the release core as usual.
+function incrementVersion(currentVersion, increment) {
+  const match = SEMVER_PATTERN.exec(currentVersion);
+  assert(match, `current version must be a semver version, got ${currentVersion}`);
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  const prerelease = match[4] !== undefined;
+
+  if (increment === "major") {
+    if (prerelease && minor === 0 && patch === 0) return `${major}.0.0`;
+    return `${major + 1}.0.0`;
+  }
+  if (increment === "minor") {
+    if (prerelease && patch === 0) return `${major}.${minor}.0`;
+    return `${major}.${minor + 1}.0`;
+  }
+  if (prerelease) return `${major}.${minor}.${patch}`;
+  return `${major}.${minor}.${patch + 1}`;
+}
+
 function resolveTargetVersion(currentVersion, requestedVersion) {
   assert(requestedVersion, "--version is required");
   if (VERSION_INCREMENTS.has(requestedVersion)) {
-    const [major, minor, patch] = currentVersion.split(".").map((part) => Number(part));
-    if (requestedVersion === "major") return `${major + 1}.0.0`;
-    if (requestedVersion === "minor") return `${major}.${minor + 1}.0`;
-    return `${major}.${minor}.${patch + 1}`;
+    const target = incrementVersion(currentVersion, requestedVersion);
+    assertSemver(target, "computed version");
+    return target;
   }
 
   assertSemver(requestedVersion);

@@ -105,8 +105,10 @@ export function formatDecimal(units: bigint, scale: number): string {
 }
 
 /**
- * Integer division rounding away from zero on any remainder, so a payer is
- * never quoted less than the amount owed.
+ * Ceiling division — rounds UP on any remainder, so a payer is never quoted
+ * less than the amount owed. Assumes a NON-NEGATIVE numerator, which every
+ * caller passes: `(n + d - 1n) / d` is a ceiling toward +∞, so a negative
+ * numerator would round toward zero instead.
  *
  * @throws {DecimalError} when `denominator` is not greater than zero.
  */

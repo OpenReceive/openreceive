@@ -16,11 +16,7 @@ import {
   serializeFixedFloatCurrencyResolution,
 } from "./fixedfloat-currencies.ts";
 import { normalizeFixedFloatOrder, readFixedFloatOrderFee } from "./fixedfloat-orders.ts";
-import {
-  classifyFixedFloatQuoteError,
-  fixedFloatAvailabilityMessage,
-  fixedFloatQuoteFromRatePair,
-} from "./fixedfloat-quote.ts";
+import { fixedFloatAvailabilityMessage, fixedFloatQuoteFromRatePair } from "./fixedfloat-quote.ts";
 import {
   deserializeFixedFloatRatesIndex,
   type FixedFloatRatesIndex,
@@ -194,10 +190,6 @@ class FixedFloatProvider implements SwapProvider {
     this.transport.attachWeightBudget(budget);
   }
 
-  async canAcceptRequest(path: string): Promise<boolean> {
-    return await this.transport.canAcceptRequest(path);
-  }
-
   async supportedPayInAssets(): Promise<Set<SwapPayInAsset>> {
     const resolution = await this.resolveCurrencies();
     return new Set(resolution.pay_in.keys());
@@ -243,25 +235,16 @@ class FixedFloatProvider implements SwapProvider {
     const resolution = await this.resolveCurrencies();
     const fromCcy = requiredFixedFloatCurrency(resolution, input.payInAsset);
     const rates = await this.resolveRatesIndex(resolution);
-    try {
-      return fixedFloatQuoteFromRatePair({
-        pair: rates.pairs[fixedFloatRatesPairKey(fromCcy, resolution.lightning.code)],
-        payInAsset: input.payInAsset,
-        invoiceAmountMsats: input.invoiceAmountMsats,
-        provider: this.name,
-      });
-    } catch (error) {
-      // Pair-math / limit errors stay as unavailable quotes. Rates/network failures
-      // already threw above from resolveRatesIndex and must not be swallowed here.
-      const reason = classifyFixedFloatQuoteError(error);
-      return {
-        pay_asset: input.payInAsset,
-        available: false,
-        unavailable_reason: reason,
-        unavailable_message: fixedFloatAvailabilityMessage(reason),
-        provider: this.name,
-      };
-    }
+    // No try/catch: fixedFloatQuoteFromRatePair is pure pair math that returns
+    // an unavailable quote rather than throwing, and rates/network failures
+    // already threw above from resolveRatesIndex so the service can skip this
+    // provider.
+    return fixedFloatQuoteFromRatePair({
+      pair: rates.pairs[fixedFloatRatesPairKey(fromCcy, resolution.lightning.code)],
+      payInAsset: input.payInAsset,
+      invoiceAmountMsats: input.invoiceAmountMsats,
+      provider: this.name,
+    });
   }
 
   async createSwap(input: {
@@ -280,7 +263,6 @@ class FixedFloatProvider implements SwapProvider {
       toAddress: input.bolt11,
     });
     const order = normalizeFixedFloatOrder(data, {
-      now: this.now,
       provider: this.name,
       payInAsset: input.payInAsset,
     });
@@ -323,7 +305,6 @@ class FixedFloatProvider implements SwapProvider {
     return {
       ...order,
       ...normalizeFixedFloatOrder(data, {
-        now: this.now,
         provider: this.name,
         payInAsset: order.pay_in_asset,
         fallback: order,

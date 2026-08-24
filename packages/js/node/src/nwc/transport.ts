@@ -85,22 +85,14 @@ function ensureNodeWebSocket(): void {
 }
 
 /**
- * The @getalby/sdk client resolves subscribeNotifications to an unsubscribe
- * function; other clients return a subscription object. Handle both shapes.
+ * ONE unsubscribe contract: `subscribeNotifications` resolves to a function
+ * that ends the subscription — the shape the committed @getalby/sdk returns.
  */
 export async function closeNwcNotificationSubscription(subscription: unknown): Promise<void> {
-  if (typeof subscription === "function") {
-    await (subscription as () => unknown)();
-    return;
+  if (typeof subscription !== "function") {
+    throw new TypeError("NWC subscribeNotifications must resolve to an unsubscribe function.");
   }
-  const record = recordOrEmpty(subscription);
-  for (const name of ["unsub", "unsubscribe", "close", "stop"]) {
-    const method = record[name];
-    if (typeof method === "function") {
-      await (method as () => unknown).call(subscription);
-      return;
-    }
-  }
+  await (subscription as () => unknown)();
 }
 
 export function delay(milliseconds: number): Promise<void> {

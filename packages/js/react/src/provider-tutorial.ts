@@ -134,7 +134,7 @@ export function ProviderTutorialModal(options: {
         React.createElement(
           "button",
           {
-            "aria-label": "Close",
+            "aria-label": checkoutLabels.tutorialClose,
             className: orClasses.tutorialClose,
             onClick: options.onClose,
             type: "button",
@@ -245,7 +245,7 @@ export function ProviderTutorialModal(options: {
             onClick: () => options.onStep(previousIndex),
             type: "button",
           },
-          "Back",
+          checkoutLabels.tutorialBack,
         ),
         React.createElement(
           "button",
@@ -260,7 +260,7 @@ export function ProviderTutorialModal(options: {
             },
             type: "button",
           },
-          isFinalStep ? checkoutLabels.tutorialExit : "Next",
+          isFinalStep ? checkoutLabels.tutorialExit : checkoutLabels.tutorialNext,
         ),
       ),
     ),

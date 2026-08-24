@@ -1,14 +1,12 @@
 ---
-name: v0.1 task
-about: Track a scoped OpenReceive v0.1 implementation task
+name: Task
+about: Track a scoped OpenReceive implementation task
 title: ""
-labels: ["v0.1"]
+labels: ["task"]
 assignees: ""
 ---
 
 ## Goal
-
-## Allowed Files
 
 ## Definition Of Done
 

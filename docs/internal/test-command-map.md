@@ -5,8 +5,8 @@
 | `npm test` | Run the Node test suite (`test:js`). `pretest:js` first builds the Angular dist chain — the one `@openreceive/*` import under `tests/` with no tsconfig `paths` entry. | No |
 | `npm run check` | Run the fast local gate: `validate` (JSON/schema/vector/provider validation plus generated-doc-table freshness) then `scan:secrets`. | No |
 | `npm run test:ci` | Run the full repository gate: `test:ci:core` then `test:ci:release`. | No |
-| `npm run test:ci:core` | Deterministic source gate, and exactly what `ci.yml` runs per push: `check`, lint, format check, workflow and example-import checks, generated-model freshness, public-API surface check, typecheck, Vue and Svelte checks, dead-export check, JS tests, package smoke. | No |
-| `npm run test:ci:release` | Release-shaped gate: build packages, Ruby tests, demo container and release checks, Rails example tests, demo builds, client-bundle scan, docs build. | No |
+| `npm run test:ci:core` | Deterministic source gate, and exactly what `ci.yml` runs per push: `check`, lint, format check, workflow check, generated-model freshness, public-API surface check, typecheck, Vue and Svelte checks, dead-export check, JS tests, package smoke. | No |
+| `npm run test:ci:release` | Release-shaped gate: build packages, Ruby tests, demo container and release checks, the Rails example's currency-drift check, demo builds (Node demos plus the Rails Shakapacker bundle), client-bundle scan, docs build. | No |
 | `npm run test:live` | Live NWC smoke against a real wallet (Node + Ruby). Never part of the deterministic gate. | Yes |
 | `npm run test:e2e` | Playwright end-to-end suite: boots the node-express Hello Fruit demo in `DEMO_WALLET=testkit` mode and drives real Chromium through all four framework tabs (lightning, swap + refund, remint, resume/theme). Run `npm run build:packages` first: the demo's vite server resolves `@openreceive/*` to the built dists, and a stale dist fails the boot with a missing-export error (CI builds before every run for the same reason). Server stdout is piped (demo boot / `on_paid`, OpenReceive INFO). `LOG_LEVEL=DEBUG` for more OpenReceive detail; `--headed` / `--ui` to watch the browser. Weekly full run in `demos.yml`. | No |
 | `npm run test:e2e:smoke` | The lightning spec's React tab only — the per-push `e2e-smoke` job in `ci.yml`. | No |
@@ -29,5 +29,5 @@
 | `npm run build:docs` | Validate the docs manifest and build the docs import/search artifact under `dist/docs`. | No |
 | `npm run build:demo` | Build the Hello Fruit demos. | No |
 | `npm run test:package-smoke` | Pack every JS workspace package into local tarballs, assemble an offline temporary project, and import each package. | No |
-| `npm run test -w @openreceive/example-rails` | Run the Rails Hello Fruit example's own test suite (also a per-push CI job). | No |
-| `npm run test:live:nwc` | Live wallet smoke harness. Reads `NWC_URI` from the environment or root `.env`, checks `tools/live-nwc-test/expected_capabilities.json` by default, then skips clearly when unset. | Optional |
+| `npm run test -w @openreceive/example-rails` | The Rails example's currency-constant drift check (`script/check-currency-drift.mjs`) — not its test suite. The suite is `bin/rails test`; `bin/ci` runs setup, the stubbed-wallet integration tests and the gem audit, and is what the per-push `rails-example` CI job runs. | No |
+| `npm run test:live:nwc` | Live wallet smoke harness. Reads `NWC_URI` from the environment or root `.env`, checks `tools/live-nwc-test/expected_capabilities.json` by default, then skips clearly when unset. Stops after preflight unless `OPENRECEIVE_LIVE_CREATE_INVOICE=1` — the same opt-in as the Ruby smoke, so one command means one thing on both engines. | Optional |

@@ -28,7 +28,9 @@ namespace :openreceive do
         begin
           OpenReceive.reconcile!
         rescue StandardError => error
-          warn "openreceive:notifications periodic reconcile failed (will retry): #{error.message}"
+          # Redacted: a connect failure can quote the NWC URI, secret and all.
+          warn "openreceive:notifications periodic reconcile failed (will retry): " \
+               "#{OpenReceive.sanitize_failure_message(error)}"
         end
         sleep interval
       end
@@ -56,7 +58,8 @@ namespace :openreceive do
       if failure.nil?
         warn "openreceive:notifications subscription ended; retrying in #{backoff}s"
       else
-        warn "openreceive:notifications error: #{failure.message}; retrying in #{backoff}s " \
+        warn "openreceive:notifications error: " \
+             "#{OpenReceive.sanitize_failure_message(failure)}; retrying in #{backoff}s " \
              "(the periodic reconcile pass still covers settlements)"
       end
       sleep backoff

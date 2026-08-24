@@ -2,8 +2,9 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { root } from "../shared/root.mjs";
+import { walkFiles } from "../shared/walk-files.mjs";
 
-const root = process.cwd();
 const examplesRoot = path.join(root, "examples");
 const ignoredDirs = new Set([".git", "node_modules"]);
 
@@ -88,24 +89,6 @@ function collectClientBundleDirs(dir) {
   }
 
   return dirs;
-}
-
-function walkFiles(dir) {
-  const files = [];
-
-  for (const entry of readdirSync(dir)) {
-    const fullPath = path.join(dir, entry);
-    const stat = statSync(fullPath);
-
-    if (stat.isDirectory()) {
-      files.push(...walkFiles(fullPath));
-      continue;
-    }
-
-    if (stat.isFile()) files.push(fullPath);
-  }
-
-  return files;
 }
 
 const findings = [];

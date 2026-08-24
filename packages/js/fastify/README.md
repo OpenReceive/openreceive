@@ -15,6 +15,8 @@ await fastify.register(openReceiveFastify, {
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
     onPaid: async ({ reference, query }) => {
+      // Host SQL reaches your driver VERBATIM: `?` on sqlite as shown,
+      // `$1` on postgres. Nothing rewrites placeholders.
       await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
     },
   },
@@ -48,6 +50,15 @@ Construct the pieces yourself (shared service, custom repository, tests) and
 pass them in. `createHost` is the persistence step: it owns the
 `openreceive_payments` rows — per-reference commit locking, write-once settlement,
 and the reconciliation state machine.
+
+Composing needs `@openreceive/http` and `@openreceive/node` as direct
+dependencies of your app — they are transitive dependencies of this adapter, so
+under pnpm or any strict-resolution install, importing them without adding them
+fails:
+
+```sh
+npm install @openreceive/http @openreceive/node
+```
 
 ```ts
 import { openReceiveFastify } from "@openreceive/fastify";

@@ -1,9 +1,14 @@
 // The payment wizard's own markup: the method grid, the network selector, the
 // route/asset pickers, and the breadcrumb trail. The deposit panel and the
 // provider tutorial modal are rendered by the two sibling modules.
+
+import type { CheckoutPaymentMethod, SwapLimitContext } from "@openreceive/browser/headless";
 import {
+  assetButtonClasses,
   buildMethodGridEntries,
+  checkoutLabels,
   createPaymentWizardModel,
+  createSwapUnavailableModel,
   createWizardRouteAssetDisplays,
   createWizardRouteDisplays,
   escapeHtml,
@@ -14,33 +19,32 @@ import {
   getPaymentMethodIcon,
   getSwapOptionIcon,
   getWizardEmptyMessage,
-  OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
-  assetButtonClasses,
-  checkoutLabels,
   networkButtonClasses,
   networkCheckClasses,
   networkMobileRevealClasses,
   networkSummaryIconClasses,
-  paymentAccentId,
+  OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
+  orClasses,
   type PaymentMethod,
-  paymentMethods,
   type PaymentWizardSelection,
+  paymentAccentId,
+  paymentMethods,
   swapAssetMatchesRoute,
   swapGroupLimitOption,
   swapPickerKey,
   type WizardRouteAssetDisplay,
-  orClasses,
+  wizardNetworkGroupIds,
 } from "@openreceive/browser/headless";
-import type { ElementsSwapOption, ElementsWizardView } from "./views.ts";
+import {
+  renderProviderOpenActionHtml,
+  renderTutorialModalHtml,
+} from "./render-provider-tutorial.ts";
 import {
   elementsSwapLimitMessage,
   renderElementSwapActionsHtml,
   renderElementSwapPanelHtml,
 } from "./render-swap-panel.ts";
-import {
-  renderProviderOpenActionHtml,
-  renderTutorialModalHtml,
-} from "./render-provider-tutorial.ts";
+import type { ElementsSwapOption, ElementsWizardView } from "./views.ts";
 
 function wizardStartingAsset(view: ElementsWizardView): string | undefined {
   const asset = view.startingSwapAsset;
@@ -55,6 +59,26 @@ function swapGroupIsStarting(
     startingAsset !== undefined &&
     group.options.some((option) => option.pay_in_asset === startingAsset)
   );
+}
+
+/**
+ * The out-of-range pane. Same model, same copy, same accepted range as React's
+ * `renderSwapUnavailable` — the shared `createSwapUnavailableModel` owns all
+ * three, so the two renderers can only differ in markup.
+ */
+function renderElementSwapUnavailableHtml(
+  quote: CheckoutPaymentMethod,
+  checkout: SwapLimitContext | undefined,
+): string {
+  const model = createSwapUnavailableModel(quote, checkout);
+  return `<section part="swap-panel" class="${orClasses.swapPanel}">
+      <div part="swap-heading" class="${orClasses.swapHeading}">
+        <strong class="${orClasses.swapHeadingTitle}">${escapeHtml(model.title)}</strong>
+      </div>
+      <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(model.detail)}</p>
+      ${model.range === undefined ? "" : `<p class="${orClasses.swapWarning}">${escapeHtml(model.range)}</p>`}
+      <p class="${orClasses.swapProgress}">${escapeHtml(model.hint)}</p>
+    </section>`;
 }
 
 export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
@@ -114,25 +138,33 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
                 ? `<section part="swap-panel" class="${orClasses.swapPanel}">
                     <div part="swap-error" role="alert" class="${orClasses.paymentStatus}">
                       <div class="${orClasses.paymentStatusBody}">
-                        <strong class="${orClasses.paymentStatusTitle}">Could not prepare the payment address</strong>
+                        <strong class="${orClasses.paymentStatusTitle}">${escapeHtml(checkoutLabels.swapStartFailedTitle)}</strong>
                         <p class="${orClasses.paymentStatusDetail}">${escapeHtml(view.swapStartError)}</p>
                         <button
                           part="swap-retry"
                           class="${orClasses.btn}"
                           type="button"
-                          ${selectedSwapAsset === null || selectedSwapAsset === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedSwapAsset)}"`}
-                        >Try again</button>
+                          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedSwapAsset)}"
+                        >${escapeHtml(checkoutLabels.tryAgain)}</button>
                       </div>
                     </div>
                   </section>`
-                : `<section part="swap-panel" class="${orClasses.swapPanel}">
+                : view.unavailableSwapQuote !== undefined
+                  ? renderElementSwapUnavailableHtml(
+                      view.unavailableSwapQuote,
+                      view.swapLimitContext,
+                    )
+                  : `<section part="swap-panel" class="${orClasses.swapPanel}">
                     <div part="status" class="${orClasses.paymentStatus}">
                       <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
                       <div class="${orClasses.paymentStatusBody}">
-                        <strong class="${orClasses.paymentStatusTitle}">Preparing payment address</strong>
-                        <p class="${orClasses.paymentStatusDetail}">Getting your ${escapeHtml(
-                          selectedSwapOption?.label ?? "coin",
-                        )} payment address…</p>
+                        <strong class="${orClasses.paymentStatusTitle}">${escapeHtml(checkoutLabels.preparingPaymentAddress)}</strong>
+                        <p class="${orClasses.paymentStatusDetail}">${escapeHtml(
+                          checkoutLabels.preparingPaymentAddressDetail.replace(
+                            "{asset}",
+                            selectedSwapOption?.label ?? "coin",
+                          ),
+                        )}</p>
                       </div>
                     </div>
                   </section>`
@@ -385,8 +417,7 @@ function renderElementNetworkSelectorHtml(
     selectedAsset === undefined
       ? undefined
       : group.options.find((option) => option.pay_in_asset === selectedAsset);
-  const panelId = `network-panel-${groupKey.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
-  const headingId = `network-heading-${groupKey.toLowerCase()}`;
+  const { panelId, headingId } = wizardNetworkGroupIds(groupKey);
   const networkButtons = group.options
     .map((option) => {
       const optionDisabled = option.available === false;
@@ -517,7 +548,7 @@ function renderElementSwapMethodGroupHtml(
     ? (swapGroupLimitOption(group.options) ?? activeOption)
     : activeOption;
   const limitMessage = elementsSwapLimitMessage(limitOption, view);
-  const panelId = `network-panel-${groupKey.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
+  const { panelId } = wizardNetworkGroupIds(groupKey);
   const networkDetail =
     !disabled && multiNetwork
       ? selected && selectedOption !== undefined

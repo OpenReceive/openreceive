@@ -1,6 +1,6 @@
 import {
-  type CreateOpenReceiveHttpHandlerOptions,
-  type CreateOpenReceiveStackOptions,
+  type CreateHttpHandlerOptions,
+  type CreateStackOptions,
   createHttpHandler,
   createStack,
   createProxyRateLimitingConfig,
@@ -61,10 +61,10 @@ interface ExpressAdapterExtras {
   readonly trustProxyIpHeader?: boolean | string;
 }
 
-export interface ExpressOptions extends CreateOpenReceiveHttpHandlerOptions, ExpressAdapterExtras {}
+export interface ExpressOptions extends CreateHttpHandlerOptions, ExpressAdapterExtras {}
 
 /** All-in-one form: host hooks + `wallet` + `storage`; the middleware builds service and host. */
-export interface ExpressStackOptions extends CreateOpenReceiveStackOptions, ExpressAdapterExtras {}
+export interface ExpressStackOptions extends CreateStackOptions, ExpressAdapterExtras {}
 
 /**
  * Build an Express middleware that serves the OpenReceive routes under its prefix.

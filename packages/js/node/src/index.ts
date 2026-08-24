@@ -86,9 +86,9 @@ export type {
 } from "./swap/index.ts";
 export { readNwcFromEnvironment } from "./require-nwc.ts";
 export type { RequireNwcFromEnvironmentOptions } from "./require-nwc.ts";
-export { createHostConsoleLogger } from "./console-logger.ts";
+export { createAppConsoleLogger } from "./console-logger.ts";
 export type {
-  CreateHostConsoleLoggerOptions,
-  CreateOpenReceiveConsoleLoggerOptions,
-  HostConsoleLogger,
+  CreateAppConsoleLoggerOptions,
+  CreateConsoleLoggerOptions,
+  AppConsoleLogger,
 } from "./console-logger.ts";

@@ -89,7 +89,7 @@ export function validateCheckoutProps(props: CheckoutPropsValidation): void {
   const snapshot = props.checkout ?? null;
   if (snapshot === null && (props.reference === undefined || props.reference.length === 0)) {
     throw new TypeError(
-      `${props.framework} Checkout requires a checkout snapshot or an reference (create mode).`,
+      `${props.framework} Checkout requires a checkout snapshot or a reference (create mode).`,
     );
   }
   if (snapshot === null) return;
@@ -101,6 +101,6 @@ export function validateCheckoutProps(props: CheckoutPropsValidation): void {
   const warn = props.warn ?? ((message: string) => globalThis.console?.warn?.(message));
   warn(
     `${props.framework} Checkout ignores ${ignored.join(", ")} in snapshot mode; ` +
-      "those props only apply when the component creates the checkout from an reference.",
+      "those props only apply when the component creates the checkout from a reference.",
   );
 }

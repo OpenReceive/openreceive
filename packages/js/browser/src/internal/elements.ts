@@ -100,7 +100,7 @@ export function createCheckoutElementAttributes(
   if (snapshot === null) {
     if (options.reference === undefined || options.reference.length === 0) {
       throw new TypeError(
-        "OpenReceive checkout element create mode requires an reference when no snapshot is given.",
+        "OpenReceive checkout element create mode requires a reference when no snapshot is given.",
       );
     }
     return {

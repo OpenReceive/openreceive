@@ -47,7 +47,6 @@ module OpenReceive
         handle(request_id) do
           body = parse(raw_body, "checkout.prepare", request: request)
           reference = required_reference(body)
-          reject_payer_amount(body)
           guard("checkout.prepare", request, { reference: reference })
           resolved = resolve_host("checkout.prepare", request, reference, body)
           prepared = @service.prepare_checkout("amount" => required_amount(resolved))
@@ -59,7 +58,6 @@ module OpenReceive
         handle(request_id) do
           body = parse(raw_body, "checkout.create", request: request)
           reference = required_reference(body)
-          reject_payer_amount(body)
           authorize!("checkout.create", request, { reference: reference })
           resolved = resolve_host("checkout.create", request, reference, body)
           # Rate limits meter minting only: re-serving an already-committed
@@ -120,7 +118,6 @@ module OpenReceive
         handle(request_id) do
           body = parse(raw_body, "swap.quote", request: request)
           reference = required_reference(body)
-          reject_payer_amount(body)
           asset = required(body["pay_in_asset"], "pay_in_asset")
           guard("swap.quote", request, { reference: reference })
           resolved = resolve_host("swap.quote", request, reference, body, asset)
@@ -132,7 +129,6 @@ module OpenReceive
         handle(request_id) do
           body = parse(raw_body, "swap.create", request: request)
           reference = required_reference(body)
-          reject_payer_amount(body)
           asset = required(body["pay_in_asset"], "pay_in_asset")
           authorize!("swap.create", request, { reference: reference })
           resolved = resolve_host("swap.create", request, reference, body, asset)
@@ -189,9 +185,24 @@ module OpenReceive
             []
           end
           raw = pairs.filter_map { |key, value| value if key == "currencies" }.first
-          currencies = raw&.split(",")&.map(&:strip)&.reject(&:empty?)
+          currencies = parse_rates_currencies(raw)
           success(200, @service.list_rates(currencies.nil? ? {} : { "currencies" => currencies }), request_id)
         end
+      end
+
+      # The payer's ?currencies filter. Shape is checked HERE, at the wire
+      # boundary and with the same message as the JS handler's ratesCurrencies,
+      # so a malformed entry is a 400 in both engines rather than falling
+      # through to the service's rates-unavailable path.
+      def parse_rates_currencies(raw)
+        return nil if raw.nil?
+
+        currencies = raw.split(",").map(&:strip).reject(&:empty?)
+        if currencies.empty? || currencies.any? { |value| !/\A[A-Za-z]{3}\z/.match?(value) }
+          raise ValidationError,
+                "currencies must be a comma-separated list of three-letter currency codes."
+        end
+        currencies
       end
 
       def error_response(error, request_id)
@@ -359,7 +370,8 @@ module OpenReceive
       # The keys a normalized NwcTransaction actually carries. `state`,
       # `amount` and `fees_paid` were never on it (they normalize to
       # transaction_state / amount_msats / fees_paid_msats), so whitelisting
-      # them silently omitted the very fields this list exists to expose.
+      # them silently omitted the very fields this list exists to expose. The
+      # JS pick list is now the same, field for field.
       # Never widen this to preimage or invoice: those stay server-side.
       PUBLIC_TRANSACTION_FIELDS = %w[
         payment_hash transaction_state amount_msats fees_paid_msats
@@ -470,7 +482,9 @@ module OpenReceive
         return if allowed.nil?
         # A payer-supplied amount is the one undeclared field worth naming: the
         # generic "unexpected field" message reads like a typo when the caller
-        # is actually reaching for the price authority.
+        # is actually reaching for the price authority. Every route in
+        # ROUTE_BODY_FIELDS passes through here, so this is THE gate — routes
+        # do not repeat it.
         reject_payer_amount(body)
         body.each_key do |key|
           unless allowed.include?(key)
@@ -528,10 +542,22 @@ module OpenReceive
       end
 
       def selected_payment_hash(resolved, requested_hash)
-        selected = required_payment_hash(resolved["payment_hash"])
+        selected = host_payment_hash(resolved["payment_hash"])
         return selected if selected == requested_hash
 
         raise NotFoundError, "The selected payment attempt does not belong to this order."
+      end
+
+      # A payment hash the HOST resolver returned. A missing or malformed value
+      # here is a host integration bug, never payer input: it surfaces as a 500
+      # naming the host, not as a payer-blaming 400. Same ruling and the same
+      # wire message as the JS handler's hostPaymentHash.
+      def host_payment_hash(value)
+        hash = value.is_a?(String) ? value.strip.downcase : nil
+        return hash if !hash.nil? && /\A[0-9a-f]{64}\z/.match?(hash)
+
+        raise InternalHostError,
+              "The host resolver returned a missing or malformed payment hash for this reference."
       end
 
       def reject_payer_amount(body)
@@ -546,9 +572,11 @@ module OpenReceive
         end
 
         data = OpenReceive.as_string_keys(checkout)
-        hash = required(data["payment_hash"] || data["paymentHash"], "payment_hash").downcase
-        selected = required(resolved["payment_hash"], "payment_hash").downcase
-        checkout_order = required(data["reference"] || data["reference"], "reference")
+        # Both hashes come from the host snapshot and the host resolver, so a
+        # missing or malformed one is host data, not payer input.
+        hash = host_payment_hash(data["payment_hash"])
+        selected = host_payment_hash(resolved["payment_hash"])
+        checkout_order = required(data["reference"], "reference")
         if hash != selected || checkout_order != reference
           raise ConflictError, "The selected payment attempt is not a reusable pending checkout."
         end

@@ -54,17 +54,16 @@ export function selectCheckoutDisplayInvoice(
   const withBolt11 = nonLock.filter(
     (invoice) => typeof invoice.invoice === "string" && invoice.invoice.length > 0,
   );
-  const settledBolt11 = withBolt11.find(
-    (invoice) => invoice.transaction_state === "settled" || invoice.settled_at !== undefined,
-  );
+  // transaction_state is the server's verdict; the browser never re-derives
+  // "settled" from settled_at (see status.ts: one rule, one owner). settled_at
+  // is display-only.
+  const settledBolt11 = withBolt11.find((invoice) => invoice.transaction_state === "settled");
   if (settledBolt11 !== undefined) return settledBolt11;
   // Prefer a payable Lightning invoice for QR/copy when one exists (even next to a
   // settled swap shadow).
   if (withBolt11[0] !== undefined) return withBolt11[0];
   // Swap-only checkout: surface the swap invoice (null bolt11) so settlement is visible.
-  const settledSwap = nonLock.find(
-    (invoice) => invoice.transaction_state === "settled" || invoice.settled_at !== undefined,
-  );
+  const settledSwap = nonLock.find((invoice) => invoice.transaction_state === "settled");
   return settledSwap ?? nonLock[0];
 }
 
@@ -227,7 +226,7 @@ export function createCheckoutSnapshotFromInvoice(
     ...(attempt.settled_at === undefined ? {} : { settled_at: attempt.settled_at }),
     ...(attempt.swap === undefined ? {} : { swap: attempt.swap }),
   };
-  const paid = attempt.settled_at !== undefined || attempt.transaction_state === "settled";
+  const paid = attempt.transaction_state === "settled";
   return {
     checkout_id: identity.checkout_id ?? invoiceId,
     reference: identity.reference ?? invoiceId,

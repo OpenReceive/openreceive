@@ -13,7 +13,6 @@ import type { SwapProviderApiRequestLog, SwapProviderApiResponseLog } from "./pr
 export interface FixedFloatWeightBudget {
   reserve(path: string): Promise<void>;
   markRateLimited(): Promise<void>;
-  canReserve(path: string): Promise<boolean>;
 }
 
 interface FixedFloatEnvelope {
@@ -101,11 +100,6 @@ export class FixedFloatTransport {
 
   attachWeightBudget(budget: FixedFloatWeightBudget): void {
     this.weightBudget = budget;
-  }
-
-  async canAcceptRequest(path: string): Promise<boolean> {
-    if (this.weightBudget === undefined) return true;
-    return await this.weightBudget.canReserve(path);
   }
 
   async post(path: string, body: Record<string, unknown>): Promise<unknown> {

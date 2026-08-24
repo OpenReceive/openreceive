@@ -16,31 +16,31 @@ module OpenReceive
         ASSET_INFO = {
           "SOL_SOL" => {
             "pay_in_asset" => "SOL_SOL", "label" => "SOL", "network_label" => "Solana",
-            "coin" => "SOL", "network" => "SOL", "expiry_seconds" => 900
+            "coin" => "SOL", "network" => "SOL"
           }.freeze,
           "USDT_TRON" => {
             "pay_in_asset" => "USDT_TRON", "label" => "USDT", "network_label" => "Tron",
-            "coin" => "USDT", "network" => "TRX", "expiry_seconds" => 900
+            "coin" => "USDT", "network" => "TRX"
           }.freeze,
           "USDT_SOL" => {
             "pay_in_asset" => "USDT_SOL", "label" => "USDT", "network_label" => "Solana",
-            "coin" => "USDT", "network" => "SOL", "expiry_seconds" => 900
+            "coin" => "USDT", "network" => "SOL"
           }.freeze,
           "USDC_SOL" => {
             "pay_in_asset" => "USDC_SOL", "label" => "USDC", "network_label" => "Solana",
-            "coin" => "USDC", "network" => "SOL", "expiry_seconds" => 900
+            "coin" => "USDC", "network" => "SOL"
           }.freeze,
           "ETH_ETH" => {
             "pay_in_asset" => "ETH_ETH", "label" => "ETH", "network_label" => "Ethereum",
-            "coin" => "ETH", "network" => "ETH", "expiry_seconds" => 1800
+            "coin" => "ETH", "network" => "ETH"
           }.freeze,
           "USDT_ETH" => {
             "pay_in_asset" => "USDT_ETH", "label" => "USDT", "network_label" => "Ethereum",
-            "coin" => "USDT", "network" => "ETH", "expiry_seconds" => 1800
+            "coin" => "USDT", "network" => "ETH"
           }.freeze,
           "USDC_ETH" => {
             "pay_in_asset" => "USDC_ETH", "label" => "USDC", "network_label" => "Ethereum",
-            "coin" => "USDC", "network" => "ETH", "expiry_seconds" => 1800
+            "coin" => "USDC", "network" => "ETH"
           }.freeze
         }.freeze
 

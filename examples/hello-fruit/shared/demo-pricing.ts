@@ -4,32 +4,26 @@ import {
   DecimalError,
   convertAmountViaBtcRates,
   multiplyAmount,
-  parseDecimal,
   sumAmounts,
   type BtcFiatRateMap,
 } from "@openreceive/core";
 
 export type HelloFruitBtcFiatRates = BtcFiatRateMap;
 
-/** Rate keys are lowercase ISO 4217 codes, exactly as the demo servers emit them. */
-const HELLO_FRUIT_RATE_CURRENCY_PATTERN = /^[a-z]{3}$/;
-
 /**
- * THE parse boundary for a `GET /rates` body, shared by every demo client.
+ * Shape adaptation for a `GET /rates` body, shared by every demo client.
  *
  * Each demo keeps its own fetch — that is the integration style each one
  * exists to show — but none of them may keep its own idea of what a rate map
- * is. A cast (`body.rates as HelloFruitBtcFiatRates`) bounds the TYPE and
- * nothing else: the compiler then believes `rates.bitcoin.usd` is a decimal
- * string when the demo server may have sent no `bitcoin` object at all, or a
- * price the money engine cannot parse (Ruby's `BigDecimal#to_s` emits
- * `0.1e6`; a feed outage placeholder emits anything). Both reach a formatter
- * inside render.
+ * is. The one real difference between the engines is the value type: the JS
+ * service serializes rates as JSON numbers and the Ruby service as decimal
+ * strings, so numbers are coerced to strings here. That is adapter work.
  *
- * Returns `undefined` — the same "rates are not loaded" value every caller
- * already handles — when the body carries no usable rate, and drops individual
- * currencies it cannot use rather than failing the whole map, so one dead
- * currency never costs the ones that arrived intact.
+ * It is NOT a validation boundary. `/rates` is the demo's own endpoint over
+ * the trusted service's `listRates`, so a rate that arrives is a rate. Rates
+ * arriving LATE is the real case every caller handles, and `undefined` — the
+ * same "rates are not loaded" value — is the answer for a body with no
+ * `bitcoin` map yet.
  */
 export function parseHelloFruitBtcFiatRates(payload: unknown): HelloFruitBtcFiatRates | undefined {
   const bitcoin = asHelloFruitRecord(asHelloFruitRecord(payload)?.bitcoin);
@@ -37,28 +31,10 @@ export function parseHelloFruitBtcFiatRates(payload: unknown): HelloFruitBtcFiat
 
   const rates: Record<string, string> = {};
   for (const [key, value] of Object.entries(bitcoin)) {
-    const currency = key.toLowerCase();
-    if (!HELLO_FRUIT_RATE_CURRENCY_PATTERN.test(currency)) continue;
-    const rate = usableHelloFruitBtcFiatRate(value);
-    if (rate !== undefined) rates[currency] = rate;
+    rates[key.toLowerCase()] = String(value);
   }
 
   return Object.keys(rates).length === 0 ? undefined : { bitcoin: rates };
-}
-
-/**
- * A rate is usable when it is a positive decimal the shared money engine can
- * parse — the same question `parseBtcFiatPrice` asks before it throws, asked
- * here where the answer can be "skip this currency" instead.
- */
-function usableHelloFruitBtcFiatRate(value: unknown): string | undefined {
-  const rate = typeof value === "number" && Number.isFinite(value) ? String(value) : value;
-  if (typeof rate !== "string") return undefined;
-  try {
-    return parseDecimal(rate).units > 0n ? rate : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function asHelloFruitRecord(value: unknown): Record<string, unknown> | undefined {
@@ -79,12 +55,9 @@ function asHelloFruitRecord(value: unknown): Record<string, unknown> | undefined
  * where a bad rate must surface instead of quietly pricing an order wrong.
  *
  * The catch is deliberately unfiltered. Conversion throws at least three ways —
- * `DecimalError` for a bad amount, `PriceFeedError` for a
- * missing or malformed rate, `TypeError` for a rate map that is not shaped like
- * one — and a display boundary that enumerates error types is a boundary that
- * leaks the next one. {@link parseHelloFruitBtcFiatRates} is what keeps a
- * malformed server payload out of the state in the first place; this is the
- * second half of that pair, not a substitute for it.
+ * `DecimalError` for a bad amount, `PriceFeedError` for a missing rate,
+ * `TypeError` for a rate map that is not shaped like one — and a display
+ * boundary that enumerates error types is a boundary that leaks the next one.
  */
 export function toHelloFruitDisplayAmount(
   amount: HelloFruitFiatAmount,

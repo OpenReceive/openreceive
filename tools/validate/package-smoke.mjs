@@ -23,7 +23,7 @@ const importChecks = {
   "@openreceive/angular":
     "typeof mod.createWrapperCheckoutBinding === 'function' && typeof mod.createWrapperCheckoutShellBinding === 'function' && typeof mod.createWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createThemeModel === 'function' && typeof mod.createStoredThemeModel === 'function' && typeof mod.defineElements === 'function' && typeof mod.validateCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createThemeToggleElement === undefined && mod.createWrapperCheckoutController === undefined && mod.createWrapperCheckoutShell === undefined && mod.createWrapperThemeBinding === undefined && mod.createWrapperStoredThemeBinding === undefined",
   "@openreceive/browser":
-    "typeof mod.requestCheckout === 'function' && typeof mod.deriveStatus === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function'",
+    "typeof mod.requestCheckout === 'function' && typeof mod.deriveStatus === 'function' && typeof mod.createLightningUri === 'function' && typeof mod.createQrSvg === 'function' && typeof mod.createQrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function'",
   "@openreceive/core":
     "typeof mod.reconcilePaymentAttempts === 'function' && typeof mod.isTransactionSettled === 'function'",
   "@openreceive/elements":
@@ -123,6 +123,7 @@ function writeImportSmoke(installDir, packages) {
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import * as browserHeadless from "@openreceive/browser/headless";
+import * as browserMain from "@openreceive/browser";
 import providerRegistryJson from "@openreceive/provider-data/registry.json" with { type: "json" };
 
 const checks = ${JSON.stringify(checks, null, 2)};
@@ -143,14 +144,18 @@ assert(
     typeof browserHeadless.orClasses === "object",
   "@openreceive/browser/headless: renderer plumbing and the headless engine surface must be importable"
 );
-// ...and package-private engine names are not. CheckoutWatcher and
-// refreshCheckoutState are engine internals; readJsonResponse
-// belongs to the main entry.
+// ...and package-private engine names are not. CheckoutWatcher,
+// refreshCheckoutState and readJsonResponse are engine internals: no wrapper,
+// example or doc names them, on either entry point.
 assert(
   browserHeadless.CheckoutWatcher === undefined &&
     browserHeadless.refreshCheckoutState === undefined &&
     browserHeadless.readJsonResponse === undefined,
   "@openreceive/browser/headless: package-private engine names must stay off the subpath"
+);
+assert(
+  browserMain.readJsonResponse === undefined,
+  "@openreceive/browser: readJsonResponse is an engine internal, not a public export"
 );
 assert(
   browserHeadless.paymentIconUrls.lightning.includes("/dist/assets/icons/lightning.svg") &&

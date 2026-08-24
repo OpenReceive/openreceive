@@ -16,6 +16,7 @@ import {
   jsonResponse,
   HttpError,
 } from "./errors.ts";
+import type { AttemptStatus } from "./payment-repository.ts";
 import {
   assertDeclaredFields,
   MAX_REFERENCE_LENGTH,
@@ -83,13 +84,25 @@ export interface ResolvedHostCheckout {
   readonly checkout?: Checkout;
   /** Server-only structured provider state loaded from the host database. */
   readonly swapData?: SwapData;
+  /**
+   * The selected attempt's stored status and settlement time, when the
+   * resolver read them. `payments/check` serves this on the row path
+   * (`gate_busy`, a hash outside the pending set, reconcile disabled) instead
+   * of re-reading the rows the resolver listed moments earlier in the same
+   * request — that route is the highest-frequency one there is. A custom
+   * `resolveCheckout` may omit it; the row is then re-read.
+   */
+  readonly attemptStatus?: {
+    readonly status: AttemptStatus;
+    readonly paidAt: number | null;
+  };
 }
 
 export type ResolveCheckoutHook = (
   context: ResolveCheckoutContext,
 ) => ResolvedHostCheckout | Promise<ResolvedHostCheckout>;
 
-export interface CreateOpenReceiveHttpHandlerOptions {
+export interface CreateHttpHandlerOptions {
   readonly service: OpenReceive;
   /** Host authentication and authorization policy. OpenReceive never inspects host sessions. */
   readonly authorize: Authorize;
@@ -128,7 +141,13 @@ export interface CreateOpenReceiveHttpHandlerOptions {
    * `{ minIntervalSeconds }` to tune.
    */
   readonly opportunisticReconcile?: boolean | { readonly minIntervalSeconds?: number };
-  /** Clock override (unix seconds) for the opportunistic reconcile gate. */
+  /**
+   * Clock override (unix seconds) for every time-dependent decision the
+   * handler makes: the opportunistic reconcile gate AND the `payments/check`
+   * payment-methods cache TTL. A test that overrides it to control the gate
+   * also controls that cache — which is the point (one clock, one handler),
+   * but worth knowing before a frozen clock keeps a warmed catalog forever.
+   */
   readonly clock?: () => number;
   readonly prefix?: string;
 }
@@ -139,7 +158,7 @@ export interface HttpHandler {
   handle(request: Request, extras?: { native?: unknown }): Promise<Response>;
 }
 
-interface Runtime extends CreateOpenReceiveHttpHandlerOptions {
+interface Runtime extends CreateHttpHandlerOptions {
   readonly prefix: string;
   /** The resolved limiter: the custom `rateLimitHook` or the built-in per-IP one. */
   readonly rateLimit?: RateLimit;
@@ -160,7 +179,7 @@ interface Runtime extends CreateOpenReceiveHttpHandlerOptions {
   readonly paymentMethods: Map<number, { readonly at: number; readonly methods: unknown }>;
 }
 
-export function createHttpHandler(options: CreateOpenReceiveHttpHandlerOptions): HttpHandler {
+export function createHttpHandler(options: CreateHttpHandlerOptions): HttpHandler {
   if (options?.service === undefined) throw new TypeError("HTTP handler requires service.");
   if (options.authorize === undefined) {
     throw new TypeError("HTTP handler requires authorize; authentication belongs to the host.");
@@ -249,10 +268,22 @@ async function dispatch(
     );
   }
 
-  // Any payment call is a settlement trigger: after the route matches and
-  // before its own work, run one durably gated reconcile pass (never throws;
-  // a failed scan must not fail this request). `payments/check` consumes this
-  // pass result below — exactly one gate claim per request.
+  // AFTER readJsonBody's cheap refusals (cross-site, content type, body cap)
+  // and the body's own field checks — the same
+  // crawlers-must-not-consume-the-scan-budget argument that exempts GET
+  // /rates. An anonymous garbage POST is refused without a DB read, without
+  // claiming the gate, and without triggering a wallet scan.
+  const body = await readJsonBody(request);
+  // Before the generic field whitelist, so a payer pricing attempt is refused
+  // by name instead of as an unexpected field.
+  rejectPayerAmount(body);
+  assertDeclaredFields(route.kind, body);
+  const reference = requiredString(body.reference, "reference", MAX_REFERENCE_LENGTH);
+
+  // Any payment call is a settlement trigger: before the route's own work, run
+  // one durably gated reconcile pass (never throws; a failed scan must not
+  // fail this request). `payments/check` consumes this pass result below —
+  // exactly one gate claim per request.
   const reconcilePass: OpportunisticReconcileResult | undefined =
     runtime.reconcile === undefined
       ? undefined
@@ -266,13 +297,6 @@ async function dispatch(
             clock: runtime.clock,
           }),
         });
-
-  const body = await readJsonBody(request);
-  // Before the generic field whitelist, so a payer pricing attempt is refused
-  // by name instead of as an unexpected field.
-  rejectPayerAmount(body);
-  assertDeclaredFields(route.kind, body);
-  const reference = requiredString(body.reference, "reference", MAX_REFERENCE_LENGTH);
 
   if (route.kind === "checkout.prepare") {
     await authorizeAndRateLimit(runtime, "checkout.prepare", request, { reference }, native);
@@ -363,7 +387,12 @@ async function dispatch(
     const checkedBody =
       fromPass !== undefined && fromPass.status !== "not_found"
         ? paymentCheckFromReconcilePass(fromPass)
-        : await paymentCheckFromStoredAttempt(runtime.host.payments, reference, paymentHash);
+        : await paymentCheckFromStoredAttempt(
+            runtime.host.payments,
+            reference,
+            paymentHash,
+            resolved.attemptStatus,
+          );
     // Catalog warms on the first check; clients keep "Loading currencies…" until
     // payment_methods is present (even as an empty Lightning-only list). Polls
     // inside the warm window reuse the cached catalog — a ~3s status poll must
@@ -557,7 +586,7 @@ async function resolveHostCheckout(
  * repository without `countAttemptsFromIp` (and no custom counter in the config) fails
  * handler construction instead of silently falling back to process-local memory.
  */
-function resolveRateLimiting(options: CreateOpenReceiveHttpHandlerOptions): RateLimit | undefined {
+function resolveRateLimiting(options: CreateHttpHandlerOptions): RateLimit | undefined {
   if (options.rateLimiting === undefined || options.rateLimiting === false) return undefined;
   const config = options.rateLimiting === true ? {} : options.rateLimiting;
   const payments = options.host.payments;
@@ -729,9 +758,10 @@ async function recoverCommittedSwap(
   const paymentHash = hostPaymentHash(resolved.paymentHash);
   const swapData = requireResolvedSwapData(resolved.swapData);
   const status = await runtime.service.getSwap({ reference, paymentHash, swapData });
+  // committedCheckout is the host-boundary check here: the checkout snapshot is
+  // host-supplied and must agree with the resolved hash. getSwap's own
+  // reference/paymentHash are verbatim echoes of the arguments just passed in,
+  // so comparing them would only compare our service with itself.
   const checkout = committedCheckout(reference, resolved);
-  if (status.reference !== reference || status.paymentHash !== paymentHash) {
-    throw new HttpError(409, "CONFLICT", "The host swap data does not match its payment hash.");
-  }
   return { ...status, checkout, swapData };
 }

@@ -18,6 +18,7 @@ const test = (await import("node:test")).default;
 const { mkdirSync, readFileSync, writeFileSync } = await import("node:fs");
 const path = (await import("node:path")).default;
 const { fileURLToPath, pathToFileURL } = await import("node:url");
+const { until } = await import("./helpers/lifecycle-harness.mjs");
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Inside the repo so bare specifiers (vue, svelte/internal/client) resolve from
@@ -82,16 +83,6 @@ async function loadSvelteCheckout() {
 }
 
 /** Poll until predicate() is truthy (its value is returned) or fail with `label`. */
-async function until(predicate, { timeoutMs = 4000, label = "condition" } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const value = predicate();
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${label}`);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
-
 /** Stub the endpoints a create-mode element hits; records every request path. */
 function stubFetch(reference) {
   const calls = [];
@@ -136,9 +127,13 @@ async function assertMountedShell(container, reference, calls) {
   // The element really runs: its connected callback prepares the checkout and
   // renders the shadow tree.
   await until(() => element.shadowRoot?.innerHTML.length > 0, {
+    timeoutMs: 4000,
+    stepMs: 5,
     label: "checkout shadow render",
   });
   const prepare = await until(() => calls.find((p) => p.endsWith("/checkouts/prepare")), {
+    timeoutMs: 4000,
+    stepMs: 5,
     label: "checkout prepare request",
   });
   assert.equal(
@@ -148,7 +143,7 @@ async function assertMountedShell(container, reference, calls) {
   );
 }
 
-test("the Vue wrapper mounts: createApp renders the checkout shell for an reference", async () => {
+test("the Vue wrapper mounts: createApp renders the checkout shell for a reference", async () => {
   const reference = "order-vue-mount";
   const calls = stubFetch(reference);
   const Checkout = await loadVueCheckout();
@@ -198,7 +193,7 @@ test("the mounted Vue wrapper honors the documented boolean prop defaults", asyn
   }
 });
 
-test("the Svelte wrapper mounts: svelte mount() renders the checkout shell for an reference", async () => {
+test("the Svelte wrapper mounts: svelte mount() renders the checkout shell for a reference", async () => {
   const reference = "order-svelte-mount";
   const calls = stubFetch(reference);
   const Checkout = await loadSvelteCheckout();

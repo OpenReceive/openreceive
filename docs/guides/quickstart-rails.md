@@ -119,7 +119,10 @@ OpenReceive.configure do |config|
   end
 
   # Runs inside the settlement transaction, only for the order's first settled
-  # attempt. Update the order or insert an outbox row here.
+  # attempt. Update the order or insert an outbox row here — plain
+  # ActiveRecord, because the engine WRAPS this block in the transaction.
+  # (The JS engine instead hands onPaid a `query` handle, since nothing wraps
+  # it there; that is the one shape difference between the two stacks.)
   config.on_paid = lambda do |settlement|
     # settlement exposes reference, payment_hash, paid_at, and details.
     Order.find(settlement.reference).update!(status: "paid")
@@ -184,13 +187,16 @@ defineElements();
 The element creates the checkout for `reference`, then renders and polls
 itself. React/Vue/Svelte/Angular apps use the matching wrapper package
 instead — same props and defaults ([Frontend checkout](frontend-checkout.md)).
-The Rails Hello Fruit demo renders a fully custom UI over
-`@openreceive/browser/headless` ([Headless checkout](headless-checkout.md)).
+The Rails Hello Fruit demo mounts the packaged `@openreceive/react` components
+and drives them from mobx-keystone stores fed by
+`@openreceive/browser/headless` ([Headless checkout](headless-checkout.md)) —
+custom state, packaged UI.
 
 ## Reconciliation
 
-Settlement runs on the request path by default: every mounted engine route
-runs one opportunistic reconcile pass when attempts are pending, serialized by
+Settlement runs on the request path by default: every mounted engine payment
+route (not the unauthenticated `GET /rates`) runs one opportunistic reconcile
+pass when attempts are pending, serialized by
 the durable `openreceive_meta` gate from the install migration. The
 gate is shared by all Puma workers on the database, so rapid calls collapse to
 one bounded wallet scan per interval — no scheduled job is needed. Disable or

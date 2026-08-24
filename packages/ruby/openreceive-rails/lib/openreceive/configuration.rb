@@ -82,12 +82,17 @@ module OpenReceive
 
     def service
       validate!
+      # The Rails logger, so the service's operator diagnostics actually land:
+      # the detailed invoice-expiry rejection ("requested Xs, got Ys…") and the
+      # spend-capable override warning are logged, never sent, so without this
+      # a Rails operator saw only the short 502 wire message.
       @service ||= OpenReceive::Server::Service.new(
         nwc_client: resolved_nwc_client,
         price_provider: @price_provider,
         swap_providers: @swap_providers,
         price_currencies: @price_currencies,
-        allow_spend_capable_wallet: @allow_spend_capable_wallet
+        allow_spend_capable_wallet: @allow_spend_capable_wallet,
+        logger: rails_logger
       )
     end
 
@@ -318,18 +323,26 @@ module OpenReceive
       end
     end
 
+    # Memoized for real: `||= begin ... return ... end` returned out of the
+    # method BEFORE the assignment, so the injected-client and
+    # client-shaped-string paths never cached — and reset_runtime! cleared an
+    # ivar they never set.
     def resolved_nwc_client
-      @resolved_nwc_client ||= begin
-        return @nwc_client unless @nwc_client.nil?
-        connection = @nwc || ENV["NWC_URI"]&.strip
-        if connection.nil? || connection.empty?
-          raise ConfigurationError, "Set NWC_URI, or configure OpenReceive.config.nwc/nwc_client explicitly."
-        end
-        return connection if connection.respond_to?(:make_invoice) || connection.respond_to?(:makeInvoice)
+      @resolved_nwc_client ||= build_resolved_nwc_client
+    end
 
-        raw = build_nwc_ruby_client(connection)
-        OpenReceive::NwcRubyReceiveClient.new(client: raw, connection_uri: connection)
+    def build_resolved_nwc_client
+      return @nwc_client unless @nwc_client.nil?
+
+      connection = @nwc || ENV["NWC_URI"]&.strip
+      if connection.nil? || connection.empty?
+        raise ConfigurationError, "Set NWC_URI, or configure OpenReceive.config.nwc/nwc_client explicitly."
       end
+      return connection if connection.respond_to?(:make_invoice) || connection.respond_to?(:makeInvoice)
+
+      OpenReceive::NwcRubyReceiveClient.new(
+        client: build_nwc_ruby_client(connection), connection_uri: connection
+      )
     end
 
     def build_nwc_ruby_client(connection)

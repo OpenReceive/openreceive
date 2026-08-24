@@ -57,8 +57,11 @@ class OpenReceivePayment < ActiveRecord::Base
   # mark_paid_once! evaluate reads only openreceive_payments rows, so the lock
   # is keyed by the order id alone.
   #
-  # Postgres takes a transaction-scoped advisory lock, matching the JS
-  # repository's lockReference so both engines can serve one database. MySQL has no
+  # Postgres takes a transaction-scoped advisory lock with the same algorithm
+  # and seed (8_210_223) as the JS repository's lockReference — the same LOCK,
+  # not the same schema: the JS DDL stores unix-seconds BIGINTs and TEXT
+  # checkout_data/swap_data where the Rails migration uses datetime columns and
+  # t.json, so one table cannot serve both engines. MySQL has no
   # transaction-scoped equivalent, so it takes a session-scoped named lock
   # around the transaction and releases it after commit. SQLite serializes
   # writers itself, so the transaction is the boundary; the payment_hash UNIQUE
@@ -126,8 +129,7 @@ class OpenReceivePayment < ActiveRecord::Base
         matches_create_action?(payment, action, pay_in_asset)
       end
       if matching.length > 1
-        raise AttemptConflict,
-              "This order has multiple live payment attempts for the same method; reconcile them before creating another."
+        raise AttemptConflict, "This reference has multiple unpaid checkouts in progress for this payment method; wait for them to expire before creating another."
       end
 
       selected = matching.first
@@ -174,7 +176,7 @@ class OpenReceivePayment < ActiveRecord::Base
         decision = live_attempt_commit_decision(live, swap_data, now)
         case decision
         when :conflict
-          raise AttemptConflict, "This order already has a live payment attempt for the same method."
+          raise AttemptConflict, "An unpaid checkout for this payment method is already in progress for this reference."
         when :supersede
           # Marked, not closed: the invoice stays payable until it expires
           # wallet-side, and closing it here on the local clock would drop it
@@ -295,14 +297,15 @@ class OpenReceivePayment < ActiveRecord::Base
     left_asset == right_asset
   end
 
-  # swap_data reaches the model with camelCase keys (JS widget flow) or
-  # snake_case (Ruby flow), and with string or symbol keys depending on the
-  # host's JSON column coder — probe all four spellings once, here.
+  # swap_data reaches the model with string or symbol keys depending on the
+  # host's JSON column coder, so both are probed. The camelCase `providerOrder`
+  # spelling the JS engine writes is NOT: swap and attempt recovery is
+  # per-engine (docs/guides/storage.md), because the two schemas cannot serve
+  # one table anyway — the JS DDL stores unix-seconds BIGINTs and TEXT
+  # checkout_data/swap_data where this engine's migration uses datetime columns
+  # and t.json. A half-alias implied a portability that does not work end to end.
   def self.swap_provider_order_value(swap, key)
-    swap&.dig("providerOrder", key.to_s) ||
-      swap&.dig("provider_order", key.to_s) ||
-      swap&.dig(:providerOrder, key.to_sym) ||
-      swap&.dig(:provider_order, key.to_sym)
+    swap&.dig("provider_order", key.to_s) || swap&.dig(:provider_order, key.to_sym)
   end
 
   def self.swap_pay_in_asset(swap)

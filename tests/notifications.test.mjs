@@ -101,7 +101,11 @@ test("client subscribeNotifications carries the settlement finality signal throu
   ]);
 });
 
-test("client subscribeNotifications survives a malformed payload as a hash-only hint", async () => {
+// The hint contract, not distrust: a notification NEVER settles anything on
+// its own — it wakes the bounded scan, which is the thing that reads the
+// wallet. So a payload the normalizer cannot read still delivers its hash and
+// drops the transaction; the scan decides settlement either way.
+test("an unreadable notification payload still arrives as a hash-only hint", async () => {
   const sdk = notifyingSdkClient();
   const client = createNwcReceiveClient({ connectionString: VALID_NWC, client: sdk });
   const received = [];
@@ -113,31 +117,23 @@ test("client subscribeNotifications survives a malformed payload as a hash-only 
     notification_type: "payment_received",
     notification: { payment_hash: hash("c"), amount: "not-an-integer" },
   });
-  // Tolerant normalization degrades the unparsable amount to "field absent";
-  // the hash still arrives and the amount-less transaction can never satisfy
-  // the settlement rule, so it only wakes reconciliation.
-  assert.deepEqual(received, [
-    {
-      type: "payment_received",
-      payment_hash: hash("c"),
-      transaction: { payment_hash: hash("c") },
-    },
-  ]);
+  assert.deepEqual(received, [{ type: "payment_received", payment_hash: hash("c") }]);
 });
 
-test("client subscribeNotifications handles a subscription-object unsubscribe shape", async () => {
-  let unsubbed = 0;
+// ONE unsubscribe contract, not a probe over four method names: the committed
+// @getalby/sdk resolves subscribeNotifications to an unsubscribe function, and
+// anything else is a client that does not meet the contract.
+test("client subscribeNotifications requires an unsubscribe function", async () => {
   const sdk = notifyingSdkClient({
     subscription: () => ({
       unsub() {
-        unsubbed += 1;
+        throw new Error("a subscription object is not the contract");
       },
     }),
   });
   const client = createNwcReceiveClient({ connectionString: VALID_NWC, client: sdk });
   const unsubscribe = await client.subscribeNotifications(() => {});
-  await unsubscribe();
-  assert.equal(unsubbed, 1);
+  await assert.rejects(() => unsubscribe(), /must resolve to an unsubscribe function/);
 });
 
 test("client subscribeNotifications rejects UNSUPPORTED_METHOD when the wallet lacks it", async () => {
