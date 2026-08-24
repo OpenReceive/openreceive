@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0-alpha.0 - Unreleased
+## 0.2.1 - Unreleased
 
 OpenReceive is pre-release and has no compatibility or migration commitments;
 this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
@@ -433,6 +433,16 @@ violations, closed 7 wrapper-parity gaps, and finished the `order_id` →
 
 - Per-push `rails-example` job; `check:public-api` runs per push; wrapper type
   checks (`vue-tsc`, `svelte-check`) and real wrapper mount tests.
+
+### Release
+
+- `npm run release:gem:build` works on prerelease versions. RubyGems rewrites
+  an npm-style prerelease through `Gem::Version` (`0.2.0-alpha.0` becomes
+  `0.2.0.pre.alpha.0`), so the release script no longer guesses the artifact
+  filename from the workspace version — it normalizes through Ruby, builds
+  straight into the output directory with `gem build --output`, and compares
+  that same normalized version against rubygems.org when checking whether a
+  version is already published.
 
 ## 0.1.1 - 2026-08-18
 

@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-nextjs-fullstack",
-  "version": "0.2.0-alpha.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,12 +9,12 @@
     "start": "node ../../../../tools/run-with-root-env.mjs next start -H 0.0.0.0 -p ${PORT:-3002}"
   },
   "dependencies": {
-    "@openreceive/browser": "0.2.0-alpha.0",
-    "@openreceive/core": "0.2.0-alpha.0",
-    "@openreceive/http": "0.2.0-alpha.0",
-    "@openreceive/next": "0.2.0-alpha.0",
-    "@openreceive/node": "0.2.0-alpha.0",
-    "@openreceive/react": "0.2.0-alpha.0",
+    "@openreceive/browser": "0.2.1",
+    "@openreceive/core": "0.2.1",
+    "@openreceive/http": "0.2.1",
+    "@openreceive/next": "0.2.1",
+    "@openreceive/node": "0.2.1",
+    "@openreceive/react": "0.2.1",
     "next": "^15.5.19",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
