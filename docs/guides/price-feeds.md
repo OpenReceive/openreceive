@@ -22,6 +22,12 @@ If `priceCurrencies` is omitted, OpenReceive falls back to `["USD"]`. Keep this
 non-secret allowlist in your normal Node configuration module or Rails
 initializer.
 
+The primary feed is CoinGecko's public Simple Price endpoint
+(`api.coingecko.com`); the fallback is the OpenReceive mirror at
+`openreceive.org`, which serves the same response shape. A refresh only
+contacts the fallback when the primary fails or times out. Expect outbound
+HTTPS to both hosts from any process that quotes fiat amounts.
+
 The same currency list is the checkout-creation allowlist. Pass the actual order
 currency in `amount.currency` (uppercase). For Bitcoin-denominated products, use
 `amount: { currency: "BTC", value: "0.005" }` or `amount: { sats: 7000 }` —
