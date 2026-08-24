@@ -72,7 +72,11 @@ npm run release:gem:publish -- --otp <code>
 `release:gem:plan` is read-only and reports version drift.
 `release:gem:build` builds all three `.gem` artifacts under
 `.release/gems/<version>` (CI builds the gems via `./tools/ci/ruby-gem-build.sh`
-on every push/PR). `release:gem:publish` requires a clean worktree, runs
+on every push/PR). RubyGems rewrites prerelease versions — a workspace version
+of `0.2.0-alpha.0` becomes `0.2.0.pre.alpha.0` in both the artifact filename and
+what rubygems.org reports — so the artifact directory is named for the workspace
+version while the files inside carry the RubyGems form, and `gem install`
+needs `--pre` to select a prerelease. `release:gem:publish` requires a clean worktree, runs
 `npm run test:ruby`, checks the target versions are not already on RubyGems,
 rebuilds, and pushes in dependency order (`openreceive`,
 `openreceive-server`, `openreceive-rails`). The RubyGems account requires MFA

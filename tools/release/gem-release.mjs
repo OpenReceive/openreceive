@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -127,26 +127,48 @@ function outDirFor(root, version, args) {
   return path.resolve(root, String(args.out ?? path.join(".release", "gems", version)));
 }
 
+// RubyGems does not use the workspace's version string verbatim: Gem::Version
+// rewrites an npm-style prerelease, so "0.2.0-alpha.0" becomes
+// "0.2.0.pre.alpha.0" in the built filename AND in what rubygems.org reports.
+// Ask Ruby instead of reimplementing those rules — guessing the filename is
+// what broke `release:gem:build` for every prerelease.
+const gemVersionCache = new Map();
+
+function toGemVersion(root, version) {
+  const cached = gemVersionCache.get(version);
+  if (cached !== undefined) return cached;
+  const normalized = run(
+    "ruby",
+    ["-e", 'require "rubygems"; print Gem::Version.new(ARGV[0]).to_s', version],
+    root,
+  ).trim();
+  assert(normalized.length > 0, `could not normalize gem version ${version}`);
+  gemVersionCache.set(version, normalized);
+  return normalized;
+}
+
 function buildGems(root, args) {
   const version = assertGemVersionsReady(root);
   const outDir = outDirFor(root, version, args);
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
+  const gemVersion = toGemVersion(root, version);
   const artifacts = [];
   for (const name of GEM_NAMES) {
     const cwd = gemDir(root, name);
-    const gemFile = `${name}-${version}.gem`;
-    console.error(`building ${gemFile}`);
-    run("gem", ["build", `${name}.gemspec`], root, { cwd, stdio: ["ignore", "pipe", "pipe"] });
-    const builtPath = path.join(cwd, gemFile);
-    assert(existsSync(builtPath), `${name}: expected ${gemFile} after gem build`);
-    const outPath = path.join(outDir, gemFile);
-    copyFileSync(builtPath, outPath);
-    rmSync(builtPath);
-    artifacts.push({ name, version, path: outPath });
+    const outPath = path.join(outDir, `${name}-${gemVersion}.gem`);
+    console.error(`building ${path.basename(outPath)}`);
+    // --output writes the artifact where we want it, so nothing lands in the
+    // gem source dir and no copy/cleanup dance is needed.
+    run("gem", ["build", `${name}.gemspec`, "--output", outPath], root, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    assert(existsSync(outPath), `${name}: expected ${path.basename(outPath)} after gem build`);
+    artifacts.push({ name, version, gemVersion, path: outPath });
   }
-  return { version, outDir, artifacts };
+  return { version, gemVersion, outDir, artifacts };
 }
 
 function assertGemNotPublished(root, name, version) {
@@ -180,7 +202,7 @@ function publishGems(root, args) {
     run("npm", ["run", "test:ruby"], root, { stdio: "inherit" });
   }
   for (const name of GEM_NAMES) {
-    assertGemNotPublished(root, name, version);
+    assertGemNotPublished(root, name, toGemVersion(root, version));
   }
   const { artifacts } = buildGems(root, args);
   for (const artifact of artifacts) {
@@ -190,7 +212,7 @@ function publishGems(root, args) {
       console.log(`dry-run: gem ${pushArgs.join(" ")}`);
       continue;
     }
-    console.error(`publishing ${artifact.name}@${artifact.version}`);
+    console.error(`publishing ${artifact.name}@${artifact.gemVersion}`);
     run("gem", pushArgs, root, { stdio: "inherit" });
   }
   console.log(
