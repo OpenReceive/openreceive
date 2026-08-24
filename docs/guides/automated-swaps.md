@@ -5,7 +5,7 @@ provider for deposit instructions. Both values are committed on one `openreceive
 attempt row before those instructions reach the payer. One row holds exactly one provider
 order; a swap retry creates another row with a fresh invoice hash.
 
-Node applications configure provider credentials with optional `LSC_URI_PRIMARY` and
+Your application configures provider credentials with optional `LSC_URI_PRIMARY` and
 `LSC_URI_BACKUP` environment variables ([Environment variables](environment-variables.md)).
 Primary is used exclusively while it is healthy; backup is only for primary outage. See
 [Lightning Swap Connect](lightning-swap-connect.md) for the URI grammar and
@@ -30,7 +30,7 @@ and refuses states other than `refund_required`.
 
 Once the wallet reports the shadow invoice settled, the order's outcome can no longer change,
 so OpenReceive stops polling the provider. The stored `provider_state` is therefore the last
-snapshot taken *before* settlement, and it can lag arbitrarily far behind the provider's real
+snapshot taken _before_ settlement, and it can lag arbitrarily far behind the provider's real
 terminal status. A fast provider can run its whole deposit → payout sequence inside one poll
 interval — a settled order can legitimately still record `awaiting_deposit` even though the
 provider finished (paying the Lightning invoice is what settled the order).
