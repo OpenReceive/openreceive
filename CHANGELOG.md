@@ -1,10 +1,8 @@
 # Changelog
 
-## 0.2.1 - Unreleased
+## 0.2.1
 
-OpenReceive is pre-release and has no compatibility or migration commitments;
-this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
-behind.
+First test publish to NPM and RubyGems
 
 ### Second audit sweep
 
@@ -229,7 +227,7 @@ violations, closed 7 wrapper-parity gaps, and finished the `order_id` →
 
 - `createOpenReceiveStack` and the adapters' all-in-one form take
   `wallet: { nwc } | { service }` and `storage: { db, onPaid, tableName? } |
-  { payments, onPaid }` instead of five optional, mutually-constrained
+{ payments, onPaid }` instead of five optional, mutually-constrained
   top-level keys. `onPaid`'s parameter type follows the storage branch, the
   "exactly one of nwc or service" runtime check is gone (the type says so),
   and the cast that once landed a custom repository in db mode is gone with
