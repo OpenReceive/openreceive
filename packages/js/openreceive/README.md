@@ -8,6 +8,12 @@ package for your frontend, and the rest comes along as dependencies.
 npm install @openreceive/express @openreceive/react
 ```
 
+Those two are an example, not a requirement. Swap `@openreceive/express` for
+`@openreceive/fastify` or `@openreceive/next`, and `@openreceive/react` for
+`@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, or
+`@openreceive/elements` (framework-free custom element). On Rails, use the
+`openreceive-rails` gem instead of a Node adapter.
+
 See the [Node quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md).
 
 This package is ESM-only and requires Node >= 22.
