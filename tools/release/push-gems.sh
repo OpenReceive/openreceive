@@ -283,7 +283,7 @@ if [ "$DRY_RUN" = false ] && [ "${#pushed[@]}" -gt 0 ]; then
   cat <<EOF
 
 Next:
-  gem owner openreceive          # MUST list the OpenReceive account, not the-megalith-node
+  gem owner openreceive          # MUST list the OpenReceive account
   tools/release/gh-release.sh    # or runbook 2.12: gh release create v$VERSION …
 EOF
 fi
