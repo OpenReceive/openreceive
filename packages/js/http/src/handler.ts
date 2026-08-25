@@ -172,9 +172,9 @@ interface Runtime extends CreateHttpHandlerOptions {
   /** Resolved opportunistic-reconcile tuning; undefined means disabled. */
   readonly reconcile: { readonly minIntervalSeconds?: number } | undefined;
   /**
-   * Handler-local warm cache for `payments/check` payment_methods: the swap
-   * catalog is served from here while fresh, so ~3s status polls do not walk
-   * the provider catalog on every request.
+   * Handler-local warm cache for the payment_methods catalog echoed by
+   * `checkouts` and `payments/check`: served from here while fresh, so neither
+   * the mint nor a ~3s status poll walks the provider catalog per request.
    */
   readonly paymentMethods: Map<number, { readonly at: number; readonly methods: unknown }>;
 }
@@ -352,7 +352,19 @@ async function dispatch(
         attempt: (minted) => ({ paymentHash: minted.paymentHash, checkout: minted }),
       },
     );
-    return jsonResponse(201, { checkout: httpCheckout(checkout) }, requestId);
+    // The catalog rides along with the mint for the same reason it rides along
+    // with prepare and payments/check: a client that just minted Lightning
+    // must not lose the pay-in options it renders its picker from. Served from
+    // the same warm cache as payments/check, so echoing it costs no extra
+    // provider walk on the mint path.
+    return jsonResponse(
+      201,
+      {
+        checkout: httpCheckout(checkout),
+        payment_methods: await warmPaymentMethods(runtime, checkout.amountMsats),
+      },
+      requestId,
+    );
   }
 
   if (route.kind === "payment.check") {
@@ -402,7 +414,7 @@ async function dispatch(
       200,
       {
         ...checkedBody,
-        payment_methods: await checkPaymentMethods(runtime, checkout.amountMsats),
+        payment_methods: await warmPaymentMethods(runtime, checkout.amountMsats),
       },
       requestId,
     );
@@ -660,19 +672,20 @@ async function persistCheckoutAttempt(
   }
 }
 
-/** Seconds a `payments/check` payment_methods catalog stays warm per amount. */
+/** Seconds a payment_methods catalog stays warm per amount, across the routes that echo it. */
 const PAYMENT_METHODS_CACHE_SECONDS = 60;
 
 /** Amount buckets kept warm before the cache is cleared wholesale: a memory cap, not an LRU. */
 const PAYMENT_METHODS_CACHE_MAX_ENTRIES = 256;
 
 /**
- * The `payments/check` payment_methods list, from the handler-local warm cache
- * when fresh for this amount, otherwise from one `listSwapOptions` call. The
- * first check (and any check after the TTL) warms the catalog; every poll in
- * between serves the warmed copy.
+ * The payment_methods list echoed by `checkouts` and `payments/check`, from the
+ * handler-local warm cache when fresh for this amount, otherwise from one
+ * `listSwapOptions` call. The first call for an amount (and any call after the
+ * TTL) warms the catalog; the mint and every poll in between serve the warmed
+ * copy, so neither route walks the provider catalog per request.
  */
-async function checkPaymentMethods(runtime: Runtime, amountMsats: number): Promise<unknown> {
+async function warmPaymentMethods(runtime: Runtime, amountMsats: number): Promise<unknown> {
   const now = (runtime.clock ?? unixSeconds)();
   const cached = runtime.paymentMethods.get(amountMsats);
   if (cached !== undefined && now - cached.at < PAYMENT_METHODS_CACHE_SECONDS) {

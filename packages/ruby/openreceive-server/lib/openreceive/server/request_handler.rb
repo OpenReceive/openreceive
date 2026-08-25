@@ -73,7 +73,14 @@ module OpenReceive
                        )
                      end
           commit(checkout, nil, request) unless resolved["payment_hash"]
-          success(201, { "checkout" => checkout }, request_id)
+          # The catalog rides along with the mint for the same reason it rides
+          # along with prepare and payments/check (mirrors the JS handler): a
+          # client that just minted Lightning must not lose the pay-in options
+          # it renders its picker from. Amount-aware, against this attempt's
+          # committed invoice amount — and served on the re-fetch path too, so
+          # a repeated create answers with the same shape it first did.
+          payment_methods = @service.list_swap_options(amount_msats: checkout["amount_msats"])
+          success(201, { "checkout" => checkout, "payment_methods" => payment_methods }, request_id)
         end
       end
 

@@ -170,7 +170,7 @@ function validateContracts() {
   const openapi = readYaml("spec/openapi/openreceive-http.v1.yaml");
   assert(openapi.openapi === "3.1.0", "OpenAPI version must be 3.1.0");
   assert(
-    openapi.info?.version === "0.4.0",
+    openapi.info?.version === "0.4.1",
     "host-owned payment-attempt HTTP contract version mismatch",
   );
   const expectedPaths = [

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpenReceive host-owned payment HTTP API
-  version: 0.4.0
+  version: 0.4.1
   description: >
     Mounted receive-checkout routes. The host owns what is being paid for and its price; the library owns the openreceive_payments rows (they live in the host's database).
     It resolves every checkout amount and stores each payment attempt before a payer response.
@@ -288,9 +288,19 @@ components:
     CreateCheckoutResponse:
       type: object
       additionalProperties: false
-      required: [checkout]
+      required: [checkout, payment_methods]
       properties:
         checkout: { $ref: '#/components/schemas/Checkout' }
+        # Echoed for the same reason prepare and payments/check echo it: a
+        # client that mints Lightning must not lose the pay-in catalog it
+        # renders its picker from. Without it, minting Bitcoin erased the
+        # method list until the next poll, and only clients with a
+        # library-side merge (@openreceive/browser's requestCheckout
+        # `previous`) escaped that. The wire is the contract for everyone
+        # else, so the catalog is on the wire.
+        payment_methods:
+          type: array
+          items: { $ref: '#/components/schemas/PaymentMethod' }
     PaymentCheckRequest:
       type: object
       additionalProperties: false

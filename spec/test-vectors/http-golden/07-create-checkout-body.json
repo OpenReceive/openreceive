@@ -4,7 +4,9 @@
   "request": {
     "method": "POST",
     "path": "/openreceive/checkouts",
-    "body": { "reference": "order-golden-create" }
+    "body": {
+      "reference": "order-golden-create"
+    }
   },
   "expected": {
     "status": 201,
@@ -21,7 +23,8 @@
         "created_at": "<unix_seconds>",
         "expires_at": "<unix_seconds>",
         "fiat_quote": null
-      }
+      },
+      "payment_methods": []
     }
   }
 }

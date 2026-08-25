@@ -881,7 +881,7 @@ mount prefix (default `/openreceive`).
 | Route | Status | Response body |
 | --- | --- | --- |
 | `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ reference, amount_msats, fiat_quote?, payment_methods }` |
-| `POST …/checkouts` | 201 | `CreateCheckoutResponse` `{ checkout: Checkout }` |
+| `POST …/checkouts` | 201 | `CreateCheckoutResponse` `{ checkout: Checkout, payment_methods }` |
 | `POST …/payments/check` | 200 | `PaymentCheck` `{ payment_hash, status: PaymentStatus, paid_at?, details?: PaymentDetails, payment_methods }` |
 | `POST …/swaps/quote` | 200 | `SwapQuote` `{ provider, pay_asset: SwapPayInAsset, available, pay_amount?, minimum_pay_amount?, maximum_pay_amount?, minimum_invoice_amount_msats?, maximum_invoice_amount_msats?, unavailable_reason?, unavailable_message? }` |
 | `POST …/swaps` | 201 | `CreateSwapResponse` `{ swap: SwapCheckout }` |
@@ -1169,14 +1169,16 @@ From `@openreceive/browser`:
 `requestCheckout({ reference, prefix, fetch?, headers?, memo?, metadata?, previous? })`.
 POST `/checkouts`: mints (or reuses) a bolt11 and returns the snapshot.
 
+The response echoes `payment_methods` alongside `checkout` (contract 0.4.1), so
+the pay-in catalog survives a mint on its own — for any client, not just this
+package.
+
 Pass `previous` — the snapshot already on screen, normally what
-`prepareCheckout` returned — whenever you drive the prepare-then-mint flow
-yourself. The mint response carries the bolt11 alone, **not** the warmed
-`payment_methods` catalog, so without it the method list a picker renders from
-is erased: the payer selects Bitcoin, changes their mind, and the swap options
-are gone. With it, the mint is folded into the previous snapshot and both the
-catalog and any sibling swap attempt survive. The shipped renderers do this for
-you.
+`prepareCheckout` returned — when you drive the prepare-then-mint flow yourself
+and want snapshot **continuity**: it carries sibling attempts (a live swap next
+to the new bolt11) that the mint response knows nothing about. It also still
+carries the catalog forward against a server older than 0.4.1. The shipped
+renderers do this for you.
 
 ### `<Checkout>`
 

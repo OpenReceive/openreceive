@@ -443,7 +443,7 @@ test("concurrent host-row loser receives no payer instructions", async () => {
   assert.match(loser.message, /already in progress for this reference/);
 });
 
-test("HTTP payment check includes swap payment_methods from the provider catalog", async () => {
+test("HTTP mint and payment check both echo the swap catalog, on one provider walk", async () => {
   const wallet = createTestkitReceiveClient({ now: () => 1000 });
   const provider = createTestkitSwapProvider({ now: () => 1000 });
   const service = await createOpenReceive({
@@ -479,6 +479,18 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
   );
   assert.equal(created.status, 201);
   const createdBody = await created.json();
+  // R1: the mint echoes the catalog too, so a client with no prepared snapshot
+  // to merge against — a native app, a server-to-server caller, an SDK in
+  // another language — still has its pay-in options after minting Lightning.
+  assert.ok(Array.isArray(createdBody.payment_methods));
+  assert.ok(createdBody.payment_methods.length > 0);
+  assert.ok(
+    createdBody.payment_methods.some(
+      (method) => method.pay_in_asset === "USDT_TRON" && method.provider === "fixedfloat",
+    ),
+  );
+  assert.equal(provider.catalogCalls, 1, "the mint warms the catalog with one walk");
+
   const checked = await handler(
     new Request("http://test/openreceive/payments/check", {
       method: "POST",
@@ -499,6 +511,8 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
       (method) => method.pay_in_asset === "USDT_TRON" && method.provider === "fixedfloat",
     ),
   );
+  // Still ONE walk across mint + check: the echo rides the same warm cache, so
+  // putting the catalog on the create response costs no extra provider call.
   assert.equal(provider.catalogCalls, 1);
 
   // Polls inside the warm window serve the cached catalog: a ~3s status poll

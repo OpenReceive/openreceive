@@ -41,10 +41,11 @@ const started = await startSwapRequest({
 Checkout lifecycle:
 
 - `prepareCheckout` / `requestCheckout` — the prepare-then-mint calls (also on
-  the main entry). Both take `{ reference, prefix }`. Pass the prepared
-  snapshot back as `requestCheckout({ previous })`: the mint response carries
-  the bolt11 alone, so without it `payment_methods` is erased and the picker
-  loses its options the moment Bitcoin is selected.
+  the main entry). Both take `{ reference, prefix }`. The mint response echoes
+  `payment_methods`, so the picker keeps its options on its own; pass the
+  prepared snapshot back as `requestCheckout({ previous })` to also keep
+  sibling attempts (a live swap beside the new bolt11), and to keep the catalog
+  against a server older than contract 0.4.1.
 - `createCheckoutState`, `CheckoutState`, `CheckoutSnapshot`,
   `CheckoutInvoiceSnapshot` — engine state and snapshots.
 - `selectCheckoutDisplayInvoice`, `isReusableLightningInvoice` — invoice

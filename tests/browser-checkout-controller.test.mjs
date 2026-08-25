@@ -320,6 +320,9 @@ test("requestCheckout keeps payment_methods from the prepared snapshot", async (
       JSON.stringify({ reference: "order-1", amount_msats: 21_000, payment_methods: methods }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
+  // The shipped engines echo the catalog on the mint too (spec 0.4.1); this
+  // fetcher deliberately does NOT, standing in for an older server, so the test
+  // pins that `previous` alone still rescues the list.
   const mintFetch = async () =>
     new Response(
       JSON.stringify({
@@ -351,8 +354,9 @@ test("requestCheckout keeps payment_methods from the prepared snapshot", async (
   assert.equal(merged.active?.invoice, "lnbc-light");
   assert.equal(merged.checkout_id, hash("a"));
 
-  // Without `previous` the bare mint response is returned unchanged — the
-  // documented behaviour for a host that has no earlier snapshot to fold into.
+  // Against a server that does not echo, and with no `previous` to fold into,
+  // there is simply no catalog to be had — that is the case `previous` exists
+  // for, and the case R1 closed on the wire.
   const bare = await requestCheckout({
     prefix: "/openreceive",
     reference: "order-1",
@@ -360,6 +364,46 @@ test("requestCheckout keeps payment_methods from the prepared snapshot", async (
   });
   assert.equal(bare.payment_methods, undefined);
   assert.equal(bare.active?.invoice, "lnbc-light");
+});
+
+// R1: `POST /checkouts` echoes `payment_methods` as a sibling of `checkout`,
+// the way prepare and payments/check do. That is what makes the catalog
+// survive a mint for EVERY client — a native app, a server-to-server caller,
+// an SDK in another language — and not only for the ones holding a prepared
+// snapshot to pass as `previous`.
+test("requestCheckout reads payment_methods echoed by the mint response", async () => {
+  const methods = [
+    {
+      pay_in_asset: "USDT_TRON",
+      label: "USDT",
+      network_label: "Tron",
+      provider: "lsc",
+      available: true,
+    },
+  ];
+  const echoingMint = async () =>
+    new Response(
+      JSON.stringify({
+        checkout: {
+          payment_hash: hash("a"),
+          reference: "order-1",
+          amount_msats: 21_000,
+          bolt11: "lnbc-light",
+          expires_at: Math.floor(Date.now() / 1000) + 900,
+        },
+        payment_methods: methods,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+
+  // No `previous` anywhere: the catalog comes off the wire alone.
+  const minted = await requestCheckout({
+    prefix: "/openreceive",
+    reference: "order-1",
+    fetch: echoingMint,
+  });
+  assert.deepEqual(minted.payment_methods, methods);
+  assert.equal(minted.active?.invoice, "lnbc-light");
 });
 
 test("deferred-mode element attributes carry the same create-time options as create mode", () => {

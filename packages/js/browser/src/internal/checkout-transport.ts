@@ -399,7 +399,15 @@ function checkoutLockSnapshotFromPrepareBody(
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   const record = recordOrEmpty(body);
   const wrapped = recordOrEmpty(record.checkout);
-  return checkoutSnapshot(wrapped);
+  // `payment_methods` is a SIBLING of `checkout` in the create response, the
+  // way it is in prepare and payments/check. Reading it here is what lets a
+  // mint carry the pay-in catalog on its own; `previous` then only has to
+  // carry snapshot continuity (sibling attempts), not rescue the catalog.
+  const paymentMethods = normalizePaymentMethods(record.payment_methods);
+  return {
+    ...checkoutSnapshot(wrapped),
+    ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
+  };
 }
 
 function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {

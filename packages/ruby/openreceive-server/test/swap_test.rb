@@ -1178,4 +1178,30 @@ class SwapServiceIntegrationTest < Minitest::Test
     # 2_000_000 msats is below the 15_874_000 msats pair minimum.
     assert_equal "amount_too_small", usdt.fetch("unavailable_reason")
   end
+
+  # The mint echoes the same catalog prepare and payments/check do. Without it,
+  # a client that minted Lightning lost the pay-in options it renders its picker
+  # from until the next poll — and only clients with a library-side merge
+  # (@openreceive/browser's `previous`) escaped that. The wire is the contract
+  # for a native app or an SDK in another language, so the catalog is on it.
+  def test_create_checkout_wire_body_carries_amount_aware_payment_methods
+    service, = build_service("primary.example" => { mode: :ok })
+    handler = OpenReceive::Server::RequestHandler.new(
+      service: service,
+      authorize: ->(_context) { true },
+      resolve_checkout: ->(**_context) { { "amount" => { "sats" => 2_000 } } },
+      on_checkout_created: ->(**_payment) {},
+      on_paid: ->(_payment) {}
+    )
+    status, _headers, body = handler.create_checkout(
+      raw_body: JSON.generate("reference" => "order-mint-methods"),
+      request: { "CONTENT_TYPE" => "application/json" }, request_id: "req-mint-methods"
+    )
+    assert_equal 201, status
+    assert body.key?("checkout"), "the minted checkout is still the primary payload"
+    usdt = body.fetch("payment_methods").find { |option| option["pay_in_asset"] == "USDT_TRON" }
+    # Amount-aware against the minted attempt's own amount, exactly as on check:
+    # 2_000_000 msats is below the 15_874_000 msats pair minimum.
+    assert_equal "amount_too_small", usdt.fetch("unavailable_reason")
+  end
 end
