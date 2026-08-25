@@ -1,5 +1,6 @@
 // Payment icon URLs, resolved against this module's own URL so the same code
 // works from source, from the packaged dist, and from a host bundler's chunk.
+import { warnOnFileAssetUrl } from "@openreceive/provider-data";
 import type { PaymentMethod } from "./checkout-types.ts";
 
 const OPENRECEIVE_PAYMENT_ICON_IDS = [
@@ -16,6 +17,9 @@ const OPENRECEIVE_PAYMENT_ICON_IDS = [
   "xrp",
 ] as const;
 export type PaymentIconId = (typeof OPENRECEIVE_PAYMENT_ICON_IDS)[number];
+
+/** Packaged location of the icon files inside `@openreceive/browser`. */
+const PACKAGED_ICON_PREFIX = "assets/icons/";
 
 declare const __filename: string | undefined;
 
@@ -50,8 +54,20 @@ function paymentIconRoot(): string {
 }
 
 function paymentIconUrl(file: string): string {
-  return new URL(`${paymentIconRoot()}${file}`, moduleUrl).href;
+  const resolved = new URL(`${paymentIconRoot()}${file}`, moduleUrl).href;
+  warnOnFileAssetUrl(`${PACKAGED_ICON_PREFIX}${file}`, resolved);
+  return resolved;
 }
+
+/**
+ * The packaged PATH of each icon, independent of how (or whether) this module
+ * managed to resolve it to a URL. A host whose bundler leaves
+ * `import.meta.url` alone serves these files itself and maps them by path —
+ * see `AssetUrlResolver`.
+ */
+export const paymentIconPaths: Readonly<Record<PaymentIconId, string>> = Object.fromEntries(
+  OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, `${PACKAGED_ICON_PREFIX}${id}.svg`]),
+) as Readonly<Record<PaymentIconId, string>>;
 
 export const paymentIconUrls: Readonly<Record<PaymentIconId, string>> = Object.fromEntries(
   OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, paymentIconUrl(`${id}.svg`)]),

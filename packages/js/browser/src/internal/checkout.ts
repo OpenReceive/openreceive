@@ -32,6 +32,7 @@ export {
   createSwapDisplayModel,
   createSwapFeeBreakdown,
   swapAssetMatchesRoute,
+  swapDepositRisk,
   overlaySwapRefundStaging,
 } from "./checkout-swap-view.ts";
 // ./checkout-links.ts — outbound explorer / decoder links

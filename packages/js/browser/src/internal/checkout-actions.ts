@@ -84,6 +84,23 @@ export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
   );
 }
 
+/**
+ * Hand the invoice to the payer's wallet as a `lightning:` URI, and return the
+ * URI. **Touch devices.**
+ *
+ * The default path is `location.assign` on the CURRENT window — the right
+ * primitive for a custom-scheme deep link on a phone, and the wrong thing
+ * anywhere else. With no registered `lightning:` handler the call does nothing
+ * visible; with one, it navigates the payer off a checkout that is still
+ * polling `/payments/check`. Pass `open` to route the URI somewhere that is not
+ * the checkout window.
+ *
+ * This is why the shipped `<Checkout>` renders no wallet button of its own and
+ * exposes `components.OpenWalletButton` as an opt-in slot instead: a desktop
+ * payer is never sent to a handler that does not exist, next to the QR code
+ * that IS the desktop payment path. A custom UI drawing its own button owns
+ * that decision — see docs/guides/headless-checkout.md.
+ */
 export function openWallet(options: OpenWalletOptions): string {
   const uri = createLightningUri(options.invoice);
 

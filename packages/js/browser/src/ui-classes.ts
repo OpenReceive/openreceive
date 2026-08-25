@@ -124,6 +124,12 @@ export const orClasses = {
   swapEstimate: "text-base-content/60 m-0 text-sm",
   swapWarning: "alert alert-warning text-sm",
   swapNetworkWarning: "alert alert-error alert-soft text-sm items-start gap-3",
+  /**
+   * Same deposit heading on a rail whose address format pins both the chain and
+   * the asset (`SwapDepositRisk` "pinned"): identical layout, no alarm colour
+   * and no warning triangle. A red banner on every rail is read on none.
+   */
+  swapNetworkNotice: "alert alert-soft text-sm items-start gap-3",
   swapNetworkWarningIcon: "size-6 shrink-0 stroke-current",
   swapNetworkWarningContent: "grid gap-1 min-w-0",
   swapNetworkWarningTitle: "font-bold m-0",

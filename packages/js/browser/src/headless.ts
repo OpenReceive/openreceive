@@ -80,6 +80,7 @@ export {
   resolveTransactionDetailRows,
   selectCheckoutDisplayInvoice,
   swapAssetMatchesRoute,
+  swapDepositRisk,
 } from "./internal/checkout.ts";
 export {
   mergeAttemptIntoCheckout,
@@ -174,6 +175,7 @@ export type {
   QrEncoder,
   ResolvedTheme,
   StoredThemeModelOptions,
+  SwapDepositRisk,
   SwapDisplayModel,
   ThemeModel,
   ThemeModelOptions,
@@ -228,9 +230,15 @@ export {
   parsePaymentMethod,
   parseResolvedTheme,
   parseThemePreference,
+  paymentIconPaths,
   paymentIconUrls,
   paymentMethods,
 } from "./internal/ui.ts";
+// The host-side asset seam: packaged icon and tutorial URLs only resolve under
+// Vite/Rollup, so every display builder takes one of these and is handed the
+// packaged PATH instead. `paymentIconPaths` is the same key set for the icons
+// this package owns.
+export type { AssetUrlResolver } from "@openreceive/provider-data";
 export type {
   MethodGridEntry,
   SwapLimitContext,
@@ -268,6 +276,7 @@ export {
   resolvePreservedNetworkSelection,
   swapGroupLimitOption,
   swapOptionLimitMessage,
+  swapOptionLimitSentence,
   swapPickerKey,
   updatePaymentWizardSelection,
   updateSelectedSwapNetworks,

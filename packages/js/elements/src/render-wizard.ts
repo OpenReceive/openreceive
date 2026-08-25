@@ -90,8 +90,11 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
   const { wizard } = model;
   const routeAssetDisplays = createWizardRouteAssetDisplays(model.routeAssets, {
     selectedRoute: model.selectedRoute,
+    ...(view.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: view.resolveAssetUrl }),
   });
-  const routeDisplays = createWizardRouteDisplays(wizard.routes);
+  const routeDisplays = createWizardRouteDisplays(wizard.routes, {
+    ...(view.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: view.resolveAssetUrl }),
+  });
   const showRoutePicker =
     routeAssetDisplays.length > 0 && (model.selectedRoute === null || routeDisplays.length === 0);
   const breadcrumbs =
@@ -352,7 +355,7 @@ function renderElementCompactPaymentSelectorHtml(
             ${gridBusy ? 'disabled aria-disabled="true"' : ""}
           >
             <span aria-hidden="true" class="${orClasses.methodIconWrap}">
-              <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getPaymentMethodIcon(method.id))}">
+              <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getPaymentMethodIcon(method.id, view.resolveAssetUrl))}">
             </span>
             <span class="${orClasses.methodTitleWrap}">
               <span class="${orClasses.methodTitle}">${escapeHtml(method.title)}</span>
@@ -438,7 +441,7 @@ function renderElementNetworkSelectorHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}="${escapeHtml(option.pay_in_asset)}"
           >
             <span aria-hidden="true" class="grid size-6 shrink-0 place-items-center">
-              <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getNetworkIcon(option.network_label))}">
+              <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getNetworkIcon(option.network_label, view.resolveAssetUrl))}">
             </span>
             <span class="truncate">${escapeHtml(option.network_label)}</span>
             ${
@@ -596,7 +599,7 @@ function renderElementSwapMethodGroupHtml(
           ${
             starting
               ? `<span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>`
-              : `<img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getSwapOptionIcon(displayOption))}">`
+              : `<img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getSwapOptionIcon(displayOption, view.resolveAssetUrl))}">`
           }
         </span>
         <span class="${orClasses.methodTitleWrap}">

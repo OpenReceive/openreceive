@@ -212,7 +212,16 @@ export function SettledCheckIcon(): React.ReactElement {
   );
 }
 
-/** Collapsible "everything the client knows about this payment" panel, shown once settled. */
+/**
+ * Collapsible "everything the client knows about this payment" panel.
+ *
+ * @deprecated Superseded by `<TransactionDetails>`, which the shipped checkout
+ * now renders on settlement. This one has no copy button, no explorer link and
+ * no truncation contract, and its rows are a strict subset — so the payer's
+ * most keep-worthy screen had the least usable copy of the values it shows.
+ * Kept exported so an integrator who mounted it directly is not broken; new
+ * code should use `<TransactionDetails>`.
+ */
 export function PaymentData(props: {
   readonly source: PaymentDataSource;
   readonly className?: string;

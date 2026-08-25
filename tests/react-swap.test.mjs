@@ -14,6 +14,7 @@ import {
   createLightningInvoiceDecodeUrl,
   createDetailExternalLink,
   getExplorerNetwork,
+  swapDepositRisk,
   checkoutLabels,
 } from "@openreceive/browser/headless";
 // Test-only: an engine seam no renderer imports, read from its source module.
@@ -108,6 +109,100 @@ test("swap deposit warning stresses exact asset and network", () => {
   assert.match(html, /15\.01 USDT on the Solana network/);
   assert.match(html, /role="alert"/);
   assert.match(html, /alert-error/);
+});
+
+// The deposit warning is not uniform, and the axis is address ambiguity, not
+// native-vs-token: ETH_ETH is a native coin and needs the alarm most of
+// anything here, because a `0x…` address is the same string on six chains.
+// This table IS the intent — a new rail lands in it before it lands in the UI.
+const DEPOSIT_RISK_BY_RAIL = [
+  ["ETH_ETH", "chain_ambiguous"],
+  ["USDT_ETH", "chain_ambiguous"],
+  ["USDC_ETH", "chain_ambiguous"],
+  ["USDT_TRON", "asset_only"],
+  ["USDT_SOL", "asset_only"],
+  ["SOL_SOL", "pinned"],
+  // Native TRX: the symbol and the `TRON` network suffix are spelled
+  // differently, and it must still read as native rather than as a token.
+  ["TRX_TRON", "pinned"],
+  // A rail with no known address rule gets the full alarm, never the quiet one.
+  ["WIF_UNKNOWNCHAIN", "chain_ambiguous"],
+];
+
+test("deposit risk follows address ambiguity, not native-vs-token", () => {
+  for (const [payInAsset, expected] of DEPOSIT_RISK_BY_RAIL) {
+    assert.equal(swapDepositRisk(payInAsset), expected, payInAsset);
+  }
+});
+
+test("deposit panel shouts only on the rails a deposit can actually be lost on", () => {
+  const displayFor = (payInAsset) =>
+    createSwapDisplayModel({
+      invoice_id: `or_inv_${payInAsset}`,
+      rail: "swap",
+      transaction_state: "pending",
+      swap: {
+        provider: "fixedfloat",
+        pay_in_asset: payInAsset,
+        deposit_address: "deposit-address",
+        deposit_amount: "1.5",
+        provider_state: "awaiting_deposit",
+        provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+      },
+    });
+
+  for (const [payInAsset, expected] of DEPOSIT_RISK_BY_RAIL) {
+    const display = displayFor(payInAsset);
+    assert.equal(display?.depositRisk, expected, payInAsset);
+    if (expected === "pinned") {
+      assert.equal(display?.networkWarningTitle, checkoutLabels.sendExactAmountTitle, payInAsset);
+      assert.doesNotMatch(display?.networkWarning ?? "", /funds will be lost/, payInAsset);
+    } else {
+      assert.equal(
+        display?.networkWarningTitle,
+        checkoutLabels.wrongCurrencyOrNetworkTitle,
+        payInAsset,
+      );
+      assert.match(display?.networkWarning ?? "", /funds will be lost/, payInAsset);
+    }
+    // Double-paying is reachable on every rail, so this half is never dropped.
+    assert.match(display?.networkWarning ?? "", /Lightning invoice/, payInAsset);
+    assert.match(display?.networkWarning ?? "", /1\.5 /, payInAsset);
+  }
+});
+
+test("pinned rail renders the deposit heading without the alarm chrome", () => {
+  const panelHtml = (payInAsset) =>
+    renderToStaticMarkup(
+      renderSwapDepositPanel({
+        invoice: {
+          invoice_id: `or_inv_ui_${payInAsset}`,
+          rail: "swap",
+          swap: {
+            provider: "fixedfloat",
+            pay_in_asset: payInAsset,
+            deposit_address: "deposit-address",
+            deposit_amount: "1.5",
+            provider_state: "awaiting_deposit",
+            provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+          },
+        },
+        onBack: () => undefined,
+        onRefund: async () => undefined,
+      }),
+    );
+
+  const pinned = panelHtml("SOL_SOL");
+  assert.match(pinned, /data-or-deposit-risk="pinned"/);
+  assert.match(pinned, /Send the exact amount/);
+  assert.doesNotMatch(pinned, /role="alert"/);
+  assert.doesNotMatch(pinned, /alert-error/);
+
+  const ambiguous = panelHtml("ETH_ETH");
+  assert.match(ambiguous, /data-or-deposit-risk="chain_ambiguous"/);
+  assert.match(ambiguous, /Wrong currency or network = lost funds/);
+  assert.match(ambiguous, /role="alert"/);
+  assert.match(ambiguous, /alert-error/);
 });
 
 test("browser builds block explorer and Lightning decode links for transaction details", () => {

@@ -50,7 +50,19 @@ export const checkoutLabels = {
   transactionDetails: "Transaction details",
   viewOnExplorer: "Explorer",
   decodeInvoice: "Decode",
+  /**
+   * Deposit heading for a rail whose address does NOT pin the chain, or whose
+   * asset is a token an exchange will happily withdraw on the wrong one — the
+   * two ways a deposit is actually lost. See `SwapDepositRisk`.
+   */
   wrongCurrencyOrNetworkTitle: "Wrong currency or network = lost funds",
+  /**
+   * Deposit heading for a rail whose address format pins both the chain and the
+   * asset (SOL on Solana). Deliberately quiet: an alarm shown on every rail is
+   * read on none, and the rails where it is load-bearing — USDT on four
+   * networks, ETH on six — are the ones that pay for the erosion.
+   */
+  sendExactAmountTitle: "Send the exact amount",
   // Payer-facing copy the two renderers (React elements, element HTML) both
   // emit. The dual-renderer architecture is deliberate; duplicated strings are
   // not — the drift it already caused was React's hardcoded "Preparing..." next
@@ -82,6 +94,19 @@ export const checkoutLabels = {
   swapUnavailableRange: "Accepted range: {minimum}–{maximum} {asset}.",
   swapUnavailableHint:
     "Choose another asset above, or pay the Lightning invoice at the top of this page.",
+  /**
+   * One-sentence form of the same limit, for a grid that DISABLES a tile rather
+   * than navigating to the four-part pane above — a tooltip or caption has room
+   * for a sentence and nowhere to put a title, a detail, a range and a hint.
+   * Built by `swapOptionLimitSentence`, from the same figures as
+   * `swapOptionLimitMessage`, so the tile and the pane can never quote
+   * different numbers.
+   */
+  swapCartMinimumSentence: "To pay with {asset}, your cart total must be at least {amount}.",
+  swapCartMaximumSentence: "To pay with {asset}, your cart total must be at most {amount}.",
+  /** Same sentence when the provider only reported PAY-side limits. */
+  swapPayMinimumSentence: "To pay with {asset}, the minimum is {amount} {asset}.",
+  swapPayMaximumSentence: "To pay with {asset}, the maximum is {amount} {asset}.",
   /** Shown on the refund screen so the payer can return after closing the tab. */
   refundReturnWarning:
     "Bookmark this page, or copy its URL. You need it to return to this refund screen.",

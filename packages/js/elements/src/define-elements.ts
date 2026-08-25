@@ -458,6 +458,9 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             : { checkoutId: this.latestCheckoutSnapshot.checkout_id }),
           lightningInvoice: invoice,
           ...(decodeLinkUrl === undefined ? {} : { decodeLinkUrl }),
+          ...(options.resolveAssetUrl === undefined
+            ? {}
+            : { resolveAssetUrl: options.resolveAssetUrl }),
           ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
             ? {}
             : {

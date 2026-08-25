@@ -3,6 +3,7 @@
 // ./swap.ts and the provider tutorial modal in ./provider-tutorial.ts.
 import {
   assetButtonClasses,
+  type AssetUrlResolver,
   buildMethodGridEntries,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
@@ -186,8 +187,11 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const { wizard } = model;
   const routeAssetDisplays = createWizardRouteAssetDisplays(model.routeAssets, {
     selectedRoute: model.selectedRoute,
+    ...(props.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: props.resolveAssetUrl }),
   });
-  const routeDisplays = createWizardRouteDisplays(wizard.routes);
+  const routeDisplays = createWizardRouteDisplays(wizard.routes, {
+    ...(props.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: props.resolveAssetUrl }),
+  });
   const showRoutePicker =
     routeAssetDisplays.length > 0 && (model.selectedRoute === null || routeDisplays.length === 0);
   const activeTutorialProvider =
@@ -338,6 +342,9 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
             }
           },
           onContinueSwap: selectSwapAsset,
+          ...(props.resolveAssetUrl === undefined
+            ? {}
+            : { resolveAssetUrl: props.resolveAssetUrl }),
         })
       : null,
     selection.selectedMethod === null
@@ -536,6 +543,7 @@ function renderCompactPaymentMethodSelector(options: {
   readonly onSelectNetwork: (groupKey: string, payInAsset: string) => void;
   readonly onContinueMethod: (methodId: string) => void;
   readonly onContinueSwap: (payInAsset: string) => void;
+  readonly resolveAssetUrl?: AssetUrlResolver;
 }): React.ReactElement {
   const entries = buildMethodGridEntries(paymentMethods, options.swapAssetOptions);
   const currenciesLoading =
@@ -671,7 +679,7 @@ function renderCompactPaymentMethodSelector(options: {
                   React.createElement("img", {
                     alt: "",
                     className: orClasses.methodNetworkIcon,
-                    src: getNetworkIcon(option.network_label),
+                    src: getNetworkIcon(option.network_label, options.resolveAssetUrl),
                   }),
                 ),
                 React.createElement("span", { className: "truncate" }, option.network_label),
@@ -774,7 +782,7 @@ function renderCompactPaymentMethodSelector(options: {
                 React.createElement("img", {
                   alt: "",
                   className: orClasses.methodIcon,
-                  src: getPaymentMethodIcon(method.id),
+                  src: getPaymentMethodIcon(method.id, options.resolveAssetUrl),
                 }),
               ),
               React.createElement(
@@ -844,7 +852,7 @@ function renderCompactPaymentMethodSelector(options: {
                   : React.createElement("img", {
                       alt: "",
                       className: orClasses.methodIcon,
-                      src: getSwapOptionIcon(displayOption),
+                      src: getSwapOptionIcon(displayOption, options.resolveAssetUrl),
                     }),
               ),
               React.createElement(

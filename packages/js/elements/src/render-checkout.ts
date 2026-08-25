@@ -3,7 +3,6 @@ import {
   type CheckoutState,
   createCheckoutStatusModel,
   createLightningInvoiceDecodeUrl,
-  createPaymentDataEntries,
   deriveCheckoutStateLabels,
   deriveStatus,
   escapeHtml,
@@ -12,7 +11,6 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_PARTS,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS,
-  type PaymentDataSource,
   checkoutLabels,
   orClasses,
 } from "@openreceive/browser/headless";
@@ -22,6 +20,8 @@ import { COPY_INVOICE_ICON } from "./dom-helpers.ts";
 import { checkoutStyleTag } from "./element-styles.ts";
 
 import { renderPaymentWizardHtml } from "./render-wizard.ts";
+
+import { renderTransactionDetailsHtml } from "./transaction-details.ts";
 
 import { type CheckoutView, createElementCheckoutState } from "./views.ts";
 
@@ -112,7 +112,13 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     ? // No state means no attempt to derive one from (a standalone caller that
       // passed `status: "settled"` and no invoice-id), so the panel reads the
       // attributes directly.
-      renderElementPaymentDataHtml(checkoutState ?? { ...view, rail: view.rail ?? "lightning" })
+      //
+      // The SAME panel the swap flow renders one screen earlier: copy buttons
+      // and explorer links, not un-copyable text. A payer's whole evidence that
+      // they paid is a payment hash and, on a swap, a deposit txid, and this is
+      // the screen they keep. No `decodeLinkUrl` is passed, so the bolt11 never
+      // reaches a third party.
+      renderTransactionDetailsHtml(checkoutState ?? { ...view, rail: view.rail ?? "lightning" })
     : expired
       ? `<div part="actions" class="${orClasses.actions}">${startOverButton}</div>`
       : `<div part="actions" class="${orClasses.actions}">${copyButton}${decodeButton}</div>`;
@@ -233,25 +239,5 @@ function renderElementPaymentStatusHtml(state: CheckoutState): string {
         ${countdown}
       </div>
     </div>
-  `;
-}
-
-function renderElementPaymentDataHtml(source: PaymentDataSource): string {
-  const entries = createPaymentDataEntries(source);
-  if (entries.length === 0) return "";
-  const rows = entries
-    .map(
-      (entry) => `
-        <div part="payment-data-row" class="${orClasses.paymentDataRow}">
-          <span class="${orClasses.paymentDataKey}">${escapeHtml(entry.label)}</span>
-          <p class="${orClasses.paymentDataValue}">${escapeHtml(entry.value)}</p>
-        </div>`,
-    )
-    .join("");
-  return `
-    <details part="payment-data" class="${orClasses.paymentData}">
-      <summary part="payment-data-summary" class="${orClasses.paymentDataTitle}">${escapeHtml(checkoutLabels.viewPaymentData)}</summary>
-      <div class="${orClasses.paymentDataBody}">${rows}</div>
-    </details>
   `;
 }

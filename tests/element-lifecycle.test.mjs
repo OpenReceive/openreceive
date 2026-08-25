@@ -686,7 +686,13 @@ test("amount-msats renders on the settled screen and a non-number carries no amo
 
   try {
     await flush(4);
-    assert.match(element.shadowRoot?.innerHTML ?? "", /21 sats \(21000 msats\)/);
+    // The settled panel is the shared `TransactionDetails` builder, which gives
+    // the sats figure and the raw msats their own rows rather than one combined
+    // string — so the payer can copy either without editing it by hand.
+    const settled = element.shadowRoot?.innerHTML ?? "";
+    assert.match(settled, /21 sats/);
+    assert.match(settled, /Amount \(msats\)/);
+    assert.match(settled, />21000</);
 
     element.setAttribute("amount-msats", "not-a-number");
     await flush(4);

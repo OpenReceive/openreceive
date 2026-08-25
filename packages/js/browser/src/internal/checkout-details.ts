@@ -238,8 +238,15 @@ export interface PaymentDataSource {
 }
 
 /**
- * Everything the client knows about a payment, as ordered label/value rows for the
- * post-settlement "payment data" panel. Undefined fields are skipped.
+ * Everything the client knows about a payment, as ordered label/value rows.
+ *
+ * @deprecated Superseded by {@link createTransactionDetails}, whose rows are a
+ * strict superset AND carry `copyValue` (the untruncated string behind a
+ * shortened display value) and `href` (a block-explorer link). The shipped
+ * renderers moved their settled panel onto that builder: a payer's whole
+ * evidence that they paid is a payment hash and, on a swap, a deposit txid, and
+ * a `<span>` they cannot copy makes the merchant's support inbox their only
+ * recourse. Kept exported so a UI already built on these entries is not broken.
  */
 export function createPaymentDataEntries(source: PaymentDataSource): readonly PaymentDataEntry[] {
   const entries: PaymentDataEntry[] = [];

@@ -1,5 +1,6 @@
 import type * as React from "react";
 import type {
+  AssetUrlResolver,
   CheckoutInvoiceSnapshot,
   CheckoutSnapshot,
   CheckoutState,
@@ -193,7 +194,16 @@ export interface CheckoutProps
   readonly refreshStatus?: CheckoutStatusRefresh;
   readonly components?: CheckoutComponents;
   readonly classNames?: CheckoutClassNames;
+  /**
+   * Render-prop or plain node rendered inside the checkout, above the payment
+   * panel. The slot for order context — a line-item summary, a thumbnail, a
+   * "you are buying" strip — which the shipped checkout otherwise never shows:
+   * it renders the amount, never the order. The function form receives the live
+   * `useCheckout` model.
+   */
   readonly children?: CheckoutChildren;
+  /** Passed through to the payment wizard. See {@link PaymentWizardProps.resolveAssetUrl}. */
+  readonly resolveAssetUrl?: AssetUrlResolver;
 }
 
 export interface UseThemeOptions {
@@ -259,6 +269,14 @@ export interface PaymentWizardProps {
   readonly qrEncoder?: QrEncoder;
   /** Base URL of an external bolt11 decoder; omitted, no "Decode" link is rendered. */
   readonly decodeLinkUrl?: string;
+  /**
+   * Rewrite a packaged asset path (`assets/provider-icons/strike.png`,
+   * `assets/icons/btc.svg`) into a URL this host can serve. The packaged URLs
+   * only resolve under Vite/Rollup; every other bundler needs this, or the
+   * method icons, provider logos and pay tutorials come out as dead `file://`
+   * links. See docs/guides/provider-registry.md.
+   */
+  readonly resolveAssetUrl?: AssetUrlResolver;
   readonly onError?: (error: unknown) => void;
   /**
    * Called when the payer enters or leaves the focused swap flow (a pay-in coin is

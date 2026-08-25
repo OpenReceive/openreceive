@@ -61,6 +61,11 @@ export interface CopyInvoiceOptions {
 
 export interface OpenWalletOptions {
   invoice: string;
+  /**
+   * Where to send the `lightning:` URI. Omitted, {@link openWallet} calls
+   * `location.assign` on the CURRENT window, which navigates the payer off a
+   * still-polling checkout on any device that has a handler registered.
+   */
   open?: (uri: string) => void;
   logger?: BrowserLoggerOption;
   logContext?: BrowserLogContext;
@@ -163,17 +168,62 @@ export interface SwapFeeBreakdown {
   readonly feePercent?: string;
 }
 
+/**
+ * How a deposit on this rail can actually go missing, which is what decides how
+ * loud the deposit panel should be.
+ *
+ * The exposure comes from the deposit ADDRESS failing to pin the chain or the
+ * asset, never from whether the coin is native:
+ *
+ * - `chain_ambiguous` — the address is byte-identical on other chains, so a
+ *   withdrawal can land somewhere unreachable. Every EVM rail (`ETH_ETH`,
+ *   `USDT_ETH`, `USDC_ETH`): a `0x…` address is the same string on Ethereum,
+ *   Arbitrum, Optimism, Base, BSC and Polygon and carries nothing that says
+ *   which. A rail whose network OpenReceive cannot classify is reported here
+ *   too — an unrecognized format has no rule proving it is safe.
+ * - `asset_only` — the address format pins the chain, but the asset is a token
+ *   on it, and every exchange's withdrawal dropdown offers that ticker on a
+ *   dozen networks (`USDT_TRON`).
+ * - `pinned` — the address format pins the chain AND the asset is that chain's
+ *   native coin, so neither mistake is reachable (`SOL_SOL`). Sending an SPL
+ *   token to a Solana address still will not credit the order, so the panel
+ *   still states the exact amount — it just does not shout about lost funds.
+ *
+ * `chain_ambiguous` and `asset_only` both warrant the full alarm; they are kept
+ * apart because they are different mistakes and a custom UI may want to say so.
+ * Note the counter-intuitive half: `ETH_ETH` is a NATIVE coin and needs the
+ * alarm most of anything on the list.
+ */
+export type SwapDepositRisk = "chain_ambiguous" | "asset_only" | "pinned";
+
 export interface SwapDisplayModel {
   readonly provider: string;
   readonly attemptId: string;
   readonly payInAsset: string;
   readonly assetLabel: string;
   readonly networkLabel: string;
-  /** Strong deposit-panel alert title, e.g. "Wrong currency or network = lost funds". */
+  /**
+   * Which of the two ways a deposit is lost is reachable on this rail. Drives
+   * `networkWarningTitle`/`networkWarning` below, and is exposed so a custom UI
+   * can pick its own chrome without re-deriving the asset table. See
+   * {@link SwapDepositRisk}.
+   */
+  readonly depositRisk: SwapDepositRisk;
+  /**
+   * Deposit-panel heading. A strong alert ("Wrong currency or network = lost
+   * funds") when `depositRisk` is anything but `pinned`, and a quiet
+   * "Send the exact amount" when it is. A banner shown on every rail is read on
+   * none, and the rails where it is load-bearing are the ones that pay for it.
+   */
   readonly networkWarningTitle: string;
   /** Exact amount + asset + network to emphasize, e.g. "15.01 USDT on the Solana network". */
   readonly networkWarningEmphasis: string;
-  /** Full plain-text network warning (accessible / non-HTML consumers). */
+  /**
+   * Full plain-text network warning (accessible / non-HTML consumers). The
+   * lost-funds sentence is present only when `depositRisk` is not `pinned`; the
+   * "pay with one method only" sentence is on every rail, because double-paying
+   * is reachable on all of them.
+   */
   readonly networkWarning: string;
   readonly depositAddress: string;
   readonly depositMemo?: string;
@@ -690,6 +740,13 @@ export interface WizardProviderDisplay {
   readonly kind: string;
   readonly url: string;
   readonly icon: string;
+  /**
+   * The packaged path the icon came from (`assets/provider-icons/strike.png`).
+   * `icon` is only loadable when the host's bundler resolved it; this is the
+   * key a host that serves the files itself maps, without going back to
+   * `providerRegistry` for `icon_path`.
+   */
+  readonly iconPath: string;
   readonly tutorials: readonly WizardProviderTutorialDisplay[];
   readonly copyLabel: string;
   readonly copiedLabel: string;

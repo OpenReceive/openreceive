@@ -479,9 +479,14 @@ export function renderSwapDepositPanel(options: {
 function renderSwapNetworkWarning(
   display: Pick<
     SwapDisplayModel,
-    "networkWarningTitle" | "networkWarningEmphasis" | "networkWarning"
+    "depositRisk" | "networkWarningTitle" | "networkWarningEmphasis" | "networkWarning"
   >,
 ): React.ReactElement {
+  // A rail whose address pins both the chain and the asset cannot be mis-sent
+  // the two ways this banner warns about, so it gets the same block without the
+  // alarm: no red, no triangle, and no `role="alert"` interrupting a screen
+  // reader for copy that is not urgent.
+  const alarm = display.depositRisk !== "pinned";
   const emphasisStart = display.networkWarning.indexOf(display.networkWarningEmphasis);
   const before =
     emphasisStart === -1 ? display.networkWarning : display.networkWarning.slice(0, emphasisStart);
@@ -492,25 +497,28 @@ function renderSwapNetworkWarning(
   return React.createElement(
     "div",
     {
-      role: "alert",
-      className: orClasses.swapNetworkWarning,
+      ...(alarm ? { role: "alert" } : {}),
+      "data-or-deposit-risk": display.depositRisk,
+      className: alarm ? orClasses.swapNetworkWarning : orClasses.swapNetworkNotice,
     },
-    React.createElement(
-      "svg",
-      {
-        xmlns: "http://www.w3.org/2000/svg",
-        fill: "none",
-        viewBox: "0 0 24 24",
-        className: orClasses.swapNetworkWarningIcon,
-        "aria-hidden": "true",
-      },
-      React.createElement("path", {
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        strokeWidth: 2,
-        d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
-      }),
-    ),
+    alarm
+      ? React.createElement(
+          "svg",
+          {
+            xmlns: "http://www.w3.org/2000/svg",
+            fill: "none",
+            viewBox: "0 0 24 24",
+            className: orClasses.swapNetworkWarningIcon,
+            "aria-hidden": "true",
+          },
+          React.createElement("path", {
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+            strokeWidth: 2,
+            d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+          }),
+        )
+      : null,
     React.createElement(
       "div",
       { className: orClasses.swapNetworkWarningContent },

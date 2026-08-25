@@ -1,6 +1,7 @@
 import { getSwapRefundAddressError } from "@openreceive/core/swap-address";
 import {
   type AssetIndexEntry,
+  type AssetUrlResolver,
   getPaymentWizardRoutes,
   listAssets,
   payTutorialUrls,
@@ -26,12 +27,27 @@ import {
   type WizardProviderTutorialDisplay,
   type WizardRouteAssetDisplay,
   type WizardRouteDisplay,
+  type PaymentIconId,
   assetIconIds,
   checkoutLabels,
+  paymentIconPaths,
   paymentIconUrls,
   paymentMethodIconIds,
   orClasses,
 } from "./ui.ts";
+
+/**
+ * Every icon and tutorial image below is a FILE the host has to be able to
+ * serve. The packaged URLs only resolve under Vite/Rollup (see
+ * `@openreceive/provider-data`'s `assetUrl`), so each display builder takes an
+ * optional resolver and hands it the packaged PATH instead. Omitted, the
+ * packaged URL is used exactly as before.
+ */
+function resolvePaymentIcon(id: PaymentIconId, resolveAssetUrl?: AssetUrlResolver): string {
+  return resolveAssetUrl === undefined
+    ? paymentIconUrls[id]
+    : resolveAssetUrl(paymentIconPaths[id]);
+}
 
 export function getBitcoinAssets(): readonly AssetIndexEntry[] {
   return listAssets().filter((asset) => asset.symbol === "btc" && asset.route !== undefined);
@@ -76,17 +92,25 @@ export function getCheckoutProviderOpenLabel(): string {
   return checkoutLabels.openProvider;
 }
 
-export function getCheckoutProviderIcon(provider: Pick<Provider, "icon_path">): string {
-  return providerIconUrls[provider.icon_path] ?? paymentIconUrls.crypto;
+export function getCheckoutProviderIcon(
+  provider: Pick<Provider, "icon_path">,
+  resolveAssetUrl?: AssetUrlResolver,
+): string {
+  if (resolveAssetUrl !== undefined) return resolveAssetUrl(provider.icon_path);
+  return providerIconUrls[provider.icon_path] ?? resolvePaymentIcon("crypto");
 }
 
 export function getCheckoutProviderTutorials(
   provider: Pick<Provider, "tutorials">,
+  resolveAssetUrl?: AssetUrlResolver,
 ): readonly WizardProviderTutorialDisplay[] {
   return (provider.tutorials ?? []).map((tutorial) => ({
     index: tutorial.index,
     path: tutorial.path,
-    image: payTutorialUrls[tutorial.path] ?? tutorial.path,
+    image:
+      resolveAssetUrl === undefined
+        ? (payTutorialUrls[tutorial.path] ?? tutorial.path)
+        : resolveAssetUrl(tutorial.path),
     caption: tutorial.caption,
   }));
 }
@@ -101,6 +125,8 @@ export function createWizardRouteAssetDisplays(
   assets: readonly AssetIndexEntry[],
   options: {
     readonly selectedRoute?: string | null;
+    /** Host-side rewrite of the packaged icon path. See {@link AssetUrlResolver}. */
+    readonly resolveAssetUrl?: AssetUrlResolver;
   } = {},
 ): readonly WizardRouteAssetDisplay[] {
   return assets.map((asset) => {
@@ -109,7 +135,7 @@ export function createWizardRouteAssetDisplays(
       id,
       label: asset.label,
       subtitle: getRouteNetworkLabel(id),
-      icon: getRouteIcon(asset),
+      icon: getRouteIcon(asset, options.resolveAssetUrl),
       selected: options.selectedRoute === id,
     };
   });
@@ -119,6 +145,8 @@ export function createWizardRouteDisplays(
   routes: readonly PaymentWizardRoute[],
   options: {
     readonly providerPreviewLimit?: number;
+    /** Host-side rewrite of the packaged icon and tutorial paths. See {@link AssetUrlResolver}. */
+    readonly resolveAssetUrl?: AssetUrlResolver;
   } = {},
 ): readonly WizardRouteDisplay[] {
   return routes.map((route) => ({
@@ -128,7 +156,7 @@ export function createWizardRouteDisplays(
     providers: (options.providerPreviewLimit === undefined
       ? route.providers
       : route.providers.slice(0, options.providerPreviewLimit)
-    ).map((entry) => createWizardProviderDisplay(entry)),
+    ).map((entry) => createWizardProviderDisplay(entry, options.resolveAssetUrl)),
   }));
 }
 
@@ -144,35 +172,45 @@ function getWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
   return route.route.symbol.toUpperCase();
 }
 
-function createWizardProviderDisplay(entry: ResolvedProviderRef): WizardProviderDisplay {
+function createWizardProviderDisplay(
+  entry: ResolvedProviderRef,
+  resolveAssetUrl?: AssetUrlResolver,
+): WizardProviderDisplay {
   return {
     id: entry.provider.id,
     name: entry.provider.name,
     kind: entry.provider.kind,
     url: entry.provider.lightning_docs_url ?? entry.provider.url,
-    icon: getCheckoutProviderIcon(entry.provider),
-    tutorials: getCheckoutProviderTutorials(entry.provider),
+    // Both the resolved URL and the packaged key: a host that serves these
+    // files itself needs the key, and going back to `providerRegistry` for it
+    // is not something a display-layer caller should have to know to do.
+    icon: getCheckoutProviderIcon(entry.provider, resolveAssetUrl),
+    iconPath: entry.provider.icon_path,
+    tutorials: getCheckoutProviderTutorials(entry.provider, resolveAssetUrl),
     copyLabel: checkoutLabels.copyInvoice,
     copiedLabel: checkoutLabels.copied,
     openLabel: getCheckoutProviderOpenLabel(),
   };
 }
 
-export function getPaymentMethodIcon(method: PaymentMethod): string {
-  return paymentIconUrls[paymentMethodIconIds[method]];
+export function getPaymentMethodIcon(
+  method: PaymentMethod,
+  resolveAssetUrl?: AssetUrlResolver,
+): string {
+  return resolvePaymentIcon(paymentMethodIconIds[method], resolveAssetUrl);
 }
 
-export function getAssetIcon(symbol: string): string {
-  return paymentIconUrls[assetIconIds[symbol] ?? "crypto"];
+export function getAssetIcon(symbol: string, resolveAssetUrl?: AssetUrlResolver): string {
+  return resolvePaymentIcon(assetIconIds[symbol] ?? "crypto", resolveAssetUrl);
 }
 
 /** Icon for a swap network label (Tron → trx, Solana → sol, Ethereum → eth). */
-export function getNetworkIcon(networkLabel: string): string {
+export function getNetworkIcon(networkLabel: string, resolveAssetUrl?: AssetUrlResolver): string {
   const key = networkLabel.trim().toLowerCase();
-  if (key === "tron" || key === "trx") return paymentIconUrls.trx;
-  if (key === "solana" || key === "sol") return paymentIconUrls.sol;
-  if (key === "ethereum" || key === "eth") return paymentIconUrls.eth;
-  return paymentIconUrls.crypto;
+  if (key === "tron" || key === "trx") return resolvePaymentIcon("trx", resolveAssetUrl);
+  if (key === "solana" || key === "sol") return resolvePaymentIcon("sol", resolveAssetUrl);
+  if (key === "ethereum" || key === "eth") return resolvePaymentIcon("eth", resolveAssetUrl);
+  return resolvePaymentIcon("crypto", resolveAssetUrl);
 }
 
 /**
@@ -180,8 +218,11 @@ export function getNetworkIcon(networkLabel: string): string {
  * Network marks (Tron/Solana/Ethereum) belong only in the network reveal via
  * {@link getNetworkIcon}.
  */
-export function getSwapOptionIcon(option: { readonly label: string }): string {
-  return getAssetIcon(option.label.trim().toLowerCase());
+export function getSwapOptionIcon(
+  option: { readonly label: string },
+  resolveAssetUrl?: AssetUrlResolver,
+): string {
+  return getAssetIcon(option.label.trim().toLowerCase(), resolveAssetUrl);
 }
 
 export interface SwapMethodGroup<T extends { readonly label: string }> {
@@ -583,6 +624,71 @@ export function swapOptionLimitMessage(
   return option.unavailable_message;
 }
 
+/**
+ * The same limit as {@link swapOptionLimitMessage}, as ONE finished sentence:
+ * "To pay with SOL, your cart total must be at least $2.43."
+ *
+ * `createSwapUnavailableModel` answers the case where the payer PICKED an
+ * unavailable asset and lands on a pane, which has room for a title, a detail,
+ * a range and a hint. A grid that disables the tile instead has nowhere to put
+ * four parts and needs one line — for a tooltip, a caption, an `aria-label`.
+ * Both are built from the same figures, so the tile and the pane cannot quote
+ * different numbers.
+ *
+ * Returns `undefined` for an option that is available; for an unavailable one
+ * it always returns something, falling back to the provider's own message and
+ * then to the generic sentence, so a caption is never blank.
+ *
+ * @param options.label Override the asset name in the sentence — pass the GROUP
+ *   label ("USDT") when the tile represents a group whose cheapest entry point
+ *   came from {@link swapGroupLimitOption}, so the sentence names what the payer
+ *   clicked rather than one network behind it.
+ */
+export function swapOptionLimitSentence(
+  option: Pick<
+    CheckoutPaymentMethod,
+    | "label"
+    | "available"
+    | "unavailable_reason"
+    | "unavailable_message"
+    | "minimum_invoice_amount_msats"
+    | "maximum_invoice_amount_msats"
+    | "minimum_pay_amount"
+    | "maximum_pay_amount"
+  >,
+  checkout: SwapLimitContext | undefined,
+  options: { readonly label?: string } = {},
+): string | undefined {
+  if (option.available !== false) return undefined;
+  const asset = options.label ?? option.label;
+  const sentence = (template: string, amount: string): string =>
+    template.replace("{asset}", asset).replaceAll("{amount}", amount);
+
+  if (option.unavailable_reason === "amount_too_small") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatSwapLimit(checkout, option.minimum_invoice_amount_msats, "ceil");
+    if (fiat !== undefined) return sentence(checkoutLabels.swapCartMinimumSentence, fiat);
+    if (option.minimum_pay_amount !== undefined) {
+      return sentence(checkoutLabels.swapPayMinimumSentence, option.minimum_pay_amount);
+    }
+  }
+  if (option.unavailable_reason === "amount_too_large") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatSwapLimit(checkout, option.maximum_invoice_amount_msats, "floor");
+    if (fiat !== undefined) return sentence(checkoutLabels.swapCartMaximumSentence, fiat);
+    if (option.maximum_pay_amount !== undefined) {
+      return sentence(checkoutLabels.swapPayMaximumSentence, option.maximum_pay_amount);
+    }
+  }
+  return (
+    option.unavailable_message ?? checkoutLabels.swapUnavailableFallback.replace("{asset}", asset)
+  );
+}
+
 /** Prefer the lowest invoice-side floor when every network in a group is unavailable. */
 export function swapGroupLimitOption<
   T extends {
@@ -624,12 +730,15 @@ export function getSwapRefundFormError(
   return getSwapRefundAddressError(payInAsset, address, networkLabel);
 }
 
-export function getRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
+export function getRouteIcon(
+  asset: Pick<AssetIndexEntry, "route" | "symbol">,
+  resolveAssetUrl?: AssetUrlResolver,
+): string {
   const routeId = asset.route ?? asset.symbol;
   if (asset.symbol === "btc" && routeId.includes("lightning")) {
-    return paymentIconUrls.lightning;
+    return resolvePaymentIcon("lightning", resolveAssetUrl);
   }
-  return getAssetIcon(asset.symbol);
+  return getAssetIcon(asset.symbol, resolveAssetUrl);
 }
 
 export function createPaymentWizardState(request: PaymentWizardRequest): PaymentWizardState {

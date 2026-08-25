@@ -194,6 +194,7 @@
         "parseResolvedTheme",
         "parseThemePreference",
         "paymentAccentId",
+        "paymentIconPaths",
         "paymentIconUrls",
         "paymentMethods",
         "postJson",
@@ -206,8 +207,10 @@
         "selectCheckoutDisplayInvoice",
         "startSwapRequest",
         "swapAssetMatchesRoute",
+        "swapDepositRisk",
         "swapGroupLimitOption",
         "swapOptionLimitMessage",
+        "swapOptionLimitSentence",
         "swapPickerKey",
         "syncStoredThemeControls",
         "toggleStoredThemeControls",
@@ -218,6 +221,7 @@
         "writeThemePreference"
       ],
       "types": [
+        "AssetUrlResolver",
         "BrowserLogContext",
         "BrowserLogger",
         "BrowserLoggerOption",
@@ -253,6 +257,7 @@
         "ResolvedTheme",
         "Status",
         "StoredThemeModelOptions",
+        "SwapDepositRisk",
         "SwapDisplayModel",
         "SwapLimitContext",
         "SwapMethodGroup",
@@ -907,10 +912,12 @@
         "providerIconUrls",
         "providerRegistry",
         "providerTutorialUrl",
-        "validateRegistry"
+        "validateRegistry",
+        "warnOnFileAssetUrl"
       ],
       "types": [
         "AssetIndexEntry",
+        "AssetUrlResolver",
         "CryptoRoute",
         "CryptoRouteId",
         "DisqualifiedProvider",

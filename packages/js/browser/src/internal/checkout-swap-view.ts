@@ -2,12 +2,19 @@
 // display model, the refund staging overlay, provider-state labels and
 // details, and the asset/route matching the wizard selection needs.
 
-import { type Decimal, formatDecimal, parseDecimal, payInAssetNetwork } from "@openreceive/core";
+import {
+  type Decimal,
+  formatDecimal,
+  parseDecimal,
+  payInAssetNetwork,
+  swapAddressNetworkForPayInAsset,
+} from "@openreceive/core";
 import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutInvoiceSwapFee,
   checkoutLabels,
+  type SwapDepositRisk,
   type SwapDisplayModel,
   type SwapFeeBreakdown,
 } from "./ui.ts";
@@ -65,6 +72,41 @@ export function createSwapFeeBreakdown(
 }
 
 /**
+ * Which of the two ways a deposit is lost is reachable on this rail — the input
+ * to how loud the deposit panel is. See {@link SwapDepositRisk} for the
+ * vocabulary and why native-vs-token is NOT the axis.
+ *
+ * Derived, never tabulated. A hand-kept rail list goes stale the day a rail is
+ * added, and it would go stale in the unsafe direction: a new rail would
+ * inherit whatever the last edit happened to leave. The two questions are asked
+ * of the pay-in code itself, so an unclassifiable one falls through to the full
+ * alarm.
+ *
+ * 1. Does the address FORMAT pin the chain? Only for networks
+ *    `swapAddressNetworkForPayInAsset` can name a checksum rule for, minus ETH:
+ *    a `0x…` address is byte-identical on every EVM chain. An unrecognized
+ *    network answers no.
+ * 2. Is the asset that chain's NATIVE coin? `SOL_SOL` yes, `USDT_TRON` no.
+ *    Compared against the normalized network so the `TRON`/`TRX` spelling split
+ *    cannot make native TRX look like a token.
+ */
+export function swapDepositRisk(payInAsset: string): SwapDepositRisk {
+  const network = swapAddressNetworkForPayInAsset(payInAsset);
+  // ETH is named because its address format is the ambiguity: every EVM chain
+  // accepts the same `0x…` string. `undefined` is every network we have no
+  // format rule for at all.
+  if (network === undefined || network === "ETH") return "chain_ambiguous";
+  // Is the asset this chain's NATIVE coin? `SOL_SOL` yes, `USDT_TRON` no. Ask
+  // core the same question about a code built from the symbol alone, so the
+  // `TRON` suffix / `TRX` symbol spelling split resolves through core's one
+  // network table rather than a second copy of it here.
+  const symbol = payInAsset.slice(0, payInAsset.lastIndexOf("_"));
+  return swapAddressNetworkForPayInAsset(`${symbol}_${symbol}`) === network
+    ? "pinned"
+    : "asset_only";
+}
+
+/**
  * @param options.now Unix timestamp in **seconds** ({@link UnixSeconds}); the
  *   provider countdown is measured against it. Milliseconds (`Date.now()`)
  *   throw rather than pinning every deposit window at zero.
@@ -83,6 +125,11 @@ export function createSwapDisplayModel(
   const asset = getSwapAssetDisplay(swap.pay_in_asset);
   const depositAmount = formatDepositAmount(swap.deposit_amount);
   const networkWarningEmphasis = `${depositAmount} ${asset.assetLabel} on the ${asset.networkLabel} network`;
+  const depositRisk = swapDepositRisk(swap.pay_in_asset);
+  // The lost-funds half is claimed only where it is reachable. The
+  // "one method only" half is on every rail: double-paying does not care what
+  // the address format pins.
+  const doubleSpendWarning = `Pay with one method only — if you already sent ${asset.assetLabel}, do not also pay the Lightning invoice.`;
   // Settlement authority is OpenReceive's own wallet sweep, surfaced as the shadow
   // invoice's settled transaction_state — never the provider's `completed` state (see
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
@@ -96,9 +143,16 @@ export function createSwapDisplayModel(
     payInAsset: swap.pay_in_asset,
     assetLabel: asset.assetLabel,
     networkLabel: asset.networkLabel,
-    networkWarningTitle: checkoutLabels.wrongCurrencyOrNetworkTitle,
+    depositRisk,
+    networkWarningTitle:
+      depositRisk === "pinned"
+        ? checkoutLabels.sendExactAmountTitle
+        : checkoutLabels.wrongCurrencyOrNetworkTitle,
     networkWarningEmphasis,
-    networkWarning: `Be sure you are sending exactly ${networkWarningEmphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost! Pay with one method only — if you already sent ${asset.assetLabel}, do not also pay the Lightning invoice.`,
+    networkWarning:
+      depositRisk === "pinned"
+        ? `Send exactly ${networkWarningEmphasis}. ${doubleSpendWarning}`
+        : `Be sure you are sending exactly ${networkWarningEmphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost! ${doubleSpendWarning}`,
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
     depositAmount,

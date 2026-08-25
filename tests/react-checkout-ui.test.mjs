@@ -191,7 +191,7 @@ test("React checkout supports design-system component and class slots", () => {
   assert.doesNotMatch(html, /nostr\+walletconnect/);
 
   // Summary meta (and the PaymentState slot) only render for terminal statuses; settled
-  // also swaps the paying affordances (QR / copy) for the payment-data panel.
+  // also swaps the paying affordances (QR / copy) for the transaction-details panel.
   const settledHtml = renderToStaticMarkup(
     React.createElement(Checkout, {
       checkout: invoice({
@@ -214,7 +214,11 @@ test("React checkout supports design-system component and class slots", () => {
   assert.match(settledHtml, /app-state/);
   assert.doesNotMatch(settledHtml, /data-slot-qr/);
   assert.doesNotMatch(settledHtml, />Copy invoice</);
-  assert.match(settledHtml, />View payment data</);
+  // The settled panel is the SAME `TransactionDetails` the swap flow renders one
+  // screen earlier, so the payer's receipt carries copy buttons rather than
+  // un-copyable text — a payment hash is their whole evidence that they paid.
+  assert.match(settledHtml, />Transaction details</);
+  assert.match(settledHtml, /aria-label="Copy"/);
   assert.match(settledHtml, />Payment received</);
 });
 

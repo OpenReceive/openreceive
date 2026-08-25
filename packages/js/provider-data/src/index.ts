@@ -4,6 +4,10 @@ import { providerIconUrls } from "./provider-icons.ts";
 
 export { payTutorialUrls };
 export { providerIconUrls };
+// The packaged asset URLs above only resolve under Vite/Rollup. `AssetUrlResolver`
+// is the seam for every other host, and `warnOnFileAssetUrl` is the diagnostic
+// that says out loud when the packaged resolution has failed.
+export { type AssetUrlResolver, warnOnFileAssetUrl } from "./asset-url.ts";
 
 export type ProviderId = string;
 export type CryptoRouteId = string;

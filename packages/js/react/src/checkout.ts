@@ -18,12 +18,12 @@ import { useCheckoutSession } from "./checkout-session.ts";
 import {
   CopyInvoiceButton,
   InvoiceSummary,
-  PaymentData,
   PaymentState,
   QRCode,
   SatsDetail,
   WaitingState,
 } from "./components.ts";
+import { TransactionDetails } from "./transaction-details.ts";
 import { ThemeToggle, useTheme } from "./theme.ts";
 import type { CheckoutProps } from "./types.ts";
 import { useCheckout } from "./use-checkout.ts";
@@ -318,6 +318,7 @@ function CheckoutView(
     components,
     classNames,
     children,
+    resolveAssetUrl,
     className,
     ...sectionProps
   } = props;
@@ -493,16 +494,25 @@ function CheckoutView(
                       })
                     : null,
                   settled
-                    ? React.createElement(PaymentData, {
-                        key: "payment-data",
-                        // The model IS the checkout state, so the payment-data
-                        // panel reads the same derivation the rest of the screen
-                        // does. It used to re-flatten the snapshot separately,
-                        // which reported the displayed ATTEMPT's transaction /
+                    ? React.createElement(TransactionDetails, {
+                        key: "transaction-details",
+                        // The model IS the checkout state, so the panel reads
+                        // the same derivation the rest of the screen does. It
+                        // used to re-flatten the snapshot separately, which
+                        // reported the displayed ATTEMPT's transaction /
                         // workflow state on a checkout the state already knows
                         // is paid.
-                        source: checkoutModel,
+                        //
+                        // The SAME panel the swap flow renders one screen
+                        // earlier. A payer's whole evidence that they paid is a
+                        // payment hash and, on a swap, a deposit txid — so the
+                        // most keep-worthy screen gets copy buttons and
+                        // explorer links, not un-copyable text. No
+                        // `decodeLinkUrl` is passed, so the bolt11 never
+                        // reaches a third party.
+                        state: checkoutModel,
                         className: classNames?.details,
+                        onError,
                       })
                     : expired
                       ? React.createElement(
@@ -589,6 +599,7 @@ function CheckoutView(
                 onCopy,
                 onRequestLightning,
                 onSwapStarted,
+                resolveAssetUrl,
               })
             : null,
         ]
