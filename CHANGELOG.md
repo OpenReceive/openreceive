@@ -1,5 +1,128 @@
 # Changelog
 
+## Unreleased
+
+Nine fixes from building a real store on the packages: one shipped bug, one
+inconsistency between two panels, three small API additions, and the guides that
+let all of them happen. Nothing on the wire changed — the HTTP routes, the mint,
+the swap lifecycle and the refund two-step are untouched.
+
+### Packaged images were dead `file://` links outside Vite
+
+The provider icons and pay-tutorial screenshots resolve against
+`import.meta.url`. Webpack — and anything else that replaces that expression at
+build time with the module's own on-disk URL — turned every one of them into
+`file:///app/node_modules/@openreceive/…`, which no browser loads and which
+publishes the server's directory layout into a public asset. The files are not
+emitted either, and cannot be: webpack's asset detection needs a string literal
+and both maps build their paths inside a `.map()`. It failed silently: blank
+images, no request, no error.
+
+- **A diagnostic.** `warnOnFileAssetUrl` logs one `console.warn` naming the
+  packaged path the first time a packaged asset resolves to `file:` in a
+  document. Node and SSR are excluded — `import.meta.url` IS a file URL there and
+  nothing is being painted.
+- **A supported seam.** `AssetUrlResolver` — `(packagedPath: string) => string`
+  — is accepted by every display builder in `@openreceive/browser/headless`, by
+  `<Checkout>`/`PaymentWizard` in `@openreceive/react` (`resolveAssetUrl`), and
+  by `defineElements` in `@openreceive/elements`. Serve the files yourself and
+  map them by the registry's own keys.
+- **The keys are published.** `WizardProviderDisplay.iconPath` carries the
+  packaged path next to the resolved `icon`, so the display layer is
+  self-sufficient instead of sending you back to `providerRegistry`;
+  `paymentIconPaths` is the same key set for this package's own icons.
+- **The guide says so.** `docs/guides/provider-registry.md` no longer says these
+  "resolve to local assets", which read as reassurance. It says they are files
+  your host has to serve, that the packaged resolution only works for a
+  Vite/Rollup chunk, and that blank icons mean grepping the bundle for `file://`.
+
+### The deposit warning follows the risk, instead of firing on every rail
+
+Every `pay_in_asset` got the same red "Wrong currency or network = lost funds"
+banner, including `SOL_SOL` — where the address is a base58 ed25519 key that
+exists on no other chain and SOL exists on no other chain either. A banner shown
+on every rail is read on none, and the rails where it is load-bearing (USDT on
+four networks, ETH on six) are the ones that pay for the erosion.
+
+- **`swapDepositRisk(payInAsset)` / `SwapDepositRisk`** classify a rail as
+  `"chain_ambiguous" | "asset_only" | "pinned"`, and `SwapDisplayModel` carries
+  the answer as `depositRisk`. The axis is address ambiguity, **not**
+  native-vs-token: `ETH_ETH` is a native coin and needs the alarm most of
+  anything on the list, because a `0x…` address is byte-identical on six chains.
+- **Derived, not tabulated.** It asks whether the address format pins the chain
+  and whether the asset is that chain's native coin, so a rail added tomorrow is
+  classified without an edit — and an unrecognized one falls through to the full
+  alarm rather than inheriting the quiet heading.
+- **Both renderers follow it.** A `pinned` rail gets the same block with
+  `checkoutLabels.sendExactAmountTitle`, no red, no warning triangle and no
+  `role="alert"`, plus `data-or-deposit-risk` for your own CSS. It still states
+  the exact amount and still says to pay with one method only — an SPL token
+  sent to a Solana address still will not credit the order.
+- The per-rail table is now the test, in `tests/react-swap.test.mjs`.
+
+### The payer's receipt is the same panel everywhere
+
+A payer who paid by swap saw the deposit txid with a copy button and an explorer
+link, one screen before settling. A payer who paid over Lightning ended on a
+64-character payment hash they could not copy with a click. Both builders'
+JSDoc called itself the post-settlement panel; the richer one was used
+pre-settlement and the plainer one after.
+
+- **The settled panel is now `TransactionDetails`** in both renderers — copy
+  buttons, explorer links, and truncation with the full `copyValue` behind it.
+  No `decodeLinkUrl` is passed, so the bolt11 still never reaches a third party.
+- `createPaymentDataEntries` and React's `<PaymentData>` are **deprecated** and
+  still exported: their rows are a strict subset. Nothing breaks.
+
+### Three additions for custom UIs
+
+- **`swapOptionLimitSentence(option, context, { label })`** — the limit on a
+  disabled tile as one finished sentence ("To pay with SOL, your cart total must
+  be at least $2.43."). A grid that disables a tile has room for a tooltip and
+  nowhere to put `createSwapUnavailableModel`'s four parts, and every custom UI
+  was otherwise going to write this string itself, differently.
+- **`AssetUrlResolver` / `paymentIconPaths`** — above.
+- **`swapDepositRisk` / `SwapDepositRisk`** — above.
+
+### Guides
+
+The pattern behind most of the above: the shipped renderers already did the
+right thing, and the guide an integrator is handed either stayed silent about it
+or said the opposite.
+
+- **`openWallet` is documented as touch-only**, in the headless guide, the
+  frontend guide, the API reference and its own JSDoc — with the mechanism
+  (`location.assign` on the current window, over a still-polling checkout) and
+  the reason `<Checkout>` ships no wallet button. The Material UI recipe drew it
+  as the primary action next to a de-emphasised Copy; it now leads with Copy and
+  keeps the wallet button behind a touch check.
+- **`checkoutLabels` gets a section**, not a bare name in a list of nine. It is
+  every payer-facing string the shipped renderers emit, and a custom UI is a
+  third renderer.
+- **A refunds section**, which did not exist anywhere in the guide tree: the one
+  state a refund is possible from, the 409 when it changes under the payer, the
+  two-step where `confirm: false` does not touch `/swaps/refunds` at all, the
+  twelve provider states, `refund_reason`, and the asymmetry that an
+  overpayment is `attention` and not a refund. The `requestSwapRefund` parameter
+  list was also missing its required `invoices` argument — code written from the
+  guide alone threw at runtime on the payer's first refund.
+- **"Progress is a status, not a position"** — why the shipped renderers draw a
+  status line and a breadcrumb and no stepper, with the counts (4 `Status`, 6
+  `CheckoutPhase`, 12 `SwapProviderState`, mostly outcomes), and the fact that
+  `createCheckoutStatusModel` reports a zero-countdown non-terminal phase as
+  `expired` so you must read the model's `phase` and never the snapshot's.
+- **A method-picker section** promoting the five symbols that explain a disabled
+  tile out of the machine-generated "uncovered" block.
+- **`<Checkout>`'s `children` render prop is public**, and was previously
+  mentioned only in `docs/internal/wrapper-parity.md`. It is the slot for order
+  context, which the shipped checkout otherwise never shows — it renders the
+  amount, never the order.
+- **`<TransactionDetails>` is documented**, including that it mounts on your own
+  order page outside `<Checkout>`.
+- **`update_all` fires no callbacks**, said out loud in the Rails quickstart,
+  with the row-lock alternative for an app that pushes settlement over Action
+  Cable.
+
 ## 0.2.3 - 2026-08-25
 
 One fix, on the wire: `POST /checkouts` now echoes `payment_methods`.

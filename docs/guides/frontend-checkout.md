@@ -36,12 +36,27 @@ Browser & React API surface (full reference in
   the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
   `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`, `paymentWizard`,
   `themeToggle` (default `true`), `defaultTheme`, `storageKey`, `decodeLinkUrl`,
-  `components`, `classNames`, `syncUrl`,
-  `resumePathPrefix`, `routeReference`, `metadata`, `createFetch`. The same names and defaults
+  `components`, `classNames`, `children`, `syncUrl`,
+  `resumePathPrefix`, `routeReference`, `metadata`, `createFetch`, `resolveAssetUrl`.
+  The same names and defaults
   hold for the Vue, Svelte and Angular wrappers, which mount the same custom element
-  (`polling`/`pollIntervalMs` ride the `options` escape hatch there).
+  (`polling`/`pollIntervalMs` ride the `options` escape hatch there) — with the
+  exception of `children`, which is React-only (see below).
 - [`useCheckout(options)`](api-reference.md#usecheckout) — the hook behind `<Checkout>` for custom layouts; returns the live
   snapshot, status/countdown labels, and `copyInvoice`/`openWallet`/`retry` actions.
+  Two notes on that list, both of which bite people building chrome around the
+  component:
+  - `openWallet` is for **touch devices**. Its default path navigates the
+    current window, so a wallet button on a desktop is either inert or sends the
+    payer off a still-polling checkout. The shipped checkout draws no wallet
+    button for that reason. See
+    [Headless checkout](headless-checkout.md#the-openreceivebrowserheadless-surface).
+  - the status labels are a **status, not a position**. There is no step index
+    here and a linear stepper cannot express what the engine reports — see
+    [Progress is a status, not a position](headless-checkout.md#progress-is-a-status-not-a-position)
+    before you add one around `<Checkout>`. That is where steppers actually get
+    added in practice: outside the component, by someone who never opens the
+    headless guide.
 
 `prefix` is the base path your app mounted the shipped OpenReceive router at —
 `/openreceive` in the example above. It is the only URL input the browser packages take:
@@ -63,3 +78,51 @@ is `/api/openreceive`, not `/openreceive`.
 Order summaries and resume pages are your concern; fetch them from your application API, not
 from OpenReceive. Status polling posts `{ reference, payment_hash }` to `/payments/check`; the
 host verifies that exact attempt belongs to the reference.
+
+## Show the payer what they are buying
+
+The shipped checkout renders the amount, never the order. A `$1.00` total, a QR
+code, and no sign of what is being bought is a real conversion problem, and
+every drop-in integrator has it by default.
+
+React solves it with `children`, which accepts a node or a **render prop**
+receiving the live `useCheckout` model:
+
+```tsx
+<Checkout reference={order.id} prefix="/openreceive">
+  {(model) => (
+    <ul className="order-lines">
+      {cart.lines.map((line) => (
+        <li key={line.id}>
+          <img src={line.thumbnail} alt="" />
+          {line.quantity} × {line.name}
+        </li>
+      ))}
+    </ul>
+  )}
+</Checkout>
+```
+
+The custom element has no equivalent slot — put the order summary in your own
+markup around it. A headless UI owns the whole screen and has no excuse.
+
+Order context is what this prop is for. It is also the honest answer to "why
+would I pick React over the custom element".
+
+## Showing the payer their receipt
+
+`<TransactionDetails>` (and `renderTransactionDetailsHtml` /
+`createTransactionDetailsElement` in `@openreceive/elements`) is the collapsible
+panel of payment hash, deposit txid, amounts and explorer links that
+`<Checkout>` renders on settlement and inside the swap flow. It is also
+**mountable on its own**, outside `<Checkout>` — pass it rows or a checkout
+state and put it on your order page, which is where a payer goes looking for the
+receipt days later:
+
+```tsx
+<TransactionDetails state={await loadCheckoutState(order.id)} />
+```
+
+Why it matters, and the row contract (`copyValue` is the untruncated value; the
+bolt11 decode link is opt-in), are in
+[The receipt is not debug output](headless-checkout.md#the-receipt-is-not-debug-output).

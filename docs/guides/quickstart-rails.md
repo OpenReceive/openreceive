@@ -69,6 +69,35 @@ writes on the order — an email or webhook sent from here would survive the
 rollback and go out again. The `state: "paid"` transition above is the flag;
 let your own job drain it after commit.
 
+**`update_all` fires no Active Record callbacks.** That is the point — it is one
+conditional `UPDATE`, so the claim is atomic and there is no model code between
+the check and the write. It also means there is no `after_commit` to hang a
+post-commit side effect on, which is fine for a background job draining the flag
+and useless for a page that wants to know *now*. If you push settlement over
+Action Cable, or your model owns the transition through callbacks, take a row
+lock for the duration instead:
+
+```ruby
+config.on_paid = lambda do |settlement|
+  order = Order.lock.find_by(id: settlement.reference)   # SELECT … FOR UPDATE
+  next unless order && order.state == "awaiting_payment"
+  order.update!(state: "paid", paid_at: Time.at(settlement.paid_at).utc)  # callbacks fire
+end
+```
+
+Both shapes are idempotent, and both are correct. They differ only in whether
+your model layer gets to run: `update_all` skips it and is the right default;
+the row lock holds the row for the duration of the block and is what you want
+when the transition has to go through your model. The generated fulfillment note
+says the same thing — if your fulfillment is a read-modify-write that cannot be
+expressed as one conditional `UPDATE`, take the lock.
+
+Either way the rule above still holds: whatever the callback does must be
+database writes on the order. `after_commit` on the settlement transaction runs
+after OpenReceive's own commit, so an email enqueued there is as safe as one
+enqueued from a job draining the flag — and an email sent *inline* from
+`on_paid` is not, in either shape.
+
 A complete runnable example app is the Rails Hello Fruit demo, `npm run demo rails`
 ([`examples/hello-fruit/server/rails`](../../examples/hello-fruit/server/rails)).
 

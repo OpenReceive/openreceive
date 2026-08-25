@@ -1189,8 +1189,13 @@ flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onSta
 `onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`,
 `paymentWizard`, `themeToggle` (default `true`), `defaultTheme`, `storageKey`,
 `decodeLinkUrl`, `components`, `classNames`, `syncUrl`, `resumePathPrefix`,
-`routeReference`, `metadata`, `createFetch`. Prop names and defaults are shared with the
-Vue, Svelte and Angular wrappers.
+`routeReference`, `metadata`, `createFetch`, `resolveAssetUrl`. Prop names and defaults are
+shared with the Vue, Svelte and Angular wrappers.
+
+`children` is React-only: a node, or a render prop receiving the live `useCheckout` model.
+It is the slot for order context — a line-item summary, a thumbnail, a "you are buying"
+strip — which the checkout otherwise never shows, since it renders the amount and never the
+order. See [Frontend checkout → Show the payer what they are buying](frontend-checkout.md#show-the-payer-what-they-are-buying).
 
 ### useCheckout
 
@@ -1200,6 +1205,12 @@ Unlike the component it does **not** default `prefix`: pass `prefix` to poll
 `/payments/check`, or omit it (or pass `polling: false`) to render the snapshot without
 polling. Returns the live snapshot, `status`, countdown labels, `statusTitle`/`statusDetail`,
 and `copyInvoice`/`openWallet`/`reloadState`/`retry`/`cancel`.
+
+`openWallet` is for **touch devices**: its default path is `location.assign` on the current
+window, so a desktop wallet button is either inert or navigates the payer off a still-polling
+checkout. `<Checkout>` renders no wallet button for that reason and exposes
+`components.OpenWalletButton` as an opt-in slot — see
+[Headless checkout](headless-checkout.md#the-openreceivebrowserheadless-surface).
 
 ### PaymentWizard
 

@@ -42,6 +42,50 @@ cannot convert raises, and the payer sees the panel's error surface — an
 amount-less payment URI would be worse than either alternative, because the
 wallet then lets the payer type any amount against a fixed-rate order.
 
+## Which deposits can actually be mis-sent
+
+The deposit panel leads with a red banner on most rails and a quiet heading on
+others, and the split is not arbitrary. The exposure comes from the deposit
+**address** failing to pin the chain or the asset — never from whether the coin
+is native:
+
+| Rail | Address | Reachable mistake | Panel |
+| --- | --- | --- | --- |
+| `ETH_ETH` | `0x…` | chain ambiguous | full alarm |
+| `USDT_ETH` | `0x…` | chain + asset ambiguous | full alarm |
+| `USDC_ETH` | `0x…` | chain + asset ambiguous | full alarm |
+| `USDT_TRON` | `T…` | chain pinned, but USDT is in every exchange's withdrawal dropdown on a dozen chains | full alarm |
+| `SOL_SOL` | base58 ed25519 | neither: SOL exists on no other chain | quiet |
+
+A `0x…` address is byte-identical on Ethereum, Arbitrum, Optimism, Base, BSC and
+Polygon; nothing in it says which chain, and an exchange will happily withdraw
+to it on the wrong one. A Solana address decodes to exactly a 32-byte ed25519
+public key, and SOL exists nowhere else — so a red "wrong currency or network =
+lost funds" banner on that screen is warning the payer about a mistake the
+address format prevents.
+
+Note the counter-intuitive half: **`ETH_ETH` is a native coin and needs the
+alarm most of anything on the list.** "Native coin" is not the axis; address
+ambiguity is. That is the opposite of the split in
+[Deposit QR amount prefill](#deposit-qr-amount-prefill) above, which really is
+native-vs-token — the two sections ask different questions about the same rails.
+
+This is proportionality, not a downgrade of a funds-safety warning. The warning
+is not literally false on `SOL_SOL` — a payer can send an SPL token to that
+address and it will not credit the order, so the panel still states the exact
+amount and still says to pay with one method only. What it drops is the alarm,
+because a banner shown on every rail is read on none, and the rails where it is
+load-bearing (USDT on four networks, ETH on six) are the ones that pay for the
+erosion.
+
+The classification is **derived, not tabulated**: `swapDepositRisk(payInAsset)`
+asks whether the address format pins the chain and whether the asset is that
+chain's native coin, so a rail added tomorrow is classified without an edit —
+and an unrecognized one falls through to the full alarm rather than inheriting
+the quiet heading. A custom UI reads `depositRisk` off the swap display model
+(`"chain_ambiguous" | "asset_only" | "pinned"`) and picks its own chrome; there
+is no need to keep a rail list of your own.
+
 ## Provider state after settlement
 
 Once the wallet reports the shadow invoice settled, the order's outcome can no longer change,

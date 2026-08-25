@@ -64,6 +64,7 @@ export function MaterialCheckoutDialog({
   onClose
 }) {
   const model = useCheckout({ checkout });
+  const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
@@ -83,10 +84,19 @@ export function MaterialCheckoutDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={model.copyInvoice}>Copy</Button>
-        <Button onClick={model.openWallet} variant="contained">
-          Open Wallet
+        {/* Copy is the primary action, and it is the only one on a desktop.
+            `model.openWallet` hands the payer a `lightning:` URI by navigating
+            the CURRENT window: with no registered handler the click is inert,
+            and with one it takes the payer off a checkout that is still
+            polling. Draw it only where it works — which is why the shipped
+            <Checkout> ships no wallet button and exposes
+            `components.OpenWalletButton` as an opt-in slot instead. */}
+        <Button onClick={model.copyInvoice} variant="contained">
+          Copy invoice
         </Button>
+        {isTouchDevice && (
+          <Button onClick={model.openWallet}>Open Wallet</Button>
+        )}
       </DialogActions>
     </Dialog>
   );
@@ -94,6 +104,11 @@ export function MaterialCheckoutDialog({
 ```
 
 Everything above about `components` and `classNames` applies to both modes.
+
+The QR code is the desktop payment path, so the dialog above leads with Copy and
+keeps the wallet button behind a touch check. See
+[Headless checkout](../guides/headless-checkout.md#the-openreceivebrowserheadless-surface)
+for what `openWallet` actually does.
 
 ## Integration Notes
 
