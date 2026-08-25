@@ -4,7 +4,7 @@
 # durable reconcile gate they share. Same host database, never a second one.
 #
 <%= fulfillment_note("# ") %>
-class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>]
+class CreateOpenReceiveTables < ActiveRecord::Migration[<%= migration_version %>]
   def change
     create_table :openreceive_payments do |t|
       # Your order id, as you passed it.
@@ -54,8 +54,9 @@ class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>
     add_check_constraint :openreceive_payments,
                          "status IN ('pending', 'settled', 'expired', 'failed', 'attention')",
                          name: "openreceive_payments_status_check"
-    add_check_constraint :openreceive_payments,
-                         <%= payment_hash_check_sql %>,
+    hash_check =
+<%= payment_hash_check_sql %>
+    add_check_constraint :openreceive_payments, hash_check,
                          name: "openreceive_payments_payment_hash_check"
 
     # Which schema generation is installed. The engine refuses to run against a

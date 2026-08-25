@@ -299,6 +299,69 @@ test("the client sends X-CSRF-Token from the page's csrf-token meta tag", async 
   assert.equal(captured[2].get("x-csrf-token"), null);
 });
 
+// `prepareCheckout` returns the warmed payment_methods catalog; `POST
+// /checkouts` answers with the minted bolt11 and nothing else. Building the
+// post-mint snapshot from that response alone ERASED the method list a headless
+// picker renders from, so the payer who selected Bitcoin and changed their mind
+// found the swap options gone. `previous` folds the mint into what was already
+// on screen.
+test("requestCheckout keeps payment_methods from the prepared snapshot", async () => {
+  const methods = [
+    {
+      pay_in_asset: "USDT_TRON",
+      label: "USDT",
+      network_label: "Tron",
+      provider: "lsc",
+      available: true,
+    },
+  ];
+  const prepareFetch = async () =>
+    new Response(
+      JSON.stringify({ reference: "order-1", amount_msats: 21_000, payment_methods: methods }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  const mintFetch = async () =>
+    new Response(
+      JSON.stringify({
+        checkout: {
+          payment_hash: hash("a"),
+          reference: "order-1",
+          amount_msats: 21_000,
+          bolt11: "lnbc-light",
+          expires_at: Math.floor(Date.now() / 1000) + 900,
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+
+  const prepared = await prepareCheckout({
+    prefix: "/openreceive",
+    reference: "order-1",
+    fetch: prepareFetch,
+  });
+  assert.deepEqual(prepared.payment_methods, methods);
+
+  const merged = await requestCheckout({
+    prefix: "/openreceive",
+    reference: "order-1",
+    fetch: mintFetch,
+    previous: prepared,
+  });
+  assert.deepEqual(merged.payment_methods, methods, "the method catalog survives the mint");
+  assert.equal(merged.active?.invoice, "lnbc-light");
+  assert.equal(merged.checkout_id, hash("a"));
+
+  // Without `previous` the bare mint response is returned unchanged — the
+  // documented behaviour for a host that has no earlier snapshot to fold into.
+  const bare = await requestCheckout({
+    prefix: "/openreceive",
+    reference: "order-1",
+    fetch: mintFetch,
+  });
+  assert.equal(bare.payment_methods, undefined);
+  assert.equal(bare.active?.invoice, "lnbc-light");
+});
+
 test("deferred-mode element attributes carry the same create-time options as create mode", () => {
   const options = {
     prefix: "/openreceive",

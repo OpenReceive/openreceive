@@ -15,6 +15,7 @@ import {
   swapOptionLimitMessage,
   orClasses,
   selectCheckoutDisplayInvoice,
+  type UnixSeconds,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 import { ClipboardIcon, WaitingState } from "./components.ts";
@@ -154,7 +155,8 @@ export function renderSwapUnavailable(
 export function renderSwapDepositPanel(options: {
   readonly invoice: CheckoutInvoiceSnapshot;
   readonly checkout?: CheckoutSnapshot;
-  readonly now?: number;
+  /** Unix **seconds** ({@link UnixSeconds}), not `Date.now()` milliseconds. */
+  readonly now?: UnixSeconds;
   readonly encoder?: QrEncoder;
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly logger?: BrowserLogger | false;

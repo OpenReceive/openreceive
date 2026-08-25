@@ -183,6 +183,7 @@ export type {
   TransactionDetailRow,
   TransactionDetailsInput,
   TransientFeedbackController,
+  UnixSeconds,
   WizardProviderDisplay,
   WizardRouteAssetDisplay,
   WizardRouteDisplay,

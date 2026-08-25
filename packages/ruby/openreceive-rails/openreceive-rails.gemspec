@@ -33,6 +33,12 @@ Gem::Specification.new do |spec|
   spec.add_dependency "openreceive", "= #{OpenReceive::Rails::VERSION}"
   spec.add_dependency "openreceive-server", "= #{OpenReceive::Rails::VERSION}"
   spec.add_dependency "rails", ">= 8.0"
+  # The engine's DEFAULT wallet client is nwc-ruby, built from NWC_URI. That is
+  # what the quickstart installs and what every reader gets who does not set
+  # config.nwc_client, so it is a hard dependency HERE even though it is
+  # deliberately not one of openreceive-server (framework-agnostic Rack, host
+  # injects its own client). config.nwc_client remains the supported override.
+  spec.add_dependency "nwc-ruby", "~> 0.2", ">= 0.2.4"
 
   # Test-only: the engine-owned model tests run against in-memory SQLite.
   spec.add_development_dependency "sqlite3", ">= 2.1"

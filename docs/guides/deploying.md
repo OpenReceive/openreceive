@@ -76,6 +76,24 @@ expose a `ready` promise, and on Fastify `await fastify.ready()` covers it
 production, so a bad `NWC_URI`, a dead relay, or a spend-capable wallet stops
 the deploy instead of surfacing as customer-facing 500s on the first checkout.
 
+### Asset builds are not deploys
+
+`rails assets:precompile` inside an image build is a production boot by
+`RAILS_ENV` — but it runs before any wallet secret is mounted, since secrets
+arrive at deploy time. Preflighting there would fail the BUILD, long before the
+deploy the check exists to protect, which is the shape of Rails' own generated
+Dockerfile (`SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile`).
+
+The engine detects that boot and skips the preflight, by two signals: Rails'
+own `SECRET_KEY_BASE_DUMMY`, and an `assets:precompile` / `assets:clean` /
+`assets:clobber` rake invocation. Either way it logs one line saying the
+preflight was skipped. A real production boot with no `NWC_URI` still fails
+closed.
+
+For any other secretless boot, `config.eager_preflight = false` is the
+supported lever — it turns off the BOOT check only; the wallet is still checked
+on the first request.
+
 ## Operational monitoring
 
 `attention` rows are the one state that wants an operator: the wallet still

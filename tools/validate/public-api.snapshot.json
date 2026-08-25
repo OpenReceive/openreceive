@@ -88,7 +88,8 @@
         "QrOptions",
         "RequestCheckoutOptions",
         "Status",
-        "StatusInvoiceLike"
+        "StatusInvoiceLike",
+        "UnixSeconds"
       ]
     },
     "./headless": {
@@ -266,6 +267,7 @@
         "TransactionDetailsInput",
         "TransactionDetailsSource",
         "TransientFeedbackController",
+        "UnixSeconds",
         "WizardProviderDisplay",
         "WizardRouteAssetDisplay",
         "WizardRouteDisplay"

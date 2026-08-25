@@ -1,4 +1,5 @@
 import { isReusableLightningInvoice, selectCheckoutDisplayInvoice } from "./checkout-state.ts";
+import type { UnixSeconds } from "./unix-seconds.ts";
 import type { CheckoutInvoiceSnapshot, CheckoutSnapshot } from "./ui.ts";
 
 /**
@@ -8,7 +9,7 @@ import type { CheckoutInvoiceSnapshot, CheckoutSnapshot } from "./ui.ts";
  */
 export function findReusableLightningInvoice(
   snapshot: CheckoutSnapshot,
-  now?: number,
+  now?: UnixSeconds,
 ): CheckoutInvoiceSnapshot | undefined {
   return snapshot.invoices.find(
     (invoice) =>

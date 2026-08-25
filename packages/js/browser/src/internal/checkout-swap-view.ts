@@ -2,13 +2,8 @@
 // display model, the refund staging overlay, provider-state labels and
 // details, and the asset/route matching the wizard selection needs.
 
-import {
-  type Decimal,
-  formatDecimal,
-  parseDecimal,
-  payInAssetNetwork,
-  unixSeconds,
-} from "@openreceive/core";
+import { type Decimal, formatDecimal, parseDecimal, payInAssetNetwork } from "@openreceive/core";
+import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutInvoiceSwapFee,
@@ -69,9 +64,14 @@ export function createSwapFeeBreakdown(
   };
 }
 
+/**
+ * @param options.now Unix timestamp in **seconds** ({@link UnixSeconds}); the
+ *   provider countdown is measured against it. Milliseconds (`Date.now()`)
+ *   throw rather than pinning every deposit window at zero.
+ */
 export function createSwapDisplayModel(
   invoice: CheckoutInvoiceSnapshot,
-  options: { readonly now?: number } = {},
+  options: { readonly now?: UnixSeconds } = {},
 ): SwapDisplayModel | undefined {
   const swap = invoice.swap;
   if (swap === undefined) return undefined;
@@ -79,7 +79,7 @@ export function createSwapDisplayModel(
     swap.provider_expires_at,
     invoice.expires_at ?? swap.provider_expires_at,
   );
-  const expiresInSeconds = Math.max(0, expiresAt - (options.now ?? unixSeconds()));
+  const expiresInSeconds = Math.max(0, expiresAt - resolveNow(options.now));
   const asset = getSwapAssetDisplay(swap.pay_in_asset);
   const depositAmount = formatDepositAmount(swap.deposit_amount);
   const networkWarningEmphasis = `${depositAmount} ${asset.assetLabel} on the ${asset.networkLabel} network`;

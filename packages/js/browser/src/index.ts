@@ -46,6 +46,7 @@ export type {
   OpenWalletOptions,
   PrepareCheckoutOptions,
   RequestCheckoutOptions,
+  UnixSeconds,
 } from "./internal/ui.ts";
 export type {
   GuestCheckoutResumeController,

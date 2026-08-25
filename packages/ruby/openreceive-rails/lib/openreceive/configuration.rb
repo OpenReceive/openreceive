@@ -36,7 +36,7 @@ module OpenReceive
                   :resolve_checkout, :on_checkout_created,
                   :rate_limit, :rate_limiting, :client_ip, :price_provider,
                   :swap_providers, :price_currencies, :allow_spend_capable_wallet,
-                  :opportunistic_reconcile
+                  :opportunistic_reconcile, :eager_preflight
 
     def initialize
       @parent_controller = "ActionController::Base"
@@ -78,6 +78,13 @@ module OpenReceive
       # `bin/rails openreceive:notifications` worker owns scanning), or a Hash
       # with min_interval_seconds to tune.
       @opportunistic_reconcile = true
+      # The production boot preflight (Engine's after_initialize): build the
+      # service, and with it the wallet check, so a missing NWC_URI or a
+      # spend-capable wallet stops a deploy instead of the first customer. ON by
+      # default. Asset builds are detected and skipped automatically (see
+      # OpenReceive.eager_preflight?); set false for any other boot that must
+      # come up without wallet secrets.
+      @eager_preflight = true
     end
 
     def service
@@ -353,6 +360,8 @@ module OpenReceive
     end
   end
 
+  # Rake tasks that are an ASSET BUILD, never a serving boot.
+  ASSET_BUILD_TASKS = %w[assets:precompile assets:clean assets:clobber].freeze
 
   class << self
     def configure
@@ -366,6 +375,45 @@ module OpenReceive
     # Gemfile before the installer has been run).
     def configured?
       @configured == true
+    end
+
+    # Whether the engine's production boot preflight should run (see Engine).
+    #
+    # It must not run during `rails assets:precompile`. That is a production
+    # boot by RAILS_ENV, but it happens inside an image build where no wallet
+    # secrets are mounted — they arrive at deploy time — so the preflight would
+    # fail the BUILD, long before the deploy it exists to protect. Rails' own
+    # generated Dockerfile has exactly this shape.
+    def eager_preflight?
+      preflight_skip_reason.nil?
+    end
+
+    # nil when the boot preflight should run; otherwise the short reason the
+    # engine logs, so an operator who expected a fail-closed boot and did not
+    # get one can see why in the same log line.
+    def preflight_skip_reason
+      return "config.eager_preflight = false" unless config.eager_preflight
+      return "asset build" if asset_build?
+
+      nil
+    end
+
+    # An asset build, by the two signals that are actually reliable.
+    # `Rails.const_defined?(:Console)`-style sniffing is not: the console
+    # constant exists in a serving boot too.
+    def asset_build?
+      # Rails' own convention for "a production boot with a throwaway secret",
+      # set by its generated Dockerfile alongside `rails assets:precompile`.
+      return true unless ENV["SECRET_KEY_BASE_DUMMY"].to_s.empty?
+
+      # The honest test for older/hand-written build shapes: what was actually
+      # invoked. `SECRET_KEY_BASE=dummy rails assets:precompile` lands here.
+      return false unless defined?(::Rake)
+
+      ::Rake.application.top_level_tasks.any? { |task| ASSET_BUILD_TASKS.include?(task.to_s) }
+    rescue StandardError
+      # Rake present but without a usable application: not an asset build.
+      false
     end
 
     def config

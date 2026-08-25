@@ -10,7 +10,7 @@
 // reconciliations are commented individually below; do not reintroduce a second
 // path.
 
-import { unixSeconds } from "@openreceive/core";
+import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutPhase,
@@ -76,8 +76,8 @@ export function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
  * seconds remaining. Pass an optional `now` (Unix seconds) for deterministic tests; defaults to the
  * current clock.
  */
-export function isReusableLightningInvoice(expiresAt: number, now?: number): boolean {
-  return expiresAt - (now ?? unixSeconds()) > OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS;
+export function isReusableLightningInvoice(expiresAt: number, now?: UnixSeconds): boolean {
+  return expiresAt - resolveNow(now) > OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS;
 }
 
 export function createCheckoutState(
@@ -109,7 +109,7 @@ export function createCheckoutState(
         workflow_state: "invoice_created",
         paid: false,
       },
-      options.now ?? unixSeconds(),
+      resolveNow(options.now),
     );
   }
 
@@ -168,7 +168,7 @@ export function createCheckoutState(
       ...(invoice.swap === undefined ? {} : { swap: invoice.swap }),
       paid,
     },
-    options.now ?? unixSeconds(),
+    resolveNow(options.now),
   );
   const source = options.source ?? "create";
   if (source === "create") {
@@ -251,16 +251,16 @@ export function refreshCheckoutState(
 
 export function shouldCheckoutShowWaiting(
   state: CheckoutState,
-  options: { readonly now?: number } = {},
+  options: { readonly now?: UnixSeconds } = {},
 ): boolean {
   if (state.terminal || state.settled) return false;
   if (state.expires_at === undefined) return true;
-  return state.expires_at > (options.now ?? unixSeconds());
+  return state.expires_at > resolveNow(options.now);
 }
 
 export function createCheckoutStatusModel(
   source?: CheckoutState | CheckoutStatusModelInput,
-  options: { readonly now?: number } = {},
+  options: { readonly now?: UnixSeconds } = {},
 ): CheckoutStatusModel {
   const isCheckoutState = source !== undefined && "invoice_id" in source && "invoice" in source;
   const phase = source?.phase ?? "invoice_created";
@@ -298,7 +298,7 @@ export function createCheckoutStatusModel(
 export function normalizeCheckoutState(
   state: Omit<CheckoutState, "phase" | "settled" | "terminal" | "expires_in_seconds"> &
     Partial<Pick<CheckoutState, "phase" | "settled" | "terminal" | "expires_in_seconds">>,
-  now?: number,
+  now?: UnixSeconds,
 ): CheckoutState {
   const {
     phase: _phase,

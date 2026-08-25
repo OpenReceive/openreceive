@@ -1218,7 +1218,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     @context = TemplateContext.new(
       migration_version: "7.1",
       schema_version: OpenReceive::Server::PAYMENTS_SCHEMA_VERSION,
-      payment_hash_check_sql: '"payment_hash ~ \'^[0-9a-f]{64}$\'"',
+      payment_hash_check_sql: '      "payment_hash ~ \'^[0-9a-f]{64}$\'"',
       mysql_adapter?: false
     )
   end
@@ -1260,6 +1260,10 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     rendered = @context.render(File.join(TEMPLATE_ROOT, "migration.rb"))
     assert_includes rendered, "status IN ('pending', 'settled', 'expired', 'failed', 'attention')"
     assert_includes rendered, "openreceive_payments_payment_hash_check"
+    # The adapter branch is hoisted to a local, so the constraint call reads as
+    # one argument list rather than an if/else spliced into the middle of one.
+    assert_includes rendered, "    hash_check =\n      \"payment_hash"
+    assert_includes rendered, "    add_check_constraint :openreceive_payments, hash_check,"
     assert_includes rendered, "INSERT INTO openreceive_meta (key, value, rev)"
     assert_includes rendered, "'schema_version', '#{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION}'"
     # Liveness is time-dependent (a superseded row stays pending with a future
@@ -1270,7 +1274,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
 
   def test_migration_creates_both_engine_tables_in_one_file
     rendered = @context.render(File.join(TEMPLATE_ROOT, "migration.rb"))
-    assert_includes rendered, "class CreateOpenreceiveTables < ActiveRecord::Migration[7.1]"
+    assert_includes rendered, "class CreateOpenReceiveTables < ActiveRecord::Migration[7.1]"
     assert_includes rendered, "create_table :openreceive_payments"
     assert_includes rendered, "create_table :openreceive_meta, id: false"
     assert_includes rendered, "t.string :key, null: false, primary_key: true"
@@ -1295,7 +1299,9 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
   def test_engine_boots_fail_closed_and_warns_on_the_logging_placeholder
     source = File.read(File.expand_path("../lib/openreceive/engine.rb", __dir__))
     assert_includes source, "config.after_initialize"
-    assert_includes source, "OpenReceive.config.service if ::Rails.env.production?"
+    assert_includes source, "if ::Rails.env.production?"
+    assert_includes source, "OpenReceive.preflight_skip_reason"
+    assert_includes source, "OpenReceive.config.service"
     assert_includes source, "LOGGING_ON_PAID"
 
     rendered = @context.render(File.join(TEMPLATE_ROOT, "initializer.rb"))

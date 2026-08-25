@@ -61,15 +61,19 @@ module OpenReceive
       # the app actually runs. MySQL's bare REGEXP follows the column's
       # case-insensitive collation, so its rendering pins case sensitivity
       # with REGEXP_LIKE's 'c' flag.
+      #
+      # Rendered as the right-hand side of `hash_check =` at method-body
+      # indentation, so the branch reads as ordinary Ruby in the file the
+      # developer opens right after running the generator.
       def payment_hash_check_sql
-        return %("REGEXP_LIKE(payment_hash, '^[0-9a-f]{64}$', 'c')") if mysql_adapter?
+        return %(      "REGEXP_LIKE(payment_hash, '^[0-9a-f]{64}$', 'c')") if mysql_adapter?
 
-        <<~RUBY.strip
+        <<~RUBY.chomp.gsub(/^/, "      ")
           if connection.adapter_name.downcase.include?("postgres")
-                           "payment_hash ~ '^[0-9a-f]{64}$'"
-                         else
-                           "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'"
-                         end
+            "payment_hash ~ '^[0-9a-f]{64}$'"
+          else
+            "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'"
+          end
         RUBY
       end
 

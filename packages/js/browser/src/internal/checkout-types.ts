@@ -2,6 +2,7 @@
 // display/state shapes, element attribute and listener options, theme models,
 // payment-wizard models, and transaction-detail rows. Types only — the values
 // they are derived from live in ./dom-contract.ts.
+import type { UnixSeconds } from "./unix-seconds.ts";
 import type { AssetIndexEntry, PaymentWizardRoute } from "@openreceive/provider-data";
 import type { CheckoutStateLabels } from "./checkout-format.ts";
 import type {
@@ -28,7 +29,8 @@ export interface TransientFeedbackController<T> {
 export interface TickingValueOptions {
   readonly active?: boolean;
   readonly intervalMs?: number;
-  readonly now?: () => number;
+  /** Clock returning unix **seconds** ({@link UnixSeconds}), not milliseconds. */
+  readonly now?: () => UnixSeconds;
   readonly setInterval?: typeof globalThis.setInterval;
   readonly clearInterval?: typeof globalThis.clearInterval;
   readonly onValue: (value: number) => void;
@@ -446,7 +448,20 @@ export interface CheckoutStatusModel {
 
 export type CheckoutStatusRefresh = (reference: string) => Promise<CheckoutSnapshot | null>;
 
-export type RequestCheckoutOptions = RequestCheckoutBaseOptions;
+export interface RequestCheckoutOptions extends RequestCheckoutBaseOptions {
+  /**
+   * The snapshot already on screen — normally what {@link prepareCheckout}
+   * returned, or the running snapshot after an earlier attempt.
+   *
+   * `POST /checkouts` answers with the minted bolt11 alone; it does NOT carry
+   * the warmed `payment_methods` catalog that prepare returned. Without this,
+   * minting Lightning ERASES the method list a picker renders from: the payer
+   * selects Bitcoin, changes their mind, and the swap options are gone.
+   * Passing the previous snapshot folds the mint into it, keeping
+   * `payment_methods` and any sibling attempts.
+   */
+  readonly previous?: CheckoutSnapshot;
+}
 
 /**
  * `prepareCheckout` posts only the order id — it locks the amount and lists
@@ -487,7 +502,8 @@ export interface CheckoutWatcherOptions {
   readonly snapshot: CheckoutSnapshot;
   readonly refreshStatus?: CheckoutStatusRefresh;
   readonly pollIntervalMs?: number;
-  readonly now?: () => number;
+  /** Clock returning unix **seconds** ({@link UnixSeconds}), not milliseconds. */
+  readonly now?: () => UnixSeconds;
   readonly setInterval?: typeof globalThis.setInterval;
   readonly clearInterval?: typeof globalThis.clearInterval;
   readonly logger?: BrowserLoggerOption;
@@ -525,7 +541,12 @@ export interface CheckoutController {
 }
 
 export interface CreateCheckoutStateOptions {
-  readonly now?: number;
+  /**
+   * Unix timestamp in **seconds** ({@link UnixSeconds}) the expiry clock is
+   * measured against; defaults to the current time. Milliseconds
+   * (`Date.now()`) throw a RangeError — see the type.
+   */
+  readonly now?: UnixSeconds;
   readonly logger?: BrowserLoggerOption;
   /**
    * How this state was produced. Controls which browser log events fire:

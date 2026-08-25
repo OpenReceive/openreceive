@@ -21,8 +21,10 @@ Gem::Specification.new do |spec|
   spec.files = Dir["lib/**/*.rb", "README.md", "CHANGELOG.md", "LICENSE"]
   spec.require_paths = ["lib"]
 
-  # nwc-ruby is deliberately NOT a hard dependency: only the Rails engine's
-  # optional default client uses it; Rack hosts inject their own NWC client.
+  # nwc-ruby is deliberately NOT a hard dependency OF THIS GEM: a Rack host
+  # injects its own NWC client, and this gem never reaches for one. The Rails
+  # engine is the exception and declares it as a runtime dependency, because
+  # building nwc-ruby from NWC_URI is the default path every reader takes.
   # The gems release in lockstep, so the sibling dependency pins the exact version.
   spec.add_dependency "openreceive", "= #{OpenReceive::Server::VERSION}"
 

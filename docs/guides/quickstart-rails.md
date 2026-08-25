@@ -8,6 +8,11 @@ Add the Rails engine gem to your `Gemfile`:
 gem "openreceive-rails"
 ```
 
+That is the whole install: `openreceive-rails` depends on `openreceive`,
+`openreceive-server` and `nwc-ruby`, so the default wallet client — built from
+`NWC_URI` — works with nothing else added. Hosts that bring their own NWC
+client set `config.nwc_client` instead.
+
 Then run:
 
 ```sh

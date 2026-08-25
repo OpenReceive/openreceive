@@ -6,6 +6,7 @@
 
 import { isRecord, nonEmptyString, recordOrEmpty } from "@openreceive/core";
 import { assertDisplayInvoice } from "./checkout-invoice.ts";
+import { mergeMintedCheckout } from "./checkout-merge.ts";
 import {
   optionalRecord,
   optionalSafeInteger,
@@ -173,7 +174,13 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     assertDisplayInvoice(responseInvoice.invoice);
   }
 
-  return snapshot;
+  // The mint response carries the bolt11 and nothing else. Folding it into the
+  // snapshot the caller already had is what keeps `payment_methods` (and any
+  // sibling swap attempt) alive across the mint — see `previous` on
+  // RequestCheckoutOptions. With no `previous`, this is the bare snapshot.
+  return options.previous === undefined
+    ? snapshot
+    : mergeMintedCheckout(snapshot, options.previous);
 }
 
 /**

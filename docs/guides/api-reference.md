@@ -1166,8 +1166,17 @@ POST `/checkouts/prepare`: locks the amount + returns payment methods without mi
 ### requestCheckout
 
 From `@openreceive/browser`:
-`requestCheckout({ reference, prefix, fetch?, headers?, memo?, metadata? })`.
+`requestCheckout({ reference, prefix, fetch?, headers?, memo?, metadata?, previous? })`.
 POST `/checkouts`: mints (or reuses) a bolt11 and returns the snapshot.
+
+Pass `previous` — the snapshot already on screen, normally what
+`prepareCheckout` returned — whenever you drive the prepare-then-mint flow
+yourself. The mint response carries the bolt11 alone, **not** the warmed
+`payment_methods` catalog, so without it the method list a picker renders from
+is erased: the payer selects Bitcoin, changes their mind, and the swap options
+are gone. With it, the mint is folded into the previous snapshot and both the
+catalog and any sibling swap attempt survive. The shipped renderers do this for
+you.
 
 ### `<Checkout>`
 
@@ -1352,6 +1361,14 @@ OpenReceive.configure do |config|
   # Your application otherwise refuses to start on a spend-capable NWC code
   # (also OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true).
   # config.allow_spend_capable_wallet = true
+
+  # Eager production boot preflight, ON by default: the wallet is built and
+  # checked at boot so a bad NWC_URI stops the deploy, not the first customer.
+  # `rails assets:precompile` is detected and skipped automatically (see
+  # Deploying); set false for any other boot that must come up with no wallet
+  # secrets. It disables the BOOT check only — the wallet is still checked on
+  # the first request.
+  # config.eager_preflight = false
 end
 ```
 
@@ -1451,7 +1468,8 @@ The worker's periodic pass is the safety net for notifications missed while
 offline. Raises `OpenReceive::ConfigurationError` when the client cannot
 notify. Blocking clients do not return until the subscription ends.
 
-The built-in `nwc-ruby` client is wired up already:
+The built-in `nwc-ruby` client is wired up already (`openreceive-rails`
+declares it as a runtime dependency, so it is installed with the engine):
 `OpenReceive::NwcRubyReceiveClient` forwards `subscribe_notifications` to that
 gem's `subscribe_to_notifications` and translates the notification object it
 yields back into the NWC-02 wire payload, so the settlement rule reads
