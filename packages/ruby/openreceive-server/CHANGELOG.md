@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 - 2026-08-25
+
+The Ruby gems release in lockstep with the npm workspace version. The full
+release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md);
+entries here are scoped to this gem.
+
+- **`POST /checkouts` now echoes `payment_methods`** (HTTP contract 0.4.1),
+  amount-aware against the minted attempt's own invoice amount and served on
+  the re-fetch path too. `prepare` and `payments/check` already did; the mint
+  alone did not, so any client without a library-side merge lost its pay-in
+  catalog the moment it minted Lightning.
+
 ## 0.2.2 - 2026-08-25
 
 The Ruby gems release in lockstep with the npm workspace version. The full

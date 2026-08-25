@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.2.3 - 2026-08-25
+
+One fix, on the wire: `POST /checkouts` now echoes `payment_methods`.
+
+### The pay-in catalog survives a mint for every client, not just the JS one
+
+0.2.2 fixed the dropped catalog client-side, with `requestCheckout({ previous })`.
+That closed it for `@openreceive/browser` callers — the great majority — and
+left it open for everyone else. `/checkouts/prepare` and `/payments/check` both
+echoed the catalog; `/checkouts` alone did not, so a native mobile client, a
+server-to-server integration, or an SDK in another language still hit the
+original failure — mint Bitcoin, lose the method list, picker comes back empty —
+with no `previous` helper to reach for and nothing in the response to hint at
+it. The wire is the contract for those callers, so the catalog belongs on it.
+
+- **HTTP contract 0.4.0 → 0.4.1** (additive response field).
+  `CreateCheckoutResponse` requires `payment_methods` alongside `checkout`,
+  mirroring `PrepareCheckoutResponse`.
+- **Both engines echo it**, amount-aware against the minted attempt's own
+  invoice amount, on the re-fetch path as well as the mint path.
+- **It costs no extra provider call.** The Node handler serves the echo from
+  the same warm per-amount cache `payments/check` already used, so the mint
+  warms the catalog and the first status poll reuses it — one provider walk
+  between them, asserted in the suite.
+- **`@openreceive/browser` reads it** as a sibling of `checkout`, so a mint
+  carries the catalog with no `previous` at all.
+
+`requestCheckout({ previous })` is unchanged and still worth passing: it is the
+snapshot-**continuity** mechanism, carrying sibling attempts (a live swap beside
+the newly minted bolt11) that the mint response knows nothing about, and it
+still rescues the catalog from a server older than 0.4.1. What changed is that
+the client-side merge is now an optimisation rather than a requirement — which
+is what the 0.2.2 notes should have been able to say.
+
+Pinned in both engines: the shared golden vector carries the new key, so an
+extra or missing field in either engine fails the run, and a non-empty-catalog
+test on each side asserts the echo is amount-aware.
+
+Examples were rebuilt against the 0.2.3 packages. The live wallet smoke
+(`npm run test:live`) was NOT run for this release: it needs a funded NWC
+connection, and nothing here touches the wallet call path.
+
 ## 0.2.2 - 2026-08-25
 
 Fixes for defects found building a real shop against `openreceive-rails` 0.2.1

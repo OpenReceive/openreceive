@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-static-html-small-api",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,12 +10,12 @@
     "start": "node ../../../../tools/run-with-root-env.mjs tsx src/server/production.ts"
   },
   "dependencies": {
-    "@openreceive/browser": "0.2.2",
-    "@openreceive/core": "0.2.2",
-    "@openreceive/elements": "0.2.2",
-    "@openreceive/express": "0.2.2",
-    "@openreceive/http": "0.2.2",
-    "@openreceive/node": "0.2.2",
+    "@openreceive/browser": "0.2.3",
+    "@openreceive/core": "0.2.3",
+    "@openreceive/elements": "0.2.3",
+    "@openreceive/express": "0.2.3",
+    "@openreceive/http": "0.2.3",
+    "@openreceive/node": "0.2.3",
     "express": "^5.2.1",
     "vite": "^6.4.3"
   },

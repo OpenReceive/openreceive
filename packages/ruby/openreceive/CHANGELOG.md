@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3 - 2026-08-25
+
+The Ruby gems release in lockstep with the npm workspace version. The full
+release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md);
+entries here are scoped to this gem.
+
+- No functional change; released in lockstep.
+
 ## 0.2.2 - 2026-08-25
 
 The Ruby gems release in lockstep with the npm workspace version. The full
