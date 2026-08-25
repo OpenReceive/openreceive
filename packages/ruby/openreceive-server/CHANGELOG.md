@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2 - 2026-08-25
+
+The Ruby gems release in lockstep with the npm workspace version. The full
+release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md);
+entries here are scoped to this gem.
+
+- No functional change. `nwc-ruby` is still deliberately NOT a dependency of
+  this gem: a Rack host injects its own NWC client and this gem never reaches
+  for one. The Rails engine — the exception that rationale already named — now
+  declares it, and the comment here says so.
+
 ## 0.2.1 - 2026-08-24
 
 The Ruby gems release in lockstep with the npm workspace version. The full

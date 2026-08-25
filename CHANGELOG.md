@@ -1,5 +1,88 @@
 # Changelog
 
+## 0.2.2 - 2026-08-25
+
+Fixes for defects found building a real shop against `openreceive-rails` 0.2.1
+and `@openreceive/browser` 0.2.1. Four of them stopped a stock Rails
+integration outright, in the order an integrator hits them.
+
+### Rails: the quickstart works end to end again
+
+- **The generated migration would not load.** `openreceive:install` wrote
+  `class CreateOpenreceiveTables`, but the engine registers an `OpenReceive`
+  acronym inflection, so Rails resolved the file name to
+  `CreateOpenReceiveTables` and the quickstart's second command died with
+  `NameError: uninitialized constant CreateOpenReceiveTables`. Every install
+  hit it. The template now declares the class Rails looks for, and a new
+  generator test registers that acronym and actually RUNS `db:migrate` against
+  in-memory SQLite — asserting the file was created is what missed it.
+- **`openreceive-rails` now depends on `nwc-ruby`.** Building the client from
+  `NWC_URI` is the engine's DEFAULT path and the only one the quickstart
+  describes, so with the single gem the quickstart names, the app booted and
+  the first checkout 500'd with `Install nwc-ruby or configure nwc_client.`
+  The "deliberately not a hard dependency" rationale still holds for
+  `openreceive-server` — a Rack host injects its own client — and it keeps the
+  omission; the engine is the exception that comment already named.
+  `config.nwc_client` remains the supported override. CI installs the gem and
+  a new test drives the real client through the boot preflight path: every
+  other Ruby test uses a hand-written fake, which is how the suite stayed green
+  against a gem nobody installed.
+- **`assets:precompile` no longer fails the image build.** That is a production
+  boot by `RAILS_ENV`, but it runs before any wallet secret is mounted — the
+  shape of Rails' own generated Dockerfile — so the eager preflight failed the
+  BUILD long before the deploy it exists to protect, and the only lever was a
+  flag the host had to invent. The engine now detects an asset build (Rails'
+  `SECRET_KEY_BASE_DUMMY`, or an `assets:precompile`/`clean`/`clobber` rake
+  invocation), skips the preflight, and logs one line saying so. New
+  `config.eager_preflight = false` is the explicit lever for any other
+  secretless boot; it disables the BOOT check only. A real production boot with
+  no `NWC_URI` still fails closed.
+- The generated migration's `payment_hash` check constraint reads as ordinary
+  Ruby: the adapter branch is hoisted to a local above the call instead of
+  being spliced into the middle of the argument list.
+
+### Browser
+
+- **`requestCheckout` takes `previous`.** `POST /checkouts` answers with the
+  minted bolt11 alone, not the warmed `payment_methods` catalog, so a headless
+  host building its snapshot from that response ERASED the method list its
+  picker renders from: the payer selected Bitcoin, changed their mind, and the
+  swap options were gone until the next poll. Pass the prepared snapshot and
+  the mint is folded into it, keeping the catalog and any sibling attempt. The
+  shipped renderers already did this internally and are unchanged.
+- **`now` options are unix SECONDS, and say so.** `deriveStatus`,
+  `createSwapDisplayModel`, `createCheckoutState` and friends compare `now`
+  against `expires_at`; passing `Date.now()` made every invoice read as
+  permanently expired with no error and no warning. They are typed
+  `UnixSeconds` (exported), documented, and a milliseconds value now throws a
+  `RangeError` at the call that made the mistake rather than silently expiring
+  the checkout.
+
+Not a defect, checked: the browser package already forwards the page's
+`<meta name="csrf-token">` as `X-CSRF-Token` on every body-bearing request, so
+`@openreceive/elements` inherits a Rails host's `protect_from_forgery` with no
+wiring. Verified in the published 0.2.1 tarball; the host page must render
+`csrf_meta_tags`.
+
+### Docs
+
+- The headless guide claimed its curated symbol list could not drift from the
+  entry module, and it had: six swap symbols were named while
+  `requestSwapRefund`, `getSwapRefundFormError`, `createQrSvg` and `openWallet`
+  were not, and `overlaySwapRefundStaging` — which MUST be called if you poll,
+  or the next `/swaps/status` tick wipes the payer's staged refund address —
+  was absent entirely. Those now have prose, and
+  `tools/docs/generate-headless-surface.mjs` fills a generated block with every
+  symbol no hand-written section names, so the claim is true and `--check`
+  enforces it.
+- `requestCheckout({ previous })`, `config.eager_preflight`, the asset-build
+  skip, and the `nwc-ruby` dependency are documented in the API reference,
+  deploying guide, and Rails quickstart.
+
+Examples were rebuilt against the 0.2.2 packages. The live wallet smoke
+(`npm run test:live`) was NOT run for this release: it needs a funded NWC
+connection, and nothing here touches the wallet call path.
+
 ## 0.2.1 - 2026-08-24
 
 First test publish to NPM and RubyGems

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2 - 2026-08-25
+
+The Ruby gems release in lockstep with the npm workspace version. The full
+release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md);
+entries here are scoped to this gem.
+
+- No functional change; released in lockstep. The `nwc-ruby` adapter shipped
+  here (`OpenReceive::NwcRubyReceiveClient`) is now covered by a test that
+  drives the real gem rather than a fake, through `openreceive-rails`'
+  new runtime dependency on it.
+
 ## 0.2.1 - 2026-08-24
 
 The Ruby gems release in lockstep with the npm workspace version. The full
