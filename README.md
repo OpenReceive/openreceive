@@ -12,7 +12,7 @@ Accept Bitcoin payments on your website, app, or point of sale, straight into a 
 never holds a key: it connects with only a spec-compliant receive-only [NWC code](https://github.com/nostr-protocol/nips/blob/master/47.md). Choose an existing
 [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments) to receive payments, or build your own NWC Service.
 
-For full self-custody, use an NWC provider like [Alby Hub](https://getalby.com/), running on your own hardware.
+For full self-custody, use an NWC provider like [Alby Hub](https://github.com/getAlby/hub), running on your own hardware.
 
 **Optionally swap in other currencies.** Not every customer holds Bitcoin.
 Configure any
@@ -81,12 +81,12 @@ transaction.
 OpenReceive is three server objects plus an optional browser package. Each one
 talks to a different side of your app, and each has an obvious home:
 
-| Piece                        | You build it with                                                                                                               | It talks to                                                                 | It lives                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
-| **Wallet client**            | [`createOpenReceive()`][api-createopenreceive]                                                                                  | **your wallet** — mints invoices, reads settlement, holds the NWC code      | server-only, one per process                     |
-| **Host**                     | [`createHost()`][api-createopenreceivehost]                                                                                     | **your database** — your hooks, plus the `openreceive_payments` table       | server-only, next to your models                 |
-| **HTTP routes**              | [`openReceiveExpress()`][api-express] (or [Fastify][api-fastify] / [Next][api-next] / [Rails](docs/guides/quickstart-rails.md)) | **the browser** — the endpoints the checkout UI calls                       | mounted on your app by default at `/openreceive` |
-| **Checkout UI** _(optional)_ | [`@openreceive/react`][api-browser] (or vue/svelte/angular/elements)                                                            | **the HTTP routes above** — creates the checkout, polls until paid          | your browser bundle                              |
+| Piece                        | You build it with                                                                                                               | It talks to                                                            | It lives                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------ |
+| **Wallet client**            | [`createOpenReceive()`][api-createopenreceive]                                                                                  | **your wallet** — mints invoices, reads settlement, holds the NWC code | server-only, one per process                     |
+| **Host**                     | [`createHost()`][api-createopenreceivehost]                                                                                     | **your database** — your hooks, plus the `openreceive_payments` table  | server-only, next to your models                 |
+| **HTTP routes**              | [`openReceiveExpress()`][api-express] (or [Fastify][api-fastify] / [Next][api-next] / [Rails](docs/guides/quickstart-rails.md)) | **the browser** — the endpoints the checkout UI calls                  | mounted on your app by default at `/openreceive` |
+| **Checkout UI** _(optional)_ | [`@openreceive/react`][api-browser] (or vue/svelte/angular/elements)                                                            | **the HTTP routes above** — creates the checkout, polls until paid     | your browser bundle                              |
 
 Only that last row is genuinely optional. Take the drop-in components, build
 your own on the semver-stable `@openreceive/browser/headless` engine, or skip
@@ -113,7 +113,9 @@ const host = createHost({
   // means there is nothing to pay for (404).
   amountFor: async (reference) => {
     const order = await orders.find(reference);
-    return order ? { currency: order.currency, value: order.total.toString() } : null;
+    return order
+      ? { currency: order.currency, value: order.total.toString() }
+      : null;
   },
   onPaid: async ({ reference, query }) => {
     // Runs inside the settlement transaction, only for the order's first
