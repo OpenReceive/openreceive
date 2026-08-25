@@ -258,6 +258,19 @@ export function shouldCheckoutShowWaiting(
   return state.expires_at > resolveNow(options.now);
 }
 
+/**
+ * The payer-facing status line: a phase, finished copy, and a countdown. No
+ * ordinal anywhere — progress in this checkout is a STATUS, not a position, and
+ * backwards movement is a breadcrumb (`checkoutLabels.switchPaymentMethod`)
+ * rather than a step back. Both shipped renderers print `title`/`detail`
+ * verbatim; a custom UI should too.
+ *
+ * The returned `phase` is NOT the source's. A non-terminal phase whose
+ * countdown has reached zero is reported as `expired`, so the screen turns over
+ * the moment the clock does instead of waiting for the next poll to disagree —
+ * which is why a caller must render the model's `phase` and never the
+ * snapshot's.
+ */
 export function createCheckoutStatusModel(
   source?: CheckoutState | CheckoutStatusModelInput,
   options: { readonly now?: UnixSeconds } = {},
