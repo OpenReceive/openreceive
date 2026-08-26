@@ -29,13 +29,21 @@ updates:
           - minor
           - patch
 
-  # The root Gemfile (Ruby engine + cross-language conformance harness) and
-  # the Rails example. The per-gem Gemfiles under packages/ruby/* have
-  # gitignored lockfiles, so there is nothing there to resolve against.
+  # The root Gemfile alone: the Ruby engine's test dependencies and the
+  # cross-language conformance harness. The per-gem Gemfiles under
+  # packages/ruby/* have gitignored lockfiles, so there is nothing there to
+  # resolve against.
+  #
+  # examples/hello-fruit/server/rails is deliberately absent. Its Gemfile
+  # reaches the three local gems with `path: "../../../../packages/ruby/*"`,
+  # and Dependabot fetches only the files inside a configured directory, so
+  # those paths land outside what it can see: the run reports
+  # path_dependencies_not_reachable and exits non-zero. Both directories would
+  # share one job, so listing the example cost the root Gemfile its updates
+  # too — every bundler run failed, and no bundler PR had ever opened.
   - package-ecosystem: bundler
     directories:
       - "/"
-      - "/examples/hello-fruit/server/rails"
     schedule:
       interval: weekly
       day: monday
