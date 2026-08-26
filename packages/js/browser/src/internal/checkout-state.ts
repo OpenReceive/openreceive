@@ -260,8 +260,8 @@ export function shouldCheckoutShowWaiting(
 
 /**
  * The payer-facing status line: a phase, finished copy, and a countdown. No
- * ordinal anywhere — progress in this checkout is a STATUS, not a position, and
- * backwards movement is a breadcrumb (`checkoutLabels.switchPaymentMethod`)
+ * step number anywhere — progress in this checkout is a STATUS, not a position,
+ * and backwards movement is a breadcrumb (`checkoutLabels.switchPaymentMethod`)
  * rather than a step back. Both shipped renderers print `title`/`detail`
  * verbatim; a custom UI should too.
  *
