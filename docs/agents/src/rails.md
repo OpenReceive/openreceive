@@ -94,7 +94,7 @@ itself, and they hold for every integration.
 
 The engine serves JSON only, so the view is yours — but the drop-ins
 (`<openreceive-checkout>`, React's `<Checkout>`) already obey all of this. This
-list is the short form of https://openreceive.org/guides/checkout-ux, for a UI
+list is the short form of https://openreceive.org/guides/checkout-ux.md, for a UI
 built on `@openreceive/browser/headless`. Read that before writing components.
 
 - `createCheckoutController` is the engine. Do not hand-roll a poll loop.
@@ -121,18 +121,19 @@ built on `@openreceive/browser/headless`. Read that before writing components.
 
 ## More documentation
 
-Fetch one when the moment comes.
+Fetch one when the moment comes. Each is raw markdown, so a plain GET is
+enough; drop the `.md` for the same page a person would read.
 
-- https://openreceive.org/guides/authorization — before you write `config.authorize`
-- https://openreceive.org/guides/environment-variables — every variable, and what is deliberately not one
-- https://openreceive.org/guides/storage — the engine tables and the attempt state machine
-- https://openreceive.org/guides/frontend-checkout — the drop-in's props, attributes and slots
-- https://openreceive.org/guides/checkout-ux — read before building any custom UI
-- https://openreceive.org/guides/headless-checkout — the controller, the display models, refunds
-- https://openreceive.org/guides/automated-swaps — only if `LSC_URI_PRIMARY` is set
-- https://openreceive.org/guides/rate-limiting — before a public shop goes live
-- https://openreceive.org/guides/security and https://openreceive.org/guides/deploying — before this goes anywhere real
-- https://openreceive.org/guides/api-reference — every route, option and error code
+- https://openreceive.org/guides/authorization.md — before you write `config.authorize`
+- https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
+- https://openreceive.org/guides/storage.md — the engine tables and the attempt state machine
+- https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
+- https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
+- https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
+- https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
+- https://openreceive.org/guides/rate-limiting.md — before a public shop goes live
+- https://openreceive.org/guides/security.md and https://openreceive.org/guides/deploying.md — before this goes anywhere real
+- https://openreceive.org/guides/api-reference.md — every route, option and error code
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
