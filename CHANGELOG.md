@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.4 - Unreleased
+## 0.2.4 - 2026-08-26
 
 Twelve findings from building a real store on the packages: one shipped bug, one
 inconsistency between two panels, three small API additions, and the guides that

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4 - 2026-08-26
+
+No Ruby changes in this release. 0.2.4 is browser-side only —
+`@openreceive/browser`, `@openreceive/elements`, `@openreceive/react` and
+`@openreceive/provider-data`. This gem is byte-identical to 0.2.3 and ships to
+keep the one-version-for-everything rule, so the engine, the HTTP contract and
+the settlement path are unchanged. The full release narrative lives in the
+repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md).
+
 ## 0.2.3 - 2026-08-25
 
 The Ruby gems release in lockstep with the npm workspace version. The full
