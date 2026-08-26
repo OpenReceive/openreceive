@@ -57,6 +57,11 @@ Browser & React API surface (full reference in
     before you add one around `<Checkout>`. That is where steppers actually get
     added in practice: outside the component, by someone who never opens the
     headless guide.
+  - any payer-facing string you need for your own layout is already in
+    `checkoutLabels`, exported from `@openreceive/browser/headless` — the copy,
+    network and breadcrumb wording the shipped renderers emit. Read it before
+    you write your own, so a custom layout and the drop-in do not say different
+    things for the same control.
 
 `prefix` is the base path your app mounted the shipped OpenReceive router at —
 `/openreceive` in the example above. It is the only URL input the browser packages take:
