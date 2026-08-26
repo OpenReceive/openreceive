@@ -21,7 +21,7 @@
 
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { SITE_OWNED_PATHS } from "./site-paths.mjs";
+import { markdownTwin, SITE_OWNED_PATHS } from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -44,8 +44,13 @@ const bySlug = new Map(manifest.docs.map((doc) => [doc.slug, doc]));
 const publish = [];
 for (const doc of manifest.docs) {
   if (!doc.public) continue;
+  const urlPath = doc.slug === "guides" ? "/guides" : `/guides/${doc.slug}`;
   publish.push({
-    path: doc.slug === "guides" ? "/guides" : `/guides/${doc.slug}`,
+    path: urlPath,
+    // The same document as raw markdown. The site renders `path` in the
+    // browser, so `path` alone is unreadable to anything without a JS engine;
+    // the directions link this one.
+    markdown_path: markdownTwin(urlPath),
     source: doc.source_path,
     kind: doc.source_path.startsWith("docs/agents/") ? "agent-directions" : "guide",
     slug: doc.slug,
@@ -60,6 +65,7 @@ for (const alias of ALIASES) {
   if (!doc) throw new Error(`${TARGET}: alias ${alias.path} names unknown slug ${alias.slug}`);
   publish.push({
     path: alias.path,
+    markdown_path: markdownTwin(alias.path),
     source: doc.source_path,
     kind: alias.kind,
     slug: doc.slug,
@@ -85,7 +91,12 @@ const copyButton = AGENT_PAYLOADS.map(({ path: urlPath, source, stack }) => ({
 }));
 
 const contract = {
-  contract_version: 1,
+  // v2 adds `markdown_path` to every entry rendered from a source here: the
+  // site must serve the raw markdown at that URL, because the agent directions
+  // now link it instead of the page. A site that ignored the field would 404
+  // every reading-list link in a payload someone has already pasted, so this is
+  // a version bump and not an additive field.
+  contract_version: 2,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.

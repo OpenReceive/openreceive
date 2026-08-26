@@ -91,7 +91,7 @@ itself, and they hold for every integration.
 ## If you build your own checkout UI
 
 The drop-ins (`<Checkout>`, `<openreceive-checkout>`) already obey all of this.
-This list is the short form of https://openreceive.org/guides/checkout-ux, for a
+This list is the short form of https://openreceive.org/guides/checkout-ux.md, for a
 UI built on `@openreceive/browser/headless`. Read that before writing
 components.
 
@@ -119,19 +119,20 @@ components.
 
 ## More documentation
 
-Fetch one when the moment comes.
+Fetch one when the moment comes. Each is raw markdown, so a plain GET is
+enough; drop the `.md` for the same page a person would read.
 
-- https://openreceive.org/guides/authorization — before you write `authorize`
-- https://openreceive.org/guides/environment-variables — every variable, and what is deliberately not one
-- https://openreceive.org/guides/storage — the payment tables and the attempt state machine
-- https://openreceive.org/guides/node-orms — recipes for Prisma, Drizzle, Knex, TypeORM, Sequelize
-- https://openreceive.org/guides/frontend-checkout — the drop-in's props, attributes and slots
-- https://openreceive.org/guides/checkout-ux — read before building any custom UI
-- https://openreceive.org/guides/headless-checkout — the controller, the display models, refunds
-- https://openreceive.org/guides/automated-swaps — only if `LSC_URI_PRIMARY` is set
-- https://openreceive.org/guides/rate-limiting — before a public shop goes live
-- https://openreceive.org/guides/security and https://openreceive.org/guides/deploying — before this goes anywhere real
-- https://openreceive.org/guides/api-reference — every route, option and error code
+- https://openreceive.org/guides/authorization.md — before you write `authorize`
+- https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
+- https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
+- https://openreceive.org/guides/node-orms.md — recipes for Prisma, Drizzle, Knex, TypeORM, Sequelize
+- https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
+- https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
+- https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
+- https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
+- https://openreceive.org/guides/rate-limiting.md — before a public shop goes live
+- https://openreceive.org/guides/security.md and https://openreceive.org/guides/deploying.md — before this goes anywhere real
+- https://openreceive.org/guides/api-reference.md — every route, option and error code
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
@@ -173,12 +174,12 @@ npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequel
 `openreceive scaffold payments` emits one schema/migration file for your ORM —
 `openreceive_payments` plus `openreceive_meta`, the durable reconcile gate —
 and a wiring guide; it never touches a database.
-→ [openreceive scaffold payments](https://openreceive.org/guides/api-reference#openreceive-scaffold-payments)
+→ [openreceive scaffold payments](https://openreceive.org/guides/api-reference.md#openreceive-scaffold-payments)
 
 Then run the emitted migration through your normal workflow (for example
 `npx prisma migrate dev`). OpenReceive owns the tables' logic at runtime; there
 is nothing else to generate. Details:
-[Payment storage](https://openreceive.org/guides/storage), [Node ORM recipes](https://openreceive.org/guides/node-orms).
+[Payment storage](https://openreceive.org/guides/storage.md), [Node ORM recipes](https://openreceive.org/guides/node-orms.md).
 
 ### 3. Add wallet credentials
 
@@ -198,12 +199,12 @@ LSC_URI_BACKUP=
 
 Never put these values in browser code. Your application refuses to start if
 the NWC code also advertises spend methods such as `pay_invoice`; mint a
-receive-only code ([Security](https://openreceive.org/guides/security)).
+receive-only code ([Security](https://openreceive.org/guides/security.md)).
 
 OpenReceive reads `process.env`; creating a `.env` file is not enough on its
 own. How that file (or production secrets) get into the process —
 `dotenv` on Express/Fastify, Next.js auto-load, secret managers in
-production — is on [Environment variables](https://openreceive.org/guides/environment-variables).
+production — is on [Environment variables](https://openreceive.org/guides/environment-variables.md).
 
 ### 4. Wire OpenReceive
 
@@ -257,12 +258,12 @@ runs the opportunistic reconcile on every OpenReceive request; restarts and
 payers who close the page are covered because any later call wins the gate and
 settles their invoices. `authorize` runs on every request with
 `{ action, request, resource, native }`.
-→ [openReceiveExpress](https://openreceive.org/guides/api-reference#openreceiveexpress) ·
-[authorize context](https://openreceive.org/guides/api-reference#the-authorize-context)
+→ [openReceiveExpress](https://openreceive.org/guides/api-reference.md#openreceiveexpress) ·
+[authorize context](https://openreceive.org/guides/api-reference.md#the-authorize-context)
 
 `rateLimiting: true` is opt-in on purpose — set it for public web shops, and
 leave it off for point-of-sale or any deployment where payers share one IP.
-Limits, custom messages, and how counting works: → [Rate limiting](https://openreceive.org/guides/rate-limiting)
+Limits, custom messages, and how counting works: → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
 
 Composing the pieces yourself — a shared wallet client, a custom payments
 repository, or direct handler tests — is fully supported: build them with
@@ -270,9 +271,9 @@ repository, or direct handler tests — is fully supported: build them with
 `{ service, host, authorize }` to the same adapter.
 `maybeReconcilePayments` exposes the same gated settlement pass for
 your own routes or middleware.
-→ [createOpenReceive](https://openreceive.org/guides/api-reference#createopenreceive) ·
-[createHost](https://openreceive.org/guides/api-reference#createhost) ·
-[maybeReconcilePayments](https://openreceive.org/guides/api-reference#maybereconcilepayments)
+→ [createOpenReceive](https://openreceive.org/guides/api-reference.md#createopenreceive) ·
+[createHost](https://openreceive.org/guides/api-reference.md#createhost) ·
+[maybeReconcilePayments](https://openreceive.org/guides/api-reference.md#maybereconcilepayments)
 
 Optionally, run one separate worker process with
 `startNotificationWorker({ service, host })`: it subscribes to NWC-02
@@ -280,7 +281,7 @@ Optionally, run one separate worker process with
 pass in the same process. A settled payload settles the matching pending attempt directly
 (same finality rule as scans; never a preimage alone); anything less only wakes a scan, and
 the worker's own periodic pass is the safety net for notifications missed while it was down.
-→ [startNotificationWorker](https://openreceive.org/guides/api-reference#startnotificationworker)
+→ [startNotificationWorker](https://openreceive.org/guides/api-reference.md#startnotificationworker)
 
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns the order id the page will pass as
@@ -320,4 +321,4 @@ npx openreceive doctor
 ```
 
 `openreceive doctor` checks Node, `NWC_URI`, and swap-provider configuration
-without touching a database. → [openreceive doctor](https://openreceive.org/guides/api-reference#openreceive-doctor)
+without touching a database. → [openreceive doctor](https://openreceive.org/guides/api-reference.md#openreceive-doctor)

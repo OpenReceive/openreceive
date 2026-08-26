@@ -21,6 +21,31 @@ published interface, generated from `docs/manifest.json` and enforced in CI on
 this side by `npm run check:docs`, which fails if a direction links to anything
 the contract does not publish.
 
+That interface is the **raw markdown**, not the page. openreceive.org renders
+guides in the browser, so `curl https://openreceive.org/guides/storage` returns
+an application shell — a few KB of `<head>` and an empty `<div id="root">`, with
+none of the guide in it. To the one reader the directions have, that is
+indistinguishable from a blocked network, which is the exact failure the
+contract exists to prevent, arriving with a 200. So every entry the site renders
+from a source here carries a `markdown_path` as well as a `path`, and the
+directions link the former.
+
+## `contract_version`
+
+The contract is at **v2**. A site that reads it should refuse to publish a
+version it does not understand rather than publish part of it — a half-honoured
+contract is how a payload ends up linking a page nobody serves.
+
+- **v1** — `publish[]`, `site_owned[]`, `never_publish[]`.
+- **v2** — adds `markdown_path` to every `publish[]` entry rendered from a
+  source here. This is a version bump rather than an additive field because the
+  directions generated alongside it link `markdown_path`, so a site that ignores
+  the field serves 404s for its entire reading list.
+
+`release_version` moves with every library release and says nothing about the
+shape of this file; `contract_version` moves only when the site has to do
+something new.
+
 ## On every OpenReceive release
 
 1. Check out this repo at the release tag.
@@ -32,11 +57,15 @@ the contract does not publish.
 3. Publish every entry in `publish[]`: render `source` (a markdown path in this
    repo) at `path`. `release_version` tells you which library release the set
    belongs to.
-4. Serve the two `agent-directions-payload` entries as **raw markdown**, and use
+4. Serve every `markdown_path` as **raw markdown** — the `source` file's bytes,
+   `text/markdown; charset=utf-8`, no chrome. This is not optional and not a
+   nicety: it is what the directions link, so a site that publishes only `path`
+   ships a reading list that resolves to blank pages.
+5. Serve the two `agent-directions-payload` entries as **raw markdown**, and use
    the same bytes behind the copy button.
-5. Publish nothing in `never_publish[]`. Those are contributor docs — release
+6. Publish nothing in `never_publish[]`. Those are contributor docs — release
    keys, unreleased internals, forbidden-change lists.
-6. Confirm every path in `site_owned[]` still resolves. Those pages are yours,
+7. Confirm every path in `site_owned[]` still resolves. Those pages are yours,
    not generated from here, and the directions link to them.
 
 ## The routes
@@ -48,11 +77,29 @@ the contract does not publish.
 | `agent-directions` | `/guides/agent-directions-node`, `…-rails` | The payload as a normal page, for people reading it. |
 | `agent-directions-payload` | `/agent-directions/node.md`, `/rails.md` | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
 
+Every one of those except the payloads — which are already markdown — also
+carries a `markdown_path`, which is always the `path` with `.md` appended:
+
+| `path` | `markdown_path` |
+| --- | --- |
+| `/guides/storage` | `/guides/storage.md` |
+| `/guides` | `/guides.md` |
+| `/api_docs` | `/api_docs.md` |
+
+Serve the `source` file at `markdown_path` as `text/markdown; charset=utf-8`,
+unrendered. Link rewriting (below) is fine and expected there — it is the same
+document, in the form a program can read. The two obligations that make it worth
+having are that it never returns HTML and that it never 404s while `path` works.
+
 **The renderer must rewrite intra-guide links.** Guides link to each other by
 filename — `[Payment storage](storage.md)`, `[errors](api-reference.md#errors)` —
 because they are also read in the repository. Map `<slug>.md[#anchor]` to
-`/guides/<slug>[#anchor]`. The agent payloads need no such treatment: every link
-in them is already absolute, which is the point of them.
+`/guides/<slug>[#anchor]` for the page. In the markdown twin, map it to
+`/guides/<slug>.md[#anchor]` instead: whatever followed one link will want to
+follow the next one, and it still has no browser.
+
+The agent payloads need no such treatment: every link in them is already
+absolute, and already points at a `.md`, which is the point of them.
 
 ## The copy button
 
@@ -76,12 +123,19 @@ sources. Agents look for these paths by convention, and they cost one build
 step. They do not replace the copy button: `llms-full.txt` is the whole corpus,
 while the payload is the one-prompt subset with Step 0 in front of it.
 
+In `llms.txt`, link each entry's `markdown_path`, not its `path`. The file
+exists to be read by something without a browser, and pointing it at the page
+would reintroduce the empty shell one level of indirection later.
+
 ## What breaks integrations
 
 Renaming or dropping any of these strands a payload that is already pasted
 somewhere:
 
 - a `/guides/<slug>` path in `publish[]`
+- **any `markdown_path`** — this is where the directions actually send an agent,
+  so it is the one most likely to be quietly missing and the one whose absence
+  is hardest to notice from a browser
 - the `/api_docs` alias
 - any path in `site_owned[]` — today `/contact`,
   `/get_a_nwc_code_to_receive_payments`, `/set_up_swap_provider`, `/guides`, `/`

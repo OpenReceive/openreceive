@@ -1,0 +1,57 @@
+# Dependency pull requests, not deploys. Every PR opened here runs the same
+# ci.yml gate a human's does, with the same read-only token and no repository
+# secrets — the same posture as a fork PR, which is why no CI lane depends on
+# a secret.
+version: 2
+
+updates:
+  # The root manifest covers every npm workspace (packages/js/*, the four
+  # example servers), so this is one entry rather than one per workspace.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # package.json's `overrides` pin @angular/* to an exact version that
+      # Dependabot does not know to edit. Grouping them means the stale
+      # override gets fixed once per bump instead of once per package.
+      angular:
+        patterns:
+          - "@angular/*"
+      dev-tooling:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  # The root Gemfile (Ruby engine + cross-language conformance harness) and
+  # the Rails example. The per-gem Gemfiles under packages/ruby/* have
+  # gitignored lockfiles, so there is nothing there to resolve against.
+  - package-ecosystem: bundler
+    directories:
+      - "/"
+      - "/examples/hello-fruit/server/rails"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+
+  # Action pins. check-workflows.mjs requires every remote `uses:` to be a
+  # full commit SHA carrying a trailing "# vX" comment; Dependabot rewrites
+  # the SHA and that comment together, which is the only maintainable way to
+  # keep SHA pins current. `directory: "/"` reaches .github/workflows only, so
+  # the two composite actions each need their own entry.
+  - package-ecosystem: github-actions
+    directories:
+      - "/"
+      - "/.github/actions/rails-ci"
+      - "/.github/actions/setup-playwright"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns:
+          - "*"

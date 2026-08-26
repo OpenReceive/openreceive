@@ -51,3 +51,13 @@ their own file, and none tracks the others.
   `npm run test:ruby` — run the same two commands locally.
 - Security reports: see `SECURITY.md` (do not open public issues for
   vulnerabilities).
+
+### CI on pull requests from forks
+
+- Every PR runs `.github/workflows/ci.yml` automatically: the core gate, the
+  Ruby engine on 3.2 and 3.4, the browser smoke spec, and the Rails example.
+- On a first-time contributor's PR, GitHub holds that run until a maintainer
+  approves it. A run reported as awaiting approval is expected, not a failure.
+- Fork PRs run with a read-only token and no repository secrets. Every lane is
+  built to pass without them (the live-wallet lanes read an empty `NWC_URI`
+  and self-skip), so a fork PR sees the same result a maintainer's branch does.

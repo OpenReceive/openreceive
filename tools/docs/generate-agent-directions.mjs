@@ -18,13 +18,22 @@
 //   3. Every openreceive.org URL it names is a page the site actually has to
 //      serve. Links are checked against docs/manifest.json and the site-owned
 //      allowlist below, so the payload cannot promise a 404.
+//   4. Every link to a document is the `.md` twin, not the page. The site
+//      renders guides in the browser, so fetching the page URL returns an empty
+//      shell — a reading list of page URLs is a reading list of blank pages to
+//      the one reader this file has.
 //
 // `--check` fails the gate when a committed payload is stale, oversized, or
 // links somewhere the site does not publish.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { SITE_OWNED_PATHS } from "./site-paths.mjs";
+import {
+  MARKDOWN_SUFFIX,
+  MARKDOWN_TWINNED_SITE_PAGES,
+  markdownTwin,
+  SITE_OWNED_PATHS,
+} from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -50,6 +59,8 @@ const STACKS = [
 ];
 
 const GUIDE_URL = (slug) => `https://openreceive.org/guides/${slug}`;
+// What the payload actually links: raw markdown, fetchable without a browser.
+const GUIDE_MARKDOWN_URL = (slug) => markdownTwin(GUIDE_URL(slug));
 
 function readManifestSlugs() {
   const manifest = JSON.parse(readFileSync(path.join(root, "docs/manifest.json"), "utf8"));
@@ -67,7 +78,9 @@ function readManifestSlugs() {
  * `#` title becomes a `##` section of one document, and its sibling links
  * (`storage.md`, `api-reference.md#errors`) become the site URLs the payload
  * uses everywhere else — a relative path is meaningless once the file has been
- * pasted into a chat window.
+ * pasted into a chat window. They keep their `.md`: the reader of a pasted
+ * payload is an agent with a fetch tool, and the page URL would hand it an
+ * empty application shell.
  */
 export function inlineGuide(markdown, publicSlugs) {
   // A guide's trailing "Next" section is a list of links to its siblings. The
@@ -84,7 +97,7 @@ export function inlineGuide(markdown, publicSlugs) {
     out
       .join("\n")
       .replace(/\]\(([a-z0-9-]+)\.md(#[a-z0-9_-]+)?\)/g, (whole, slug, anchor) =>
-        publicSlugs.has(slug) ? `](${GUIDE_URL(slug)}${anchor ?? ""})` : whole,
+        publicSlugs.has(slug) ? `](${GUIDE_MARKDOWN_URL(slug)}${anchor ?? ""})` : whole,
       )
       // A path into the repository (the demo app, a contributor doc) is dead
       // once the file has been pasted somewhere else, and cloning is not the
@@ -114,14 +127,30 @@ function render(directions, quickstart, quickstartSlug, publicSlugs) {
 export function unservedUrls(payload, publicSlugs) {
   const bad = [];
   for (const match of payload.matchAll(/https:\/\/openreceive\.org(\/[^\s)<>"'`]*)?/g)) {
-    const url = (match[1] ?? "/").replace(/[.,)]+$/, "");
+    // A trailing `.` ends a sentence; `.md` is part of the path. Strip the
+    // suffix first so prose punctuation cannot eat it.
+    const raw = (match[1] ?? "/").replace(/[,)]+$/, "");
+    const url = raw.endsWith(MARKDOWN_SUFFIX) ? raw : raw.replace(/\.+$/, "");
     const [pathname] = url.split("#");
     if (SITE_OWNED_PATHS.includes(pathname)) continue;
-    const guide = pathname.match(/^\/guides\/([a-z0-9-]+)$/);
-    if (guide && publicSlugs.has(guide[1])) continue;
+    if (servesMarkdown(pathname, publicSlugs)) continue;
     bad.push(pathname);
   }
   return [...new Set(bad)];
+}
+
+/**
+ * `/guides/<slug>` and its `.md` twin, plus `/guides.md` and `/api_docs.md` —
+ * the twins of the two site-owned pages the site generates from this repo.
+ * `/contact.md` and friends are NOT twinned: those pages are hand-authored on
+ * the site and there is no markdown behind them.
+ */
+function servesMarkdown(pathname, publicSlugs) {
+  const isTwin = pathname.endsWith(MARKDOWN_SUFFIX);
+  const page = isTwin ? pathname.slice(0, -MARKDOWN_SUFFIX.length) : pathname;
+  if (isTwin && MARKDOWN_TWINNED_SITE_PAGES.includes(page)) return true;
+  const guide = page.match(/^\/guides\/([a-z0-9-]+)$/);
+  return Boolean(guide) && publicSlugs.has(guide[1]);
 }
 
 const { publicSlugs } = readManifestSlugs();

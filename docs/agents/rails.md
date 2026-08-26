@@ -94,7 +94,7 @@ itself, and they hold for every integration.
 
 The engine serves JSON only, so the view is yours — but the drop-ins
 (`<openreceive-checkout>`, React's `<Checkout>`) already obey all of this. This
-list is the short form of https://openreceive.org/guides/checkout-ux, for a UI
+list is the short form of https://openreceive.org/guides/checkout-ux.md, for a UI
 built on `@openreceive/browser/headless`. Read that before writing components.
 
 - `createCheckoutController` is the engine. Do not hand-roll a poll loop.
@@ -121,18 +121,19 @@ built on `@openreceive/browser/headless`. Read that before writing components.
 
 ## More documentation
 
-Fetch one when the moment comes.
+Fetch one when the moment comes. Each is raw markdown, so a plain GET is
+enough; drop the `.md` for the same page a person would read.
 
-- https://openreceive.org/guides/authorization — before you write `config.authorize`
-- https://openreceive.org/guides/environment-variables — every variable, and what is deliberately not one
-- https://openreceive.org/guides/storage — the engine tables and the attempt state machine
-- https://openreceive.org/guides/frontend-checkout — the drop-in's props, attributes and slots
-- https://openreceive.org/guides/checkout-ux — read before building any custom UI
-- https://openreceive.org/guides/headless-checkout — the controller, the display models, refunds
-- https://openreceive.org/guides/automated-swaps — only if `LSC_URI_PRIMARY` is set
-- https://openreceive.org/guides/rate-limiting — before a public shop goes live
-- https://openreceive.org/guides/security and https://openreceive.org/guides/deploying — before this goes anywhere real
-- https://openreceive.org/guides/api-reference — every route, option and error code
+- https://openreceive.org/guides/authorization.md — before you write `config.authorize`
+- https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
+- https://openreceive.org/guides/storage.md — the engine tables and the attempt state machine
+- https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
+- https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
+- https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
+- https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
+- https://openreceive.org/guides/rate-limiting.md — before a public shop goes live
+- https://openreceive.org/guides/security.md and https://openreceive.org/guides/deploying.md — before this goes anywhere real
+- https://openreceive.org/guides/api-reference.md — every route, option and error code
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
@@ -170,7 +171,7 @@ bin/rails db:migrate
 initializer, and the engine mount. The migration adapts to the app's configured
 database adapter — PostgreSQL, SQLite, and MySQL (`mysql2`/`trilogy`) are
 supported.
-→ [openreceive:install](https://openreceive.org/guides/api-reference#openreceiveinstall)
+→ [openreceive:install](https://openreceive.org/guides/api-reference.md#openreceiveinstall)
 
 The generator emits three things:
 
@@ -251,12 +252,12 @@ Supply the receive-only wallet connection as `ENV["NWC_URI"]`. Never put it in
 browser code, logs, or assets. Your application refuses to start when the code
 advertises spend methods such as `pay_invoice`; the explicit override is
 `config.allow_spend_capable_wallet = true` or
-`OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` ([Security](https://openreceive.org/guides/security)).
+`OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` ([Security](https://openreceive.org/guides/security.md)).
 
 OpenReceive reads `ENV`; Rails does not load a `.env` file on its own.
 `dotenv-rails`, an exported shell environment, or your production secret
 manager has to put the values there first.
-→ [Environment variables](https://openreceive.org/guides/environment-variables).
+→ [Environment variables](https://openreceive.org/guides/environment-variables.md).
 
 ### Configure the host hooks
 
@@ -312,7 +313,7 @@ end
 
 `OpenReceive.configure` sets the three host hooks; `on_paid` runs inside the
 settlement transaction, only for the first settled attempt for a reference.
-→ [OpenReceive.configure](https://openreceive.org/guides/api-reference#openreceiveconfigure)
+→ [OpenReceive.configure](https://openreceive.org/guides/api-reference.md#openreceiveconfigure)
 
 The engine inherits your application's `protect_from_forgery`. Keep
 `csrf_meta_tags` in the layout that renders the checkout; the checkout client
@@ -331,7 +332,7 @@ overrides for custom-repository applications and are not part of the quickstart.
 
 For public web shops, opt into the per-IP invoice cap with
 `config.rate_limiting = true`; leave it off (the default) when many payers
-share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting#rails)
+share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md#rails)
 
 In production the engine builds the wallet client — and runs its receive-only
 preflight — eagerly when your application boots, so a missing `NWC_URI`, a
@@ -366,10 +367,10 @@ defineElements();
 
 The element creates the checkout for `reference`, then renders and polls
 itself. React/Vue/Svelte/Angular apps use the matching wrapper package
-instead — same props and defaults ([Frontend checkout](https://openreceive.org/guides/frontend-checkout)).
+instead — same props and defaults ([Frontend checkout](https://openreceive.org/guides/frontend-checkout.md)).
 The Rails Hello Fruit demo mounts the packaged `@openreceive/react` components
 and drives them from mobx-keystone stores fed by
-`@openreceive/browser/headless` ([Headless checkout](https://openreceive.org/guides/headless-checkout)) —
+`@openreceive/browser/headless` ([Headless checkout](https://openreceive.org/guides/headless-checkout.md)) —
 custom state, packaged UI.
 
 ### Reconciliation
@@ -395,14 +396,14 @@ data — and also reconciles periodically
 safety net for notifications missed while it was down. A settled payload
 settles the matching pending attempt directly (same finality rule as scans;
 never a preimage alone); anything less only wakes a reconcile pass.
-→ [rake openreceive:notifications](https://openreceive.org/guides/api-reference#rake-openreceivenotifications) ·
-[OpenReceive.listen_for_notifications!](https://openreceive.org/guides/api-reference#openreceivelisten_for_notifications)
+→ [rake openreceive:notifications](https://openreceive.org/guides/api-reference.md#rake-openreceivenotifications) ·
+[OpenReceive.listen_for_notifications!](https://openreceive.org/guides/api-reference.md#openreceivelisten_for_notifications)
 
 `OpenReceive.reconcile!`, `OpenReceive::ReconcileJob`, and
 `bin/rails openreceive:reconcile` remain one-shot primitives — nothing to
 schedule. `reconcile!` now returns the per-hash check results of the pass.
-→ [OpenReceive.reconcile!](https://openreceive.org/guides/api-reference#openreceivereconcile) ·
-[OpenReceive::ReconcileJob](https://openreceive.org/guides/api-reference#openreceivereconcilejob)
+→ [OpenReceive.reconcile!](https://openreceive.org/guides/api-reference.md#openreceivereconcile) ·
+[OpenReceive::ReconcileJob](https://openreceive.org/guides/api-reference.md#openreceivereconcilejob)
 
 Each pass reconciles only `pending` attempts — the oldest
 `OpenReceive::Server::RECONCILE_BATCH_SIZE` (200) per pass — with one batched
@@ -414,9 +415,9 @@ grace, never the local clock alone. Duplicate delivery is harmless.
 ### Swap secrets
 
 The Ruby server recognizes `LSC_URI_PRIMARY` and `LSC_URI_BACKUP` using the
-shared [Lightning Swap Connect](https://openreceive.org/guides/lightning-swap-connect) vectors: setting either one
+shared [Lightning Swap Connect](https://openreceive.org/guides/lightning-swap-connect.md) vectors: setting either one
 auto-builds the matching provider, so an app that wants swaps only supplies the
-connection strings ([Environment variables](https://openreceive.org/guides/environment-variables)).
+connection strings ([Environment variables](https://openreceive.org/guides/environment-variables.md)).
 `config.swap_providers` is the override knob — pass your own adapters to
 replace the auto-built set, or an empty array to disable swaps.
 

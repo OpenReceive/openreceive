@@ -1,5 +1,5 @@
 {
-  "contract_version": 1,
+  "contract_version": 2,
   "release_version": "0.3.0",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -7,6 +7,7 @@
   "publish": [
     {
       "path": "/guides",
+      "markdown_path": "/guides.md",
       "source": "docs/guides/README.md",
       "kind": "guide",
       "slug": "guides",
@@ -16,6 +17,7 @@
     },
     {
       "path": "/guides/quickstart-node",
+      "markdown_path": "/guides/quickstart-node.md",
       "source": "docs/guides/quickstart-node.md",
       "kind": "guide",
       "slug": "quickstart-node",
@@ -25,6 +27,7 @@
     },
     {
       "path": "/guides/quickstart-rails",
+      "markdown_path": "/guides/quickstart-rails.md",
       "source": "docs/guides/quickstart-rails.md",
       "kind": "guide",
       "slug": "quickstart-rails",
@@ -34,6 +37,7 @@
     },
     {
       "path": "/guides/node-orms",
+      "markdown_path": "/guides/node-orms.md",
       "source": "docs/guides/node-orms.md",
       "kind": "guide",
       "slug": "node-orms",
@@ -43,6 +47,7 @@
     },
     {
       "path": "/guides/authorization",
+      "markdown_path": "/guides/authorization.md",
       "source": "docs/guides/authorization.md",
       "kind": "guide",
       "slug": "authorization",
@@ -52,6 +57,7 @@
     },
     {
       "path": "/guides/rate-limiting",
+      "markdown_path": "/guides/rate-limiting.md",
       "source": "docs/guides/rate-limiting.md",
       "kind": "guide",
       "slug": "rate-limiting",
@@ -61,6 +67,7 @@
     },
     {
       "path": "/guides/frontend-checkout",
+      "markdown_path": "/guides/frontend-checkout.md",
       "source": "docs/guides/frontend-checkout.md",
       "kind": "guide",
       "slug": "frontend-checkout",
@@ -70,6 +77,7 @@
     },
     {
       "path": "/guides/checkout-ux",
+      "markdown_path": "/guides/checkout-ux.md",
       "source": "docs/guides/checkout-ux.md",
       "kind": "guide",
       "slug": "checkout-ux",
@@ -79,6 +87,7 @@
     },
     {
       "path": "/guides/headless-checkout",
+      "markdown_path": "/guides/headless-checkout.md",
       "source": "docs/guides/headless-checkout.md",
       "kind": "guide",
       "slug": "headless-checkout",
@@ -88,6 +97,7 @@
     },
     {
       "path": "/guides/automated-swaps",
+      "markdown_path": "/guides/automated-swaps.md",
       "source": "docs/guides/automated-swaps.md",
       "kind": "guide",
       "slug": "automated-swaps",
@@ -97,6 +107,7 @@
     },
     {
       "path": "/guides/lightning-swap-connect",
+      "markdown_path": "/guides/lightning-swap-connect.md",
       "source": "docs/guides/lightning-swap-connect.md",
       "kind": "guide",
       "slug": "lightning-swap-connect",
@@ -106,6 +117,7 @@
     },
     {
       "path": "/guides/environment-variables",
+      "markdown_path": "/guides/environment-variables.md",
       "source": "docs/guides/environment-variables.md",
       "kind": "guide",
       "slug": "environment-variables",
@@ -115,6 +127,7 @@
     },
     {
       "path": "/guides/storage",
+      "markdown_path": "/guides/storage.md",
       "source": "docs/guides/storage.md",
       "kind": "guide",
       "slug": "storage",
@@ -124,6 +137,7 @@
     },
     {
       "path": "/guides/deploying",
+      "markdown_path": "/guides/deploying.md",
       "source": "docs/guides/deploying.md",
       "kind": "guide",
       "slug": "deploying",
@@ -133,6 +147,7 @@
     },
     {
       "path": "/guides/host-testing",
+      "markdown_path": "/guides/host-testing.md",
       "source": "docs/guides/host-testing.md",
       "kind": "guide",
       "slug": "host-testing",
@@ -142,6 +157,7 @@
     },
     {
       "path": "/guides/api-reference",
+      "markdown_path": "/guides/api-reference.md",
       "source": "docs/guides/api-reference.md",
       "kind": "guide",
       "slug": "api-reference",
@@ -151,6 +167,7 @@
     },
     {
       "path": "/guides/security",
+      "markdown_path": "/guides/security.md",
       "source": "docs/guides/security.md",
       "kind": "guide",
       "slug": "security",
@@ -160,6 +177,7 @@
     },
     {
       "path": "/guides/provider-registry",
+      "markdown_path": "/guides/provider-registry.md",
       "source": "docs/guides/provider-registry.md",
       "kind": "guide",
       "slug": "provider-registry",
@@ -169,6 +187,7 @@
     },
     {
       "path": "/guides/price-feeds",
+      "markdown_path": "/guides/price-feeds.md",
       "source": "docs/guides/price-feeds.md",
       "kind": "guide",
       "slug": "price-feeds",
@@ -178,6 +197,7 @@
     },
     {
       "path": "/guides/react-material-ui-recipe",
+      "markdown_path": "/guides/react-material-ui-recipe.md",
       "source": "docs/recipes/react-material-ui.md",
       "kind": "guide",
       "slug": "react-material-ui-recipe",
@@ -187,6 +207,7 @@
     },
     {
       "path": "/guides/custom-checkout-route",
+      "markdown_path": "/guides/custom-checkout-route.md",
       "source": "docs/guides/custom-checkout-route.md",
       "kind": "guide",
       "slug": "custom-checkout-route",
@@ -196,24 +217,27 @@
     },
     {
       "path": "/guides/agent-directions-node",
+      "markdown_path": "/guides/agent-directions-node.md",
       "source": "docs/agents/node.md",
       "kind": "agent-directions",
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 16481
+      "bytes": 16661
     },
     {
       "path": "/guides/agent-directions-rails",
+      "markdown_path": "/guides/agent-directions-rails.md",
       "source": "docs/agents/rails.md",
       "kind": "agent-directions",
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 22057
+      "bytes": 22234
     },
     {
       "path": "/api_docs",
+      "markdown_path": "/api_docs.md",
       "source": "docs/guides/api-reference.md",
       "kind": "api-docs",
       "slug": "api-reference",
@@ -228,7 +252,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 16481,
+      "bytes": 16661,
       "copy_button": true,
       "self_contained": true
     },
@@ -238,7 +262,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22057,
+      "bytes": 22234,
       "copy_button": true,
       "self_contained": true
     }

@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### The docs the agent directions point at are fetchable now
+
+The reading list at the end of both agent-directions payloads named page URLs —
+`https://openreceive.org/guides/authorization`. openreceive.org renders guides in
+the browser, so fetching one returned an application shell with an empty
+`<div id="root">` and none of the guide in it. Every link in that list was a
+200 with no words behind it, and an agent cannot tell that from a blocked
+network: the failure the site contract exists to prevent, arriving as a success.
+
+Every page the site renders from a source here is now also published as raw
+markdown at the same URL with `.md` appended, and the directions link that:
+
+```
+https://openreceive.org/guides/authorization.md
+https://openreceive.org/guides.md
+https://openreceive.org/api_docs.md
+```
+
+- **`docs/site-contract.json` is `contract_version: 2`.** Every `publish[]` entry
+  rendered from a source here gains `markdown_path` beside `path`. The bump is
+  deliberate rather than an additive field: the payloads shipped alongside it
+  link `markdown_path`, so a site that ignored it would 404 the whole reading
+  list. `docs/internal/site-build.md` has the obligations.
+- **The inlined quickstart's sibling links point at `.md` too.** They are
+  followed by whatever the payload was pasted into, which still has no browser.
+- **`npm run check:docs` checks the twins.** A payload may link
+  `/guides/<slug>.md` for a public slug, and `/guides.md` or `/api_docs.md`; a
+  `.md` on any other site-owned page fails the gate, because nothing generates
+  one.
+
 ## 0.3.0 - 2026-08-26
 
 Seven changes that all answer the same question: what does an integrator have to
