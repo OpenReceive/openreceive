@@ -2,6 +2,9 @@
 # ci.yml gate a human's does, with the same read-only token and no repository
 # secrets — the same posture as a fork PR, which is why no CI lane depends on
 # a secret.
+#
+# Dependabot reads this file from the default branch only, so an edit here
+# takes effect when it lands on master, not when its pull request opens.
 version: 2
 
 updates:
