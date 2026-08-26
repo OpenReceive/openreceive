@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-08-26
+
+No changes to this gem in 0.3.0. The release is the JavaScript integration
+surface plus the order-description support in `openreceive-server` and
+`openreceive-rails`; the core gem's wallet, invoice and settlement code is
+byte-identical to 0.2.4 and ships to keep the one-version-for-everything rule.
+The full release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md).
+
 ## 0.2.4 - 2026-08-26
 
 No Ruby changes in this release. 0.2.4 is browser-side only —

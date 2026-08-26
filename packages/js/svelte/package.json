@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/svelte",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Svelte wrapper for the OpenReceive checkout custom element.",
   "keywords": [
     "bitcoin",
@@ -20,8 +20,8 @@
   "types": "./dist/index.d.ts",
   "svelte": "./dist/index.js",
   "dependencies": {
-    "@openreceive/browser": "0.2.4",
-    "@openreceive/elements": "0.2.4"
+    "@openreceive/browser": "0.3.0",
+    "@openreceive/elements": "0.3.0"
   },
   "peerDependencies": {
     "svelte": ">=5.0.0"

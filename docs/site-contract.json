@@ -1,6 +1,6 @@
 {
   "contract_version": 1,
-  "release_version": "0.2.4",
+  "release_version": "0.3.0",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
   "how_to_update": "docs/internal/site-build.md",
@@ -75,7 +75,7 @@
       "slug": "checkout-ux",
       "title": "Checkout UX",
       "category": "guide",
-      "bytes": 12925
+      "bytes": 12918
     },
     {
       "path": "/guides/headless-checkout",
@@ -201,7 +201,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 16486
+      "bytes": 16481
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -210,7 +210,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 22062
+      "bytes": 22057
     },
     {
       "path": "/api_docs",
@@ -228,7 +228,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 16486,
+      "bytes": 16481,
       "copy_button": true,
       "self_contained": true
     },
@@ -238,7 +238,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22062,
+      "bytes": 22057,
       "copy_button": true,
       "self_contained": true
     }

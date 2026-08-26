@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/express",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Express adapter for the OpenReceive checkout HTTP handler.",
   "keywords": [
     "bitcoin",
@@ -17,7 +17,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/http": "0.2.4"
+    "@openreceive/http": "0.3.0"
   },
   "peerDependencies": {
     "express": "^4.18.0 || ^5.0.0"

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0 - 2026-08-26
+
+### The order description rides the prepare and create responses
+
+What the payer is BUYING, in the host's own words. When the resolver answers
+with a `description` beside the amount, the handler echoes it on
+`POST /checkouts/prepare` and on `POST /checkouts` — as a SIBLING of `checkout`,
+not a field inside it, because the `Checkout` object is shared with the swap
+responses. It is never read from a request body: the payer does not write the
+copy next to the amount. Blank and non-string values are treated as absent.
+
+Golden vectors 16 and 17 pin both responses, so the Ruby and JavaScript engines
+cannot drift on the shape.
+
+The full release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md).
+
 ## 0.2.4 - 2026-08-26
 
 No Ruby changes in this release. 0.2.4 is browser-side only —

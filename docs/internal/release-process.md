@@ -2,7 +2,7 @@
 
 The npm release surface, all versioned in lockstep:
 
-- OpenReceive `0.2.4`
+- OpenReceive `0.3.0`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -140,7 +140,7 @@ commands, concurrency groups, and the disabled publish path.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.2.4` — no release tags exist yet,
+Tag the prepared release commit once, as `v0.3.0` — no release tags exist yet,
 and per-package tags are deliberately not used while every package and gem
 releases in lockstep with the workspace version. Introduce per-package tags
 only if versions ever diverge, after the contract is stable enough to avoid

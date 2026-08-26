@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.3.0 - 2026-08-26
+
 Seven changes that all answer the same question: what does an integrator have to
 KNOW that the API could have known for them? Each one moves a rule out of prose
 and into a type, a default, or an object that owns it. Nothing on the wire
@@ -180,6 +182,19 @@ options.
 are deleted. Deprecated in 0.2.4 with zero shipped callers; both renderers'
 settled panels already render `createTransactionDetails`, whose rows are a strict
 superset and carry `copyValue` and explorer links. Use `<TransactionDetails>`.
+
+Examples were rebuilt against the 0.3.0 packages. Every package changed this
+release: the browser, elements, React and wrapper packages carry the new
+surface, `@openreceive/http` carries the description on the prepare and create
+responses, and `openreceive-server` and `openreceive-rails` carry its Ruby half.
+The live wallet smoke (`npm run test:live`) was NOT run for this release: it
+needs a funded NWC connection, and nothing here touches the wallet call path —
+the invoice, settlement and refund routes are byte-identical in behavior.
+
+This is a MINOR bump rather than a patch because three names left the public
+API: `overlaySwapRefundStaging`, `requestSwapRefund`'s `invoices` + `attemptId`
+parameters, and the `PaymentData` family. Pre-1.0, a breaking contract change is
+a minor per the release rules.
 
 ## 0.2.4 - 2026-08-26
 

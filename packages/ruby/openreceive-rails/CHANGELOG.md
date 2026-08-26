@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 - 2026-08-26
+
+### `config.amount_for` may return a `:description` beside the price
+
+One optional display string — what the payer is buying — returned from the same
+hook that already answers the price:
+
+```ruby
+config.amount_for = lambda do |reference|
+  order = Order.find_by(reference: reference)
+  next nil unless order
+  { currency: "USD", value: order.total.to_s, description: "#{order.line_items.size} items" }
+end
+```
+
+The engine peels it off before the amount reaches the minting service, and the
+handler echoes it on the prepare and create responses, where both shipped
+checkout renderers draw it above the amount. Deliberately one string and not a
+line-item schema: OpenReceive owns no orders. The install generator's
+initializer documents it inline.
+
+The full release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md).
+
 ## 0.2.4 - 2026-08-26
 
 No Ruby changes in this release. 0.2.4 is browser-side only —

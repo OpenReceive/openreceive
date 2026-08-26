@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-rails",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "bin/shakapacker-dev-server",
@@ -9,10 +9,10 @@
     "test": "node script/check-currency-drift.mjs"
   },
   "dependencies": {
-    "@openreceive/browser": "0.2.4",
-    "@openreceive/core": "0.2.4",
-    "@openreceive/elements": "0.2.4",
-    "@openreceive/react": "0.2.4",
+    "@openreceive/browser": "0.3.0",
+    "@openreceive/core": "0.3.0",
+    "@openreceive/elements": "0.3.0",
+    "@openreceive/react": "0.3.0",
     "@rails/actioncable": "^8.1.300",
     "mobx": "^6.15.0",
     "mobx-keystone": "^1.21.0",

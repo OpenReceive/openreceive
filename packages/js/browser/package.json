@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/browser",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Framework-free browser helpers for OpenReceive checkout: prepare/create calls, status polling, QR and wallet helpers.",
   "keywords": [
     "bitcoin",
@@ -31,8 +31,8 @@
     "./assets/*": "./dist/assets/*"
   },
   "dependencies": {
-    "@openreceive/core": "0.2.4",
-    "@openreceive/provider-data": "0.2.4",
+    "@openreceive/core": "0.3.0",
+    "@openreceive/provider-data": "0.3.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

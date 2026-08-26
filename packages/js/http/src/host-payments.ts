@@ -285,9 +285,10 @@ function priceOnly(price: HostCheckoutPrice): CreateCheckoutAmount {
  * The resolved price as every branch must answer it: the amount with nothing
  * the service does not accept, plus the display string as its own field.
  */
-function resolvedPrice(
-  price: HostCheckoutPrice | undefined,
-): { readonly amount?: CreateCheckoutAmount; readonly description?: string } {
+function resolvedPrice(price: HostCheckoutPrice | undefined): {
+  readonly amount?: CreateCheckoutAmount;
+  readonly description?: string;
+} {
   return price === undefined ? {} : { amount: priceOnly(price), ...describePrice(price) };
 }
 
