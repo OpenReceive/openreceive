@@ -82,7 +82,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "ajv": "^8.17.1",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.3",
     "happy-dom": "^20.11.2",
     "knex": "^3.3.0",
     "knip": "^6.32.2",
