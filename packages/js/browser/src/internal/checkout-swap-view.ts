@@ -13,6 +13,7 @@ import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutInvoiceSwapFee,
+  type CheckoutSnapshot,
   checkoutLabels,
   type SwapDepositRisk,
   type SwapDisplayModel,
@@ -156,6 +157,29 @@ export function createSwapDisplayModel(
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
     depositAmount,
+    copyRows: [
+      // Selectable, not just copyable: a payer on a phone that blocks the
+      // clipboard API still has to be able to select the string by hand.
+      {
+        label: checkoutLabels.swapCopyAddress,
+        value: swap.deposit_address,
+        selectable: true,
+      },
+      // Present only on the rails that require one, and a deposit that arrives
+      // WITHOUT it can be unrecoverable at the provider — worse than an
+      // underpayment, because there is no `refund_required` to act on. It is a
+      // labelled row like the others, never prose inside a warning banner.
+      ...(swap.deposit_memo === undefined
+        ? []
+        : [
+            {
+              label: checkoutLabels.swapCopyMemo,
+              value: swap.deposit_memo,
+              selectable: false,
+            },
+          ]),
+      { label: checkoutLabels.swapCopyAmount, value: depositAmount, selectable: true },
+    ],
     providerStateLabel: settled
       ? "Payment complete"
       : getSwapProviderStateLabel(swap.provider_state),
@@ -191,8 +215,12 @@ export function createSwapDisplayModel(
 }
 
 /**
- * Poll snapshots omit the locally staged refund address/nonce. Overlay them so
- * Review → Confirm is not wiped by the next `/swaps/status` tick.
+ * Package-private. Poll snapshots omit the locally staged refund address, so it
+ * is overlaid back on before anything reads them. This is not a rule an
+ * integration has to remember: {@link CheckoutWatcher} holds the staged invoice
+ * and folds it through {@link overlaySwapRefundStagingIntoSnapshot} on every
+ * snapshot it publishes, and {@link selectCurrentSwapInvoice} is the same fold
+ * for a renderer that carries its own started attempt.
  */
 export function overlaySwapRefundStaging(
   invoice: CheckoutInvoiceSnapshot,
@@ -220,6 +248,60 @@ export function overlaySwapRefundStaging(
       ...(refund_address === undefined ? {} : { refund_address }),
     },
   };
+}
+
+/**
+ * The same overlay across a whole snapshot: every invoice, plus `active`. The
+ * watcher applies this before `onSnapshot` and before `createCheckoutState`, so
+ * a host that stores what it is handed keeps the address the payer is reviewing
+ * without knowing this function exists.
+ */
+export function overlaySwapRefundStagingIntoSnapshot(
+  snapshot: CheckoutSnapshot,
+  staged: CheckoutInvoiceSnapshot | undefined | null,
+): CheckoutSnapshot {
+  if (staged?.swap?.refund_address === undefined) return snapshot;
+  const invoices = snapshot.invoices.map((invoice) => overlaySwapRefundStaging(invoice, staged));
+  const changed = invoices.some((invoice, index) => invoice !== snapshot.invoices[index]);
+  const active =
+    snapshot.active === undefined ? undefined : overlaySwapRefundStaging(snapshot.active, staged);
+  if (!changed && active === snapshot.active) return snapshot;
+  return {
+    ...snapshot,
+    invoices,
+    ...(active === undefined ? {} : { active }),
+  };
+}
+
+/**
+ * The current swap attempt as a renderer should read it: the polled snapshot's
+ * copy when it has one, the locally started attempt when the snapshot has not
+ * caught up, and the staged refund address folded over either. Both shipped
+ * renderers used to keep a near-identical copy of this; a headless UI holding
+ * its own snapshot store wants the same three rules.
+ *
+ * `dismissedInvoiceId` is the "back to Lightning" exit: a dismissed attempt is
+ * invisible until a new start or a refund clears the dismissal.
+ */
+export function selectCurrentSwapInvoice(
+  snapshot: CheckoutSnapshot | undefined,
+  options: {
+    readonly started?: CheckoutInvoiceSnapshot | null;
+    readonly dismissedInvoiceId?: string | null;
+  } = {},
+): CheckoutInvoiceSnapshot | undefined {
+  const dismissedInvoiceId = options.dismissedInvoiceId ?? null;
+  const started = options.started ?? null;
+  const fromSnapshot = snapshot?.invoices.find(
+    (invoice) =>
+      invoice.rail === "swap" &&
+      invoice.swap !== undefined &&
+      invoice.invoice_id !== dismissedInvoiceId,
+  );
+  if (started === null || started.invoice_id === dismissedInvoiceId) return fromSnapshot;
+  const matched =
+    snapshot?.invoices.find((invoice) => invoice.invoice_id === started.invoice_id) ?? started;
+  return overlaySwapRefundStaging(matched, started);
 }
 
 export function swapAssetMatchesRoute(routeKey: string, payInAsset: string | undefined): boolean {

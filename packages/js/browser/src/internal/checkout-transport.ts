@@ -384,6 +384,7 @@ function checkoutLockSnapshotFromPrepareBody(
       ? undefined
       : { currency: fiatCurrency, value: fiatValue };
   const paymentMethods = normalizePaymentMethods(record.payment_methods);
+  const description = nonEmptyString(record.description);
   return {
     checkout_id: lockId,
     reference: reference,
@@ -393,6 +394,7 @@ function checkoutLockSnapshotFromPrepareBody(
     active: lockInvoice,
     invoices: [lockInvoice],
     ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
+    ...(description === undefined ? {} : { description }),
   };
 }
 
@@ -404,9 +406,13 @@ function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   // mint carry the pay-in catalog on its own; `previous` then only has to
   // carry snapshot continuity (sibling attempts), not rescue the catalog.
   const paymentMethods = normalizePaymentMethods(record.payment_methods);
+  // A SIBLING of `checkout`, like `payment_methods`: the display string belongs
+  // to the checkout call, not to the `Checkout` object the swap routes share.
+  const description = nonEmptyString(record.description);
   return {
     ...checkoutSnapshot(wrapped),
     ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
+    ...(description === undefined ? {} : { description }),
   };
 }
 

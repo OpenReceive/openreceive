@@ -71,12 +71,24 @@ error.
 `file://`.** The packages also log one `console.warn` naming the path the first
 time this happens in a document.
 
-Two ways to fix it, and you need one of them under any non-Vite bundler:
+Three ways to fix it, and you need one of them under any non-Vite bundler:
 
 1. **Copy the packaged assets next to your bundle.** The demos do this with
    `copy-openreceive-payment-icons-plugin.ts`, which is the reference
    implementation.
-2. **Serve the files yourself and tell the UI where they went.** Every display
+2. **Serve the trees and point at them with one string.** `assetBaseUrl` (the
+   `<Checkout>` prop, the Vue/Svelte/Angular prop) and `asset-base-url` (the
+   `<openreceive-checkout>` attribute) take a base URL and join every packaged
+   key to it: `asset-base-url="/openreceive-assets"` loads
+   `assets/icons/btc.svg` from `/openreceive-assets/assets/icons/btc.svg`. The
+   layout it expects is exactly what the copy plugin above produces, so a Rails
+   app can add
+   `node_modules/@openreceive/provider-data/dist/assets` and
+   `node_modules/@openreceive/browser/dist/assets` under one served root and be
+   done. This is the only fix that reaches plain `<openreceive-checkout>` markup
+   and the non-React wrappers, because `defineElements` is first-write-wins and
+   all three of them call it with no options.
+3. **Serve the files yourself and map each path.** Every display
    builder in `@openreceive/browser/headless`, `PaymentWizard` in
    `@openreceive/react`, and `defineElements` in `@openreceive/elements` take an
    optional `resolveAssetUrl: (packagedPath: string) => string`. It is handed
@@ -84,6 +96,8 @@ Two ways to fix it, and you need one of them under any non-Vite bundler:
    URL your host serves it at. The registry's own `icon_path` and tutorial
    `path` strings are the keys, and `WizardProviderDisplay.iconPath` carries the
    key on the display row so you do not have to go back to the registry for it.
+   `createAssetBaseUrlResolver(base)` from `@openreceive/browser/headless` is
+   the one-line resolver option 2 is built on.
 
 `@openreceive/browser`'s own payment icons (`assets/icons/*.svg`) have the same
 contract, keyed by `paymentIconPaths`.
@@ -97,9 +111,12 @@ provider suggestion the payer sees is a way to pay the Lightning invoice
 directly. The registry still carries routes for other assets (swap services and
 exchanges that convert the payer's asset into a Lightning payment), but no UI
 surfaces them today.
-`getPaymentWizardRoutes({ asset })` or `getPaymentWizardRoutes({ route })`
-returns the crypto route for any of these assets; the wizard only ever asks for
-the Bitcoin route.
+`getPaymentWizardRoutes()` with no arguments returns exactly that route, so the
+minimal call is the correct one for a checkout. `getPaymentWizardRoutes({ asset })`
+or `getPaymentWizardRoutes({ route })` names another of the registry's routes
+deliberately — the default never stands in for one you asked for and did not get,
+so an unknown asset or route, and the routeless fiat assets (`usd`, `eur`, `gbp`),
+all still return `[]`.
 
 Provider entries include conservative availability metadata:
 

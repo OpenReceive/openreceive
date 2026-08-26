@@ -20,18 +20,15 @@
 // log-field builders, the watcher class, and the create-flow steps that only
 // createCheckoutSession calls.
 
-export type {
-  PaymentDataSource,
-  TransactionDetailsSource,
-} from "./internal/checkout.ts";
+export type { TransactionDetailsSource } from "./internal/checkout.ts";
 // Checkout lifecycle: prepare/create calls, the polling controller, and the
 // merge rules that fold a freshly minted attempt back into a snapshot without
 // losing its siblings.
 // Checkout state: snapshot + now -> the one derived view both renderers read
 // (G4). `assertDisplayInvoice` is the display boundary — a snapshot
 // with no renderable attempt must fail here, loudly, not halfway down a render.
-// Transaction details and payment-data rows: the row model both renderers
-// build, plus the explorer/decode links a row can carry.
+// Transaction details: the row model both renderers build for the live
+// checkout and the receipt, plus the explorer/decode links a row can carry.
 // Formatting + labels. `formatMsats` throws a RangeError on an amount that is
 // not a non-negative safe integer — wire construction, amount validation and
 // the display sites share it, and a malformed amount from our own server is a
@@ -54,7 +51,6 @@ export {
   createCheckoutStatusModel,
   createDetailExternalLink,
   createLightningInvoiceDecodeUrl,
-  createPaymentDataEntries,
   createQrPayloadSvg,
   createQrSvg,
   createStatusFetcher,
@@ -74,11 +70,11 @@ export {
   getExplorerNetwork,
   isReusableLightningInvoice,
   openWallet,
-  overlaySwapRefundStaging,
   prepareCheckout,
   requestCheckout,
   resolveTransactionDetailRows,
   selectCheckoutDisplayInvoice,
+  selectCurrentSwapInvoice,
   swapAssetMatchesRoute,
   swapDepositRisk,
 } from "./internal/checkout.ts";
@@ -175,8 +171,10 @@ export type {
   QrEncoder,
   ResolvedTheme,
   StoredThemeModelOptions,
+  SwapCopyRow,
   SwapDepositRisk,
   SwapDisplayModel,
+  SwapRefundStaging,
   ThemeModel,
   ThemeModelOptions,
   ThemePreference,
@@ -212,6 +210,7 @@ export {
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_PARTS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_SLOTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
@@ -237,13 +236,20 @@ export {
 // The host-side asset seam: packaged icon and tutorial URLs only resolve under
 // Vite/Rollup, so every display builder takes one of these and is handed the
 // packaged PATH instead. `paymentIconPaths` is the same key set for the icons
-// this package owns.
+// this package owns. `createAssetBaseUrlResolver` is the one-line adapter from
+// the string form of the seam (`assetBaseUrl` / `asset-base-url`) to a resolver.
 export type { AssetUrlResolver } from "@openreceive/provider-data";
+export { createAssetBaseUrlResolver } from "@openreceive/provider-data";
 export type {
+  MethodGridContinueDisplay,
+  MethodGridDisplay,
+  MethodGridDisplayEntry,
   MethodGridEntry,
+  MethodGridGroupDisplay,
   SwapLimitContext,
   SwapMethodGroup,
   SwapUnavailableModel,
+  WizardSelection,
 } from "./internal/wizard.ts";
 export type { DetailLinkKind } from "./internal/checkout-links.ts";
 // Payment wizard: the method grid, network selection, and provider tutorials.
@@ -254,15 +260,15 @@ export {
   buildMethodGridEntries,
   createPaymentWizardController,
   createPaymentWizardModel,
+  createMethodGridDisplay,
   createPaymentWizardSelection,
   createSwapUnavailableModel,
   createWizardRouteAssetDisplays,
   createWizardRouteDisplays,
-  findSwapGridGroup,
-  formatChooseNetworkHeading,
   formatNetworkSummary,
   getNetworkIcon,
   getPaymentMethodIcon,
+  getRouteIconPath,
   getRouteNetworkLabel,
   getSwapOptionIcon,
   getSwapRefundFormError,
@@ -273,14 +279,11 @@ export {
   networkSummaryIconClasses,
   parseMethodPickerKey,
   paymentAccentId,
-  resolvePreservedNetworkSelection,
-  swapGroupLimitOption,
+  resolveWizardSelection,
   swapOptionLimitMessage,
   swapOptionLimitSentence,
   swapPickerKey,
   updatePaymentWizardSelection,
-  updateSelectedSwapNetworks,
-  wizardNetworkGroupIds,
 } from "./internal/wizard.ts";
 export type { Status } from "./status.ts";
 export { deriveStatus } from "./status.ts";

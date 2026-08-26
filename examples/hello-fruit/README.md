@@ -65,12 +65,15 @@ from `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`,
 
 What the Rails variant shows instead is a different **state** story: its
 `CheckoutPanel` mounts the packaged `PaymentWizard`, `InvoiceSummary`,
-`PaymentData`, `QRCode`, `WaitingState` and `TransactionDetails` from
+`QRCode`, `WaitingState` and `TransactionDetails` from
 `@openreceive/react`, and drives them from
 [mobx-keystone](https://mobx-keystone.js.org) stores (`CheckoutFlow`,
 `ShopWorkspace`) fed by the headless engine and Action Cable. Nothing visual is
-re-implemented; the custom part is the store layer between the engine and the
-packaged components.
+re-implemented, and neither is the engine: `CheckoutFlow` drives
+`createCheckoutController`, so the poll loop, its backoff, the countdown and the
+staged swap-refund address come from the package. The custom part is only the
+store layer between the engine and the packaged components — which is exactly
+what a headless integration is.
 
 The one thing the Rails variant does duplicate is DATA, not UI:
 `shared/demo-currencies.ts` is the only shared module it cannot import, so it

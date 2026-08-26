@@ -168,6 +168,16 @@ export interface SwapFeeBreakdown {
   readonly feePercent?: string;
 }
 
+/** One value the payer has to reproduce, with the affordance that lets them. */
+export interface SwapCopyRow {
+  readonly label: string;
+  readonly value: string;
+  /** The untruncated string a copy button writes, when it differs from `value`. */
+  readonly copyValue?: string;
+  /** Render the value in a selectable field rather than a code block. */
+  readonly selectable: boolean;
+}
+
 /**
  * How a deposit on this rail can actually go missing, which is what decides how
  * loud the deposit panel should be.
@@ -227,7 +237,22 @@ export interface SwapDisplayModel {
   readonly networkWarning: string;
   readonly depositAddress: string;
   readonly depositMemo?: string;
+  /**
+   * BARE, with no asset symbol appended: it pastes into a wallet's amount field,
+   * where "0.032664 SOL" is not a number. Join the symbol at the point of
+   * display if a sentence needs it.
+   */
   readonly depositAmount: string;
+  /**
+   * Every value the payer must reproduce, as labelled rows: the deposit address,
+   * the memo where the rail has one, and the amount. The amount is the one that
+   * gets left out and the one that costs money — on token rails (USDT_TRON,
+   * USDT_ETH, USDC_ETH) the QR encodes the bare address and carries NO amount,
+   * so the payer types it off the screen, and a short send against a fixed-rate
+   * swap order is an underpayment: `refund_required`, a refund form, and a payer
+   * who has to come back.
+   */
+  readonly copyRows: readonly SwapCopyRow[];
   readonly providerStateLabel: string;
   readonly providerStateDetail: string;
   readonly state:
@@ -280,6 +305,11 @@ export interface CheckoutInvoiceSnapshot {
   readonly expires_at?: number;
   readonly settled_at?: number;
   readonly swap?: CheckoutInvoiceSwapSnapshot;
+  /**
+   * What the payer is buying, carried through from the snapshot. Data, not a
+   * derived label, so it survives `normalizeCheckoutState`.
+   */
+  readonly description?: string;
 }
 
 export interface CheckoutPaymentMethod {
@@ -316,6 +346,13 @@ export interface CheckoutSnapshot {
   readonly active?: CheckoutInvoiceSnapshot;
   readonly invoices: readonly CheckoutInvoiceSnapshot[];
   readonly payment_methods?: readonly CheckoutPaymentMethod[];
+  /**
+   * What the payer is buying, in the host's own words — one display string the
+   * host returned from `amountFor` / `amount_for`. OpenReceive owns no line
+   * items, so this is the whole of what it carries; a richer summary is the
+   * host's own markup (React `children`, the element's `order` slot).
+   */
+  readonly description?: string;
 }
 
 export interface CheckoutElementAttributeOptions {
@@ -356,6 +393,14 @@ export interface CheckoutElementAttributeOptions {
    * renders no "Decode" link and the invoice is never sent to a third party.
    */
   readonly decodeLinkUrl?: string;
+  /**
+   * Where this app serves the packages' `dist/assets` trees, as one base URL.
+   * The string form of the `resolveAssetUrl` seam: every packaged asset key is a
+   * relative path under one `assets/` root, so the value is joined to it
+   * directly. Emitted as the element's `asset-base-url` attribute, which is how
+   * the Vue/Svelte/Angular wrappers reach a seam a function cannot cross.
+   */
+  readonly assetBaseUrl?: string;
   /** False renders the snapshot without status polling (no POST /payments/check). */
   readonly polling?: boolean;
   /** Status poll cadence in milliseconds; defaults to OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS. */
@@ -570,13 +615,51 @@ export interface CheckoutControllerOptions extends Omit<CheckoutWatcherOptions, 
    * to render a snapshot without polling.
    */
   readonly prefix?: string;
+  /**
+   * False renders the snapshot without a status fetcher of its own. `prefix`
+   * still names the mount, so the swap-refund calls keep working — polling and
+   * "where the routes live" are two questions.
+   */
+  readonly polling?: boolean;
   readonly fetch?: typeof globalThis.fetch;
   readonly statusHeaders?: Readonly<Record<string, string>>;
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
 }
 
-export interface CheckoutController {
+/**
+ * The two-step swap refund, and the staging that makes it survive polling. The
+ * controller implements it; a renderer that is handed one (React's
+ * `PaymentWizard`) takes exactly this much of it.
+ */
+export interface SwapRefundStaging {
+  /**
+   * Step one: post `/swaps/status` and hold the address the payer typed so the
+   * panel can show it back for confirmation. It touches no refund route —
+   * nothing is submitted until {@link confirmSwapRefund}.
+   *
+   * The staged address is folded into every later snapshot, so polling cannot
+   * wipe what the payer is reviewing. `attemptId` is
+   * `SwapDisplayModel.attemptId`; the payment hash is resolved from the
+   * snapshot already in hand.
+   */
+  stageSwapRefund(options: {
+    readonly attemptId: string;
+    readonly refundAddress: string;
+  }): Promise<CheckoutInvoiceSnapshot>;
+  /** Step two: the only call that posts `/swaps/refunds`. */
+  confirmSwapRefund(options: {
+    readonly attemptId: string;
+    readonly refundAddress: string;
+  }): Promise<CheckoutInvoiceSnapshot>;
+  /**
+   * Drop the staged address. The payer leaving the swap for Lightning is the one
+   * exit that is not a submitted refund.
+   */
+  clearSwapRefundStaging(): void;
+}
+
+export interface CheckoutController extends SwapRefundStaging {
   start(): CheckoutState;
   stop(): void;
   getState(): CheckoutState | undefined;
@@ -724,6 +807,8 @@ export interface WizardRouteAssetDisplay {
   readonly label: string;
   readonly subtitle: string;
   readonly icon: string;
+  /** The packaged key behind `icon`, for a host serving the files itself. */
+  readonly iconPath: string;
   readonly selected: boolean;
 }
 

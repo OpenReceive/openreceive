@@ -88,5 +88,8 @@ export function mergeMintedCheckout(
     ...checkout,
     invoices: previous.invoices,
     payment_methods: previous.payment_methods ?? checkout.payment_methods,
+    // Prepare answered with it and create echoes it, but a host that only
+    // returns it from one of the two must not lose it at the mint.
+    description: checkout.description ?? previous.description,
   });
 }

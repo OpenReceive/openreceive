@@ -264,9 +264,16 @@ module OpenReceive
     def engine_resolve_checkout
       lambda do |action:, request:, reference:, input:, pay_in_asset: nil|
         pricing = %w[checkout.prepare swap.quote checkout.create swap.create].include?(action)
-        amount = pricing ? @amount_for.call(reference) : nil
-        raise OpenReceive::Server::NotFoundError, "Unknown reference." if pricing && amount.nil?
-        next({ amount: amount }) if %w[checkout.prepare swap.quote].include?(action)
+        price = pricing ? @amount_for.call(reference) : nil
+        raise OpenReceive::Server::NotFoundError, "Unknown reference." if pricing && price.nil?
+        # `description` — what the payer is buying, in the host's own words — is
+        # returned beside the price and peeled off here, so the amount handed to
+        # the minting service stays exactly the price.
+        amount = price_only(price)
+        description = price_description(price)
+        if %w[checkout.prepare swap.quote].include?(action)
+          next({ amount: amount, description: description }.compact)
+        end
 
         requested_hash = input["payment_hash"] || input[:payment_hash]
         begin
@@ -285,11 +292,31 @@ module OpenReceive
 
         {
           amount: amount,
+          description: description,
           payment_hash: payment&.payment_hash,
           checkout: payment&.checkout_data,
           swap_data: payment&.swap_data
         }.compact
       end
+    end
+
+    # The price alone. A host that returns a display string beside it must not
+    # have that string reach the amount resolver.
+    def price_only(price)
+      return price unless price.is_a?(Hash)
+
+      price.reject { |key, _| key.to_s == "description" }
+    end
+
+    # One optional display string, blank treated as absent.
+    def price_description(price)
+      return nil unless price.is_a?(Hash)
+
+      value = price[:description] || price["description"]
+      return nil unless value.is_a?(String)
+
+      trimmed = value.strip
+      trimmed.empty? ? nil : trimmed
     end
 
     def engine_on_checkout_created

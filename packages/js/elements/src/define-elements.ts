@@ -1,10 +1,12 @@
 import {
+  type AssetUrlResolver,
   buildMethodGridEntries,
   type CheckoutController,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutState,
   copyInvoice,
+  createAssetBaseUrlResolver,
   createCheckoutActionEvent,
   createCheckoutController,
   createCheckoutErrorEvent,
@@ -19,7 +21,6 @@ import {
   createQrSvg,
   deriveStatus,
   enterCheckoutResumePath,
-  findSwapGridGroup,
   getSwapRefundFormError,
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
@@ -35,18 +36,16 @@ import {
   type BrowserLoggerOption,
   paymentMethods,
   orClasses,
-  overlaySwapRefundStaging,
   parseBooleanAttribute,
-  parseMethodPickerKey,
   parseOptionalInteger,
   parsePaymentMethod,
   parseResolvedTheme,
   parseThemePreference,
-  requestSwapRefund,
+  resolveWizardSelection,
+  selectCurrentSwapInvoice,
   syncStoredThemeControls,
   toggleStoredThemeControls,
   updatePaymentWizardSelection,
-  updateSelectedSwapNetworks,
 } from "@openreceive/browser/headless";
 import { createElementCheckoutSession } from "./element-checkout-session.ts";
 import {
@@ -101,6 +100,9 @@ function checkoutSnapshotDisplayKey(snapshot: CheckoutSnapshot): string {
     ),
   });
 }
+
+/** One warning per document when both asset seams are wired at once. */
+let warnedAssetSeamConflict = false;
 
 /**
  * Register the OpenReceive custom elements with the browser's element
@@ -217,6 +219,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl,
       ];
     }
 
@@ -242,7 +245,8 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference ||
-        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl;
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl;
       if (displayOnly) {
         this.render();
         this.syncThemeAncestorObserver();
@@ -287,6 +291,29 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     disconnectedCallback() {
       this.stopCheckoutController();
       this.stopThemeAncestorObserver();
+    }
+
+    /**
+     * The asset seam for this element. `resolveAssetUrl` on `defineElements` is
+     * the explicit, programmatic answer and wins; `asset-base-url` is the string
+     * every host can reach — plain markup and the Vue/Svelte/Angular wrappers
+     * included, since `defineElements` is first-write-wins and all three call it
+     * with no options. Setting both is a host mistake worth naming once.
+     */
+    private resolveAssetUrlResolver(): AssetUrlResolver | undefined {
+      const base = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl);
+      if (options.resolveAssetUrl !== undefined) {
+        if (base !== null && !warnedAssetSeamConflict) {
+          warnedAssetSeamConflict = true;
+          globalThis.console?.warn(
+            "[openreceive] Both defineElements({ resolveAssetUrl }) and asset-base-url are set; " +
+              "resolveAssetUrl wins. Drop one.",
+          );
+        }
+        return options.resolveAssetUrl;
+      }
+      if (base === null || base.trim() === "") return undefined;
+      return createAssetBaseUrlResolver(base);
     }
 
     // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element
@@ -360,8 +387,11 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       const swapInvoice = snapshot.invoices.find(
         (invoice) => invoice.rail === "swap" && invoice.swap !== undefined,
       );
+      // The snapshot is the fresher copy of an attempt this element started;
+      // the staged refund address it may be missing was already folded back in
+      // by the controller, so there is nothing to re-apply here.
       if (swapInvoice !== undefined) {
-        this.startedSwapInvoice = overlaySwapRefundStaging(swapInvoice, this.startedSwapInvoice);
+        this.startedSwapInvoice = swapInvoice;
       }
       const displayKey = checkoutSnapshotDisplayKey(snapshot);
       if (this.lastSnapshotDisplayKey === displayKey) return;
@@ -408,6 +438,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         !this.isCreateMode() || this.session.lightningRequested || invoice.length > 0;
       const decodeLinkUrl =
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl) ?? undefined;
+      const assetUrlResolver = this.resolveAssetUrlResolver();
       // The shared session quotes before it starts, so an out-of-range amount
       // arrives here as an unavailable quote — the same pane React shows.
       const selectedQuote =
@@ -430,6 +461,12 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status),
         ),
         expires_at: readElementExpiresAt(this),
+        // Host-owned order context, straight off the polled snapshot: the
+        // element has no attribute for it because the payer must never be able
+        // to write the copy next to the amount.
+        ...(this.latestCheckoutSnapshot?.description === undefined
+          ? {}
+          : { description: this.latestCheckoutSnapshot.description }),
         theme: this.resolveTheme(),
         payment_wizard: parseBooleanAttribute(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard),
@@ -458,9 +495,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             : { checkoutId: this.latestCheckoutSnapshot.checkout_id }),
           lightningInvoice: invoice,
           ...(decodeLinkUrl === undefined ? {} : { decodeLinkUrl }),
-          ...(options.resolveAssetUrl === undefined
-            ? {}
-            : { resolveAssetUrl: options.resolveAssetUrl }),
+          ...(assetUrlResolver === undefined ? {} : { resolveAssetUrl: assetUrlResolver }),
           ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
             ? {}
             : {
@@ -564,7 +599,17 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       // After a swap starts, the merged snapshot (swap active) must drive
       // polling — the attribute snapshot still describes the pre-swap
       // Lightning attempt.
-      const snapshot = latest?.active?.rail === "swap" ? latest : (attributeSnapshot ?? latest);
+      const chosen = latest?.active?.rail === "swap" ? latest : (attributeSnapshot ?? latest);
+      // The element has no `description` attribute on purpose, so the snapshot
+      // rebuilt from attributes after the mint cannot carry the host's order
+      // copy. Hand it back to the controller here, or the restart blanks it.
+      const snapshot =
+        chosen !== undefined &&
+        chosen.description === undefined &&
+        latest?.description !== undefined &&
+        latest.reference === chosen.reference
+          ? { ...chosen, description: latest.description }
+          : chosen;
       const prefix = this.resolvePollPrefix(snapshot?.reference);
       if (snapshot === undefined) {
         this.stopCheckoutController();
@@ -590,7 +635,8 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       this.stopCheckoutController();
       this.controller = createCheckoutController({
         snapshot,
-        ...(prefix === undefined || !polling ? {} : { prefix }),
+        ...(prefix === undefined ? {} : { prefix }),
+        polling,
         ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
         logger: options.logger,
         onError: (error) => this.dispatchError(error),
@@ -765,9 +811,18 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           if (!(button instanceof HTMLButtonElement) || button.disabled) return;
           const key = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerSelect);
           if (key === null || key.length === 0) return;
-          const methodPick = parseMethodPickerKey(key);
-          if (methodPick !== null) {
-            const method = parsePaymentMethod(methodPick.methodId);
+          // One resolver decides what a tile click MEANS, so the "ask the
+          // network question only when it is a real question" rule is not
+          // re-derived here: a single-network group comes back as start_swap.
+          const selection = resolveWizardSelection({
+            pickerKey: key,
+            previousKey: this.selectedPickerKey,
+            entries: buildMethodGridEntries(paymentMethods, this.swapOptions),
+            selectedNetworks: this.selectedSwapNetworks,
+          });
+          if (selection.kind === "none") return;
+          if (selection.kind === "select_method") {
+            const method = parsePaymentMethod(selection.methodId);
             if (method === null) return;
             this.selectedPickerKey = null;
             this.selection = updatePaymentWizardSelection(this.selection, {
@@ -780,24 +835,13 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             this.render();
             return;
           }
-          const previousKey = this.selectedPickerKey;
-          this.selectedPickerKey = key;
-          const entries = buildMethodGridEntries(paymentMethods, this.swapOptions);
-          const nextGroup = findSwapGridGroup(entries, key);
-          if (nextGroup !== undefined && nextGroup.options.length === 1) {
-            const option =
-              nextGroup.options.find((entry) => entry.available !== false) ?? nextGroup.options[0];
-            if (option === undefined || option.available === false) return;
+          if (selection.kind === "start_swap") {
             this.selectedPickerKey = null;
-            void this.session.startSwap(option.pay_in_asset);
+            void this.session.startSwap(selection.payInAsset);
             return;
           }
-          this.selectedSwapNetworks = updateSelectedSwapNetworks({
-            entries,
-            nextKey: key,
-            previousKey,
-            selectedNetworks: this.selectedSwapNetworks,
-          });
+          this.selectedPickerKey = key;
+          this.selectedSwapNetworks = selection.selectedNetworks;
           this.render();
         });
       });
@@ -902,6 +946,9 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           this.selectedPickerKey = null;
           this.selectedSwapNetworks = {};
           this.clearRefundAddressDraft();
+          // Leaving the swap for Lightning is the one exit that is not a
+          // submitted refund, so the staged address goes with it.
+          this.controller?.clearSwapRefundStaging();
           void this.session.ensureLightning();
           this.render();
         });
@@ -1071,21 +1118,16 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       refundAddress: string,
       confirm: boolean,
     ): Promise<void> {
-      const reference = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
-      const prefix = this.resolvePollPrefix(reference ?? undefined);
-      if (prefix === undefined) return;
+      // The controller owns the staging: it resolves the attempt's payment hash
+      // from the snapshot it already holds, and folds the staged address back
+      // into every poll result so a review cannot be wiped mid-typing.
+      const controller = this.controller;
+      if (controller === undefined) return;
 
       try {
-        this.startedSwapInvoice = await requestSwapRefund({
-          fetch: globalThis.fetch,
-          prefix,
-          ...(reference === null ? {} : { reference }),
-          invoices: [this.startedSwapInvoice, ...(this.latestCheckoutSnapshot?.invoices ?? [])],
-          attemptId,
-          refundAddress,
-          confirm,
-          logger: options.logger,
-        });
+        this.startedSwapInvoice = confirm
+          ? await controller.confirmSwapRefund({ attemptId, refundAddress })
+          : await controller.stageSwapRefund({ attemptId, refundAddress });
         this.dismissedSwapInvoiceId = null;
         this.render();
       } catch (error) {
@@ -1094,23 +1136,10 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     }
 
     private currentSwapInvoice(): CheckoutInvoiceSnapshot | undefined {
-      const fromSnapshot = this.latestCheckoutSnapshot?.invoices.find(
-        (invoice) =>
-          invoice.rail === "swap" &&
-          invoice.swap !== undefined &&
-          invoice.invoice_id !== this.dismissedSwapInvoiceId,
-      );
-      if (
-        this.startedSwapInvoice === undefined ||
-        this.startedSwapInvoice.invoice_id === this.dismissedSwapInvoiceId
-      ) {
-        return fromSnapshot;
-      }
-      const matched =
-        this.latestCheckoutSnapshot?.invoices.find(
-          (invoice) => invoice.invoice_id === this.startedSwapInvoice?.invoice_id,
-        ) ?? this.startedSwapInvoice;
-      return overlaySwapRefundStaging(matched, this.startedSwapInvoice);
+      return selectCurrentSwapInvoice(this.latestCheckoutSnapshot, {
+        started: this.startedSwapInvoice,
+        dismissedInvoiceId: this.dismissedSwapInvoiceId,
+      });
     }
 
     private renderSwapQrCodes(root: ShadowRoot): void {

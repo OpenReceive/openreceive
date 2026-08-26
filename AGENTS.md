@@ -61,8 +61,8 @@ small, honest API and a good developer experience.
   host-row retry/concurrency tests; settlement behavior needs replay-safe tests.
 - We should not worry about validating the NWC's responses or behavior: a user of OpenReceive implicitly
   trusts their backing NWC service, because they will need to use that NWC service anyway to withdraw any funds.
-  OpenReceive users can also build their own fully self-custodial NWC service, or use a fully self-custodial NWC service
-  like an Alby Hub instance running on their own hardware.
+  OpenReceive users can also build their own NWC service, or run one on their own
+  hardware, like an Alby Hub instance.
 
 ## Shipped routes and hooks
 

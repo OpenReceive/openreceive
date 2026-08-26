@@ -169,7 +169,6 @@ export function renderSwapDepositPanel(options: {
     options.now === undefined ? {} : { now: options.now },
   );
   if (display === undefined) return null;
-  const memo = display.depositMemo;
   const backButton = React.createElement(
     "button",
     {
@@ -439,16 +438,21 @@ export function renderSwapDepositPanel(options: {
             {
               className: orClasses.swapDetails,
             },
+            // Every value the payer must reproduce, from the model: address,
+            // memo where the rail has one, and the amount BARE.
+            //
             // Explorer stays hidden until payment completes (tx ids / settled details).
             // No explorer link on the LIVE deposit row: the address has nothing on
             // chain yet, and sending the payer to a third-party explorer mid-payment
             // is not something this pane does. The settled/refund panes link theirs.
-            renderSwapCopyRow("Address", display.depositAddress, {
-              ...options,
-              selectable: true,
-            }),
-            memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
-            renderSwapCopyRow("Amount", display.depositAmount, { ...options, selectable: true }),
+            ...display.copyRows.flatMap((row) =>
+              renderSwapCopyRow(
+                row.label,
+                row.copyValue ?? row.value,
+                { ...options, selectable: row.selectable },
+                row.value,
+              ),
+            ),
           ),
           waitingCard(display.countdownLabel),
           renderSwapFeeBreakdown(display.feeBreakdown),

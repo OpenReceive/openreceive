@@ -54,6 +54,7 @@ const SHARED_PROPS = [
   "prefix",
   "paymentWizard",
   "decodeLinkUrl",
+  "assetBaseUrl",
   "themeToggle",
   "defaultTheme",
   "storageKey",

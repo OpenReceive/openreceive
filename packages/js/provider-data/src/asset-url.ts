@@ -44,6 +44,28 @@ export function assetUrl(path: string): string {
  */
 export type AssetUrlResolver = (packagedPath: string) => string;
 
+/**
+ * Turn "wherever I serve the packages' `dist/assets` trees" into an
+ * {@link AssetUrlResolver}.
+ *
+ * Every packaged key is a relative path under one `assets/` root
+ * (`assets/icons/…`, `assets/provider-icons/…`, `assets/pay_tutorials/…`), so
+ * the merged layout this implies is exactly what the demos' copy plugin already
+ * produces — a plain join is the whole rule. A string can cross an HTML
+ * attribute, which a function cannot, so this is the seam the custom element
+ * and the Vue/Svelte/Angular wrappers reach.
+ *
+ * The base is used verbatim apart from its trailing slashes, so it can be a
+ * path (`/assets`, `/`) or an absolute origin (`https://cdn.example.com/or`).
+ */
+export function createAssetBaseUrlResolver(baseUrl: string): AssetUrlResolver {
+  // Trim to the empty string on a bare "/" so the join below contributes
+  // exactly one separator and `/assets/icons/btc.svg` does not become
+  // `//assets/icons/btc.svg`.
+  const base = baseUrl.trim().replace(/\/+$/, "");
+  return (packagedPath) => `${base}/${packagedPath.replace(/^\/+/, "")}`;
+}
+
 let warnedFileAssetUrl = false;
 
 /**
@@ -69,6 +91,8 @@ export function warnOnFileAssetUrl(packagedPath: string, resolved: string): void
       "not rewrite import.meta.url, so provider icons, pay tutorials and payment icons cannot " +
       "load (and the path leaks the server's layout). Copy the packaged assets next to your " +
       "bundle — see the demos' copy-openreceive-payment-icons-plugin.ts — or serve them yourself " +
-      "and pass resolveAssetUrl. docs/guides/provider-registry.md has both.",
+      "and point at them — asset-base-url on <openreceive-checkout> (or the assetBaseUrl " +
+      "prop on any wrapper), or resolveAssetUrl for a custom mapping. " +
+      "docs/guides/provider-registry.md has all three.",
   );
 }

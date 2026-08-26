@@ -13,6 +13,7 @@ export type WirePrepareCheckoutRequest = {
 export type WirePrepareCheckoutResponse = {
   readonly reference: string;
   readonly amount_msats: number;
+  readonly description?: string;
   readonly fiat_quote?: null | WireFiatQuote;
   readonly payment_methods: readonly WirePaymentMethod[];
 };
@@ -38,6 +39,7 @@ export type WireCheckout = {
 /** Wire shape of the OpenAPI `CreateCheckoutResponse` schema (snake_case JSON body). */
 export type WireCreateCheckoutResponse = {
   readonly checkout: WireCheckout;
+  readonly description?: string;
   readonly payment_methods: readonly WirePaymentMethod[];
 };
 

@@ -135,9 +135,22 @@ test("provider-data resolves payment wizard routes from asset and route inputs",
   assert.equal(explicitRoutes[0].route.id, "btc-lightning");
   assert.equal(explicitRoutes[0].asset, undefined);
 
-  assert.deepEqual(getPaymentWizardRoutes({}), []);
+  // No inputs at all is the checkout's question, and btc-lightning is its
+  // answer: both the no-arg and the empty-object call resolve to it.
+  for (const defaulted of [getPaymentWizardRoutes(), getPaymentWizardRoutes({})]) {
+    assert.equal(defaulted.length, 1);
+    assert.equal(defaulted[0].route.id, "btc-lightning");
+    assert.equal(defaulted[0].asset, undefined);
+  }
+
+  // An input that names something unresolvable still answers [] — the default
+  // must never stand in for a route the caller asked for and did not get.
   assert.deepEqual(getPaymentWizardRoutes({ asset: "no-such-asset" }), []);
   assert.deepEqual(getPaymentWizardRoutes({ route: "no-such-route" }), []);
+  // The registry ships fiat assets with no route; naming one is not "no inputs".
+  for (const fiat of ["usd", "eur", "gbp"]) {
+    assert.deepEqual(getPaymentWizardRoutes({ asset: fiat }), [], fiat);
+  }
 });
 
 test("provider-data satisfies canonical provider-route vectors", () => {

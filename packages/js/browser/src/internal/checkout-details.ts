@@ -1,14 +1,8 @@
-// The transaction-details rows and the payment-data entries — the two
-// key/value panels the checkout renders under the invoice. Both are pure
-// projections of a checkout state or display data into labelled rows.
+// The transaction-details rows: the key/value panel the checkout renders under
+// the invoice, on the live screen and again on the receipt. A pure projection
+// of a checkout state or display data into labelled rows.
 
-import type {
-  CheckoutInvoiceSnapshot,
-  CheckoutInvoiceSwapSnapshot,
-  CheckoutState,
-  TransactionDetailRow,
-  TransactionDetailsInput,
-} from "./ui.ts";
+import type { CheckoutState, TransactionDetailRow, TransactionDetailsInput } from "./ui.ts";
 import {
   formatDepositAmount,
   formatFiatAmount,
@@ -213,74 +207,4 @@ function isCheckoutStateSource(value: object): value is CheckoutState {
     "transaction_state" in value &&
     "phase" in value
   );
-}
-
-export interface PaymentDataEntry {
-  readonly label: string;
-  readonly value: string;
-}
-
-/** Structural subset of {@link CheckoutState} / display data a payment-data panel needs. */
-export interface PaymentDataSource {
-  readonly reference?: string;
-  readonly checkout_id?: string;
-  readonly invoice_id?: string;
-  readonly invoice?: string;
-  readonly rail?: "lightning" | "swap" | "checkout_lock";
-  readonly payment_hash?: string;
-  readonly amount_msats?: number;
-  readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];
-  readonly transaction_state?: string;
-  readonly workflow_state?: string;
-  readonly settled_at?: number;
-  readonly expires_at?: number;
-  readonly swap?: CheckoutInvoiceSwapSnapshot;
-}
-
-/**
- * Everything the client knows about a payment, as ordered label/value rows.
- *
- * @deprecated Superseded by {@link createTransactionDetails}, whose rows are a
- * strict superset AND carry `copyValue` (the untruncated string behind a
- * shortened display value) and `href` (a block-explorer link). The shipped
- * renderers moved their settled panel onto that builder: a payer's whole
- * evidence that they paid is a payment hash and, on a swap, a deposit txid, and
- * a `<span>` they cannot copy makes the merchant's support inbox their only
- * recourse. Kept exported so a UI already built on these entries is not broken.
- */
-export function createPaymentDataEntries(source: PaymentDataSource): readonly PaymentDataEntry[] {
-  const entries: PaymentDataEntry[] = [];
-  const add = (label: string, value: string | undefined): void => {
-    if (value !== undefined && value !== "") entries.push({ label, value });
-  };
-  add("Order", source.reference);
-  add("Checkout", source.checkout_id);
-  add("Invoice ID", source.invoice_id);
-  add("Payment hash", source.payment_hash);
-  if (source.amount_msats !== undefined) {
-    add("Amount", `${formatMsats(source.amount_msats)} (${source.amount_msats} msats)`);
-  }
-  const fiat = source.fiat_quote?.fiat;
-  if (fiat?.value !== undefined) {
-    add("Fiat amount", fiat.currency === undefined ? fiat.value : `${fiat.value} ${fiat.currency}`);
-  }
-  add("Rail", source.rail);
-  add("Transaction state", source.transaction_state);
-  add("Workflow state", source.workflow_state);
-  // Both panels render timestamps through the one formatter so the same
-  // unix-seconds field never shows two formats on one screen.
-  if (source.settled_at !== undefined) add("Settled at", formatUnixTime(source.settled_at));
-  if (source.expires_at !== undefined) {
-    add("Invoice expires at", formatUnixTime(source.expires_at));
-  }
-  if (source.swap !== undefined) {
-    add("Swap provider", source.swap.provider);
-    add("Swap pay-in asset", source.swap.pay_in_asset);
-    add("Swap provider order", source.swap.provider_order_id);
-    add("Swap state", source.swap.provider_state);
-    add("Swap deposit tx", source.swap.deposit_tx_id);
-    add("Swap payout tx", source.swap.payout_tx_id);
-  }
-  add("BOLT11 invoice", source.invoice);
-  return entries;
 }

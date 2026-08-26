@@ -12,7 +12,7 @@ Accept Bitcoin payments on your website, app, or point of sale, straight into a 
 never holds a key: it connects with only a spec-compliant receive-only [NWC code](https://github.com/nostr-protocol/nips/blob/master/47.md). Choose an existing
 [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments) to receive payments, or build your own NWC Service.
 
-For full self-custody, use an NWC provider like [Alby Hub](https://github.com/getAlby/hub), running on your own hardware.
+To run the wallet on your own hardware, use an NWC service you host yourself, like [Alby Hub](https://github.com/getAlby/hub).
 
 **Optionally swap in other currencies.** Not every customer holds Bitcoin.
 Configure any

@@ -1,5 +1,186 @@
 # Changelog
 
+Seven changes that all answer the same question: what does an integrator have to
+KNOW that the API could have known for them? Each one moves a rule out of prose
+and into a type, a default, or an object that owns it. Nothing on the wire
+changed except one optional response field.
+
+### The swap refund staging is the engine's problem now
+
+`requestSwapRefund({ confirm: false })` fabricated the staged refund address
+client-side and handed it back as a return value. Nothing wrote it into the
+snapshot pipeline, so the next `/swaps/status` tick answered without it and the
+refund form emptied under the payer mid-review — unless the integration
+remembered to fold every polled snapshot through `overlaySwapRefundStaging`
+first. That was a documented MUST, a silent failure mode, and no type error.
+
+`CheckoutController` now owns it:
+
+```ts
+const staged = await controller.stageSwapRefund({ attemptId, refundAddress });
+// …the payer reviews; polling continues; the address stays put…
+await controller.confirmSwapRefund({ attemptId, refundAddress });
+```
+
+- **`stageSwapRefund` / `confirmSwapRefund` / `clearSwapRefundStaging`** are on
+  `CheckoutController` (and on React's `useCheckout` result). The two verbs
+  replace one `confirm: boolean` — a flag that picked between `POST /swaps/status`
+  and `POST /swaps/refunds` was two operations wearing one name. The two steps
+  are still two steps.
+- `CheckoutWatcher` holds the staged attempt and folds it into **every** snapshot
+  it publishes, before `onSnapshot` and before the derived state. A host that
+  stores what it is handed keeps the address the payer is typing.
+- **`overlaySwapRefundStaging` is gone from `@openreceive/browser/headless`.**
+  Nothing needs it: the watcher applies it, and `selectCurrentSwapInvoice` — new
+  on the surface, and previously a near-identical private copy in each shipped
+  renderer — applies it for a UI carrying its own started attempt.
+- **`requestSwapRefund` takes `paymentHash`**, not `invoices` + `attemptId`. The
+  route takes a hash; resolving an attempt id to one is the job of whoever holds
+  the snapshot, and the controller does it. The documented throw
+  `Swap refund requires the original payment hash.` is gone with the parameter.
+- `CheckoutControllerOptions.polling: false` withholds the status fetcher without
+  withholding the mount, so a checkout that deliberately does not poll can still
+  stage a refund.
+
+### The network question is data, not a rule you remember
+
+Payment methods group by label, and the groups are not the same size: USDT is on
+three networks, SOL on one. Asking "which network?" above a single tile teaches
+the payer that the network step is ceremony to click past — one screen before
+USDT, where a wrong send is unrecoverable. The rule lived in nineteen call sites
+and in two near-identical ~15-line blocks per renderer.
+
+- **`resolveWizardSelection({ pickerKey, previousKey, entries, selectedNetworks })`**
+  answers what a tile click MEANS as a discriminated `WizardSelection`:
+  `start_swap`, `choose_network` (carrying the group, the heading, the
+  `aria-controls`/`aria-labelledby` pair and the updated network map),
+  `select_method`, or `none`. A single-network group comes back as `start_swap`,
+  so the ceremony mistake is now unrepresentable.
+- **`createMethodGridDisplay`** gives the method grid the display model it was
+  the only pane to lack, carrying `needsNetworkStep` / `startPayInAsset`,
+  `limitMessage` quoted from the group's cheapest entry point, the accent, the id
+  pair and the Continue button's finished label.
+- `findSwapGridGroup`, `updateSelectedSwapNetworks`, `formatChooseNetworkHeading`,
+  `wizardNetworkGroupIds`, `swapGroupLimitOption` and
+  `resolvePreservedNetworkSelection` left the surface: both renderers stopped
+  importing them, which is exactly what the curation rule says should happen.
+- **`SwapDisplayModel.copyRows`** carries the Address / Memo / bare-Amount rows as
+  data (`{ label, value, copyValue?, selectable }`). Both deposit panels render
+  it instead of hand-writing the same three calls.
+
+### `assetBaseUrl`: the asset seam a wrapper can reach
+
+`resolveAssetUrl` is a function, and a function cannot cross an HTML attribute —
+so under Vue, Svelte and Angular, which all call `defineElements()` with no
+options against a first-write-wins registry, there was no way to move the
+provider icons off the packaged URLs at all. Under webpack those come out as dead
+`file://` links that also publish the server's directory layout.
+
+- **`assetBaseUrl`** is a shared wrapper prop and an **`asset-base-url`** attribute
+  on `<openreceive-checkout>`. Point it at wherever you serve the packages'
+  `dist/assets` trees; every packaged key is joined to it directly.
+- `createAssetBaseUrlResolver(base)` is the one-line adapter, exported for a
+  headless host.
+- An explicit `resolveAssetUrl` still wins, and setting both warns once.
+- `WizardRouteAssetDisplay` gained `iconPath` — parity with
+  `WizardProviderDisplay`, so a host serving the files itself has the key.
+- The api-reference claim that every `<Checkout>` prop is shared with the
+  wrappers was false and now is not.
+
+### Show the payer what they are buying
+
+The shipped checkout renders the total and never the order — it cannot, because
+OpenReceive owns no line items. A stock integration is a QR and `$1.00`.
+
+- `amountFor` / `config.amount_for` may return an optional **`description`**
+  beside the price. It rides the prepare and create responses (never a request
+  body — the payer does not write the copy next to the amount) and both drop-ins
+  render it above the amount, on every screen. One display string, deliberately:
+  a line-item schema would make OpenReceive own the order.
+- The custom element gained a **`slot="order"`**, the equivalent of React's
+  render-prop `children`, projected through the shadow root so it survives every
+  re-render.
+- Contract: `PrepareCheckoutResponse.description` and
+  `CreateCheckoutResponse.description` (a sibling of `checkout`, so the swap
+  contract is untouched), with golden vectors in both engines.
+
+### `getPaymentWizardRoutes()` answers the question a checkout is asking
+
+It returned `[]` with no arguments. `btc-lightning` is the one route that belongs
+under a Lightning invoice, so that is now the default — while an unknown asset or
+route, and the routeless fiat assets, still answer `[]`. The default never stands
+in for a route you asked for and did not get.
+
+### The flagship headless demo stopped teaching the hard glue
+
+Hello Fruit's Rails variant hand-rolled a poll loop whose own comment admitted it
+"mirrors CheckoutWatcher's rules": in-flight guard, failure counter, Retry-After
+backoff, a per-tick status fetcher. Agents copy the demo. `CheckoutFlow` now
+drives `createCheckoutController` and keeps only what a store layer is for, and
+its swap refund is two method calls.
+
+### Agent directions are a prompt, and they are generated
+
+[`docs/agents/node.md`](docs/agents/node.md) and
+[`docs/agents/rails.md`](docs/agents/rails.md) are the instructions to hand a
+coding agent integrating OpenReceive — and the payload behind the site's "Copy
+agent directions" button, which is the constraint that shapes them. Someone
+pastes them into Cursor, Claude or Codex, often on a small model, alongside
+their own application code.
+
+So they are **self-contained**: Step 0 (check the environment before writing
+code), the non-negotiables no API call can state for itself, and the stack's
+quickstart inlined in full. An agent with no network, a blocked github.com, or
+no fetch tool at all can finish the integration from the paste alone. Nothing in
+them resolves against a repository, because the reader does not have one.
+
+They are also **built, not maintained**:
+`tools/docs/generate-agent-directions.mjs` assembles each payload from
+`docs/agents/src/<stack>.md` plus the quickstart, rewriting the guide's sibling
+links to site URLs, and fails the gate when a payload is stale, when a link
+points anywhere the site does not publish, or when the paste grows past 24 KB
+(~6k tokens) — the budget that keeps it absorbable in one prompt. Both payloads
+were ~30 KB before the checkout-UX rules moved out; that is the growth the gate
+exists to catch. `npm run check:docs` runs all of it in CI.
+
+### `docs/guides/checkout-ux.md`, and a contract for openreceive.org
+
+The payer-facing rules that used to live in the agent directions — no progress
+stepper, ask "which network?" only where there is a question, a copy row for
+every value the payer must retype, wallet suggestions that say they are
+suggestions, the receipt as evidence rather than debug output — are now
+[Checkout UX](docs/guides/checkout-ux.md), one guide, linked from the frontend
+and headless pages. They are rules the shipped renderers already obey, so they
+belong where someone replacing those renderers will look, not in a prompt every
+integrator pays for.
+
+[`docs/site-contract.json`](docs/site-contract.json) is the single file the
+openreceive.org repository reads per release: every URL the site must serve,
+mapped to the markdown that renders it, plus the copy-button payloads with their
+byte sizes, the pages the site owns, and the contributor docs it must never
+publish. Generated from `docs/manifest.json`, so the links inside a payload
+cannot promise a page the site does not have.
+[`docs/internal/site-build.md`](docs/internal/site-build.md) explains it. The
+docs index now covers `docs/agents/`, so a file there cannot ship unlisted.
+
+### Dropped the "self-custodial" claim
+
+OpenReceive holds no key and exposes no send API, but the custody of the funds
+belongs to whatever NWC service the merchant connected — which may well be a
+custodial one. Calling the library self-custodial promised a property only the
+merchant's wallet choice can supply. The README, `AGENTS.md`, both agent-direction
+payloads and the Checkout UX guide now say what is actually true: the merchant
+picks the NWC service, and running one on their own hardware is one of the
+options.
+
+### Removed: the `PaymentData` family
+
+`createPaymentDataEntries`, `PaymentDataEntry`, `PaymentDataSource`, React's
+`<PaymentData>`, `orClasses.paymentData*` and `checkoutLabels.viewPaymentData`
+are deleted. Deprecated in 0.2.4 with zero shipped callers; both renderers'
+settled panels already render `createTransactionDetails`, whose rows are a strict
+superset and carry `copyValue` and explorer links. Use `<TransactionDetails>`.
+
 ## 0.2.4 - 2026-08-26
 
 Twelve findings from building a real store on the packages: one shipped bug, one

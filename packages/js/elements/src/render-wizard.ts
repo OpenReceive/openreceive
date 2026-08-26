@@ -7,13 +7,12 @@ import {
   assetButtonClasses,
   buildMethodGridEntries,
   checkoutLabels,
+  createMethodGridDisplay,
   createPaymentWizardModel,
   createSwapUnavailableModel,
   createWizardRouteAssetDisplays,
   createWizardRouteDisplays,
   escapeHtml,
-  findSwapGridGroup,
-  formatChooseNetworkHeading,
   formatNetworkSummary,
   getNetworkIcon,
   getPaymentMethodIcon,
@@ -23,23 +22,21 @@ import {
   networkCheckClasses,
   networkMobileRevealClasses,
   networkSummaryIconClasses,
+  type MethodGridGroupDisplay,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   orClasses,
   type PaymentMethod,
   type PaymentWizardSelection,
-  paymentAccentId,
   paymentMethods,
   swapAssetMatchesRoute,
-  swapGroupLimitOption,
-  swapPickerKey,
   type WizardRouteAssetDisplay,
-  wizardNetworkGroupIds,
 } from "@openreceive/browser/headless";
 import {
   renderProviderOpenActionHtml,
   renderTutorialModalHtml,
 } from "./render-provider-tutorial.ts";
 import {
+  elementsSwapLimitContext,
   elementsSwapLimitMessage,
   renderElementSwapActionsHtml,
   renderElementSwapPanelHtml,
@@ -49,16 +46,6 @@ import type { ElementsSwapOption, ElementsWizardView } from "./views.ts";
 function wizardStartingAsset(view: ElementsWizardView): string | undefined {
   const asset = view.startingSwapAsset;
   return asset !== undefined && asset !== null && asset.length > 0 ? asset : undefined;
-}
-
-function swapGroupIsStarting(
-  group: { readonly options: readonly Pick<ElementsSwapOption, "pay_in_asset">[] },
-  startingAsset: string | undefined,
-): boolean {
-  return (
-    startingAsset !== undefined &&
-    group.options.some((option) => option.pay_in_asset === startingAsset)
-  );
 }
 
 /**
@@ -294,65 +281,43 @@ function renderElementCompactPaymentSelectorHtml(
   swapAssetOptions: readonly ElementsSwapOption[],
   view: ElementsWizardView,
 ): string {
-  const entries = buildMethodGridEntries(paymentMethods, swapAssetOptions);
+  // One model, both renderers: which tile is open, which network each coin is
+  // set to, which asset is starting, and every derivation that used to be
+  // re-done by hand on each side of the pair.
+  const limitContext = elementsSwapLimitContext(view);
+  const display = createMethodGridDisplay({
+    entries: buildMethodGridEntries(paymentMethods, swapAssetOptions),
+    selectedPickerKey: view.selectedPickerKey ?? null,
+    selectedNetworks: view.selectedSwapNetworks ?? {},
+    startingAsset: wizardStartingAsset(view) ?? null,
+    ...(limitContext === undefined ? {} : { checkout: limitContext }),
+  });
   const currenciesLoading = view.currenciesLoading === true && swapAssetOptions.length === 0;
-  const selectedKey = view.selectedPickerKey ?? null;
-  const selectedGroup = findSwapGridGroup(entries, selectedKey);
-  const networkRequired = selectedGroup !== undefined && selectedGroup.options.length > 1;
-  const selectedNetworks = view.selectedSwapNetworks ?? {};
-  const selectedGroupKey = selectedGroup?.label.trim().toUpperCase();
-  const selectedNetworkAsset =
-    selectedGroupKey === undefined ? undefined : selectedNetworks[selectedGroupKey];
-  const selectedNetworkOption =
-    selectedGroup === undefined || selectedNetworkAsset === undefined
-      ? undefined
-      : selectedGroup.options.find((option) => option.pay_in_asset === selectedNetworkAsset);
-
-  const startingAsset = wizardStartingAsset(view);
-  const gridBusy = startingAsset !== undefined;
-  let continueDisabled = selectedNetworkOption === undefined || gridBusy;
-  let continueAttr = "";
-  let continueLabel = escapeHtml(checkoutLabels.continue);
-  const continueStarting =
-    selectedNetworkOption !== undefined && selectedNetworkOption.pay_in_asset === startingAsset;
-  if (selectedNetworkOption !== undefined) {
-    const disabled = selectedNetworkOption.available === false;
-    const limitMessage = elementsSwapLimitMessage(selectedNetworkOption, view);
-    continueDisabled = disabled || gridBusy;
-    continueAttr =
-      disabled || gridBusy
-        ? ""
-        : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedNetworkOption.pay_in_asset)}"`;
-    if (disabled && limitMessage !== undefined) continueLabel = escapeHtml(limitMessage);
-    else if (continueStarting) continueLabel = escapeHtml(checkoutLabels.preparingPayment);
-  } else if (networkRequired) {
-    continueDisabled = true;
-  }
+  const { gridBusy, networkRequired, selectedGroup, continueTarget } = display;
 
   const continueButton = (className: string) =>
     renderElementMethodConfirmHtml({
       className,
-      disabled: continueDisabled,
-      starting: continueStarting,
+      disabled: continueTarget === undefined || continueTarget.disabled,
+      starting: continueTarget?.starting === true,
       swapStartAsset:
-        continueAttr.length === 0 || selectedNetworkOption === undefined
+        continueTarget === undefined || continueTarget.disabled
           ? undefined
-          : selectedNetworkOption.pay_in_asset,
-      label: continueLabel,
+          : continueTarget.payInAsset,
+      label: escapeHtml(continueTarget?.label ?? checkoutLabels.continue),
     });
 
-  const tiles = entries
+  const tiles = display.entries
     .map((entry) => {
       if (entry.kind === "method") {
         const method = entry.method;
-        const accent = paymentAccentId(method.id);
         return `
           <button
             part="method"
             type="button"
-            class="${assetButtonClasses({ accent, selected: false, disabled: gridBusy })}"
+            class="${assetButtonClasses({ accent: entry.accent, selected: false, disabled: entry.disabled })}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method}="${escapeHtml(method.id)}"
-            ${gridBusy ? 'disabled aria-disabled="true"' : ""}
+            ${entry.disabled ? 'disabled aria-disabled="true"' : ""}
           >
             <span aria-hidden="true" class="${orClasses.methodIconWrap}">
               <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getPaymentMethodIcon(method.id, view.resolveAssetUrl))}">
@@ -365,10 +330,8 @@ function renderElementCompactPaymentSelectorHtml(
       return renderElementSwapMethodGroupHtml(
         entry.group,
         view,
-        selectedKey,
-        selectedKey === swapPickerKey(entry.group.label)
-          ? continueButton(orClasses.methodConfirmDesktop)
-          : undefined,
+        gridBusy,
+        entry.group.selected ? continueButton(orClasses.methodConfirmDesktop) : undefined,
       );
     })
     .join("");
@@ -404,23 +367,12 @@ function renderElementCompactPaymentSelectorHtml(
 }
 
 function renderElementNetworkSelectorHtml(
-  group: {
-    readonly label: string;
-    readonly options: readonly ElementsSwapOption[];
-  },
+  group: MethodGridGroupDisplay<ElementsSwapOption>,
   view: ElementsWizardView,
   continueButtonHtml: string,
   mobile: boolean,
 ): string {
-  const accent = paymentAccentId(group.label);
-  const groupKey = group.label.trim().toUpperCase();
-  const selectedNetworks = view.selectedSwapNetworks ?? {};
-  const selectedAsset = selectedNetworks[groupKey];
-  const selectedOption =
-    selectedAsset === undefined
-      ? undefined
-      : group.options.find((option) => option.pay_in_asset === selectedAsset);
-  const { panelId, headingId } = wizardNetworkGroupIds(groupKey);
+  const { accent, groupKey, panelId, headingId, selectedOption } = group;
   const networkButtons = group.options
     .map((option) => {
       const optionDisabled = option.available === false;
@@ -477,7 +429,7 @@ function renderElementNetworkSelectorHtml(
       <div class="${orClasses.methodNetworkLayout}">
         <div>
           <h3 id="${headingId}" class="${orClasses.methodNetworkHeading}">${escapeHtml(
-            formatChooseNetworkHeading(group.label),
+            group.heading,
           )}</h3>
           <p class="${orClasses.methodNetworkHint}">${escapeHtml(
             checkoutLabels.selectNetworkToContinue,
@@ -520,38 +472,23 @@ function renderElementMethodConfirmHtml(options: {
 }
 
 function renderElementSwapMethodGroupHtml(
-  group: {
-    readonly label: string;
-    readonly options: readonly ElementsSwapOption[];
-  },
+  group: MethodGridGroupDisplay<ElementsSwapOption>,
   view: ElementsWizardView,
-  selectedKey: string | null,
+  gridBusy: boolean,
   continueButtonHtml?: string,
 ): string {
-  const selectedNetworks = view.selectedSwapNetworks ?? {};
-  const groupKey = group.label.trim().toUpperCase();
-  const pickerKey = swapPickerKey(group.label);
-  const selected = selectedKey === pickerKey;
-  const displayOption =
-    group.options.find((option) => option.available !== false) ?? group.options[0];
-  if (displayOption === undefined) return "";
-  const multiNetwork = group.options.length > 1;
-  const selectedAsset = selectedNetworks[groupKey];
-  const selectedOption =
-    selectedAsset === undefined
-      ? undefined
-      : group.options.find((option) => option.pay_in_asset === selectedAsset);
-  const activeOption = selectedOption ?? displayOption;
-  const startingAsset = wizardStartingAsset(view);
-  const starting = swapGroupIsStarting(group, startingAsset);
-  const gridBusy = startingAsset !== undefined;
-  const disabled = group.options.every((option) => option.available === false);
-  const accent = paymentAccentId(group.label);
-  const limitOption = disabled
-    ? (swapGroupLimitOption(group.options) ?? activeOption)
-    : activeOption;
-  const limitMessage = elementsSwapLimitMessage(limitOption, view);
-  const { panelId } = wizardNetworkGroupIds(groupKey);
+  const {
+    pickerKey,
+    selected,
+    displayOption,
+    selectedOption,
+    multiNetwork,
+    starting,
+    disabled,
+    accent,
+    limitMessage,
+    panelId,
+  } = group;
   const networkDetail =
     !disabled && multiNetwork
       ? selected && selectedOption !== undefined

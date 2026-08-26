@@ -96,6 +96,8 @@ export const OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES = {
   meta: "data-openreceive-meta",
   state: "data-openreceive-state",
   actions: "data-openreceive-actions",
+  /** What the payer is buying, when the host's amount hook named it. */
+  orderDescription: "data-openreceive-order-description",
   theme: "data-openreceive-theme",
   themeToggle: "data-openreceive-theme-toggle",
 } as const;
@@ -105,6 +107,18 @@ export const OPENRECEIVE_CHECKOUT_DATA_SELECTORS = attributeSelectors(
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PARTS = {
   copy: "copy",
   startOver: "start-over",
+} as const;
+
+/**
+ * Named slots the checkout element projects host light-DOM children into.
+ *
+ * `order` is the element's answer to React's render-prop `children`: a line-item
+ * strip, a thumbnail, a "you are buying" summary, drawn from the order
+ * OpenReceive does not own. It is projected through a `<slot>` in the shadow
+ * root, so it survives every re-render of the shell's `innerHTML` untouched.
+ */
+export const OPENRECEIVE_CHECKOUT_ELEMENT_SLOTS = {
+  order: "order",
 } as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS = partSelectors(
   OPENRECEIVE_CHECKOUT_ELEMENT_PARTS,
@@ -223,6 +237,17 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * default), no decode link is rendered and the invoice never leaves the page.
    */
   decodeLinkUrl: "decode-link-url",
+  /**
+   * Where this app serves the packages' `dist/assets` trees, as one base URL —
+   * the string form of the `resolveAssetUrl` seam, so plain markup and the
+   * Vue/Svelte/Angular wrappers can reach it (a function cannot cross an HTML
+   * attribute). Every packaged key is a relative path under one `assets/` root,
+   * so the value is joined to it directly: `asset-base-url="/openreceive-assets"`
+   * makes `assets/icons/btc.svg` load from
+   * `/openreceive-assets/assets/icons/btc.svg`. A `resolveAssetUrl` passed to
+   * `defineElements` wins over it.
+   */
+  assetBaseUrl: "asset-base-url",
   /** `polling="false"` renders the snapshot without status polling (no POST /payments/check). */
   polling: "polling",
   /** Status poll cadence in milliseconds; defaults to OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS. */

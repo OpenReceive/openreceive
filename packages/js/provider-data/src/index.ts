@@ -7,7 +7,11 @@ export { providerIconUrls };
 // The packaged asset URLs above only resolve under Vite/Rollup. `AssetUrlResolver`
 // is the seam for every other host, and `warnOnFileAssetUrl` is the diagnostic
 // that says out loud when the packaged resolution has failed.
-export { type AssetUrlResolver, warnOnFileAssetUrl } from "./asset-url.ts";
+export {
+  type AssetUrlResolver,
+  createAssetBaseUrlResolver,
+  warnOnFileAssetUrl,
+} from "./asset-url.ts";
 
 export type ProviderId = string;
 export type CryptoRouteId = string;
@@ -105,6 +109,12 @@ function deepFreeze<T>(value: T): T {
 
 const registry = deepFreeze(structuredClone(providerRegistryJson)) as ProviderRegistry;
 
+/**
+ * The one route a checkout renders provider suggestions for. See
+ * {@link getPaymentWizardRoutes}.
+ */
+export const DEFAULT_PAYMENT_WIZARD_ROUTE: CryptoRouteId = "btc-lightning";
+
 function sortByProviderName(left: Provider, right: Provider): number {
   return left.name.localeCompare(right.name, "en");
 }
@@ -181,11 +191,30 @@ export function listCryptoRouteProviders(routeId: CryptoRouteId): readonly Resol
   return route ? resolveProviderRefs(route.providers) : [];
 }
 
+/**
+ * The provider rows for one route. Called with nothing, it answers the question
+ * a checkout is actually asking: `btc-lightning` is the only route that belongs
+ * under a Lightning invoice, and the other routes list exchanges that convert an
+ * asset INTO a Lightning payment — a different path from the deposit address a
+ * swap provider already quoted, and a mid-payment misdirection on a deposit
+ * panel. So the minimal call is the correct one, and naming another route is a
+ * deliberate act.
+ *
+ * The default is gated on "neither input supplied", never on an unresolvable
+ * route: the registry ships fiat assets with no route at all (`usd`, `eur`,
+ * `gbp`), and `{ asset: "usd" }` must keep returning [] rather than silently
+ * answering with Lightning.
+ */
 export function getPaymentWizardRoutes(
-  options: PaymentWizardRouteRequest,
+  options: PaymentWizardRouteRequest = {},
 ): readonly PaymentWizardRoute[] {
   const asset = options.asset === undefined ? undefined : getAsset(options.asset);
-  const routeId = options.route === undefined ? asset?.route : normalizeRouteId(options.route);
+  const routeId =
+    options.asset === undefined && options.route === undefined
+      ? DEFAULT_PAYMENT_WIZARD_ROUTE
+      : options.route === undefined
+        ? asset?.route
+        : normalizeRouteId(options.route);
   if (!routeId) return [];
 
   const route = getCryptoRoute(routeId);

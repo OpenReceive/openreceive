@@ -263,6 +263,33 @@ test("host pricing runs only when minting or quoting, never on status or refund 
   assert.equal(priced, 0, "a slow or broken pricing callback must not break status polls");
 });
 
+test("the display string never rides along inside the amount, on any resolve branch", async () => {
+  // The service's amount validator rejects every field it does not know, so a
+  // branch that forgets to peel answers 400 "amount contains unsupported
+  // fields." for a host whose amountFor returns a description — and the fresh
+  // mint, the branch with no attempt to reuse, is the one a first checkout hits.
+  const described = (rows) =>
+    createHost({
+      clock: () => 1_000,
+      amountFor: async () => ({ sats: 1000, description: "2 kg Ataulfo mangoes" }),
+      payments: repository(rows),
+      onPaid: async () => undefined,
+    });
+  const branches = [
+    ["fresh mint, no attempt to reuse", []],
+    ["an expired attempt, so a replacement is minted", [payment("a", { expiresAt: 100 })]],
+    ["a live attempt that is reused", [payment("a")]],
+  ];
+  for (const [label, rows] of branches) {
+    const resolved = await described(rows).resolveCheckout(context("checkout.create"));
+    assert.deepEqual(resolved.amount, { sats: 1000 }, label);
+    assert.equal(resolved.description, "2 kg Ataulfo mangoes", label);
+  }
+  const prepared = await described([]).resolveCheckout(context("checkout.prepare"));
+  assert.deepEqual(prepared.amount, { sats: 1000 });
+  assert.equal(prepared.description, "2 kg Ataulfo mangoes");
+});
+
 test("host integration reuses Lightning and allows a concurrent swap mint", async () => {
   const paymentHost = host([payment("c")]);
   const lightning = await paymentHost.resolveCheckout(context("checkout.create"));

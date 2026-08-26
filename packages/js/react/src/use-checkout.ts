@@ -214,6 +214,42 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
     if (next !== undefined) setState(next);
   }, []);
 
+  // The two-step refund, straight off the controller: it resolves the attempt's
+  // payment hash from the snapshot it holds and keeps the staged address across
+  // every later poll, so nothing here has to re-apply anything.
+  const swapRefundController = React.useCallback((): CheckoutController => {
+    const controller = controllerRef.current;
+    if (controller === null) {
+      throw new Error("Swap refunds need a started checkout controller.");
+    }
+    return controller;
+  }, []);
+  const stageSwapRefund = React.useCallback<CheckoutController["stageSwapRefund"]>(
+    async (refund) => {
+      try {
+        return await swapRefundController().stageSwapRefund(refund);
+      } catch (error) {
+        onErrorRef.current?.(error);
+        throw error;
+      }
+    },
+    [swapRefundController],
+  );
+  const confirmSwapRefund = React.useCallback<CheckoutController["confirmSwapRefund"]>(
+    async (refund) => {
+      try {
+        return await swapRefundController().confirmSwapRefund(refund);
+      } catch (error) {
+        onErrorRef.current?.(error);
+        throw error;
+      }
+    },
+    [swapRefundController],
+  );
+  const clearSwapRefundStaging = React.useCallback(() => {
+    controllerRef.current?.clearSwapRefundStaging();
+  }, []);
+
   return {
     // The state IS the view model now: one derivation, one set of display
     // fields. `status` stays on top of it because the component's terminal
@@ -233,6 +269,9 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
     cancel,
     copyInvoice,
     openWallet,
+    stageSwapRefund,
+    confirmSwapRefund,
+    clearSwapRefundStaging,
   };
 }
 

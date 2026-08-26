@@ -7,10 +7,10 @@ import {
 import {
   CopyInvoiceButton,
   InvoiceSummary,
-  PaymentData,
   PaymentWizard,
   QRCode,
   SatsDetail,
+  TransactionDetails,
   WaitingState,
 } from "@openreceive/react";
 import { observer } from "mobx-react";
@@ -108,7 +108,7 @@ const CheckoutPanel: React.FC = observer(() => {
             )}
             {showSummaryMeta ? <InvoiceSummary status={checkout.status} /> : null}
             {settled ? (
-              <PaymentData source={state} />
+              <TransactionDetails state={state} />
             ) : expired ? (
               <div
                 className={orClasses.actions}
@@ -175,6 +175,10 @@ const CheckoutWizard: React.FC<{ checkout: CheckoutFlow }> = observer(({ checkou
       prefix={openReceivePrefix()}
       onRequestLightning={() => checkout.ensureLightning()}
       onSwapStarted={(invoice) => checkout.applyAttempt(invoice)}
+      // The two-step refund, off the store's controller: review stages the
+      // address, confirm submits it, and the staged value survives every poll
+      // in between without this component knowing it exists.
+      swapRefund={checkout}
       onSwapFocusChange={onSwapFocusChange}
       onError={(error) => checkout.reportError(error)}
     />

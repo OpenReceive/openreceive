@@ -108,6 +108,7 @@ export function createCheckoutState(
         transaction_state: "pending",
         workflow_state: "invoice_created",
         paid: false,
+        ...(snapshot.description === undefined ? {} : { description: snapshot.description }),
       },
       resolveNow(options.now),
     );
@@ -161,6 +162,7 @@ export function createCheckoutState(
       // that omits its own amount still shows one rather than no amount at all.
       amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
       ...(fiatQuote === undefined ? {} : { fiat_quote: fiatQuote }),
+      ...(snapshot.description === undefined ? {} : { description: snapshot.description }),
       transaction_state: transactionState,
       workflow_state: workflowState,
       ...(invoice.expires_at === undefined ? {} : { expires_at: invoice.expires_at }),

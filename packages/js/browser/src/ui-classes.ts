@@ -5,6 +5,13 @@
 
 export const orClasses = {
   root: "grid gap-3 min-w-0",
+  /**
+   * What the payer is buying, above the amount. Present only when the host
+   * returned a `description` from its amount hook — the checkout renders the
+   * total and never the order, so this is the one line of order context the
+   * default path has.
+   */
+  orderDescription: "text-base font-semibold leading-snug m-0 min-w-0",
   paymentLayout: "grid gap-3 grid-cols-[auto_minmax(0,1fr)] gap-x-3 md:gap-x-5 items-start min-w-0",
   paymentLayoutExpired: "grid gap-3 grid-cols-1 items-start min-w-0",
   lightningPane: "grid gap-2 items-start justify-items-start min-w-0",
@@ -30,12 +37,6 @@ export const orClasses = {
   /** Spinner on a primary button — inherit the button foreground, not the warning color. */
   continueSpinner: "loading loading-spinner loading-md shrink-0",
   settledIcon: "size-8 shrink-0 text-success",
-  paymentData: "collapse collapse-arrow border border-base-300 bg-base-100",
-  paymentDataTitle: "collapse-title font-semibold",
-  paymentDataBody: "collapse-content grid gap-2",
-  paymentDataRow: "grid gap-0.5",
-  paymentDataKey: "text-xs uppercase tracking-wide text-base-content/60",
-  paymentDataValue: "font-mono text-sm break-all m-0",
   countdown: "text-base-content/60 text-sm",
   countdownStrong: "text-base-content font-semibold",
   creating: "grid gap-2 place-items-center p-4",

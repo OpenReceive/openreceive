@@ -14,7 +14,10 @@ import {
   providerIconUrl
 } from "@openreceive/provider-data";
 
-const [route] = getPaymentWizardRoutes({ asset: "eth" });
+// No arguments is the checkout's question: btc-lightning, the one route whose
+// providers pay a Lightning invoice directly. Name an asset or route to ask for
+// another one.
+const [route] = getPaymentWizardRoutes();
 
 for (const { provider, rank } of route.providers) {
   console.log(
@@ -26,7 +29,7 @@ for (const { provider, rank } of route.providers) {
 }
 ```
 
-`getPaymentWizardRoutes()` returns routes with fully resolved provider objects, so a pay-this-invoice UI can render provider names, URLs, icons, tutorial metadata, and per-route provider ordering (`rank`, lower first) without making network calls.
+`getPaymentWizardRoutes()` returns routes with fully resolved provider objects, so a pay-this-invoice UI can render provider names, URLs, icons, tutorial metadata, and per-route provider ordering (`rank`, lower first) without making network calls. Called with no arguments it returns the `btc-lightning` route; `{ asset: "eth" }` or `{ route: "usdt" }` asks for another.
 
 The package is frontend-safe: it contains static registry data and bundled provider icon assets only. It does not require a backend, NWC connection, wallet secret, or OpenReceive checkout server.
 

@@ -53,6 +53,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() prefix?: string;
   @Input() paymentWizard?: boolean;
   @Input() decodeLinkUrl?: string;
+  @Input() assetBaseUrl?: string;
   @Input() themeToggle?: boolean;
   @Input() defaultTheme?: ThemePreference;
   @Input() storageKey?: string;
@@ -138,6 +139,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       ...(this.prefix === undefined ? {} : { prefix: this.prefix }),
       ...(this.paymentWizard === undefined ? {} : { paymentWizard: this.paymentWizard }),
       ...(this.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: this.decodeLinkUrl }),
+      ...(this.assetBaseUrl === undefined ? {} : { assetBaseUrl: this.assetBaseUrl }),
       ...(this.defaultTheme === undefined ? {} : { defaultTheme: this.defaultTheme }),
       ...(this.storageKey === undefined ? {} : { storageKey: this.storageKey }),
       ...(this.metadata === undefined ? {} : { metadata: this.metadata }),

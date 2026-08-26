@@ -356,6 +356,32 @@ test("create mode keeps one checkout view across the deferred Lightning mint", a
   }
 });
 
+test("the order description survives the deferred Lightning mint", async () => {
+  // The description arrives twice in two different shapes — beside the price on
+  // /checkouts/prepare, and as a sibling of `checkout` on /checkouts — so the
+  // mint is where a host that only read the first one loses it.
+  const stack = await createLifecycleStack();
+  globalThis.fetch = stack.fetchStub;
+  stack.addOrder("order-mint-described", 2000, "2 kg Ataulfo mangoes");
+  const handle = mount(React.createElement(Checkout, { reference: "order-mint-described" }));
+  try {
+    await until(() => handle.text().includes("2 kg Ataulfo mangoes"), {
+      label: "description before the mint",
+    });
+    (await until(() => handle.button("Bitcoin"), { label: "method grid" })).click();
+    await until(() => handle.button(checkoutLabels.copyInvoice), {
+      label: "minted Lightning invoice",
+    });
+    assert.ok(
+      handle.text().includes("2 kg Ataulfo mangoes"),
+      "the description must survive the mint",
+    );
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
 test("a swap start failure is discarded when the payer leaves the focused flow", async () => {
   const stack = await createLifecycleStack();
   // Every start fails. The in-range quote runs BEFORE the first start, and the

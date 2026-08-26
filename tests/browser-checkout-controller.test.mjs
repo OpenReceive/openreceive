@@ -611,3 +611,221 @@ test("every amount a swap start copies is one the formatter will format", () => 
     assert.notEqual(state.amountLabel, undefined, `${amountMsats} must still get a label`);
   }
 });
+
+// ------------------------------------------------- swap refund staging (item 1)
+
+function swapInvoice(overrides = {}, swapOverrides = {}) {
+  return {
+    invoice_id: hash("c"),
+    rail: "swap",
+    payment_hash: hash("c"),
+    amount_msats: 21_000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    expires_at: Math.floor(Date.now() / 1000) + 900,
+    ...overrides,
+    swap: {
+      attempt_id: "or_att_swap",
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TDeposit",
+      deposit_amount: "10.00",
+      provider_state: "refund_required",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 900,
+      ...swapOverrides,
+    },
+  };
+}
+
+/**
+ * A fetch that answers each mounted route from a map keyed by path suffix, and
+ * records what it was asked for.
+ */
+function routedFetch(routes) {
+  const calls = [];
+  const fetcher = async (url, init) => {
+    const body = JSON.parse(init.body);
+    const path = new URL(url, "http://checkout.local").pathname;
+    calls.push({ path, body });
+    const handler = Object.entries(routes).find(([suffix]) => path.endsWith(suffix))?.[1];
+    assert.ok(handler !== undefined, `no stub for ${path}`);
+    return new Response(JSON.stringify(handler(body)), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  fetcher.calls = calls;
+  fetcher.paths = () => calls.map((call) => call.path);
+  return fetcher;
+}
+
+test("a staged refund address survives every later poll", async () => {
+  const attempt = swapInvoice();
+  // The server never echoes a refund address until the payer CONFIRMS, so every
+  // status answer below is the un-staged truth — which is exactly what used to
+  // wipe the form under the payer mid-review.
+  const fetcher = routedFetch({
+    "/swaps/status": () => ({
+      payment_hash: hash("c"),
+      attempt_id: "or_att_swap",
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TDeposit",
+      deposit_amount: "10.00",
+      provider_state: "refund_required",
+      provider_expires_at: attempt.swap.provider_expires_at,
+    }),
+    "/payments/check": () => ({ payment_hash: hash("c"), status: "pending" }),
+    "/swaps/refunds": () => ({
+      payment_hash: hash("c"),
+      attempt_id: "or_att_swap",
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TDeposit",
+      deposit_amount: "10.00",
+      provider_state: "refund_pending",
+      refund_address: "TRefundAddress",
+      provider_expires_at: attempt.swap.provider_expires_at,
+    }),
+  });
+
+  const snapshots = [];
+  const controller = createCheckoutController({
+    snapshot: snapshotOf([attempt]),
+    prefix: "/openreceive",
+    fetch: fetcher,
+    ...noTimers,
+    logger: false,
+    onSnapshot: (snapshot) => snapshots.push(snapshot),
+  });
+  controller.start();
+
+  // Step one stages: it posts /swaps/status and nothing else. The controller
+  // resolves the attempt's payment hash from the snapshot it already holds, so
+  // the caller passes an attempt id and no invoice array.
+  const staged = await controller.stageSwapRefund({
+    attemptId: "or_att_swap",
+    refundAddress: "TRefundAddress",
+  });
+  assert.equal(staged.swap.refund_address, "TRefundAddress");
+  assert.deepEqual(
+    fetcher.paths(),
+    ["/openreceive/swaps/status"],
+    "review must not touch /swaps/refunds",
+  );
+
+  // The poll answers WITHOUT the staged address; the watcher folds it back in
+  // before anything reads the snapshot, so both the host's copy and the derived
+  // state still carry it.
+  const state = await controller.reloadState();
+  const polled = snapshots.at(-1);
+  assert.equal(
+    polled.invoices.find((invoice) => invoice.invoice_id === hash("c")).swap.refund_address,
+    "TRefundAddress",
+    "the next status tick must not wipe what the payer typed",
+  );
+  assert.equal(polled.active.swap.refund_address, "TRefundAddress");
+  assert.equal(state.swap.refund_address, "TRefundAddress");
+
+  // Step two is the only call that posts /swaps/refunds.
+  await controller.confirmSwapRefund({
+    attemptId: "or_att_swap",
+    refundAddress: "TRefundAddress",
+  });
+  assert.ok(fetcher.paths().includes("/openreceive/swaps/refunds"));
+
+  controller.stop();
+});
+
+test("clearing the staging is what leaving the swap does", async () => {
+  const attempt = swapInvoice();
+  const fetcher = routedFetch({
+    "/swaps/status": () => ({
+      payment_hash: hash("c"),
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TDeposit",
+      deposit_amount: "10.00",
+      provider_state: "refund_required",
+      provider_expires_at: attempt.swap.provider_expires_at,
+    }),
+    "/payments/check": () => ({ payment_hash: hash("c"), status: "pending" }),
+  });
+  const snapshots = [];
+  const controller = createCheckoutController({
+    snapshot: snapshotOf([attempt]),
+    prefix: "/openreceive",
+    fetch: fetcher,
+    ...noTimers,
+    logger: false,
+    onSnapshot: (snapshot) => snapshots.push(snapshot),
+  });
+  controller.start();
+
+  await controller.stageSwapRefund({ attemptId: "or_att_swap", refundAddress: "TRefundAddress" });
+  controller.clearSwapRefundStaging();
+  assert.equal(
+    snapshots.at(-1).invoices.find((invoice) => invoice.invoice_id === hash("c")).swap
+      .refund_address,
+    undefined,
+  );
+
+  await controller.reloadState();
+  assert.equal(
+    snapshots.at(-1).invoices.find((invoice) => invoice.invoice_id === hash("c")).swap
+      .refund_address,
+    undefined,
+    "a cleared staging must not come back on the next poll",
+  );
+  controller.stop();
+});
+
+test("a refund names the attempt the checkout does not have", async () => {
+  const controller = createCheckoutController({
+    snapshot: snapshotOf([lightningInvoice()]),
+    prefix: "/openreceive",
+    fetch: async () => assert.fail("no request should be made"),
+    ...noTimers,
+    logger: false,
+  });
+  controller.start();
+  await assert.rejects(
+    () => controller.stageSwapRefund({ attemptId: "or_att_missing", refundAddress: "TRefund" }),
+    /No swap attempt or_att_missing in this checkout\./,
+  );
+  controller.stop();
+});
+
+test("polling:false withholds the poller, not the mount the refund routes live at", async () => {
+  const attempt = swapInvoice();
+  const fetcher = routedFetch({
+    "/swaps/status": () => ({
+      payment_hash: hash("c"),
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TDeposit",
+      deposit_amount: "10.00",
+      provider_state: "refund_required",
+      provider_expires_at: attempt.swap.provider_expires_at,
+    }),
+  });
+  const controller = createCheckoutController({
+    snapshot: snapshotOf([attempt]),
+    prefix: "/openreceive",
+    polling: false,
+    fetch: fetcher,
+    ...noTimers,
+    logger: false,
+  });
+  controller.start();
+  // No status fetcher at all: a reload is a no-op rather than a POST.
+  await controller.reloadState();
+  assert.deepEqual(fetcher.paths(), []);
+  const staged = await controller.stageSwapRefund({
+    attemptId: "or_att_swap",
+    refundAddress: "TRefundAddress",
+  });
+  assert.equal(staged.swap.refund_address, "TRefundAddress");
+  assert.deepEqual(fetcher.paths(), ["/openreceive/swaps/status"]);
+  controller.stop();
+});

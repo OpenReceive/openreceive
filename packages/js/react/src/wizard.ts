@@ -9,36 +9,33 @@ import {
   type CheckoutSnapshot,
   checkoutLabels,
   copyInvoice as copyInvoiceHelper,
+  createAssetBaseUrlResolver,
+  createMethodGridDisplay,
   createPaymentWizardController,
   createPaymentWizardModel,
   createWizardRouteAssetDisplays,
   createWizardRouteDisplays,
-  findSwapGridGroup,
-  formatChooseNetworkHeading,
   formatNetworkSummary,
   getNetworkIcon,
   getPaymentMethodIcon,
   getSwapOptionIcon,
   getWizardEmptyMessage,
+  type MethodGridGroupDisplay,
   networkButtonClasses,
   networkCheckClasses,
   networkMobileRevealClasses,
   networkSummaryIconClasses,
   orClasses,
-  overlaySwapRefundStaging,
   type PaymentMethod,
   type PaymentWizardController,
   type PaymentWizardSelection,
-  paymentAccentId,
   paymentMethods,
+  resolveWizardSelection,
   requestSwapRefund,
+  selectCurrentSwapInvoice,
   swapAssetMatchesRoute,
-  swapGroupLimitOption,
   swapOptionLimitMessage,
-  swapPickerKey,
-  updateSelectedSwapNetworks,
   type WizardRouteAssetDisplay,
-  wizardNetworkGroupIds,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 import { useCheckoutSession } from "./checkout-session.ts";
@@ -107,13 +104,16 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const { startSwap, swapStartError, startingSwapAsset: swapStartingAsset } = session;
   // Leave the focused swap flow and restore the default method grid (nothing selected).
   // The start failure belongs to the asset being left: keeping it would show the previous
-  // coin's message on the next one, with retry wired to the new coin.
+  // coin's message on the next one, with retry wired to the new coin. Leaving the swap for
+  // Lightning is also the one exit that is not a submitted refund, so the staged refund
+  // address goes with it.
   const clearSwapFocus = React.useCallback(() => {
     setSelectedSwapAsset(null);
     setSelectedPickerKey(null);
     setSelectedSwapNetworks({});
     session.clearSwapStartError();
-  }, [session]);
+    props.swapRefund?.clearSwapRefundStaging();
+  }, [session, props.swapRefund]);
   // Tell the host (default Checkout) whether the payer is in the focused swap flow, so it
   // can hide the Lightning payment section while the swap deposit panel stands in for it.
   const onSwapFocusChange = props.onSwapFocusChange;
@@ -129,7 +129,11 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   }, [checkout]);
 
   const currentSwapInvoice = React.useMemo(
-    () => selectCurrentSwapInvoice(checkout, startedSwapInvoice, dismissedSwapInvoiceId),
+    () =>
+      selectCurrentSwapInvoice(checkout, {
+        started: startedSwapInvoice,
+        dismissedInvoiceId: dismissedSwapInvoiceId,
+      }),
     [checkout, startedSwapInvoice, dismissedSwapInvoiceId],
   );
   const now = useTickingUnixSeconds(currentSwapInvoice !== undefined);
@@ -144,6 +148,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     },
     [props.prefix, session],
   );
+  const swapRefund = props.swapRefund;
   const refundSwap = React.useCallback(
     async (attemptId: string, refundAddress: string, confirm: boolean) => {
       const prefix = props.prefix;
@@ -151,16 +156,28 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         return;
       }
       try {
-        const invoice = await requestSwapRefund({
-          fetch: fetcher,
-          prefix,
-          reference,
-          invoices: [startedSwapInvoice, ...(checkout?.invoices ?? [])],
-          attemptId,
-          refundAddress,
-          confirm,
-          ...(props.logger === undefined ? {} : { logger: props.logger }),
-        });
+        // With a controller in hand (the `<Checkout>` path) the staging lives in
+        // the engine, so every later poll keeps the address the payer is
+        // reviewing. Standalone, the host owns the snapshot and this component's
+        // own carry is the staging.
+        const invoice =
+          swapRefund !== undefined
+            ? await (confirm ? swapRefund.confirmSwapRefund : swapRefund.stageSwapRefund).call(
+                swapRefund,
+                { attemptId, refundAddress },
+              )
+            : await requestSwapRefund({
+                fetch: fetcher,
+                prefix,
+                reference,
+                paymentHash: resolveAttemptPaymentHash(
+                  [startedSwapInvoice, ...(checkout?.invoices ?? [])],
+                  attemptId,
+                ),
+                refundAddress,
+                confirm,
+                ...(props.logger === undefined ? {} : { logger: props.logger }),
+              });
         setStartedSwapInvoice(invoice);
         setDismissedSwapInvoiceId(null);
       } catch (error) {
@@ -173,6 +190,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       fetcher,
       props.onError,
       props.logger,
+      swapRefund,
       startedSwapInvoice,
       checkout?.invoices,
     ],
@@ -185,12 +203,19 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   );
   const model = createPaymentWizardModel(selection);
   const { wizard } = model;
+  // One seam, two ways in: an explicit resolver wins over the base-URL string
+  // (which is what the element attribute and the wrappers can carry).
+  const resolveAssetUrl =
+    props.resolveAssetUrl ??
+    (props.assetBaseUrl === undefined || props.assetBaseUrl.trim() === ""
+      ? undefined
+      : createAssetBaseUrlResolver(props.assetBaseUrl));
   const routeAssetDisplays = createWizardRouteAssetDisplays(model.routeAssets, {
     selectedRoute: model.selectedRoute,
-    ...(props.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: props.resolveAssetUrl }),
+    ...(resolveAssetUrl === undefined ? {} : { resolveAssetUrl }),
   });
   const routeDisplays = createWizardRouteDisplays(wizard.routes, {
-    ...(props.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: props.resolveAssetUrl }),
+    ...(resolveAssetUrl === undefined ? {} : { resolveAssetUrl }),
   });
   const showRoutePicker =
     routeAssetDisplays.length > 0 && (model.selectedRoute === null || routeDisplays.length === 0);
@@ -312,17 +337,33 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           selectedPickerKey,
           startingAsset: swapStartingAsset,
           selectedSwapNetworks,
+          // One resolver decides what a tile click MEANS, so the "ask the
+          // network question only when it is a real question" rule is not
+          // re-derived here: a single-network group comes back as start_swap
+          // and the wizard starts it instead of opening a one-answer step.
           onSelectPicker: (key, previousKey) => {
+            const resolved = resolveWizardSelection({
+              pickerKey: key,
+              previousKey,
+              entries: buildMethodGridEntries(paymentMethods, swapAssetOptions),
+              selectedNetworks: selectedSwapNetworks,
+            });
+            if (resolved.kind === "none") return;
+            if (resolved.kind === "select_method") {
+              setSelectedPickerKey(null);
+              updateWizardSelection((controller) =>
+                controller.selectMethod(resolved.methodId as PaymentMethod),
+              );
+              if (resolved.methodId === "bitcoin") void props.onRequestLightning?.();
+              return;
+            }
+            if (resolved.kind === "start_swap") {
+              setSelectedPickerKey(null);
+              selectSwapAsset(resolved.payInAsset);
+              return;
+            }
             setSelectedPickerKey(key);
-            const entries = buildMethodGridEntries(paymentMethods, swapAssetOptions);
-            setSelectedSwapNetworks((current) =>
-              updateSelectedSwapNetworks({
-                entries,
-                nextKey: key,
-                previousKey,
-                selectedNetworks: current,
-              }),
-            );
+            setSelectedSwapNetworks(resolved.selectedNetworks);
           },
           onSelectNetwork: (groupKey, payInAsset) => {
             setSelectedSwapNetworks((current) => ({
@@ -342,9 +383,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
             }
           },
           onContinueSwap: selectSwapAsset,
-          ...(props.resolveAssetUrl === undefined
-            ? {}
-            : { resolveAssetUrl: props.resolveAssetUrl }),
+          ...(resolveAssetUrl === undefined ? {} : { resolveAssetUrl }),
         })
       : null,
     selection.selectedMethod === null
@@ -545,35 +584,20 @@ function renderCompactPaymentMethodSelector(options: {
   readonly onContinueSwap: (payInAsset: string) => void;
   readonly resolveAssetUrl?: AssetUrlResolver;
 }): React.ReactElement {
-  const entries = buildMethodGridEntries(paymentMethods, options.swapAssetOptions);
+  // One model, both renderers: which tile is open, which network each coin is
+  // set to, which asset is starting, and every derivation that used to be
+  // re-done by hand on each side of the pair.
+  const display = createMethodGridDisplay({
+    entries: buildMethodGridEntries(paymentMethods, options.swapAssetOptions),
+    selectedPickerKey: options.selectedPickerKey,
+    selectedNetworks: options.selectedSwapNetworks,
+    startingAsset: options.startingAsset,
+    ...(options.checkout === undefined ? {} : { checkout: options.checkout }),
+  });
   const currenciesLoading =
     options.currenciesLoading === true && options.swapAssetOptions.length === 0;
-  const selectedKey = options.selectedPickerKey;
-  const selectedGroup = findSwapGridGroup(entries, selectedKey);
-  const networkRequired = selectedGroup !== undefined && selectedGroup.options.length > 1;
-  const selectedGroupKey = selectedGroup?.label.trim().toUpperCase();
-  const selectedNetworkAsset =
-    selectedGroupKey === undefined ? undefined : options.selectedSwapNetworks[selectedGroupKey];
-  const selectedNetworkOption =
-    selectedGroup === undefined || selectedNetworkAsset === undefined
-      ? undefined
-      : selectedGroup.options.find((option) => option.pay_in_asset === selectedNetworkAsset);
-  const continueTarget =
-    selectedNetworkOption !== undefined
-      ? {
-          payInAsset: selectedNetworkOption.pay_in_asset,
-          disabled: selectedNetworkOption.available === false,
-          limitMessage: swapOptionLimitMessage(selectedNetworkOption, options.checkout),
-        }
-      : null;
-  const startingAsset = options.startingAsset;
-  const gridBusy = startingAsset !== null;
-  const continueStarting = continueTarget !== null && continueTarget.payInAsset === startingAsset;
-  const canContinue =
-    continueTarget !== null &&
-    !continueTarget.disabled &&
-    selectedNetworkOption !== undefined &&
-    !gridBusy;
+  const { gridBusy, networkRequired, selectedGroup, continueTarget, canContinue } = display;
+  const continueStarting = continueTarget?.starting === true;
 
   const continueButton = (className: string) =>
     React.createElement(
@@ -587,7 +611,7 @@ function renderCompactPaymentMethodSelector(options: {
         onClick: !canContinue
           ? undefined
           : () => {
-              if (continueTarget === null) return;
+              if (continueTarget === undefined) return;
               options.onContinueSwap(continueTarget.payInAsset);
             },
       },
@@ -601,20 +625,14 @@ function renderCompactPaymentMethodSelector(options: {
             }),
             checkoutLabels.preparingPayment,
           )
-        : continueTarget?.disabled && continueTarget.limitMessage !== undefined
-          ? continueTarget.limitMessage
-          : checkoutLabels.continue,
+        : (continueTarget?.label ?? checkoutLabels.continue),
     );
 
-  const renderNetworkSelector = (group: typeof selectedGroup & object, mobile: boolean) => {
-    const accent = paymentAccentId(group.label);
-    const groupKey = group.label.trim().toUpperCase();
-    const selectedAsset = options.selectedSwapNetworks[groupKey];
-    const selectedOption =
-      selectedAsset === undefined
-        ? undefined
-        : group.options.find((option) => option.pay_in_asset === selectedAsset);
-    const { panelId, headingId } = wizardNetworkGroupIds(groupKey);
+  const renderNetworkSelector = (
+    group: MethodGridGroupDisplay<SwapOptionDisplay>,
+    mobile: boolean,
+  ) => {
+    const { accent, groupKey, panelId, headingId, selectedOption } = group;
     return React.createElement(
       "div",
       {
@@ -635,7 +653,7 @@ function renderCompactPaymentMethodSelector(options: {
               id: headingId,
               className: orClasses.methodNetworkHeading,
             },
-            formatChooseNetworkHeading(group.label),
+            group.heading,
           ),
           React.createElement(
             "p",
@@ -758,23 +776,22 @@ function renderCompactPaymentMethodSelector(options: {
           "aria-label": checkoutLabels.paymentMethod,
           className: orClasses.methodGrid,
         },
-        ...entries.map((entry) => {
+        ...display.entries.map((entry) => {
           if (entry.kind === "method") {
             const method = entry.method;
-            const accent = paymentAccentId(method.id);
             return React.createElement(
               "button",
               {
                 key: method.id,
                 type: "button",
                 className: assetButtonClasses({
-                  accent,
+                  accent: entry.accent,
                   selected: false,
-                  disabled: gridBusy,
+                  disabled: entry.disabled,
                 }),
-                disabled: gridBusy,
-                "aria-disabled": gridBusy ? "true" : undefined,
-                onClick: gridBusy ? undefined : () => options.onContinueMethod(method.id),
+                disabled: entry.disabled,
+                "aria-disabled": entry.disabled ? "true" : undefined,
+                onClick: entry.disabled ? undefined : () => options.onContinueMethod(method.id),
               },
               React.createElement(
                 "span",
@@ -794,27 +811,18 @@ function renderCompactPaymentMethodSelector(options: {
           }
 
           const group = entry.group;
-          const groupKey = group.label.trim().toUpperCase();
-          const pickerKey = swapPickerKey(group.label);
-          const selected = selectedKey === pickerKey;
-          const multiNetwork = group.options.length > 1;
-          const displayOption =
-            group.options.find((option) => option.available !== false) ?? group.options[0];
-          if (displayOption === undefined) return null;
-          const selectedAsset = options.selectedSwapNetworks[groupKey];
-          const selectedOption =
-            selectedAsset === undefined
-              ? undefined
-              : group.options.find((option) => option.pay_in_asset === selectedAsset);
-          const activeOption = selectedOption ?? displayOption;
-          const starting = group.options.some((option) => option.pay_in_asset === startingAsset);
-          const disabled = group.options.every((option) => option.available === false);
-          const accent = paymentAccentId(group.label);
-          const limitOption = disabled
-            ? (swapGroupLimitOption(group.options) ?? activeOption)
-            : activeOption;
-          const limitMessage = swapOptionLimitMessage(limitOption, options.checkout);
-          const { panelId } = wizardNetworkGroupIds(groupKey);
+          const {
+            pickerKey,
+            selected,
+            multiNetwork,
+            displayOption,
+            selectedOption,
+            starting,
+            disabled,
+            accent,
+            limitMessage,
+            panelId,
+          } = group;
 
           return React.createElement(
             "div",
@@ -837,9 +845,15 @@ function renderCompactPaymentMethodSelector(options: {
                 onClick:
                   disabled || gridBusy
                     ? undefined
-                    : multiNetwork
-                      ? () => options.onSelectPicker(pickerKey, selectedKey)
-                      : () => options.onContinueSwap(displayOption.pay_in_asset),
+                    : // `needsNetworkStep` / `startPayInAsset` are the
+                      // options.length > 1 rule as DATA, so neither renderer
+                      // re-derives which of the two a tile click means.
+                      group.needsNetworkStep
+                      ? () => options.onSelectPicker(pickerKey, options.selectedPickerKey)
+                      : () =>
+                          options.onContinueSwap(
+                            group.startPayInAsset ?? displayOption.pay_in_asset,
+                          ),
               },
               React.createElement(
                 "span",
@@ -1035,21 +1049,21 @@ function swapOptionsForRoute(
 // The pay-in asset to auto-advance to a deposit address, or undefined when the payer
 // should still choose (multi-network stablecoins, no swap configured).
 
-function selectCurrentSwapInvoice(
-  checkout: CheckoutSnapshot | undefined,
-  local: CheckoutInvoiceSnapshot | null,
-  dismissedInvoiceId: string | null,
-): CheckoutInvoiceSnapshot | undefined {
-  const fromCheckout = checkout?.invoices.find(
-    (invoice) =>
-      invoice.rail === "swap" &&
-      invoice.swap !== undefined &&
-      invoice.invoice_id !== dismissedInvoiceId,
-  );
-  if (local === null || local.invoice_id === dismissedInvoiceId) return fromCheckout;
-  const matched =
-    checkout?.invoices.find((invoice) => invoice.invoice_id === local.invoice_id) ?? local;
-  return overlaySwapRefundStaging(matched, local);
+/**
+ * Standalone only: with a controller in hand the refund is staged through it and
+ * the hash never surfaces. An attempt is addressed by
+ * `swap.attempt_id ?? invoice_id`, and the route takes `payment_hash`.
+ */
+function resolveAttemptPaymentHash(
+  invoices: readonly (CheckoutInvoiceSnapshot | null | undefined)[],
+  attemptId: string,
+): string {
+  for (const invoice of invoices) {
+    if (invoice == null) continue;
+    if ((invoice.swap?.attempt_id ?? invoice.invoice_id) !== attemptId) continue;
+    if (invoice.payment_hash !== undefined) return invoice.payment_hash;
+  }
+  throw new Error(`No swap attempt ${attemptId} in this checkout.`);
 }
 
 function renderRoutePicker(options: {

@@ -22,6 +22,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | `prefix` | `/openreceive` | yes | yes | both |
 | `paymentWizard` | `true` | yes | yes | both |
 | `decodeLinkUrl` | – (no decode link) | yes | yes | both |
+| `assetBaseUrl` | – (packaged URLs) | yes | yes | both |
 | `themeToggle` | `true` | yes | yes | both |
 | `defaultTheme` | `system` | yes | yes | both |
 | `storageKey` | `openreceive.theme` | yes | yes | both |
@@ -32,6 +33,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | `polling` / `pollIntervalMs` | on / engine default | yes | via `options` | both |
 | `createFetch` | `globalThis.fetch` | yes | element-owned | create |
 | `qrEncoder`, `logger` | – | yes | element-owned | both |
+| `resolveAssetUrl` | – | yes | element-owned (use `assetBaseUrl`) | both |
 | `components`, `classNames`, `children` | – | yes | not representable | both |
 | `options` | `{}` | – (props are flat) | yes (escape hatch for the rest of `CheckoutShellOptions`) | both |
 
@@ -47,6 +49,13 @@ removed syntax from before the `order_id` → `reference` rename, so they are
 deliberately NOT renamed here.) To turn polling off, pass `polling={false}`
 (React) or `polling="false"` (the element); to drop swaps, pass
 `paymentWizard={false}`.
+
+`assetBaseUrl` is the string half of the asset seam: where this app serves the
+packages' `dist/assets` trees. It exists as a prop AND an `asset-base-url`
+attribute because `resolveAssetUrl` is a function and a function cannot cross an
+HTML attribute — and `defineElements` is first-write-wins, so the Vue, Svelte and
+Angular wrappers (which all call it with no options) have no other way in. React
+takes either and lets `resolveAssetUrl` win.
 
 On the element itself the polling knobs are the `polling` / `poll-interval-ms`
 attributes: `polling="false"` renders the snapshot (countdown included)

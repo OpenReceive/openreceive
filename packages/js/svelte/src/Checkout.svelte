@@ -25,6 +25,7 @@ export let reference: string | undefined = undefined;
 export let prefix: string | undefined = undefined;
 export let paymentWizard: boolean | undefined = undefined;
 export let decodeLinkUrl: string | undefined = undefined;
+export let assetBaseUrl: string | undefined = undefined;
 export let themeToggle: boolean | undefined = undefined;
 export let defaultTheme: ThemePreference | undefined = undefined;
 export let storageKey: string | undefined = undefined;
@@ -69,6 +70,7 @@ $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...(prefix === undefined ? {} : { prefix }),
   ...(paymentWizard === undefined ? {} : { paymentWizard }),
   ...(decodeLinkUrl === undefined ? {} : { decodeLinkUrl }),
+  ...(assetBaseUrl === undefined ? {} : { assetBaseUrl }),
   ...(defaultTheme === undefined ? {} : { defaultTheme }),
   ...(storageKey === undefined ? {} : { storageKey }),
   ...(metadata === undefined ? {} : { metadata }),

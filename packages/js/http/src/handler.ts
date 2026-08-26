@@ -78,6 +78,14 @@ export interface ResolvedHostCheckout {
    * attempt never need (or wait for) host pricing.
    */
   readonly amount?: CreateCheckoutAmount;
+  /**
+   * What the payer is buying, in the host's own words — one display string,
+   * echoed on the prepare and create responses so the shipped checkout can show
+   * something other than a QR and a number. OpenReceive owns no line items and
+   * never will; this is the whole of what it carries. Response only: it is
+   * never read from a request body.
+   */
+  readonly description?: string;
   /** Return the selected host payment attempt's hash to reuse or inspect its checkout. */
   readonly paymentHash?: string;
   /** Host-persisted safe checkout snapshot used for retry without a wallet read. */
@@ -318,6 +326,7 @@ async function dispatch(
       {
         reference: reference,
         amount_msats: prepared.amountMsats,
+        ...(resolved.description === undefined ? {} : { description: resolved.description }),
         fiat_quote: prepared.fiatQuote === null ? null : toSnakeCase(prepared.fiatQuote),
         payment_methods: toSnakeCase(swapOptions.options),
       },
@@ -361,6 +370,7 @@ async function dispatch(
       201,
       {
         checkout: httpCheckout(checkout),
+        ...(resolved.description === undefined ? {} : { description: resolved.description }),
         payment_methods: await warmPaymentMethods(runtime, checkout.amountMsats),
       },
       requestId,

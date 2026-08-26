@@ -136,6 +136,7 @@ export function createWizardRouteAssetDisplays(
       label: asset.label,
       subtitle: getRouteNetworkLabel(id),
       icon: getRouteIcon(asset, options.resolveAssetUrl),
+      iconPath: getRouteIconPath(asset),
       selected: options.selectedRoute === id,
     };
   });
@@ -508,6 +509,79 @@ export function updateSelectedSwapNetworks<
   return { ...options.selectedNetworks, [groupKey]: preserved };
 }
 
+/**
+ * What a compact-selector tile click means, resolved once.
+ *
+ * The network question exists ONLY because a deposit address is
+ * network-specific and a wrong send is unrecoverable — which is exactly why it
+ * must not be asked when it is not a real question. A single-network group
+ * therefore resolves to `start_swap`, not `choose_network`: the rule is data
+ * here, so a custom UI cannot ask a group with one answer which answer it wants.
+ */
+export type WizardSelection<T extends { readonly label: string }> =
+  | { readonly kind: "select_method"; readonly methodId: string }
+  | { readonly kind: "start_swap"; readonly payInAsset: string }
+  | {
+      readonly kind: "choose_network";
+      readonly group: SwapMethodGroup<T>;
+      readonly groupKey: string;
+      readonly heading: string;
+      readonly panelId: string;
+      readonly headingId: string;
+      /** The network map after the pick, from {@link updateSelectedSwapNetworks}. */
+      readonly selectedNetworks: Record<string, string>;
+    }
+  | { readonly kind: "none" };
+
+/**
+ * Resolve a picker key against the grid: which of the three things a tile click
+ * can mean, with everything that arm needs already in hand.
+ *
+ * `previousKey` is the tile that was open before, so a carried-over network
+ * choice resolves the same way it does in both shipped renderers.
+ */
+export function resolveWizardSelection<
+  T extends {
+    readonly label: string;
+    readonly pay_in_asset: string;
+    readonly network_label: string;
+    readonly available?: boolean;
+  },
+>(options: {
+  readonly pickerKey: string;
+  readonly previousKey?: string | null;
+  readonly entries: readonly MethodGridEntry<T>[];
+  readonly selectedNetworks?: Readonly<Record<string, string>>;
+}): WizardSelection<T> {
+  const methodPick = parseMethodPickerKey(options.pickerKey);
+  if (methodPick !== null) return { kind: "select_method", methodId: methodPick.methodId };
+  const group = findSwapGridGroup(options.entries, options.pickerKey);
+  if (group === undefined) return { kind: "none" };
+  const selectedNetworks = options.selectedNetworks ?? {};
+  if (group.options.length <= 1) {
+    // One network is not a question. Prefer an available option so a group whose
+    // only entry is out of range resolves to `none` rather than starting a swap
+    // the server will refuse.
+    const option = group.options.find((entry) => entry.available !== false);
+    if (option === undefined) return { kind: "none" };
+    return { kind: "start_swap", payInAsset: option.pay_in_asset };
+  }
+  const groupKey = group.label.trim().toUpperCase();
+  return {
+    kind: "choose_network",
+    group,
+    groupKey,
+    heading: formatChooseNetworkHeading(group.label),
+    ...wizardNetworkGroupIds(groupKey),
+    selectedNetworks: updateSelectedSwapNetworks({
+      entries: options.entries,
+      nextKey: options.pickerKey,
+      previousKey: options.previousKey ?? null,
+      selectedNetworks,
+    }),
+  };
+}
+
 /** Invoice-side amount context for fiat swap-limit notes. */
 export interface SwapLimitContext {
   readonly amount_msats: number;
@@ -716,6 +790,234 @@ export function swapGroupLimitOption<
   return best;
 }
 
+/** One method-grid tile, as data. */
+export type MethodGridDisplayEntry<T extends { readonly label: string }> =
+  | {
+      readonly kind: "method";
+      readonly method: PaymentMethodOption;
+      readonly accent: PaymentAccentId;
+      readonly disabled: boolean;
+    }
+  | { readonly kind: "swap"; readonly group: MethodGridGroupDisplay<T> };
+
+/**
+ * One coin's tile in the method grid, with every derivation both renderers used
+ * to redo by hand.
+ *
+ * `needsNetworkStep` and `startPayInAsset` are the `options.length > 1` rule as
+ * DATA: a tile either opens the network step or starts a swap outright, and a
+ * renderer picking between two DOM attributes never re-derives which.
+ */
+export interface MethodGridGroupDisplay<T extends { readonly label: string }> {
+  readonly label: string;
+  /** The group's normalized key — how the network map is keyed. */
+  readonly groupKey: string;
+  readonly pickerKey: string;
+  readonly accent: PaymentAccentId;
+  readonly options: readonly T[];
+  readonly multiNetwork: boolean;
+  /** This tile is the open one in the compact selector. */
+  readonly selected: boolean;
+  /** A swap on one of this group's networks is being started right now. */
+  readonly starting: boolean;
+  /** Every network in the group is out of range for this cart. */
+  readonly disabled: boolean;
+  /** The option the tile's icon and title stand for. */
+  readonly displayOption: T;
+  /** The payer's pick when there is one, else {@link displayOption}. */
+  readonly activeOption: T;
+  readonly selectedOption?: T;
+  /**
+   * The SHORT tile message ("Minimum amount $2.71"), present only when the tile
+   * is disabled — the pane's full sentence is a different string, deliberately
+   * (see `swapOptionLimitSentence`).
+   */
+  readonly limitMessage?: string;
+  readonly panelId: string;
+  readonly headingId: string;
+  readonly heading: string;
+  readonly needsNetworkStep: boolean;
+  readonly startPayInAsset?: string;
+}
+
+/** The compact selector's Continue button, as data. */
+export interface MethodGridContinueDisplay {
+  readonly payInAsset: string;
+  readonly disabled: boolean;
+  /** This exact asset is the one being started. */
+  readonly starting: boolean;
+  /** Finished copy: the limit message, "Preparing payment", or "Continue". */
+  readonly label: string;
+}
+
+/**
+ * The method grid as a display model — the last pane on the headless surface
+ * that had none (routes have `createWizardRouteDisplays`, the deposit panel
+ * `createSwapDisplayModel`, status `createCheckoutStatusModel`).
+ */
+export interface MethodGridDisplay<T extends { readonly label: string }> {
+  readonly entries: readonly MethodGridDisplayEntry<T>[];
+  /** A swap start is in flight, so every tile is inert. */
+  readonly gridBusy: boolean;
+  /** The open tile has more than one network, so a choice is still owed. */
+  readonly networkRequired: boolean;
+  readonly selectedGroup?: MethodGridGroupDisplay<T>;
+  readonly continueTarget?: MethodGridContinueDisplay;
+  readonly canContinue: boolean;
+}
+
+/**
+ * Build the method grid's display model from the grid entries plus the three
+ * pieces of renderer state (which tile is open, which network each coin is set
+ * to, which asset is starting) and the invoice-side amount the limit notes are
+ * quoted against.
+ */
+export function createMethodGridDisplay<
+  T extends {
+    readonly label: string;
+    readonly pay_in_asset: string;
+    readonly network_label: string;
+    readonly available: boolean;
+    readonly unavailable_reason?: string;
+    readonly unavailable_message?: string;
+    readonly minimum_pay_amount?: string;
+    readonly maximum_pay_amount?: string;
+    readonly minimum_invoice_amount_msats?: number;
+    readonly maximum_invoice_amount_msats?: number;
+  },
+>(options: {
+  readonly entries: readonly MethodGridEntry<T>[];
+  readonly selectedPickerKey?: string | null;
+  readonly selectedNetworks?: Readonly<Record<string, string>>;
+  /** The asset whose swap is being started, or null/undefined for none. */
+  readonly startingAsset?: string | null;
+  readonly checkout?: SwapLimitContext;
+}): MethodGridDisplay<T> {
+  const selectedKey = options.selectedPickerKey ?? null;
+  const selectedNetworks = options.selectedNetworks ?? {};
+  const startingAsset =
+    options.startingAsset === null || options.startingAsset === ""
+      ? undefined
+      : options.startingAsset;
+  const gridBusy = startingAsset !== undefined;
+
+  const entries: MethodGridDisplayEntry<T>[] = [];
+  for (const entry of options.entries) {
+    if (entry.kind === "method") {
+      entries.push({
+        kind: "method",
+        method: entry.method,
+        accent: paymentAccentId(entry.method.id),
+        disabled: gridBusy,
+      });
+      continue;
+    }
+    const group = entry.group;
+    const displayOption =
+      group.options.find((option) => option.available !== false) ?? group.options[0];
+    // An empty group has no tile to draw; both renderers already bailed here.
+    if (displayOption === undefined) continue;
+    const groupKey = group.label.trim().toUpperCase();
+    const multiNetwork = group.options.length > 1;
+    const selectedAsset = selectedNetworks[groupKey];
+    const selectedOption =
+      selectedAsset === undefined
+        ? undefined
+        : group.options.find((option) => option.pay_in_asset === selectedAsset);
+    const activeOption = selectedOption ?? displayOption;
+    const disabled = group.options.every((option) => option.available === false);
+    const limitOption = disabled
+      ? (swapGroupLimitOption(group.options) ?? activeOption)
+      : activeOption;
+    entries.push({
+      kind: "swap",
+      group: {
+        label: group.label,
+        groupKey,
+        pickerKey: swapPickerKey(group.label),
+        accent: paymentAccentId(group.label),
+        options: group.options,
+        multiNetwork,
+        selected: selectedKey === swapPickerKey(group.label),
+        starting: group.options.some((option) => option.pay_in_asset === startingAsset),
+        disabled,
+        displayOption,
+        activeOption,
+        ...(selectedOption === undefined ? {} : { selectedOption }),
+        ...(() => {
+          const limitMessage = swapOptionLimitMessage(limitOption, options.checkout);
+          return limitMessage === undefined ? {} : { limitMessage };
+        })(),
+        ...wizardNetworkGroupIds(groupKey),
+        heading: formatChooseNetworkHeading(group.label),
+        needsNetworkStep: multiNetwork,
+        ...(multiNetwork ? {} : { startPayInAsset: displayOption.pay_in_asset }),
+      },
+    });
+  }
+
+  const selectedGroup = entries.find(
+    (entry): entry is Extract<MethodGridDisplayEntry<T>, { kind: "swap" }> =>
+      entry.kind === "swap" && entry.group.pickerKey === selectedKey,
+  )?.group;
+  const networkRequired = selectedGroup?.multiNetwork === true;
+  const selectedNetworkOption = selectedGroup?.selectedOption;
+  const continueTarget =
+    selectedNetworkOption === undefined
+      ? undefined
+      : buildContinueDisplay(selectedNetworkOption, {
+          gridBusy,
+          startingAsset,
+          checkout: options.checkout,
+        });
+
+  return {
+    entries,
+    gridBusy,
+    networkRequired,
+    ...(selectedGroup === undefined ? {} : { selectedGroup }),
+    ...(continueTarget === undefined ? {} : { continueTarget }),
+    canContinue: continueTarget !== undefined && !continueTarget.disabled,
+  };
+}
+
+function buildContinueDisplay<
+  T extends Pick<
+    CheckoutPaymentMethod,
+    | "label"
+    | "pay_in_asset"
+    | "available"
+    | "unavailable_reason"
+    | "unavailable_message"
+    | "minimum_pay_amount"
+    | "maximum_pay_amount"
+    | "minimum_invoice_amount_msats"
+    | "maximum_invoice_amount_msats"
+  >,
+>(
+  option: T,
+  context: {
+    readonly gridBusy: boolean;
+    readonly startingAsset: string | undefined;
+    readonly checkout: SwapLimitContext | undefined;
+  },
+): MethodGridContinueDisplay {
+  const outOfRange = option.available === false;
+  const starting = option.pay_in_asset === context.startingAsset;
+  const limitMessage = swapOptionLimitMessage(option, context.checkout);
+  return {
+    payInAsset: option.pay_in_asset,
+    disabled: outOfRange || context.gridBusy,
+    starting,
+    label:
+      outOfRange && limitMessage !== undefined
+        ? limitMessage
+        : starting
+          ? checkoutLabels.preparingPayment
+          : checkoutLabels.continue,
+  };
+}
+
 /**
  * Payer-facing validation for a swap refund address, shared by every refund
  * form: an empty address prompts for one, anything else is checked against the
@@ -734,11 +1036,22 @@ export function getRouteIcon(
   asset: Pick<AssetIndexEntry, "route" | "symbol">,
   resolveAssetUrl?: AssetUrlResolver,
 ): string {
+  return resolvePaymentIcon(routeIconId(asset), resolveAssetUrl);
+}
+
+/**
+ * The PACKAGED key behind {@link getRouteIcon}, for a host serving the files
+ * itself. Parity with `WizardProviderDisplay.iconPath`: the display row carries
+ * the key so nothing has to go back to the registry for it.
+ */
+export function getRouteIconPath(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
+  return paymentIconPaths[routeIconId(asset)];
+}
+
+function routeIconId(asset: Pick<AssetIndexEntry, "route" | "symbol">): PaymentIconId {
   const routeId = asset.route ?? asset.symbol;
-  if (asset.symbol === "btc" && routeId.includes("lightning")) {
-    return resolvePaymentIcon("lightning", resolveAssetUrl);
-  }
-  return getAssetIcon(asset.symbol, resolveAssetUrl);
+  if (asset.symbol === "btc" && routeId.includes("lightning")) return "lightning";
+  return assetIconIds[asset.symbol] ?? "crypto";
 }
 
 export function createPaymentWizardState(request: PaymentWizardRequest): PaymentWizardState {

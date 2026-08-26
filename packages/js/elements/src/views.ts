@@ -49,6 +49,13 @@ export interface CheckoutView {
    * describe the pre-swap Lightning attempt (or, in create mode, nothing).
    */
   readonly liveState?: CheckoutState;
+  /**
+   * What the payer is buying, in the host's own words — the `description` the
+   * host returned from its amount hook, echoed on the prepare and create
+   * responses. One display string; anything richer is host markup in the
+   * element's `order` slot.
+   */
+  readonly description?: string;
 }
 
 export interface ElementsWizardView {

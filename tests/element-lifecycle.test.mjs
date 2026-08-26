@@ -980,3 +980,113 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
     element.remove();
   }
 });
+
+// The string half of the asset seam. `defineElements` above was called with no
+// `resolveAssetUrl`, exactly like the Vue/Svelte/Angular wrappers call it — and
+// because registration is first-write-wins, an attribute is the ONLY way those
+// hosts can move the icons off the packaged (under webpack, dead `file://`) URLs.
+test("asset-base-url points the wizard icons at the host's own assets", async () => {
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-assets", 21_000),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  const element = mount({
+    reference: "order-assets",
+    prefix: "/openreceive",
+    "asset-base-url": "/or-assets/",
+  });
+
+  try {
+    await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'), {
+      label: "method grid",
+    });
+    const iconSrc = () =>
+      [...(element.shadowRoot?.querySelectorAll("img") ?? [])].map((img) =>
+        img.getAttribute("src"),
+      );
+    assert.ok(
+      iconSrc().some((src) => src?.startsWith("/or-assets/assets/icons/")),
+      `expected packaged icons under the base URL, got ${JSON.stringify(iconSrc())}`,
+    );
+    assert.ok(!iconSrc().some((src) => src?.startsWith("file:")));
+
+    // Display-only: changing it must re-render without restarting the poll
+    // controller (the bucket that exists so a cosmetic attribute never fires an
+    // extra POST /payments/check).
+    element.setAttribute("asset-base-url", "https://cdn.example.com/or");
+    await untilLocal(
+      () => iconSrc().some((src) => src?.startsWith("https://cdn.example.com/or/assets/icons/")),
+      { label: "re-rendered icons" },
+    );
+  } finally {
+    element.remove();
+  }
+});
+
+// The host's order description reaches the element the only way it can: off the
+// prepare response, through the snapshot. There is deliberately no attribute for
+// it — an attribute would let the payer write the copy next to the amount.
+test("the order description rides the prepare response into the element", async () => {
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => ({
+      ...prepareBody("order-described", 21_000),
+      description: "2 kg Ataulfo mangoes",
+    }),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  const element = mount({ reference: "order-described", prefix: "/openreceive" });
+  try {
+    await untilLocal(
+      () => element.shadowRoot?.querySelector("[data-openreceive-order-description]"),
+      { label: "order description" },
+    );
+    assert.match(element.shadowRoot?.innerHTML ?? "", /2 kg Ataulfo mangoes/);
+  } finally {
+    element.remove();
+  }
+});
+
+test("the order description survives the Lightning mint in the element", async () => {
+  // The description rides two response shapes — beside the price on
+  // /checkouts/prepare, and as a sibling of `checkout` on /checkouts — so the
+  // mint is the transition that drops it if only the first one is folded in.
+  const paymentHash = "b".repeat(64);
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => ({
+      ...prepareBody("order-mint-described", 21_000),
+      description: "2 kg Ataulfo mangoes",
+    }),
+    "/checkouts": () => ({
+      checkout: {
+        reference: "order-mint-described",
+        payment_hash: paymentHash,
+        bolt11: `lnbc-${paymentHash}`,
+        amount_msats: 21_000,
+        expires_at: Math.floor(Date.now() / 1000) + 900,
+      },
+      description: "2 kg Ataulfo mangoes",
+      payment_methods: [],
+    }),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  const element = mount({ reference: "order-mint-described", prefix: "/openreceive" });
+  try {
+    await untilLocal(
+      () => element.shadowRoot?.querySelector("[data-openreceive-order-description]"),
+      { label: "description before the mint" },
+    );
+    const bitcoin = await untilLocal(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "bitcoin tile" },
+    );
+    bitcoin.click();
+    await untilLocal(() => element.getAttribute("invoice") !== null, { label: "minted" });
+    await flush(20);
+    assert.ok(
+      element.shadowRoot?.querySelector("[data-openreceive-order-description]"),
+      "the description must survive the mint",
+    );
+  } finally {
+    element.remove();
+  }
+});

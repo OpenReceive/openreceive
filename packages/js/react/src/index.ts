@@ -3,7 +3,6 @@ export {
   CopyInvoiceButton,
   InvoiceSummary,
   OpenWalletButton,
-  PaymentData,
   PaymentState,
   QRCode,
   SatsDetail,

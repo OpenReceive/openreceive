@@ -3,7 +3,6 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   copyInvoice as copyInvoiceHelper,
   createCheckoutStatusModel,
-  createPaymentDataEntries,
   createQrSvg,
   formatAmountCaption,
   checkoutLabels,
@@ -11,7 +10,6 @@ import {
   orClasses,
   type CheckoutPhase,
   type CheckoutStatusModel,
-  type PaymentDataSource,
 } from "@openreceive/browser/headless";
 import { useTransientValue } from "./hooks.ts";
 import { joinClassNames } from "./utils.ts";
@@ -209,45 +207,6 @@ export function SettledCheckIcon(): React.ReactElement {
       strokeLinejoin: "round",
       d: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     }),
-  );
-}
-
-/**
- * Collapsible "everything the client knows about this payment" panel.
- *
- * @deprecated Superseded by `<TransactionDetails>`, which the shipped checkout
- * now renders on settlement. This one has no copy button, no explorer link and
- * no truncation contract, and its rows are a strict subset — so the payer's
- * most keep-worthy screen had the least usable copy of the values it shows.
- * Kept exported so an integrator who mounted it directly is not broken; new
- * code should use `<TransactionDetails>`.
- */
-export function PaymentData(props: {
-  readonly source: PaymentDataSource;
-  readonly className?: string;
-}): React.ReactElement | null {
-  const entries = createPaymentDataEntries(props.source);
-  if (entries.length === 0) return null;
-  return React.createElement(
-    "details",
-    { className: joinClassNames(orClasses.paymentData, props.className) },
-    React.createElement(
-      "summary",
-      { className: orClasses.paymentDataTitle },
-      checkoutLabels.viewPaymentData,
-    ),
-    React.createElement(
-      "div",
-      { className: orClasses.paymentDataBody },
-      entries.map((entry) =>
-        React.createElement(
-          "div",
-          { key: entry.label, className: orClasses.paymentDataRow },
-          React.createElement("span", { className: orClasses.paymentDataKey }, entry.label),
-          React.createElement("p", { className: orClasses.paymentDataValue }, entry.value),
-        ),
-      ),
-    ),
   );
 }
 

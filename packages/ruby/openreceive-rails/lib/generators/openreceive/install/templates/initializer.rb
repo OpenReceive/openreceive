@@ -40,10 +40,17 @@ OpenReceive.configure do |config|
   # { sats: 1200 }, or nil when there is nothing to pay for (a 404). The
   # engine refuses to serve checkouts until this is set.
   #
+  # An optional :description beside the price is what the payer is BUYING, in
+  # your own words — one display string the checkout renders above the amount.
+  # Without it the payer sees a QR and a number and no sign of what the number
+  # is for; OpenReceive owns no line items, so this is the whole of what it can
+  # show on its own.
+  #
   # TODO(price): look the reference up in your own application, e.g.
   # config.amount_for = lambda do |reference|
   #   order = Order.find_by(id: reference)
-  #   order && { currency: "USD", value: order.total.to_s }
+  #   order && { currency: "USD", value: order.total.to_s,
+  #              description: "#{order.line_items.size} items" }
   # end
 
   # Runs inside the settlement transaction, only for the order's first settled

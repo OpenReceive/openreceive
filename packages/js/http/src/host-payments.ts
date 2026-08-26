@@ -46,7 +46,7 @@ interface CreateOpenReceiveHostBaseOptions {
   readonly amountFor: (
     reference: string,
     context: ResolveCheckoutContext,
-  ) => CreateCheckoutAmount | null | Promise<CreateCheckoutAmount | null>;
+  ) => HostCheckoutPrice | null | Promise<HostCheckoutPrice | null>;
   readonly clock?: () => number;
 }
 
@@ -171,14 +171,14 @@ export function createHost(options: CreateHostOptions): Host {
   // The host is asked only where a price is minted or quoted. Status polls and
   // refund recovery for committed attempts are answered from OpenReceive's own
   // rows and never depend on (or wait for) the host's price hook.
-  const priceFor = async (context: ResolveCheckoutContext): Promise<CreateCheckoutAmount> => {
+  const priceFor = async (context: ResolveCheckoutContext): Promise<HostCheckoutPrice> => {
     const amount = await options.amountFor(context.reference, context);
     if (amount === null) throw hostError("Unknown reference.", 404, "NOT_FOUND");
     return amount;
   };
   const resolveCheckout: ResolveCheckoutHook = async (context) => {
     if (context.action === "swap.quote" || context.action === "checkout.prepare") {
-      return { amount: await priceFor(context) };
+      return resolvedPrice(await priceFor(context));
     }
     const isCreate = context.action === "checkout.create" || context.action === "swap.create";
     const amount = isCreate ? await priceFor(context) : undefined;
@@ -238,9 +238,12 @@ export function createHost(options: CreateHostOptions): Host {
         );
       }
       const selected = matching[0];
-      if (selected === undefined) return { amount };
+      // `amount` is the host's price object, which may still carry the display
+      // string; the service's amount validator rejects any field it does not
+      // know, so it is peeled here exactly as it is on the reuse path.
+      if (selected === undefined) return resolvedPrice(amount);
       // Reuse while comfortably before expiry; otherwise mint a replacement.
-      if (!isReusablePaymentAttempt(selected.expiresAt, now)) return { amount };
+      if (!isReusablePaymentAttempt(selected.expiresAt, now)) return resolvedPrice(amount);
       return resolvedPayment(amount, selected);
     }
 
@@ -257,12 +260,43 @@ export function createHost(options: CreateHostOptions): Host {
   };
 }
 
+/**
+ * What the payer is buying, in the host's own words — one optional display
+ * string returned beside the price by `amountFor`. It is peeled off here so the
+ * amount handed to the minting service stays exactly the price.
+ */
+export type HostCheckoutPrice = CreateCheckoutAmount & {
+  readonly description?: string;
+};
+
+/** The response field, present only when the host returned one. */
+function describePrice(price: HostCheckoutPrice): { readonly description?: string } {
+  const description = price.description?.trim();
+  return description === undefined || description.length === 0 ? {} : { description };
+}
+
+/** The price alone. The display string is a response field, never a mint input. */
+function priceOnly(price: HostCheckoutPrice): CreateCheckoutAmount {
+  const { description: _description, ...amount } = price;
+  return amount as CreateCheckoutAmount;
+}
+
+/**
+ * The resolved price as every branch must answer it: the amount with nothing
+ * the service does not accept, plus the display string as its own field.
+ */
+function resolvedPrice(
+  price: HostCheckoutPrice | undefined,
+): { readonly amount?: CreateCheckoutAmount; readonly description?: string } {
+  return price === undefined ? {} : { amount: priceOnly(price), ...describePrice(price) };
+}
+
 function resolvedPayment(
-  amount: CreateCheckoutAmount | undefined,
+  amount: HostCheckoutPrice | undefined,
   payment: PaymentRecord,
 ): ResolvedHostCheckout {
   return {
-    ...(amount === undefined ? {} : { amount }),
+    ...resolvedPrice(amount),
     paymentHash: payment.paymentHash,
     checkout: structuredClone(payment.checkout),
     // Carried so `payments/check` can serve the row path without re-listing

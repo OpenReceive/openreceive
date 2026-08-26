@@ -58,6 +58,14 @@
       "public": true
     },
     {
+      "slug": "checkout-ux",
+      "title": "Checkout UX",
+      "source_path": "docs/guides/checkout-ux.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "source_path": "docs/guides/headless-checkout.md",
@@ -274,12 +282,36 @@
       "public": false
     },
     {
+      "slug": "site-build",
+      "title": "Building openreceive.org From This Repo",
+      "source_path": "docs/internal/site-build.md",
+      "category": "process",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "forbidden-without-approval",
       "title": "Forbidden Without Approval",
       "source_path": "docs/internal/forbidden-without-approval.md",
       "category": "internal",
       "audience": "contributor",
       "public": false
+    },
+    {
+      "slug": "agent-directions-node",
+      "title": "Agent Directions: Node.js",
+      "source_path": "docs/agents/node.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-rails",
+      "title": "Agent Directions: Rails",
+      "source_path": "docs/agents/rails.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
     }
   ]
 }

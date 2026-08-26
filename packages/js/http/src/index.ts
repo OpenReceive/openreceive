@@ -42,6 +42,7 @@ export type {
   CreateHostOptions,
   CreateHostRepositoryOptions,
   Host,
+  HostCheckoutPrice,
   SettlementEvent,
   SettlementEventHook,
 } from "./host-payments.ts";

@@ -11,6 +11,7 @@ import type {
   CheckoutPaymentMethod,
   QrEncoder,
   ResolvedTheme,
+  SwapRefundStaging,
   ThemeModel,
   ThemePreference,
   Status,
@@ -69,7 +70,7 @@ export interface UseCheckoutOptions
   readonly pollIntervalMs?: number;
 }
 
-export interface UseCheckoutResult extends CheckoutViewModel {
+export interface UseCheckoutResult extends CheckoutViewModel, SwapRefundStaging {
   readonly checkout: CheckoutSnapshot;
   readonly copied: boolean;
   readonly countdownLabel?: string;
@@ -144,7 +145,9 @@ export interface CheckoutClassNames extends InvoiceSummaryClassNames {
   readonly satsDetail?: string;
   readonly lightningPane?: string;
   readonly invoiceTitle?: string;
-  /** Applied to the settled payment-data disclosure. */
+  /** Applied to the host-supplied order description above the amount. */
+  readonly orderDescription?: string;
+  /** Applied to the settled transaction-details disclosure. */
   readonly details?: string;
   readonly waiting?: string;
   readonly countdown?: string;
@@ -277,6 +280,19 @@ export interface PaymentWizardProps {
    * links. See docs/guides/provider-registry.md.
    */
   readonly resolveAssetUrl?: AssetUrlResolver;
+  /**
+   * The string form of the same seam: where this host serves the packages'
+   * `dist/assets` trees. `resolveAssetUrl` wins when both are set.
+   */
+  readonly assetBaseUrl?: string;
+  /**
+   * The two-step refund, from whoever owns the checkout controller —
+   * `<Checkout>` passes its `useCheckout` model. Given one, the wizard stages
+   * and confirms through it, so the address the payer is reviewing survives
+   * every poll. Standalone (a host driving its own snapshot), the wizard falls
+   * back to posting the refund itself and carrying the staging locally.
+   */
+  readonly swapRefund?: SwapRefundStaging;
   readonly onError?: (error: unknown) => void;
   /**
    * Called when the payer enters or leaves the focused swap flow (a pay-in coin is

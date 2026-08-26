@@ -38,6 +38,27 @@ const started = await startSwapRequest({
 
 ## The `@openreceive/browser/headless` surface
 
+**Start here: two objects do most of it.** Everything below them is available,
+and reaching for it first is how an integration ends up re-writing a poll loop.
+
+- `createCheckoutController` / `CheckoutController` — the engine under every
+  OpenReceive UI. Hand it a snapshot and a `prefix` and it owns the poll
+  interval, the one-request-at-a-time rule, Retry-After-aware backoff, the
+  1 Hz countdown, the stop rules for a settled or terminal attempt, and the
+  staged swap-refund address a status tick would otherwise wipe. It publishes
+  results through `onSnapshot` / `onState`; your store holds them. Its verbs are
+  `start` / `stop` / `getState` / `reloadState` / `cancel` /
+  `copyInvoice` / `openWallet`, plus the refund pair below. `polling: false`
+  withholds the poller without withholding the mount, so the swap calls still
+  work. The flagship headless demo
+  ([hello-fruit's Rails variant](https://github.com/OpenReceive/openreceive/tree/master/examples/hello-fruit/server/rails))
+  is a mobx-keystone store over exactly this.
+- `createCheckoutSession` / `CheckoutSession` — the create-mode flow: the
+  deferred Lightning mint, the swap start, and the in-flight guards that make
+  both safe to click twice. One implementation, wrapped by the element class
+  and by React's hook. If you are writing "should I reuse this bolt11 or mint a
+  new one", it already answered.
+
 Checkout lifecycle:
 
 - `prepareCheckout` / `requestCheckout` — the prepare-then-mint calls (also on
@@ -72,11 +93,14 @@ Payment methods and wizard model:
 - `paymentMethods`, `PaymentMethod`,
   `CheckoutPaymentMethod`.
 - `buildMethodGridEntries` / `MethodGridEntry`,
+  `createMethodGridDisplay` / `MethodGridDisplay` /
+  `MethodGridDisplayEntry` / `MethodGridGroupDisplay` /
+  `MethodGridContinueDisplay`,
+  `resolveWizardSelection` / `WizardSelection`,
   `createPaymentWizardModel` / `PaymentWizardModel`,
   `createPaymentWizardSelection` /
   `updatePaymentWizardSelection` /
-  `PaymentWizardSelection`,
-  `resolvePreservedNetworkSelection`.
+  `PaymentWizardSelection`.
 - `createWizardRouteDisplays` / `WizardProviderDisplay`,
   `getRouteNetworkLabel`, `paymentAccentId`,
   `SwapMethodGroup`.
@@ -106,21 +130,21 @@ Swap flows:
 
 Swap refunds. A deposit that arrives outside the provider's limits, or too
 late, becomes refundable, and the payer has to give an address on their own
-network. Three symbols, and the third is not optional:
+network.
 
-- `requestSwapRefund` — POST the address (`{ fetch, prefix, reference,
-  invoices, attemptId, refundAddress, confirm }`). `invoices` is **required**:
-  the call finds the attempt by `attemptId` inside that array to recover its
-  payment hash, and throws `Swap refund requires the original payment hash.`
-  when nothing in it carries one. Pass every invoice you hold, not just the
-  displayed one. See [Refunds](#refunds) for the flow around it.
+- `SwapRefundStaging` — the two-step refund, on the controller:
+  `stageSwapRefund({ attemptId, refundAddress })` posts `/swaps/status` and
+  HOLDS the address for review, `confirmSwapRefund(...)` is the only call that
+  posts `/swaps/refunds`, and `clearSwapRefundStaging()` is the exit when the
+  payer goes back to Lightning. The controller resolves the attempt's payment
+  hash from the snapshot it already holds and folds the staged address into
+  every later snapshot itself, so **polling cannot wipe a review in progress and
+  there is no overlay rule to remember.** See [Refunds](#refunds) for the flow.
 - `getSwapRefundFormError` — the validation message for what the payer typed,
   before you let them submit.
-- **`overlaySwapRefundStaging` — REQUIRED IF YOU POLL.** The refund address the
-  payer is typing lives in your UI, not on the server, so the next
-  `/swaps/status` tick overwrites it and the field empties itself mid-flow.
-  Overlay the staged value onto every polled snapshot before you render it.
-  This reads like one more helper and is not one.
+- `requestSwapRefund` — the low-level POST (`{ fetch, prefix, reference,
+  paymentHash, refundAddress, confirm }`), for a client that holds no
+  controller. It takes the hash the route takes; nothing stages for you.
 
 Rendering the attempt — the pieces a custom UI would otherwise pull a second
 library in for:
@@ -149,11 +173,17 @@ library in for:
   and `WizardProviderDisplay.iconPath` / `tutorials[].path` are the keys for the
   provider art. Serve the files yourself and map them. See
   [Provider registry → assets](provider-registry.md#assets-are-files-your-host-serves).
+- `createAssetBaseUrlResolver` — the same seam as one string. Hand it the base
+  URL where you serve the packages' `dist/assets` trees and it returns an
+  `AssetUrlResolver` that joins every packaged key to it. It is what the
+  `assetBaseUrl` prop and the `asset-base-url` attribute are built on, which is
+  how a seam that is otherwise a function reaches plain markup and the
+  Vue/Svelte/Angular wrappers.
 
 Formatting and labels:
 
 - `formatMsats`, `formatFiatAmount`,
-  `formatNetworkSummary`, `formatChooseNetworkHeading`,
+  `formatNetworkSummary`,
   `createLightningInvoiceDecodeUrl`.
 - `checkoutLabels` — **every payer-facing string the shipped renderers emit.**
   Read it before you write copy. A custom UI is a third renderer, and these
@@ -180,12 +210,6 @@ The payer's receipt:
   `resolveTransactionDetailRows`, `TransactionDetailRow`,
   `TransactionDetailsInput`, `TransactionDetailsSource` — see
   [The receipt is not debug output](#the-receipt-is-not-debug-output).
-- `createPaymentDataEntries` / `PaymentDataEntry` / `PaymentDataSource` —
-  **deprecated.** The older, plainer builder for the same panel: label/value
-  rows with no `copyValue`, no explorer link and no truncation contract, and a
-  strict subset of the rows above. The shipped renderers moved their settled
-  panel off it. Kept exported so a UI already built on it is not broken; use
-  `createTransactionDetails` instead.
 
 Styling tokens (the contract with the shipped `styles.css` — an interface by
 nature, so custom UIs reuse the same class names and data attributes):
@@ -239,11 +263,11 @@ A $1.00 cart can render four greyed tiles. Several of those coins are usually a
 dollar or two away, so it is a recoverable cart and not a dead end — but only if
 the payer is told the number. Everything needed is on this surface:
 
-- `buildMethodGridEntries` / `MethodGridEntry` builds the grid, and
-  `swapGroupLimitOption` picks which entry in a group to quote from: a group's
-  unavailability is quoted from its **cheapest entry point**, so "USDT" reports
-  the lowest floor of its networks rather than whichever one happens to be
-  first.
+- `buildMethodGridEntries` / `MethodGridEntry` builds the grid and
+  `createMethodGridDisplay` turns it into the display model, whose
+  `limitMessage` is already quoted from a group's **cheapest entry point** — so
+  "USDT" reports the lowest floor of its networks rather than whichever one
+  happens to be first.
 - `SwapLimitContext` is just `{ amount_msats, fiat }` off the snapshot. That
   pair plus the option is the whole recipe — everything below takes exactly
   those two.
@@ -273,10 +297,7 @@ the obvious way therefore asks "Which network are you sending SOL on?" above a
 single tile.
 
 Do not do that. **A group with one option has no network question: start the
-swap straight from the tile. Only `options.length > 1` earns a second step.**
-Both shipped renderers gate on exactly that test, and the custom element goes
-further and calls `startSwap` directly from a single-option tile — so a custom
-UI that asks anyway looks wrong beside the drop-in.
+swap straight from the tile.**
 
 The reason is not tidiness. The network question exists because the deposit
 address is network-specific and a wrong send is unrecoverable — which is
@@ -284,19 +305,19 @@ precisely why it must not be asked when it is not a real question. Ask it on
 `SOL` and you have taught the payer that the network step is ceremony to click
 past, one screen before `USDT`, where it is the whole ballgame.
 
-The helpers that carry the rule:
+You do not have to remember any of that, because the rule is data:
 
-- `findSwapGridGroup` — the group behind a picker key, and the thing you count
-  `options` on.
-- `updateSelectedSwapNetworks` — per-coin network selection after a tile is
-  picked. It returns the map unchanged for non-swap keys **and for
-  single-network groups**, so the rule is already baked in if you route through
-  it.
-- `wizardNetworkGroupIds` — the `aria-controls` / `aria-labelledby` id pair for
-  a group's disclosure panel and heading. One helper so the two ids cannot
-  disagree, between the renderers or within one.
-- `formatChooseNetworkHeading` — the heading copy for the step, when there is
-  one.
+- `resolveWizardSelection({ pickerKey, previousKey, entries, selectedNetworks })`
+  answers what a tile click MEANS, as a `WizardSelection` you branch on:
+  `start_swap` (with the asset), `choose_network` (with the group, the heading,
+  the `aria-controls` / `aria-labelledby` id pair, and the updated network map),
+  `select_method`, or `none`. A single-network group comes back as `start_swap`,
+  so the ceremony mistake is unrepresentable — a custom UI cannot ask a group
+  with one answer which answer it wants. Both shipped renderers branch on
+  exactly this.
+- `createMethodGridDisplay` carries the same rule per tile as
+  `needsNetworkStep` and `startPayInAsset`, which is what a renderer picking
+  between two DOM attributes needs.
 
 ## The deposit values are the payer's to reproduce
 
@@ -331,7 +352,7 @@ payer the same.
 
 A deposit that arrives outside the provider's limits, or too late, becomes
 refundable, and the payer has to give an address on their own network. This is
-the flow the three symbols above sit in.
+the flow the symbols above sit in.
 
 **Exactly one state allows it: `refund_required`.** The server re-reads live
 provider state at confirm time and answers `409 CONFLICT`
@@ -340,15 +361,19 @@ state can and does change under the payer between the two steps. Handle that
 409 as a normal outcome, not as an error screen.
 
 **It is a two-step review-then-confirm, and the first step does not touch
-`/swaps/refunds` at all.** `confirm: false` posts `/swaps/status` and rides the
+`/swaps/refunds` at all.** `stageSwapRefund` posts `/swaps/status` and rides the
 typed address back on the returned snapshot so you can show it for
-confirmation; only `confirm: true` submits. Authorization and the provider-state
-refresh happen on the host, on the confirmed request.
+confirmation; only `confirmSwapRefund` submits. Authorization and the
+provider-state refresh happen on the host, on the confirmed request. Wiring the
+review button to the confirm call silently skips the confirmation the payer
+thinks they still owe.
 
-**`overlaySwapRefundStaging` is required if you poll.** The address the payer is
-typing lives in your UI, not on the server, so the next `/swaps/status` tick
-overwrites it and the field empties itself mid-flow. Overlay the staged value
-onto every polled snapshot before you render it.
+**The staging survives polling, and you do not maintain that.** The address the
+payer is typing lives in the browser and nowhere else — the server does not know
+about it until they confirm, so a raw `/swaps/status` answer omits it. The
+controller holds the staged attempt and folds it back into every snapshot it
+publishes, before `onSnapshot` and before the derived state, so a host that
+simply stores what it is handed keeps the field the payer is mid-way through.
 
 Validate before you submit with `getSwapRefundFormError(payInAsset, address,
 networkLabel)`, which checks the address against the pay-in asset's own format —
@@ -442,7 +467,6 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `BrowserLogger`
 - `BrowserLoggerOption`
 - `CheckoutComponentProps`
-- `CheckoutController`
 - `CheckoutControllerOptions`
 - `CheckoutElementAttributeOptions`
 - `CheckoutElementAttributes`
@@ -450,7 +474,6 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `CheckoutElementListeners`
 - `checkoutElementStyles`
 - `CheckoutPropsValidation`
-- `CheckoutSession`
 - `CheckoutSessionOptions`
 - `CheckoutShellElements`
 - `CheckoutShellModel`
@@ -458,11 +481,9 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `CheckoutStatusRefresh`
 - `createBlockExplorerUrl`
 - `createCheckoutActionEvent`
-- `createCheckoutController`
 - `createCheckoutElementAttributes`
 - `createCheckoutElementListeners`
 - `createCheckoutErrorEvent`
-- `createCheckoutSession`
 - `createCheckoutShell`
 - `createCheckoutShellModel`
 - `CreateCheckoutShellOptions`
@@ -483,12 +504,14 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `formatAmountCaption`
 - `formatUnixTime`
 - `getExplorerNetwork`
+- `getRouteIconPath`
 - `getWizardEmptyMessage`
 - `OPENRECEIVE_CHECKOUT_DATA_SELECTORS`
 - `OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES`
 - `OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS`
 - `OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS`
 - `OPENRECEIVE_CHECKOUT_ELEMENT_PARTS`
+- `OPENRECEIVE_CHECKOUT_ELEMENT_SLOTS`
 - `OPENRECEIVE_COPY_FEEDBACK_MS`
 - `OPENRECEIVE_DEFAULT_PREFIX`
 - `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES`
@@ -509,7 +532,9 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `QrEncoder`
 - `readThemePreference`
 - `ResolvedTheme`
+- `selectCurrentSwapInvoice`
 - `StoredThemeModelOptions`
+- `SwapCopyRow`
 - `SwapSelection`
 - `syncStoredThemeControls`
 - `ThemeModel`
@@ -538,3 +563,7 @@ Neither this page nor
 from the entry module: both carry generated blocks, and
 `node tools/docs/generate-headless-surface.mjs --check` fails the gate when
 either is stale.
+
+The display models above answer "what do I render"; [Checkout UX](checkout-ux.md)
+answers "why does the shipped checkout render it that way", which is what you
+inherit responsibility for the moment you stop using the drop-in.

@@ -8,6 +8,7 @@ import {
   escapeHtml,
   formatAmountCaption,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
+  OPENRECEIVE_CHECKOUT_ELEMENT_SLOTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_PARTS,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS,
@@ -92,7 +93,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
       : `<a part="decode-invoice" class="${orClasses.btn}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(checkoutLabels.decodeInvoice)}</a>`;
   const startOverButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" class="${orClasses.btn}" type="button">${escapeHtml(checkoutLabels.startOver)}</button>`;
   // Settled: the QR / copy / decode affordances are for paying, so they drop out and a
-  // payment-data panel takes their place next to the green "Payment received" status.
+  // transaction-details panel takes their place next to the green "Payment received" status.
   const lightningPane =
     hideLightning || expired || settled
       ? ""
@@ -124,9 +125,18 @@ export function renderCheckoutHtml(view: CheckoutView): string {
       : `<div part="actions" class="${orClasses.actions}">${copyButton}${decodeButton}</div>`;
 
   const resolvedTheme = view.theme ?? "light";
+  // Above the amount and OUTSIDE the Lightning pane, which drops out on the
+  // swap deposit panel, on expiry and on the receipt — the payer needs to know
+  // what they are buying on all four screens, not just the first.
+  const orderDescription =
+    view.description === undefined || view.description === ""
+      ? ""
+      : `<p part="order-description" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.orderDescription} class="${orClasses.orderDescription}">${escapeHtml(view.description)}</p>`;
   return `
     ${styleTag(view.inlineStyles)}
     <section part="root" data-theme="${escapeHtml(resolvedTheme)}" class="${orClasses.root}">
+      <slot name="${OPENRECEIVE_CHECKOUT_ELEMENT_SLOTS.order}"></slot>
+      ${orderDescription}
       ${
         hideLightning
           ? ""

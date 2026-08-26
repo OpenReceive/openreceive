@@ -31,8 +31,10 @@ tmp/*
 # The demos' file logger writes cwd-relative when enabled.
 examples/*/server/*/logs/
 
-# Local audit scratch lists.
-zz-*.txt
+# Local audit scratch lists and working files (any extension: .txt lists, the
+# .mts/.xt one-off harnesses used while chasing a bug). Never committed.
+zz-*
+**/zz*.test.mjs
 
 # Local live-test override; expected_capabilities.example.json is the tracked template.
 tools/live-nwc-test/expected_capabilities.json

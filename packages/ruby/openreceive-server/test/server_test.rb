@@ -1222,11 +1222,24 @@ class StorageFreeServerTest < Minitest::Test
       end,
       on_paid: ->(_payment) {}
     )
+    # The host returning a display string beside the price. `description` rides
+    # the prepare and create responses and NOTHING else: it is never read from a
+    # request body, because the payer does not write the copy next to the amount.
+    described_app = OpenReceive::Server::RackApp.new(
+      service: @service,
+      authorize: ->(_context) { true },
+      resolve_checkout: lambda do |**_context|
+        { "amount" => { "sats" => 1 }, "description" => "2 kg Ataulfo mangoes" }
+      end,
+      on_checkout_created: ->(**_payment) {},
+      on_paid: ->(_payment) {}
+    )
     apps = {
       "default" => build_app.call(nil),
       "rate_limited" => build_app.call(->(_context) { false }),
       "settled_check" => settled_app,
-      "live_attempt_conflict" => live_conflict_app
+      "live_attempt_conflict" => live_conflict_app,
+      "described" => described_app
     }
     golden_paths = Dir[File.join(SPEC_DIR, "test-vectors/http-golden/*.json")].sort
     refute_empty golden_paths

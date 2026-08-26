@@ -1,19 +1,19 @@
 import {
   copyInvoice as copyInvoiceHelper,
   deriveStatus,
-  BrowserRequestError,
   prepareCheckout,
   requestCheckout,
   type Status,
 } from "@openreceive/browser";
 import {
+  type CheckoutController,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutState,
   type CheckoutStatusModel,
+  createCheckoutController,
   createCheckoutState,
   createCheckoutStatusModel,
-  createStatusFetcher,
   isReusableLightningInvoice,
   selectCheckoutDisplayInvoice,
 } from "@openreceive/browser/headless";
@@ -37,10 +37,15 @@ const unixNow = (): number => Math.floor(Date.now() / 1000);
 
 /**
  * One payment attempt lifecycle for one order: prepare → (mint Lightning |
- * fold in a started swap) → poll until settled/expired. All server round-trips
- * are @modelFlow s; every poll result and every HTTP response lands in the same
- * idempotent snapshot actions, so a late poll can never flip a settled screen
- * back to "waiting" and a slow backend never stacks overlapping requests.
+ * fold in a started swap) → poll until settled/expired.
+ *
+ * The POLL LOOP is not written here. `createCheckoutController` owns it — one
+ * request at a time, Retry-After-aware backoff, the countdown, the stop rules
+ * for a settled or terminal attempt, and the staged swap-refund address that a
+ * status tick would otherwise wipe. This store is the state layer above it: it
+ * holds the snapshot the controller publishes, derives everything the panel
+ * renders from it, and hands actions back down. That is the whole shape of a
+ * headless integration — bring your own store, not your own engine.
  *
  * The payment wizard — method grid, network reveal, swap deposit panel — is
  * the packaged @openreceive/react PaymentWizard, mounted by CheckoutPanel on
@@ -63,10 +68,14 @@ export class CheckoutFlow extends Model({
   /** Unix seconds, ticked once per second while the checkout is live (countdowns). */
   nowSeconds: prop<number>(() => unixNow()),
 }) {
-  // Volatile (non-snapshot) poll bookkeeping — mirrors CheckoutWatcher's rules.
-  private pollInFlight = false;
-  private pollFailureCount = 0;
-  private pollBackoffUntil: number | undefined;
+  /**
+   * The packaged poll loop. Volatile, never part of the keystone snapshot, and
+   * rebuilt whenever the checkout it watches changes identity — a swap start
+   * re-keys `checkout_id`, and a controller still pointed at the pre-swap
+   * Lightning attempt is how a paid swap customer gets told "Invoice expired".
+   */
+  private controller: CheckoutController | undefined;
+  private controllerKey: string | undefined;
   private settledAnnounced = false;
 
   @computed
@@ -144,6 +153,7 @@ export class CheckoutFlow extends Model({
     this.snapshot = frozen(snapshot);
     this.phase = "ready";
     this.prepareErrorMessage = null;
+    this.syncController();
   }
 
   /** Fold a started attempt (swap deposit or minted bolt11) into the snapshot. */
@@ -166,6 +176,7 @@ export class CheckoutFlow extends Model({
       invoices: [invoice, ...withoutSame],
       ...(invoice.amount_msats === undefined ? {} : { amount_msats: invoice.amount_msats }),
     });
+    this.syncController();
   }
 
   /**
@@ -174,8 +185,12 @@ export class CheckoutFlow extends Model({
    */
   @modelAction
   applyPollResult(next: CheckoutSnapshot): void {
+    // The controller already refuses to flip its own state back; this guard is
+    // for the OTHER door — the cable push and any host-driven refresh, which do
+    // not go through the watcher.
     if (this.snapshot !== null && (this.settled || this.state?.terminal === true)) return;
     this.snapshot = frozen(next);
+    this.announceSettledIfNeeded();
   }
 
   @modelAction
@@ -239,22 +254,25 @@ export class CheckoutFlow extends Model({
     if (this.mintingLightning) return;
     this.mintingLightning = true;
     try {
+      // `previous` is what keeps the warmed pay-in catalog (and any sibling
+      // swap attempt) alive across the mint: the mint response carries the
+      // bolt11 and the catalog, and the package folds the two snapshots
+      // together. Re-attaching `payment_methods` by hand afterwards was this
+      // store doing the package's job, one merge rule out of date.
+      const current = this.snapshot?.data;
       const checkout = yield* _await(
-        requestCheckout({ prefix: openReceivePrefix(), reference: this.orderId }),
+        requestCheckout({
+          prefix: openReceivePrefix(),
+          reference: this.orderId,
+          ...(current === undefined ? {} : { previous: current }),
+        }),
       );
       const minted = selectCheckoutDisplayInvoice(checkout) ?? checkout.active;
-      const previousMethods = this.snapshot?.data.payment_methods;
       if (minted === undefined) {
-        this.applyPrepared({
-          ...checkout,
-          ...(previousMethods === undefined ? {} : { payment_methods: previousMethods }),
-        });
+        this.applyPrepared(checkout);
       } else {
-        if (this.snapshot === null) this.applyPrepared(checkout);
+        this.applyPrepared(checkout);
         this.applyAttempt(minted);
-        if (previousMethods !== undefined && this.snapshot !== null) {
-          this.applyPrepared({ ...this.snapshot.data, payment_methods: previousMethods });
-        }
       }
       logDemo("checkout.lightning_ready", "Lightning invoice minted or reused.", {
         orderId: this.orderId,
@@ -266,71 +284,101 @@ export class CheckoutFlow extends Model({
     }
   });
 
-  /**
-   * One poll tick: /openreceive/payments/check (+ /swaps/status for a live
-   * swap). One request at a time; failures back off (honoring Retry-After);
-   * settled/terminal checkouts stop polling.
-   */
-  @modelFlow
-  pollTick = _async(function* (this: CheckoutFlow) {
-    const snapshot = this.snapshot?.data;
-    const state = this.state;
-    if (snapshot === undefined || state === undefined) return;
-    if (this.settled || state.terminal) return;
-    const paymentHash = state.payment_hash;
-    if (
-      state.rail === "checkout_lock" ||
-      typeof paymentHash !== "string" ||
-      !/^[0-9a-f]{64}$/i.test(paymentHash)
-    ) {
-      return;
-    }
-    if (this.pollInFlight) return;
-    if (this.pollBackoffUntil !== undefined && unixNow() < this.pollBackoffUntil) return;
-    this.pollInFlight = true;
-    const polledOrderId = this.orderId;
-    try {
-      const refresh = createStatusFetcher({
-        prefix: openReceivePrefix(),
-        snapshot,
-      });
-      const next = yield* _await(refresh(this.orderId));
-      this.pollFailureCount = 0;
-      this.pollBackoffUntil = undefined;
-      if (next === null || polledOrderId !== this.orderId) return;
-      this.applyPollResult(next);
-      this.announceSettledIfNeeded();
-    } catch (error) {
-      this.pollFailureCount += 1;
-      const retryAfterSeconds =
-        error instanceof BrowserRequestError ? error.retryAfterSeconds : undefined;
-      const backoffSeconds =
-        retryAfterSeconds ?? Math.min(60, 2 ** Math.min(this.pollFailureCount, 6));
-      this.pollBackoffUntil = unixNow() + backoffSeconds;
-      logDemo("checkout.poll_error", "Payment status poll failed; backing off.", {
-        orderId: this.orderId,
-        backoffSeconds,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      this.pollInFlight = false;
-    }
-  });
-
   /** Copy the bolt11; the shared CopyInvoiceButton renders the transient feedback. */
   @modelFlow
   copyInvoice = _async(function* (this: CheckoutFlow) {
+    const controller = this.controller;
+    if (controller !== undefined) {
+      yield* _await(controller.copyInvoice());
+      return;
+    }
     const invoice = this.state?.invoice;
     if (invoice === undefined || invoice === "") return;
     yield* _await(copyInvoiceHelper({ invoice }));
   });
+
+  // ---- the two-step swap refund ---------------------------------------------
+  //
+  // Handed to the mounted PaymentWizard as its `swapRefund`. Step one posts
+  // /swaps/status and STAGES the address the payer typed; step two is the only
+  // call that posts /swaps/refunds. The staged address lives in the controller,
+  // so the next status tick cannot wipe a review in progress — this store does
+  // not have to remember an overlay rule, and neither does the panel.
+
+  async stageSwapRefund(options: {
+    readonly attemptId: string;
+    readonly refundAddress: string;
+  }): Promise<CheckoutInvoiceSnapshot> {
+    return this.requireController().stageSwapRefund(options);
+  }
+
+  async confirmSwapRefund(options: {
+    readonly attemptId: string;
+    readonly refundAddress: string;
+  }): Promise<CheckoutInvoiceSnapshot> {
+    return this.requireController().confirmSwapRefund(options);
+  }
+
+  /** The payer left the swap for Lightning — the one exit that is not a refund. */
+  clearSwapRefundStaging(): void {
+    this.controller?.clearSwapRefundStaging();
+  }
 
   /**
    * A cable push told us the server settled this order — refresh immediately
    * instead of waiting for the next poll interval.
    */
   wakeFromServerPush(): void {
-    void this.pollTick();
+    void this.controller?.reloadState().catch((error: unknown) => this.reportError(error));
+  }
+
+  /** Stop the poll loop. The workspace calls this when it leaves the order. */
+  stopWatching(): void {
+    this.controller?.stop();
+    this.controller = undefined;
+    this.controllerKey = undefined;
+  }
+
+  /**
+   * Point the poll loop at the checkout the snapshot now describes, rebuilding
+   * it when that identity changes. Cheap and idempotent: every snapshot sink
+   * calls it, and only a re-key does any work.
+   */
+  private syncController(): void {
+    const snapshot = this.snapshot?.data;
+    if (snapshot === undefined) {
+      this.stopWatching();
+      return;
+    }
+    const key = `${snapshot.checkout_id} ${snapshot.reference}`;
+    if (this.controller !== undefined && this.controllerKey === key) return;
+    this.controller?.stop();
+    this.controllerKey = key;
+    this.controller = createCheckoutController({
+      snapshot,
+      prefix: openReceivePrefix(),
+      logger: false,
+      // The engine's one output this store cares about. `onState` is
+      // deliberately unused: `state` here is a @computed over the snapshot and
+      // this store's own 1 Hz clock, and reading a per-tick state object would
+      // re-render the whole wizard once a second.
+      onSnapshot: (next) => this.applyPollResult(next),
+      onError: (error) => {
+        logDemo("checkout.poll_error", "Payment status poll failed; backing off.", {
+          orderId: this.orderId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+    this.controller.start();
+  }
+
+  private requireController(): CheckoutController {
+    const controller = this.controller;
+    if (controller === undefined) {
+      throw new Error("This checkout is not being watched yet.");
+    }
+    return controller;
   }
 
   @modelAction

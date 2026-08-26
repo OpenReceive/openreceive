@@ -64,8 +64,10 @@ export async function createLifecycleStack(options = {}) {
     settlements,
     requests,
     fetchStub,
-    addOrder(reference, sats = 1234) {
-      orders.set(reference, { amount: { sats } });
+    addOrder(reference, sats = 1234, description) {
+      orders.set(reference, {
+        amount: { sats, ...(description === undefined ? {} : { description }) },
+      });
     },
     checkCalls() {
       return requests.filter((entry) => entry.path.endsWith("/payments/check"));

@@ -1,0 +1,338 @@
+{
+  "contract_version": 1,
+  "release_version": "0.2.4",
+  "docs_manifest_version": "0.2.0",
+  "generated_by": "tools/docs/generate-site-contract.mjs",
+  "how_to_update": "docs/internal/site-build.md",
+  "publish": [
+    {
+      "path": "/guides",
+      "source": "docs/guides/README.md",
+      "kind": "guide",
+      "slug": "guides",
+      "title": "OpenReceive Guides",
+      "category": "guide",
+      "bytes": 1337
+    },
+    {
+      "path": "/guides/quickstart-node",
+      "source": "docs/guides/quickstart-node.md",
+      "kind": "guide",
+      "slug": "quickstart-node",
+      "title": "Node Framework Quickstart",
+      "category": "quickstart",
+      "bytes": 8559
+    },
+    {
+      "path": "/guides/quickstart-rails",
+      "source": "docs/guides/quickstart-rails.md",
+      "kind": "guide",
+      "slug": "quickstart-rails",
+      "title": "Rails Quickstart",
+      "category": "quickstart",
+      "bytes": 13549
+    },
+    {
+      "path": "/guides/node-orms",
+      "source": "docs/guides/node-orms.md",
+      "kind": "guide",
+      "slug": "node-orms",
+      "title": "Node ORM Recipes",
+      "category": "quickstart",
+      "bytes": 7400
+    },
+    {
+      "path": "/guides/authorization",
+      "source": "docs/guides/authorization.md",
+      "kind": "guide",
+      "slug": "authorization",
+      "title": "Authorization",
+      "category": "security",
+      "bytes": 9046
+    },
+    {
+      "path": "/guides/rate-limiting",
+      "source": "docs/guides/rate-limiting.md",
+      "kind": "guide",
+      "slug": "rate-limiting",
+      "title": "Rate Limiting",
+      "category": "security",
+      "bytes": 8160
+    },
+    {
+      "path": "/guides/frontend-checkout",
+      "source": "docs/guides/frontend-checkout.md",
+      "kind": "guide",
+      "slug": "frontend-checkout",
+      "title": "Frontend Checkout",
+      "category": "quickstart",
+      "bytes": 9229
+    },
+    {
+      "path": "/guides/checkout-ux",
+      "source": "docs/guides/checkout-ux.md",
+      "kind": "guide",
+      "slug": "checkout-ux",
+      "title": "Checkout UX",
+      "category": "guide",
+      "bytes": 12925
+    },
+    {
+      "path": "/guides/headless-checkout",
+      "source": "docs/guides/headless-checkout.md",
+      "kind": "guide",
+      "slug": "headless-checkout",
+      "title": "Headless Checkout",
+      "category": "guide",
+      "bytes": 28519
+    },
+    {
+      "path": "/guides/automated-swaps",
+      "source": "docs/guides/automated-swaps.md",
+      "kind": "guide",
+      "slug": "automated-swaps",
+      "title": "Automated Swaps",
+      "category": "guide",
+      "bytes": 7002
+    },
+    {
+      "path": "/guides/lightning-swap-connect",
+      "source": "docs/guides/lightning-swap-connect.md",
+      "kind": "guide",
+      "slug": "lightning-swap-connect",
+      "title": "Lightning Swap Connect URI",
+      "category": "reference",
+      "bytes": 4009
+    },
+    {
+      "path": "/guides/environment-variables",
+      "source": "docs/guides/environment-variables.md",
+      "kind": "guide",
+      "slug": "environment-variables",
+      "title": "Environment Variables",
+      "category": "reference",
+      "bytes": 3327
+    },
+    {
+      "path": "/guides/storage",
+      "source": "docs/guides/storage.md",
+      "kind": "guide",
+      "slug": "storage",
+      "title": "Payment Storage",
+      "category": "operations",
+      "bytes": 10706
+    },
+    {
+      "path": "/guides/deploying",
+      "source": "docs/guides/deploying.md",
+      "kind": "guide",
+      "slug": "deploying",
+      "title": "Deploying OpenReceive",
+      "category": "operations",
+      "bytes": 6693
+    },
+    {
+      "path": "/guides/host-testing",
+      "source": "docs/guides/host-testing.md",
+      "kind": "guide",
+      "slug": "host-testing",
+      "title": "Testing Your OpenReceive Integration",
+      "category": "guide",
+      "bytes": 4051
+    },
+    {
+      "path": "/guides/api-reference",
+      "source": "docs/guides/api-reference.md",
+      "kind": "guide",
+      "slug": "api-reference",
+      "title": "API Reference",
+      "category": "reference",
+      "bytes": 84276
+    },
+    {
+      "path": "/guides/security",
+      "source": "docs/guides/security.md",
+      "kind": "guide",
+      "slug": "security",
+      "title": "Security",
+      "category": "security",
+      "bytes": 13229
+    },
+    {
+      "path": "/guides/provider-registry",
+      "source": "docs/guides/provider-registry.md",
+      "kind": "guide",
+      "slug": "provider-registry",
+      "title": "Provider Registry",
+      "category": "reference",
+      "bytes": 6316
+    },
+    {
+      "path": "/guides/price-feeds",
+      "source": "docs/guides/price-feeds.md",
+      "kind": "guide",
+      "slug": "price-feeds",
+      "title": "Price Feeds",
+      "category": "reference",
+      "bytes": 2747
+    },
+    {
+      "path": "/guides/react-material-ui-recipe",
+      "source": "docs/recipes/react-material-ui.md",
+      "kind": "guide",
+      "slug": "react-material-ui-recipe",
+      "title": "React Material UI Recipe",
+      "category": "recipe",
+      "bytes": 4143
+    },
+    {
+      "path": "/guides/custom-checkout-route",
+      "source": "docs/guides/custom-checkout-route.md",
+      "kind": "guide",
+      "slug": "custom-checkout-route",
+      "title": "Writing Your Own Checkout Route",
+      "category": "guide",
+      "bytes": 5503
+    },
+    {
+      "path": "/guides/agent-directions-node",
+      "source": "docs/agents/node.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-node",
+      "title": "Agent Directions: Node.js",
+      "category": "quickstart",
+      "bytes": 16486
+    },
+    {
+      "path": "/guides/agent-directions-rails",
+      "source": "docs/agents/rails.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-rails",
+      "title": "Agent Directions: Rails",
+      "category": "quickstart",
+      "bytes": 22062
+    },
+    {
+      "path": "/api_docs",
+      "source": "docs/guides/api-reference.md",
+      "kind": "api-docs",
+      "slug": "api-reference",
+      "title": "API Reference",
+      "category": "reference",
+      "bytes": 84276,
+      "alias_of": "/guides/api-reference"
+    },
+    {
+      "path": "/agent-directions/node.md",
+      "source": "docs/agents/node.md",
+      "kind": "agent-directions-payload",
+      "stack": "node",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 16486,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/rails.md",
+      "source": "docs/agents/rails.md",
+      "kind": "agent-directions-payload",
+      "stack": "rails",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 22062,
+      "copy_button": true,
+      "self_contained": true
+    }
+  ],
+  "site_owned": [
+    {
+      "path": "/",
+      "must_exist": true
+    },
+    {
+      "path": "/api_docs",
+      "must_exist": true
+    },
+    {
+      "path": "/guides",
+      "must_exist": true
+    },
+    {
+      "path": "/contact",
+      "must_exist": true
+    },
+    {
+      "path": "/get_a_nwc_code_to_receive_payments",
+      "must_exist": true
+    },
+    {
+      "path": "/set_up_swap_provider",
+      "must_exist": true
+    }
+  ],
+  "never_publish": [
+    {
+      "source": "docs/internal/README.md",
+      "slug": "internal"
+    },
+    {
+      "source": "docs/internal/architecture.md",
+      "slug": "architecture"
+    },
+    {
+      "source": "docs/internal/shipped-routes.md",
+      "slug": "shipped-routes"
+    },
+    {
+      "source": "docs/internal/node-integration.md",
+      "slug": "node-integration"
+    },
+    {
+      "source": "docs/internal/swap-operations.md",
+      "slug": "swap-operations"
+    },
+    {
+      "source": "docs/internal/settlement-sweeps.md",
+      "slug": "settlement-sweeps"
+    },
+    {
+      "source": "docs/internal/deployment-storage.md",
+      "slug": "deployment-storage"
+    },
+    {
+      "source": "docs/internal/scope-lock.md",
+      "slug": "scope-lock"
+    },
+    {
+      "source": "docs/internal/conformance.md",
+      "slug": "conformance"
+    },
+    {
+      "source": "docs/internal/test-command-map.md",
+      "slug": "test-command-map"
+    },
+    {
+      "source": "docs/internal/package-ownership.md",
+      "slug": "package-ownership"
+    },
+    {
+      "source": "docs/internal/wrapper-parity.md",
+      "slug": "wrapper-parity"
+    },
+    {
+      "source": "docs/internal/headless-surface.md",
+      "slug": "headless-surface"
+    },
+    {
+      "source": "docs/internal/release-process.md",
+      "slug": "release-process"
+    },
+    {
+      "source": "docs/internal/site-build.md",
+      "slug": "site-build"
+    },
+    {
+      "source": "docs/internal/forbidden-without-approval.md",
+      "slug": "forbidden-without-approval"
+    }
+  ]
+}

@@ -134,26 +134,22 @@ export async function startSwapRequest(
 }
 
 /**
- * Review-or-confirm a swap refund for one attempt: locates the attempt's
- * payment hash among the known invoices, posts the refund action, and returns
- * the normalized swap invoice (with the staged refund address on review).
+ * Review-or-confirm a swap refund for one attempt, and return the normalized
+ * swap invoice — carrying the staged refund address on review.
+ *
+ * `paymentHash` is what the route takes, so it is what this takes. Resolving an
+ * attempt id to a hash is the job of whoever holds the snapshot: the controller
+ * does it in {@link CheckoutController.stageSwapRefund}, which is what an
+ * integration should be calling.
  */
 export async function requestSwapRefund(
   options: SwapRequestOptions & {
     readonly reference?: string;
-    readonly invoices: readonly (CheckoutInvoiceSnapshot | null | undefined)[];
-    readonly attemptId: string;
+    readonly paymentHash: string;
     readonly refundAddress: string;
     readonly confirm: boolean;
   },
 ): Promise<CheckoutInvoiceSnapshot> {
-  const payment = options.invoices.find(
-    (invoice) =>
-      invoice != null && (invoice.swap?.attempt_id ?? invoice.invoice_id) === options.attemptId,
-  );
-  if (payment?.payment_hash === undefined) {
-    throw new Error("Swap refund requires the original payment hash.");
-  }
   const body = await postJson({
     fetch: options.fetch,
     prefix: options.prefix,
@@ -161,9 +157,8 @@ export async function requestSwapRefund(
     ...(options.headers === undefined ? {} : { headers: options.headers }),
     body: {
       ...(options.reference === undefined ? {} : { reference: options.reference }),
-      payment_hash: payment.payment_hash,
+      payment_hash: options.paymentHash,
       action: "refund_swap",
-      attempt_id: options.attemptId,
       refund_address: options.refundAddress,
       confirm: options.confirm,
     },

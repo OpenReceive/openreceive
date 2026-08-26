@@ -36,12 +36,14 @@ Browser & React API surface (full reference in
   the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
   `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`, `paymentWizard`,
   `themeToggle` (default `true`), `defaultTheme`, `storageKey`, `decodeLinkUrl`,
-  `components`, `classNames`, `children`, `syncUrl`,
+  `assetBaseUrl`, `components`, `classNames`, `children`, `syncUrl`,
   `resumePathPrefix`, `routeReference`, `metadata`, `createFetch`, `resolveAssetUrl`.
-  The same names and defaults
-  hold for the Vue, Svelte and Angular wrappers, which mount the same custom element
-  (`polling`/`pollIntervalMs` ride the `options` escape hatch there) — with the
-  exception of `children`, which is React-only (see below).
+  The shared names and defaults hold for the Vue, Svelte and Angular wrappers,
+  which mount the same custom element. Four of these are React-only:
+  `components`, `classNames`, `children` (see below) and `createFetch`;
+  `resolveAssetUrl` is a function, so it cannot cross an HTML attribute — the
+  wrappers take `assetBaseUrl` instead; and `polling`/`pollIntervalMs` ride the
+  `options` escape hatch there.
 - [`useCheckout(options)`](api-reference.md#usecheckout) — the hook behind `<Checkout>` for custom layouts; returns the live
   snapshot, status/countdown labels, and `copyInvoice`/`openWallet`/`retry` actions.
   Two notes on that list, both of which bite people building chrome around the
@@ -86,12 +88,43 @@ host verifies that exact attempt belongs to the reference.
 
 ## Show the payer what they are buying
 
-The shipped checkout renders the amount, never the order. A `$1.00` total, a QR
-code, and no sign of what is being bought is a real conversion problem, and
-every drop-in integrator has it by default.
+The shipped checkout renders the amount, never the order — it cannot, because
+OpenReceive owns no line items. A `$1.00` total, a QR code, and no sign of what
+is being bought is a real conversion problem, and every drop-in integrator has
+it by default.
 
-React solves it with `children`, which accepts a node or a **render prop**
-receiving the live `useCheckout` model:
+**The one-line fix is on the server.** Return a `description` beside the price
+from the hook you already write, and both drop-ins render it above the amount,
+on every screen — the Lightning pane, the swap deposit panel, the expired pane
+and the receipt:
+
+```ts
+amountFor: async (reference) => {
+  const order = await orders.find(reference);
+  if (order === null) return null;
+  return {
+    currency: "USD",
+    value: order.total,
+    description: `${order.lines.length} items from Hello Fruit`,
+  };
+},
+```
+
+```ruby
+config.amount_for = lambda do |reference|
+  order = Order.find_by(id: reference)
+  order && { currency: "USD", value: order.total.to_s,
+             description: "#{order.line_items.size} items from Hello Fruit" }
+end
+```
+
+It is ONE display string, deliberately: a line-item schema would make
+OpenReceive own the order, which is the thing it never does. It rides the
+prepare and create responses only — never a request body, because the payer does
+not get to write the copy next to the amount.
+
+**For anything richer, the host supplies markup.** React takes `children`, which
+accepts a node or a **render prop** receiving the live `useCheckout` model:
 
 ```tsx
 <Checkout reference={order.id} prefix="/openreceive">
@@ -108,11 +141,20 @@ receiving the live `useCheckout` model:
 </Checkout>
 ```
 
-The custom element has no equivalent slot — put the order summary in your own
-markup around it. A headless UI owns the whole screen and has no excuse.
+The custom element has the same affordance as a named slot. Put your markup
+inside the tag with `slot="order"` and the element projects it into its shadow
+root, above the amount — and because it is a slot, it survives every re-render
+of the shell untouched:
 
-Order context is what this prop is for. It is also the honest answer to "why
-would I pick React over the custom element".
+```html
+<openreceive-checkout reference="ord_123" prefix="/openreceive">
+  <ul slot="order" class="order-lines">
+    <li><img src="/mango.jpg" alt=""> 2 kg Ataulfo mangoes</li>
+  </ul>
+</openreceive-checkout>
+```
+
+A headless UI owns the whole screen and has no excuse at all.
 
 ## Showing the payer their receipt
 
@@ -131,3 +173,11 @@ receipt days later:
 Why it matters, and the row contract (`copyValue` is the untruncated value; the
 bolt11 decode link is opt-in), are in
 [The receipt is not debug output](headless-checkout.md#the-receipt-is-not-debug-output).
+
+## Replacing any of this
+
+The drop-in encodes a set of payer-facing rules — no progress stepper, a network
+question only where there is one to ask, a copy row for every value the payer
+must retype, suggestions that say they are suggestions. Building your own UI
+means owning them: [Checkout UX](checkout-ux.md) is the argument for each, and
+names the display model that already carries it.

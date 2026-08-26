@@ -319,6 +319,7 @@ function CheckoutView(
     classNames,
     children,
     resolveAssetUrl,
+    assetBaseUrl,
     className,
     ...sectionProps
   } = props;
@@ -352,7 +353,7 @@ function CheckoutView(
   const customChildren = typeof children === "function" ? children(checkoutModel) : children;
   const expired = checkoutModel.status === "expired";
   // Settled: paying affordances (QR, copy, decode, wizard) drop out; a green "Payment
-  // received" status plus the payment-data panel take their place.
+  // received" status plus the transaction-details panel take their place.
   const settled = checkoutModel.status === "settled";
   // The QR pane needs a minted bolt11, no focused swap deposit panel, and an
   // unexpired invoice. Expiry removes the PANE but keeps the LN section, because
@@ -407,6 +408,24 @@ function CheckoutView(
     },
     customChildren === undefined
       ? [
+          // Above the amount and OUTSIDE the Lightning pane, which drops out on
+          // the swap deposit panel, on expiry and on the receipt — the payer
+          // needs to know what they are buying on all four screens.
+          checkoutModel.checkout.description === undefined ||
+          checkoutModel.checkout.description === ""
+            ? null
+            : React.createElement(
+                "p",
+                {
+                  key: "order-description",
+                  className: joinClassNames(
+                    orClasses.orderDescription,
+                    classNames?.orderDescription,
+                  ),
+                  [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.orderDescription]: "",
+                },
+                checkoutModel.checkout.description,
+              ),
           ownsTheme
             ? React.createElement(ThemeToggle, {
                 key: "theme",
@@ -600,6 +619,10 @@ function CheckoutView(
                 onRequestLightning,
                 onSwapStarted,
                 resolveAssetUrl,
+                assetBaseUrl,
+                // The engine's staged refund address rides the controller this
+                // model owns, so a poll cannot wipe a review in progress.
+                swapRefund: checkoutModel,
               })
             : null,
         ]

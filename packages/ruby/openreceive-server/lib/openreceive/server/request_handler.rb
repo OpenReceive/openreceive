@@ -50,7 +50,10 @@ module OpenReceive
           guard("checkout.prepare", request, { reference: reference })
           resolved = resolve_host("checkout.prepare", request, reference, body)
           prepared = @service.prepare_checkout("amount" => required_amount(resolved))
-          success(200, prepared.merge("reference" => reference), request_id)
+          body = prepared.merge("reference" => reference)
+          description = resolved_description(resolved)
+          body["description"] = description if description
+          success(200, body, request_id)
         end
       end
 
@@ -80,7 +83,10 @@ module OpenReceive
           # committed invoice amount — and served on the re-fetch path too, so
           # a repeated create answers with the same shape it first did.
           payment_methods = @service.list_swap_options(amount_msats: checkout["amount_msats"])
-          success(201, { "checkout" => checkout, "payment_methods" => payment_methods }, request_id)
+          body = { "checkout" => checkout, "payment_methods" => payment_methods }
+          description = resolved_description(resolved)
+          body["description"] = description if description
+          success(201, body, request_id)
         end
       end
 
@@ -520,6 +526,18 @@ module OpenReceive
           raise ValidationError, "memo must be #{MAX_MEMO_LENGTH} characters or fewer."
         end
         memo
+      end
+
+      # What the payer is buying, in the host's own words: one optional display
+      # string the host returns beside the price. Response only — it is never
+      # read from a request body, because the payer does not get to write the
+      # copy next to the amount. Blank is the same as absent.
+      def resolved_description(resolved)
+        value = resolved["description"]
+        return nil unless value.is_a?(String)
+
+        trimmed = value.strip
+        trimmed.empty? ? nil : trimmed
       end
 
       def required_amount(resolved)

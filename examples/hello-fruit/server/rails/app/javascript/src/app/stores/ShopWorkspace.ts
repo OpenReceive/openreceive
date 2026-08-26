@@ -195,6 +195,9 @@ export class ShopWorkspace extends Model({
   @modelAction
   enterOrder(order: HelloFruitDemoOrder, options: { readonly rememberUrl: boolean }): void {
     this.order = frozen(order);
+    // The previous flow owns a live poll loop; dropping the reference without
+    // stopping it leaves an interval polling an order the payer has left.
+    this.checkout?.stopWatching();
     this.checkout = new CheckoutFlow({ orderId: order.uuid });
     if (options.rememberUrl) {
       rememberHelloFruitOrder(order);
@@ -212,6 +215,7 @@ export class ShopWorkspace extends Model({
     forgetHelloFruitOrder(this.order?.data.uuid);
     if (options.preserveUrl !== true) leaveHelloFruitCheckout();
     this.order = null;
+    this.checkout?.stopWatching();
     this.checkout = null;
     this.cart = {};
     this.closeStickerModal();

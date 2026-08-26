@@ -11,6 +11,7 @@ import {
   swapAssetMatchesRoute,
   type SwapDisplayModel,
   swapOptionLimitMessage,
+  type SwapLimitContext,
   orClasses,
 } from "@openreceive/browser/headless";
 import { renderElementSwapCopyDetailHtml } from "./dom-helpers.ts";
@@ -64,22 +65,28 @@ export function renderElementSwapActionsHtml(
   `;
 }
 
+/**
+ * The invoice-side amount the swap limits are quoted against, read off the
+ * element's flat view props. React passes the checkout snapshot straight
+ * through; this is the same context assembled from attributes.
+ */
+export function elementsSwapLimitContext(view: ElementsWizardView): SwapLimitContext | undefined {
+  if (view.amountMsats === undefined) return undefined;
+  return {
+    amount_msats: view.amountMsats,
+    ...(view.fiat?.currency === undefined || view.fiat.value === undefined
+      ? {}
+      : { fiat: { currency: view.fiat.currency, value: view.fiat.value } }),
+  };
+}
+
 // Short reason for an out-of-range swap asset in the web-component surface,
 // sharing the React wizard's canonical message via the browser helper.
 export function elementsSwapLimitMessage(
   option: ElementsSwapOption,
   view: ElementsWizardView,
 ): string | undefined {
-  const checkout =
-    view.amountMsats === undefined
-      ? undefined
-      : {
-          amount_msats: view.amountMsats,
-          ...(view.fiat?.currency === undefined || view.fiat.value === undefined
-            ? {}
-            : { fiat: { currency: view.fiat.currency, value: view.fiat.value } }),
-        };
-  return swapOptionLimitMessage(option, checkout);
+  return swapOptionLimitMessage(option, elementsSwapLimitContext(view));
 }
 
 export function renderElementSwapPanelHtml(
@@ -136,11 +143,14 @@ export function renderElementSwapPanelHtml(
           <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
           <div part="swap-deposit-side" class="${orClasses.swapDepositSide}">
             <dl part="swap-details" class="${orClasses.swapDetails}">
-              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress, {
-                selectable: true,
-              })}
-              ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
-              ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount, { selectable: true })}
+              ${display.copyRows
+                .map((row) =>
+                  renderElementSwapCopyDetailHtml(row.label, row.copyValue ?? row.value, {
+                    selectable: row.selectable,
+                    displayValue: row.value,
+                  }),
+                )
+                .join("")}
             </dl>
             ${waitingStatus}
             ${feeBreakdown}

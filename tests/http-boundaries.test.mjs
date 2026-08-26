@@ -762,6 +762,20 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       }),
     }),
   };
+  // The host returning a display string beside the price. `description` rides
+  // the prepare and create responses and NOTHING else: it is never read from a
+  // request body, because the payer does not write the copy next to the amount.
+  handlers.described = createHttpHandler({
+    service,
+    authorize: () => true,
+    host: testHost({
+      resolveCheckout: () => ({
+        amount: { sats: 1 },
+        description: "2 kg Ataulfo mangoes",
+      }),
+      onCheckoutCreated: () => {},
+    }),
+  });
   // A repository refusing a second live attempt on the same rail. Both engines
   // answer with ONE agreed string; the vector is what keeps them from drifting
   // apart per-engine again.

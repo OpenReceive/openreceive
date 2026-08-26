@@ -255,6 +255,13 @@ components:
       properties:
         reference: { type: string, minLength: 1, maxLength: 200 }
         amount_msats: { type: integer, minimum: 1000, maximum: 9007199254740991 }
+        # What the payer is buying, in the host's own words, returned alongside
+        # the price by `amount_for` / `amountFor`. OpenReceive owns no line
+        # items and never will; this is one display string so the default
+        # checkout can show something other than a QR and a number. Response
+        # only: it is never accepted on a request, because the payer does not
+        # get to write the copy next to the amount.
+        description: { type: string, minLength: 1, maxLength: 200 }
         fiat_quote:
           oneOf:
             - { type: 'null' }
@@ -291,6 +298,10 @@ components:
       required: [checkout, payment_methods]
       properties:
         checkout: { $ref: '#/components/schemas/Checkout' }
+        # A sibling of `checkout`, not a field inside it: `Checkout` is shared
+        # with the swap responses, and the display string belongs to the
+        # checkout call, not to the swap contract.
+        description: { type: string, minLength: 1, maxLength: 200 }
         # Echoed for the same reason prepare and payments/check echo it: a
         # client that mints Lightning must not lose the pay-in catalog it
         # renders its picker from. Without it, minting Bitcoin erased the

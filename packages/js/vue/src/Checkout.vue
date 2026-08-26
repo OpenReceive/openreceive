@@ -53,6 +53,7 @@ const shell = computed(() => {
     ...(props.prefix === undefined ? {} : { prefix: props.prefix }),
     ...(props.paymentWizard === undefined ? {} : { paymentWizard: props.paymentWizard }),
     ...(props.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: props.decodeLinkUrl }),
+    ...(props.assetBaseUrl === undefined ? {} : { assetBaseUrl: props.assetBaseUrl }),
     ...(props.defaultTheme === undefined ? {} : { defaultTheme: props.defaultTheme }),
     ...(props.storageKey === undefined ? {} : { storageKey: props.storageKey }),
     ...(props.metadata === undefined ? {} : { metadata: props.metadata }),

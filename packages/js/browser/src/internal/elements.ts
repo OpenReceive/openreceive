@@ -70,6 +70,10 @@ function sharedElementAttributes(
   if (options.decodeLinkUrl !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl] = options.decodeLinkUrl;
   }
+  // Shared, not create-mode: the wizard and its icons render in every mode.
+  if (isSet(options.assetBaseUrl)) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl] = options.assetBaseUrl;
+  }
   if (options.polling !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling] = String(options.polling);
   }

@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "name": "prepare echoes the host's order description beside the price",
+  "handler": "described",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts/prepare",
+    "body": { "reference": "order-golden-described" }
+  },
+  "expected": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "reference": "order-golden-described",
+      "amount_msats": 1000,
+      "description": "2 kg Ataulfo mangoes",
+      "fiat_quote": null,
+      "payment_methods": []
+    }
+  },
+  "note": "`description` is what the payer is buying, in the host's own words: one display string returned beside the price by amount_for / amountFor, so the shipped checkout can show something other than a QR and a number. It is RESPONSE ONLY — never accepted on a request body, because the payer does not get to write the copy next to the amount."
+}

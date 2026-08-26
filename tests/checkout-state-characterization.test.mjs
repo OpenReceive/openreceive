@@ -69,7 +69,6 @@ process.env.LOG_LEVEL ??= "error";
 import {
   createCheckoutState,
   createCheckoutStatusModel,
-  createPaymentDataEntries,
   createTransactionDetailsFromState,
   formatUnixTime,
 } from "@openreceive/browser/headless";
@@ -77,11 +76,9 @@ import { createCheckoutViewModel } from "@openreceive/react";
 
 const NOW = Math.floor(Date.now() / 1000);
 const hash = (character) => character.repeat(64);
-// PRODUCT CHANGE: the payment-data panel used to print unix seconds with a
-// ".000Z" the transaction-details panel next to it stripped. Both now render
-// through the one formatter (`formatUnixTime`), so both print the stripped
-// form. The milliseconds of a unix-SECONDS value are always zero, so the two
-// labels never carried different information — only different noise.
+// The transaction-details panel renders unix seconds through one formatter
+// (`formatUnixTime`), which strips the always-zero milliseconds of a
+// unix-SECONDS value. Every timestamp assertion below reads the stripped form.
 const iso = (unixSeconds) => new Date(unixSeconds * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
 
 /** The browser path, with the clock pinned and logging off. */
@@ -363,18 +360,21 @@ test("characterization: lightning pending", () => {
     countdownLabel: "10:00",
   });
 
-  assert.deepStrictEqual(createPaymentDataEntries(state), [
-    { label: "Order", value: "order-ln-pending" },
-    { label: "Checkout", value: "or_chk_ln_pending" },
+  assert.deepStrictEqual(createTransactionDetailsFromState(state), [
+    { label: "Order ID", value: "order-ln-pending" },
+    { label: "Checkout ID", value: "or_chk_ln_pending" },
     { label: "Invoice ID", value: "or_inv_ln_pending" },
-    { label: "Payment hash", value: hash("a") },
-    { label: "Amount", value: "200 sats (200000 msats)" },
-    { label: "Fiat amount", value: "0.05 USD" },
     { label: "Rail", value: "lightning" },
-    { label: "Transaction state", value: "pending" },
-    { label: "Workflow state", value: "invoice_created" },
-    { label: "Invoice expires at", value: iso(NOW + 600) },
-    { label: "BOLT11 invoice", value: "lnbc-pending" },
+    { label: "Status", value: "pending" },
+    { label: "Workflow", value: "invoice_created" },
+    { label: "Amount", value: "200 sats" },
+    { label: "Amount (msats)", value: "200000" },
+    { label: "Fiat", value: "$0.05" },
+    { label: "Lightning invoice", value: "lnbc-pending", copyValue: "lnbc-pending" },
+    // The truncated `value` is what the payer reads; `copyValue` is what the
+    // copy button puts on the clipboard.
+    { label: "Payment hash", value: "aaaaaaaa...aaaaaaaa", copyValue: hash("a") },
+    { label: "Expires at", value: iso(NOW + 600) },
   ]);
 });
 
@@ -489,23 +489,35 @@ test("characterization: swap pending", () => {
   });
   assertReactModelMatches(swapPending, state, "pending");
 
-  assert.deepStrictEqual(createPaymentDataEntries(state), [
-    { label: "Order", value: "order-swap-pending" },
-    { label: "Checkout", value: "or_chk_swap_pending" },
+  assert.deepStrictEqual(createTransactionDetailsFromState(state), [
+    { label: "Order ID", value: "order-swap-pending" },
+    { label: "Checkout ID", value: "or_chk_swap_pending" },
     { label: "Invoice ID", value: "or_inv_swap_pending" },
-    { label: "Payment hash", value: hash("d") },
-    { label: "Amount", value: "3,028 sats (3028000 msats)" },
-    // PRODUCT CHANGE (divergence (a)): this row was missing from the browser
-    // path's payment-data panel for every swap.
-    { label: "Fiat amount", value: "2.10 USD" },
     { label: "Rail", value: "swap" },
-    { label: "Transaction state", value: "pending" },
-    { label: "Workflow state", value: "invoice_created" },
-    { label: "Invoice expires at", value: iso(NOW + 900) },
+    { label: "Status", value: "pending" },
+    { label: "Workflow", value: "invoice_created" },
+    { label: "Amount", value: "3,028 sats" },
+    { label: "Amount (msats)", value: "3028000" },
+    // PRODUCT CHANGE (divergence (a)): this row was missing from the browser
+    // path for every swap.
+    { label: "Fiat", value: "$2.10" },
+    { label: "Payment hash", value: "dddddddd...dddddddd", copyValue: hash("d") },
+    { label: "Expires at", value: iso(NOW + 900) },
     { label: "Swap provider", value: "lightning-swap-com" },
-    { label: "Swap pay-in asset", value: "SOL_SOL" },
-    { label: "Swap provider order", value: "2WGWRH" },
-    { label: "Swap state", value: "awaiting_deposit" },
+    { label: "Provider order", value: "2WGWRH" },
+    { label: "Swap attempt", value: "or_att_swap" },
+    { label: "Pay-in asset", value: "SOL_SOL" },
+    { label: "Asset", value: "SOL" },
+    { label: "Network", value: "Solana" },
+    {
+      label: "Deposit address",
+      value: "SoLAddress",
+      href: "https://solscan.io/account/SoLAddress",
+      hrefLabel: "Explorer",
+    },
+    { label: "Deposit amount", value: "0.027479" },
+    { label: "Provider state", value: "awaiting_deposit" },
+    { label: "Provider expires at", value: iso(NOW + 900) },
   ]);
 });
 
@@ -539,24 +551,44 @@ test("characterization: swap settled", () => {
   });
   assertReactModelMatches(swapSettled, state, "settled");
 
-  assert.deepStrictEqual(createPaymentDataEntries(state), [
-    { label: "Order", value: "order-swap-settled" },
-    { label: "Checkout", value: "or_chk_swap_settled" },
+  assert.deepStrictEqual(createTransactionDetailsFromState(state), [
+    { label: "Order ID", value: "order-swap-settled" },
+    { label: "Checkout ID", value: "or_chk_swap_settled" },
     { label: "Invoice ID", value: "or_inv_swap_settled" },
-    { label: "Payment hash", value: hash("d") },
-    { label: "Amount", value: "3,028 sats (3028000 msats)" },
-    { label: "Fiat amount", value: "2.10 USD" },
     { label: "Rail", value: "swap" },
-    { label: "Transaction state", value: "settled" },
-    { label: "Workflow state", value: "paid" },
+    { label: "Status", value: "settled" },
+    { label: "Workflow", value: "paid" },
+    { label: "Amount", value: "3,028 sats" },
+    { label: "Amount (msats)", value: "3028000" },
+    { label: "Fiat", value: "$2.10" },
+    { label: "Payment hash", value: "dddddddd...dddddddd", copyValue: hash("d") },
     { label: "Settled at", value: iso(NOW - 45) },
-    { label: "Invoice expires at", value: iso(NOW + 900) },
+    { label: "Expires at", value: iso(NOW + 900) },
     { label: "Swap provider", value: "lightning-swap-com" },
-    { label: "Swap pay-in asset", value: "SOL_SOL" },
-    { label: "Swap provider order", value: "2WGWRH" },
-    { label: "Swap state", value: "completed" },
-    { label: "Swap deposit tx", value: "deposit-tx" },
-    { label: "Swap payout tx", value: "payout-tx" },
+    { label: "Provider order", value: "2WGWRH" },
+    { label: "Swap attempt", value: "or_att_swap" },
+    { label: "Pay-in asset", value: "SOL_SOL" },
+    { label: "Asset", value: "SOL" },
+    { label: "Network", value: "Solana" },
+    {
+      label: "Deposit address",
+      value: "SoLAddress",
+      href: "https://solscan.io/account/SoLAddress",
+      hrefLabel: "Explorer",
+    },
+    { label: "Deposit amount", value: "0.027479" },
+    // Settled-only relabel: the wallet sweep is settlement, so a provider state
+    // still reading "completed" is the LAST thing the provider said, not the
+    // current truth. This is the only site that pins it.
+    { label: "Last provider state", value: "completed" },
+    { label: "Provider expires at", value: iso(NOW + 900) },
+    {
+      label: "Deposit transaction",
+      value: "deposit-tx",
+      href: "https://solscan.io/tx/deposit-tx",
+      hrefLabel: "Explorer",
+    },
+    { label: "Lightning payout", value: "payout-tx" },
   ]);
 });
 
@@ -620,14 +652,17 @@ test("characterization: checkout_lock deferred", () => {
   });
   assertReactModelMatches(checkoutLockDeferred, state, "pending");
 
-  assert.deepStrictEqual(createPaymentDataEntries(state), [
-    { label: "Order", value: "order-lock" },
-    { label: "Checkout", value: "or_chk_lock" },
-    { label: "Amount", value: "750 sats (750000 msats)" },
-    { label: "Fiat amount", value: "0.19 USD" },
+  // No Invoice ID row: nothing is minted yet, so `invoice_id` is "" and the
+  // builder's empty-string guard drops the row entirely.
+  assert.deepStrictEqual(createTransactionDetailsFromState(state), [
+    { label: "Order ID", value: "order-lock" },
+    { label: "Checkout ID", value: "or_chk_lock" },
     { label: "Rail", value: "checkout_lock" },
-    { label: "Transaction state", value: "pending" },
-    { label: "Workflow state", value: "invoice_created" },
+    { label: "Status", value: "pending" },
+    { label: "Workflow", value: "invoice_created" },
+    { label: "Amount", value: "750 sats" },
+    { label: "Amount (msats)", value: "750000" },
+    { label: "Fiat", value: "$0.19" },
   ]);
 });
 
@@ -651,8 +686,8 @@ test("characterization: paid with sibling attempts", () => {
     amount_msats: 19_450_000,
     fiat_quote: { fiat: { currency: "USD", value: "19.45" } },
     // The CHECKOUT is paid, so the state overrides the displayed attempt's own
-    // pending/verifying pair. PRODUCT CHANGE for React's payment-data panel,
-    // which used to print the attempt's states on a checkout already paid.
+    // pending/verifying pair. PRODUCT CHANGE for React's settled panel, which
+    // used to print the attempt's states on a checkout already paid.
     transaction_state: "settled",
     workflow_state: "paid",
     expires_at: NOW + 300,
@@ -820,7 +855,7 @@ function amountSnapshot({ rail, settled, amountMsats }) {
 /** The value of the row with this label, or undefined when no such row exists. */
 const rowValue = (rows, label) => rows.find((row) => row.label === label)?.value;
 
-test("a good amount formats on every rail and both screens", () => {
+test("a good amount formats on every rail and every screen", () => {
   // Including the legitimate zero, which is falsy and the obvious thing for a
   // formatter guard to get wrong.
   for (const amountMsats of [0, 1_000, 200_000]) {
@@ -830,11 +865,6 @@ test("a good amount formats on every rail and both screens", () => {
         const state = browserState(amountSnapshot({ rail, settled, amountMsats }));
         const expected = amountMsats === 1_000 ? "1 sat" : `${amountMsats / 1000} sats`;
         assert.equal(state.amountLabel, expected, where);
-        assert.equal(
-          rowValue(createPaymentDataEntries(state), "Amount"),
-          `${expected} (${amountMsats} msats)`,
-          where,
-        );
         const rows = createTransactionDetailsFromState(state);
         assert.equal(rowValue(rows, "Amount"), expected, where);
         assert.equal(rowValue(rows, "Amount (msats)"), String(amountMsats), where);
@@ -885,7 +915,7 @@ function timestampSnapshot({ rail, settled, settledAt, expiresAt }) {
   };
 }
 
-test("a legitimate timestamp formats on every rail and both panels", () => {
+test("a legitimate timestamp formats on every rail", () => {
   // The far edge of the ECMAScript time range is included on purpose: it is
   // the largest value the formatter renders as a date, and an off-by-one in
   // the comparison would degrade it to the raw echo.
@@ -897,20 +927,16 @@ test("a legitimate timestamp formats on every rail and both panels", () => {
         timestampSnapshot({ rail, settled, settledAt: NOW - 10, expiresAt: NOW + 600 }),
       );
 
-      const entries = createPaymentDataEntries(state);
       const rows = createTransactionDetailsFromState(state);
       // Deferred checkout_lock has no timestamps to render at all: nothing is
       // minted yet, so the state carries no expiry or settlement.
       if (state.expires_at === undefined) {
         assert.equal(rail, "checkout_lock", where);
-        assert.equal(rowValue(entries, "Invoice expires at"), undefined, where);
         assert.equal(rowValue(rows, "Expires at"), undefined, where);
         continue;
       }
-      assert.equal(rowValue(entries, "Invoice expires at"), iso(NOW + 600), where);
       assert.equal(rowValue(rows, "Expires at"), iso(NOW + 600), where);
       if (state.settled) {
-        assert.equal(rowValue(entries, "Settled at"), iso(NOW - 10), where);
         assert.equal(rowValue(rows, "Settled at"), iso(NOW - 10), where);
       }
       if (state.swap !== undefined) {

@@ -477,7 +477,7 @@ your application's existing database:
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `db` | `SqlDatabase` | yes | pg Pool/Client, `node:sqlite` DatabaseSync, better-sqlite3, or a custom [SqlAdapter](#sqladapter). |
-| `amountFor` | `(reference, context) => amount \| null` | yes | The trusted price for a reference, from your data, or `null` → 404. Called only where a price is minted or quoted. |
+| `amountFor` | `(reference, context) => amount \| null` | yes | The trusted price for a reference, from your data, or `null` → 404. Called only where a price is minted or quoted. Return an optional `description` beside the price — one display string, echoed on the prepare and create responses and rendered above the amount by both drop-ins. See [Frontend checkout → Show the payer what they are buying](frontend-checkout.md#show-the-payer-what-they-are-buying). |
 | `onPaid` | `PaymentSettlementHook` | yes | Fulfillment; see [onPaid](#onpaid). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
 | `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
@@ -880,8 +880,8 @@ mount prefix (default `/openreceive`).
 
 | Route | Status | Response body |
 | --- | --- | --- |
-| `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ reference, amount_msats, fiat_quote?, payment_methods }` |
-| `POST …/checkouts` | 201 | `CreateCheckoutResponse` `{ checkout: Checkout, payment_methods }` |
+| `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ reference, amount_msats, description?, fiat_quote?, payment_methods }` |
+| `POST …/checkouts` | 201 | `CreateCheckoutResponse` `{ checkout: Checkout, description?, payment_methods }` |
 | `POST …/payments/check` | 200 | `PaymentCheck` `{ payment_hash, status: PaymentStatus, paid_at?, details?: PaymentDetails, payment_methods }` |
 | `POST …/swaps/quote` | 200 | `SwapQuote` `{ provider, pay_asset: SwapPayInAsset, available, pay_amount?, minimum_pay_amount?, maximum_pay_amount?, minimum_invoice_amount_msats?, maximum_invoice_amount_msats?, unavailable_reason?, unavailable_message? }` |
 | `POST …/swaps` | 201 | `CreateSwapResponse` `{ swap: SwapCheckout }` |
@@ -1188,9 +1188,17 @@ bare snapshot polls). `polling={false}` renders without status polling and leave
 flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onState`,
 `onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`,
 `paymentWizard`, `themeToggle` (default `true`), `defaultTheme`, `storageKey`,
-`decodeLinkUrl`, `components`, `classNames`, `syncUrl`, `resumePathPrefix`,
-`routeReference`, `metadata`, `createFetch`, `resolveAssetUrl`. Prop names and defaults are
-shared with the Vue, Svelte and Angular wrappers.
+`decodeLinkUrl`, `assetBaseUrl`, `components`, `classNames`, `syncUrl`,
+`resumePathPrefix`, `routeReference`, `metadata`, `createFetch`, `resolveAssetUrl`.
+
+The shared prop surface — everything up to and including `assetBaseUrl` above,
+plus `checkout` and `reference` — has the same names and defaults in the Vue,
+Svelte and Angular wrappers. The rest is React-only: `components`, `classNames`,
+`children` and `createFetch` have no wrapper equivalent, `resolveAssetUrl` is a
+function and so cannot cross an HTML attribute (pass `assetBaseUrl` instead), and
+`polling` / `pollIntervalMs` reach the wrappers only through their `options`
+escape hatch. [docs/internal/wrapper-parity.md](../internal/wrapper-parity.md) is
+the full table.
 
 `children` is React-only: a node, or a render prop receiving the live `useCheckout` model.
 It is the slot for order context — a line-item summary, a thumbnail, a "you are buying"
@@ -1223,7 +1231,9 @@ From `@openreceive/react`. The method picker + swap deposit flow rendered inside
 From `@openreceive/elements`. The custom element behind the non-React wrappers. Create
 mode: `reference` + `prefix` attributes. Snapshot mode: `invoice`/`invoice-id`/
 `payment-hash`/... attributes. Polling knobs: `polling="false"` renders without status
-polling; `poll-interval-ms` tunes the interval. Events (all seven): `openreceive-copy`,
+polling; `poll-interval-ms` tunes the interval. `asset-base-url` points the wizard's
+icons and tutorials at wherever this app serves the packages' `dist/assets` trees —
+the string form of `resolveAssetUrl`, and the only form plain markup can carry. Events (all seven): `openreceive-copy`,
 `openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`,
 `openreceive-provider-copy`, `openreceive-start-over`, `openreceive-error`.
 
@@ -1325,9 +1335,16 @@ OpenReceive.configure do |config|
   # { "currency" => "USD", "value" => "12.00" } or { "sats" => 1200 }, or nil
   # when there is nothing to pay for (a 404). Called only where a price is
   # minted or quoted; payer input never carries an amount.
+  #
+  # An optional "description" beside the price is what the payer is buying, in
+  # your own words: one display string, echoed on the prepare and create
+  # responses and rendered above the amount by both drop-ins. The checkout
+  # shows a total and never an order, so without it the payer sees a QR and a
+  # number.
   config.amount_for = lambda do |reference|
     order = Order.find_by(id: reference)
-    order && { "currency" => "USD", "value" => order.total.to_s }
+    order && { "currency" => "USD", "value" => order.total.to_s,
+               "description" => "#{order.line_items.size} items" }
   end
 
   # REQUIRED. Fulfillment. Runs inside the settlement transaction, only for

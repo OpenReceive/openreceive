@@ -31,9 +31,9 @@ export {
 export {
   createSwapDisplayModel,
   createSwapFeeBreakdown,
+  selectCurrentSwapInvoice,
   swapAssetMatchesRoute,
   swapDepositRisk,
-  overlaySwapRefundStaging,
 } from "./checkout-swap-view.ts";
 // ./checkout-links.ts — outbound explorer / decoder links
 export {
@@ -42,13 +42,9 @@ export {
   createLightningInvoiceDecodeUrl,
   getExplorerNetwork,
 } from "./checkout-links.ts";
-// ./checkout-details.ts — detail rows + payment data entries
-export type {
-  PaymentDataSource,
-  TransactionDetailsSource,
-} from "./checkout-details.ts";
+// ./checkout-details.ts — the transaction-details rows
+export type { TransactionDetailsSource } from "./checkout-details.ts";
 export {
-  createPaymentDataEntries,
   createTransactionDetails,
   createTransactionDetailsFromState,
   resolveTransactionDetailRows,

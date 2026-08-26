@@ -11,7 +11,7 @@ round-trip is a `@modelFlow`, and payment state has exactly one sink — a poll
 result and an ActionCable push land in the same idempotent store action, so
 the UI can never flip a settled screen back to "waiting". The visual layer
 stays the shared npm packages: components come from `@openreceive/react`
-(`QRCode`, `SatsDetail`, `WaitingState`, `InvoiceSummary`, `PaymentData`,
+(`QRCode`, `SatsDetail`, `WaitingState`, `InvoiceSummary`, `TransactionDetails`,
 `CopyInvoiceButton`, `PaymentWizard`) and every class string from
 `@openreceive/browser`'s `ui-classes` design registry, so the design is
 identical to the other demos.
@@ -26,7 +26,10 @@ action — a started swap attempt, a request for a Lightning invoice, whether
 its deposit panel has replaced the Lightning pane, and its errors — so
 polling and the cable push keep landing in that one sink. Selecting Bitcoin
 mints (or reuses) the bolt11 and the Lightning pane above the wizard is the
-payment target.
+payment target. The two-step swap refund is two method calls on the store,
+which forwards them to the controller: `stageSwapRefund` posts
+`/openreceive/swaps/status` and holds what the payer typed, `confirmSwapRefund`
+is the only call that posts `/openreceive/swaps/refunds`.
 
 Host persistence is **Postgres** (Docker Compose). Fruit rows live in
 `products` (seeded from [`../../shared/fruits.json`](../../shared/fruits.json));
@@ -44,9 +47,15 @@ The browser never receives your NWC code.
 
 ## How payment state reaches the browser
 
-- **Polling (baseline):** the store polls `POST /openreceive/payments/check`
-  (plus `/openreceive/swaps/status` for a live swap) every 3 s, with an
-  in-flight guard, Retry-After-aware backoff, and a terminal-state stop.
+- **Polling (baseline):** `createCheckoutController` from
+  `@openreceive/browser/headless` owns the loop — `POST /openreceive/payments/check`
+  (plus `/openreceive/swaps/status` for a live swap) every 3 s, with the
+  in-flight guard, Retry-After-aware backoff, the countdown, the terminal-state
+  stop, and the staged swap-refund address a status tick would otherwise wipe.
+  `CheckoutFlow` supplies the state layer above it and nothing more: the
+  controller publishes a snapshot, the store freezes it, and every derived value
+  is a `@computed` over that. Bringing your own store does not mean bringing
+  your own engine.
 - **ActionCable over solid_cable (instant):** settlement is usually discovered
   out of band — by the request-path opportunistic reconcile (any OpenReceive
   call that wins the durable `openreceive_meta` gate) or the optional

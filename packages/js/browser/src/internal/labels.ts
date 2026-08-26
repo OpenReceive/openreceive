@@ -32,7 +32,6 @@ export const checkoutLabels = {
   switchPaymentMethod: "Switch payment method",
   loadingCurrencies: "Loading currencies...",
   emptyBitcoin: "Choose Bitcoin Lightning.",
-  viewPaymentData: "View payment data",
   openProvider: "How To Pay",
   tutorialTitlePrefix: "Pay a Lightning invoice with",
   tutorialIntroPrefix: "It's easy to make this payment using",
@@ -87,6 +86,14 @@ export const checkoutLabels = {
   tutorialBack: "Back",
   tutorialNext: "Next",
   tutorialClose: "Close",
+  /**
+   * The deposit panel's copy rows. Every value the payer has to REPRODUCE gets a
+   * labelled row with a copy button — the amount included, because on token
+   * rails the QR carries no amount and the payer types it by hand.
+   */
+  swapCopyAddress: "Address",
+  swapCopyMemo: "Memo",
+  swapCopyAmount: "Amount",
   /** Out-of-range swap asset: both renderers build this panel from one model. */
   swapUnavailableTitle: "{asset} unavailable",
   swapUnavailableFallback: "{asset} is not available for this amount.",

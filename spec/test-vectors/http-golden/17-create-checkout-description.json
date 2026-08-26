@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "name": "create echoes the order description as a sibling of checkout",
+  "handler": "described",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": { "reference": "order-golden-described" }
+  },
+  "expected": {
+    "status": 201,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "checkout": {
+        "reference": "order-golden-described",
+        "payment_hash": "<payment_hash>",
+        "bolt11": "<bolt11>",
+        "amount_msats": 1000,
+        "created_at": "<unix_seconds>",
+        "expires_at": "<unix_seconds>",
+        "fiat_quote": null
+      },
+      "description": "2 kg Ataulfo mangoes",
+      "payment_methods": []
+    }
+  },
+  "note": "A SIBLING of `checkout`, not a field inside it: the `Checkout` object is shared with the swap responses, and the display string belongs to the checkout call."
+}
