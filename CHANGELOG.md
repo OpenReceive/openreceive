@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.4 - Unreleased
 
-Nine fixes from building a real store on the packages: one shipped bug, one
+Twelve findings from building a real store on the packages: one shipped bug, one
 inconsistency between two panels, three small API additions, and the guides that
 let all of them happen. Nothing on the wire changed — the HTTP routes, the mint,
 the swap lifecycle and the refund two-step are untouched.
@@ -138,6 +138,19 @@ or said the opposite.
   copy button, and the amount is copied **bare** — `0.032664 SOL` is not
   something a wallet's amount field accepts, which is why the model keeps the
   number and the labels apart.
+
+Examples were rebuilt against the 0.2.4 packages. Only the browser-side
+packages changed — `@openreceive/browser`, `@openreceive/elements`,
+`@openreceive/react` and `@openreceive/provider-data`; `core`, `node`, the HTTP
+adapters and all three gems are byte-identical to 0.2.3 and release in lockstep
+only. The live wallet smoke (`npm run test:live`) was NOT run for this release:
+it needs a funded NWC connection, and nothing here touches the wallet call path.
+
+The public API surface gained seven names and removed none — five on
+`@openreceive/browser/headless` (`swapDepositRisk`, `SwapDepositRisk`,
+`swapOptionLimitSentence`, `AssetUrlResolver`, `paymentIconPaths`) and two on
+`@openreceive/provider-data` (`warnOnFileAssetUrl`, `AssetUrlResolver`) — so the
+diff in `tools/validate/public-api.snapshot.json` is additive throughout.
 
 ## 0.2.3 - 2026-08-25
 
