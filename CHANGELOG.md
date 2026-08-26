@@ -121,7 +121,23 @@ or said the opposite.
   order page outside `<Checkout>`.
 - **`update_all` fires no callbacks**, said out loud in the Rails quickstart,
   with the row-lock alternative for an app that pushes settlement over Action
-  Cable.
+  Cable. Framed as a choice — conditional `UPDATE` when a job drains the flag,
+  row lock plus `update!` when something has to fire on commit — because both
+  are idempotent and the axis between them was never named.
+- **A network-selection section**, stating as a requirement what both renderers
+  already gate on: a group with one option has no network question, so start the
+  swap from the tile and let only `options.length > 1` earn a second step.
+  Asking anyway on SOL teaches the payer that the network step is ceremony, one
+  screen before USDT, where a wrong send is unrecoverable.
+  `findSwapGridGroup`, `updateSelectedSwapNetworks` and `wizardNetworkGroupIds`
+  move out of the "uncovered" block into it.
+- **The deposit values are the payer's to reproduce.** On a token rail the QR
+  carries no amount, so the payer types six decimals by hand and a short send
+  becomes `refund_required`. `SwapDisplayModel`'s `depositAddress`,
+  `depositMemo` and `depositAmount` each owe the payer a labelled row with a
+  copy button, and the amount is copied **bare** — `0.032664 SOL` is not
+  something a wallet's amount field accepts, which is why the model keeps the
+  number and the labels apart.
 
 ## 0.2.3 - 2026-08-25
 

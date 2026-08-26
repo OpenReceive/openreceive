@@ -42,6 +42,15 @@ cannot convert raises, and the payer sees the panel's error surface — an
 amount-less payment URI would be worse than either alternative, because the
 wallet then lets the payer type any amount against a fixed-rate order.
 
+The consequence for the UI: on a token rail the payer **types six decimals by
+hand**, and a short send against a fixed-rate order becomes `refund_required` —
+a refund-address form and a round trip. So the amount is not a caption. It gets
+its own labelled row with a copy button, beside the address and the memo, and it
+is copied **bare** — the number alone, because `0.032664 SOL` is not something a
+wallet's amount field accepts. Both shipped panels do this; a custom UI owes the
+payer the same. See
+[The deposit values are the payer's to reproduce](headless-checkout.md#the-deposit-values-are-the-payers-to-reproduce).
+
 ## Which deposits can actually be mis-sent
 
 The deposit panel leads with a red banner on most rails and a quiet heading on
