@@ -1579,8 +1579,16 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
 
   def test_mysql_adapter_run_renders_mysql_compatible_ddl
     fake_db_config = Struct.new(:adapter).new("mysql2")
-    ActiveRecord::Base.stub(:connection_db_config, fake_db_config) do
+    # Object#stub is gone: minitest 6 moved mocking out to a separate gem, and
+    # every other fake in this suite is a hand-written define_singleton_method
+    # anyway. connection_db_config is owned by ActiveRecord::ConnectionHandling
+    # rather than defined on the singleton, so defining it here shadows the
+    # inherited method and remove_method restores it exactly.
+    ActiveRecord::Base.define_singleton_method(:connection_db_config) { fake_db_config }
+    begin
       run_generator
+    ensure
+      ActiveRecord::Base.singleton_class.remove_method(:connection_db_config)
     end
 
     assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
