@@ -9,9 +9,7 @@ process.env.LOG_LEVEL ??= "error";
 
 const assert = (await import("node:assert/strict")).default;
 const test = (await import("node:test")).default;
-const { createLifecycleStack, installFastTimers, until } = await import(
-  "./helpers/lifecycle-harness.mjs"
-);
+const { createLifecycleStack, until } = await import("./helpers/lifecycle-harness.mjs");
 const { invoice } = await import("./helpers/react-fixtures.mjs");
 const React = (await import("react")).default;
 const { createRoot } = await import("react-dom/client");
@@ -210,18 +208,18 @@ test("copy feedback appears on click and resets itself", async (t) => {
   t.after(() => {
     if (!hadClipboard) delete globalThis.navigator.clipboard;
   });
-  // The reset is a real OPENRECEIVE_COPY_FEEDBACK_MS timer, and the controller
-  // captures setTimeout when it is built — on mount — so the clamp has to be
-  // installed first. Left unclamped this test burns 1.8s of wall clock and fails
-  // outright on a loaded runner: it timed out once in run 33008705772 and passed
-  // on re-run, which is the signature worth designing out rather than retrying.
-  const restoreTimers = installFastTimers();
-  t.after(restoreTimers);
   const handle = mount(React.createElement(Checkout, { checkout: snapshot, polling: false }));
   try {
     const copy = await until(() => handle.button(checkoutLabels.copyInvoice), {
       label: "copy button",
     });
+    // useTransientValue only owns a reset timer once its passive effect has run;
+    // until then showValue takes the controller-less branch, which sets the label
+    // and schedules nothing. Clicking before the flush therefore produces feedback
+    // that never clears — the timeout this test hit on CI, passing on re-run
+    // because the effect happened to land first. The button renders before that
+    // effect, so waiting for it is not enough.
+    await flush();
     copy.click();
     await until(() => handle.text().includes(checkoutLabels.copied), {
       label: "copied feedback",
