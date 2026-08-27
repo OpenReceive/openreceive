@@ -34,7 +34,7 @@ updates:
   # packages/ruby/* have gitignored lockfiles, so there is nothing there to
   # resolve against.
   #
-  # examples/hello-fruit/server/rails is deliberately absent. Its Gemfile
+  # examples/buttons/server/rails is deliberately absent. Its Gemfile
   # reaches the three local gems with `path: "../../../../packages/ruby/*"`,
   # and Dependabot fetches only the files inside a configured directory, so
   # those paths land outside what it can see: the run reports

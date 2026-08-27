@@ -1,0 +1,19 @@
+# solid_cable: database-backed ActionCable, no Redis.
+#
+# Single-database setup — `solid_cable_messages` lives in the primary database
+# (db/migrate), which is the whole point: the `notifications` worker container
+# settles orders in a different PROCESS from the one holding the payer's
+# websocket, and the database is what those two already share. A per-process
+# in-memory adapter would drop every broadcast that worker makes.
+development:
+  adapter: solid_cable
+  polling_interval: 0.1.seconds
+  message_retention: 1.day
+
+test:
+  adapter: test
+
+production:
+  adapter: solid_cable
+  polling_interval: 0.1.seconds
+  message_retention: 1.day

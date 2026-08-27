@@ -64,12 +64,13 @@ jobs:
       - run: npm ci
       - run: npm run test:orms
 
-  # Full Rails Hello Fruit demo (host-owned Postgres, like its compose stack).
+  # Full Buy a Button Rails demo (host-owned Postgres, like its compose stack).
   # bin/ci runs setup against the service database, the stubbed-wallet
-  # integration tests, and the gem audit. No importmap audit: the browser
-  # client is the Shakapacker bundle, which the hello-fruit job above builds
-  # (build:demo) and scans for secret/testkit markers (scan:client-bundles).
-  hello-fruit-rails:
+  # integration tests, the schema/catalog drift checks and the gem audit. No
+  # importmap audit: the browser client is the Shakapacker bundle, which the
+  # hello-fruit job above builds (build:demo) and scans for secret/testkit
+  # markers (scan:client-bundles).
+  buttons-rails:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

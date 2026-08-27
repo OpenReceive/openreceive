@@ -86,11 +86,12 @@ jobs:
       - uses: ./.github/actions/setup-playwright
       - run: npm run test:e2e:smoke
 
-  # Full Rails Hello Fruit example on every push/PR, not only in the weekly
+  # Full Buy a Button Rails example on every push/PR, not only in the weekly
   # demos lane: a schema break in the example once shipped because nothing
-  # per-push ever executed it. Mirrors demos.yml's hello-fruit-rails job.
+  # per-push ever executed it. Mirrors demos.yml's buttons-rails job.
   # bin/ci runs setup against the service database, the stubbed-wallet
-  # integration tests, and the gem audit. database.yml's test default already
+  # integration tests, the drift checks and the gem audit. database.yml's test
+  # default already
   # points at postgres://openreceive:openreceive@127.0.0.1:5432, which the
   # service container below provides, so no DATABASE_URL override is needed.
   rails-example:

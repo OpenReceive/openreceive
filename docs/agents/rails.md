@@ -297,8 +297,11 @@ after OpenReceive's own commit, so an email enqueued there is as safe as one
 enqueued from a job draining the flag — and an email sent *inline* from
 `on_paid` is not, in either shape.
 
-A complete runnable example app is the Rails Hello Fruit demo, `npm run demo rails`
-(`examples/hello-fruit/server/rails`).
+A complete runnable example app is the Buy a Button Rails demo,
+`npm run demo buttons`
+(`examples/buttons/server/rails`) — a
+products table, a signed-cookie visitor table, an orders table, and a public
+feed of paid orders, with the three hooks as the only bridge to any of it.
 
 Supply the receive-only wallet connection as `ENV["NWC_URI"]`. Never put it in
 browser code, logs, or assets. Your application refuses to start when the code

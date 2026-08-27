@@ -1,17 +1,18 @@
 name: Rails example CI
 description: >-
-  Ruby + bundler cache, then `bin/ci` in the Rails Hello Fruit example (setup
-  against the service database, the stubbed-wallet integration tests, and the
-  gem audit). Shared by ci.yml's per-push rails-example and demos.yml's
-  hello-fruit-rails so the two lanes cannot drift.
+  Ruby + bundler cache, then `bin/ci` in the Buy a Button Rails example
+  (setup against the service database, the stubbed-wallet integration tests,
+  the schema/catalog drift checks and the gem audit). Shared by ci.yml's
+  per-push rails-example and demos.yml's buttons-rails so the two lanes cannot
+  drift.
 
 runs:
   using: composite
   steps:
     - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
       with:
-        working-directory: examples/hello-fruit/server/rails
+        working-directory: examples/buttons/server/rails
         bundler-cache: true
     - run: bin/ci
       shell: bash
-      working-directory: examples/hello-fruit/server/rails
+      working-directory: examples/buttons/server/rails

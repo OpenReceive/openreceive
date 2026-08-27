@@ -196,18 +196,24 @@ for (const demo of nodeDemos) {
   );
   expect(
     dockerfile.includes(`npm run build -w ${demo.packageName}`),
-    `${dockerfilePath}: must build the Rails Hello Fruit client`,
+    `${dockerfilePath}: must build the Rails client`,
   );
   expect(dockerfile.includes("packages/ruby"), `${dockerfilePath}: must copy Ruby packages`);
   expect(
-    dockerfile.includes("examples/hello-fruit/shared"),
-    `${dockerfilePath}: must copy shared Hello Fruit assets`,
+    dockerfile.includes(demo.sharedDir),
+    `${dockerfilePath}: must copy ${demo.sharedDir} (the shop UI, stores and seed catalog)`,
+  );
+  // One copy of the artwork, read by every stack. The Ruby stage needs it
+  // because it is on the Propshaft load path, not inside the app.
+  expect(
+    dockerfile.includes(demo.imagesDir),
+    `${dockerfilePath}: must copy ${demo.imagesDir} (the product artwork)`,
   );
   expect(dockerfile.includes(`EXPOSE ${demo.port}`), `${dockerfilePath}: must expose ${demo.port}`);
 
   // Shakapacker layout: one pack entry, webpack config, and a manifest-driven
   // public/packs handed from the client stage to the Ruby stage.
-  const packsEntry = "app/javascript/packs/hello_fruit.js";
+  const packsEntry = `app/javascript/packs/${demo.packName}.js`;
   expect(
     existsSync(path.join(root, demo.dir, packsEntry)),
     `${demo.dir}/${packsEntry}: missing Shakapacker pack entry`,
@@ -217,8 +223,8 @@ for (const demo of nodeDemos) {
     `${demo.dir}/app/javascript/src/main.tsx: missing React client entry`,
   );
   expect(
-    existsSync(path.join(root, demo.dir, "lib/hello_fruit/public_cache_headers.rb")),
-    `${demo.dir}/lib/hello_fruit/public_cache_headers.rb: missing public cache middleware`,
+    existsSync(path.join(root, demo.dir, `lib/${demo.libNamespace}/public_cache_headers.rb`)),
+    `${demo.dir}/lib/${demo.libNamespace}/public_cache_headers.rb: missing public cache middleware`,
   );
 
   const shakapackerConfigPath = `${demo.dir}/config/shakapacker.yml`;
@@ -241,7 +247,14 @@ for (const demo of nodeDemos) {
   );
   expect(
     (shakapacker.default?.additional_paths ?? []).includes("../../shared"),
-    `${shakapackerConfigPath}: must resolve the shared Hello Fruit helpers`,
+    `${shakapackerConfigPath}: must resolve ${demo.sharedDir}`,
+  );
+  // The client stage owns the webpack build. An `assets:precompile` in the Ruby
+  // stage exists only to digest the product artwork through Propshaft, and it
+  // must not drag webpack in behind it — there are no node_modules there.
+  expect(
+    shakapacker.default?.shakapacker_precompile === false,
+    `${shakapackerConfigPath}: shakapacker_precompile must be false — the client stage builds the bundle`,
   );
 
   const railsPackagePath = `${demo.dir}/package.json`;
@@ -256,11 +269,15 @@ for (const demo of nodeDemos) {
     `${demo.dir}/config/webpack/webpack.config.js: missing webpack config`,
   );
 
-  // The webpack manifest is the digest authority; a Propshaft/Sprockets
-  // precompile pass would fingerprint the same bundles a second time.
+  // public/packs/manifest.json is the digest authority for JS and CSS, and
+  // public/packs is not on the Propshaft load path — so a precompile pass
+  // cannot fingerprint the bundles a second time. What it DOES fingerprint is
+  // the product artwork, which lives outside the app and whose digested URLs
+  // ship to the browser in the bootstrap payload. `shakapacker_precompile:
+  // false` (asserted above) is what keeps webpack out of that pass.
   expect(
-    !/^\s*RUN[^\n]*assets:precompile/m.test(dockerfile),
-    `${dockerfilePath}: must not precompile assets — public/packs/manifest.json is the digest authority`,
+    !/^\s*RUN[^\n]*shakapacker:compile/m.test(dockerfile),
+    `${dockerfilePath}: must not run webpack in the Ruby stage`,
   );
   expect(
     /COPY --from=client [^\n]*public\/packs/.test(dockerfile),
@@ -351,8 +368,26 @@ for (const demo of nodeDemos) {
   const migratePath = path.join(root, migrationsDir);
   expect(existsSync(migratePath), `${migrationsDir}: missing migrations`);
   const migrateListing = existsSync(migratePath) ? readdirSync(migratePath).join("\n") : "";
-  expect(/create_products/.test(migrateListing), `${migrationsDir}: missing products migration`);
-  expect(/create_orders/.test(migrateListing), `${migrationsDir}: missing orders migration`);
+  expect(
+    /create_shop_products/.test(migrateListing),
+    `${migrationsDir}: missing products migration`,
+  );
+  expect(/create_shop_users/.test(migrateListing), `${migrationsDir}: missing users migration`);
+  expect(/create_shop_orders/.test(migrateListing), `${migrationsDir}: missing orders migration`);
+  // The settlement push crosses PROCESSES: the notifications worker below
+  // broadcasts into the web container. A per-process in-memory cable adapter
+  // would silently drop every one of those, so the messages table and the
+  // database-backed adapter are asserted together.
+  expect(
+    /create_solid_cable_messages/.test(migrateListing),
+    `${migrationsDir}: missing solid_cable messages migration`,
+  );
+  const cablePath = `${demo.dir}/config/cable.yml`;
+  const cable = parse(cablePath, parseCompose);
+  expect(
+    cable.production?.adapter === "solid_cable",
+    `${cablePath}: production must use a database-backed cable adapter — the notifications worker broadcasts from another process`,
+  );
   expect(
     /create_openreceive_tables/.test(migrateListing),
     `${migrationsDir}: missing openreceive tables migration`,

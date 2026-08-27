@@ -203,22 +203,28 @@ flow the routes do not offer:
 
 ## Run a demo
 
-Hello Fruit is a small example shop, built once for each supported stack. In
-every variant you add fruit stickers to a cart, check out to create an order,
-and pay that order with a real Lightning invoice from your own wallet; the
-sticker is delivered only after `onPaid` marks the order paid.
+Two example shops. In both you add items to a cart, check out to create an
+order, and pay that order with a real Lightning invoice from your own wallet;
+the goods are delivered only after `onPaid` marks the order paid.
 
 ```sh
-npm run demo node      # Express + React/Vue/Svelte/Angular http://localhost:3000
-npm run demo static    # Static HTML + small API             http://localhost:3001
-npm run demo nextjs    # Next.js fullstack                   http://localhost:3002
-npm run demo rails     # Rails + host Postgres               http://localhost:3003
+npm run demo node      # Hello Fruit — Express + React/Vue/Svelte/Angular  http://localhost:3000
+npm run demo static    # Hello Fruit — Static HTML + small API             http://localhost:3001
+npm run demo nextjs    # Hello Fruit — Next.js fullstack                   http://localhost:3002
+npm run demo buttons   # Buy a Button — Rails + host Postgres              http://localhost:3003
 ```
 
-Every variant needs a receive-only `NWC_URI` in the root `.env`. The
-[Hello Fruit README](examples/hello-fruit/README.md) explains what each command
-starts, what each variant demonstrates, and which parts of the code belong to
-the shop and which to the library.
+Hello Fruit is the same shop built once per Node stack — a parity showcase.
+[Buy a Button](examples/buttons) is the persistence story: a products table, a
+visitor remembered by a signed cookie, an orders table, and a public feed of
+every paid order on the site, with three lambdas as the entire bridge to
+OpenReceive.
+
+Every demo needs a receive-only `NWC_URI` in the root `.env`. The
+[Hello Fruit README](examples/hello-fruit/README.md) and the
+[Buy a Button README](examples/buttons/README.md) explain what each command
+starts and which parts of the code belong to the shop and which to the
+library.
 
 ## Development
 

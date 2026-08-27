@@ -1,4 +1,4 @@
-// The single catalog of dockerized Hello Fruit demos. Both the launcher
+// The single catalog of dockerized demos. Both the launcher
 // (tools/run-demo.mjs) and the container validator
 // (tools/validate/check-demo-containers.mjs) read this list, so a demo added
 // or renamed here is launchable and validated in the same change.
@@ -33,13 +33,21 @@ export const OPENRECEIVE_DEMOS = [
   },
   {
     kind: "rails",
-    keys: ["rails", "rails-fullstack"],
-    dir: "examples/hello-fruit/server/rails",
-    packageName: "@openreceive/example-rails",
-    service: "hello-fruit-rails",
+    keys: ["buttons", "rails", "rails-fullstack"],
+    dir: "examples/buttons/server/rails",
+    // The shop UI, stores, wire types and seed catalog. Read by every stack;
+    // the Dockerfile has to carry it into both build stages.
+    sharedDir: "examples/buttons/shared",
+    // The Shakapacker entry, the lib/ namespace, and the artwork directory the
+    // Propshaft load path points at.
+    packName: "buttons",
+    libNamespace: "button_shop",
+    imagesDir: "examples/buttons/images",
+    packageName: "@openreceive/example-buttons-rails",
+    service: "buttons-rails",
     notificationsService: "notifications",
     dbService: "db",
     port: "3003",
-    label: "Rails + Postgres",
+    label: "Buy a Button — Rails + Postgres",
   },
 ];

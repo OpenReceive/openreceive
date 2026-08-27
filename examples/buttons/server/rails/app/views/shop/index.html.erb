@@ -1,0 +1,7 @@
+<div id="root"></div>
+<%# The bootstrap payload: the catalog with its digested image urls, the engine
+    mount prefix, and this visitor's PUBLIC uuid. The private id stays in the
+    signed cookie and never appears here. %>
+<script id="__shop_bootstrap" type="application/json">
+  <%= raw(json_escape(@app_data.to_json)) %>
+</script>

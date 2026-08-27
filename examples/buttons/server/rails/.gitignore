@@ -1,0 +1,37 @@
+# See https://help.github.com/articles/ignoring-files for more about ignoring files.
+
+/.bundle
+/vendor/bundle
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+/tmp/pids/*
+!/tmp/pids/
+!/tmp/pids/.keep
+/storage/*
+!/storage/.keep
+/tmp/storage/*
+!/tmp/storage/
+!/tmp/storage/.keep
+/public/assets
+/public/assets/*
+/public/index.html
+/public/stickers
+/public/**/*.js
+/public/**/*.css
+/app/assets/builds/*
+!/app/assets/builds/.keep
+/node_modules
+/config/*.key
+/.env*
+!/.env.example
+
+# Shakapacker output
+/public/packs
+/public/packs-test
+
+# Local port publishing. compose.override.yml.example is the committed template;
+# `npm run demo buttons` copies it, and a copy carrying somebody's local ports
+# is not the repository's business.
+/compose.override.yml

@@ -1,0 +1,84 @@
+x-rails-app: &rails_app
+  build:
+    context: ../../../..
+    dockerfile: examples/buttons/server/rails/Dockerfile
+    args:
+      CLIENT_BUILD_ID: "${CLIENT_BUILD_ID:-}"
+  depends_on:
+    db:
+      condition: service_healthy
+  environment: &rails_env
+    RAILS_ENV: production
+    # Host app database. Not an OpenReceive runtime persistence setting — the
+    # engine's two tables live in this same database, and so does
+    # solid_cable_messages: the worker below broadcasts into the web container
+    # THROUGH this database.
+    DATABASE_URL: postgres://openreceive:openreceive@db:5432/buttons_rails
+    # Fixed, not generated: it signs the shop_user_id cookie, and a new value on
+    # every boot would log every visitor out and orphan their orders.
+    SECRET_KEY_BASE: ${SECRET_KEY_BASE:-buy-a-button-rails-demo-secret-key-base-change-me}
+  env_file:
+    - ../../../../.env
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: openreceive
+      POSTGRES_PASSWORD: openreceive
+      POSTGRES_DB: buttons_rails
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openreceive -d buttons_rails"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    # Persistence is the SUBJECT of this demo, so the database is a named volume
+    # rather than a tmpfs: orders, visitors and the recent-orders feed survive
+    # `docker compose restart`. Wipe with `docker compose down -v`.
+    volumes:
+      - buttons-rails-db:/var/lib/postgresql
+
+  buttons-rails:
+    <<: *rails_app
+    environment:
+      <<: *rails_env
+      PORT: "3003"
+    expose:
+      - "3003"
+
+  # THE LONG-RUNNING WORKER. Its own container, its own process, the same
+  # database.
+  #
+  # `openreceive:notifications` is the one long-lived task the engine ships, and
+  # it is two jobs in one process: it listens for NWC-02 `payment_received`
+  # notifications from the wallet, AND runs a periodic reconcile pass
+  # (OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS, default 15s) as the
+  # safety net for notifications missed while it was down. There is no separate
+  # reconciler container to add: a one-shot `openreceive:reconcile` exists, but
+  # scheduling it alongside this would just duplicate the thread already
+  # running here.
+  #
+  # It is OPTIONAL. Without it, settlement of an abandoned checkout still
+  # happens — every engine request runs the durably gated opportunistic
+  # reconcile — it just waits for the next OpenReceive call instead of landing
+  # the moment the wallet reports the payment.
+  #
+  # THIS CONTAINER IS WHY CABLE IS DATABASE-BACKED. It settles orders in a
+  # process that holds none of the payers' websockets; solid_cable is how its
+  # broadcast reaches the web container. A per-process in-memory adapter would
+  # drop every push this worker makes, and the demo would silently fall back to
+  # polling with no sign that anything was wrong.
+  notifications:
+    <<: *rails_app
+    depends_on:
+      db:
+        condition: service_healthy
+      buttons-rails:
+        condition: service_started
+    environment:
+      <<: *rails_env
+      SKIP_DB_PREPARE: "1"
+    command: ["bundle", "exec", "rails", "openreceive:notifications"]
+
+volumes:
+  buttons-rails-db:

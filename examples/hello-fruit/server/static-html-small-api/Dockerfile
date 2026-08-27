@@ -23,7 +23,7 @@ COPY packages/js/vue/package.json ./packages/js/vue/package.json
 COPY examples/hello-fruit/server/nextjs-fullstack/package.json ./examples/hello-fruit/server/nextjs-fullstack/package.json
 COPY examples/hello-fruit/server/node-express/package.json ./examples/hello-fruit/server/node-express/package.json
 COPY examples/hello-fruit/server/static-html-small-api/package.json ./examples/hello-fruit/server/static-html-small-api/package.json
-COPY examples/hello-fruit/server/rails/package.json ./examples/hello-fruit/server/rails/package.json
+COPY examples/buttons/server/rails/package.json ./examples/buttons/server/rails/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 
 COPY packages ./packages

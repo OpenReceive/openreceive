@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 13549
+      "bytes": 13701
     },
     {
       "path": "/guides/node-orms",
@@ -93,7 +93,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 33678
+      "bytes": 33637
     },
     {
       "path": "/guides/automated-swaps",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 25843
+      "bytes": 25999
     },
     {
       "path": "/api_docs",
@@ -262,7 +262,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25843,
+      "bytes": 25999,
       "copy_button": true,
       "self_contained": true
     }

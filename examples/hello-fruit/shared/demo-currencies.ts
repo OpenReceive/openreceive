@@ -6,7 +6,7 @@ export const HELLO_FRUIT_DIRECT_AMOUNT_CURRENCIES = ["BTC", "SATS"] as const;
  * the demo currency data; the Rails demo mirrors it in
  * app/models/money_format.rb (MIN_FRACTION_DIGITS) and
  * app/models/create_fruit_order.rb (DIRECT_CURRENCIES/SUPPORTED), guarded by
- * examples/hello-fruit/server/rails/script/check-currency-drift.mjs.
+ * the Node demos' own currency handling.
  */
 export const HELLO_FRUIT_FIAT_FRACTION_DIGITS: Readonly<Record<string, number>> = {
   USD: 2,

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title><%= content_for(:title) || "Buy a Button — OpenReceive on Rails" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%# The token shared/client/http.ts reads. The OpenReceive engine inherits
+        this app's forgery protection, so its routes need it too. %>
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= stylesheet_pack_tag "buttons" %>
+    <%= javascript_pack_tag "buttons", defer: true %>
+  </head>
+  <body>
+    <%= yield %>
+  </body>
+</html>

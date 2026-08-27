@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-// Convenience launcher for the dockerized Hello Fruit demos.
+// Convenience launcher for the dockerized demos.
 //
-//   npm run demo node      -> Express + React/Vue/Svelte/Angular (http://localhost:3000)
-//   npm run demo static    -> Static HTML + small API (http://localhost:3001)
-//   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
-//   npm run demo rails     -> Rails + Postgres        (http://localhost:3003)
+//   npm run demo node      -> Hello Fruit, Express + React/Vue/Svelte/Angular (:3000)
+//   npm run demo static    -> Hello Fruit, Static HTML + small API            (:3001)
+//   npm run demo nextjs    -> Hello Fruit, Next.js fullstack                  (:3002)
+//   npm run demo buttons   -> Buy a Button, Rails + Postgres                  (:3003)
 //
 // It ensures the repo-root .env exists, validates NWC_URI,
 // and runs the compose stack with the local port-publishing override.

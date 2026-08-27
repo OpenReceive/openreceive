@@ -1,0 +1,18 @@
+# Host-owned Postgres. OpenReceive has no database configuration of its own —
+# it persists its two tables in whatever database this app is already using.
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  url: <%= ENV.fetch("DATABASE_URL", "postgres://openreceive:openreceive@127.0.0.1:5432/buttons_rails_development") %>
+
+test:
+  <<: *default
+  url: <%= ENV.fetch("DATABASE_URL", "postgres://openreceive:openreceive@127.0.0.1:5432/buttons_rails_test") %>
+
+production:
+  <<: *default
+  url: <%= ENV.fetch("DATABASE_URL", "postgres://openreceive:openreceive@db:5432/buttons_rails") %>

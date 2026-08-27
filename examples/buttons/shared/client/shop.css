@@ -1,0 +1,617 @@
+/* ============================================================================
+   Buy a Button — the whole stylesheet.
+
+   Everything is built from five tokens plus #fff, with one exception: the
+   #b4322c on a failed/expired status border. If something new needs a colour,
+   add a token here; do not inline a hex.
+
+   LAYOUT comes from Mantine primitives. STRUCTURE comes from these classes.
+   There are no CSS modules, no createStyles, no Mantine `classNames`/`styles`
+   props and no inline `style={{}}` anywhere in the components — one stylesheet
+   of `or-` prefixed global classes is the entire system.
+
+   THERE IS NO DARK MODE. `background: #fff` is hard-coded in several places
+   below. A later dark mode turns every one of those into a variable FIRST and
+   then adds a [data-mantine-color-scheme="dark"] token block; piecemeal dark
+   styles will look half-converted.
+   ========================================================================= */
+
+:root {
+  --or-ink: #17231f;    /* body text; == theme.black                        */
+  --or-muted: #5c665f;  /* secondary text, every "detail" line              */
+  --or-paper: #fbfaf6;  /* page ground and inset panels                     */
+  --or-line: #d9ded6;   /* every border                                     */
+  --or-accent: #20824a; /* selection, success; == orGreen[7]. BY HAND.      */
+}
+
+body {
+  margin: 0;
+  color: var(--or-ink);
+  background: var(--or-paper);
+}
+
+/* The page around the panel. The demo is one panel centred on a plain ground;
+   the shop itself is the subject. */
+.or-page {
+  min-height: 100vh;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 16px;
+  padding: 32px 16px 48px;
+}
+
+.or-page-inner {
+  width: 100%;
+  max-width: 720px;
+  display: grid;
+  gap: 14px;
+}
+
+.or-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--or-muted);
+}
+
+.or-page-note {
+  font-size: 0.8rem;
+  color: var(--or-muted);
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- the shop */
+
+/* THE FIXED-HEIGHT CONTRACT — the one thing not to break.
+
+   Catalog, checkout, receipt and the recent-orders feed are four views of one
+   small app, and letting the panel grow and shrink under each of them would
+   move the page every time a payer picked a coin. The box stays put;
+   `.or-shop-scroll` is the only thing that scrolls.
+
+   `min-height: 0` on .or-shop-body and .or-shop-scroll is LOAD-BEARING. A flex
+   item's default `min-height: auto` refuses to shrink below its content, so
+   without those two declarations the panel grows to fit the checkout and the
+   page jumps.
+
+   660px, not 620: the tab strip costs ~44px in the head. Change the desktop
+   and the mobile height together or the mobile panel ends up proportionally
+   shorter than it was.
+
+   Consequences for anything new inside the panel: the scroll region is
+   `.or-shop-scroll` and only that; a new stage puts its content inside one and
+   its actions inside `.or-shop-footer`; empty and loading states RESERVE
+   height rather than collapsing; nothing inside may set its own
+   `height: 100%` chain. */
+.or-shop {
+  display: flex;
+  flex-direction: column;
+  height: 660px;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* No border-bottom: the tab strip below it owns that rule. Two hairlines 44px
+   apart is what putting one here gets you. */
+.or-shop-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 20px 12px;
+}
+
+.or-shop-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.or-shop-subtitle {
+  font-size: 0.85rem;
+  color: var(--or-muted);
+  max-width: 42ch;
+}
+
+.or-shop-tabs {
+  padding: 0 20px 10px;
+  border-bottom: 1px solid var(--or-line);
+}
+
+.or-shop-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.or-shop-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px;
+}
+
+.or-shop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--or-line);
+  background: var(--or-paper);
+}
+
+/* ---- catalog */
+
+.or-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+.or-shop-card {
+  border: 1px solid var(--or-line);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  background: #fff;
+}
+
+/* Selection is an inset ring, never a background change — a background would
+   fight the product photography. */
+.or-shop-card[data-in-cart] {
+  border-color: var(--or-accent);
+  box-shadow: 0 0 0 1px var(--or-accent) inset;
+}
+
+.or-shop-card-image {
+  width: 100%;
+  max-width: 120px;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+}
+
+.or-shop-card-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.or-shop-card-price {
+  font-size: 0.85rem;
+  color: var(--or-muted);
+}
+
+.or-shop-card-qty {
+  min-width: 22px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* ---- checkout */
+
+.or-shop-order-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+  background: var(--or-paper);
+}
+
+.or-shop-order-thumbs img {
+  border: 1px solid var(--or-line);
+  background: #fff;
+}
+
+.or-shop-order-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.or-shop-order-total {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.or-shop-status {
+  border: 1px solid var(--or-line);
+  border-left: 3px solid var(--or-muted);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.or-shop-status[data-phase="settled"] {
+  border-left-color: var(--or-accent);
+}
+
+.or-shop-status[data-phase="expired"],
+.or-shop-status[data-phase="failed"],
+.or-shop-status[data-phase="cancelled"] {
+  border-left-color: #b4322c;
+}
+
+.or-shop-status-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.or-shop-status-detail,
+.or-shop-status-countdown {
+  font-size: 0.85rem;
+  color: var(--or-muted);
+}
+
+.or-shop-status-countdown {
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.or-shop-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--or-muted);
+}
+
+.or-shop-methods {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.or-shop-method {
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+  background: #fff;
+}
+
+.or-shop-method[data-selected] {
+  border-color: var(--or-accent);
+  box-shadow: 0 0 0 1px var(--or-accent) inset;
+}
+
+.or-shop-method:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.or-shop-method-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.or-shop-method-detail {
+  font-size: 0.75rem;
+  color: var(--or-muted);
+  line-height: 1.3;
+}
+
+/* A <fieldset>: these are mutually exclusive choices, and `aria-labelledby`
+   means nothing on an element with no grouping role. The three resets below
+   undo the browser's default fieldset chrome — in particular
+   `min-inline-size: min-content`, which would stop it shrinking inside the
+   panel. */
+.or-shop-networks {
+  margin: 0;
+  min-inline-size: 0;
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.or-shop-network {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--or-line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #fff;
+}
+
+.or-shop-network[data-selected] {
+  border-color: var(--or-accent);
+  color: var(--or-accent);
+}
+
+.or-shop-qr {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+}
+
+.or-shop-qr svg {
+  width: 208px;
+  height: 208px;
+}
+
+/* Every value the payer has to reproduce: a label, the value, a copy button.
+   `overflow-wrap: anywhere` because a bolt11 is one 300-character word. */
+.or-shop-copyrow {
+  display: grid;
+  gap: 3px;
+}
+
+.or-shop-copyrow-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--or-muted);
+}
+
+.or-shop-copyrow-value {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  padding: 5px 8px;
+}
+
+/* A deposit address should select whole on one click. */
+.or-shop-copyrow-value.is-selectable {
+  user-select: all;
+}
+
+.or-shop-wallets {
+  border-top: 1px solid var(--or-line);
+  padding-top: 12px;
+}
+
+.or-shop-wallet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.or-shop-wallet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--or-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Several registry marks are white-on-transparent, so they need something
+   behind them to be visible at all on a white panel. */
+.or-shop-wallet img {
+  flex: none;
+  border-radius: 4px;
+  background: var(--or-paper);
+}
+
+.or-shop-fees,
+.or-shop-refund {
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+/* ---- transaction details, collapsed behind a caret */
+
+.or-shop-details {
+  border-top: 1px solid var(--or-line);
+  padding-top: 10px;
+}
+
+.or-shop-details-toggle {
+  width: 100%;
+  text-align: left;
+}
+
+.or-shop-details-chevron {
+  transition: transform 120ms ease;
+}
+
+.or-shop-details-chevron[data-open] {
+  transform: rotate(90deg);
+}
+
+.or-shop-details-link {
+  display: inline-block;
+  margin-top: 2px;
+}
+
+/* ---- receipt */
+
+.or-shop-paid-icon {
+  color: var(--or-accent);
+  flex: none;
+}
+
+.or-shop-receipt-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.or-shop-receipt-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- the recent-orders feed */
+
+.or-shop-feed {
+  display: grid;
+  gap: 8px;
+}
+
+.or-shop-feed-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+/* Same inset ring the cart card and the method tile use, for the same reason:
+   "this one is yours" is the same kind of statement as "this one is chosen". */
+.or-shop-feed-row[data-you] {
+  border-color: var(--or-accent);
+  box-shadow: 0 0 0 1px var(--or-accent) inset;
+}
+
+.or-shop-feed-thumbs {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.or-shop-feed-thumbs img {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--or-line);
+  background: #fff;
+  object-fit: contain;
+}
+
+/* min-width:0 is what lets the title ellipsize inside a 1fr grid track. */
+.or-shop-feed-main {
+  min-width: 0;
+}
+
+.or-shop-feed-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.or-shop-feed-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--or-muted);
+}
+
+/* The buyer's public uuid. Monospace so eight hex characters are comparable at
+   a glance across rows; the full value lives in the title attribute. */
+.or-shop-feed-buyer {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.or-shop-feed-you {
+  border: 1px solid var(--or-accent);
+  color: var(--or-accent);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.6;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.or-shop-feed-amount {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Reserves height rather than collapsing, so switching to an empty feed does
+   not change the panel's inner geometry. */
+.or-shop-feed-empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  min-height: 180px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--or-muted);
+}
+
+/* Same box as a real row, so the first paint and the loaded paint are the same
+   shape. Three of these while loading. */
+.or-shop-feed-skeleton {
+  height: 46px;
+  border: 1px solid var(--or-line);
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--or-paper), #fff, var(--or-paper));
+  background-size: 200% 100%;
+  animation: or-shop-feed-shimmer 1.4s linear infinite;
+}
+
+@keyframes or-shop-feed-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .or-shop-feed-skeleton {
+    animation: none;
+  }
+
+  .or-shop-details-chevron {
+    transition: none;
+  }
+}
+
+.or-shop-feed-totals {
+  font-size: 0.8rem;
+  color: var(--or-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .or-shop {
+    height: 600px;
+  }
+
+  .or-shop-qr svg {
+    width: 168px;
+    height: 168px;
+  }
+
+  /* At 360px the thumbnails cost more than they say. The row still carries the
+     product name, the buyer and the amount. */
+  .or-shop-feed-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .or-shop-feed-thumbs {
+    display: none;
+  }
+}

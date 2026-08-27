@@ -8,8 +8,8 @@ There are two supported ways to build an OpenReceive checkout UI:
 2. **Headless** — bring your own components and state management and build on
    the engine directly via `@openreceive/browser/headless`. This is the
    supported, semver-guaranteed surface for custom UIs; the
-   `examples/hello-fruit/server/rails` app (custom mobx-keystone stores +
-   components over the headless engine) is the flagship demo of this style.
+   `examples/buttons` app (custom mobx-keystone stores + Mantine components
+   over the headless engine) is the flagship demo of this style.
 
 `/headless` is also the floor under OpenReceive's own renderers:
 `@openreceive/react`, `@openreceive/elements`, and the vue/svelte/angular
@@ -51,7 +51,7 @@ and reaching for it first is how an integration ends up re-writing a poll loop.
   `copyInvoice` / `openWallet`, plus the refund pair below. `polling: false`
   withholds the poller without withholding the mount, so the swap calls still
   work. The flagship headless demo
-  ([hello-fruit's Rails variant](https://github.com/OpenReceive/openreceive/tree/master/examples/hello-fruit/server/rails))
+  ([Buy a Button](https://github.com/OpenReceive/openreceive/tree/master/examples/buttons))
   is a mobx-keystone store over exactly this.
 - `createCheckoutSession` / `CheckoutSession` — the create-mode flow: the
   deferred Lightning mint, the swap start, and the in-flight guards that make

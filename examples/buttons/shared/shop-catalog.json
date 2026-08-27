@@ -1,0 +1,44 @@
+[
+  {
+    "sku": "safety-orange",
+    "name": "Safety Orange",
+    "price_cents": 100,
+    "position": 1,
+    "image_name": "openreceive-safety-orange-button.webp"
+  },
+  {
+    "sku": "midnight-navy",
+    "name": "Midnight Navy",
+    "price_cents": 300,
+    "position": 2,
+    "image_name": "openreceive-midnight-navy-button.webp"
+  },
+  {
+    "sku": "classic-black",
+    "name": "Classic Black",
+    "price_cents": 500,
+    "position": 3,
+    "image_name": "openreceive-classic-black-button.webp"
+  },
+  {
+    "sku": "vintage-cream",
+    "name": "Vintage Cream",
+    "price_cents": 700,
+    "position": 4,
+    "image_name": "openreceive-vintage-cream-button.webp"
+  },
+  {
+    "sku": "plain-white",
+    "name": "Plain White",
+    "price_cents": 900,
+    "position": 5,
+    "image_name": "openreceive-plain-white-button.webp"
+  },
+  {
+    "sku": "signal-red",
+    "name": "Signal Red",
+    "price_cents": 1000,
+    "position": 6,
+    "image_name": "openreceive-signal-red-button.webp"
+  }
+]
