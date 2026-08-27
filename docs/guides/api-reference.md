@@ -1189,7 +1189,14 @@ flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onSta
 `onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`,
 `paymentWizard`, `themeToggle` (default `true`), `defaultTheme`, `storageKey`,
 `decodeLinkUrl`, `assetBaseUrl`, `components`, `classNames`, `syncUrl`,
-`resumePathPrefix`, `routeReference`, `metadata`, `createFetch`, `resolveAssetUrl`.
+`resumePathPrefix`, `routeReference`, `resumable`, `metadata`, `createFetch`,
+`resolveAssetUrl`.
+
+`resumable` declares whether a payer who closes this tab has a URL that brings
+them back. Inferred from `syncUrl` / `routeReference`; set it explicitly when
+your own router owns a per-order route. It picks which return warning the swap
+refund screen shows (`SwapDisplayModel.refundReturnLabel`) — see
+[Checkout UX → The refund screens](checkout-ux.md#the-refund-screens).
 
 The shared prop surface — everything up to and including `assetBaseUrl` above,
 plus `checkout` and `reference` — has the same names and defaults in the Vue,

@@ -30,6 +30,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | `syncUrl` | `false` | yes | yes | **create only** |
 | `resumePathPrefix` | `/checkout` | yes | yes | **create only** |
 | `routeReference` | – | yes | yes | **create only** |
+| `resumable` | inferred from `syncUrl` / `routeReference` | yes | yes | both |
 | `polling` / `pollIntervalMs` | on / engine default | yes | via `options` | both |
 | `createFetch` | `globalThis.fetch` | yes | element-owned | create |
 | `qrEncoder`, `logger` | – | yes | element-owned | both |

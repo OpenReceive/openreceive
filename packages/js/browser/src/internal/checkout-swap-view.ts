@@ -111,10 +111,17 @@ export function swapDepositRisk(payInAsset: string): SwapDepositRisk {
  * @param options.now Unix timestamp in **seconds** ({@link UnixSeconds}); the
  *   provider countdown is measured against it. Milliseconds (`Date.now()`)
  *   throw rather than pinning every deposit window at zero.
+ * @param options.resumable Whether this checkout has a URL the payer can come
+ *   BACK to — a synced history path, or the host's own per-order route. It
+ *   decides {@link SwapDisplayModel.refundReturnLabel} and nothing else; the
+ *   refund form itself stays available either way, because a payer who is on
+ *   the screen right now can still submit one. Defaults to `false`: a host that
+ *   has not said it is resumable is the host whose payer must not be told to
+ *   bookmark the page.
  */
 export function createSwapDisplayModel(
   invoice: CheckoutInvoiceSnapshot,
-  options: { readonly now?: UnixSeconds } = {},
+  options: { readonly now?: UnixSeconds; readonly resumable?: boolean } = {},
 ): SwapDisplayModel | undefined {
   const swap = invoice.swap;
   if (swap === undefined) return undefined;
@@ -200,6 +207,10 @@ export function createSwapDisplayModel(
     ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
     ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
     refundAllowed: swap.provider_state === "refund_required",
+    refundReturnLabel:
+      options.resumable === true
+        ? checkoutLabels.refundReturnWarning
+        : checkoutLabels.refundNoReturnWarning,
     ...(swap.refund_tx_id === undefined ? {} : { refundTxId: swap.refund_tx_id }),
     ...(swap.refund_reason === undefined ? {} : { refundReason: swap.refund_reason }),
     ...(swap.deposit_received_amount === undefined

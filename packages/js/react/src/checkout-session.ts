@@ -35,18 +35,25 @@ export function useCheckoutSession(options: UseOpenReceiveCheckoutSessionOptions
       reference: () => optionsRef.current.reference(),
       requestCheckout: (reference) => optionsRef.current.requestCheckout?.(reference),
       onSnapshot: (snapshot) => optionsRef.current.onSnapshot?.(snapshot),
-      swapPrefix: () => optionsRef.current.swapPrefix?.(),
-      fetch: () => optionsRef.current.fetch?.(),
-      swapSelection: {
-        started: () => optionsRef.current.swapSelection?.started(),
-        setStarted: (invoice) => optionsRef.current.swapSelection?.setStarted(invoice),
-        dismissedInvoiceId: () => optionsRef.current.swapSelection?.dismissedInvoiceId() ?? null,
-        setDismissedInvoiceId: (invoiceId) =>
-          optionsRef.current.swapSelection?.setDismissedInvoiceId(invoiceId),
-        setSelectedAsset: (payInAsset) =>
-          optionsRef.current.swapSelection?.setSelectedAsset(payInAsset),
+      // The inner `swap` is always present because the session is built once,
+      // on the first render, and the host may only gain swap options later.
+      // Every accessor reads through `optionsRef`, so a host with no `swap`
+      // makes `prefix()` answer undefined and the session reports the missing
+      // wiring instead of silently doing nothing.
+      swap: {
+        selection: {
+          started: () => optionsRef.current.swap?.selection.started(),
+          setStarted: (invoice) => optionsRef.current.swap?.selection.setStarted(invoice),
+          dismissedInvoiceId: () => optionsRef.current.swap?.selection.dismissedInvoiceId() ?? null,
+          setDismissedInvoiceId: (invoiceId) =>
+            optionsRef.current.swap?.selection.setDismissedInvoiceId(invoiceId),
+          setSelectedAsset: (payInAsset) =>
+            optionsRef.current.swap?.selection.setSelectedAsset(payInAsset),
+        },
+        prefix: () => optionsRef.current.swap?.prefix(),
+        fetch: () => optionsRef.current.swap?.fetch(),
+        onStarted: (invoice) => optionsRef.current.swap?.onStarted?.(invoice),
       },
-      onSwapStarted: (invoice) => optionsRef.current.onSwapStarted?.(invoice),
       get logger() {
         return optionsRef.current.logger;
       },

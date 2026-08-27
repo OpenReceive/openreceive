@@ -93,7 +93,9 @@ export function renderElementSwapPanelHtml(
   invoice: CheckoutInvoiceSnapshot,
   view: ElementsWizardView = {},
 ): string {
-  const display = createSwapDisplayModel(invoice);
+  const display = createSwapDisplayModel(invoice, {
+    ...(view.resumable === undefined ? {} : { resumable: view.resumable }),
+  });
   if (display === undefined) return "";
   const backButton = `
     <button part="swap-back" class="${orClasses.swapBack}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">${escapeHtml(checkoutLabels.payWithLightningInstead)}</button>
@@ -263,7 +265,7 @@ export function renderElementSwapPanelHtml(
         `
         }
         ${supportDetails}
-        ${renderElementSwapRefundReturnWarningHtml()}
+        ${renderElementSwapRefundReturnWarningHtml(display)}
       </section>
     `;
   }
@@ -279,7 +281,7 @@ export function renderElementSwapPanelHtml(
           ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, { kind: "tx", payInAsset: display.payInAsset })}
         </dl>
         ${supportDetails}
-        ${renderElementSwapRefundReturnWarningHtml()}
+        ${renderElementSwapRefundReturnWarningHtml(display)}
       </section>
     `;
   }
@@ -294,9 +296,9 @@ export function renderElementSwapPanelHtml(
   `;
 }
 
-function renderElementSwapRefundReturnWarningHtml(): string {
+function renderElementSwapRefundReturnWarningHtml(display: SwapDisplayModel): string {
   return `
-    <p part="swap-refund-return" class="${orClasses.swapWarning}">${escapeHtml(checkoutLabels.refundReturnWarning)}</p>
+    <p part="swap-refund-return" class="${orClasses.swapWarning}">${escapeHtml(display.refundReturnLabel)}</p>
   `;
 }
 

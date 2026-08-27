@@ -66,6 +66,39 @@ export function createAssetBaseUrlResolver(baseUrl: string): AssetUrlResolver {
   return (packagedPath) => `${base}/${packagedPath.replace(/^\/+/, "")}`;
 }
 
+/**
+ * A packaged-asset URL table whose entries resolve when they are READ, not when
+ * the module is imported.
+ *
+ * These tables used to be built eagerly with `Object.fromEntries`, which called
+ * {@link assetUrl} — and therefore {@link warnOnFileAssetUrl} — at import time,
+ * before any host resolver could possibly have been consulted. A host doing
+ * exactly the right thing (serving the packaged `dist/assets` trees itself and
+ * passing an {@link AssetUrlResolver} to every display builder, so these tables
+ * are never read) still got a console warning saying its icons "cannot load",
+ * about icons that loaded fine. That inverts the warning: an agent or a
+ * developer reading their own console could no longer tell a correct
+ * integration from a broken one.
+ *
+ * Resolving lazily makes the warning evidence again — it can only fire when
+ * something actually reads a packaged URL, which is precisely the case the
+ * warning is about. The table keeps its shape: own, enumerable, frozen, and a
+ * missing key still answers `undefined`.
+ */
+export function lazyAssetUrlTable<K extends string>(
+  keys: readonly K[],
+  resolve: (key: K) => string,
+): Readonly<Record<K, string>> {
+  return Object.freeze(
+    Object.defineProperties(
+      {},
+      Object.fromEntries(
+        keys.map((key) => [key, { enumerable: true, get: (): string => resolve(key) }]),
+      ),
+    ),
+  ) as Readonly<Record<K, string>>;
+}
+
 let warnedFileAssetUrl = false;
 
 /**

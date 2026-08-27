@@ -90,8 +90,36 @@ If `authorize` returns true whenever `resource.reference` is present, or
 whenever an order with that id exists, any caller can mint invoices, poll
 status, or request a refund for someone else's order. Look the order up in
 **your** data and check that **this caller** — session cookie, signed guest
-token, logged-in user — may perform **this `action`** on it. OpenReceive does
-not ship a permissive default.
+token, logged-in user — may perform **this `action`** on it.
+
+**The library ships no default at all**: `authorize` is unset until you set it,
+and both stacks refuse to serve a checkout without it — the Node HTTP handler
+throws `TypeError: HTTP handler requires authorize; authentication belongs to
+the host.`, and the Rails engine raises `ConfigurationError`.
+
+**The Rails install generator does ship a placeholder**, and says so out loud.
+`bin/rails generate openreceive:install` writes:
+
+```ruby
+config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE
+```
+
+which allows every request, so the five-minute demo works before you have a
+session to check. It is a NAMED constant, not a literal lambda, precisely so the
+engine can recognise it: at boot it logs
+
+```
+[openreceive] config.authorize is still the generated allow-all placeholder —
+anyone holding an order id can mint invoices, poll status, and request refunds
+for it. Safe only while your references are unguessable.
+```
+
+for as long as it is still there — the same treatment `OpenReceive::LOGGING_ON_PAID`
+gets. `bin/rails openreceive:doctor` reports it too. Replace it before anything
+real, or keep it deliberately and know that your references are doing the whole
+job. The Node quickstart starts from a real check
+(`orders.viewerMay(...)`) because there is no generator to run: you write the
+config object yourself, so the example writes the honest version.
 
 After you return true, the library still verifies that a requested
 `paymentHash` belongs to that `reference` before loading server-only

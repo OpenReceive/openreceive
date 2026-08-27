@@ -62,6 +62,7 @@ const SHARED_PROPS = [
   "syncUrl",
   "resumePathPrefix",
   "routeReference",
+  "resumable",
 ];
 
 function read(file) {

@@ -1,5 +1,7 @@
 # OpenReceive agent directions (Rails)
 
+These directions describe OpenReceive 0.3.0.
+
 Add OpenReceive to a Rails application — the app you are already working in. You
 do not need a copy of the OpenReceive source: the gem is on RubyGems, the
 frontend packages are on npm, and the quickstart is appended to this file in
@@ -29,9 +31,17 @@ owns orders, users, prices, or fulfillment.
 Do this before installing the gem or editing files.
 
 1. Look for `NWC_URI` in this app's server environment — `.env`, Rails
-   credentials, the deploy config, whatever this app already uses. Never print
+   credentials, the deploy config, whatever this app already uses. If the app
+   runs in a container the value is in none of those: ask the running process
+   (`docker exec <container> printenv NWC_URI`), because finding the NAME in a
+   compose file or `.kamal/secrets` proves nothing about the value. Never print
    or echo the value itself; only report whether it is set. Check for
    `LSC_URI_PRIMARY` in the same pass.
+
+   If OpenReceive is already installed here, `bin/rails openreceive:doctor`
+   answers this whole step in one command — every credential as set/unset, the
+   engine mount, the three hooks, and the wallet preflight. It never prints a
+   value.
 2. If BOTH are already set — the common case in an existing app — say so and go
    straight to the quickstart. Steps 3 and 4 are for an environment that is
    missing one; do not stop to ask about altcoins that are already configured.
@@ -54,8 +64,16 @@ Do this before installing the gem or editing files.
    - No → skip it. Bitcoin over Lightning works with `NWC_URI` alone, and you
      can add a swap provider later without changing application code.
 5. Check the environment again and confirm `NWC_URI` is present (plus
-   `LSC_URI_PRIMARY` if they asked for altcoins). Only then start the
-   quickstart.
+   `LSC_URI_PRIMARY` if they asked for altcoins).
+6. If OpenReceive is ALREADY installed here, check the installed versions of
+   `openreceive-rails` and `@openreceive/browser` against the release named at
+   the top of this file. The headless display models below do not exist in
+   older versions, and the first tile click throws with nothing saying why.
+   Upgrade first — and if this app runs in containers, rebuild the images: the
+   gems are baked into the image, so an in-place `bundle update` is undone by
+   the next `compose up`.
+
+Only then start the quickstart.
 
 ## Non-negotiables
 
@@ -87,6 +105,9 @@ itself, and they hold for every integration.
 - Show the payer the transaction record: `createTransactionDetails(...)` rows,
   collapsed behind a caret, on the live checkout AND on the receipt. A payment
   hash and a deposit txid are the only evidence a payer has that they paid you.
+  (It returns no rows while the rail is `checkout_lock` — before the payer has
+  chosen anything there is no transaction — so render the caret only when the
+  rows are non-empty.)
 - HTTP JSON is snake_case; the browser packages' TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
 
@@ -102,22 +123,43 @@ built on `@openreceive/browser/headless`. Read that before writing components.
   the wire vocabularies are 4, 6 and 12 values, and mostly outcomes.
 - `resolveWizardSelection` decides whether to ask "which network?". A
   one-network asset (SOL, ETH) must not be asked — ceremony where there is no
-  question teaches the payer to click past USDT, where it is unrecoverable.
+  question teaches the payer to click past USDT, where it is unrecoverable. The
+  `selectedAssetByGroup` map it returns and `createMethodGridDisplay` takes is
+  keyed by GROUP KEY (`USDT`) and valued by the chosen option's `pay_in_asset`
+  (`USDT_TRON`) — not its `network_label`.
 - `createMethodGridDisplay` for tiles, including `limitMessage` ("Minimum amount
   $2.71") so an unavailable method says why in the payer's own currency.
 - `createSwapDisplayModel` → `display.copyRows` for deposits: address, memo AND
   the bare amount each get a labelled copy row. `swap.networkWarning*` is scoped
   per rail; do not hard-code one banner for every asset.
+- `createCheckoutSession` owns the deferred Lightning mint and the swap start,
+  with the guards that make both safe to double-click. To start swaps, pass its
+  `swap` option — `selection` (five accessors over state you already hold),
+  `prefix` and `fetch`, together or not at all. Without it `startSwap` reports
+  through `onError` instead of starting anything.
+- `createQrSvg` / `createQrPayloadSvg` are ASYNC. Handing the promise straight
+  to `dangerouslySetInnerHTML` type-checks and renders `[object Promise]`; use
+  `createQrSvgController`, which also drops an encode that lands after the
+  payload changed.
 - `checkoutLabels` for every payer-facing string. Only write copy it lacks.
 - `stageSwapRefund` then `confirmSwapRefund` — two steps, and only the second
   submits. Validate with `getSwapRefundFormError`, and treat `409 CONFLICT` as a
   normal outcome.
+- A swap refund needs a URL the payer can come back to. Tell
+  `createSwapDisplayModel` whether your checkout has one (`{ resumable: true }`)
+  and render `display.refundReturnLabel`: without a per-order route, a payer who
+  closes the tab loses the order id and the deposit with it. The resume
+  machinery — `createGuestCheckoutResume`, `createGuestOrderFetcher` — is on
+  `@openreceive/browser`, not on `/headless`.
 - No "Open wallet" button on desktop: it navigates the window that is polling
   for settlement away from the payment.
 - Wallet suggestions under the invoice come from `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only, present them as suggestions, and
-  host the icons yourself via the `asset-base-url` attribute or they break
-  outside Vite.
+  `createWizardRouteDisplays` (both on `@openreceive/browser/headless`; the
+  registry itself is `@openreceive/provider-data`). Lightning only, present them
+  as suggestions, and host the icons yourself via the `asset-base-url` attribute
+  or they break outside Vite. The registry answers ~37 wallets: pass
+  `providerPreviewLimit` and build "show all" from `display.providerCount`,
+  or they push the QR off the screen.
 
 ## More documentation
 
@@ -130,10 +172,20 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
 - https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
+- https://openreceive.org/guides/provider-registry.md — where the packaged icons and pay
+  tutorials come from, and how to serve them. The asset rule is the one a custom
+  UI is most likely to get wrong; this is the page that owns it, not the summary
+  in checkout-ux.md
 - https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
+- https://openreceive.org/guides/lightning-swap-connect.md — what an `LSC_URI_*` code actually is
+- https://openreceive.org/guides/price-feeds.md — where the fiat→sats rate comes from, and how to replace it
+- https://openreceive.org/guides/host-testing.md — testing your three hooks without a live wallet or provider
 - https://openreceive.org/guides/rate-limiting.md — before a public shop goes live
 - https://openreceive.org/guides/security.md and https://openreceive.org/guides/deploying.md — before this goes anywhere real
 - https://openreceive.org/guides/api-reference.md — every route, option and error code
+- https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the mounted engine's routes with your own
+- https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
+- https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact

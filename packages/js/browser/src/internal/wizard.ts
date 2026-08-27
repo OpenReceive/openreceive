@@ -142,9 +142,24 @@ export function createWizardRouteAssetDisplays(
   });
 }
 
+/**
+ * The wallet suggestions for each route, as displays.
+ *
+ * The registry answers ~37 providers for Lightning. Both shipped renderers draw
+ * all of them, in a grid on the route screen where that is fine; a host putting
+ * them under the invoice instead — beside a QR, in a fixed-height panel — wants
+ * `providerPreviewLimit` and a "show all" affordance built from
+ * {@link WizardRouteDisplay.providerCount}. `OPENRECEIVE_PROVIDER_PREVIEW_LIMIT`
+ * is the number the shipped styles are drawn against.
+ *
+ * No default limit, deliberately: the renderers show the whole grid, and a
+ * default that silently hid 33 wallets from them would be a worse bug than the
+ * one it prevents.
+ */
 export function createWizardRouteDisplays(
   routes: readonly PaymentWizardRoute[],
   options: {
+    /** Draw at most this many providers per route. Omitted, every one is drawn. */
     readonly providerPreviewLimit?: number;
     /** Host-side rewrite of the packaged icon and tutorial paths. See {@link AssetUrlResolver}. */
     readonly resolveAssetUrl?: AssetUrlResolver;
@@ -158,6 +173,7 @@ export function createWizardRouteDisplays(
       ? route.providers
       : route.providers.slice(0, options.providerPreviewLimit)
     ).map((entry) => createWizardProviderDisplay(entry, options.resolveAssetUrl)),
+    providerCount: route.providers.length,
   }));
 }
 
@@ -430,10 +446,10 @@ export function resolvePreservedNetworkSelection<
 >(options: {
   readonly previousGroup: { readonly label: string; readonly options: readonly T[] } | undefined;
   readonly nextGroup: { readonly label: string; readonly options: readonly T[] };
-  readonly selectedNetworks: Readonly<Record<string, string>>;
+  readonly selectedAssetByGroup: Readonly<Record<string, string>>;
 }): string | undefined {
   const nextKey = options.nextGroup.label.trim().toUpperCase();
-  const current = options.selectedNetworks[nextKey];
+  const current = options.selectedAssetByGroup[nextKey];
   if (
     current !== undefined &&
     options.nextGroup.options.some(
@@ -446,7 +462,7 @@ export function resolvePreservedNetworkSelection<
   const previous = options.previousGroup;
   if (previous === undefined) return undefined;
   const previousKey = previous.label.trim().toUpperCase();
-  const previousAsset = options.selectedNetworks[previousKey];
+  const previousAsset = options.selectedAssetByGroup[previousKey];
   if (previousAsset === undefined) return undefined;
   const previousOption = previous.options.find((option) => option.pay_in_asset === previousAsset);
   if (previousOption === undefined) return undefined;
@@ -478,7 +494,7 @@ export function findSwapGridGroup<T extends { readonly label: string }>(
  * coin's entry. Returns the map unchanged for non-swap keys and single-network
  * groups.
  */
-export function updateSelectedSwapNetworks<
+export function updateSelectedSwapAssetByGroup<
   T extends {
     readonly label: string;
     readonly pay_in_asset: string;
@@ -489,24 +505,24 @@ export function updateSelectedSwapNetworks<
   readonly entries: readonly MethodGridEntry<T>[];
   readonly nextKey: string;
   readonly previousKey: string | null;
-  readonly selectedNetworks: Readonly<Record<string, string>>;
+  readonly selectedAssetByGroup: Readonly<Record<string, string>>;
 }): Record<string, string> {
   const nextGroup = findSwapGridGroup(options.entries, options.nextKey);
   if (nextGroup === undefined || nextGroup.options.length <= 1) {
-    return options.selectedNetworks;
+    return options.selectedAssetByGroup;
   }
   const previousGroup = findSwapGridGroup(options.entries, options.previousKey);
   const preserved = resolvePreservedNetworkSelection({
     previousGroup,
     nextGroup,
-    selectedNetworks: options.selectedNetworks,
+    selectedAssetByGroup: options.selectedAssetByGroup,
   });
   const groupKey = nextGroup.label.trim().toUpperCase();
   if (preserved === undefined) {
-    const { [groupKey]: _removed, ...rest } = options.selectedNetworks;
+    const { [groupKey]: _removed, ...rest } = options.selectedAssetByGroup;
     return rest;
   }
-  return { ...options.selectedNetworks, [groupKey]: preserved };
+  return { ...options.selectedAssetByGroup, [groupKey]: preserved };
 }
 
 /**
@@ -528,8 +544,15 @@ export type WizardSelection<T extends { readonly label: string }> =
       readonly heading: string;
       readonly panelId: string;
       readonly headingId: string;
-      /** The network map after the pick, from {@link updateSelectedSwapNetworks}. */
-      readonly selectedNetworks: Record<string, string>;
+      /**
+       * The per-group choice map after the pick, from
+       * {@link updateSelectedSwapAssetByGroup}: keyed by GROUP KEY
+       * (`group.label` upper-cased), valued by the chosen option's
+       * `pay_in_asset` — NOT its `network_label`. A deposit address is
+       * network-specific, so the value has to be the thing that identifies the
+       * address, and `pay_in_asset` is what every other seam here keys on.
+       */
+      readonly selectedAssetByGroup: Record<string, string>;
     }
   | { readonly kind: "none" };
 
@@ -551,13 +574,14 @@ export function resolveWizardSelection<
   readonly pickerKey: string;
   readonly previousKey?: string | null;
   readonly entries: readonly MethodGridEntry<T>[];
-  readonly selectedNetworks?: Readonly<Record<string, string>>;
+  /** Keyed by group key, valued by the chosen option's `pay_in_asset`. */
+  readonly selectedAssetByGroup?: Readonly<Record<string, string>>;
 }): WizardSelection<T> {
   const methodPick = parseMethodPickerKey(options.pickerKey);
   if (methodPick !== null) return { kind: "select_method", methodId: methodPick.methodId };
   const group = findSwapGridGroup(options.entries, options.pickerKey);
   if (group === undefined) return { kind: "none" };
-  const selectedNetworks = options.selectedNetworks ?? {};
+  const selectedAssetByGroup = options.selectedAssetByGroup ?? {};
   if (group.options.length <= 1) {
     // One network is not a question. Prefer an available option so a group whose
     // only entry is out of range resolves to `none` rather than starting a swap
@@ -573,11 +597,11 @@ export function resolveWizardSelection<
     groupKey,
     heading: formatChooseNetworkHeading(group.label),
     ...wizardNetworkGroupIds(groupKey),
-    selectedNetworks: updateSelectedSwapNetworks({
+    selectedAssetByGroup: updateSelectedSwapAssetByGroup({
       entries: options.entries,
       nextKey: options.pickerKey,
       previousKey: options.previousKey ?? null,
-      selectedNetworks,
+      selectedAssetByGroup,
     }),
   };
 }
@@ -810,7 +834,7 @@ export type MethodGridDisplayEntry<T extends { readonly label: string }> =
  */
 export interface MethodGridGroupDisplay<T extends { readonly label: string }> {
   readonly label: string;
-  /** The group's normalized key — how the network map is keyed. */
+  /** The group's normalized key — how `selectedAssetByGroup` is keyed. */
   readonly groupKey: string;
   readonly pickerKey: string;
   readonly accent: PaymentAccentId;
@@ -888,13 +912,14 @@ export function createMethodGridDisplay<
 >(options: {
   readonly entries: readonly MethodGridEntry<T>[];
   readonly selectedPickerKey?: string | null;
-  readonly selectedNetworks?: Readonly<Record<string, string>>;
+  /** Keyed by group key, valued by the chosen option's `pay_in_asset`. */
+  readonly selectedAssetByGroup?: Readonly<Record<string, string>>;
   /** The asset whose swap is being started, or null/undefined for none. */
   readonly startingAsset?: string | null;
   readonly checkout?: SwapLimitContext;
 }): MethodGridDisplay<T> {
   const selectedKey = options.selectedPickerKey ?? null;
-  const selectedNetworks = options.selectedNetworks ?? {};
+  const selectedAssetByGroup = options.selectedAssetByGroup ?? {};
   const startingAsset =
     options.startingAsset === null || options.startingAsset === ""
       ? undefined
@@ -919,7 +944,7 @@ export function createMethodGridDisplay<
     if (displayOption === undefined) continue;
     const groupKey = group.label.trim().toUpperCase();
     const multiNetwork = group.options.length > 1;
-    const selectedAsset = selectedNetworks[groupKey];
+    const selectedAsset = selectedAssetByGroup[groupKey];
     const selectedOption =
       selectedAsset === undefined
         ? undefined

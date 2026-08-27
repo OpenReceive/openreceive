@@ -107,11 +107,11 @@ absolute, and already points at a `.md`, which is the point of them.
   "read more". It is engineered to be complete on its own: the stack's
   quickstart is inlined in full, so an agent with no network, a blocked
   github.com, or no fetch tool at all can still finish the integration.
-- The payload is size-gated in this repo at 24 KB (~6k tokens) by
-  `tools/docs/generate-agent-directions.mjs`, because it has to fit in one
-  prompt on a small free model alongside the user's own code. `bytes` in the
-  contract is what the button will copy. If a payload ever exceeds the budget,
-  CI here fails before it reaches you.
+- The payload is size-gated in this repo at 52 KB (~13k tokens, about 1,000
+  lines) by `tools/docs/generate-agent-directions.mjs`, because it has to be
+  absorbed in one prompt alongside the user's own code. `bytes` in the contract
+  is what the button will copy. If a payload ever exceeds the budget, CI here
+  fails before it reaches you.
 - Put the button on the matching quickstart page, and say what it is: directions
   for a coding agent, including the quickstart itself.
 

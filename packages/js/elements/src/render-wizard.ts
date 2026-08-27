@@ -288,7 +288,7 @@ function renderElementCompactPaymentSelectorHtml(
   const display = createMethodGridDisplay({
     entries: buildMethodGridEntries(paymentMethods, swapAssetOptions),
     selectedPickerKey: view.selectedPickerKey ?? null,
-    selectedNetworks: view.selectedSwapNetworks ?? {},
+    selectedAssetByGroup: view.selectedSwapAssetByGroup ?? {},
     startingAsset: wizardStartingAsset(view) ?? null,
     ...(limitContext === undefined ? {} : { checkout: limitContext }),
   });

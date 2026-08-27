@@ -1,6 +1,6 @@
 // Payment icon URLs, resolved against this module's own URL so the same code
 // works from source, from the packaged dist, and from a host bundler's chunk.
-import { warnOnFileAssetUrl } from "@openreceive/provider-data";
+import { lazyAssetUrlTable, warnOnFileAssetUrl } from "@openreceive/provider-data";
 import type { PaymentMethod } from "./checkout-types.ts";
 
 const OPENRECEIVE_PAYMENT_ICON_IDS = [
@@ -69,9 +69,13 @@ export const paymentIconPaths: Readonly<Record<PaymentIconId, string>> = Object.
   OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, `${PACKAGED_ICON_PREFIX}${id}.svg`]),
 ) as Readonly<Record<PaymentIconId, string>>;
 
-export const paymentIconUrls: Readonly<Record<PaymentIconId, string>> = Object.fromEntries(
-  OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, paymentIconUrl(`${id}.svg`)]),
-) as Readonly<Record<PaymentIconId, string>>;
+// Lazy, like the two tables in @openreceive/provider-data: reading a packaged
+// URL is what the file: warning is about, so importing this module must not
+// count as reading one. See lazyAssetUrlTable.
+export const paymentIconUrls: Readonly<Record<PaymentIconId, string>> = lazyAssetUrlTable(
+  OPENRECEIVE_PAYMENT_ICON_IDS,
+  (id) => paymentIconUrl(`${id}.svg`),
+);
 
 export const paymentMethodIconIds: Readonly<Record<PaymentMethod, PaymentIconId>> = {
   bitcoin: "btc",

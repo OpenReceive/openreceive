@@ -292,9 +292,13 @@ function CheckoutView(
     prefix = OPENRECEIVE_DEFAULT_PREFIX,
     metadata: _metadata,
     createFetch: _createFetch,
-    syncUrl: _syncUrl,
+    // Not `_`-prefixed like its neighbours: the view reads it, to infer
+    // `resumable` for the refund screen. Still destructured out so it never
+    // reaches the rendered <section>.
+    syncUrl,
     resumePathPrefix: _resumePathPrefix,
-    routeReference: _routeReference,
+    routeReference,
+    resumable,
     onRequestLightning,
     onSwapStarted,
     mintingLightning = false,
@@ -620,6 +624,11 @@ function CheckoutView(
                 onSwapStarted,
                 resolveAssetUrl,
                 assetBaseUrl,
+                // Whether a payer who closes the tab has a URL to come back
+                // to. Explicit wins — only the host knows about a per-order
+                // route of its own; otherwise infer it from the two props that
+                // put the reference in the URL.
+                resumable: resumable ?? (syncUrl === true || routeReference !== undefined),
                 // The engine's staged refund address rides the controller this
                 // model owns, so a poll cannot wipe a review in progress.
                 swapRefund: checkoutModel,

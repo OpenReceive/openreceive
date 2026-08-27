@@ -114,9 +114,23 @@ export const checkoutLabels = {
   /** Same sentence when the provider only reported PAY-side limits. */
   swapPayMinimumSentence: "To pay with {asset}, the minimum is {amount} {asset}.",
   swapPayMaximumSentence: "To pay with {asset}, the maximum is {amount} {asset}.",
-  /** Shown on the refund screen so the payer can return after closing the tab. */
+  /**
+   * Shown on the refund screen so the payer can return after closing the tab —
+   * and TRUE ONLY IF THIS CHECKOUT HAS A URL TO RETURN TO. Both are reached
+   * through {@link SwapDisplayModel.refundReturnLabel}, which picks between
+   * them from what the host declared; neither should be rendered directly.
+   */
   refundReturnWarning:
     "Bookmark this page, or copy its URL. You need it to return to this refund screen.",
+  /**
+   * The same screen when the checkout is NOT resumable — no synced URL, no
+   * per-order route. Telling that payer to bookmark the page would send them
+   * back to an empty checkout with their deposit unreachable, so it says the
+   * true thing instead.
+   */
+  refundNoReturnWarning:
+    "Do not close this tab until you have submitted this refund. This checkout has no address " +
+    "to return to, so this screen is the only place it can be requested.",
 } as const;
 
 export { orClasses } from "../ui-classes.ts";
@@ -127,8 +141,12 @@ export const checkoutElementStyles = `:host{display:block}${compiledStyles}`;
 export const paymentMethods: readonly PaymentMethodOption[] = [
   {
     id: "bitcoin",
+    // The detail line disambiguates this tile from its NEIGHBOURS, so it must
+    // describe this tile. In a grid where USDT / USDC / SOL / ETH are their own
+    // tiles, "send on-chain into a swap" described what those tiles do — one
+    // tile away from four tiles that actually do it.
     title: "Bitcoin",
-    detail: "Pay from Lightning or send on-chain into a swap.",
+    detail: "Pay a Lightning invoice from any Bitcoin wallet.",
   },
 ];
 

@@ -21,8 +21,9 @@ OpenReceive.configure do |config|
   #                        prove this caller owns it.
   # Return true to allow the request, false for a 403.
   #
-  # The default below allows every request, treating possession of the
-  # reference as the authorization (an unknown reference is still a 404,
+  # The default below is a NAMED PLACEHOLDER, and the engine warns at boot for
+  # as long as it is still here. It allows every request, treating possession of
+  # the reference as the authorization (an unknown reference is still a 404,
   # because amount_for returns nil for it). That is only safe while your
   # references are unguessable (UUIDs, not sequential integers). If they are
   # enumerable, or an order should only be visible to the customer who placed
@@ -32,7 +33,7 @@ OpenReceive.configure do |config|
   #     order = Order.find_by(id: context[:resource][:reference])
   #     order && order.user_id == context[:request].session[:user_id]
   #   end
-  config.authorize = ->(_context) { true }
+  config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE
 
   # The price for a reference — the string your checkout passes, typically
   # your order id. Your application is the only price authority; payer input

@@ -293,6 +293,14 @@ export interface PaymentWizardProps {
    * back to posting the refund itself and carrying the staging locally.
    */
   readonly swapRefund?: SwapRefundStaging;
+  /**
+   * Whether this checkout has a URL the payer can come BACK to — `<Checkout
+   * syncUrl>`, or a host route of its own that carries the order. It decides
+   * which of the two refund-return warnings the deposit panel shows; see
+   * `SwapDisplayModel.refundReturnLabel`. Defaults to false, so a payer is
+   * never told to bookmark a page that will not bring them back.
+   */
+  readonly resumable?: boolean;
   readonly onError?: (error: unknown) => void;
   /**
    * Called when the payer enters or leaves the focused swap flow (a pay-in coin is

@@ -3,7 +3,7 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   copyInvoice as copyInvoiceHelper,
   createCheckoutStatusModel,
-  createQrSvg,
+  createQrSvgController,
   formatAmountCaption,
   checkoutLabels,
   openWallet as openWalletHelper,
@@ -59,18 +59,19 @@ export function QRCode(props: QRCodeProps): React.ReactElement {
   const onErrorRef = React.useRef(onError);
   onErrorRef.current = onError;
 
+  // The supersede rule — a slow encode that lands after the invoice changed
+  // must not paint the old QR — lives in the controller, not here. React
+  // supplies what is React's: where the SVG lands, and when the effect ends.
   React.useEffect(() => {
-    let cancelled = false;
-    createQrSvg(invoice, { encoder, width })
-      .then((nextSvg) => {
-        if (!cancelled) setSvg(nextSvg);
-      })
-      .catch((error) => {
-        if (!cancelled) onErrorRef.current?.(error);
-      });
-
+    const controller = createQrSvgController({
+      onValue: setSvg,
+      onError: (error) => onErrorRef.current?.(error),
+      ...(encoder === undefined ? {} : { encoder }),
+      width,
+    });
+    controller.show(invoice);
     return () => {
-      cancelled = true;
+      controller.stop();
     };
   }, [invoice, encoder, width]);
 

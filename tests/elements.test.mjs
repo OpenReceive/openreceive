@@ -140,7 +140,7 @@ test("elements render payment wizard route choices and providers from browser st
 
   const startingUsdtContinue = renderPaymentWizardHtml({
     selectedPickerKey: "swap:USDT",
-    selectedSwapNetworks: { USDT: "USDT_SOL" },
+    selectedSwapAssetByGroup: { USDT: "USDT_SOL" },
     startingSwapAsset: "USDT_SOL",
     swapOptions: [
       {
@@ -410,38 +410,44 @@ test("elements expose a create-mode prefix attribute and creating placeholder", 
   assert.match(noTheme, /part="root" data-theme="light"/);
 });
 
-test("elements refund screen warns to bookmark the checkout URL", () => {
-  const html = renderPaymentWizardHtml({
-    selectedSwapAsset: "USDT_SOL",
-    swapOptions: [
-      {
-        pay_in_asset: "USDT_SOL",
-        label: "USDT",
-        network_label: "Solana",
-        provider: "fixedfloat",
-        available: true,
+// See the React twin in tests/react-swap.test.mjs: the bookmark warning is only
+// true when the checkout HAS a URL to come back to.
+test("elements refund screen tells the payer to bookmark only when the checkout is resumable", () => {
+  const wizard = (resumable) =>
+    renderPaymentWizardHtml({
+      ...(resumable === undefined ? {} : { resumable }),
+      selectedSwapAsset: "USDT_SOL",
+      swapOptions: [
+        {
+          pay_in_asset: "USDT_SOL",
+          label: "USDT",
+          network_label: "Solana",
+          provider: "fixedfloat",
+          available: true,
+        },
+      ],
+      swapInvoice: {
+        invoice_id: "or_inv_refund",
+        rail: "swap",
+        transaction_state: "pending",
+        swap: {
+          attempt_id: "or_swp_refund",
+          provider: "fixedfloat",
+          provider_order_id: "ABC123",
+          pay_in_asset: "USDT_SOL",
+          deposit_address: "SoLDeposit",
+          deposit_amount: "15.01",
+          deposit_received_amount: "10.00",
+          provider_state: "refund_required",
+          refund_reason: "underpaid",
+          provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+          deposit_tx_id:
+            "3VPLchnKgC42q69meEZWnnGCYA1Lz8xXQzFeKy6tEQtsDgckwBWpxGjVrCvQH8ieHcJjjNUKRB6gL2VJJhCwLGmw",
+        },
       },
-    ],
-    swapInvoice: {
-      invoice_id: "or_inv_refund",
-      rail: "swap",
-      transaction_state: "pending",
-      swap: {
-        attempt_id: "or_swp_refund",
-        provider: "fixedfloat",
-        provider_order_id: "ABC123",
-        pay_in_asset: "USDT_SOL",
-        deposit_address: "SoLDeposit",
-        deposit_amount: "15.01",
-        deposit_received_amount: "10.00",
-        provider_state: "refund_required",
-        refund_reason: "underpaid",
-        provider_expires_at: Math.floor(Date.now() / 1000) + 600,
-        deposit_tx_id:
-          "3VPLchnKgC42q69meEZWnnGCYA1Lz8xXQzFeKy6tEQtsDgckwBWpxGjVrCvQH8ieHcJjjNUKRB6gL2VJJhCwLGmw",
-      },
-    },
-  });
+    });
+
+  const html = wizard(true);
   assert.match(html, /Refund needed/);
   assert.match(html, /Payment details/);
   assert.match(html, /part="swap-refund-return"/);
@@ -449,6 +455,14 @@ test("elements refund screen warns to bookmark the checkout URL", () => {
   assert.match(html, /Review refund address/);
   assert.ok(html.includes(checkoutLabels.refundReturnWarning));
   assert.ok(html.indexOf("Payment details") < html.indexOf(checkoutLabels.refundReturnWarning));
+
+  for (const resumable of [undefined, false]) {
+    const unbookmarkable = wizard(resumable);
+    assert.ok(unbookmarkable.includes(checkoutLabels.refundNoReturnWarning), String(resumable));
+    assert.ok(!unbookmarkable.includes(checkoutLabels.refundReturnWarning), String(resumable));
+    // The refund form survives: a payer on the screen can still submit one.
+    assert.match(unbookmarkable, /Review refund address/);
+  }
 });
 
 test("elements definition fails clearly without DOM custom elements", () => {

@@ -68,13 +68,20 @@ export interface ElementsWizardView {
    */
   readonly currenciesLoading?: boolean;
   /** Selected pay-in asset per multi-network coin label (e.g. USDT → USDT_TRON). */
-  readonly selectedSwapNetworks?: Readonly<Record<string, string>>;
+  readonly selectedSwapAssetByGroup?: Readonly<Record<string, string>>;
   /** Compact selector highlight: `method:bitcoin` or `swap:USDT`. */
   readonly selectedPickerKey?: string | null;
   /** Pay-in asset whose swap create is in flight — method tiles spin and disable. */
   readonly startingSwapAsset?: string | null;
   /** When set, the wizard shows the focused swap deposit flow for this pay-in asset. */
   readonly selectedSwapAsset?: string | null;
+  /**
+   * Whether this checkout has a URL the payer can return to — `sync-url` is
+   * set, or the host mounted the element on its own per-order route. Decides
+   * which of the two refund-return warnings the deposit panel shows; see
+   * {@link SwapDisplayModel.refundReturnLabel}.
+   */
+  readonly resumable?: boolean;
   /** Invoice amount + fiat, used to render fiat limit messages for out-of-range assets. */
   readonly amountMsats?: number;
   readonly fiat?: { readonly currency?: string; readonly value?: string };

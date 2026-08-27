@@ -10,6 +10,7 @@ export { providerIconUrls };
 export {
   type AssetUrlResolver,
   createAssetBaseUrlResolver,
+  lazyAssetUrlTable,
   warnOnFileAssetUrl,
 } from "./asset-url.ts";
 

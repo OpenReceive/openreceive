@@ -131,7 +131,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     private activeTutorialCopied = false;
     private swapOptions: readonly ElementsSwapOption[] = [];
     private swapOptionsLoaded = false;
-    private selectedSwapNetworks: Record<string, string> = {};
+    private selectedSwapAssetByGroup: Record<string, string> = {};
     private selectedPickerKey: string | null = null;
     private selectedSwapAsset: string | null = null;
     private startedSwapInvoice: CheckoutInvoiceSnapshot | undefined;
@@ -216,6 +216,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumable,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl,
@@ -245,6 +246,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumable ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl;
       if (displayOnly) {
@@ -356,11 +358,36 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       return parsed as Record<string, unknown>;
     }
 
+    /**
+     * Whether a payer who closes this tab has a URL to come back to. Only
+     * `sync-url` puts one there — the refund screen's copy has to say the true
+     * thing either way, so this is read rather than assumed.
+     */
+    private isResumable(): boolean {
+      // Explicit wins — only the host knows about a per-order route of its own.
+      // Otherwise infer it: `sync-url` puts the reference in the URL, and
+      // `route-reference` says the app router already did.
+      const declared = parseBooleanAttribute(
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumable),
+      );
+      if (declared !== undefined) return declared;
+      const routeReference = this.getAttribute(
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference,
+      );
+      if (routeReference !== null && routeReference.length > 0) return true;
+      return (
+        parseBooleanAttribute(
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
+        ) === true
+      );
+    }
+
     /** Order data belongs to the host; this only performs optional History API sync. */
     private syncResumePath(reference: string): void {
-      const syncUrl = parseBooleanAttribute(
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
-      );
+      const syncUrl =
+        parseBooleanAttribute(
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
+        ) === true;
       if (syncUrl) {
         const resumePathPrefix =
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix) ??
@@ -477,10 +504,11 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           selectedBitcoinRoute: this.selection.selectedBitcoinRoute,
           swapOptions: this.swapOptions,
           currenciesLoading: !this.swapOptionsLoaded,
-          selectedSwapNetworks: this.selectedSwapNetworks,
+          selectedSwapAssetByGroup: this.selectedSwapAssetByGroup,
           selectedPickerKey: this.selectedPickerKey,
           startingSwapAsset: this.session.startingSwapAsset,
           selectedSwapAsset: this.selectedSwapAsset,
+          resumable: this.isResumable(),
           ...(this.latestCheckoutSnapshot?.amount_msats === undefined
             ? {}
             : { amountMsats: this.latestCheckoutSnapshot.amount_msats }),
@@ -769,7 +797,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       }
       const swapInvoice = this.currentSwapInvoice();
       if (swapInvoice !== undefined) {
-        const display = createSwapDisplayModel(swapInvoice, {});
+        const display = createSwapDisplayModel(swapInvoice, { resumable: this.isResumable() });
         const swapCountdown = root.querySelector('[part="swap-countdown"]');
         if (swapCountdown !== null && display !== undefined) {
           swapCountdown.textContent = display.countdownLabel;
@@ -818,7 +846,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             pickerKey: key,
             previousKey: this.selectedPickerKey,
             entries: buildMethodGridEntries(paymentMethods, this.swapOptions),
-            selectedNetworks: this.selectedSwapNetworks,
+            selectedAssetByGroup: this.selectedSwapAssetByGroup,
           });
           if (selection.kind === "none") return;
           if (selection.kind === "select_method") {
@@ -841,7 +869,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             return;
           }
           this.selectedPickerKey = key;
-          this.selectedSwapNetworks = selection.selectedNetworks;
+          this.selectedSwapAssetByGroup = selection.selectedAssetByGroup;
           this.render();
         });
       });
@@ -875,7 +903,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           if (target === "swap-asset") {
             this.selectedSwapAsset = null;
             this.selectedPickerKey = null;
-            this.selectedSwapNetworks = {};
+            this.selectedSwapAssetByGroup = {};
             this.render();
             return;
           }
@@ -929,8 +957,8 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             if (groupKey === null || groupKey.length === 0 || payInAsset === null) return;
             const details = button.closest("details");
             if (details instanceof HTMLDetailsElement) details.open = false;
-            this.selectedSwapNetworks = {
-              ...this.selectedSwapNetworks,
+            this.selectedSwapAssetByGroup = {
+              ...this.selectedSwapAssetByGroup,
               [groupKey]: payInAsset,
             };
             this.render();
@@ -944,7 +972,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           this.dismissedSwapInvoiceId = current?.invoice_id ?? null;
           this.selectedSwapAsset = null;
           this.selectedPickerKey = null;
-          this.selectedSwapNetworks = {};
+          this.selectedSwapAssetByGroup = {};
           this.clearRefundAddressDraft();
           // Leaving the swap for Lightning is the one exit that is not a
           // submitted refund, so the staged address goes with it.

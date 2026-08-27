@@ -511,6 +511,66 @@ class ConfigurationContractTest < Minitest::Test
     assert_respond_to config, :allow_spend_capable_wallet
   end
 
+  # Step 0 of the agent directions is a SEARCH ("look for NWC_URI in .env, Rails
+  # credentials, the deploy config…") with a different answer on every host
+  # shape — and no answer at all in a container, where the value exists only in
+  # the running process. `bin/rails openreceive:doctor` is that search as one
+  # command, and its one hard rule is that it reports PRESENCE and never a
+  # value.
+  def test_doctor_reports_presence_only_and_never_a_secret
+    rake = File.read(File.expand_path("../lib/tasks/openreceive.rake", __dir__))
+    assert_includes rake, "task doctor: :environment"
+    # Every credential line goes through the set/unset lambda. An interpolation
+    # of the value itself is the one mistake this task must never make.
+    assert_includes rake, %q(ENV[name].to_s.strip.empty? ? "unset" : "set")
+    refute_match(/\#\{ENV\[/, rake)
+    for name in %w[NWC_URI LSC_URI_PRIMARY LSC_URI_BACKUP]
+      assert_includes rake, name
+    end
+    # It names the two placeholders the engine warns about, so one command
+    # answers "is this install finished?" as well as "are the secrets there?".
+    assert_includes rake, "ALLOW_ALL_AUTHORIZE"
+    assert_includes rake, "LOGGING_ON_PAID"
+  end
+
+  def test_doctor_wallet_report_never_raises_and_redacts_the_connection
+    assert_equal(
+      "skipped — OpenReceive.configure has not run",
+      with_unconfigured_openreceive { OpenReceive.doctor_wallet_report }
+    )
+
+    OpenReceive.configure do |config|
+      config.nwc = "nostr+walletconnect://deadbeef?relay=wss://relay.invalid&secret=SUPERSECRET"
+      config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE
+      config.amount_for = ->(_reference) { nil }
+      config.on_paid = ->(_settlement) {}
+    end
+    report = OpenReceive.doctor_wallet_report
+    assert_match(/^FAILED — /, report)
+    # A connect failure can quote the URI, secret and all. A doctor an operator
+    # is invited to paste into an issue must not be the thing that leaks it.
+    refute_includes report, "SUPERSECRET"
+    refute_includes report, "nostr+walletconnect://"
+    # The redaction itself, directly: whatever the failure turns out to be on a
+    # given machine, this is the rule the report leans on.
+    leak = RuntimeError.new(
+      "connect failed for nostr+walletconnect://deadbeef?secret=SUPERSECRET"
+    )
+    sanitized = OpenReceive.sanitize_failure_message(leak)
+    assert_includes sanitized, "[REDACTED_NWC]"
+    refute_includes sanitized, "SUPERSECRET"
+  ensure
+    OpenReceive.configure { |config| config.nwc = nil }
+  end
+
+  def with_unconfigured_openreceive
+    was = OpenReceive.instance_variable_get(:@configured)
+    OpenReceive.instance_variable_set(:@configured, false)
+    yield
+  ensure
+    OpenReceive.instance_variable_set(:@configured, was)
+  end
+
   def test_validate_requires_authorize_plus_amount_for_or_advanced_hooks
     config = OpenReceive::Configuration.new
     config.nwc_client = FakeWallet.new
@@ -1306,6 +1366,27 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
 
     rendered = @context.render(File.join(TEMPLATE_ROOT, "initializer.rb"))
     assert_includes rendered, "config.on_paid = OpenReceive::LOGGING_ON_PAID"
+  end
+
+  # The same treatment for the OTHER generated placeholder. An allow-all
+  # `authorize` lets anyone holding an order id mint invoices, poll status and
+  # request refunds for it — safe only while references are unguessable — and
+  # docs/guides/authorization.md is emphatic about it. Making it a named
+  # constant is what lets the engine notice it is still in place and say so.
+  def test_engine_warns_on_the_generated_allow_all_authorize_placeholder
+    configuration = File.read(
+      File.expand_path("../lib/openreceive/configuration.rb", __dir__)
+    )
+    assert_includes configuration, "ALLOW_ALL_AUTHORIZE = ->(_context) { true }"
+    assert_equal true, OpenReceive::ALLOW_ALL_AUTHORIZE.call({ action: "checkout.create" })
+
+    source = File.read(File.expand_path("../lib/openreceive/engine.rb", __dir__))
+    assert_includes source, "OpenReceive.config.authorize.equal?(OpenReceive::ALLOW_ALL_AUTHORIZE)"
+
+    rendered = @context.render(File.join(TEMPLATE_ROOT, "initializer.rb"))
+    assert_includes rendered, "config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE"
+    # The literal lambda is what the engine could not detect.
+    refute_includes rendered, "config.authorize = ->(_context) { true }"
   end
 
   # The host's protect_from_forgery applies to the engine's routes unchanged

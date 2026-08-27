@@ -20,7 +20,11 @@
 // log-field builders, the watcher class, and the create-flow steps that only
 // createCheckoutSession calls.
 
-export type { TransactionDetailsSource } from "./internal/checkout.ts";
+export type {
+  QrSvgController,
+  QrSvgControllerOptions,
+  TransactionDetailsSource,
+} from "./internal/checkout.ts";
 // Checkout lifecycle: prepare/create calls, the polling controller, and the
 // merge rules that fold a freshly minted attempt back into a snapshot without
 // losing its siblings.
@@ -53,6 +57,7 @@ export {
   createLightningInvoiceDecodeUrl,
   createQrPayloadSvg,
   createQrSvg,
+  createQrSvgController,
   createStatusFetcher,
   createSwapDisplayModel,
   createTickingValueController,
@@ -95,6 +100,7 @@ export { validateCheckoutProps } from "./internal/checkout-props.ts";
 export type {
   CheckoutSession,
   CheckoutSessionOptions,
+  CheckoutSwapOptions,
   SwapSelection,
 } from "./internal/checkout-session.ts";
 // The create-mode flow itself (G6): the deferred Lightning mint, the swap
@@ -217,6 +223,7 @@ export {
   OPENRECEIVE_DEFAULT_PREFIX,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_PAYMENT_WIZARD_SELECTORS,
+  OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
   OPENRECEIVE_THEME_STORAGE_KEY,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS,
@@ -240,6 +247,13 @@ export {
 // the string form of the seam (`assetBaseUrl` / `asset-base-url`) to a resolver.
 export type { AssetUrlResolver } from "@openreceive/provider-data";
 export { createAssetBaseUrlResolver } from "@openreceive/provider-data";
+// The wallet-suggestion registry, re-exported so the pair reads as one API.
+// `getPaymentWizardRoutes` lives in @openreceive/provider-data and
+// `createWizardRouteDisplays` — which consumes its output and nothing else —
+// lives here; that split is a packaging decision, and a host that had to
+// discover the other package to complete one call was paying for it.
+export type { PaymentWizardRoute, PaymentWizardRouteRequest } from "@openreceive/provider-data";
+export { getPaymentWizardRoutes } from "@openreceive/provider-data";
 export type {
   MethodGridContinueDisplay,
   MethodGridDisplay,

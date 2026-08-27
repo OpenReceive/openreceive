@@ -55,6 +55,38 @@ export interface SwapSelection {
   setSelectedAsset(payInAsset: string | null): void;
 }
 
+/**
+ * Everything {@link CheckoutSession.startSwap} needs, as ONE option.
+ *
+ * These three used to be three optional fields beside each other
+ * (`swapSelection`, `swapPrefix`, `fetch`), which let a host supply two of them
+ * and get silence: `startSwap` returned at its first `undefined` without a
+ * throw, an `onError` or a state change, so the payer clicked Continue and the
+ * screen did not move. They are only ever useful as a set, so they are one
+ * field now and the mistake is no longer representable — a host either drives
+ * swaps or it does not.
+ */
+export interface CheckoutSwapOptions {
+  /** The swap attempt the wizard is showing, over the host's own state. */
+  selection: SwapSelection;
+  /**
+   * The mount prefix swap routes are derived from. May still answer
+   * `undefined` — a standalone wizard has no prefix until its host has one —
+   * and a start attempted before then is reported through `onError` rather
+   * than swallowed.
+   */
+  prefix(): string | undefined;
+  /** Read at call time so a host that swaps `globalThis.fetch` is honoured. */
+  fetch(): typeof globalThis.fetch | undefined;
+  /**
+   * Publish a freshly started swap attempt. The two hosts fold it into their
+   * snapshot differently (the element re-keys its poll controller onto the
+   * merged snapshot; React hands the attempt to whichever component owns the
+   * snapshot), so the merge stays on the host side of this callback.
+   */
+  onStarted?(invoice: CheckoutInvoiceSnapshot): void;
+}
+
 export interface CheckoutSessionOptions {
   /**
    * The snapshot the host is rendering right now, read at call time — the
@@ -73,20 +105,11 @@ export interface CheckoutSessionOptions {
   /** Publish a snapshot that now carries the Lightning attempt. */
   onSnapshot?(snapshot: CheckoutSnapshot): void;
   /**
-   * The mount prefix swap routes are derived from, or `undefined` when this
-   * host has no swap backend (a standalone wizard with no prefix).
+   * Swap support, all of it or none of it. Omit for a Lightning-only host:
+   * {@link CheckoutSession.startSwap} then reports through `onError` instead
+   * of doing nothing.
    */
-  swapPrefix?(): string | undefined;
-  /** Read at call time so a host that swaps `globalThis.fetch` is honoured. */
-  fetch?(): typeof globalThis.fetch | undefined;
-  swapSelection?: SwapSelection;
-  /**
-   * Publish a freshly started swap attempt. The two hosts fold it into their
-   * snapshot differently (the element re-keys its poll controller onto the
-   * merged snapshot; React hands the attempt to whichever component owns the
-   * snapshot), so the merge stays on the host side of this callback.
-   */
-  onSwapStarted?(invoice: CheckoutInvoiceSnapshot): void;
+  swap?: CheckoutSwapOptions;
   logger?: BrowserLoggerOption;
   /** The host's error surface: a DOM `openreceive:error` event, or `onError`. */
   onError(error: unknown): void;
@@ -126,6 +149,10 @@ export interface CheckoutSession {
 }
 
 const SWAP_START_FAILED = "Could not prepare the payment address. Please try again.";
+const MISSING_SWAP_OPTIONS =
+  "startSwap needs the session's `swap` options (selection, prefix, fetch) — this session was " +
+  "created without them, so it cannot start a swap. See docs/guides/headless-checkout.md.";
+const MISSING_SWAP_WIRING = "startSwap cannot start a swap: the session was given no";
 const MINT_FAILED = "Could not create the Lightning invoice. Please try again.";
 
 /**
@@ -204,11 +231,29 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     // The same double-POST guard as the mint: a poll-driven re-render hands the
     // payer a fresh, enabled button while the first start is still in flight.
     if (startingSwapAsset !== null) return;
-    const selection = options.swapSelection;
-    const prefix = options.swapPrefix?.();
-    const fetcher = options.fetch?.();
+    const swap = options.swap;
+    if (swap === undefined) {
+      options.onError(new Error(MISSING_SWAP_OPTIONS));
+      return;
+    }
+    const selection = swap.selection;
+    const prefix = swap.prefix();
+    const fetcher = swap.fetch();
     const reference = options.reference();
-    if (selection === undefined || prefix === undefined || fetcher === undefined) return;
+    // A start that cannot be made is a WIRING mistake, and silence about it is
+    // what this used to be: the payer clicked Continue, nothing was requested,
+    // and nothing said why. Report it on the host's own error surface.
+    if (prefix === undefined || fetcher === undefined) {
+      const missing = [
+        ...(prefix === undefined ? ["swap.prefix()"] : []),
+        ...(fetcher === undefined ? ["swap.fetch()"] : []),
+      ];
+      options.onError(new Error(`${MISSING_SWAP_WIRING} ${missing.join(" and ")}.`));
+      return;
+    }
+    // Not an error, unlike the two above: no reference yet is a moment in the
+    // lifecycle (the checkout has not been prepared), not a host that wired the
+    // session wrong. It resolves itself on the next render.
     if (reference === undefined || reference.length === 0) return;
     // Already holding this asset's deposit instructions: show them again rather
     // than mint a colliding second attempt. Pinned on both hosts:
@@ -252,7 +297,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       // poller kept the pre-swap snapshot (create mode never polled at all;
       // snapshot mode polled the old Lightning hash, which the handler 404s) and
       // a paid swap customer was told "Invoice expired".
-      options.onSwapStarted?.(started);
+      swap.onStarted?.(started);
       selection.setSelectedAsset(payInAsset);
       options.onChange();
     } catch (error) {

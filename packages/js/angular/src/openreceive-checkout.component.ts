@@ -62,6 +62,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() syncUrl?: boolean;
   @Input() resumePathPrefix?: string;
   @Input() routeReference?: string;
+  @Input() resumable?: boolean;
   @Input() onCopy?: (event: Event) => void;
   @Input() onOpenWallet?: (event: Event) => void;
   @Input() onState?: (event: Event) => void;
@@ -146,6 +147,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       ...(this.syncUrl === undefined ? {} : { syncUrl: this.syncUrl }),
       ...(this.resumePathPrefix === undefined ? {} : { resumePathPrefix: this.resumePathPrefix }),
       ...(this.routeReference === undefined ? {} : { routeReference: this.routeReference }),
+      ...(this.resumable === undefined ? {} : { resumable: this.resumable }),
       ...(this.onCopy === undefined ? {} : { onCopy: this.onCopy }),
       ...(this.onOpenWallet === undefined ? {} : { onOpenWallet: this.onOpenWallet }),
       ...(this.onState === undefined ? {} : { onState: this.onState }),

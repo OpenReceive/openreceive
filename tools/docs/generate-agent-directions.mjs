@@ -12,9 +12,10 @@
 //   1. It is self-contained. The stack's quickstart is inlined verbatim, so an
 //      agent that cannot fetch a URL — no network, a blocked github.com, a
 //      sandbox with no tools at all — can still finish the integration.
-//   2. It stays small. BUDGET_BYTES fails the build before the paste grows past
-//      what a small model can hold. Every rule that only applies to a custom UI
-//      lives in the checkout-ux guide instead.
+//   2. It stays bounded. BUDGET_BYTES fails the build before the paste grows
+//      past what an agent will follow as instructions rather than skim as
+//      reference. Every rule that only applies to a custom UI lives in the
+//      checkout-ux guide instead, whether or not there is room for it here.
 //   3. Every openreceive.org URL it names is a page the site actually has to
 //      serve. Links are checked against docs/manifest.json and the site-owned
 //      allowlist below, so the payload cannot promise a 404.
@@ -38,12 +39,26 @@ import {
 const root = process.cwd();
 const check = process.argv.includes("--check");
 
-// ~6k tokens. The ceiling is set by the smallest model someone might paste this
-// into, not the largest: an 8k-token context still has to hold the payload, the
-// files the agent is editing, and its own reply. Both payloads sat at ~30 KB
-// before the UI rules moved into docs/guides/checkout-ux.md, which is the kind
-// of growth this number exists to catch.
-const BUDGET_BYTES = 24_000;
+// The payload never named a release, so "check the installed version against
+// the documented one" was not an instruction anyone could follow: the
+// documented one was not written down. It is stamped on the payload's own H1,
+// from the same place generate-site-contract.mjs reads it.
+const RELEASE = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
+
+// ~13k tokens — about 1,000 lines at the ~52 bytes per line both payloads run
+// at. Raised deliberately from 24 KB (~6k tokens) on 2026-08-27: that ceiling
+// was sized for an 8k-token context that had to hold the payload, the files the
+// agent is editing, and its own reply. That was a reasonable floor in 2025 and
+// is a conservative one now, and the Rails payload had grown into it at 93%,
+// leaving the next correctness fix nowhere to go.
+//
+// The ceiling did not go away, because the reason for it was never only the
+// context window: this is a PROMPT, and past some size an agent skims it instead
+// of following it. Both payloads sat at ~30 KB before the UI rules moved into
+// docs/guides/checkout-ux.md, which is the kind of growth this number exists to
+// catch — a guide has no budget, and that is still where a rule belongs when it
+// only applies to a custom UI.
+const BUDGET_BYTES = 52_000;
 
 const STACKS = [
   {
@@ -57,6 +72,29 @@ const STACKS = [
     quickstart: "docs/guides/quickstart-rails.md",
   },
 ];
+
+/**
+ * Guides a payload is allowed NOT to link, and why.
+ *
+ * Everything else in the manifest's `public` set has to appear in the payload's
+ * reading list. That list used to be a hand-kept literal beside a manifest the
+ * generator was already reading, so publishing a guide and forgetting to name
+ * it was silent — and the guides that went missing were the ones answering the
+ * questions an integrator gets wrong (provider-registry.md owns the
+ * asset-hosting rule; the payload sent readers to a three-paragraph summary
+ * instead).
+ *
+ * A reason is required, so dropping a guide off the list is a decision someone
+ * wrote down rather than an omission nobody noticed.
+ */
+const UNLISTED_GUIDES = {
+  "agent-directions-node": "this payload's own page",
+  "agent-directions-rails": "this payload's own page",
+  guides: "linked as the index at the end of the reading list, not as an entry",
+  "quickstart-node": "inlined in full below, or the other stack's",
+  "quickstart-rails": "inlined in full below, or the other stack's",
+  "node-orms": "Node only; the Rails engine owns its tables",
+};
 
 const GUIDE_URL = (slug) => `https://openreceive.org/guides/${slug}`;
 // What the payload actually links: raw markdown, fetchable without a browser.
@@ -109,7 +147,9 @@ export function inlineGuide(markdown, publicSlugs) {
 
 function render(directions, quickstart, quickstartSlug, publicSlugs) {
   return [
-    directions.trim(),
+    directions
+      .trim()
+      .replace(/^# (.*)$/m, `# $1\n\nThese directions describe OpenReceive ${RELEASE}.`),
     "",
     "---",
     "",
@@ -137,6 +177,23 @@ export function unservedUrls(payload, publicSlugs) {
     bad.push(pathname);
   }
   return [...new Set(bad)];
+}
+
+/**
+ * Public guides this payload neither links nor has a reason to skip. The
+ * reading list IS the payload for anything not inlined, so a guide the site
+ * serves and the payload never names is unreachable to its one reader.
+ */
+export function unlistedGuides(payload, publicSlugs, stack) {
+  const linked = new Set(
+    [...payload.matchAll(/https:\/\/openreceive\.org\/guides\/([a-z0-9-]+)/g)].map(
+      (match) => match[1],
+    ),
+  );
+  return [...publicSlugs]
+    .filter((slug) => !linked.has(slug))
+    .filter((slug) => UNLISTED_GUIDES[slug] === undefined && slug !== `quickstart-${stack}`)
+    .sort();
 }
 
 /**
@@ -183,6 +240,15 @@ for (const { stack, source, quickstart } of STACKS) {
     problems.push(
       `${target}: ${relative.length} link(s) are not absolute — ${[...new Set(relative)].slice(0, 5).join(", ")}. ` +
         `A pasted payload has no repository to resolve them against.`,
+    );
+  }
+
+  const unlisted = unlistedGuides(payload, publicSlugs, stack);
+  if (unlisted.length > 0) {
+    problems.push(
+      `${target}: ${unlisted.join(", ")} ${unlisted.length === 1 ? "is" : "are"} published in ` +
+        `docs/manifest.json but never linked from the payload. Add it to the reading list in ` +
+        `${source}, or give it a reason in UNLISTED_GUIDES in this generator.`,
     );
   }
 

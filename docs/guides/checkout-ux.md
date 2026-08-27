@@ -65,9 +65,12 @@ whole ballgame.
 You do not have to enforce this yourself — call `resolveWizardSelection` and
 branch on `kind`. A one-network group comes back as `start_swap`, never
 `choose_network`, so the mistake is unrepresentable; `choose_network` carries
-the group, the heading, the aria id pair and the updated network map.
-`createMethodGridDisplay` carries the same rule per tile as `needsNetworkStep` /
-`startPayInAsset`.
+the group, the heading, the aria id pair and the updated `selectedAssetByGroup`.
+That map is **keyed by group key (`USDT`) and valued by the chosen option's
+`pay_in_asset` (`USDT_TRON`)** — not by its `network_label`, which is the
+obvious wrong write, type-checks, and simply leaves the tile unselected with no
+error anywhere. `createMethodGridDisplay` takes the same map and carries the
+same rule per tile as `needsNetworkStep` / `startPayInAsset`.
 
 ## An unavailable method must say why, in the payer's own currency
 
@@ -129,6 +132,15 @@ walkthrough's own first step is "copy the invoice", so it belongs to a live
 invoice and must close when the payer changes payment method.
 
 Three constraints:
+
+**Show a few, not all of them.** The registry answers ~37 providers for
+Lightning. Rendered in full under the invoice they push the QR off a
+fixed-height panel — the desktop payment path. Pass `providerPreviewLimit` to
+`createWizardRouteDisplays` (`OPENRECEIVE_PROVIDER_PREVIEW_LIMIT` is the number
+the shipped styles are drawn against) and build a "show all" affordance from
+`display.providerCount`, which is the untruncated total. There is no default
+limit, because the shipped renderers draw the whole grid on a screen that has
+room for it.
 
 **Lightning only, and the default is already right.** `getPaymentWizardRoutes()`
 with no arguments returns `btc-lightning`, the one route whose providers pay a
@@ -193,6 +205,13 @@ Title it with `checkoutLabels.transactionDetails`, keep it collapsed by default,
 and render it in TWO places: on the live checkout, and on the receipt or order
 page AFTER settlement.
 
+One exception, and the builder owns it: while the rail is `checkout_lock` — the
+deferred placeholder a prepared checkout carries before the payer has chosen
+anything — it returns NO rows. There is no transaction to describe yet, and
+"both places" taken literally opens a "Transaction details" caret over a record
+of nothing on the very first screen. Render the caret only when the rows are
+non-empty, which is the check every caller already makes.
+
 This is not developer debug output. A Bitcoin payment leaves the payer holding a
 payment hash and a deposit txid, and those are the only evidence they have that
 they paid you. A UI that never shows them makes your support inbox the payer's
@@ -219,6 +238,20 @@ server re-reads live state at confirm time: handle the `409 CONFLICT` as a norma
 outcome, not an error screen. The whole flow, the twelve provider states, and the
 overpayment/missing-memo asymmetry are in
 [Headless checkout → Refunds](headless-checkout.md#refunds).
+
+**A refund screen the payer cannot return to is the failure this section cannot
+prevent on its own.** The deposit is already sent and the refund is a second
+visit — often after the payer has gone to fetch an address from another wallet.
+If your checkout lives at one route with no per-order path, closing the tab
+takes the order id with it and the deposit is unreachable through the UI.
+Nothing above stops that, because it is a routing decision, not a UI one.
+
+Tell the model which you have: `createSwapDisplayModel(invoice, { resumable })`,
+and render `display.refundReturnLabel` instead of picking a `checkoutLabels`
+string yourself. Resumable, it says to bookmark the page; not resumable, it says
+not to close the tab — telling a payer to bookmark a page that will not bring
+them back is worse than saying nothing. The drop-ins infer it from `syncUrl` /
+`routeReference` and take a `resumable` prop for a route they cannot see.
 
 ## Where these rules live in code
 

@@ -34,6 +34,7 @@ export let metadata: Record<string, unknown> | undefined = undefined;
 export let syncUrl: boolean | undefined = undefined;
 export let resumePathPrefix: string | undefined = undefined;
 export let routeReference: string | undefined = undefined;
+export let resumable: boolean | undefined = undefined;
 export let onCopy: ((event: Event) => void) | undefined = undefined;
 export let onOpenWallet: ((event: Event) => void) | undefined = undefined;
 export let onState: ((event: Event) => void) | undefined = undefined;
@@ -77,6 +78,7 @@ $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...(syncUrl === undefined ? {} : { syncUrl }),
   ...(resumePathPrefix === undefined ? {} : { resumePathPrefix }),
   ...(routeReference === undefined ? {} : { routeReference }),
+  ...(resumable === undefined ? {} : { resumable }),
   ...(onCopy === undefined ? {} : { onCopy }),
   ...(onOpenWallet === undefined ? {} : { onOpenWallet }),
   ...(onState === undefined ? {} : { onState }),

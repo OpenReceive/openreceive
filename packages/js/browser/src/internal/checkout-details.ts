@@ -17,8 +17,17 @@ import { createSwapFeeBreakdown, getSwapAssetDisplay } from "./checkout-swap-vie
 /**
  * Build display rows for settled checkout / swap state from public OpenReceive
  * fields only. Omits undefined values; never surfaces NWC or send-payment secrets.
+ *
+ * A `checkout_lock` rail returns NO rows. That rail is the deferred placeholder
+ * a prepared checkout carries before the payer has chosen anything, so there is
+ * no transaction to describe yet — and a host following "transaction details on
+ * the live checkout AND on the receipt" would otherwise open a caret over a
+ * record of nothing. An empty array is already every caller's "render nothing"
+ * signal, so the rule enforces itself and no host has to learn the rail
+ * vocabulary to obey it.
  */
 export function createTransactionDetails(input: TransactionDetailsInput): TransactionDetailRow[] {
+  if (input.rail === "checkout_lock") return [];
   const rows: TransactionDetailRow[] = [];
   const payInAsset = input.swap?.pay_in_asset;
   // `kind` says what the value IS; the label is only shown. A row with no kind

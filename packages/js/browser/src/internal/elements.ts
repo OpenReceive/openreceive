@@ -74,6 +74,11 @@ function sharedElementAttributes(
   if (isSet(options.assetBaseUrl)) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl] = options.assetBaseUrl;
   }
+  // Shared for the same reason: a swap refund screen — the one thing this
+  // governs — shows in snapshot mode too.
+  if (options.resumable !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumable] = String(options.resumable);
+  }
   if (options.polling !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling] = String(options.polling);
   }

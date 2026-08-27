@@ -563,16 +563,18 @@ test("the checkout session survives a re-render, so a second start is refused", 
     probe.session = useCheckoutSession({
       snapshot: () => undefined,
       reference: () => "order-probe",
-      swapPrefix: () => "http://harness.local/openreceive",
-      fetch: () => fetchStub,
-      swapSelection: {
-        started: () => startedRef.current,
-        setStarted: (invoice) => {
-          startedRef.current = invoice;
+      swap: {
+        selection: {
+          started: () => startedRef.current,
+          setStarted: (invoice) => {
+            startedRef.current = invoice;
+          },
+          dismissedInvoiceId: () => null,
+          setDismissedInvoiceId: () => {},
+          setSelectedAsset: () => {},
         },
-        dismissedInvoiceId: () => null,
-        setDismissedInvoiceId: () => {},
-        setSelectedAsset: () => {},
+        prefix: () => "http://harness.local/openreceive",
+        fetch: () => fetchStub,
       },
       onError: () => {},
     });
@@ -741,14 +743,16 @@ test("the session refuses a second start for an asset it already holds instructi
     probe.session = useCheckoutSession({
       snapshot: () => undefined,
       reference: () => "order-reselect",
-      swapPrefix: () => "http://harness.local/openreceive",
-      fetch: () => fetchStub,
-      swapSelection: {
-        started: () => started,
-        setStarted,
-        dismissedInvoiceId: () => dismissed,
-        setDismissedInvoiceId: setDismissed,
-        setSelectedAsset: setSelected,
+      swap: {
+        selection: {
+          started: () => started,
+          setStarted,
+          dismissedInvoiceId: () => dismissed,
+          setDismissedInvoiceId: setDismissed,
+          setSelectedAsset: setSelected,
+        },
+        prefix: () => "http://harness.local/openreceive",
+        fetch: () => fetchStub,
       },
       onError: () => {},
     });

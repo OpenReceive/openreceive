@@ -71,6 +71,14 @@ error.
 `file://`.** The packages also log one `console.warn` naming the path the first
 time this happens in a document.
 
+That warning means what it says, and it means it only when it fires. The
+packaged URL tables (`providerIconUrls`, `payTutorialUrls`, `paymentIconUrls`)
+resolve each entry when it is READ, not when the module is imported, so a host
+that supplies a resolver — and therefore never reads one — sees nothing. If you
+are seeing the warning, something is genuinely reaching for a packaged URL: one
+display builder that was not given `resolveAssetUrl`, or a wrapper mounted
+without `assetBaseUrl`. Find that call rather than dismissing the warning.
+
 Three ways to fix it, and you need one of them under any non-Vite bundler:
 
 1. **Copy the packaged assets next to your bundle.** The demos do this with

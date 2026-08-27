@@ -3,6 +3,14 @@
 require "openreceive/server"
 
 module OpenReceive
+  # The generated initializer's placeholder `config.authorize`: it allows every
+  # request, treating possession of the reference as the authorization. Kept as
+  # a named constant for the same reason LOGGING_ON_PAID is — the engine detects
+  # it at boot and says out loud that anyone holding an order id can mint
+  # invoices, poll status and request refunds for it. The five-minute demo still
+  # works; it just stops being silent.
+  ALLOW_ALL_AUTHORIZE = ->(_context) { true }
+
   class ConfigurationError < StandardError; end
 
   # Passed to the quickstart `config.on_paid` inside the settlement transaction,
@@ -413,6 +421,24 @@ module OpenReceive
     # generated Dockerfile has exactly this shape.
     def eager_preflight?
       preflight_skip_reason.nil?
+    end
+
+    # One line for `bin/rails openreceive:doctor`: did the wallet check pass?
+    #
+    # It builds the service, which is the same eager preflight the engine runs
+    # at production boot — a missing NWC_URI, a dead relay, or a SPEND-CAPABLE
+    # connection all answer here rather than on a payer's first checkout. The
+    # failure is reported, never raised: an operator running a doctor wants
+    # every other line too, and a doctor that dies at line six tells them less
+    # than one that finishes. Sanitized for the same reason the reconcile logs
+    # are — a connect failure can quote the NWC URI, secret and all.
+    def doctor_wallet_report
+      return "skipped — OpenReceive.configure has not run" unless configured?
+
+      config.service
+      "ok — the wallet answered and is receive-only"
+    rescue StandardError => error
+      "FAILED — #{sanitize_failure_message(error)}"
     end
 
     # nil when the boot preflight should run; otherwise the short reason the

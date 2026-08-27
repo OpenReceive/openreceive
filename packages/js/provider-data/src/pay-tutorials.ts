@@ -1,4 +1,4 @@
-import { assetUrl } from "./asset-url.ts";
+import { assetUrl, lazyAssetUrlTable } from "./asset-url.ts";
 
 // One filename list drives the whole map, mirroring provider-icons.ts — two
 // patterns for one concept in one package was the drift risk. The list matches
@@ -27,9 +27,8 @@ export const OPENRECEIVE_PAY_TUTORIAL_FILES: readonly string[] = [
   "strike-4.webp",
 ];
 
-export const payTutorialUrls: Readonly<Record<string, string>> = Object.fromEntries(
-  OPENRECEIVE_PAY_TUTORIAL_FILES.map((file) => [
-    `assets/pay_tutorials/${file}`,
-    assetUrl(`./assets/pay_tutorials/${file}`),
-  ]),
+// Lazy, for the reason provider-icons.ts is: see lazyAssetUrlTable.
+export const payTutorialUrls: Readonly<Record<string, string>> = lazyAssetUrlTable(
+  OPENRECEIVE_PAY_TUTORIAL_FILES.map((file) => `assets/pay_tutorials/${file}`),
+  (key) => assetUrl(`./${key}`),
 );

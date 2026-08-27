@@ -652,18 +652,15 @@ test("characterization: checkout_lock deferred", () => {
   });
   assertReactModelMatches(checkoutLockDeferred, state, "pending");
 
-  // No Invoice ID row: nothing is minted yet, so `invoice_id` is "" and the
-  // builder's empty-string guard drops the row entirely.
-  assert.deepStrictEqual(createTransactionDetailsFromState(state), [
-    { label: "Order ID", value: "order-lock" },
-    { label: "Checkout ID", value: "or_chk_lock" },
-    { label: "Rail", value: "checkout_lock" },
-    { label: "Status", value: "pending" },
-    { label: "Workflow", value: "invoice_created" },
-    { label: "Amount", value: "750 sats" },
-    { label: "Amount (msats)", value: "750000" },
-    { label: "Fiat", value: "$0.19" },
-  ]);
+  // NO ROWS AT ALL on this rail. `checkout_lock` is the deferred placeholder a
+  // prepared checkout carries before the payer has chosen anything, so there is
+  // no transaction to describe — and a host obeying "transaction details on the
+  // live checkout AND on the receipt" would otherwise open a "Transaction
+  // details" caret over a record of nothing (an Order ID, the word
+  // `checkout_lock`, and an amount) before the payer had done anything at all.
+  // The builder owns the rule so no host has to learn the rail vocabulary to
+  // obey it; an empty array is already every caller's "render nothing" signal.
+  assert.deepStrictEqual(createTransactionDetailsFromState(state), []);
 });
 
 // ------------------------------------------- 8. paid, with sibling attempts
@@ -866,6 +863,13 @@ test("a good amount formats on every rail and every screen", () => {
         const expected = amountMsats === 1_000 ? "1 sat" : `${amountMsats / 1000} sats`;
         assert.equal(state.amountLabel, expected, where);
         const rows = createTransactionDetailsFromState(state);
+        if (rail === "checkout_lock") {
+          // The deferred placeholder has no transaction to describe, so the
+          // details panel gets nothing — while `amountLabel`, which is what the
+          // screen actually shows the payer, still formats above.
+          assert.deepStrictEqual(rows, [], where);
+          continue;
+        }
         assert.equal(rowValue(rows, "Amount"), expected, where);
         assert.equal(rowValue(rows, "Amount (msats)"), String(amountMsats), where);
       }
@@ -929,10 +933,11 @@ test("a legitimate timestamp formats on every rail", () => {
 
       const rows = createTransactionDetailsFromState(state);
       // Deferred checkout_lock has no timestamps to render at all: nothing is
-      // minted yet, so the state carries no expiry or settlement.
+      // minted yet, so the state carries no expiry or settlement — and the
+      // builder returns no rows on that rail in the first place.
       if (state.expires_at === undefined) {
         assert.equal(rail, "checkout_lock", where);
-        assert.equal(rowValue(rows, "Expires at"), undefined, where);
+        assert.deepStrictEqual(rows, [], where);
         continue;
       }
       assert.equal(rowValue(rows, "Expires at"), iso(NOW + 600), where);

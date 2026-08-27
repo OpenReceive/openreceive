@@ -232,6 +232,14 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    */
   routeReference: "route-reference",
   /**
+   * Does a payer who closes this tab have a URL that brings them back to this
+   * checkout? Only the refund screen's copy depends on it — see
+   * `SwapDisplayModel.refundReturnLabel`. Unset, the element infers it from
+   * `sync-url` / `route-reference`; set it when the host owns a per-order route
+   * of its own, which the element cannot see.
+   */
+  resumable: "resumable",
+  /**
    * Base URL of an external bolt11 decoder. When set, the checkout shows a
    * "Decode" link to `{decode-link-url}?invoice={bolt11}`. Omitted (the
    * default), no decode link is rendered and the invoice never leaves the page.

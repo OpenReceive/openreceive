@@ -132,6 +132,79 @@ export function openWallet(options: OpenWalletOptions): string {
   return uri;
 }
 
+/**
+ * A QR that follows a changing payload, without every host rewriting the same
+ * effect.
+ *
+ * {@link createQrSvg} and {@link createQrPayloadSvg} are ASYNC, and that is the
+ * trap: `dangerouslySetInnerHTML={{ __html: createQrSvg(invoice) }}` type-checks
+ * (React types `__html` as `string | TrustedHTML`, and `TrustedHTML` is an empty
+ * interface every object satisfies) and paints the literal text
+ * "[object Promise]" inside the QR box. Resolving it by hand then needs the
+ * other half nobody writes the first time: a slow encode that lands AFTER the
+ * payload changed must not paint the old QR over the new one.
+ *
+ * So: call `show`/`showPayload` whenever the payload changes and render what
+ * `onValue` last handed you. Only the newest call can publish — an earlier
+ * encode still in flight is dropped, resolved or rejected. `stop()` drops the
+ * one in flight, for a host going away. Same shape as
+ * {@link createTickingValueController}: DOM-free, framework-free, one
+ * implementation instead of one per renderer.
+ */
+export interface QrSvgControllerOptions {
+  /** The newest encoded SVG. Not called for a superseded or stopped encode. */
+  onValue(svg: string): void;
+  /** Encode failures, on the same terms. */
+  onError?(error: unknown): void;
+  readonly encoder?: QrEncoder;
+  readonly width?: number;
+}
+
+export interface QrSvgController {
+  /** Encode a bolt11, as the `lightning:` URI a wallet expects. */
+  show(invoice: string): void;
+  /** Encode a payload verbatim — a swap deposit URI, say. */
+  showPayload(payload: string): void;
+  /** Publish nothing further; the encode in flight is abandoned. */
+  stop(): void;
+}
+
+export function createQrSvgController(options: QrSvgControllerOptions): QrSvgController {
+  // Monotonic, and bumped by `stop()` too: "is this still the newest request"
+  // is the whole rule, and a stopped controller is one nobody can match.
+  let generation = 0;
+
+  const qrOptions = (): QrOptions => ({
+    ...(options.encoder === undefined ? {} : { encoder: options.encoder }),
+    ...(options.width === undefined ? {} : { width: options.width }),
+  });
+
+  const publish = (pending: Promise<string>): void => {
+    generation += 1;
+    const mine = generation;
+    void pending.then(
+      (svg) => {
+        if (mine === generation) options.onValue(svg);
+      },
+      (error: unknown) => {
+        if (mine === generation) options.onError?.(error);
+      },
+    );
+  };
+
+  return {
+    show(invoice: string): void {
+      publish(createQrSvg(invoice, qrOptions()));
+    },
+    showPayload(payload: string): void {
+      publish(createQrPayloadSvg(payload, qrOptions()));
+    },
+    stop(): void {
+      generation += 1;
+    },
+  };
+}
+
 function getQrEncoder(encoder: QrEncoder | undefined): QrEncoder {
   if (encoder !== undefined) return encoder;
   if (isQrEncoder(defaultQrEncoder)) return defaultQrEncoder;

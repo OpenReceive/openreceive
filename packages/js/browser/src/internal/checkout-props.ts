@@ -64,6 +64,18 @@ export interface CheckoutComponentProps {
    * does not push/replace the URL itself.
    */
   readonly routeReference?: string;
+  /**
+   * Does a payer who closes this tab have a URL that brings them back to this
+   * checkout? It decides ONE thing: which of the two refund-return warnings the
+   * swap deposit panel shows (`SwapDisplayModel.refundReturnLabel`). Telling a
+   * payer to bookmark a page that will not bring them back is how a swap
+   * deposit becomes unreachable, so the safe copy is the default.
+   *
+   * Unset, it is inferred from `syncUrl` / `routeReference` — both of which put
+   * the order in the URL. Set it explicitly when the host owns a per-order
+   * route the component cannot see, which is most snapshot-mode apps.
+   */
+  readonly resumable?: boolean;
 }
 
 /** Which props only do something in create mode (no `checkout` snapshot). */

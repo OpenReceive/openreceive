@@ -46,7 +46,7 @@ test("a multi-network group resolves to the network step, with everything it nee
     pickerKey: swapPickerKey("USDT"),
     previousKey: null,
     entries,
-    selectedNetworks: {},
+    selectedAssetByGroup: {},
   });
   assert.equal(resolved.kind, "choose_network");
   assert.equal(resolved.groupKey, "USDT");
@@ -55,7 +55,7 @@ test("a multi-network group resolves to the network step, with everything it nee
   // One id pair, so aria-controls and aria-labelledby cannot disagree.
   assert.equal(resolved.panelId, "network-panel-usdt");
   assert.equal(resolved.headingId, "network-heading-usdt");
-  assert.deepEqual(resolved.selectedNetworks, {});
+  assert.deepEqual(resolved.selectedAssetByGroup, {});
 });
 
 test("an unresolvable or all-unavailable key resolves to none", () => {
@@ -80,7 +80,7 @@ test("the grid display model carries the rule as data", () => {
   const display = createMethodGridDisplay({
     entries: entriesOf([USDT_TRON, USDT_ETH, SOL]),
     selectedPickerKey: swapPickerKey("USDT"),
-    selectedNetworks: { USDT: "USDT_ETH" },
+    selectedAssetByGroup: { USDT: "USDT_ETH" },
     startingAsset: null,
     checkout: { amount_msats: 200_000, fiat: { currency: "USD", value: "0.05" } },
   });
@@ -152,7 +152,7 @@ test("a start in flight makes the whole grid inert and names the asset", () => {
   const display = createMethodGridDisplay({
     entries: entriesOf([USDT_TRON, USDT_ETH, SOL]),
     selectedPickerKey: swapPickerKey("USDT"),
-    selectedNetworks: { USDT: "USDT_TRON" },
+    selectedAssetByGroup: { USDT: "USDT_TRON" },
     startingAsset: "USDT_TRON",
   });
   assert.equal(display.gridBusy, true);

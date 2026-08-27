@@ -74,7 +74,9 @@ export {
   createQrPayloadSvg,
   createQrPngDataUrl,
   createQrSvg,
+  createQrSvgController,
   openWallet,
 } from "./checkout-actions.ts";
+export type { QrSvgController, QrSvgControllerOptions } from "./checkout-actions.ts";
 // ./checkout-watcher.ts — polling loop + controller
 export { createCheckoutController } from "./checkout-watcher.ts";

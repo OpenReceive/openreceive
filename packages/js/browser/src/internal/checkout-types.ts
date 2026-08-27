@@ -281,6 +281,18 @@ export interface SwapDisplayModel {
    * refund_address.
    */
   readonly refundAllowed: boolean;
+  /**
+   * What to tell the payer about getting BACK to this refund screen, already
+   * decided from whether the host said the checkout is resumable.
+   *
+   * `checkoutLabels.refundReturnWarning` — "Bookmark this page…" — is only true
+   * if the checkout HAS a URL. A swap checkout that lives at one route with no
+   * per-order path (a single-page shop, a modal) sends that payer back to an
+   * empty checkout and their deposit is unreachable through the UI. So the
+   * choice is made here, from one declared fact, rather than left to every host
+   * to notice: render this string, never either label directly.
+   */
+  readonly refundReturnLabel: string;
   readonly refundTxId?: string;
   readonly refundReason?: string;
   readonly depositReceivedAmount?: string;
@@ -388,6 +400,11 @@ export interface CheckoutElementAttributeOptions {
    * Order id from the app router (e.g. Next.js). When set, skip History API URL sync.
    */
   readonly routeReference?: string;
+  /**
+   * Does a payer who closes this tab have a URL that brings them back? Emitted
+   * in every mode, because the refund screen it governs shows in every mode.
+   */
+  readonly resumable?: boolean;
   /**
    * Base URL of an external bolt11 decoder. Omitted (the default), the element
    * renders no "Decode" link and the invoice is never sent to a third party.
@@ -842,7 +859,18 @@ export interface WizardRouteDisplay {
   readonly key: string;
   readonly title: string;
   readonly subtitle: string;
+  /**
+   * The providers to draw — every one the route has, or the first
+   * `providerPreviewLimit` of them.
+   */
   readonly providers: readonly WizardProviderDisplay[];
+  /**
+   * How many the route has in total, before any preview limit. The registry
+   * carries ~37 wallets for Lightning, so a host that renders them beside a QR
+   * needs a limit and a "show all N" affordance; this is the N, and
+   * {@link WizardRouteDisplay.providers}.length is what it is showing.
+   */
+  readonly providerCount: number;
 }
 
 /**

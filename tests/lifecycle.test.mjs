@@ -273,7 +273,11 @@ for (const surface of [elementSurface("create"), reactSurface("create")]) {
       const input = await until(() => findRefundAddressInput(handle.root()), {
         label: `${surface.name} refund address input`,
       });
-      assert.ok(handle.text().includes("Bookmark this page"));
+      // Neither surface is mounted with `syncUrl` or `resumable`, so neither has
+      // a URL the payer could come back to — and the copy says so instead of
+      // telling them to bookmark a page that would not bring them back.
+      assert.ok(handle.text().includes("Do not close this tab"));
+      assert.ok(!handle.text().includes("Bookmark this page"));
 
       const refundAddress = TESTKIT_TRON_DEPOSIT_ADDRESS;
       setInputValue(input, refundAddress);

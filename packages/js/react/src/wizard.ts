@@ -69,9 +69,9 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<string | null>(null);
   // For multi-network coins (USDT), remember which network the payer picked before
   // confirming the method tile.
-  const [selectedSwapNetworks, setSelectedSwapNetworks] = React.useState<Record<string, string>>(
-    {},
-  );
+  const [selectedSwapAssetByGroup, setSelectedSwapAssetByGroup] = React.useState<
+    Record<string, string>
+  >({});
   // Compact selector: which asset tile is currently selected (method:… or swap:…).
   const [selectedPickerKey, setSelectedPickerKey] = React.useState<string | null>(null);
   const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
@@ -86,16 +86,18 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const session = useCheckoutSession({
     snapshot: () => checkout,
     reference: () => reference,
-    swapPrefix: () => props.prefix,
-    fetch: () => fetcher,
-    swapSelection: {
-      started: () => startedSwapInvoice ?? undefined,
-      setStarted: setStartedSwapInvoice,
-      dismissedInvoiceId: () => dismissedSwapInvoiceId,
-      setDismissedInvoiceId: setDismissedSwapInvoiceId,
-      setSelectedAsset: setSelectedSwapAsset,
+    swap: {
+      selection: {
+        started: () => startedSwapInvoice ?? undefined,
+        setStarted: setStartedSwapInvoice,
+        dismissedInvoiceId: () => dismissedSwapInvoiceId,
+        setDismissedInvoiceId: setDismissedSwapInvoiceId,
+        setSelectedAsset: setSelectedSwapAsset,
+      },
+      prefix: () => props.prefix,
+      fetch: () => fetcher,
+      onStarted: (invoice) => props.onSwapStarted?.(invoice),
     },
-    onSwapStarted: (invoice) => props.onSwapStarted?.(invoice),
     ...(props.logger === undefined ? {} : { logger: props.logger }),
     onError: (error) => props.onError?.(error),
   });
@@ -110,7 +112,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const clearSwapFocus = React.useCallback(() => {
     setSelectedSwapAsset(null);
     setSelectedPickerKey(null);
-    setSelectedSwapNetworks({});
+    setSelectedSwapAssetByGroup({});
     session.clearSwapStartError();
     props.swapRefund?.clearSwapRefundStaging();
   }, [session, props.swapRefund]);
@@ -307,6 +309,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                   logger: props.logger,
                   onError: props.onError,
                   onRefund: refundSwap,
+                  ...(props.resumable === undefined ? {} : { resumable: props.resumable }),
                   onBackToLightning: () => {
                     setDismissedSwapInvoiceId(activeSwapForAsset.invoice_id);
                     clearSwapFocus();
@@ -336,7 +339,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           checkout: checkout ?? undefined,
           selectedPickerKey,
           startingAsset: swapStartingAsset,
-          selectedSwapNetworks,
+          selectedSwapAssetByGroup,
           // One resolver decides what a tile click MEANS, so the "ask the
           // network question only when it is a real question" rule is not
           // re-derived here: a single-network group comes back as start_swap
@@ -346,7 +349,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
               pickerKey: key,
               previousKey,
               entries: buildMethodGridEntries(paymentMethods, swapAssetOptions),
-              selectedNetworks: selectedSwapNetworks,
+              selectedAssetByGroup: selectedSwapAssetByGroup,
             });
             if (resolved.kind === "none") return;
             if (resolved.kind === "select_method") {
@@ -363,10 +366,10 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
               return;
             }
             setSelectedPickerKey(key);
-            setSelectedSwapNetworks(resolved.selectedNetworks);
+            setSelectedSwapAssetByGroup(resolved.selectedAssetByGroup);
           },
           onSelectNetwork: (groupKey, payInAsset) => {
-            setSelectedSwapNetworks((current) => ({
+            setSelectedSwapAssetByGroup((current) => ({
               ...current,
               [groupKey]: payInAsset,
             }));
@@ -465,6 +468,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                           logger: props.logger,
                           onError: props.onError,
                           onRefund: refundSwap,
+                          ...(props.resumable === undefined ? {} : { resumable: props.resumable }),
                           onBackToLightning: () => {
                             setDismissedSwapInvoiceId(activeSwapForRoute.invoice_id);
                             clearSwapFocus();
@@ -577,7 +581,7 @@ function renderCompactPaymentMethodSelector(options: {
   readonly checkout: CheckoutSnapshot | undefined;
   readonly selectedPickerKey: string | null;
   readonly startingAsset: string | null;
-  readonly selectedSwapNetworks: Readonly<Record<string, string>>;
+  readonly selectedSwapAssetByGroup: Readonly<Record<string, string>>;
   readonly onSelectPicker: (key: string, previousKey: string | null) => void;
   readonly onSelectNetwork: (groupKey: string, payInAsset: string) => void;
   readonly onContinueMethod: (methodId: string) => void;
@@ -590,7 +594,7 @@ function renderCompactPaymentMethodSelector(options: {
   const display = createMethodGridDisplay({
     entries: buildMethodGridEntries(paymentMethods, options.swapAssetOptions),
     selectedPickerKey: options.selectedPickerKey,
-    selectedNetworks: options.selectedSwapNetworks,
+    selectedAssetByGroup: options.selectedSwapAssetByGroup,
     startingAsset: options.startingAsset,
     ...(options.checkout === undefined ? {} : { checkout: options.checkout }),
   });

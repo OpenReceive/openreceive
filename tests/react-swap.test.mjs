@@ -396,9 +396,14 @@ test("browser builds block explorer and Lightning decode links for transaction d
   assert.doesNotMatch(detailsHtml, />Copy</);
 });
 
-test("react refund screen warns to bookmark the checkout URL", () => {
-  const html = renderToStaticMarkup(
+// The bookmark warning is only TRUE if the checkout has a URL. A swap checkout
+// on a single route with no per-order path sends that payer back to an empty
+// screen with their deposit unreachable — so the copy is chosen from what the
+// host declared, and the safe half is the default.
+test("react refund screen tells the payer to bookmark only when the checkout is resumable", () => {
+  const panel = (resumable) =>
     renderSwapDepositPanel({
+      ...(resumable === undefined ? {} : { resumable }),
       invoice: {
         invoice_id: "or_inv_refund",
         rail: "swap",
@@ -420,11 +425,23 @@ test("react refund screen warns to bookmark the checkout URL", () => {
       },
       onBack: () => undefined,
       onRefund: async () => undefined,
-    }),
-  );
+    });
+
+  const html = renderToStaticMarkup(panel(true));
   assert.match(html, /Refund needed/);
   assert.match(html, /Payment details/);
   assert.ok(html.includes(checkoutLabels.refundReturnWarning));
   assert.ok(html.indexOf("Payment details") < html.indexOf(checkoutLabels.refundReturnWarning));
   assert.match(html, /Review refund address/);
+
+  // Undeclared and explicitly false both get the honest line, and neither is
+  // allowed to leak the bookmark advice.
+  for (const resumable of [undefined, false]) {
+    const unbookmarkable = renderToStaticMarkup(panel(resumable));
+    assert.ok(unbookmarkable.includes(checkoutLabels.refundNoReturnWarning), String(resumable));
+    assert.ok(!unbookmarkable.includes(checkoutLabels.refundReturnWarning), String(resumable));
+    // The form itself stays: a payer who is on the screen right now can still
+    // submit a refund, and hiding it would strand the deposit outright.
+    assert.match(unbookmarkable, /Review refund address/);
+  }
 });

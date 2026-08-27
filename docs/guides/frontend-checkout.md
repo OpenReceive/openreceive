@@ -37,7 +37,14 @@ Browser & React API surface (full reference in
   `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`, `paymentWizard`,
   `themeToggle` (default `true`), `defaultTheme`, `storageKey`, `decodeLinkUrl`,
   `assetBaseUrl`, `components`, `classNames`, `children`, `syncUrl`,
-  `resumePathPrefix`, `routeReference`, `metadata`, `createFetch`, `resolveAssetUrl`.
+  `resumePathPrefix`, `routeReference`, `resumable`, `metadata`, `createFetch`,
+  `resolveAssetUrl`. `resumable` says whether a payer who closes the tab has a
+  URL that brings them back; it is inferred from `syncUrl` / `routeReference`,
+  and set explicitly when your own router owns a per-order route the component
+  cannot see. It decides one thing — which return warning the swap refund screen
+  shows — and that one thing is what stands between a stranded deposit and a
+  recoverable one. See
+  [Checkout UX → The refund screens](checkout-ux.md#the-refund-screens).
   The shared names and defaults hold for the Vue, Svelte and Angular wrappers,
   which mount the same custom element. Four of these are React-only:
   `components`, `classNames`, `children` (see below) and `createFetch`;

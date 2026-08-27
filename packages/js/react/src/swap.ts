@@ -5,7 +5,7 @@ import {
   type DetailLinkKind,
   createSwapDisplayModel,
   createTransactionDetails,
-  createQrPayloadSvg,
+  createQrSvgController,
   getSwapRefundFormError,
   type BrowserLogger,
   type QrEncoder,
@@ -163,11 +163,13 @@ export function renderSwapDepositPanel(options: {
   readonly onError?: (error: unknown) => void;
   readonly onRefund: (attemptId: string, refundAddress: string, confirm: boolean) => Promise<void>;
   readonly onBackToLightning: () => void;
+  /** Does this checkout have a URL to return to? See `refundReturnLabel`. */
+  readonly resumable?: boolean;
 }): React.ReactElement | null {
-  const display = createSwapDisplayModel(
-    options.invoice,
-    options.now === undefined ? {} : { now: options.now },
-  );
+  const display = createSwapDisplayModel(options.invoice, {
+    ...(options.now === undefined ? {} : { now: options.now }),
+    ...(options.resumable === undefined ? {} : { resumable: options.resumable }),
+  });
   if (display === undefined) return null;
   const backButton = React.createElement(
     "button",
@@ -361,7 +363,7 @@ export function renderSwapDepositPanel(options: {
         onError: options.onError,
       }),
       renderSwapSupportDetails(display, options),
-      renderSwapRefundReturnWarning(),
+      renderSwapRefundReturnWarning(display),
     );
   }
 
@@ -394,7 +396,7 @@ export function renderSwapDepositPanel(options: {
             }),
       ),
       renderSwapSupportDetails(display, options),
-      renderSwapRefundReturnWarning(),
+      renderSwapRefundReturnWarning(display),
     );
   }
 
@@ -758,13 +760,13 @@ function renderSwapSupportDetails(
   );
 }
 
-function renderSwapRefundReturnWarning(): React.ReactElement {
+function renderSwapRefundReturnWarning(display: SwapDisplayModel): React.ReactElement {
   return React.createElement(
     "p",
     {
       className: orClasses.swapWarning,
     },
-    checkoutLabels.refundReturnWarning,
+    display.refundReturnLabel,
   );
 }
 
@@ -899,19 +901,19 @@ function SwapPayloadQRCode(props: {
   // Read through a ref: an inline onError would re-encode the QR on every parent render.
   const onErrorRef = React.useRef(props.onError);
   onErrorRef.current = props.onError;
+  const { payload, encoder } = props;
   React.useEffect(() => {
-    let cancelled = false;
-    createQrPayloadSvg(props.payload, { encoder: props.encoder, width: 220 })
-      .then((nextSvg) => {
-        if (!cancelled) setSvg(nextSvg);
-      })
-      .catch((error) => {
-        if (!cancelled) onErrorRef.current?.(error);
-      });
+    const controller = createQrSvgController({
+      onValue: setSvg,
+      onError: (error) => onErrorRef.current?.(error),
+      ...(encoder === undefined ? {} : { encoder }),
+      width: 220,
+    });
+    controller.showPayload(payload);
     return () => {
-      cancelled = true;
+      controller.stop();
     };
-  }, [props.payload, props.encoder]);
+  }, [payload, encoder]);
 
   const imageSource =
     svg.length === 0 ? undefined : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

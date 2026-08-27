@@ -59,6 +59,17 @@ and reaching for it first is how an integration ends up re-writing a poll loop.
   and by React's hook. If you are writing "should I reuse this bolt11 or mint a
   new one", it already answered.
 
+  **A host that wants swaps must pass `swap`** (`CheckoutSwapOptions`):
+  `selection` — a `SwapSelection`, five accessors (`started` / `setStarted` /
+  `dismissedInvoiceId` / `setDismissedInvoiceId` / `setSelectedAsset`) over
+  state you are already holding — plus `prefix` and `fetch`, and optionally
+  `onStarted`. They are ONE option because they are only useful as a set:
+  supplying two of three used to leave `startSwap` returning at the first
+  `undefined` with no throw, no `onError` and no state change, so the payer
+  clicked Continue and the screen did not move. Omit `swap` entirely for a
+  Lightning-only host; `startSwap` then reports through `onError` rather than
+  doing nothing.
+
 Checkout lifecycle:
 
 - `prepareCheckout` / `requestCheckout` — the prepare-then-mint calls (also on
@@ -126,7 +137,9 @@ Swap flows:
   chains. See [Automated swaps](automated-swaps.md#which-deposits-can-actually-be-mis-sent).
 - `mergeAttemptIntoSnapshot` / `mergeAttemptIntoCheckout` — fold a started
   attempt into the running snapshot, so the deposit becomes the active invoice
-  without dropping a still-valid Lightning sibling.
+  without dropping a still-valid Lightning sibling. Argument order is
+  `(attempt, snapshot)`, which reads backwards from the name; TypeScript catches
+  it either way.
 
 Swap refunds. A deposit that arrives outside the provider's limits, or too
 late, becomes refundable, and the payer has to give an address on their own
@@ -150,7 +163,18 @@ Rendering the attempt — the pieces a custom UI would otherwise pull a second
 library in for:
 
 - `createQrSvg` / `createQrPayloadSvg` — the QR the shipped renderers draw. No
-  second QR dependency.
+  second QR dependency. **Both are async**, and the type system will not save
+  you: React types `dangerouslySetInnerHTML.__html` as `string | TrustedHTML`,
+  `TrustedHTML` is an empty interface every object satisfies, so passing the
+  promise straight in type-checks cleanly and renders the literal text
+  `[object Promise]` inside the QR box.
+- `createQrSvgController` / `QrSvgController` — that resolved for you, and the
+  half nobody writes the first time: call `show(invoice)` or
+  `showPayload(payload)` whenever the payload changes, render what `onValue`
+  last handed you, and an encode that lands AFTER the payload changed is
+  dropped instead of painting the old QR over the new one. `stop()` on teardown.
+  Framework-free, same shape as `createTickingValueController`; both shipped
+  React QR components are built on it.
 - `openWallet` — hand a `lightning:` URI to the payer's wallet. **Touch devices
   only.** The default path is `location.assign` on the CURRENT window: with no
   registered `lightning:` handler the click is inert, and with one it navigates
@@ -307,10 +331,12 @@ past, one screen before `USDT`, where it is the whole ballgame.
 
 You do not have to remember any of that, because the rule is data:
 
-- `resolveWizardSelection({ pickerKey, previousKey, entries, selectedNetworks })`
+- `resolveWizardSelection({ pickerKey, previousKey, entries, selectedAssetByGroup })`
   answers what a tile click MEANS, as a `WizardSelection` you branch on:
   `start_swap` (with the asset), `choose_network` (with the group, the heading,
-  the `aria-controls` / `aria-labelledby` id pair, and the updated network map),
+  the `aria-controls` / `aria-labelledby` id pair, and the updated
+  `selectedAssetByGroup` — **keyed by group key (`USDT`), valued by the chosen
+  option's `pay_in_asset` (`USDT_TRON`), not its `network_label`**),
   `select_method`, or `none`. A single-network group comes back as `start_swap`,
   so the ceremony mistake is unrepresentable — a custom UI cannot ask a group
   with one answer which answer it wants. Both shipped renderers branch on
@@ -379,6 +405,29 @@ Validate before you submit with `getSwapRefundFormError(payInAsset, address,
 networkLabel)`, which checks the address against the pay-in asset's own format —
 these are checksum checks, not length guards, because a false accept sends money
 nowhere recoverable.
+
+**A refund form is only honest if the payer can get BACK to it.** The deposit is
+already sent; the refund is a second visit, often minutes or hours later, and
+the order id lives in the page. A swap checkout that sits at one route with no
+per-order path — a single-page shop, a modal over a cart — loses that id the
+moment the tab closes, and the deposit becomes unreachable through the UI. Every
+rule above is obeyed and the money is still stranded.
+
+So tell the display model what your routing actually is:
+`createSwapDisplayModel(invoice, { resumable })`, and render
+`display.refundReturnLabel` rather than either `checkoutLabels` string. With
+`resumable: true` it is "Bookmark this page, or copy its URL"; without it, it
+says not to close the tab — because telling someone to bookmark a page that will
+not bring them back is worse than saying nothing. The form itself stays
+available either way: a payer who is on the screen right now can still submit
+one.
+
+Give yourself a per-order route if you can. **The machinery for that is on
+`@openreceive/browser`, not on `/headless`**: `createGuestCheckoutResume` and
+`createGuestOrderFetcher` are host-application behaviour (your storage, your
+order fetch), so they live on the main entry — see [What is deliberately not on
+this surface](#what-is-deliberately-not-on-this-surface). `/headless` carries
+only `enterCheckoutResumePath`, the History API write itself.
 
 The provider vocabulary a refund UI reads (`SwapProviderState`, 12 values):
 
@@ -458,7 +507,7 @@ is [docs/internal/headless-surface.md](../internal/headless-surface.md).
 <!-- BEGIN GENERATED: headless-symbols-uncovered -->
 <!-- Generated by tools/docs/generate-headless-surface.mjs from packages/js/browser/src/headless.ts. Promote or drop the symbol there, then rerun the generator; never edit this block by hand. -->
 
-Also on the surface, in no group above (88 symbols) — element
+Also on the surface, in no group above (90 symbols) — element
 and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 
 - `applyCheckoutElementAttributes`
@@ -495,15 +544,14 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `createThemeChangeEvent`
 - `createThemeModel`
 - `createThemeToggleElementAttributes`
-- `createTickingValueController`
 - `createTransientFeedbackController`
 - `deriveCheckoutStateLabels`
 - `DetailLinkKind`
-- `enterCheckoutResumePath`
 - `escapeHtml`
 - `formatAmountCaption`
 - `formatUnixTime`
 - `getExplorerNetwork`
+- `getPaymentWizardRoutes`
 - `getRouteIconPath`
 - `getWizardEmptyMessage`
 - `OPENRECEIVE_CHECKOUT_DATA_SELECTORS`
@@ -516,6 +564,7 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `OPENRECEIVE_DEFAULT_PREFIX`
 - `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES`
 - `OPENRECEIVE_PAYMENT_WIZARD_SELECTORS`
+- `OPENRECEIVE_PROVIDER_PREVIEW_LIMIT`
 - `OPENRECEIVE_THEME_STORAGE_KEY`
 - `OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES`
 - `OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS`
@@ -529,13 +578,15 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `parseResolvedTheme`
 - `parseThemePreference`
 - `PaymentWizardController`
+- `PaymentWizardRoute`
+- `PaymentWizardRouteRequest`
 - `QrEncoder`
+- `QrSvgControllerOptions`
 - `readThemePreference`
 - `ResolvedTheme`
 - `selectCurrentSwapInvoice`
 - `StoredThemeModelOptions`
 - `SwapCopyRow`
-- `SwapSelection`
 - `syncStoredThemeControls`
 - `ThemeModel`
 - `ThemeModelOptions`
@@ -550,6 +601,50 @@ and theme plumbing, wizard/icon helpers, attribute parsers and log types:
 - `WizardRouteDisplay`
 - `writeThemePreference`
 <!-- END GENERATED: headless-symbols-uncovered -->
+
+## What is deliberately not on this surface
+
+`@openreceive/browser` has two entry points and they are disjoint on purpose:
+`/headless` is the engine under a custom UI, and the main entry is the drop-in's
+own surface. Neither re-exports the other, so a host that reads "build on the
+engine directly via `@openreceive/browser/headless`" has no reason to look at
+the main entry at all — and the names below are invisible to exactly the
+audience they are for.
+
+The one that matters most: `createGuestCheckoutResume` and
+`createGuestOrderFetcher` are the resume machinery a swap checkout needs before
+it can honestly offer a refund form (see [Refunds](#refunds)). They are here
+rather than on `/headless` because the guest-resume CONTROLLER is host
+behaviour — its own storage, its own order fetch — and a surface that cannot
+construct it has no use for its type. That reasoning is sound; the silence
+about it was the bug. This block is generated from both export lists, so it
+cannot drift from either.
+
+<!-- BEGIN GENERATED: headless-symbols-main-entry -->
+<!-- Generated by tools/docs/generate-headless-surface.mjs by diffing packages/js/browser/src/index.ts against src/headless.ts. Move the symbol between those two entry modules, then rerun the generator; never edit this block by hand. -->
+
+18 names on `@openreceive/browser`
+that `/headless` does not carry:
+
+- `AppBrowserConsoleLogger`
+- `BrowserLogEntry`
+- `BrowserLogLevel`
+- `CopyInvoiceOptions`
+- `createAppBrowserConsoleLogger`
+- `CreateAppBrowserConsoleLoggerOptions`
+- `CreateBrowserConsoleLoggerOptions`
+- `createGuestCheckoutResume`
+- `createGuestOrderFetcher`
+- `createLightningUri`
+- `createQrPngDataUrl`
+- `GuestCheckoutResumeController`
+- `GuestCheckoutResumeOptions`
+- `OpenWalletOptions`
+- `PrepareCheckoutOptions`
+- `QrOptions`
+- `RequestCheckoutOptions`
+- `StatusInvoiceLike`
+<!-- END GENERATED: headless-symbols-main-entry -->
 
 ## Curation rule
 

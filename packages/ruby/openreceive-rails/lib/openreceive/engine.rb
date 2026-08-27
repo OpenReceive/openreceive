@@ -33,6 +33,14 @@ module OpenReceive
             "config/initializers/openreceive.rb."
           )
         end
+        if OpenReceive.config.authorize.equal?(OpenReceive::ALLOW_ALL_AUTHORIZE)
+          ::Rails.logger&.warn(
+            "[openreceive] config.authorize is still the generated allow-all placeholder — " \
+            "anyone holding an order id can mint invoices, poll status, and request refunds " \
+            "for it. Safe only while your references are unguessable. Replace it in " \
+            "config/initializers/openreceive.rb."
+          )
+        end
         if ::Rails.env.production?
           skipped = OpenReceive.preflight_skip_reason
           if skipped.nil?

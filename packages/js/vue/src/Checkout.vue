@@ -25,6 +25,7 @@ const props = withDefaults(defineProps<WrapperCheckoutComponentProps>(), {
   paymentWizard: undefined,
   themeToggle: undefined,
   syncUrl: undefined,
+  resumable: undefined,
 });
 
 // Storage and matchMedia only exist in the browser: resolving the theme before mount
@@ -60,6 +61,7 @@ const shell = computed(() => {
     ...(props.syncUrl === undefined ? {} : { syncUrl: props.syncUrl }),
     ...(props.resumePathPrefix === undefined ? {} : { resumePathPrefix: props.resumePathPrefix }),
     ...(props.routeReference === undefined ? {} : { routeReference: props.routeReference }),
+    ...(props.resumable === undefined ? {} : { resumable: props.resumable }),
     ...(props.onCopy === undefined ? {} : { onCopy: props.onCopy }),
     ...(props.onOpenWallet === undefined ? {} : { onOpenWallet: props.onOpenWallet }),
     ...(props.onState === undefined ? {} : { onState: props.onState }),

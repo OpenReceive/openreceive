@@ -168,18 +168,20 @@ export function createElementCheckoutSession(
       });
     },
     onSnapshot: publishSnapshot,
-    swapPrefix: () => host.resolvePollPrefix(currentReference()),
-    fetch: () => globalThis.fetch,
-    swapSelection: host.swapSelection,
-    // A swap attempt is NOT written back as attributes: a bolt11 attribute
-    // would take the element out of create mode. It re-keys the poll
-    // controller onto the merged snapshot and nothing else.
-    onSwapStarted: (invoice) => {
-      const reference = currentReference();
-      if (reference === undefined) return;
-      const previous = host.latestCheckoutSnapshot() ?? host.currentCheckoutSnapshot();
-      host.handleControllerSnapshot(mergeAttemptIntoCheckout(invoice, previous, reference));
-      host.startCheckoutController();
+    swap: {
+      selection: host.swapSelection,
+      prefix: () => host.resolvePollPrefix(currentReference()),
+      fetch: () => globalThis.fetch,
+      // A swap attempt is NOT written back as attributes: a bolt11 attribute
+      // would take the element out of create mode. It re-keys the poll
+      // controller onto the merged snapshot and nothing else.
+      onStarted: (invoice) => {
+        const reference = currentReference();
+        if (reference === undefined) return;
+        const previous = host.latestCheckoutSnapshot() ?? host.currentCheckoutSnapshot();
+        host.handleControllerSnapshot(mergeAttemptIntoCheckout(invoice, previous, reference));
+        host.startCheckoutController();
+      },
     },
     logger: host.logger,
     onError: (error) => host.dispatchError(error),
