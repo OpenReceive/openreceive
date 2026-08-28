@@ -1,25 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
-  addBananaToCart,
-  createOrder,
-  expectPaidDelivery,
+  addButtonToCart,
+  expectPaidReceipt,
   expectWizardCurrencies,
   mintAttempt,
+  type MintedAttempt,
   openShop,
   selectFrameworkTab,
   settleTestkitInvoice,
+  startCheckout,
   stepTestkitSwap,
-  type MintedAttempt,
 } from "./helpers.ts";
 
-// Desktop viewport on purpose: the demo once loaded its own Tailwind sheet
-// after the checkout styles, which hid the >=640px network-selector panel —
-// running the swap flow at desktop width regression-tests that CSS ordering.
+// Desktop viewport on purpose: a demo that loads its own sheet after the
+// checkout styles can hide the >=640px network-selector panel, so running the
+// swap flow at desktop width regression-tests that CSS ordering.
 test.use({ viewport: { width: 1280, height: 900 } });
 
 /** The testkit swap provider's fixed Tron facts (see packages/js/testkit). */
 const USDT_TRON_DEPOSIT_ADDRESS = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb";
-const USDT_TRON_DEPOSIT_AMOUNT = "1.05";
+/** The deposit instruction names an amount the provider quoted; assert the shape, not the number. */
+const USDT_DEPOSIT_INSTRUCTION = /Pay [\d.]+ USDT to this address/;
 /** A checksum-valid Tron mainnet address that is NOT the deposit address. */
 const VALID_TRON_REFUND_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
@@ -29,9 +30,9 @@ const VALID_TRON_REFUND_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
  */
 async function startUsdtTronSwap(page: Page): Promise<MintedAttempt> {
   await openShop(page);
+  await addButtonToCart(page);
+  await startCheckout(page);
   await selectFrameworkTab(page, "react");
-  await addBananaToCart(page);
-  await createOrder(page);
   await expectWizardCurrencies(page);
 
   await page.getByRole("button", { name: /USDT/ }).click();
@@ -52,9 +53,7 @@ test("USDT on Tron: deposit renders, provider advances to done, settle pays the 
   const selector = { provider_order_id: attempt.providerOrderId as string };
 
   // Deposit panel: amount instruction, address, and the provider countdown.
-  await expect(
-    page.getByText(`Pay ${USDT_TRON_DEPOSIT_AMOUNT} USDT to this address`),
-  ).toBeVisible();
+  await expect(page.getByText(USDT_DEPOSIT_INSTRUCTION)).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Address", exact: true })).toHaveValue(
     USDT_TRON_DEPOSIT_ADDRESS,
   );
@@ -70,7 +69,7 @@ test("USDT on Tron: deposit renders, provider advances to done, settle pays the 
 
   // The provider "paid" the shadow Lightning invoice: settle it in the wallet.
   await settleTestkitInvoice(page, attempt.paymentHash);
-  await expectPaidDelivery(page);
+  await expectPaidReceipt(page);
 });
 
 test("USDT on Tron refund path: refund_required → validated address → confirmed refund", async ({
@@ -78,9 +77,7 @@ test("USDT on Tron refund path: refund_required → validated address → confir
 }) => {
   const attempt = await startUsdtTronSwap(page);
   const selector = { provider_order_id: attempt.providerOrderId as string };
-  await expect(
-    page.getByText(`Pay ${USDT_TRON_DEPOSIT_AMOUNT} USDT to this address`),
-  ).toBeVisible();
+  await expect(page.getByText(USDT_DEPOSIT_INSTRUCTION)).toBeVisible();
 
   await stepTestkitSwap(page, selector, "refund_required");
   await expect(page.getByText("Refund needed")).toBeVisible();

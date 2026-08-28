@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-/** The four checkout frameworks the node-express demo hosts as tabs. */
+/** The four checkout frameworks node-express hosts as tabs. */
 export const CHECKOUT_FRAMEWORKS = ["react", "vue", "svelte", "angular"] as const;
 export type CheckoutFramework = (typeof CHECKOUT_FRAMEWORKS)[number];
 
@@ -11,41 +11,53 @@ const FRAMEWORK_TAB_LABELS: Record<CheckoutFramework, string> = {
   angular: "Angular",
 };
 
-/** Static-price demo math: 1 Banana at $4.00, BTC at $50,000 → 8,000 sats. */
-export const BANANA_PRICE = "$4.00";
-export const BANANA_SATS = "8,000 sats";
+/**
+ * Static-price demo math: one Safety Orange at $1.00, BTC at $50,000 → 2,000
+ * sats. Safety Orange is the cheapest button and therefore the first card.
+ */
+export const BUTTON_NAME = "Safety Orange";
+export const BUTTON_PRICE = "$1.00";
+export const BUTTON_SATS = "2,000 sats";
 
 /** Open the shop and wait for the catalog to be interactive. */
 export async function openShop(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Buy A Fruit Sticker/ })).toBeVisible();
+  await expect(page.getByText("Buy an OR button")).toBeVisible();
+  await expect(page.getByText(BUTTON_NAME).first()).toBeVisible();
 }
 
-/** Pick the framework tab that hosts the embedded checkout. */
+/** Add one Safety Orange to the cart. */
+export async function addButtonToCart(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Add" }).first().click();
+  await expect(page.locator(".or-shop-footer")).toContainText(`1 button · ${BUTTON_PRICE}`);
+}
+
+/**
+ * Place the order and wait for the checkout stage.
+ *
+ * The order strip above the payment screen is the host's own copy — the
+ * `description` OpenReceive shows comes from `amountFor`, and this strip is the
+ * richer version of it — so its presence proves the order reached the server
+ * and came back priced.
+ */
+export async function startCheckout(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Checkout" }).click();
+  await expect(page.getByText(`OpenReceive button: ${BUTTON_NAME}`)).toBeVisible();
+}
+
+/**
+ * Pick the framework tab that hosts the packaged checkout.
+ *
+ * Called AFTER `startCheckout`, unlike the Hello Fruit demo this replaces: the
+ * tab strip lives inside the `renderCheckout` seam rather than above the shop,
+ * because choosing a framework is a statement about the payment screen and
+ * means nothing on the catalog. Mantine's SegmentedControl hides the radio
+ * input, so the click target is the label.
+ */
 export async function selectFrameworkTab(page: Page, framework: CheckoutFramework): Promise<void> {
-  const tab = page.getByRole("tab", { name: FRAMEWORK_TAB_LABELS[framework], exact: true });
-  await tab.click();
-  await expect(tab).toHaveAttribute("aria-selected", "true");
-}
-
-/** Select the Banana sticker and add one to the cart. */
-export async function addBananaToCart(page: Page): Promise<void> {
-  await page
-    .getByRole("button", { name: /Banana/ })
-    .first()
-    .click();
-  await page.getByRole("button", { name: /Add to cart/ }).click();
-  const cart = page.getByRole("region", { name: "Cart" });
-  await expect(cart).toContainText("1 item");
-  await expect(cart).toContainText("Banana");
-}
-
-/** Create the host order and wait for the checkout screen to replace the shop. */
-export async function createOrder(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Create order", exact: true }).click();
-  const order = page.getByRole("region", { name: "Order" });
-  await expect(order).toBeVisible();
-  await expect(order).toContainText(BANANA_PRICE);
+  const label = FRAMEWORK_TAB_LABELS[framework];
+  await page.locator(".or-shop-stage label", { hasText: label }).first().click();
+  await expect(page.getByRole("radio", { name: label, exact: true })).toBeChecked();
 }
 
 /**
@@ -151,15 +163,22 @@ export async function stepTestkitSwap(
 }
 
 /**
- * The post-payment host flow: settled status flips in place, then the
- * onPaid-gated delivery modal offers the purchased sticker download.
+ * The post-payment host flow: the receipt replaces the checkout, and the
+ * download link exists.
+ *
+ * THE LINK IS THE ASSERTION. `download_path` is written into the order payload
+ * only for a `paid` row, and that row was flipped inside OpenReceive's
+ * settlement transaction by the `onPaid` hook's guarded UPDATE. A visible
+ * download here means the whole bridge ran.
  */
-export async function expectPaidDelivery(page: Page): Promise<void> {
-  await expect(page.getByText("Payment received").first()).toBeVisible();
-  const modal = page.getByRole("dialog", { name: "You just got a sticker" });
-  await expect(modal).toBeVisible();
-  await expect(modal.getByText("Banana sticker")).toBeVisible();
-  await expect(modal.getByText("Download")).toBeVisible();
+export async function expectPaidReceipt(page: Page): Promise<void> {
+  await expect(page.getByText("Payment received")).toBeVisible();
+  await expect(page.getByText(`OpenReceive button: ${BUTTON_NAME}`)).toBeVisible();
+  await expect(downloadLink(page)).toBeVisible();
+}
+
+export function downloadLink(page: Page): Locator {
+  return page.locator("a[href*='/downloads/']").first();
 }
 
 /** Counts matching requests from the moment of creation; read `count()` later. */

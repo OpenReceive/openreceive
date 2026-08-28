@@ -7,11 +7,10 @@ import {
   SegmentedControl,
   Text,
 } from "@mantine/core";
-import type { CheckoutState } from "@openreceive/browser";
 import { Checkout } from "@openreceive/react";
 import { observer } from "mobx-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loadShopBootstrap } from "../../../../shared/bootstrap.ts";
 import { ShopPanel } from "../../../../shared/client/components/ShopPanel.tsx";
 import { ShopStore } from "../../../../shared/client/stores/ShopStore.ts";
@@ -121,128 +120,22 @@ interface FrameworkCheckoutProps {
  */
 const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
   ({ framework, onFrameworkChange, onSettled, reference, shop }) => {
-    const hostRef = useRef<HTMLDivElement | null>(null);
     const prefix = shop.checkout.prefix;
 
-    useEffect(() => {
-      const host = hostRef.current;
-      if (host === null || framework === "react") return;
-      const mountTarget = host;
-      let canceled = false;
-      let cleanup: () => void = () => undefined;
-
-      const options = {
-        rootSelector: ".or-page",
-        defaultTheme: "light" as const,
-        themeToggle: false as const,
-        onSettled: (event: Event) => {
-          const detail = (event as CustomEvent<{ state?: CheckoutState }>).detail;
-          void detail;
-          onSettled();
-        },
-      };
-
-      const mount = async (): Promise<void> => {
-        if (framework === "vue") {
-          // The stylesheet loads lazily with its tab; Vite injects the CSS
-          // chunk before the dynamic import resolves.
-          const [{ default: VueCheckout }, { createApp }] = await Promise.all([
-            import("@openreceive/vue/checkout.vue"),
-            import("vue"),
-            import("@openreceive/vue/styles.css"),
-          ]);
-          if (canceled) return;
-
-          const app = createApp(VueCheckout, {
-            reference,
-            prefix,
-            onSettled: options.onSettled,
-            onStartOver: shop.startOver,
-            options: {
-              rootSelector: options.rootSelector,
-              defaultTheme: options.defaultTheme,
-              themeToggle: options.themeToggle,
-            },
-          });
-          app.mount(mountTarget);
-          cleanup = () => app.unmount();
-        }
-
-        if (framework === "svelte") {
-          const [{ default: SvelteCheckout }, { mount: mountSvelte, unmount }] = await Promise.all([
-            import("@openreceive/svelte/checkout.svelte"),
-            import("svelte"),
-            import("@openreceive/svelte/styles.css"),
-          ]);
-          if (canceled) return;
-
-          const component = mountSvelte(SvelteCheckout, {
-            target: mountTarget,
-            props: {
-              reference,
-              prefix,
-              onSettled: options.onSettled,
-              onStartOver: shop.startOver,
-              options: {
-                rootSelector: options.rootSelector,
-                defaultTheme: options.defaultTheme,
-                themeToggle: options.themeToggle,
-              },
-            },
-          });
-          cleanup = () => void unmount(component);
-        }
-
-        if (framework === "angular") {
-          await import("@angular/compiler");
-          const [{ CheckoutComponent }, { createComponent }, { createApplication }] =
-            await Promise.all([
-              import("@openreceive/angular/checkout-component"),
-              import("@angular/core"),
-              import("@angular/platform-browser"),
-              import("@openreceive/angular/styles.css"),
-            ]);
-          if (canceled) return;
-
-          const application = await createApplication();
-          if (canceled) {
-            application.destroy();
-            return;
-          }
-
-          const component = createComponent(CheckoutComponent, {
-            environmentInjector: application.injector,
-            hostElement: mountTarget,
-          });
-          component.setInput("reference", reference);
-          component.setInput("prefix", prefix);
-          component.setInput("onSettled", options.onSettled);
-          component.setInput("onStartOver", shop.startOver);
-          component.setInput("options", {
-            rootSelector: options.rootSelector,
-            defaultTheme: options.defaultTheme,
-            themeToggle: options.themeToggle,
-          });
-          application.attachView(component.hostView);
-          component.changeDetectorRef.detectChanges();
-          cleanup = () => {
-            application.detachView(component.hostView);
-            component.destroy();
-            application.destroy();
-          };
-        }
-      };
-
-      void mount().catch((cause: unknown) => {
-        console.error("Embedded checkout failed to mount.", cause);
-      });
-
-      return () => {
-        canceled = true;
-        cleanup();
-        host.replaceChildren();
-      };
-    }, [framework, onSettled, prefix, reference, shop.startOver]);
+    // TWO DIFFERENT INTENTIONS, and the packaged checkout only has one callback
+    // for them. Its `onStartOver` is the action offered when an invoice
+    // EXPIRES, where what the payer wants is a fresh invoice for the cart they
+    // already have — so this remounts the checkout on the SAME reference
+    // rather than throwing the order away. The reference is minted once and
+    // survives every retry; discarding it here would leave one cart payable
+    // twice.
+    //
+    // Abandoning the order is the footer's job, and it is labelled for that.
+    // The retry is spelled as a REMOUNT — a changing `key` — so React tears the
+    // old checkout down and builds a new one, rather than an effect dependency
+    // nothing in the effect actually reads.
+    const [retryNonce, setRetryNonce] = useState(0);
+    const retrySameOrder = useCallback(() => setRetryNonce((nonce) => nonce + 1), []);
 
     return (
       <>
@@ -259,8 +152,9 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
           {framework === "react" ? (
             <Checkout
               defaultTheme="light"
+              key={`react-${retryNonce}`}
               onSettled={onSettled}
-              onStartOver={shop.startOver}
+              onStartOver={retrySameOrder}
               prefix={prefix}
               reference={reference}
               // The shop has no dark mode — shop.css hard-codes #fff in several
@@ -270,13 +164,22 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
               themeToggle={false}
             />
           ) : (
-            <div data-framework={framework} ref={hostRef} />
+            <EmbeddedCheckout
+              framework={framework}
+              key={`${framework}-${retryNonce}`}
+              onSettled={onSettled}
+              onStartOver={retrySameOrder}
+              prefix={prefix}
+              reference={reference}
+            />
           )}
         </div>
 
         <div className="or-shop-footer">
+          {/* Abandoning the order, as distinct from the checkout's own
+              "Start over", which retries this one. */}
           <Button onClick={shop.startOver} size="sm" variant="subtle">
-            Start over
+            Back to shop
           </Button>
           <Text c="dimmed" size="sm">
             {formatUsdCents(shop.orderTotalCents)}
@@ -286,3 +189,123 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
     );
   },
 );
+
+/**
+ * Vue, Svelte and Angular, mounted imperatively into a plain div.
+ *
+ * A component of its own so that REMOUNTING is a `key` change and nothing
+ * else: the effect below runs on mount and tears down on unmount, which is
+ * what an effect is for. Keeping it inside FrameworkCheckout meant carrying a
+ * retry counter in the dependency array that the effect never read.
+ */
+const EmbeddedCheckout: React.FC<{
+  readonly framework: Exclude<CheckoutFramework, "react">;
+  readonly onSettled: () => void;
+  readonly onStartOver: () => void;
+  readonly prefix: string;
+  readonly reference: string;
+}> = ({ framework, onSettled, onStartOver, prefix, reference }) => {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    const mountTarget = host;
+    let canceled = false;
+    let cleanup: () => void = () => undefined;
+
+    const options = {
+      rootSelector: ".or-page",
+      defaultTheme: "light" as const,
+      // The shop has no dark mode — shop.css hard-codes #fff in several places
+      // and says so at the top — so every framework is pinned to light.
+      themeToggle: false as const,
+      onSettled: () => onSettled(),
+    };
+
+    const mount = async (): Promise<void> => {
+      if (framework === "vue") {
+        // The stylesheet loads lazily with its tab; Vite injects the CSS chunk
+        // before the dynamic import resolves.
+        const [{ default: VueCheckout }, { createApp }] = await Promise.all([
+          import("@openreceive/vue/checkout.vue"),
+          import("vue"),
+          import("@openreceive/vue/styles.css"),
+        ]);
+        if (canceled) return;
+
+        const app = createApp(VueCheckout, {
+          reference,
+          prefix,
+          onSettled: options.onSettled,
+          onStartOver,
+          options,
+        });
+        app.mount(mountTarget);
+        cleanup = () => app.unmount();
+      }
+
+      if (framework === "svelte") {
+        const [{ default: SvelteCheckout }, { mount: mountSvelte, unmount }] = await Promise.all([
+          import("@openreceive/svelte/checkout.svelte"),
+          import("svelte"),
+          import("@openreceive/svelte/styles.css"),
+        ]);
+        if (canceled) return;
+
+        const component = mountSvelte(SvelteCheckout, {
+          target: mountTarget,
+          props: { reference, prefix, onSettled: options.onSettled, onStartOver, options },
+        });
+        cleanup = () => void unmount(component);
+      }
+
+      if (framework === "angular") {
+        await import("@angular/compiler");
+        const [{ CheckoutComponent }, { createComponent }, { createApplication }] =
+          await Promise.all([
+            import("@openreceive/angular/checkout-component"),
+            import("@angular/core"),
+            import("@angular/platform-browser"),
+            import("@openreceive/angular/styles.css"),
+          ]);
+        if (canceled) return;
+
+        const application = await createApplication();
+        if (canceled) {
+          application.destroy();
+          return;
+        }
+
+        const component = createComponent(CheckoutComponent, {
+          environmentInjector: application.injector,
+          hostElement: mountTarget,
+        });
+        component.setInput("reference", reference);
+        component.setInput("prefix", prefix);
+        component.setInput("onSettled", options.onSettled);
+        component.setInput("onStartOver", onStartOver);
+        component.setInput("options", options);
+        application.attachView(component.hostView);
+        component.changeDetectorRef.detectChanges();
+        cleanup = () => {
+          application.detachView(component.hostView);
+          component.destroy();
+          application.destroy();
+        };
+      }
+    };
+
+    void mount().catch((cause: unknown) => {
+      console.error("Embedded checkout failed to mount.", cause);
+    });
+
+    return () => {
+      canceled = true;
+      cleanup();
+      host.replaceChildren();
+    };
+  }, [framework, onSettled, onStartOver, prefix, reference]);
+
+  return <div data-framework={framework} ref={hostRef} />;
+};

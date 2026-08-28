@@ -1,25 +1,28 @@
 import { expect, test } from "@playwright/test";
 import {
-  addBananaToCart,
+  addButtonToCart,
   bitcoinTile,
-  createOrder,
   expectWizardCurrencies,
   expireTestkitInvoice,
   mintAttempt,
   openShop,
   selectFrameworkTab,
+  startCheckout,
 } from "./helpers.ts";
 
 /**
  * E1 regression at the UI level: after an invoice expires, creating again on
  * the SAME order must mint a fresh bolt11 — not 409 on the superseded attempt
  * and strand the payer on an error panel.
+ *
+ * The reference is minted once, before checkout, and survives every retry.
+ * That is the invariant this exercises: one cart, one reference, two invoices.
  */
 test("expired invoice reminted on the same order without an error panel", async ({ page }) => {
   await openShop(page);
+  await addButtonToCart(page);
+  await startCheckout(page);
   await selectFrameworkTab(page, "react");
-  await addBananaToCart(page);
-  await createOrder(page);
   await expectWizardCurrencies(page);
 
   const first = await mintAttempt(page, "/openreceive/checkouts", async () => {
@@ -31,9 +34,11 @@ test("expired invoice reminted on the same order without an error panel", async 
   await expireTestkitInvoice(page, first.paymentHash);
   await expect(page.getByText("Invoice expired")).toBeVisible();
 
-  // Return to the same order (reload = the resume URL) and pay again: the
-  // create call for the same order must mint a NEW invoice.
-  await page.reload();
+  // The expired panel's own action. In this host it remounts the checkout on
+  // the SAME reference rather than discarding the order — the reference is
+  // minted once and survives every retry, and abandoning it is the footer's
+  // job ("Back to shop"), not this button's.
+  await page.getByRole("button", { name: "Start over", exact: true }).click();
   await expectWizardCurrencies(page);
   const second = await mintAttempt(page, "/openreceive/checkouts", async () => {
     await bitcoinTile(page).click();

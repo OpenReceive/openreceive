@@ -5,22 +5,24 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
 /**
- * E2E harness for the node-express Hello Fruit demo in testkit wallet mode.
+ * E2E harness for the Buy a Button node-express demo in testkit wallet mode.
  *
- * The webServer boots the demo's vite dev entry directly (not through
+ * The webServer boots the demo's Vite dev entry directly (not through
  * `tools/run-with-root-env.mjs`, which hard-requires NWC_URI): with
  * DEMO_WALLET=testkit the server runs against the in-memory
- * `@openreceive/testkit` fakes — no NWC_URI, no network — and mounts the
- * `/__testkit` control routes the specs drive. OPENRECEIVE_DEMO_DB points the
- * demo's sqlite store at a fresh temp dir so runs never touch
- * examples/hello-fruit/.openreceive.
+ * `@openreceive/testkit` fakes — no NWC_URI, no network — and serves the
+ * `/__testkit` control routes the specs drive.
+ *
+ * OPENRECEIVE_DEMO_DB points the store at a fresh temp dir per run. That
+ * matters MORE than it did for Hello Fruit: this shop deliberately does not
+ * wipe its database on boot, so without the override a test run would
+ * accumulate orders in examples/buttons/.data and the acceptance demo would be
+ * reading the suite's leftovers.
  */
 
 const e2eDir = path.dirname(fileURLToPath(import.meta.url));
-const demoDir = path.resolve(e2eDir, "../../examples/hello-fruit/server/node-express");
+const demoDir = path.resolve(e2eDir, "../../examples/buttons/server/node-express");
 
-// Fresh, hermetic sqlite location per run (the demo wipes its DB on boot; the
-// temp dir keeps that wipe away from the repo checkout).
 const databaseDir = mkdtempSync(path.join(tmpdir(), "openreceive-e2e-db-"));
 
 const PORT = 4173;
@@ -45,14 +47,12 @@ export default defineConfig({
   webServer: {
     command: `npx vite --host 127.0.0.1 --port ${PORT} --strictPort --configLoader runner`,
     cwd: demoDir,
-    // /rates only answers once the OpenReceive service booted against the fakes.
-    url: `http://127.0.0.1:${PORT}/rates`,
+    // /openreceive/rates only answers once the service booted against the fakes.
+    url: `http://127.0.0.1:${PORT}/openreceive/rates`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    // Play the demo's console (boot, testkit, on_paid) and OpenReceive's
-    // INFO lines (reconcile completions) next to the list reporter. Playwright
-    // swallows stdout by default. LOG_LEVEL=DEBUG on the command adds mint /
-    // NWC / swap detail; leave the default INFO so CI stays readable.
+    // Play the demo's console (boot, testkit, on_paid) and OpenReceive's INFO
+    // lines next to the list reporter. Playwright swallows stdout by default.
     stdout: "pipe",
     stderr: "pipe",
     env: {
