@@ -11,12 +11,7 @@ import type { Authorize } from "@openreceive/http";
 import type { CreateOpenReceiveOptions } from "@openreceive/node";
 import type { PaymentSettlement } from "@openreceive/http";
 import { visitorIdFrom } from "./shop-routes.ts";
-import {
-  checkoutDescription,
-  claimShopOrderPaid,
-  formatAmount,
-  type ShopStore,
-} from "./store.ts";
+import { checkoutDescription, claimShopOrderPaid, formatAmount, type ShopStore } from "./store.ts";
 
 /**
  * Non-secret service settings, shared by the three Node stacks.
@@ -50,7 +45,8 @@ export const config = {
  * secret. A tampered value fails the signature and reads as absent, which lands
  * in the same `false` as a missing one.
  */
-export const createShopAuthorize = (store: ShopStore, secret: string): Authorize =>
+export const createShopAuthorize =
+  (store: ShopStore, secret: string): Authorize =>
   ({ request, resource }) => {
     const record = store.orderByReference(resource.reference);
     if (record === null) return false;
@@ -71,18 +67,16 @@ export const createShopAuthorize = (store: ShopStore, secret: string): Authorize
  * Without it the payer sees a QR code and "$4.00" and no sign of what the four
  * dollars is for.
  */
-export const createShopAmountFor =
-  (store: ShopStore) =>
-  (reference: string) => {
-    const record = store.orderByReference(reference);
-    if (record === null) return null;
+export const createShopAmountFor = (store: ShopStore) => (reference: string) => {
+  const record = store.orderByReference(reference);
+  if (record === null) return null;
 
-    return {
-      currency: record.order.currency,
-      value: formatAmount(record.order.total_cents),
-      description: checkoutDescription(record),
-    };
+  return {
+    currency: record.order.currency,
+    value: formatAmount(record.order.total_cents),
+    description: checkoutDescription(record),
   };
+};
 
 /**
  * Runs INSIDE the settlement transaction, only for the order's first settled

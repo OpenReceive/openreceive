@@ -46,6 +46,10 @@
     "examples/hello-fruit/server/*/vite.config.ts",
     "examples/buttons/shared/**/*.ts",
     "examples/buttons/shared/**/*.tsx",
+    "examples/buttons/server/*/src/**/*.ts",
+    "examples/buttons/server/*/src/**/*.tsx",
+    "examples/buttons/server/*/src/**/*.d.ts",
+    "examples/buttons/server/*/vite.config.ts",
     "examples/buttons/server/rails/app/javascript/**/*.ts",
     "examples/buttons/server/rails/app/javascript/**/*.tsx",
     "tests/e2e/**/*.ts"

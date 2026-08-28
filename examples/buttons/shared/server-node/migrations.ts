@@ -208,4 +208,3 @@ export const migrations: readonly ShopMigration[] = [
     },
   },
 ];
-

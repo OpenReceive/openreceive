@@ -1,0 +1,6 @@
+# Local port publishing for `npm run demo` / `make docker-run`.
+# Ports only: the image's built production server is what the demo runs.
+services:
+  buttons-node-express:
+    ports:
+      - "3000:3000"

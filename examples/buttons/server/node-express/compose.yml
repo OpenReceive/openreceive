@@ -1,0 +1,21 @@
+services:
+  buttons-node-express:
+    build:
+      context: ../../../..
+      dockerfile: examples/buttons/server/node-express/Dockerfile
+    environment:
+      PORT: "3000"
+      # The shop SURVIVES A RESTART, so its database is a volume rather than a
+      # layer in the image. Without this the acceptance demo — close the
+      # browser, reopen it, the download still works — would pass until the
+      # first `docker compose up --build` and then quietly stop passing.
+      OPENRECEIVE_DEMO_DB: /data
+    env_file:
+      - ../../../../.env
+    volumes:
+      - buttons-node-express-data:/data
+    expose:
+      - "3000"
+
+volumes:
+  buttons-node-express-data:

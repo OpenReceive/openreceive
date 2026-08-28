@@ -52,10 +52,7 @@ export const ShopApp: React.FC = () => {
     <MantineProvider theme={shopTheme} defaultColorScheme="light">
       <main className="or-page">
         <div className="or-page-inner">
-          <ShopPanel
-            shop={shop}
-            renderCheckout={() => <CheckoutStage shop={shop} />}
-          />
+          <ShopPanel shop={shop} renderCheckout={() => <CheckoutStage shop={shop} />} />
           <Text className="or-page-note">Rails + Postgres.</Text>
         </div>
       </main>

@@ -164,8 +164,12 @@ export class ShopStore extends Model({
         items: this.lines.map((line) => ({ sku: line.entry.sku, quantity: line.quantity })),
       });
       this.applyOrder(order);
+      // The stage flips and this store's job is done. Which checkout runs is
+      // the HOST's choice — that is what ShopPanel's `renderCheckout` seam
+      // means — so beginning the keystone checkout belongs to CheckoutStage,
+      // the component that uses it, and not here. node-express plugs in the
+      // packaged widget and never touches `this.checkout` at all.
       this.setStage("checkout");
-      await this.checkout.begin(order.reference);
     } catch (error) {
       this.setError(error instanceof Error ? error.message : String(error));
     } finally {

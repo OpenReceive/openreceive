@@ -1,0 +1,27 @@
+{
+  "//": [
+    "THIS FILE EXISTS FOR THE COMPILERS, NOT FOR TYPE CHECKING.",
+    "",
+    "The repo root tsconfig.json is what `npm run typecheck` uses, and it already",
+    "covers these files. This one is here because esbuild — which is what Vite",
+    "transforms TypeScript with — resolves compiler options per FILE, from the",
+    "nearest tsconfig.json above it. Without one here, the shared client compiled",
+    "under Vite's defaults and the stores' decorators were a syntax error.",
+    "",
+    "Both settings below are LOAD-BEARING for mobx-keystone, and they are the same",
+    "pair the Rails host sets in its own tsconfig and swc.config.js:",
+    "",
+    "  experimentalDecorators   @model / @modelAction / @computed are LEGACY",
+    "                           decorators. The TC39 form is a different feature.",
+    "  useDefineForClassFields  With the ES default, a decorated class property is",
+    "                           DEFINED rather than assigned, the decorator never",
+    "                           applies, and every arrow-form @modelAction quietly",
+    "                           stops being an action. At runtime, with no error."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
+  }
+}

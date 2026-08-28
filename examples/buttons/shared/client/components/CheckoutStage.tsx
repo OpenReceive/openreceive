@@ -32,6 +32,16 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
     void shop.confirmSettlement();
   }, [checkout.settled, shop]);
 
+  // Prepare locks the amount and lists every way to pay it, without minting
+  // anything. It runs HERE rather than in ShopStore.placeOrder because it is
+  // this component's checkout: a host that plugs a different payment screen
+  // into `renderCheckout` must not pay for a prepare nothing renders.
+  // `begin` resets first, so a new reference starts clean.
+  useEffect(() => {
+    if (!shop.orderReference) return;
+    void checkout.begin(shop.orderReference);
+  }, [checkout, shop.orderReference]);
+
   return (
     <>
       {/* Two columns on a desktop, one on a phone. The summary — what is being

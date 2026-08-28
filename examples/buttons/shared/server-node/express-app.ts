@@ -13,12 +13,7 @@ import { openReceiveExpress, sendHostRouteError } from "@openreceive/express";
 import { createHost } from "@openreceive/http";
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
 import { createTestkitReceiveClient, createTestkitSwapProvider } from "@openreceive/testkit";
-import express, {
-  type Express,
-  type NextFunction,
-  type Request,
-  type Response,
-} from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { resolveCookieSecret } from "./cookie.ts";
 import { createShopServerLogger } from "./logging.ts";
 import { readRequiredShopNwcConnectionString, shopWalletMode } from "./nwc.ts";

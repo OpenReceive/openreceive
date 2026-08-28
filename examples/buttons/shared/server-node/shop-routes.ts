@@ -13,12 +13,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type {
-  ShopBootstrap,
-  ShopFeed,
-  ShopFeedOrder,
-  ShopOrderPayload,
-} from "../shop-types.ts";
+import type { ShopBootstrap, ShopFeed, ShopFeedOrder, ShopOrderPayload } from "../shop-types.ts";
 import {
   parseCookieHeader,
   readSignedCookieValue,
@@ -119,7 +114,8 @@ export const resolveVisitor = (
 export const visitorIdFrom = (
   cookieHeader: string | undefined,
   secret: string,
-): string | undefined => readSignedCookieValue(parseCookieHeader(cookieHeader)[SHOP_COOKIE], secret);
+): string | undefined =>
+  readSignedCookieValue(parseCookieHeader(cookieHeader)[SHOP_COOKIE], secret);
 
 /**
  * Possession of an order id is a CLAIM, not proof — the same rule the engine's
@@ -208,7 +204,12 @@ export const showOrder = (request: ShopRequest, context: ShopContext): ShopResul
   const record = authorizedOrder(request.params?.reference, user, context.store);
   if (record === null) return { status: 404, json: { error: "Not found." }, setCookie };
 
-  return { status: 200, json: orderPayload(record), setCookie, headers: { "Cache-Control": "no-store" } };
+  return {
+    status: 200,
+    json: orderPayload(record),
+    setCookie,
+    headers: { "Cache-Control": "no-store" },
+  };
 };
 
 // ------------------------------------------------------------------- download

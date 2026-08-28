@@ -8,10 +8,7 @@ import { CatalogStage } from "./CatalogStage.tsx";
 import { ReceiptStage } from "./ReceiptStage.tsx";
 import { RecentOrdersStage } from "./RecentOrdersStage.tsx";
 
-export type RenderCheckout = (args: {
-  reference: string;
-  onSettled: () => void;
-}) => ReactNode;
+export type RenderCheckout = (args: { reference: string; onSettled: () => void }) => ReactNode;
 
 /**
  * The shop, as one fixed-height panel with two tabs.
