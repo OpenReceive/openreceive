@@ -44,3 +44,7 @@ tests/e2e/test-results/
 
 # Prisma client for the test:orms lane; `npm run test:orms` regenerates it.
 tests/orms/generated/
+
+# The Node stacks' SQLite databases and cookie secrets. The shop SURVIVES a
+# restart, so unlike Hello Fruit's disposable file these are real local state.
+examples/buttons/.data/

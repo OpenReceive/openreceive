@@ -113,6 +113,14 @@ export type ShopFeed = {
 
 // ------------------------------------------------------------------ the routes
 
+/**
+ * The Node hosts serve the bootstrap payload as a route and the SPA fetches it
+ * on mount. Rails inlines the identical payload into its ERB layout instead —
+ * that is the one thing the four stacks genuinely do differently, and it is why
+ * this path is a shared constant rather than a string in three clients.
+ */
+export const SHOP_BOOTSTRAP_PATH = "/shop/bootstrap";
+
 export const SHOP_ORDERS_PATH = "/shop/orders";
 export const SHOP_FEED_PATH = "/shop/recent_orders";
 
