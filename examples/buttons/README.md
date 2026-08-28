@@ -39,17 +39,21 @@ This is the sentence that says whether it works, and it is run by hand:
 If it does not do that, the persistence is not real regardless of what the
 schema looks like.
 
-## Running it
+## Four stacks, one shop
 
 From the repository root:
 
 ```sh
 cp -n .env.example .env      # set a receive-only NWC_URI
-npm run demo buttons         # Rails + Postgres, :3003
+
+npm run demo node            # Express + SQLite                  :3000
+npm run demo static          # static HTML, no framework         :3001
+npm run demo nextjs          # Next.js app router + SQLite       :3002
+npm run demo buttons         # Rails + Postgres                  :3003
 ```
 
-For an edit-reload loop, run the stack's own `bin/dev` outside Docker — see
-[`server/rails/README.md`](server/rails/README.md).
+For an edit-reload loop, run the stack's own `npm run dev` (or `bin/dev` for
+Rails) outside Docker — see each stack's README.
 
 ## The layout
 
@@ -61,33 +65,53 @@ examples/buttons/
     shop-catalog.json    the six products — THE seed source of truth
     shop-types.ts        wire shapes, route paths, formatters. Imports
                          nothing but the standard library.
-    client/              React + Mantine + mobx-keystone: the theme, the
-                         stylesheet, three stores, twelve components.
+    shop.css             the whole design, as global `or-` classes
+    http.ts              getJson / postJson, and the feed's cache rule
+    bootstrap.ts         the bootstrap fetch
+    client/              React + Mantine + mobx-keystone: the theme, three
+                         stores, twelve components.
+    client-vanilla/      the no-framework client. No React.
+    server-node/         SQLite, migrations, the five handlers, the three
+                         hooks, the Express host.
   server/
+    node-express/        Express + Vite, four framework tabs
+    static-html-small-api/  Express + Vite, hand-written DOM
+    nextjs-fullstack/    Next.js app router
     rails/               Rails 8.1 + Postgres + Shakapacker
 ```
 
-The shop UI, the stores and the wire types live ONCE, in `shared/`. Each stack
-under `server/` is a thin host: its own routing, its own database idiom, its own
-build. Nothing that renders a button or names a column is duplicated per stack.
+The shop UI, the stores, the wire types and the Node server live ONCE, in
+`shared/`. Each stack under `server/` is a thin host: its own routing, its own
+database idiom, its own build. Nothing that renders a button or names a column
+is duplicated per stack.
 
 The directory names carry the boundary, so a wrong import is visible in the
 diff rather than discovered at build time:
 
-- Rails imports `shared/shop-types.ts` and `shared/client/**`, and never
-  `shared/server-node/**` — that is SQLite and Express, and Rails has
-  ActiveRecord. `server/rails/script/check-shared-boundary.rb` enforces it.
-- `shared/shop-types.ts` imports nothing but the standard library. It is the
-  one module every stack shares, so it must stay free of React, of Node, and of
-  any package that is not already a dependency everywhere.
+- The shared ROOT is what every client shares — the wire types, the
+  stylesheet, the fetch helpers. `shop-types.ts` imports nothing but the
+  standard library.
+- `client/` is React. `client-vanilla/` is no framework. **Neither imports the
+  other**, which is why `@mantine/*` and `mobx*` are absent from the
+  static-html workspace: an accidental import fails to resolve.
+- Rails never imports `shared/server-node/**` — that is SQLite and Express,
+  and Rails has ActiveRecord. `server/rails/script/check-shared-boundary.rb`
+  enforces it.
 
 ### The checkout renderer is pluggable
 
 The catalog, the cart, the receipt and the feed are identical everywhere. The
-PAYMENT step is not necessarily, so `ShopPanel` takes a `renderCheckout` prop.
-Rails plugs in the mobx-keystone `CheckoutStage`, which drives
-`@openreceive/browser/headless` directly. That prop is the seam; everything
-above and below it is shared.
+PAYMENT step is not, so `ShopPanel` takes a `renderCheckout` prop. That prop is
+the seam; everything above and below it is shared.
+
+| stack | what it plugs in |
+| --- | --- |
+| rails, nextjs | the mobx-keystone `CheckoutStage`, driving `@openreceive/browser/headless` directly |
+| node-express | the packaged `<Checkout>`, behind React / Vue / Svelte / Angular tabs |
+| static-html | the packaged `<openreceive-checkout>` custom element |
+
+node-express is the one stack whose payment screen differs from the others,
+and that is its job: it is the demo the four wrapper packages need.
 
 ## The seven invariants
 
@@ -144,9 +168,17 @@ times as they like — it is an unauthenticated route that writes a row. If the
 feed showed unpaid orders it would be a free billboard. An entry here costs a
 real payment.
 
-### It is pushed, and it also polls
+### On Rails it is pushed; on Node it polls
 
-Settlement rides ActionCable over solid_cable. Two streams, for two audiences:
+**Only the Rails stack pushes.** The three Node stacks keep the checkout's own
+poll loop and refresh the feed every thirty seconds. Both paths land in the
+same idempotent store methods, so the difference is latency and never
+correctness — which is exactly why the shared stores expose
+`setPushConnected` / `refreshFromPush` and know nothing about how news
+arrives.
+
+On Rails, settlement rides ActionCable over solid_cable. Two streams, for two
+audiences:
 
 | channel | who | envelope |
 | --- | --- | --- |
@@ -169,8 +201,8 @@ transaction back and asserts silence.
 
 **Polling did not go away.** With the socket connected the feed still polls
 every two minutes, and the checkout keeps its own poll loop; without it the
-feed drops back to thirty seconds. Both paths land in the same idempotent store
-methods. A dropped websocket costs latency, never correctness.
+feed drops back to thirty seconds — which is what every Node stack does all the
+time. A dropped websocket costs latency, never correctness.
 
 ### Why the cable is database-backed
 
@@ -202,4 +234,11 @@ payment.
 - **There is no admin surface for editing products.** A console and the seed
   file are the editing story.
 - **There is no dark mode**, and adding one is not a piecemeal change — see the
-  note at the top of `shared/shop.css`.
+  note at the top of `shared/shop.css`. Every stack pins the checkout to light
+  for the same reason.
+- **The Node stacks do not push settlement.** Only Rails does. Adding it means
+  picking a transport per stack and is orthogonal to what these demos show.
+- **There is no URL resume.** Closing the tab mid-checkout loses the reference
+  on the Node stacks; the order row survives and is still payable, but the
+  browser has no way back to it. That is the OpenReceive URL-resume issue, not
+  a shop-table problem.
