@@ -98,11 +98,11 @@ after OpenReceive's own commit, so an email enqueued there is as safe as one
 enqueued from a job draining the flag — and an email sent *inline* from
 `on_paid` is not, in either shape.
 
-A complete runnable example app is the Buy a Button Rails demo,
-`npm run demo buttons`
-([`examples/buttons/server/rails`](../../examples/buttons/server/rails)) — a
-products table, a signed-cookie visitor table, an orders table, and a public
-feed of paid orders, with the three hooks as the only bridge to any of it.
+A runnable illustration of this boundary — not a template to copy models from —
+is Buy a Button
+([`examples/buttons/server/rails`](../../examples/buttons/server/rails)).
+It has products, visitors, and orders, with the three hooks as the only bridge.
+Map that shape onto the models in THIS app.
 
 Supply the receive-only wallet connection as `ENV["NWC_URI"]`. Never put it in
 browser code, logs, or assets. Your application refuses to start when the code
@@ -149,20 +149,26 @@ OpenReceive.configure do |config|
   end
 
   # The price for a reference — here, your order id — from your own data;
-  # nil when there is nothing to pay for (a 404).
+  # nil when there is nothing to pay for (a 404). `value` is a decimal STRING
+  # from the order row, never a float and never a request param. `description`
+  # is what the payer is buying, in your own words.
   config.amount_for = lambda do |reference|
     order = Order.find_by(id: reference)
-    order && { currency: "USD", value: order.total.to_s }
+    order && { currency: "USD", value: order.total.to_s,
+               description: "#{order.line_items.size} items" }
   end
 
   # Runs inside the settlement transaction, only for the order's first settled
-  # attempt. Update the order or insert an outbox row here — plain
+  # attempt. The WHERE clause is the lock: a second fulfillment path of yours
+  # (admin action, replayed job) updates zero rows and does nothing. Plain
   # ActiveRecord, because the engine WRAPS this block in the transaction.
   # (The JS engine instead hands onPaid a `query` handle, since nothing wraps
   # it there; that is the one shape difference between the two stacks.)
   config.on_paid = lambda do |settlement|
-    # settlement exposes reference, payment_hash, paid_at, and details.
-    Order.find(settlement.reference).update!(status: "paid")
+    claimed = Order
+                .where(id: settlement.reference, state: "awaiting_payment")
+                .update_all(state: "paid", paid_at: Time.at(settlement.paid_at).utc)
+    next if claimed.zero?
   end
 end
 ```
@@ -224,10 +230,9 @@ defineElements();
 The element creates the checkout for `reference`, then renders and polls
 itself. React/Vue/Svelte/Angular apps use the matching wrapper package
 instead — same props and defaults ([Frontend checkout](frontend-checkout.md)).
-The Rails Hello Fruit demo mounts the packaged `@openreceive/react` components
-and drives them from mobx-keystone stores fed by
-`@openreceive/browser/headless` ([Headless checkout](headless-checkout.md)) —
-custom state, packaged UI.
+Build a custom checkout only if this app cannot use a drop-in; then
+`@openreceive/browser/headless` is the API
+([Headless checkout](headless-checkout.md)).
 
 ## Reconciliation
 

@@ -77,17 +77,33 @@ const openreceive = openReceiveExpress({
   wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
-    onPaid: async ({ reference, query }) => {
-      // Settlement transaction; runs only for the first settled attempt for a reference.
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
+    onPaid: async ({ reference, paidAt, query }) => {
+      // Settlement transaction; runs only for the first settled attempt for a
+      // reference. The WHERE clause is the lock: a second fulfillment path of
+      // yours (admin action, replayed job) updates zero rows and does nothing.
+      // Use `query` here, not your ORM's other connection. `?` on sqlite, `$1`
+      // on postgres.
+      const claimed = await query(
+        "UPDATE orders SET state = 'paid', paid_at = ? WHERE id = ? AND state = 'awaiting_payment' RETURNING id",
+        [paidAt, reference],
+      );
+      if (claimed.length === 0) return;
     },
   },
   // The price for a reference — here, your order id — from your own data;
   // OpenReceive converts it into the Lightning invoice. Return null when
-  // there is nothing to pay for.
+  // there is nothing to pay for. `value` is a decimal STRING from the order
+  // row, never a float and never a request param. `description` is what the
+  // payer is buying, in your own words.
   amountFor: async (reference) => {
     const order = await orders.find(reference);
-    return order ? { currency: "USD", value: order.total.toString() } : null;
+    return order
+      ? {
+          currency: "USD",
+          value: order.total.toString(),
+          description: `${order.lines.length} items`,
+        }
+      : null;
   },
   // Your own access check: may this caller do this action to this reference?
   authorize: async ({ action, request, resource }) =>
@@ -167,6 +183,12 @@ plain `<link rel="stylesheet">` works with no build step.
 
 That is the whole loop: your server owns the price and the order, the payer gets
 an invoice, and `onPaid` runs once inside the settlement transaction.
+
+A runnable illustration of this boundary — not a template to copy models from —
+is Buy a Button
+([`examples/buttons/server/node-express`](../../examples/buttons/server/node-express)).
+It has products, visitors, and orders, with the three hooks as the only bridge.
+Map that shape onto the models in THIS app.
 
 ## 6. Verify
 

@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "category": "quickstart",
-      "bytes": 8559
+      "bytes": 9532
     },
     {
       "path": "/guides/quickstart-rails",
@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 13701
+      "bytes": 13981
     },
     {
       "path": "/guides/node-orms",
@@ -223,7 +223,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 20022
+      "bytes": 23688
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 26183
+      "bytes": 28906
     },
     {
       "path": "/api_docs",
@@ -252,7 +252,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 20022,
+      "bytes": 23688,
       "copy_button": true,
       "self_contained": true
     },
@@ -262,7 +262,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 26183,
+      "bytes": 28906,
       "copy_button": true,
       "self_contained": true
     }

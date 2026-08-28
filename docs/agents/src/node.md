@@ -6,9 +6,10 @@ quickstart is appended to this file in full, so you can do the whole integration
 without fetching anything. Prefer the published packages and the routes they
 mount — do not reimplement wallet RPC, settlement, or pricing.
 
-If you want to see a finished integration, you can also clone the OpenReceive
-repository (https://github.com/OpenReceive/openreceive) and study the examples
-in the `examples` folder.
+Do not clone the OpenReceive repository into this app, and do not copy a demo's
+models (`ShopOrder`, a signed-cookie visitor, an in-memory catalog) over tables
+that already exist. Find this application's order, product, and user models —
+whatever they are actually named — and map the three hooks onto those.
 
 ## What OpenReceive is
 
@@ -74,7 +75,9 @@ Only then start the quickstart.
 The quickstart below has the code. These are the rules it cannot state for
 itself, and they hold for every integration.
 
-- OpenReceive never owns orders, users, prices, or fulfillment.
+- OpenReceive never owns orders, users, prices, or fulfillment. The section
+  below is how those tables sit next to the library — not a second order model,
+  and not a Prisma/Drizzle relation to `openreceive_payments`.
 - Keep `NWC_URI` / `LSC_URI_*` server-only. Never put them in browser code,
   logs, or assets.
 - The host owns the price. `amountFor` reads it from your own data; reject
@@ -103,6 +106,46 @@ itself, and they hold for every integration.
   rows are non-empty.)
 - HTTP JSON is snake_case; TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
+
+## Your tables, not ours
+
+`npx openreceive scaffold payments` emits `openreceive_payments` and
+`openreceive_meta` for THIS application's database. That is the whole
+persistence OpenReceive needs. It does not replace your orders, users, or
+products, and you do not join them.
+
+- **Find this app's models first.** They may be named `Order`, `Invoice`,
+  `Booking`, `Product`, `Variant`, `User`, `Account` — anything. Wire the hooks
+  to those. Do not generate a parallel `ShopOrder` / `ShopProduct` / `ShopUser`
+  stack.
+- **The payable row's id is the `reference`.** Create it before checkout, keep
+  it across retries, never reuse it. Pass that id to `<Checkout>` /
+  `<openreceive-checkout>`. A fresh id per page load lets one order be paid
+  twice.
+- **Products (or the catalog) are the price authority.** Order creation reads
+  live prices into the order (snapshot line items if this app has them).
+  `amountFor` reads only that order — never a payer-supplied amount, never a
+  live catalog lookup that could re-price a cart already placed. Return
+  `{ currency, value }` as a decimal STRING, plus a `description` of what they
+  are buying.
+- **Users own the order; OpenReceive never sees them.** `authorize` uses the
+  same ownership check this app already uses on the order show / pay page —
+  `sessions.currentUser(request)`, a cookie, whatever it is.
+  `resource.reference` is a claim the payer sent, not proof.
+- **The order is unpaid or paid.** Do not copy `pending` / `expired` / `failed`
+  / `attention` onto it. Those are attempt statuses on `openreceive_payments`. An
+  expired invoice does not cancel the order; a later checkout may mint another
+  attempt. The library refuses a new checkout under a reference that already
+  settled (409).
+- **Pass this app's `db` handle.** Do not add a Prisma/Drizzle relation from
+  Order to `openreceive_payments`, and do not implement `PaymentRepository`
+  unless no supported handle can reach this database. `reference` is not unique
+  (many attempts per order). Fulfillment is a guarded transition on YOUR order
+  row inside `onPaid` — `UPDATE … WHERE state = 'awaiting_payment'` (or this
+  app's equivalent) through the `query` the library hands you, on that same
+  settlement transaction, not a second connection from your ORM. Database writes
+  only in the hook; emails, jobs, and pushes after commit. Placeholder style is
+  the dialect you declared: `?` on sqlite, `$1` on postgres.
 
 ## If you build your own checkout UI
 

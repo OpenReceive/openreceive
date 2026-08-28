@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Agent directions say how host tables sit next to the library
+
+Both payloads told agents OpenReceive never owns orders, then pointed them at
+cloning the repository. An agent working in an existing app does not have that
+repo, and copying a demo's `ShopOrder` / signed-cookie visitor over the tables
+already there is the failure the buttons demo exists to prevent. The directions
+now spell the combination recipe: this app's order id is the `reference`,
+products price the order, users authorize it, the order is unpaid or paid, and
+the library's payment rows are not joined from host models. The inlined
+quickstarts' `onPaid` / `on_paid` are the guarded `UPDATE … WHERE state =
+awaiting_payment`. Node's extra: pass this app's `db` handle, use the `query`
+the settlement transaction hands you, and do not invent a `PaymentRepository`.
+
 ### The docs the agent directions point at are fetchable now
 
 The reading list at the end of both agent-directions payloads named page URLs —

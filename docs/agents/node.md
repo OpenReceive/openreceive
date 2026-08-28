@@ -8,9 +8,10 @@ quickstart is appended to this file in full, so you can do the whole integration
 without fetching anything. Prefer the published packages and the routes they
 mount — do not reimplement wallet RPC, settlement, or pricing.
 
-If you want to see a finished integration, you can also clone the OpenReceive
-repository (https://github.com/OpenReceive/openreceive) and study the examples
-in the `examples` folder.
+Do not clone the OpenReceive repository into this app, and do not copy a demo's
+models (`ShopOrder`, a signed-cookie visitor, an in-memory catalog) over tables
+that already exist. Find this application's order, product, and user models —
+whatever they are actually named — and map the three hooks onto those.
 
 ## What OpenReceive is
 
@@ -76,7 +77,9 @@ Only then start the quickstart.
 The quickstart below has the code. These are the rules it cannot state for
 itself, and they hold for every integration.
 
-- OpenReceive never owns orders, users, prices, or fulfillment.
+- OpenReceive never owns orders, users, prices, or fulfillment. The section
+  below is how those tables sit next to the library — not a second order model,
+  and not a Prisma/Drizzle relation to `openreceive_payments`.
 - Keep `NWC_URI` / `LSC_URI_*` server-only. Never put them in browser code,
   logs, or assets.
 - The host owns the price. `amountFor` reads it from your own data; reject
@@ -105,6 +108,46 @@ itself, and they hold for every integration.
   rows are non-empty.)
 - HTTP JSON is snake_case; TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
+
+## Your tables, not ours
+
+`npx openreceive scaffold payments` emits `openreceive_payments` and
+`openreceive_meta` for THIS application's database. That is the whole
+persistence OpenReceive needs. It does not replace your orders, users, or
+products, and you do not join them.
+
+- **Find this app's models first.** They may be named `Order`, `Invoice`,
+  `Booking`, `Product`, `Variant`, `User`, `Account` — anything. Wire the hooks
+  to those. Do not generate a parallel `ShopOrder` / `ShopProduct` / `ShopUser`
+  stack.
+- **The payable row's id is the `reference`.** Create it before checkout, keep
+  it across retries, never reuse it. Pass that id to `<Checkout>` /
+  `<openreceive-checkout>`. A fresh id per page load lets one order be paid
+  twice.
+- **Products (or the catalog) are the price authority.** Order creation reads
+  live prices into the order (snapshot line items if this app has them).
+  `amountFor` reads only that order — never a payer-supplied amount, never a
+  live catalog lookup that could re-price a cart already placed. Return
+  `{ currency, value }` as a decimal STRING, plus a `description` of what they
+  are buying.
+- **Users own the order; OpenReceive never sees them.** `authorize` uses the
+  same ownership check this app already uses on the order show / pay page —
+  `sessions.currentUser(request)`, a cookie, whatever it is.
+  `resource.reference` is a claim the payer sent, not proof.
+- **The order is unpaid or paid.** Do not copy `pending` / `expired` / `failed`
+  / `attention` onto it. Those are attempt statuses on `openreceive_payments`. An
+  expired invoice does not cancel the order; a later checkout may mint another
+  attempt. The library refuses a new checkout under a reference that already
+  settled (409).
+- **Pass this app's `db` handle.** Do not add a Prisma/Drizzle relation from
+  Order to `openreceive_payments`, and do not implement `PaymentRepository`
+  unless no supported handle can reach this database. `reference` is not unique
+  (many attempts per order). Fulfillment is a guarded transition on YOUR order
+  row inside `onPaid` — `UPDATE … WHERE state = 'awaiting_payment'` (or this
+  app's equivalent) through the `query` the library hands you, on that same
+  settlement transaction, not a second connection from your ORM. Database writes
+  only in the hook; emails, jobs, and pushes after commit. Placeholder style is
+  the dialect you declared: `?` on sqlite, `$1` on postgres.
 
 ## If you build your own checkout UI
 
@@ -272,17 +315,33 @@ const openreceive = openReceiveExpress({
   wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; your app refuses to start otherwise
   storage: {
     db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
-    onPaid: async ({ reference, query }) => {
-      // Settlement transaction; runs only for the first settled attempt for a reference.
-      await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
+    onPaid: async ({ reference, paidAt, query }) => {
+      // Settlement transaction; runs only for the first settled attempt for a
+      // reference. The WHERE clause is the lock: a second fulfillment path of
+      // yours (admin action, replayed job) updates zero rows and does nothing.
+      // Use `query` here, not your ORM's other connection. `?` on sqlite, `$1`
+      // on postgres.
+      const claimed = await query(
+        "UPDATE orders SET state = 'paid', paid_at = ? WHERE id = ? AND state = 'awaiting_payment' RETURNING id",
+        [paidAt, reference],
+      );
+      if (claimed.length === 0) return;
     },
   },
   // The price for a reference — here, your order id — from your own data;
   // OpenReceive converts it into the Lightning invoice. Return null when
-  // there is nothing to pay for.
+  // there is nothing to pay for. `value` is a decimal STRING from the order
+  // row, never a float and never a request param. `description` is what the
+  // payer is buying, in your own words.
   amountFor: async (reference) => {
     const order = await orders.find(reference);
-    return order ? { currency: "USD", value: order.total.toString() } : null;
+    return order
+      ? {
+          currency: "USD",
+          value: order.total.toString(),
+          description: `${order.lines.length} items`,
+        }
+      : null;
   },
   // Your own access check: may this caller do this action to this reference?
   authorize: async ({ action, request, resource }) =>
@@ -362,6 +421,12 @@ plain `<link rel="stylesheet">` works with no build step.
 
 That is the whole loop: your server owns the price and the order, the payer gets
 an invoice, and `onPaid` runs once inside the settlement transaction.
+
+A runnable illustration of this boundary — not a template to copy models from —
+is Buy a Button
+(`examples/buttons/server/node-express`).
+It has products, visitors, and orders, with the three hooks as the only bridge.
+Map that shape onto the models in THIS app.
 
 ### 6. Verify
 
