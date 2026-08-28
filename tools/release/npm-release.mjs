@@ -166,22 +166,30 @@ function assertCleanWorktree(root, args, action) {
   );
 }
 
-function workspaceManifestPaths(root) {
-  const paths = [path.join(root, "package.json")];
-  for (const workspaceRoot of [
-    path.join(root, "packages/js"),
-    path.join(root, "examples/buttons/server"),
-  ]) {
+// Every root package.json workspace glob, as directories. Renaming or moving a
+// demo tree means editing THIS list and nothing else — the 0.3.1 release found
+// both halves of what happens otherwise: manifests keep their old
+// `@openreceive/*` pins, and the lockfile refresh goes to the registry for a
+// package that is private by construction.
+const WORKSPACE_ROOTS = ["packages/js", "examples/buttons/server"];
+
+function workspaceDirs(root) {
+  const dirs = [];
+  for (const workspaceRoot of WORKSPACE_ROOTS.map((entry) => path.join(root, entry))) {
     if (!existsSync(workspaceRoot)) continue;
     for (const entry of readdirSync(workspaceRoot)) {
-      const candidate = path.join(workspaceRoot, entry, "package.json");
-      if (
-        statSync(path.dirname(candidate), { throwIfNoEntry: false })?.isDirectory() &&
-        existsSync(candidate)
-      ) {
-        paths.push(candidate);
-      }
+      const candidate = path.join(workspaceRoot, entry);
+      if (statSync(candidate, { throwIfNoEntry: false })?.isDirectory()) dirs.push(candidate);
     }
+  }
+  return dirs.sort();
+}
+
+function workspaceManifestPaths(root) {
+  const paths = [path.join(root, "package.json")];
+  for (const dir of workspaceDirs(root)) {
+    const candidate = path.join(dir, "package.json");
+    if (existsSync(candidate)) paths.push(candidate);
   }
   return paths.sort();
 }
@@ -223,6 +231,7 @@ function updateVersions(root, targetVersion) {
   }
 
   changed.push(...updateRubyGemVersions(root, currentVersion, targetVersion));
+  changed.push(...refreshPathGemLockfiles(root));
   changed.push(...updateTextVersionReferences(root, currentVersion, targetVersion));
   run("npm", ["install", "--package-lock-only", "--ignore-scripts"], root, {
     stdio: ["ignore", "pipe", "pipe"],
@@ -256,6 +265,28 @@ function updateRubyGemVersions(root, currentVersion, targetVersion) {
         changed.push(path.relative(root, changelogPath));
       }
     }
+  }
+  return changed;
+}
+
+// A demo that consumes the gems by `path` pins their versions in its own
+// Gemfile.lock, so rewriting the VERSION constants is only half a bump. CI runs
+// bundler in deployment mode, where a lockfile that disagrees with the gemspec
+// is exit 16 — "the gemspecs for path gems changed, but the lockfile can't be
+// updated because frozen mode is set" — and not a re-resolve. Local test:ci
+// never sees it, because nothing here sets frozen.
+//
+// `--local` is what keeps this honest: it forbids the network, so the only
+// lines that can move are the path specs prepare just rewrote. A release is not
+// the place to discover that some unrelated gem has a newer build.
+function refreshPathGemLockfiles(root) {
+  const changed = [];
+  for (const dir of workspaceDirs(root)) {
+    const lockfile = path.join(dir, "Gemfile.lock");
+    if (!existsSync(lockfile) || !existsSync(path.join(dir, "Gemfile"))) continue;
+    const before = readFileSync(lockfile, "utf8");
+    run("bundle", ["lock", "--local"], dir);
+    if (readFileSync(lockfile, "utf8") !== before) changed.push(path.relative(root, lockfile));
   }
   return changed;
 }
