@@ -61,3 +61,15 @@ the gate — no background worker required.
 — no `NWC_URI`, no network — and mounts the `/__testkit` control routes the
 Playwright suite in `tests/e2e/` drives. In every other mode the whole
 `/__testkit` prefix answers 404.
+
+## The boundary
+
+**The browser never receives your NWC code.** `NWC_URI` is read by the server
+at boot and never reaches a bundle, a log or an asset. The payer's browser
+talks to the mounted OpenReceive routes; the wallet connection stays on this
+side of them.
+
+Persistence is host-owned in the same way. The shop's four tables and the
+engine's two live in ONE local SQLite database that this application opens —
+OpenReceive brings no datastore of its own, and `onPaid` writes the order
+transition through the transaction it hands the host.

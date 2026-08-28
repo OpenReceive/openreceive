@@ -6,7 +6,7 @@
 //   (through @openreceive/elements/wrapper-shared) the vue/svelte/angular
 //   wrappers build on exactly this — there is no second, private floor.
 // - A headless integration (own components, own store, this engine
-//   underneath): the hello-fruit rails example is the flagship.
+//   underneath): the buttons rails example is the flagship.
 //
 // Curated symbol-by-symbol, never `export *`. THE RULE: a symbol is on this
 // list iff a renderer in packages/js imports it by name, or a headless

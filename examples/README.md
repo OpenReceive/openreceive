@@ -1,19 +1,20 @@
 # OpenReceive examples
 
-Two apps live here.
+One app lives here, built four times.
 
 [`buttons/`](buttons) — **Buy a Button**, a shop for six virtual OR pin badges,
 built on real persistence: a products table, a signed-cookie visitor table, an
 orders table, and a public feed of every paid order on the site. Read it to see
 where the line falls between YOUR data and OpenReceive's — three lambdas are the
-entire bridge. It runs on Rails + Postgres.
+entire bridge.
 
-[`hello-fruit/`](hello-fruit) — the fruit-sticker shop, built three times over
-three Node stacks. A complete checkout: catalog, cart, currency picker,
-Lightning + swap rails, resume-after-refresh, post-pay delivery. The variants
-are parity showcases: they deliberately exercise the composed/advanced
-integration forms so every surface stays covered — for the minimal happy path,
-follow the quickstarts below instead.
+It runs on **Rails + Postgres**, **Express + SQLite**, the **Next.js app
+router**, and **static HTML with no framework at all**. The shop itself — the
+UI, the stores, the wire types and the Node server — lives ONCE in
+`buttons/shared/`; each stack under `buttons/server/` is a thin host with its
+own routing, database idiom and build. The stacks deliberately exercise
+different integration forms so every surface stays covered — for the minimal
+happy path, follow the quickstarts below instead.
 
 For the smallest possible integration, follow the
 [Node quickstart](../docs/guides/quickstart-node.md) or the
@@ -27,10 +28,10 @@ Every demo runs from the repository root:
 
 ```sh
 cp -n .env.example .env      # set a receive-only NWC_URI
-npm run demo node            # Hello Fruit — Express + React/Vue/Svelte/Angular  :3000
-npm run demo static          # Hello Fruit — Static HTML + small API             :3001
-npm run demo nextjs          # Hello Fruit — Next.js fullstack                   :3002
-npm run demo buttons         # Buy a Button — Rails + Postgres                   :3003
+npm run demo node            # Buy a Button — Express + React/Vue/Svelte/Angular  :3000
+npm run demo static          # Buy a Button — static HTML, no framework           :3001
+npm run demo nextjs          # Buy a Button — Next.js app router                  :3002
+npm run demo buttons         # Buy a Button — Rails + Postgres                    :3003
 ```
 
 `npm run demo` builds the image and runs the production server inside it. The
@@ -40,11 +41,11 @@ nothing else. For an edit-reload loop, run the variant's own `npm run dev`
 
 ## Running the demo against fakes (no wallet)
 
-The node-express variant boots against in-process fakes when
+The node-express and Next.js stacks boot against in-process fakes when
 `DEMO_WALLET=testkit` is set — no `NWC_URI`, no network, full checkout:
 
 ```sh
-cd hello-fruit/server/node-express
+cd buttons/server/node-express
 DEMO_WALLET=testkit npm run dev
 ```
 
@@ -75,14 +76,17 @@ integration this way.
 - **The receive-only NWC code never leaves the server.** It is read from the
   repository-root `.env` by server code only; no variant ships it to a bundle.
 - **Demos import the shared `@openreceive/*` UI — they never fork it.** When a
-  demo needs different markup, it composes the packaged components and class
-  registries rather than copying them. Buy a Button is the one place that
-  builds its own UI, and it does so on `@openreceive/browser/headless` — the
-  supported surface OpenReceive's own renderers are built on — which is what
-  proves the headless engine drives a checkout from a non-React store.
-- **Product data has one source.** `hello-fruit/shared/fruits.json` is the
-  catalog for the three Node variants; `buttons/shared/shop-catalog.json` seeds
-  the buttons. Nothing re-declares an id, a price or an artwork path.
+  stack needs different markup, it composes the packaged components and class
+  registries rather than copying them. The shop builds its own checkout on
+  `@openreceive/browser/headless` — the supported surface OpenReceive's own
+  renderers are built on — which is what proves the headless engine drives a
+  checkout from a non-React store. node-express plugs the PACKAGED checkout
+  into that same shop instead, behind four framework tabs, so the wrapper
+  packages keep a demo too.
+- **Product data has one source.** `buttons/shared/shop-catalog.json` is the
+  seed every stack's data migration reads, and `buttons/images/` holds the one
+  copy of the artwork that all four stacks serve. Nothing re-declares a sku, a
+  price or an artwork path.
 - **The shop UI lives once.** `buttons/shared/` holds the stores, the
   components and the wire types; each stack under `buttons/server/` is a thin
   host. The directory names carry the boundary so a wrong import shows up in

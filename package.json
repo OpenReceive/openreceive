@@ -7,9 +7,6 @@
   "type": "module",
   "workspaces": [
     "packages/js/*",
-    "examples/hello-fruit/server/node-express",
-    "examples/hello-fruit/server/static-html-small-api",
-    "examples/hello-fruit/server/nextjs-fullstack",
     "examples/buttons/server/node-express",
     "examples/buttons/server/nextjs-fullstack",
     "examples/buttons/server/static-html-small-api",
@@ -20,7 +17,7 @@
     "generate:site-contract": "node tools/docs/generate-site-contract.mjs",
     "build:docs": "npm run generate:agent-directions && npm run generate:site-contract && node tools/docs/build-index.mjs",
     "check:docs": "node tools/docs/generate-agent-directions.mjs --check && node tools/docs/generate-site-contract.mjs --check && node tools/docs/build-index.mjs",
-    "build:demo": "npm run build -w @openreceive/example-node-express && npm run build -w @openreceive/example-static-html-small-api && npm run build -w @openreceive/example-nextjs-fullstack && npm run build -w @openreceive/example-buttons-rails",
+    "build:demo": "npm run build -w @openreceive/example-buttons-node-express && npm run build -w @openreceive/example-buttons-static-html && npm run build -w @openreceive/example-buttons-nextjs-fullstack && npm run build -w @openreceive/example-buttons-rails",
     "demo": "node --import tsx tools/run-demo.mjs",
     "generate:models": "node tools/codegen/generate-js-models.mjs",
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",

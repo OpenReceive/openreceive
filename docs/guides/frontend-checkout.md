@@ -112,7 +112,7 @@ amountFor: async (reference) => {
   return {
     currency: "USD",
     value: order.total,
-    description: `${order.lines.length} items from Hello Fruit`,
+    description: `${order.lines.length} items from the shop`,
   };
 },
 ```
@@ -121,7 +121,7 @@ amountFor: async (reference) => {
 config.amount_for = lambda do |reference|
   order = Order.find_by(id: reference)
   order && { currency: "USD", value: order.total.to_s,
-             description: "#{order.line_items.size} items from Hello Fruit" }
+             description: "#{order.line_items.size} items from the shop" }
 end
 ```
 

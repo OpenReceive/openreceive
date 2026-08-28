@@ -20,7 +20,7 @@ Thanks for helping build OpenReceive. The short version:
 - `packages/ruby/` — the dependency-free core, the Service and Rack app, and
   the mountable Rails engine: a second settlement implementation checked
   against the shared vectors.
-- `examples/hello-fruit/server/` — Express, static HTML, Next.js, and Rails
+- `examples/buttons/server/` — Express, static HTML, Next.js, and Rails
   demos; demo order models are ordinary application code.
 - `tools/` — validation, conformance, package-smoke, documentation, and
   live-wallet helpers.

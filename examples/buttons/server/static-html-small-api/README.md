@@ -56,3 +56,15 @@ bundle.
 `examples/buttons/shared/server-node/express-app.ts`, identical to
 node-express except that per-IP rate limiting is left **off** in this minimal
 variant. The database is SQLite and it survives a restart.
+
+## The boundary
+
+**The browser never receives your NWC code.** `NWC_URI` is read by the server
+at boot and never reaches a bundle, a log or an asset. The payer's browser
+talks to the mounted OpenReceive routes; the wallet connection stays on this
+side of them.
+
+Persistence is host-owned in the same way. The shop's four tables and the
+engine's two live in ONE local SQLite database that this application opens —
+OpenReceive brings no datastore of its own, and `onPaid` writes the order
+transition through the transaction it hands the host.

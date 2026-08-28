@@ -15,7 +15,7 @@ Part of [OpenReceive](https://openreceive.org). Start with the [Node quickstart]
   (state machine, wizard/status/swap models, formatters, labels, styling
   tokens). See the
   [Headless checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/headless-checkout.md);
-  the hello-fruit rails example is the flagship demo of this style.
+  the buttons rails example is the flagship demo of this style.
 
 There is no private subpath: `./headless` is both the integration surface and
 the floor under `@openreceive/elements`, `@openreceive/react`, and the
@@ -46,7 +46,7 @@ files where the resolution lands. Per setup:
   `node_modules/@openreceive/browser/dist/assets/icons` into
   `public/assets/icons/`, or copy it into the build output from a small
   `writeBundle` plugin (the repo demos use
-  `examples/hello-fruit/shared/copy-openreceive-payment-icons-plugin.ts`).
+  `examples/buttons/shared/copy-openreceive-payment-icons-plugin.ts`).
 - **webpack / Next.js**: copy the icons next to your emitted bundles with
   `copy-webpack-plugin` (the repo's Rails Shakapacker demo copies
   `node_modules/@openreceive/browser/dist/assets/icons` to

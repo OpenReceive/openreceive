@@ -203,28 +203,32 @@ flow the routes do not offer:
 
 ## Run a demo
 
-Two example shops. In both you add items to a cart, check out to create an
-order, and pay that order with a real Lightning invoice from your own wallet;
-the goods are delivered only after `onPaid` marks the order paid.
+One shop, four stacks. You add buttons to a cart, check out to create an order,
+and pay that order with a real Lightning invoice from your own wallet or a
+stablecoin swap; the download unlocks only after `onPaid` marks the order paid.
 
 ```sh
-npm run demo node      # Hello Fruit — Express + React/Vue/Svelte/Angular  http://localhost:3000
-npm run demo static    # Hello Fruit — Static HTML + small API             http://localhost:3001
-npm run demo nextjs    # Hello Fruit — Next.js fullstack                   http://localhost:3002
-npm run demo buttons   # Buy a Button — Rails + host Postgres              http://localhost:3003
+npm run demo node      # Buy a Button — Express + React/Vue/Svelte/Angular  http://localhost:3000
+npm run demo static    # Buy a Button — static HTML, no framework           http://localhost:3001
+npm run demo nextjs    # Buy a Button — Next.js app router                  http://localhost:3002
+npm run demo buttons   # Buy a Button — Rails + host Postgres               http://localhost:3003
 ```
 
-Hello Fruit is the same shop built once per Node stack — a parity showcase.
 [Buy a Button](examples/buttons) is the persistence story: a products table, a
 visitor remembered by a signed cookie, an orders table, and a public feed of
 every paid order on the site, with three lambdas as the entire bridge to
-OpenReceive.
+OpenReceive. The four stacks share one shop — the UI, the wire types and the
+Node server live once in `examples/buttons/shared/` and each stack under
+`server/` is a thin host with its own routing, database idiom and build.
+
+They differ in exactly two interesting ways, and both are on purpose: Rails
+pushes settlement over ActionCable while the Node stacks poll, and node-express
+plugs the packaged `<Checkout>` into the shared shop behind React / Vue /
+Svelte / Angular tabs while the others render the keystone-driven checkout.
 
 Every demo needs a receive-only `NWC_URI` in the root `.env`. The
-[Hello Fruit README](examples/hello-fruit/README.md) and the
-[Buy a Button README](examples/buttons/README.md) explain what each command
-starts and which parts of the code belong to the shop and which to the
-library.
+[Buy a Button README](examples/buttons/README.md) explains what each command
+starts and which parts of the code belong to the shop and which to the library.
 
 ## Development
 

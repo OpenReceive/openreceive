@@ -180,19 +180,3 @@ export async function expectPaidReceipt(page: Page): Promise<void> {
 export function downloadLink(page: Page): Locator {
   return page.locator("a[href*='/downloads/']").first();
 }
-
-/** Counts matching requests from the moment of creation; read `count()` later. */
-export function trackRequests(page: Page, pathname: string): () => number {
-  let count = 0;
-  page.on("request", (request) => {
-    if (new URL(request.url()).pathname === pathname) count += 1;
-  });
-  return () => count;
-}
-
-/** Resolves on the next request to `pathname` (used to phase-align with polling). */
-export function nextRequest(page: Page, pathname: string): Promise<void> {
-  return page
-    .waitForRequest((request) => new URL(request.url()).pathname === pathname)
-    .then(() => undefined);
-}

@@ -53,6 +53,51 @@ const forbidRuntimePersistence = (relativePath, text, { allowHostPostgres = fals
     `${relativePath}: must not mount an OpenReceive state directory`,
   );
 };
+
+/**
+ * A demo may keep ONE named volume, and only for its own database.
+ *
+ * The rule this replaces forbade volumes outright. That was the right
+ * instinct aimed at the wrong target: what must never appear is a datastore
+ * for OPENRECEIVE — a state directory, a wired-in Postgres, a mounted config
+ * file — and `forbidRuntimePersistence` already catches every one of those.
+ * A named volume holding the HOST's SQLite file is the opposite claim: the
+ * host owns its data and the engine's two tables live inside it.
+ *
+ * The Buy a Button demo needs it. Its subject is that orders survive a
+ * restart, and a container whose database is a layer in the image quietly
+ * stops demonstrating that on the first `up --build`.
+ *
+ * BIND MOUNTS STAY FORBIDDEN. `- ./something:/in/container` is how a config
+ * file or a secret gets injected, and that is what the old message was
+ * guarding.
+ */
+const expectHostDataVolumesOnly = (composePath, compose, service) => {
+  const declared = Object.keys(compose.volumes ?? {});
+  for (const name of declared) {
+    expect(
+      compose.volumes[name] === null || compose.volumes[name] === undefined,
+      `${composePath}: volume "${name}" must be a plain named volume`,
+    );
+    expect(
+      name.endsWith("-data"),
+      `${composePath}: volume "${name}" must be named for host data (<name>-data)`,
+    );
+  }
+
+  for (const mount of service.volumes ?? []) {
+    expect(
+      typeof mount === "string",
+      `${composePath}: volume mounts must be "<named-volume>:<path>" strings`,
+    );
+    const source = String(mount).split(":")[0];
+    expect(
+      declared.includes(source),
+      `${composePath}: "${mount}" must mount a declared named volume, never a host path`,
+    );
+  }
+};
+
 /** No demo reads a mode switch: `npm run demo <x>` always runs the image's built server. */
 const forbidDemoModeSwitch = (relativePath, text) => {
   expect(
@@ -108,8 +153,8 @@ for (const demo of nodeDemos) {
   expect(/^FROM node:22-bookworm-slim$/m.test(dockerfile), `${dockerfilePath}: must use Node 22`);
   expect(dockerfile.includes("npm ci --no-audit"), `${dockerfilePath}: must use npm ci`);
   expect(
-    dockerfile.includes("COPY examples/hello-fruit ./examples/hello-fruit"),
-    `${dockerfilePath}: must copy the Hello Fruit tree (carries the shared OpenReceive config)`,
+    dockerfile.includes("COPY examples/buttons ./examples/buttons"),
+    `${dockerfilePath}: must copy the buttons tree (the shared client, server, wire types, seed catalog and artwork)`,
   );
   expect(
     dockerfile.includes("COPY tools/run-with-root-env.mjs ./tools/run-with-root-env.mjs"),
@@ -142,8 +187,7 @@ for (const demo of nodeDemos) {
     `${composePath}: build context must be the repo root`,
   );
   expect(service.depends_on === undefined, `${composePath}: must not depend on a database`);
-  expect(compose.volumes === undefined, `${composePath}: must not declare OpenReceive volumes`);
-  expect(service.volumes === undefined, `${composePath}: must not mount configuration files`);
+  expectHostDataVolumesOnly(composePath, compose, service);
   expect(service.env_file?.length === 1, `${composePath}: must load one environment file`);
   expect(
     service.env_file?.[0] === "../../../../.env",

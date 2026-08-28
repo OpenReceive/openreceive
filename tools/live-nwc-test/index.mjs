@@ -33,14 +33,17 @@ const profile = process.env.OPENRECEIVE_WALLET_PROFILE || "rizful";
 const expectedCapabilitiesPath =
   process.env.OPENRECEIVE_EXPECTED_CAPABILITIES ??
   path.join(currentDir, "expected_capabilities.json");
-const productPath = path.join(repoRoot, "examples/hello-fruit/shared/product.json");
+const catalogPath = path.join(repoRoot, "examples/buttons/shared/shop-catalog.json");
 // Opt-IN, matching the Ruby smoke: `npm run test:live:nwc` with NWC_URI set
 // used to mint a real invoice on the JS side and stop after preflight on the
 // Ruby side, so one command meant two different things per engine.
 const shouldRequestLiveInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE === "1";
 const waitForPayment = process.env.OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT === "1";
 const supportedProfiles = new Set(["rizful", "alby", "zeus", "custom"]);
-const fruitsPath = path.join(repoRoot, "examples/hello-fruit/shared/fruits.json");
+// The engine's own default. The demo this replaced read the value from a
+// product.json field that file never actually carried, so `expiry` went out
+// undefined on every live run.
+const INVOICE_EXPIRY_SECONDS = 600;
 
 function handleFatalError(error) {
   console.error(formatErrorMessage(error));
@@ -169,29 +172,30 @@ if (!shouldRequestLiveInvoice) {
   process.exit(0);
 }
 
-const product = JSON.parse(readFileSync(productPath, "utf8"));
-const fruits = JSON.parse(readFileSync(fruitsPath, "utf8"));
-const liveFruit = fruits.fruits.find((fruit) => fruit.id === "banana") ?? fruits.fruits[0];
-if (!liveFruit) {
-  throw new Error("Hello Fruit live smoke needs at least one fruit.");
+// The cheapest button in the shop's own catalog, so a live smoke against a
+// real wallet mints the smallest invoice the demo can sell.
+const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+const liveButton = [...catalog].sort((a, b) => a.price_cents - b.price_cents)[0];
+if (!liveButton) {
+  throw new Error("The live smoke needs at least one product in shop-catalog.json.");
 }
-const liveQuote = await quoteLiveFruitAmount(liveFruit.fiat);
+const liveFiat = { currency: "USD", value: (liveButton.price_cents / 100).toFixed(2) };
+const liveQuote = await quoteLiveButtonAmount(liveFiat);
 const liveAmountMsats = BigInt(liveQuote.amountMsats);
 console.log(
-  `Priced ${liveFruit.fiat.value} ${liveFruit.fiat.currency} at ${liveQuote.btcFiatPrice} BTC/${liveFruit.fiat.currency} (source: ${liveQuote.source}).`,
+  `Priced ${liveFiat.value} ${liveFiat.currency} at ${liveQuote.btcFiatPrice} BTC/${liveFiat.currency} (source: ${liveQuote.source}).`,
 );
 console.log("Checking local NWC metadata size guard...");
 await assertMetadataGuard(client, liveAmountMsats);
 
-console.log("Creating low-value Hello Fruit invoice...");
+console.log("Creating a low-value Buy a Button invoice...");
 const invoice = await client.makeInvoice({
   amount_msats: liveAmountMsats,
-  description: "Fruit sticker from OpenReceive live smoke test",
-  expiry: product.invoice_expiry_seconds,
+  description: `OpenReceive button: ${liveButton.name} (live smoke test)`,
+  expiry: INVOICE_EXPIRY_SECONDS,
   metadata: {
-    product_id: product.product_id,
-    fruit: liveFruit.id,
-    fiat: liveFruit.fiat,
+    sku: liveButton.sku,
+    fiat: liveFiat,
     smoke_test: true,
     wallet_profile: profile,
   },
@@ -216,7 +220,7 @@ if (!waitForPayment) {
 
 console.log("Waiting for manual payment. Settlement must be proven by list_transactions.");
 const createdAt = invoice.created_at ?? Math.floor(Date.now() / 1000);
-const expiresAt = invoice.expires_at ?? createdAt + product.invoice_expiry_seconds;
+const expiresAt = invoice.expires_at ?? createdAt + INVOICE_EXPIRY_SECONDS;
 const outcome = await waitForCheckPaymentFinalState({
   client,
   invoice,
@@ -282,7 +286,7 @@ function sleep(ms) {
  * run stops rather than guessing, and the operator opts into an explicit fixed
  * sats amount instead.
  */
-async function quoteLiveFruitAmount(fiat) {
+async function quoteLiveButtonAmount(fiat) {
   const fixedSats = process.env.OPENRECEIVE_LIVE_INVOICE_SATS?.trim();
   if (fixedSats) {
     if (!/^[1-9][0-9]*$/.test(fixedSats)) {

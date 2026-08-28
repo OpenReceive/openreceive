@@ -15,7 +15,7 @@ Rails.application.configure do
   # loading is working properly before deploying your code.
   config.eager_load = ENV["CI"].present?
 
-  # Same default as production; HelloFruit::PublicCacheHeaders sets the real policy.
+  # Same default as production; ButtonShop::PublicCacheHeaders sets the real policy.
   config.public_file_server.headers = { "cache-control" => "public, max-age=0, must-revalidate" }
 
   # Show full error reports.

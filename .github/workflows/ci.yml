@@ -71,7 +71,7 @@ jobs:
       # because nothing ever ran `gem build`).
       - run: ./tools/ci/ruby-gem-build.sh
 
-  # Browser E2E smoke on every push/PR: boots the node-express Hello Fruit
+  # Browser E2E smoke on every push/PR: boots the node-express Buy a Button
   # demo against the testkit wallet and drives a real checkout in Chromium.
   # Independent of the core job so the browser lane never blocks the fast
   # checks; the full cross-framework spec matrix runs weekly in demos.yml.

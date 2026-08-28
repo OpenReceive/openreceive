@@ -126,7 +126,7 @@ enabled:
 - `.github/workflows/ci.yml` runs the full local gate.
 - `.github/workflows/conformance.yml` runs contract, generated-model, JS, and
   internal testkit checks.
-- `.github/workflows/demos.yml` validates and builds Hello Fruit example
+- `.github/workflows/demos.yml` validates and builds the Buy a Button example
   artifacts without injecting receive-only NWC codes.
 - `.github/workflows/provider-registry.yml` validates canonical provider data.
 - `.github/workflows/security.yml` runs secret and client-bundle boundary

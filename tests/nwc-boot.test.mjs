@@ -11,7 +11,7 @@ import {
   createOpenReceive,
   readNwcFromEnvironment,
 } from "../packages/js/node/src/index.ts";
-import { readRequiredHelloFruitNwcConnectionString } from "../examples/hello-fruit/shared/demo-nwc.ts";
+import { readRequiredShopNwcConnectionString } from "../examples/buttons/shared/server-node/nwc.ts";
 
 async function withEnv(overrides, run) {
   const previous = new Map();
@@ -67,16 +67,16 @@ test("createOpenReceive refuses an invalid NWC URI with the help URL", async () 
   });
 });
 
-test("Hello Fruit NWC gate uses the demo subject and help URL", async () => {
+test("the demo NWC gate uses the demo subject and help URL", async () => {
   await withEnv({ NWC_URI: undefined }, () => {
     assert.throws(
-      () => readRequiredHelloFruitNwcConnectionString(),
-      /The Hello Fruit demo needs a receive-only NWC code[\s\S]*https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+      () => readRequiredShopNwcConnectionString(),
+      /The Buy a Button demo needs a receive-only NWC code[\s\S]*https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
     );
   });
   await withEnv({ NWC_URI: "not-a-uri" }, () => {
     assert.throws(
-      () => readNwcFromEnvironment({ subject: "The Hello Fruit demo" }),
+      () => readNwcFromEnvironment({ subject: "The Buy a Button demo" }),
       /not a valid NWC code[\s\S]*https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
     );
   });

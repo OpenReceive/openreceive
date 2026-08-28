@@ -1,4 +1,13 @@
 {
+  "//": [
+    "Next compiles with SWC, which reads THIS tsconfig for the whole project",
+    "rather than resolving one per file the way esbuild does. So",
+    "experimentalDecorators and useDefineForClassFields are repeated here — both",
+    "are load-bearing for mobx-keystone's decorators, and the long version of",
+    "why is in examples/buttons/shared/tsconfig.json, which is the same pair for",
+    "Vite. Line comments are not an option: tools/validate/validate-spec.mjs",
+    "parses every tsconfig as strict JSON."
+  ],
   "extends": "../../../../tsconfig.json",
   "compilerOptions": {
     "incremental": true,
@@ -7,10 +16,6 @@
     "allowJs": true,
     "esModuleInterop": true,
     "jsx": "preserve",
-    // Next compiles with SWC, which reads THIS tsconfig for the whole project
-    // rather than resolving one per file the way esbuild does. Both settings
-    // are load-bearing for mobx-keystone's decorators — see the long note in
-    // examples/buttons/shared/tsconfig.json, which is the same pair for Vite.
     "experimentalDecorators": true,
     "useDefineForClassFields": false
   },

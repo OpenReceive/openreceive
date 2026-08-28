@@ -71,7 +71,7 @@ test("createConsoleLogger emits timestamped LEVEL-prefixed lines and filters by 
 test("createAppConsoleLogger includes timestamps and honors minLevel", () => {
   const lines = [];
   const log = createAppConsoleLogger({
-    prefix: "hello-fruit:test:server",
+    prefix: "buttons:test:server",
     minLevel: "warn",
     now: () => new Date("2026-07-30T00:01:58.332Z"),
     console: {
@@ -89,7 +89,7 @@ test("createAppConsoleLogger includes timestamps and honors minLevel", () => {
   assert.equal(lines.length, 1);
   assert.equal(
     lines[0][0],
-    "[2026-07-30T00:01:58.332Z] WARN [hello-fruit:test:server] openreceive.on_paid: Checkout settled.",
+    "[2026-07-30T00:01:58.332Z] WARN [buttons:test:server] openreceive.on_paid: Checkout settled.",
   );
   assert.deepEqual(lines[0][1], { reference: "o1" });
 });

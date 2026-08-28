@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hello-fruit:
+  demos:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -68,7 +68,7 @@ jobs:
   # bin/ci runs setup against the service database, the stubbed-wallet
   # integration tests, the schema/catalog drift checks and the gem audit. No
   # importmap audit: the browser client is the Shakapacker bundle, which the
-  # hello-fruit job above builds (build:demo) and scans for secret/testkit
+  # demos job above builds (build:demo) and scans for secret/testkit
   # markers (scan:client-bundles).
   buttons-rails:
     runs-on: ubuntu-latest

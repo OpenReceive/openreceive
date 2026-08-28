@@ -168,10 +168,7 @@ function assertCleanWorktree(root, args, action) {
 
 function workspaceManifestPaths(root) {
   const paths = [path.join(root, "package.json")];
-  for (const workspaceRoot of [
-    path.join(root, "packages/js"),
-    path.join(root, "examples/hello-fruit/server"),
-  ]) {
+  for (const workspaceRoot of [path.join(root, "packages/js")]) {
     if (!existsSync(workspaceRoot)) continue;
     for (const entry of readdirSync(workspaceRoot)) {
       const candidate = path.join(workspaceRoot, entry, "package.json");

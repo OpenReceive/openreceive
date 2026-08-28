@@ -2,9 +2,9 @@
 
 // Convenience launcher for the dockerized demos.
 //
-//   npm run demo node      -> Hello Fruit, Express + React/Vue/Svelte/Angular (:3000)
-//   npm run demo static    -> Hello Fruit, Static HTML + small API            (:3001)
-//   npm run demo nextjs    -> Hello Fruit, Next.js fullstack                  (:3002)
+//   npm run demo node      -> Buy a Button, Express + React/Vue/Svelte/Angular (:3000)
+//   npm run demo static    -> Buy a Button, static HTML + small API            (:3001)
+//   npm run demo nextjs    -> Buy a Button, Next.js fullstack                  (:3002)
 //   npm run demo buttons   -> Buy a Button, Rails + Postgres                  (:3003)
 //
 // It ensures the repo-root .env exists, validates NWC_URI,
@@ -14,7 +14,7 @@ import { spawn } from "node:child_process";
 import { copyFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readRequiredHelloFruitNwcConnectionString } from "../examples/hello-fruit/shared/demo-nwc.ts";
+import { readRequiredShopNwcConnectionString } from "../examples/buttons/shared/server-node/nwc.ts";
 import { OPENRECEIVE_DEMOS } from "./shared/demo-catalog.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -57,15 +57,12 @@ if (!existsSync(envPath)) {
 process.loadEnvFile(envPath);
 
 try {
-  readRequiredHelloFruitNwcConnectionString();
+  readRequiredShopNwcConnectionString();
 } catch (error) {
   console.error(
-    [
-      "",
-      "Cannot start the Hello Fruit demo.",
-      error instanceof Error ? error.message : String(error),
-      "",
-    ].join("\n"),
+    ["", "Cannot start the demo.", error instanceof Error ? error.message : String(error), ""].join(
+      "\n",
+    ),
   );
   process.exit(1);
 }

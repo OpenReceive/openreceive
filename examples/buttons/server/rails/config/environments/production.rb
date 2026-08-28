@@ -15,7 +15,7 @@ Rails.application.configure do
   # Turn on fragment caching in view templates.
   config.action_controller.perform_caching = true
 
-  # Conservative default. HelloFruit::PublicCacheHeaders overwrites this per path:
+  # Conservative default. ButtonShop::PublicCacheHeaders overwrites this per path:
   # Propshaft-digested files are immutable; HTML is no-store; other public files revalidate.
   config.public_file_server.headers = { "cache-control" => "public, max-age=0, must-revalidate" }
 

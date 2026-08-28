@@ -21,7 +21,7 @@ parallel work. Shared contract files still need lead coordination.
 | Testkit package | `packages/js/testkit` | Implemented | Conformance lane |
 | Ruby core package | `packages/ruby/openreceive` | Implemented (vector-backed) | Ecosystem lane |
 | Ruby server + Rails | `packages/ruby/openreceive-server`, `openreceive-rails` | Implemented | Ecosystem lane |
-| Hello Fruit examples | `examples/hello-fruit/**` | Implemented | Example lane |
+| Buy a Button examples | `examples/buttons/**` | Implemented | Example lane |
 | Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem lanes |
 
 Why this many packages: each framework adapter (`express`, `fastify`, `next`;

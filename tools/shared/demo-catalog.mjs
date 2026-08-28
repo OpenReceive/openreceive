@@ -1,4 +1,5 @@
-// The single catalog of dockerized demos. Both the launcher
+// The single catalog of dockerized demos. Four stacks, one shop.
+// Both the launcher
 // (tools/run-demo.mjs) and the container validator
 // (tools/validate/check-demo-containers.mjs) read this list, so a demo added
 // or renamed here is launchable and validated in the same change.
@@ -6,30 +7,30 @@
 export const OPENRECEIVE_DEMOS = [
   {
     kind: "node",
-    keys: ["node", "node-express", "express"],
-    dir: "examples/hello-fruit/server/node-express",
-    packageName: "@openreceive/example-node-express",
-    service: "hello-fruit-node-express",
+    keys: ["node", "node-express", "express", "buttons-express"],
+    dir: "examples/buttons/server/node-express",
+    packageName: "@openreceive/example-buttons-node-express",
+    service: "buttons-node-express",
     port: "3000",
-    label: "Express + React/Vue/Svelte/Angular",
+    label: "Buy a Button — Express + React/Vue/Svelte/Angular",
   },
   {
     kind: "node",
-    keys: ["static", "static-html-small-api", "html"],
-    dir: "examples/hello-fruit/server/static-html-small-api",
-    packageName: "@openreceive/example-static-html-small-api",
-    service: "hello-fruit-static-html-small-api",
+    keys: ["static", "static-html-small-api", "html", "buttons-static"],
+    dir: "examples/buttons/server/static-html-small-api",
+    packageName: "@openreceive/example-buttons-static-html",
+    service: "buttons-static-html-small-api",
     port: "3001",
-    label: "Static HTML + small API",
+    label: "Buy a Button — static HTML + small API",
   },
   {
     kind: "node",
-    keys: ["nextjs", "next", "nextjs-fullstack"],
-    dir: "examples/hello-fruit/server/nextjs-fullstack",
-    packageName: "@openreceive/example-nextjs-fullstack",
-    service: "hello-fruit-nextjs-fullstack",
+    keys: ["nextjs", "next", "nextjs-fullstack", "buttons-nextjs"],
+    dir: "examples/buttons/server/nextjs-fullstack",
+    packageName: "@openreceive/example-buttons-nextjs-fullstack",
+    service: "buttons-nextjs-fullstack",
     port: "3002",
-    label: "Next.js fullstack",
+    label: "Buy a Button — Next.js fullstack",
   },
   {
     kind: "rails",

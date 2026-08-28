@@ -6,13 +6,12 @@ COPY package.json package-lock.json tsconfig.json ./
 COPY packages/js ./packages/js
 # The shop UI, stores and wire types. One copy, read by every stack.
 COPY examples/buttons/shared ./examples/buttons/shared
-COPY examples/hello-fruit/shared ./examples/hello-fruit/shared
-COPY examples/hello-fruit/server/nextjs-fullstack/package.json \
-  ./examples/hello-fruit/server/nextjs-fullstack/package.json
-COPY examples/hello-fruit/server/node-express/package.json \
-  ./examples/hello-fruit/server/node-express/package.json
-COPY examples/hello-fruit/server/static-html-small-api/package.json \
-  ./examples/hello-fruit/server/static-html-small-api/package.json
+COPY examples/buttons/server/nextjs-fullstack/package.json \
+  ./examples/buttons/server/nextjs-fullstack/package.json
+COPY examples/buttons/server/node-express/package.json \
+  ./examples/buttons/server/node-express/package.json
+COPY examples/buttons/server/static-html-small-api/package.json \
+  ./examples/buttons/server/static-html-small-api/package.json
 COPY examples/buttons/server/rails/package.json \
   ./examples/buttons/server/rails/package.json
 COPY tools/package ./tools/package

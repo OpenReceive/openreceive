@@ -16,7 +16,7 @@ try {
 // Testkit mode runs the demo against in-process fakes — no wallet needed.
 if (process.env.DEMO_WALLET !== "testkit" && !process.env.NWC_URI?.trim()) {
   console.error(
-    "The Hello Fruit demo requires NWC_URI. Copy .env.example to .env and add a receive-only NWC URI (or run with DEMO_WALLET=testkit for the wallet-free demo).",
+    "The demo requires NWC_URI. Copy .env.example to .env and add a receive-only NWC URI (or run with DEMO_WALLET=testkit for the wallet-free demo).",
   );
   process.exit(1);
 }

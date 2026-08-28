@@ -73,7 +73,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 9720
+      "bytes": 9714
     },
     {
       "path": "/guides/checkout-ux",
@@ -153,7 +153,7 @@
       "slug": "host-testing",
       "title": "Testing Your OpenReceive Integration",
       "category": "guide",
-      "bytes": 4051
+      "bytes": 4048
     },
     {
       "path": "/guides/api-reference",

@@ -79,11 +79,11 @@ explicitly.
 
 ## Click through a full checkout with no wallet
 
-The Hello Fruit demo boots against in-process fakes when `DEMO_WALLET=testkit`
+The Buy a Button demo boots against in-process fakes when `DEMO_WALLET=testkit`
 is set — no `NWC_URI`, no network:
 
 ```sh
-DEMO_WALLET=testkit npm run dev   # in examples/hello-fruit/server/node-express
+DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/node-express
 ```
 
 The shop, the checkout wizard (all four framework tabs), Lightning invoices,

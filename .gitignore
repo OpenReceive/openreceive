@@ -46,5 +46,5 @@ tests/e2e/test-results/
 tests/orms/generated/
 
 # The Node stacks' SQLite databases and cookie secrets. The shop SURVIVES a
-# restart, so unlike Hello Fruit's disposable file these are real local state.
+# restart, so unlike a disposable checkout demo these are real local state.
 examples/buttons/.data/

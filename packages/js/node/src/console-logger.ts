@@ -64,7 +64,7 @@ export type AppConsoleLogger = (
 ) => void;
 
 export interface CreateAppConsoleLoggerOptions {
-  /** Prefix before the event, e.g. `hello-fruit:node-express:server`. */
+  /** Prefix before the event, e.g. `buttons:node-express:server`. */
   readonly prefix: string;
   /**
    * Minimum level to emit. Default: `LOG_LEVEL` from the environment, or `info`.
