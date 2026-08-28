@@ -24,7 +24,7 @@ import {
 } from "@openreceive/browser/headless";
 import { computed } from "mobx";
 import { type Frozen, frozen, Model, model, modelAction, prop } from "mobx-keystone";
-import { csrfFetch } from "../http.ts";
+import { csrfFetch } from "../../http.ts";
 
 const invoiceKey = (snapshot: CheckoutSnapshot | null): string =>
   snapshot ? snapshot.invoices.map((invoice) => invoice.invoice_id).join("|") : "";

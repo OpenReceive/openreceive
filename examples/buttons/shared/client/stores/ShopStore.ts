@@ -7,7 +7,7 @@ import {
   type ShopOrderPayload,
   shopOrderPath,
 } from "../../shop-types.ts";
-import { getJson, postJson } from "../http.ts";
+import { getJson, postJson } from "../../http.ts";
 import { RecentOrders } from "./RecentOrders.ts";
 import { ShopCheckout } from "./ShopCheckout.ts";
 

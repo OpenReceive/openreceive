@@ -12,7 +12,7 @@ import { Checkout } from "@openreceive/react";
 import { observer } from "mobx-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { loadShopBootstrap } from "../../../../shared/client/bootstrap.ts";
+import { loadShopBootstrap } from "../../../../shared/bootstrap.ts";
 import { ShopPanel } from "../../../../shared/client/components/ShopPanel.tsx";
 import { ShopStore } from "../../../../shared/client/stores/ShopStore.ts";
 import { shopTheme } from "../../../../shared/client/theme.ts";

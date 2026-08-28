@@ -5,5 +5,5 @@
 // and shop.css is plain CSS with five custom properties. postcss-preset-mantine
 // is only needed to author styles with Mantine's mixins.
 import "@mantine/core/styles.css";
-import "../../../../../shared/client/shop.css";
+import "../../../../../shared/shop.css";
 import "../src/main.tsx";

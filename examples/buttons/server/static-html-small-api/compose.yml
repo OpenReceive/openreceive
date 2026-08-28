@@ -1,0 +1,19 @@
+services:
+  buttons-static-html-small-api:
+    build:
+      context: ../../../..
+      dockerfile: examples/buttons/server/static-html-small-api/Dockerfile
+    environment:
+      PORT: "3001"
+      # The shop SURVIVES A RESTART, so its database is a volume rather than a
+      # layer in the image.
+      OPENRECEIVE_DEMO_DB: /data
+    env_file:
+      - ../../../../.env
+    volumes:
+      - buttons-static-html-data:/data
+    expose:
+      - "3001"
+
+volumes:
+  buttons-static-html-data:

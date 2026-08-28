@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Buy a Button — OpenReceive with no framework</title>
+  </head>
+  <!-- `or-vanilla` scopes the handful of rules in shop-vanilla.css that touch
+       shared class names, so that sheet never reaches into a component it does
+       not own. -->
+  <body class="or-vanilla">
+    <main class="or-page">
+      <div class="or-page-inner">
+        <!-- The panel shell is static markup; main.ts fills #or-shop-body and
+             nothing else. The head and the tab strip never change, so there is
+             no reason for JavaScript to own them. -->
+        <section class="or-shop">
+          <div class="or-shop-head">
+            <div>
+              <p class="or-eyebrow">Official OpenReceive Demo</p>
+              <p class="or-shop-title">Buy an OR button</p>
+            </div>
+          </div>
+
+          <div class="or-shop-tabs">
+            <div class="or-vanilla-tabs" role="tablist" aria-label="Shop or recent orders">
+              <button type="button" role="tab" data-tab="shop" aria-selected="true">
+                Buy a button
+              </button>
+              <button type="button" role="tab" data-tab="orders" aria-selected="false">
+                Recent orders
+              </button>
+            </div>
+          </div>
+
+          <div class="or-shop-body" id="or-shop-body"></div>
+        </section>
+
+        <p class="or-page-note">Static HTML + a small API. No framework at all.</p>
+      </div>
+    </main>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>

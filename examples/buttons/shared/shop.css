@@ -10,6 +10,15 @@
    props and no inline `style={{}}` anywhere in the components — one stylesheet
    of `or-` prefixed global classes is the entire system.
 
+   WHICH IS WHY THIS FILE SITS BESIDE shop-types.ts RATHER THAN INSIDE client/.
+   Being global `or-` classes and not a React concern, it is the one other
+   thing EVERY stack shares: the three React hosts import it, and so does the
+   no-framework host in client-vanilla/, which emits the same class names
+   against hand-written DOM. That is what makes the vanilla demo look like the
+   same product instead of a second design — and it keeps client/ and
+   client-vanilla/ from importing each other, which is the boundary that
+   matters.
+
    THERE IS NO DARK MODE. `background: #fff` is hard-coded in several places
    below. A later dark mode turns every one of those into a variable FIRST and
    then adds a [data-mantine-color-scheme="dark"] token block; piecemeal dark

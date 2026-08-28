@@ -1,0 +1,151 @@
+/* ============================================================================
+   The no-framework client's own controls.
+
+   ../shop.css is the shop's design and BOTH clients load it — the page, the
+   panel, the cards, the receipt lines and the feed rows are the same rules
+   rendered against the same class names. This file adds only what Mantine was
+   providing on the React side: buttons, the quantity stepper, the tab strip,
+   an alert and a link.
+
+   Everything here is built from the five tokens ../shop.css defines. If
+   something new needs a colour, add a token there; do not inline a hex.
+   ========================================================================= */
+
+/* The tab strip. Mantine's SegmentedControl on the React side; two buttons
+   with a sliding-free active state here, because a moving indicator is a
+   transition to maintain and this is not what the demo is about. */
+.or-vanilla-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--or-paper);
+  border: 1px solid var(--or-line);
+}
+
+.or-vanilla-tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--or-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.or-vanilla-tabs button.or-tab-active {
+  color: var(--or-ink);
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(23 35 31 / 12%);
+}
+
+/* One button, three weights. `default` is the bare form. */
+.or-vanilla-button {
+  border: 1px solid var(--or-line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--or-ink);
+  background: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.or-vanilla-button:hover:not(:disabled) {
+  border-color: var(--or-accent);
+}
+
+.or-vanilla-button:disabled,
+.or-vanilla-button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.or-vanilla-button-primary {
+  color: #fff;
+  background: var(--or-accent);
+  border-color: var(--or-accent);
+}
+
+.or-vanilla-button-light {
+  width: 100%;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--or-accent);
+  background: var(--or-paper);
+  border-color: transparent;
+}
+
+.or-vanilla-button-subtle {
+  border-color: transparent;
+  background: transparent;
+  color: var(--or-muted);
+}
+
+/* The quantity stepper on a card that is already in the cart. */
+.or-vanilla-qty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.or-vanilla-step {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--or-line);
+  border-radius: 6px;
+  font: inherit;
+  line-height: 1;
+  color: var(--or-ink);
+  background: #fff;
+  cursor: pointer;
+}
+
+.or-vanilla-step:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.or-vanilla-alert {
+  margin: 0 20px 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #b4322c;
+  background: rgb(180 50 44 / 8%);
+}
+
+.or-vanilla-link {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--or-accent);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.or-vanilla-receipt-head {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+/* The stage stacks its children with the same rhythm Mantine's <Stack gap="xs">
+   gave the React receipt. Scoped to `.or-vanilla` on <body>: `.or-shop-stage`
+   is a SHARED class name, and an unscoped rule here would be this file
+   reaching into a component it does not own. */
+.or-vanilla .or-shop-stage > * + * {
+  margin-top: 10px;
+}

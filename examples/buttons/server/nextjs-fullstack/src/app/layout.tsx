@@ -1,6 +1,6 @@
 // Mantine's own stylesheet first, then ours — the same order every stack uses.
 import "@mantine/core/styles.css";
-import "../../../../shared/client/shop.css";
+import "../../../../shared/shop.css";
 
 export const metadata = {
   title: "Buy a Button — OpenReceive on Next.js",

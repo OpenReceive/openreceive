@@ -1,6 +1,6 @@
 // Mantine's own stylesheet first, then ours — the same order every stack uses.
 import "@mantine/core/styles.css";
-import "../../../../shared/client/shop.css";
+import "../../../../shared/shop.css";
 // Only the default (React) checkout styles load eagerly so the first paint is
 // correct; each other framework's stylesheet loads with its tab. See App.tsx.
 import "@openreceive/react/styles.css";

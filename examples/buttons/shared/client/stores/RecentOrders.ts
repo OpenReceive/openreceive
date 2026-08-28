@@ -6,7 +6,7 @@ import {
   type ShopFeedOrder,
   type ShopFeedTotals,
 } from "../../shop-types.ts";
-import { getJson } from "../http.ts";
+import { getJson } from "../../http.ts";
 
 /** No push transport: the feed is only as fresh as this. */
 const REFRESH_MS = 30_000;

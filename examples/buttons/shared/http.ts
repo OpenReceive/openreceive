@@ -12,6 +12,12 @@
  * the header is simply not set, and this degrades to `window.fetch` with
  * same-origin credentials — which is what those stacks want anyway. That is
  * why this file, not a Rails-specific one, is what the stores import.
+ *
+ * It sits beside shop-types.ts rather than inside client/ because BOTH clients
+ * need it: the React one and the no-framework one in client-vanilla/. The
+ * `fresh` revalidation below is a real rule about the feed's ten-second cache,
+ * and a second hand-rolled copy of it in the vanilla demo is exactly the drift
+ * the shared layout exists to prevent.
  */
 
 export const csrfToken = (): string =>

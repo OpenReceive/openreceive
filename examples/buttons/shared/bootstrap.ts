@@ -8,7 +8,7 @@
  * clients.
  */
 
-import { SHOP_BOOTSTRAP_PATH, type ShopBootstrap } from "../shop-types.ts";
+import { SHOP_BOOTSTRAP_PATH, type ShopBootstrap } from "./shop-types.ts";
 import { getJson } from "./http.ts";
 
 export const loadShopBootstrap = async (): Promise<ShopBootstrap | null> => {

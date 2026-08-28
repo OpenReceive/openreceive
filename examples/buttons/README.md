@@ -202,4 +202,4 @@ payment.
 - **There is no admin surface for editing products.** A console and the seed
   file are the editing story.
 - **There is no dark mode**, and adding one is not a piecemeal change — see the
-  note at the top of `shared/client/shop.css`.
+  note at the top of `shared/shop.css`.

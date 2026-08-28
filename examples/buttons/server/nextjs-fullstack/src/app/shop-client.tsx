@@ -3,7 +3,7 @@
 import { Alert, Group, Loader, MantineProvider, Text } from "@mantine/core";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { loadShopBootstrap } from "../../../../shared/client/bootstrap.ts";
+import { loadShopBootstrap } from "../../../../shared/bootstrap.ts";
 import { CheckoutStage } from "../../../../shared/client/components/CheckoutStage.tsx";
 import { ShopPanel } from "../../../../shared/client/components/ShopPanel.tsx";
 import { ShopStore } from "../../../../shared/client/stores/ShopStore.ts";
