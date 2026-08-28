@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 - 2026-08-28
+
+No changes to this gem in 0.3.1. It is byte-identical to 0.3.0 and ships to keep
+the one-version-for-everything rule. The Ruby half of this release is in
+`openreceive-rails`. The full release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md).
+
 ## 0.3.0 - 2026-08-26
 
 ### The order description rides the prepare and create responses

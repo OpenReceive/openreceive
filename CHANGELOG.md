@@ -1,6 +1,114 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 - 2026-08-28
+
+Three changes where a component or an engine was guessing about the host, and
+answering wrongly in the safe-looking direction: a swap panel telling payers to
+bookmark a page that would not bring them back, a console warning that fired at
+correct integrations, and a Rails app serving checkouts through the generated
+allow-all placeholder without ever saying so. Around them, the demo is a new
+shop on four stacks, and CI is running again.
+
+### The swap refund-return warning stops guessing
+
+`SwapDisplayModel.refundReturnLabel` picks one of two warnings, and the wrong
+one strands money: a payer who is told to come back to a page that has no route
+to it cannot reach a swap deposit's refund. The component was inferring the
+answer from `syncUrl` / `routeReference`, which only knows about URLs the
+component itself writes.
+
+`resumable` is now an explicit prop on `<Checkout>` and `PaymentWizard` — React,
+Vue, Svelte, Angular, `@openreceive/browser` and the custom elements. Unset, it
+is still inferred from `syncUrl` / `routeReference`; on the React wizard it
+defaults to false, so the safe copy is what a host gets by saying nothing. Set
+it when the host owns a per-order route the component cannot see, which is most
+snapshot-mode apps.
+
+### Packaged asset URLs resolve when they are read
+
+`@openreceive/provider-data`'s icon and tutorial tables were built eagerly with
+`Object.fromEntries`, so `assetUrl` — and its `file://` warning — ran at import
+time, before any host resolver could be consulted. A host doing exactly the
+right thing, serving the packaged `dist/assets` trees itself and passing an
+`AssetUrlResolver` everywhere, was told on the console that its icons "cannot
+load" about icons that loaded fine. That inverts the warning: nobody reading
+their own console could tell a correct integration from a broken one.
+
+The new `lazyAssetUrlTable` export builds the same shape — own, enumerable,
+frozen, `undefined` for a missing key — with getters, so a packaged URL resolves
+when something actually reads it. The warning becomes evidence again.
+
+### Rails says out loud what the generated initializer left in place
+
+`config.authorize` from `openreceive:install` allows every request, treating
+possession of the reference as the authorization. That is a fine five-minute
+demo and a bad production posture, and nothing distinguished the two.
+
+- **`OpenReceive::ALLOW_ALL_AUTHORIZE` is a named constant**, for the same reason
+  `LOGGING_ON_PAID` is: the engine can detect it at boot by identity and warn
+  that anyone holding an order id can mint invoices, poll status and request
+  refunds for it.
+- **`bin/rails openreceive:doctor` is step 0 of the agent directions as one
+  command.** It reports credential PRESENCE only — every line is `set` or
+  `unset`, no secret is printed or partially shown — plus whether `configure`
+  ran, which hooks are missing or still placeholders, where the engine is
+  mounted, and a best-effort wallet preflight that reports rather than raises.
+  "Look for `NWC_URI` in this app's server environment" has a different answer
+  on every host shape, and in a containerised app grepping the repo finds the
+  name and proves nothing about the value. This asks the process.
+
+### CI is on again, and it had been off for three releases
+
+Repository-level CI had been disabled since 2026-08-23, so 0.2.4, 0.3.0 and the
+PR #1 merge all landed ungated. Switching it back on surfaced three failures,
+none of them new: the Rails example's `Gemfile.lock` carried `arm64-darwin`
+alone, so bundler exited 16 on `x86_64-linux` before a test ran; the ruby-engine
+suite leaned on an `ActiveRecord::Base.stub` that minitest 6 moved out to a
+separate gem; and one core test raced an 8s budget waiting out a real 1800ms
+timer, which `installFastTimers` — exported since it was written and never
+called — now clamps.
+
+### Buy a Button replaces Hello Fruit, on four stacks instead of one
+
+The reference shop is `examples/buttons/`, and it exists in four hosts that sell
+the same catalog: `node-express` (3000), `static-html-small-api` (3001),
+`nextjs-fullstack` (3002) and `rails` (3003). Hello Fruit is deleted — 80 files
+and its whole shared tree.
+
+- **The stacks share a shop, not a checkout.** `shared/server-node` is one
+  persistence layer behind all three Node hosts, and the interesting seam is
+  `renderCheckout`: the same order reaches a React mount, a vanilla
+  `@openreceive/elements` mount, and the Next.js app router, and the shop code
+  around it does not change. `client/` and `client-vanilla/` never import each
+  other, which is why the static-html workspace carries no `@mantine/*` or
+  `mobx*`.
+- **Settlement arrives differently per host, on purpose.** Rails pushes over
+  ActionCable; the Node stacks poll. The shared stores expose push seams they
+  know nothing about the implementation of, which is the point.
+- **The Playwright suite runs against `node-express`.** All eight specs:
+  four framework tabs through a full Lightning checkout, both swap paths, the
+  remint regression, and `persistence.spec.ts` in place of `resume.spec.ts`.
+- **Two stale references only surfaced when their target vanished.** The Rails
+  demo's Dockerfile copied a Hello Fruit shared tree it never needed, and the
+  live NWC smoke read `product.invoice_expiry_seconds` from a `product.json`
+  that never carried that key, so `expiry` went out undefined on every live run.
+  It now prices the cheapest button from `shop-catalog.json` and passes the
+  engine's own 600s default.
+- **`check-demo-containers` had a rule that was wrong, not merely stale.** It
+  forbade compose volumes outright. The intent — the engine must never carry a
+  datastore of its own — is enforced by `forbidRuntimePersistence`; the blanket
+  ban also forbade the HOST keeping its own database, without which a demo
+  stops demonstrating "survives a restart" on the first `up --build`. Named
+  `*-data` volumes are allowed; bind mounts are still rejected.
+
+### The release tool bumps the examples again
+
+Deleting Hello Fruit took `examples/hello-fruit/server` out of
+`npm-release.mjs`'s workspace roots and put nothing back. The four buttons
+examples are root workspaces, so `release:prepare` left their `@openreceive/*`
+pins on the old version and the lockfile refresh went to the registry for
+`@openreceive/testkit` — a package that is private by construction and has
+never been published. Caught cutting this release.
 
 ### Agent directions say how host tables sit next to the library
 
@@ -44,6 +152,22 @@ https://openreceive.org/api_docs.md
   `/guides/<slug>.md` for a public slug, and `/guides.md` or `/api_docs.md`; a
   `.md` on any other site-owned page fails the gate, because nothing generates
   one.
+
+All four Buy a Button stacks — `node-express`, `static-html-small-api`,
+`nextjs-fullstack` and `rails` — were rebuilt against the 0.3.1 packages, and
+the Playwright suite runs against `node-express`. `openreceive` (the core gem)
+is byte-identical to 0.3.0 and ships to keep the one-version-for-everything
+rule; `openreceive-rails` carries the doctor task and the allow-all warning.
+
+The live wallet smoke (`npm run test:live`) was NOT run for this release: it
+needs a funded NWC connection. Note that the smoke script itself changed here —
+it had been reading `product.invoice_expiry_seconds` from a `product.json` that
+never carried that key, so `expiry` went out undefined on every live run, and it
+now prices the cheapest button from `shop-catalog.json`. That correction is
+therefore unexercised against a real wallet.
+
+This is a PATCH bump: nothing left the public API. `resumable` and
+`lazyAssetUrlTable` are additive, and both are optional.
 
 ## 0.3.0 - 2026-08-26
 

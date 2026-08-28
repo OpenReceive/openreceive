@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 - 2026-08-28
+
+No changes to this gem in 0.3.1. The release is the browser/React `resumable`
+prop, the lazy packaged-asset URL tables, and `openreceive-rails`'s doctor task
+and allow-all warning; this gem's wallet, invoice and settlement code is
+byte-identical to 0.3.0 and ships to keep the one-version-for-everything rule.
+The full release narrative lives in the repository-root
+[CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md).
+
 ## 0.3.0 - 2026-08-26
 
 No changes to this gem in 0.3.0. The release is the JavaScript integration

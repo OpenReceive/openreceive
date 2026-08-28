@@ -1,6 +1,6 @@
 {
   "contract_version": 2,
-  "release_version": "0.3.0",
+  "release_version": "0.3.1",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
   "how_to_update": "docs/internal/site-build.md",

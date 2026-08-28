@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.3.1 - 2026-08-28
+
+### The generated allow-all `config.authorize` is no longer silent
+
+`openreceive:install` writes a `config.authorize` that allows every request,
+treating possession of the reference as the authorization. It is now the named
+constant `OpenReceive::ALLOW_ALL_AUTHORIZE`, for the same reason
+`LOGGING_ON_PAID` is a constant: the engine detects it at boot by identity and
+warns that anyone holding an order id can mint invoices, poll status and request
+refunds for it. Safe only while references are unguessable. The five-minute demo
+still works; it just stops being quiet about what it is.
+
+### `bin/rails openreceive:doctor`
+
+Step 0 of the agent directions as one command. It reports credential PRESENCE
+only — every line is `set` or `unset`, and no secret is printed, echoed or
+partially shown, which is what makes it safe to run in a shared terminal or
+paste into an issue. Alongside that: whether `OpenReceive.configure` ran, which
+hooks are missing or still the generated placeholders, where the engine is
+mounted, and a wallet preflight.
+
+The wallet line is last and best-effort. It builds the service — the same eager
+preflight production boot runs, so a missing `NWC_URI`, a dead relay or a
+SPEND-CAPABLE connection all answer here rather than on a payer's first checkout
+— and reports the failure sanitized rather than raising it, because a doctor
+that dies at line six tells an operator less than one that finishes.
+
+"Look for `NWC_URI` in this app's server environment" has a different answer on
+every host shape, and in a containerised app grepping the repo finds the name in
+a compose file and proves nothing about the value. This asks the process, which
+is the only place that always knows.
+
 ## 0.3.0 - 2026-08-26
 
 ### `config.amount_for` may return a `:description` beside the price

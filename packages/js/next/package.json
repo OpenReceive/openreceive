@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/next",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Next.js App Router adapter for the OpenReceive checkout HTTP handler.",
   "keywords": [
     "bitcoin",
@@ -17,7 +17,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/http": "0.3.0"
+    "@openreceive/http": "0.3.1"
   },
   "peerDependencies": {
     "next": "^14.0.0 || ^15.0.0 || ^16.0.0"
