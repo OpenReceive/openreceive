@@ -173,7 +173,7 @@
       "slug": "security",
       "title": "Security",
       "category": "security",
-      "bytes": 13229
+      "bytes": 13224
     },
     {
       "path": "/guides/provider-registry",
@@ -223,7 +223,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 19838
+      "bytes": 20022
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 25999
+      "bytes": 26183
     },
     {
       "path": "/api_docs",
@@ -252,7 +252,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 19838,
+      "bytes": 20022,
       "copy_button": true,
       "self_contained": true
     },
@@ -262,7 +262,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25999,
+      "bytes": 26183,
       "copy_button": true,
       "self_contained": true
     }

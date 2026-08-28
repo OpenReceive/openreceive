@@ -8,6 +8,10 @@ quickstart is appended to this file in full, so you can do the whole integration
 without fetching anything. Prefer the published packages and the routes they
 mount — do not reimplement wallet RPC, settlement, or pricing.
 
+If you want to see a finished integration, you can also clone the OpenReceive
+repository (https://github.com/OpenReceive/openreceive) and study the examples
+in the `examples` folder.
+
 ## What OpenReceive is
 
 A payment library that runs inside YOUR server. It mounts HTTP routes in the

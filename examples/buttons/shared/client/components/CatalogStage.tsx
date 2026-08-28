@@ -14,7 +14,7 @@ import type { ShopStore } from "../stores/ShopStore.ts";
 // catalog ships from the server rather than being a constant in this bundle.
 export const CatalogStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) => (
   <>
-    <div className="or-shop-scroll">
+    <div className="or-shop-stage">
       <div className="or-shop-grid">
         {shop.catalog.map((entry) => {
           const quantity = shop.quantityOf(entry.sku);

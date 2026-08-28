@@ -38,7 +38,11 @@ export const TransactionDetailsPanel: React.FC<{ rows: readonly TransactionDetai
         <Stack gap={8} mt="xs">
           {rows.map((row) => (
             <div key={`${row.label}-${row.value}`}>
-              <CopyRow label={row.label} value={row.value} copyValue={row.copyValue ?? row.value} />
+              {/* `row.value` is the SHORTENED display string on the invoice
+                  and payment-hash rows; `row.copyValue` is the real one. Rows
+                  wrap rather than truncate here, so the whole value is both
+                  visible and selectable. */}
+              <CopyRow label={row.label} value={row.copyValue ?? row.value} />
               {row.href ? (
                 <Anchor
                   href={row.href}

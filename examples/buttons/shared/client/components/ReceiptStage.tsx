@@ -8,7 +8,7 @@ import { TransactionDetailsPanel } from "./TransactionDetailsPanel.tsx";
 
 export const ReceiptStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) => (
   <>
-    <div className="or-shop-scroll">
+    <div className="or-shop-stage">
       <Stack gap="md">
         <Group gap={8} wrap="nowrap">
           <IconCircleCheck size={22} className="or-shop-paid-icon" />

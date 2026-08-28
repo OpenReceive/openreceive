@@ -5,27 +5,32 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type CopyRowProps = {
   label: string;
+  // THE REAL VALUE, always complete. Never pass a pre-shortened string: this
+  // is what a payer's own selection copies, and a hand-truncated one puts an
+  // ellipsis in the middle of an invoice that looks copyable and is not.
   value: string;
-  // The untruncated string a copy button writes, when the displayed value is
-  // shortened. Always copy this, never the display value.
-  copyValue?: string;
-  // Render the value in a selectable field rather than a code block — a deposit
-  // address a payer may want to drag-select as well as copy.
+  // Shorten a long value TO ONE LINE. The shortening is CSS — the full string
+  // stays in the DOM, so select-all-and-copy still yields the real value.
+  truncate?: boolean;
+  // Render the value so a click selects the whole of it — a deposit address or
+  // an invoice a payer may want to select by hand rather than press a button.
   selectable?: boolean;
 };
 
 // Every value the payer has to REPRODUCE gets one of these: a label, the value,
 // and a copy button. A badge or a sentence is not a copy affordance.
-export const CopyRow: React.FC<CopyRowProps> = ({ label, value, copyValue, selectable }) => (
+export const CopyRow: React.FC<CopyRowProps> = ({ label, value, truncate, selectable }) => (
   <div className="or-shop-copyrow">
     <Text className="or-shop-copyrow-label">{label}</Text>
     <Group gap={6} wrap="nowrap" align="center">
       <Code
-        className={selectable ? "or-shop-copyrow-value is-selectable" : "or-shop-copyrow-value"}
+        className="or-shop-copyrow-value"
+        data-selectable={selectable || undefined}
+        data-truncate={truncate || undefined}
       >
         {value}
       </Code>
-      <CopyButton value={copyValue ?? value} timeout={1600}>
+      <CopyButton value={value} timeout={1600}>
         {({ copied, copy }) => (
           <Tooltip label={copied ? "Copied!" : `Copy ${label.toLowerCase()}`} withArrow>
             <ActionIcon

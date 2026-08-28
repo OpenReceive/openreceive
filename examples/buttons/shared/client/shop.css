@@ -37,15 +37,19 @@ body {
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 16px;
-  padding: 32px 16px 48px;
+  gap: 12px;
+  padding: 24px 16px 32px;
 }
 
+/* The panel is as wide as the viewport allows, up to a line length the head and
+   the feed rows still read at. Everything inside lays out from THIS width — the
+   checkout goes two-column, the catalog goes one row — so a desktop payer sees
+   the whole checkout without scrolling. */
 .or-page-inner {
   width: 100%;
-  max-width: 720px;
+  max-width: 1120px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .or-eyebrow {
@@ -64,32 +68,25 @@ body {
 
 /* ---------------------------------------------------------------- the shop */
 
-/* THE FIXED-HEIGHT CONTRACT — the one thing not to break.
+/* THE PANEL IS AS TALL AS ITS CONTENT. There is no fixed height and nothing
+   inside the panel scrolls on its own: the page is the only scroller, so a
+   viewport with room to spare shows the whole stage rather than a short box
+   with a scrollbar in it.
 
-   Catalog, checkout, receipt and the recent-orders feed are four views of one
-   small app, and letting the panel grow and shrink under each of them would
-   move the page every time a payer picked a coin. The box stays put;
-   `.or-shop-scroll` is the only thing that scrolls.
+   That trades a stable box for a taller one, so the way this stays honest is
+   HORIZONTAL: the checkout splits into a summary column and a payment column at
+   880px, and the QR moves beside its copy rows at 1000px. Anything new that is
+   tall enough to push a desktop checkout past the fold belongs in one of those
+   columns, not under them.
 
-   `min-height: 0` on .or-shop-body and .or-shop-scroll is LOAD-BEARING. A flex
-   item's default `min-height: auto` refuses to shrink below its content, so
-   without those two declarations the panel grows to fit the checkout and the
-   page jumps.
-
-   660px, not 620: the tab strip costs ~44px in the head. Change the desktop
-   and the mobile height together or the mobile panel ends up proportionally
-   shorter than it was.
-
-   Consequences for anything new inside the panel: the scroll region is
-   `.or-shop-scroll` and only that; a new stage puts its content inside one and
-   its actions inside `.or-shop-footer`; empty and loading states RESERVE
-   height rather than collapsing; nothing inside may set its own
-   `height: 100%` chain. */
+   Consequences for anything new inside the panel: a stage puts its content in
+   an `.or-shop-stage` and its actions in an `.or-shop-footer`; empty and
+   loading states still RESERVE height, because a feed that collapses to nothing
+   while it loads still moves the page under the pointer. */
 .or-shop {
   display: flex;
   flex-direction: column;
-  height: 660px;
-  overflow: hidden;
+  overflow: hidden; /* corner clipping; the panel never scrolls */
   background: #fff;
 }
 
@@ -122,17 +119,11 @@ body {
 }
 
 .or-shop-body {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.or-shop-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+.or-shop-stage {
   padding: 16px 20px;
 }
 
@@ -196,6 +187,60 @@ body {
 }
 
 /* ---- checkout */
+
+/* Summary on the left, the thing the payer has to act on on the right. Below
+   880px it is one column in source order, so the order and its status stay
+   above the QR code. */
+.or-checkout {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+/* A grid item's automatic minimum size is its content; a bolt11 would blow the
+   track out without this. */
+.or-checkout-summary,
+.or-checkout-pay,
+.or-checkout-record {
+  min-width: 0;
+}
+
+@media (min-width: 880px) {
+  .or-checkout {
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .or-checkout-record {
+    grid-column: 1 / -1;
+  }
+}
+
+/* A QR code and the values beside it, rather than under them: stacked, the pair
+   is ~380px of height that a desktop checkout does not have to spend. The `auto`
+   track is the QR at its natural size. */
+.or-shop-payload {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+.or-shop-payload > * {
+  min-width: 0;
+}
+
+/* A rail whose payload has no QR code (or a QR that has not rendered yet) gets
+   the whole width rather than the narrow `auto` track meant for the code. */
+.or-shop-payload > :only-child {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 1000px) {
+  .or-shop-payload {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 16px;
+  }
+}
 
 .or-shop-order-strip {
   display: flex;
@@ -351,6 +396,13 @@ body {
   gap: 3px;
 }
 
+/* A grid item's automatic minimum size is its CONTENT, so the nowrap value row
+   below would size the track to a 300-character invoice and push the copy
+   button off the panel. Grid items opt out of that with min-width: 0. */
+.or-shop-copyrow > * {
+  min-width: 0;
+}
+
 .or-shop-copyrow-label {
   font-size: 0.72rem;
   font-weight: 700;
@@ -367,8 +419,21 @@ body {
   padding: 5px 8px;
 }
 
-/* A deposit address should select whole on one click. */
-.or-shop-copyrow-value.is-selectable {
+/* THE ELLIPSIS IS CSS, NEVER THE STRING. A bolt11 is 300 characters and does
+   not get five lines of the panel, but shortening it in JavaScript puts a `…`
+   in the middle of the text a payer can select — and with `user-select: all`
+   below, one click hands them a broken invoice that looks like a whole one.
+   The full value stays in the DOM and the overflow is hidden, so a selection
+   copies the real string whatever is on screen. */
+.or-shop-copyrow-value[data-truncate] {
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A deposit address or an invoice should select whole on one click. */
+.or-shop-copyrow-value[data-selectable] {
   user-select: all;
 }
 
@@ -596,10 +661,6 @@ body {
 }
 
 @media (max-width: 600px) {
-  .or-shop {
-    height: 600px;
-  }
-
   .or-shop-qr svg {
     width: 168px;
     height: 168px;

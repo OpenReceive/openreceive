@@ -34,8 +34,12 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
 
   return (
     <>
-      <div className="or-shop-scroll">
-        <Stack gap="md">
+      {/* Two columns on a desktop, one on a phone. The summary — what is being
+          bought, where the payment has got to, the transaction record — is the
+          column that does not change when the payer picks a coin; the payment
+          column is the one they act in. */}
+      <div className="or-shop-stage or-checkout">
+        <Stack gap="md" className="or-checkout-summary">
           <OrderStrip shop={shop} />
 
           {/* A status line, not a stepper. Progress here is a STATUS: four wire
@@ -64,7 +68,9 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
               {checkout.errorMessage}
             </Alert>
           ) : null}
+        </Stack>
 
+        <div className="or-checkout-pay">
           {checkout.preparing ? (
             <Group gap="sm" py="lg" justify="center">
               <Loader size="sm" color="orGreen" />
@@ -117,9 +123,14 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
           ) : (
             <MethodGrid checkout={checkout} />
           )}
+        </div>
 
+        {/* The record of the payment sits under both columns: it is collapsed
+            almost always, and on a phone it must not come between the status
+            and the thing the payer has to scan. */}
+        <div className="or-checkout-record">
           <TransactionDetailsPanel rows={checkout.transactionRows} />
-        </Stack>
+        </div>
       </div>
 
       <div className="or-shop-footer">

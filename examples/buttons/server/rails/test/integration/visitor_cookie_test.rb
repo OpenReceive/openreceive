@@ -132,6 +132,35 @@ class VisitorCookieTest < ActionDispatch::IntegrationTest
     assert_includes header, (Time.current + ShopIdentity::LIFETIME).utc.strftime("%d %b %Y")
   end
 
+  # REGRESSION. The demo runs RAILS_ENV=production over plain http://localhost,
+  # and Rails silently DROPS a Set-Cookie marked secure on a non-SSL request
+  # (ActionDispatch::Cookies#write_cookie?) unless always_write_cookie is on —
+  # which it is in this environment and nowhere else. So the test suite is
+  # blind to a secure flag keyed off the ENVIRONMENT rather than the request:
+  # it turned every page load into a new ShopUser and every checkout into a 403
+  # from `config.authorize`. Both tests below turn that crutch off.
+  test "the identity cookie survives a plain-HTTP request with always_write_cookie off" do
+    without_always_write_cookie do
+      get root_path
+
+      assert identity_cookie_header.present?, "the cookie was dropped as secure over plain HTTP"
+      refute_includes identity_cookie_header.downcase, "secure"
+
+      get root_path
+      assert_equal 1, ShopUser.count, "a dropped cookie mints a new visitor per request"
+    end
+  end
+
+  test "the identity cookie IS marked secure once the request is HTTPS" do
+    without_always_write_cookie do
+      https!
+      get root_path
+
+      assert identity_cookie_header.present?
+      assert_includes identity_cookie_header.downcase, "secure"
+    end
+  end
+
   test "touch_seen! is throttled so a page of requests is not a write storm" do
     user = ShopUser.create!(first_seen_at: 1.day.ago, last_seen_at: Time.current)
 
@@ -142,5 +171,24 @@ class VisitorCookieTest < ActionDispatch::IntegrationTest
     user.update_column(:last_seen_at, 10.minutes.ago)
     user.touch_seen!
     assert user.reload.last_seen_at > 1.minute.ago
+  end
+
+  private
+
+  def identity_cookie_header
+    Array(response.headers["Set-Cookie"]).join("\n").lines.find do |line|
+      line.include?(ShopIdentity::COOKIE.to_s)
+    end.to_s
+  end
+
+  # The test environment writes every cookie regardless of the secure flag.
+  # Production does not, and that is the case these tests are about.
+  def without_always_write_cookie
+    jar = ActionDispatch::Cookies::CookieJar
+    previous = jar.always_write_cookie
+    jar.always_write_cookie = false
+    yield
+  ensure
+    jar.always_write_cookie = previous
   end
 end

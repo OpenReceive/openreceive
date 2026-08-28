@@ -27,7 +27,7 @@ export const RecentOrdersStage: React.FC<{ shop: ShopStore }> = observer(({ shop
 
   return (
     <>
-      <div className="or-shop-scroll">
+      <div className="or-shop-stage">
         {feed.isFirstLoad ? (
           <div className="or-shop-feed">
             {Array.from({ length: SKELETON_ROWS }, (_, index) => (

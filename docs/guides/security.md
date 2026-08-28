@@ -174,7 +174,7 @@ Specifications:
 - [NIP-04][nip04] and [NIP-44][nip44] — the two encryption schemes preflight
   accepts.
 
-In this repository:
+In these docs:
 
 - [Deploying OpenReceive](deploying.md) — scan gate, worker topology, what
   happens when your application boots, operational monitoring.

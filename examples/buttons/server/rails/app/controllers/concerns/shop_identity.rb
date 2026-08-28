@@ -46,6 +46,14 @@ module ShopIdentity
   # SIGNED, always. This value is the ownership token for every order this
   # browser ever placed — it gates the download, and it is what
   # `config.authorize` checks before OpenReceive will mint an invoice.
+  #
+  # `secure` follows THE REQUEST, not the environment. Rails silently DROPS a
+  # Set-Cookie marked secure on a plain-HTTP request (ActionDispatch::Cookies
+  # #write_cookie?), so `Rails.env.production?` here meant the production-mode
+  # Docker demo, served over http://localhost, minted a fresh ShopUser on every
+  # request and every checkout 403'd in `config.authorize`. Behind TLS —
+  # including a proxy, with `config.assume_ssl` set — `request.ssl?` is true and
+  # the cookie is marked secure, which is the case that matters.
   def write_identity_cookie(user)
     cookies.signed[COOKIE] = {
       value: user.id,
@@ -53,7 +61,7 @@ module ShopIdentity
       httponly: true,
       same_site: :lax,
       path: "/",
-      secure: Rails.env.production?
+      secure: request.ssl?
     }
   end
 end

@@ -37,41 +37,46 @@ export const LightningPanel: React.FC<{ checkout: ShopCheckout }> = observer(({ 
     <Stack gap="sm">
       <Text className="or-shop-section-title">{checkoutLabels.bitcoinLightningInvoice}</Text>
 
-      <div
-        className="or-shop-qr"
-        role="img"
-        aria-label={checkoutLabels.bitcoinLightningInvoice}
-        dangerouslySetInnerHTML={{ __html: qr }}
-      />
+      {/* The QR and everything that goes with it, side by side once there is
+          room — the wallet list included, because it is what fills the height
+          the QR code costs. */}
+      <div className="or-shop-payload">
+        <div
+          className="or-shop-qr"
+          role="img"
+          aria-label={checkoutLabels.bitcoinLightningInvoice}
+          dangerouslySetInnerHTML={{ __html: qr }}
+        />
 
-      <CopyRow
-        label="Invoice"
-        value={`${invoice.slice(0, 24)}…${invoice.slice(-12)}`}
-        copyValue={invoice}
-        selectable
-      />
+        <Stack gap="sm">
+          {/* The WHOLE bolt11, shortened by CSS. It reads as one line either
+              way, but a payer who selects it by hand gets the invoice rather
+              than a string with an ellipsis where the middle used to be. */}
+          <CopyRow label="Invoice" value={invoice} truncate selectable />
 
-      <Group gap="sm">
-        <ControllerCopyButton
-          onCopy={checkout.copyInvoice}
-          label={checkoutLabels.copyInvoice}
-          copiedLabel={checkoutLabels.copied}
-        >
-          {({ label, onClick }) => (
-            <Button onClick={onClick} size="md">
-              {label}
-            </Button>
-          )}
-        </ControllerCopyButton>
+          <Group gap="sm">
+            <ControllerCopyButton
+              onCopy={checkout.copyInvoice}
+              label={checkoutLabels.copyInvoice}
+              copiedLabel={checkoutLabels.copied}
+            >
+              {({ label, onClick }) => (
+                <Button onClick={onClick} size="md">
+                  {label}
+                </Button>
+              )}
+            </ControllerCopyButton>
 
-        {touch ? (
-          <Button variant="default" size="md" onClick={checkout.openWallet}>
-            {checkoutLabels.openWallet}
-          </Button>
-        ) : null}
-      </Group>
+            {touch ? (
+              <Button variant="default" size="md" onClick={checkout.openWallet}>
+                {checkoutLabels.openWallet}
+              </Button>
+            ) : null}
+          </Group>
 
-      <WalletSuggestions checkout={checkout} />
+          <WalletSuggestions checkout={checkout} />
+        </Stack>
+      </div>
     </Stack>
   );
 });

@@ -8,7 +8,10 @@ import { CatalogStage } from "./CatalogStage.tsx";
 import { ReceiptStage } from "./ReceiptStage.tsx";
 import { RecentOrdersStage } from "./RecentOrdersStage.tsx";
 
-export type RenderCheckout = (args: { reference: string; onSettled: () => void }) => ReactNode;
+export type RenderCheckout = (args: {
+  reference: string;
+  onSettled: () => void;
+}) => ReactNode;
 
 /**
  * The shop, as one fixed-height panel with two tabs.
@@ -35,12 +38,12 @@ export const ShopPanel: React.FC<{
     <Paper className="or-shop" radius="lg" withBorder p={0}>
       <div className="or-shop-head">
         <div>
-          <Text className="or-eyebrow">Try it</Text>
+          <Text className="or-eyebrow">Official OpenReceive Demo</Text>
           <Text className="or-shop-title">Buy an OR button</Text>
         </div>
-        <Text className="or-shop-subtitle">
-          Real payments, on this page, through the library this demo documents.
-        </Text>
+        {/* <Text className="or-shop-subtitle">
+          Buy a virtual button to see OpenReceive in action.
+        </Text> */}
       </div>
 
       {/* A SegmentedControl already renders a radiogroup and needs only a

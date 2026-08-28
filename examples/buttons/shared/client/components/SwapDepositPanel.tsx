@@ -31,43 +31,49 @@ export const SwapDepositPanel: React.FC<{ checkout: ShopCheckout; swap: SwapDisp
           </Text>
         </Alert>
 
-        {qr ? (
-          <div
-            className="or-shop-qr"
-            role="img"
-            aria-label={`${swap.assetLabel} deposit address`}
-            dangerouslySetInnerHTML={{ __html: qr }}
-          />
-        ) : null}
-
-        {/* Address, memo AND the bare amount each get a labelled copy row. The
-            amount is the one that gets left out and the one that costs money: on
-            token rails the QR encodes the address and carries no amount, so the
-            payer types six decimals by hand, and a short send against a
-            fixed-rate order is `refund_required`. */}
-        <Stack gap={8}>
-          {swap.copyRows.map((row) => (
-            <CopyRow
-              key={row.label}
-              label={row.label}
-              value={row.value}
-              copyValue={row.copyValue}
-              selectable={row.selectable}
+        {/* The deposit address and the amount belong NEXT TO the code that
+            encodes them, not under it — a payer typing six decimals by hand is
+            reading both. */}
+        <div className="or-shop-payload">
+          {qr ? (
+            <div
+              className="or-shop-qr"
+              role="img"
+              aria-label={`${swap.assetLabel} deposit address`}
+              dangerouslySetInnerHTML={{ __html: qr }}
             />
-          ))}
-        </Stack>
-
-        <Group justify="space-between">
-          <Text size="sm" c="dimmed">
-            {swap.providerStateLabel}
-          </Text>
-          {swap.countdownLabel ? (
-            <Text size="sm" c="dimmed">
-              {swap.countdownLabel}
-            </Text>
           ) : null}
-        </Group>
-        <Text size="sm">{swap.providerStateDetail}</Text>
+
+          <Stack gap="sm">
+            {/* Address, memo AND the bare amount each get a labelled copy row.
+                The amount is the one that gets left out and the one that costs
+                money: on token rails the QR encodes the address and carries no
+                amount, so the payer types six decimals by hand, and a short send
+                against a fixed-rate order is `refund_required`. */}
+            <Stack gap={8}>
+              {swap.copyRows.map((row) => (
+                <CopyRow
+                  key={row.label}
+                  label={row.label}
+                  value={row.copyValue ?? row.value}
+                  selectable={row.selectable}
+                />
+              ))}
+            </Stack>
+
+            <Group justify="space-between">
+              <Text size="sm" c="dimmed">
+                {swap.providerStateLabel}
+              </Text>
+              {swap.countdownLabel ? (
+                <Text size="sm" c="dimmed">
+                  {swap.countdownLabel}
+                </Text>
+              ) : null}
+            </Group>
+            <Text size="sm">{swap.providerStateDetail}</Text>
+          </Stack>
+        </div>
 
         {swap.feeBreakdown ? <FeeBreakdown swap={swap} /> : null}
 

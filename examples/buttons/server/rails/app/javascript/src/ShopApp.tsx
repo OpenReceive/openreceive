@@ -52,11 +52,11 @@ export const ShopApp: React.FC = () => {
     <MantineProvider theme={shopTheme} defaultColorScheme="light">
       <main className="or-page">
         <div className="or-page-inner">
-          <ShopPanel shop={shop} renderCheckout={() => <CheckoutStage shop={shop} />} />
-          <Text className="or-page-note">
-            Rails + Postgres. Your buttons, your orders and your visitor row live in this app's
-            tables; OpenReceive only ever sees an order id.
-          </Text>
+          <ShopPanel
+            shop={shop}
+            renderCheckout={() => <CheckoutStage shop={shop} />}
+          />
+          <Text className="or-page-note">Rails + Postgres.</Text>
         </div>
       </main>
     </MantineProvider>
