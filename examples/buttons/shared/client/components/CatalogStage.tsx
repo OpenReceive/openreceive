@@ -4,6 +4,7 @@ import { observer } from "mobx-react";
 import type React from "react";
 import { formatUsdCents, pluralize } from "../../shop-types.ts";
 import type { ShopStore } from "../stores/ShopStore.ts";
+import { ResumeOrderRow } from "./ResumeOrderRow.tsx";
 
 // Six buttons, cheapest first. Each one is a downloadable image of a pin badge:
 // the same file is the thumbnail here and the thing the payer downloads after
@@ -62,6 +63,10 @@ export const CatalogStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) =
           );
         })}
       </div>
+
+      {/* A footnote, not a feature: the payer who needs it was told to copy an
+          order id on the refund screen. */}
+      <ResumeOrderRow shop={shop} />
     </div>
 
     {shop.errorMessage ? (

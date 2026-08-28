@@ -24,7 +24,9 @@ key. Provider `completed` does not fulfill an order unless the wallet also repor
 
 Refunds are authorized by your application and pass the row's `reference`, `paymentHash`, `swapData`, and
 refund address. The wallet client refreshes provider state immediately before requesting the refund
-and refuses states other than `refund_required`.
+and refuses states other than `refund_required`. What a payer-facing refund needs around that call —
+the two-step form, and the per-order route that lets them come back and use it — is
+[Swap refunds](swap-refunds.md).
 
 ## Deposit QR amount prefill
 

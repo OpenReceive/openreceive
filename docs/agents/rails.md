@@ -105,6 +105,19 @@ itself, and they hold for every integration.
   never converted — are the only refund OpenReceive performs, and only from the
   `refund_required` provider state. Do not build, promise, or imply a Lightning
   refund path.
+- IF YOU TURN SWAPS ON, BUILD THE ROUTE BACK. A deposit that arrives short or
+  late becomes `refund_required`, and the payer claims it on a SECOND VISIT,
+  after leaving your page to fetch an address from another wallet. Three things
+  must exist or that money is unreachable through your UI: a per-order URL your
+  server serves (`/checkout/:reference` — `syncUrl` on the drop-ins), your own
+  order-summary route to restore the order from, and the ATTEMPT.
+  `/checkouts/prepare` returns no attempts, so a checkout rebuilt from the
+  reference alone opens on the method grid. Re-picking the same coin
+  (`POST /swaps`) re-serves the committed attempt — but only while it is live,
+  and the shadow invoice behind a swap lasts about half an hour, after which the
+  same click mints a NEW deposit address and the refund is off-screen. Keep the
+  `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
+  such window. https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `config.amount_for` and both drop-ins render it above the
   amount. Without it the checkout is a QR and "$1.00" with no sign of what the
@@ -187,12 +200,16 @@ built on `@openreceive/browser/headless`. Read that before writing components.
 - `stageSwapRefund` then `confirmSwapRefund` — two steps, and only the second
   submits. Validate with `getSwapRefundFormError`, and treat `409 CONFLICT` as a
   normal outcome.
-- A swap refund needs a URL the payer can come back to. Tell
-  `createSwapDisplayModel` whether your checkout has one (`{ resumable: true }`)
-  and render `display.refundReturnLabel`: without a per-order route, a payer who
-  closes the tab loses the order id and the deposit with it. The resume
-  machinery — `createGuestCheckoutResume`, `createGuestOrderFetcher` — is on
+- Tell `createSwapDisplayModel` whether your checkout has a URL the payer can
+  come back to (`{ resumable: true }`) and render `display.refundReturnLabel`;
+  never pick either `checkoutLabels` string yourself. The resume machinery —
+  `createGuestCheckoutResume`, `createGuestOrderFetcher` — is on
   `@openreceive/browser`, not on `/headless`.
+- A refund REPLACES the deposit panel; it is not a form underneath it. On
+  `refund_required`, `refund_pending` and `refunded`, drop the QR, the address,
+  the amount and the fee breakdown — a payer told to send 15.01 USDT beside a
+  refund notice sends twice — and drop "switch payment method" on
+  `refund_required`, which would dismiss the attempt being refunded.
 - No "Open wallet" button on desktop: it navigates the window that is polling
   for settlement away from the payment.
 - Wallet suggestions under the invoice come from `getPaymentWizardRoutes()` +
@@ -219,6 +236,7 @@ enough; drop the `.md` for the same page a person would read.
   UI is most likely to get wrong; this is the page that owns it, not the summary
   in checkout-ux.md
 - https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
+- https://openreceive.org/guides/swap-refunds.md — the refund flow, and the route back to it. Read it before you turn swaps on
 - https://openreceive.org/guides/lightning-swap-connect.md — what an `LSC_URI_*` code actually is
 - https://openreceive.org/guides/price-feeds.md — where the fiat→sats rate comes from, and how to replace it
 - https://openreceive.org/guides/host-testing.md — testing your three hooks without a live wallet or provider

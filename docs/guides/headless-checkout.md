@@ -429,6 +429,19 @@ order fetch), so they live on the main entry — see [What is deliberately not o
 this surface](#what-is-deliberately-not-on-this-surface). `/headless` carries
 only `enterCheckoutResumePath`, the History API write itself.
 
+The route is necessary and not sufficient. `POST /checkouts/prepare` answers
+with the amount and the pay-in catalog and **no attempts**, so a checkout
+rebuilt from the reference alone opens on the method grid — the payer is back on
+your page and not back on their refund. Re-selecting the same coin
+(`POST /swaps`) re-serves the committed attempt rather than minting a second
+one, but only while that attempt is live; past its expiry the same call mints a
+new deposit address. The durable handle is the payment hash:
+`POST /swaps/status` with `{ reference, payment_hash }` addresses one attempt
+with no reuse test, and `normalizeSwapStartInvoice` +
+`mergeAttemptIntoSnapshot` (both here on `/headless`) put its answer back into
+the snapshot every display model reads. [Swap refunds](swap-refunds.md) works
+that through layer by layer.
+
 The provider vocabulary a refund UI reads (`SwapProviderState`, 12 values):
 
 | State | Meaning |

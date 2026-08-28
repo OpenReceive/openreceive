@@ -82,6 +82,14 @@
       "public": true
     },
     {
+      "slug": "swap-refunds",
+      "title": "Swap Refunds",
+      "source_path": "docs/guides/swap-refunds.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "lightning-swap-connect",
       "title": "Lightning Swap Connect URI",
       "source_path": "docs/guides/lightning-swap-connect.md",

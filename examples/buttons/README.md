@@ -68,6 +68,7 @@ examples/buttons/
     shop.css             the whole design, as global `or-` classes
     http.ts              getJson / postJson, and the feed's cache rule
     bootstrap.ts         the bootstrap fetch
+    checkout-resume.ts   `/checkout/:uuid`, and the way back to a deposit
     client/              React + Mantine + mobx-keystone: the theme, three
                          stores, twelve components.
     client-vanilla/      the no-framework client. No React.
@@ -112,6 +113,32 @@ the seam; everything above and below it is shared.
 
 node-express is the one stack whose payment screen differs from the others,
 and that is its job: it is the demo the four wrapper packages need.
+
+### The order has a URL
+
+The checkout lives at `/checkout/:reference` on every stack, and every server
+serves the SPA there. This is not decoration. A payer with a stablecoin deposit
+in flight has no account and gets no email from us, so the order's uuid is the
+only thing that can return them to their payment — and a deposit that arrives
+short or late becomes `refund_required`, which the payer claims on a second
+visit, after leaving to fetch an address from another wallet.
+
+So the shop puts the uuid in the address bar the moment the order exists, shows
+it with a copy button beside what is being bought, and takes a pasted uuid back
+in through a quiet "already have an order id?" box on the catalog. On the refund
+screen — which REPLACES the deposit panel rather than sitting under it, because
+"send 15.01 USDT to this address" beside a refund notice gets sent twice — that
+copy affordance becomes the loud one.
+
+Restoring the order is `shared/checkout-resume.ts`, over the packaged
+`createGuestCheckoutResume` and this shop's own `GET /shop/orders/:reference`.
+Restoring the ATTEMPT is the part that is easy to miss: `/checkouts/prepare`
+carries no attempts, so an order restored on its own opens on the method grid.
+The two custom-UI stacks keep the attempt's `payment_hash` and reopen it with
+`POST /swaps/status`, which addresses one attempt with no expiry window; the two
+that mount the packaged checkout leave that to the drop-in, where the payer
+re-picks their coin. [Swap refunds](../../docs/guides/swap-refunds.md) is the
+whole of that argument.
 
 ## The seven invariants
 

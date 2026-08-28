@@ -44,7 +44,10 @@ Browser & React API surface (full reference in
   cannot see. It decides one thing — which return warning the swap refund screen
   shows — and that one thing is what stands between a stranded deposit and a
   recoverable one. See
-  [Checkout UX → The refund screens](checkout-ux.md#the-refund-screens).
+  [Checkout UX → The refund screens](checkout-ux.md#the-refund-screens). The
+  prop declares the URL; restoring the ORDER and the in-flight ATTEMPT behind it
+  stays host work, and the drop-in opens on the method grid without it — see
+  [Swap refunds](swap-refunds.md).
   The shared names and defaults hold for the Vue, Svelte and Angular wrappers,
   which mount the same custom element. Four of these are React-only:
   `components`, `classNames`, `children` (see below) and `createFetch`;

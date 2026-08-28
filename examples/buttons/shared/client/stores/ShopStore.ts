@@ -1,13 +1,20 @@
 import { computed } from "mobx";
 import { Model, model, modelAction, prop } from "mobx-keystone";
 import {
+  buttonsCheckoutResume,
+  checkoutUrlFor,
+  forgetSwapAttempt,
+  normalizeOrderReference,
+  referenceInLocation,
+} from "../../checkout-resume.ts";
+import { getJson, postJson } from "../../http.ts";
+import {
   SHOP_ORDERS_PATH,
   type ShopBootstrap,
   type ShopCatalogEntry,
   type ShopOrderPayload,
   shopOrderPath,
 } from "../../shop-types.ts";
-import { getJson, postJson } from "../../http.ts";
 import { RecentOrders } from "./RecentOrders.ts";
 import { ShopCheckout } from "./ShopCheckout.ts";
 
@@ -73,6 +80,12 @@ export class ShopStore extends Model({
   placingOrder: prop<boolean>(false),
   settling: prop<boolean>(false),
   errorMessage: prop<string>(""),
+
+  // Resuming an order the URL named, or one a payer pasted into the catalog's
+  // "open an order" box. Kept apart from `errorMessage`: a dead resume link is
+  // a fact about a uuid, not about the cart the payer is looking at.
+  resuming: prop<boolean>(false),
+  resumeError: prop<string>(""),
 
   // Child models are props with FACTORY defaults. A shared literal default
   // would be one object shared by every instance.
@@ -164,6 +177,12 @@ export class ShopStore extends Model({
         items: this.lines.map((line) => ({ sku: line.entry.sku, quantity: line.quantity })),
       });
       this.applyOrder(order);
+      buttonsCheckoutResume.rememberOrder(order);
+      // The uuid goes in the address bar the moment it exists. A payer with a
+      // deposit in flight has no account and no email from us — this URL is
+      // the only thing that can bring them back to their payment screen, and
+      // it has to be bookmarkable BEFORE they need it.
+      buttonsCheckoutResume.enterCheckout(order.reference);
       // The stage flips and this store's job is done. Which checkout runs is
       // the HOST's choice — that is what ShopPanel's `renderCheckout` seam
       // means — so beginning the keystone checkout belongs to CheckoutStage,
@@ -185,6 +204,7 @@ export class ShopStore extends Model({
     try {
       const order = await getJson<ShopOrderPayload>(shopOrderPath(this.orderReference));
       this.applyOrder(order);
+      buttonsCheckoutResume.rememberOrder(order);
       return order.state === PAID;
     } catch {
       return false;
@@ -254,6 +274,95 @@ export class ShopStore extends Model({
     return this.catalog.find((entry) => entry.sku === sku)?.image_url ?? "";
   }
 
+  // ------------------------------------------------------- coming back to it
+
+  /**
+   * The order's own URL: what the payer bookmarks, and what the refund screen
+   * tells them to keep. Empty until an order exists.
+   */
+  @computed
+  get checkoutUrl(): string {
+    return this.orderReference ? checkoutUrlFor(this.orderReference) : "";
+  }
+
+  /**
+   * Open an order by its uuid — from `/checkout/:reference` on a cold load, or
+   * from the uuid a payer pasted into the catalog.
+   *
+   * The summary comes from sessionStorage first and from the host's own
+   * `GET /shop/orders/:reference` when that misses, which is what makes a
+   * bookmark work in a new tab. That route is authorized by the visitor
+   * cookie, so a uuid pasted into a browser that did not place the order is a
+   * miss and not somebody else's receipt.
+   */
+  resume = async (input: string): Promise<boolean> => {
+    const reference = normalizeOrderReference(input);
+    if (!reference) {
+      this.setResumeError("That does not look like an order id.");
+      return false;
+    }
+    if (reference === this.orderReference && this.stage !== "catalog") return true;
+
+    this.setResuming(true);
+    try {
+      const order = await buttonsCheckoutResume.loadOrderForResume(reference);
+      if (order === undefined) {
+        this.setResumeError("We could not find that order in this browser.");
+        return false;
+      }
+      this.checkout.dispose();
+      this.applyOrder(order);
+      this.setResumeError("");
+      buttonsCheckoutResume.enterCheckout(reference);
+      // A paid order resumes to its receipt — the downloads are the reason
+      // that payer kept the link — and anything else resumes to the payment
+      // screen it was left on.
+      this.setStage(order.state === PAID ? "receipt" : "checkout");
+      return true;
+    } finally {
+      this.setResuming(false);
+    }
+  };
+
+  /**
+   * The URL, applied. Called on mount and on every popstate, so the back
+   * button leaves the checkout instead of leaving the address bar lying.
+   */
+  private applyLocation = (): void => {
+    const reference = referenceInLocation();
+    if (reference) {
+      void this.resume(reference);
+      return;
+    }
+    if (this.stage !== "catalog") this.leaveOrder();
+  };
+
+  /**
+   * Start honouring the URL. Returns its own disposer, so the panel's mount
+   * effect is one line.
+   *
+   * The History API, on every stack — including Next.js, where a bare
+   * `pushState` updates the address bar without asking the app router for a
+   * different tree. Each server also serves the SPA at `/checkout/:reference`,
+   * which is what makes the bookmark survive a hard reload.
+   */
+  startRouting = (): (() => void) => {
+    this.applyLocation();
+    const onPopState = () => this.applyLocation();
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  };
+
+  @modelAction
+  private setResuming(value: boolean) {
+    this.resuming = value;
+  }
+
+  @modelAction
+  setResumeError(message: string) {
+    this.resumeError = message;
+  }
+
   // ------------------------------------------------------------------ stages
 
   @modelAction
@@ -284,10 +393,27 @@ export class ShopStore extends Model({
 
   // Back to the shop with a clean slate: the finished order keeps its own
   // reference, so starting again mints a new one rather than reusing it.
+  //
+  // This is the one exit that also DROPS the link. The stored summary and the
+  // `/checkout/:reference` URL both go, because the payer said they were done
+  // with this order — the back button, which routes through `leaveOrder`,
+  // says something weaker and keeps both.
   startOver = () => {
+    const reference = this.orderReference;
+    this.leaveOrder();
+    if (reference) {
+      buttonsCheckoutResume.forgetOrder(reference);
+      forgetSwapAttempt(reference);
+    }
+    buttonsCheckoutResume.leaveCheckout();
+  };
+
+  /** The order, closed on screen. The URL is the caller's business. */
+  private leaveOrder = () => {
     this.checkout.dispose();
     this.resetOrder();
     this.clearCart();
+    this.setResumeError("");
     this.setStage("catalog");
   };
 

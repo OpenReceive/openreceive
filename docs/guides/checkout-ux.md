@@ -253,9 +253,23 @@ not to close the tab — telling a payer to bookmark a page that will not bring
 them back is worse than saying nothing. The drop-ins infer it from `syncUrl` /
 `routeReference` and take a `resumable` prop for a route they cannot see.
 
+A resumable URL is the first of three layers, and on its own it returns the
+payer to a method grid rather than to their refund: `/checkouts/prepare` carries
+no attempts, so the attempt has to be restored too.
+[Swap refunds](swap-refunds.md) is the whole route back, and the page to read
+before you enable swaps.
+
+**The refund screen replaces the deposit panel; it is not a form underneath
+one.** On `refund_required`, `refund_pending` and `refunded`, take away the QR,
+the address, the amount and the fee breakdown — a payer reading "send 15.01 USDT
+to this address" beside a notice that their last send is being refunded sends
+twice — and take away "switch payment method" on `refund_required`, where it
+would dismiss the very attempt being refunded.
+
 ## Where these rules live in code
 
 - [Frontend checkout](frontend-checkout.md) — the drop-ins that already obey them
 - [Headless checkout](headless-checkout.md) — the display models named above
 - [Automated swaps](automated-swaps.md) — the deposit panel and provider states
+- [Swap refunds](swap-refunds.md) — the refund flow end to end, and the route back to it
 - [Provider registry](provider-registry.md) — the wallet suggestions and their assets

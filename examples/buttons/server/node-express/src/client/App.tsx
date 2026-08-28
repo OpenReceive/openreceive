@@ -157,6 +157,12 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
               onStartOver={retrySameOrder}
               prefix={prefix}
               reference={reference}
+              // NOT `syncUrl`: the HOST owns the address bar here, because it
+              // also has to restore the order behind `/checkout/:reference` on
+              // a cold load — see shared/checkout-resume.ts. This says the
+              // order HAS such a URL, which is the one thing that decides
+              // whether the refund screen tells the payer to bookmark it.
+              resumable
               // The shop has no dark mode — shop.css hard-codes #fff in several
               // places and says so at the top. A toggle here would half-convert
               // the page, so the packaged checkout is pinned to light like every
@@ -192,6 +198,10 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
 
 /**
  * Vue, Svelte and Angular, mounted imperatively into a plain div.
+ *
+ * `resumable: true` on all three, for the same reason as the React one above:
+ * the host puts the order in the URL, so the packaged refund screen may tell
+ * the payer to bookmark it.
  *
  * A component of its own so that REMOUNTING is a `key` change and nothing
  * else: the effect below runs on mount and tears down on unmount, which is
@@ -237,6 +247,7 @@ const EmbeddedCheckout: React.FC<{
         const app = createApp(VueCheckout, {
           reference,
           prefix,
+          resumable: true,
           onSettled: options.onSettled,
           onStartOver,
           options,
@@ -255,7 +266,14 @@ const EmbeddedCheckout: React.FC<{
 
         const component = mountSvelte(SvelteCheckout, {
           target: mountTarget,
-          props: { reference, prefix, onSettled: options.onSettled, onStartOver, options },
+          props: {
+            reference,
+            prefix,
+            resumable: true,
+            onSettled: options.onSettled,
+            onStartOver,
+            options,
+          },
         });
         cleanup = () => void unmount(component);
       }
@@ -283,6 +301,7 @@ const EmbeddedCheckout: React.FC<{
         });
         component.setInput("reference", reference);
         component.setInput("prefix", prefix);
+        component.setInput("resumable", true);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
         component.setInput("options", options);

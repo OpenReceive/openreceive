@@ -478,10 +478,51 @@ body {
 }
 
 .or-shop-fees,
-.or-shop-refund {
+.or-shop-refund,
+.or-shop-keeplink {
   border: 1px solid var(--or-line);
   border-radius: 10px;
   padding: 10px 12px;
+}
+
+/* ---- the way back into an order
+
+   The order id is the only thing a payer with no account can use to reach
+   their payment again, so it gets a panel of its own on the checkout screen
+   and a full-width alert on the refund screen. */
+
+.or-shop-keeplink {
+  display: grid;
+  gap: 6px;
+  background: var(--or-paper);
+}
+
+/* A refund REPLACES the deposit panel — no QR, no address, no amount — so the
+   column it takes over is the whole width it had. */
+.or-shop-refund-stage {
+  min-width: 0;
+}
+
+/* The "already have an order id?" footnote under the catalog. Deliberately
+   quiet: it is a way back for the payer who needs one, not a second entrance
+   competing with the cart. */
+.or-shop-resume {
+  border-top: 1px solid var(--or-line);
+  margin-top: 4px;
+  padding-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.or-shop-resume-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.or-shop-resume-hint {
+  color: var(--or-muted);
+  font-size: 0.75rem;
+  margin: 0;
 }
 
 /* ---- transaction details, collapsed behind a caret */

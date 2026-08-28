@@ -15,6 +15,7 @@ import {
   createTransactionDetailsFromState,
   getSwapRefundFormError,
   mergeAttemptIntoSnapshot,
+  normalizeSwapStartInvoice,
   paymentMethods,
   prepareCheckout,
   requestCheckout,
@@ -24,6 +25,12 @@ import {
 } from "@openreceive/browser/headless";
 import { computed } from "mobx";
 import { type Frozen, frozen, Model, model, modelAction, prop } from "mobx-keystone";
+import {
+  checkoutUrlFor,
+  forgetSwapAttempt,
+  readSwapAttempt,
+  rememberSwapAttempt,
+} from "../../checkout-resume.ts";
 import { csrfFetch } from "../../http.ts";
 
 const invoiceKey = (snapshot: CheckoutSnapshot | null): string =>
@@ -109,11 +116,48 @@ export class ShopCheckout extends Model({
         fetch: csrfFetch,
       });
       this.applySnapshot(prepared);
+      // THE OTHER HALF OF THE URL. See resumeSwapAttempt.
+      await this.resumeSwapAttempt(reference);
     } catch (error) {
       this.setError(errorText(error));
     } finally {
       this.setPreparing(false);
     }
+  };
+
+  /**
+   * The deposit this order already has, put back on screen.
+   *
+   * Prepare answers with the amount and the pay-in catalog and NO attempts, so
+   * without this a bookmarked checkout opens on the method grid and a payer who
+   * was told to come back and claim a refund finds a shop.
+   *
+   * `POST /swaps/status` addresses ONE attempt by payment hash, with no reuse
+   * test — see ../../checkout-resume.ts for why the hash is the durable handle
+   * and re-picking the coin is not. The route is built by hand because the
+   * packages export no route builder; `normalizeSwapStartInvoice` and
+   * `mergeAttemptIntoSnapshot` are the two halves that turn its answer into the
+   * snapshot the poll controller and every display model already read.
+   *
+   * A miss is silence, not an error: an attempt the server will not serve is a
+   * stale note in this browser, and the payer belongs on the method grid.
+   */
+  private resumeSwapAttempt = async (reference: string): Promise<void> => {
+    const paymentHash = readSwapAttempt(reference);
+    if (!paymentHash) return;
+    const response = await csrfFetch(`${this.prefix}/swaps/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ reference, payment_hash: paymentHash }),
+    });
+    if (!response.ok) {
+      forgetSwapAttempt(reference);
+      return;
+    }
+    const invoice = normalizeSwapStartInvoice(await response.json());
+    this.setStartedSwap(invoice);
+    const current = this.snapshotValue;
+    if (current) this.applySnapshot(mergeAttemptIntoSnapshot(invoice, current));
   };
 
   // Anything that starts something must be able to stop it. Called from
@@ -392,7 +436,18 @@ export class ShopCheckout extends Model({
       dismissedInvoiceId: this.dismissedInvoiceId,
     });
     if (!invoice) return undefined;
-    return createSwapDisplayModel(invoice);
+    // `resumable` decides ONE string — `refundReturnLabel`, the sentence the
+    // refund screen shows about getting back here — and the safe default is the
+    // one that says "do not close this tab". This shop earns the other one: the
+    // order lives at `/checkout/:reference` on every stack, and every server
+    // serves the SPA there. See ../../checkout-resume.ts.
+    return createSwapDisplayModel(invoice, { resumable: true });
+  }
+
+  /** The URL of this checkout — what the refund screen tells the payer to keep. */
+  @computed
+  get checkoutUrl(): string {
+    return this.reference ? checkoutUrlFor(this.reference) : "";
   }
 
   // The payer's evidence that they paid: order and checkout ids, the rail, the
@@ -493,6 +548,14 @@ export class ShopCheckout extends Model({
   startSwap = async (payInAsset: string) => {
     if (!this.session) return;
     await this.session.startSwap(payInAsset);
+    // Remembered only once a deposit exists, and never cleared by walking back
+    // to the methods: the deposit is real money and the payer may need this
+    // screen again long after they stopped looking at it.
+    // The PAYMENT HASH, not `swapDisplay.attemptId`: the display model's
+    // attempt id falls back to the hash but prefers the provider's own
+    // `attempt_id`, and `/swaps/status` takes the hash.
+    const paymentHash = this.startedSwap?.data?.payment_hash;
+    if (paymentHash) rememberSwapAttempt(this.reference, paymentHash);
   };
 
   copyInvoice = async () => {

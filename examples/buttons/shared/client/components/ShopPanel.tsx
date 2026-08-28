@@ -31,6 +31,11 @@ export const ShopPanel: React.FC<{
   // interval both.
   useEffect(() => () => shop.dispose(), [shop]);
 
+  // The URL is the way back to a payment. `/checkout/:reference` is read on
+  // mount and on every back/forward, so a bookmark, a pasted link and the back
+  // button all land where they say they will. See ShopStore.startRouting.
+  useEffect(() => shop.startRouting(), [shop]);
+
   return (
     <Paper className="or-shop" radius="lg" withBorder p={0}>
       <div className="or-shop-head">

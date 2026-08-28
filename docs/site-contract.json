@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 1337
+      "bytes": 1399
     },
     {
       "path": "/guides/quickstart-node",
@@ -73,7 +73,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 9714
+      "bytes": 9913
     },
     {
       "path": "/guides/checkout-ux",
@@ -83,7 +83,7 @@
       "slug": "checkout-ux",
       "title": "Checkout UX",
       "category": "guide",
-      "bytes": 15137
+      "bytes": 15985
     },
     {
       "path": "/guides/headless-checkout",
@@ -93,7 +93,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 33637
+      "bytes": 34475
     },
     {
       "path": "/guides/automated-swaps",
@@ -103,7 +103,17 @@
       "slug": "automated-swaps",
       "title": "Automated Swaps",
       "category": "guide",
-      "bytes": 7002
+      "bytes": 7175
+    },
+    {
+      "path": "/guides/swap-refunds",
+      "markdown_path": "/guides/swap-refunds.md",
+      "source": "docs/guides/swap-refunds.md",
+      "kind": "guide",
+      "slug": "swap-refunds",
+      "title": "Swap Refunds",
+      "category": "guide",
+      "bytes": 11738
     },
     {
       "path": "/guides/lightning-swap-connect",
@@ -223,7 +233,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 23688
+      "bytes": 25105
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -233,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 28906
+      "bytes": 30323
     },
     {
       "path": "/api_docs",
@@ -252,7 +262,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 23688,
+      "bytes": 25105,
       "copy_button": true,
       "self_contained": true
     },
@@ -262,7 +272,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 28906,
+      "bytes": 30323,
       "copy_button": true,
       "self_contained": true
     }

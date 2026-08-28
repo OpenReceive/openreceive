@@ -25,12 +25,18 @@
  */
 
 import {
-  defineElements,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES as CHECKOUT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS as CHECKOUT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME as CHECKOUT_TAG,
+  defineElements,
 } from "@openreceive/elements";
 import { loadShopBootstrap } from "../bootstrap.ts";
+import {
+  buttonsCheckoutResume,
+  checkoutUrlFor,
+  normalizeOrderReference,
+  referenceInLocation,
+} from "../checkout-resume.ts";
 import { getJson, postJson } from "../http.ts";
 import {
   formatUsdCents,
@@ -78,6 +84,12 @@ const state = {
   feed: null as ShopFeed | null,
   feedLoading: false,
   feedLoaded: false,
+  // The "open an order id" box on the catalog: collapsed until asked for, and
+  // its own error, because a dead uuid is a fact about a link and not about
+  // the cart on screen.
+  resumeOpen: false,
+  resuming: false,
+  resumeError: "",
 };
 
 let feedTimer: number | undefined;
@@ -120,10 +132,16 @@ const placeOrder = async (): Promise<void> => {
   state.placingOrder = true;
   render();
   try {
-    state.order = await postJson<ShopOrderPayload>(SHOP_ORDERS_PATH, {
+    const order = await postJson<ShopOrderPayload>(SHOP_ORDERS_PATH, {
       // Only the sku and the quantity. A price never goes on the wire.
       items: lines().map((line) => ({ sku: line.entry.sku, quantity: line.quantity })),
     });
+    state.order = order;
+    buttonsCheckoutResume.rememberOrder(order);
+    // The uuid goes in the address bar the moment it exists. A payer with a
+    // deposit in flight has no account and no email from us; this URL is the
+    // only thing that brings them back to their payment screen.
+    buttonsCheckoutResume.enterCheckout(order.reference);
     state.stage = "checkout";
     state.errorMessage = "";
   } catch (error) {
@@ -139,8 +157,10 @@ const refreshOrder = async (): Promise<boolean> => {
   const reference = state.order?.reference;
   if (reference === undefined) return false;
   try {
-    state.order = await getJson<ShopOrderPayload>(shopOrderPath(reference));
-    return state.order.state === PAID;
+    const order = await getJson<ShopOrderPayload>(shopOrderPath(reference));
+    state.order = order;
+    buttonsCheckoutResume.rememberOrder(order);
+    return order.state === PAID;
   } catch {
     return false;
   }
@@ -171,12 +191,79 @@ const confirmSettlement = async (): Promise<void> => {
   }
 };
 
+/**
+ * Back to the shop, and the one exit that also DROPS the link: the payer said
+ * they were done with this order, so the stored summary and the
+ * `/checkout/:reference` URL both go. The back button routes through
+ * `leaveOrder` instead, which says something weaker and keeps them.
+ */
 const startOver = (): void => {
+  const reference = state.order?.reference;
+  leaveOrder();
+  if (reference !== undefined) buttonsCheckoutResume.forgetOrder(reference);
+  buttonsCheckoutResume.leaveCheckout();
+  render();
+};
+
+const leaveOrder = (): void => {
   state.order = null;
   state.quantities = {};
   state.stage = "catalog";
   state.errorMessage = "";
+  state.resumeError = "";
+};
+
+/**
+ * Open an order by its uuid — from `/checkout/:reference` on a cold load, or
+ * from a uuid a payer pasted into the catalog.
+ *
+ * The summary comes from sessionStorage first and from the host's own
+ * `GET /shop/orders/:reference` when that misses, which is what makes a
+ * bookmark work in a new tab. That route is authorized by the visitor cookie,
+ * so an id pasted into a browser that did not place the order is a miss and
+ * never somebody else's receipt.
+ */
+const resumeOrder = async (input: string): Promise<void> => {
+  const reference = normalizeOrderReference(input);
+  if (!reference) {
+    state.resumeError = "That does not look like an order id.";
+    render();
+    return;
+  }
+  if (reference === state.order?.reference && state.stage !== "catalog") return;
+
+  state.resuming = true;
   render();
+  try {
+    const order = await buttonsCheckoutResume.loadOrderForResume(reference);
+    if (order === undefined) {
+      state.resumeError = "We could not find that order in this browser.";
+      return;
+    }
+    state.order = order;
+    state.resumeError = "";
+    state.resumeOpen = false;
+    buttonsCheckoutResume.enterCheckout(reference);
+    // A paid order resumes to its receipt — the downloads are why that payer
+    // kept the link — and anything else resumes to the payment screen.
+    state.stage = order.state === PAID ? "receipt" : "checkout";
+  } finally {
+    state.resuming = false;
+    render();
+  }
+};
+
+/** The URL, applied. Runs on load and on every back/forward. */
+const applyLocation = (): void => {
+  const reference = referenceInLocation();
+  if (reference) {
+    void resumeOrder(reference);
+    return;
+  }
+  if (state.stage !== "catalog") {
+    leaveOrder();
+    render();
+  }
 };
 
 // ---------------------------------------------------------------- the feed
@@ -237,6 +324,81 @@ const button = (label: string, className: string, onClick: () => void): HTMLButt
   node.type = "button";
   node.addEventListener("click", onClick);
   return node;
+};
+
+/**
+ * A labelled value with a copy button — the same `or-shop-copyrow` markup the
+ * React client renders, against the same stylesheet.
+ *
+ * Every value a payer has to REPRODUCE gets one of these. A badge or a
+ * sentence is not a copy affordance.
+ */
+const copyRow = (label: string, value: string): HTMLElement => {
+  const row = el("div", "or-shop-copyrow");
+  const code = el("code", "or-shop-copyrow-value", value);
+  code.dataset.truncate = "true";
+  const copy = button("Copy", "or-vanilla-button or-vanilla-button-subtle", () => {
+    void navigator.clipboard.writeText(value).then(() => {
+      copy.textContent = "Copied";
+      window.setTimeout(() => {
+        copy.textContent = "Copy";
+      }, 1_600);
+    });
+  });
+  copy.setAttribute("aria-label", `Copy ${label.toLowerCase()}`);
+
+  const line = el("div", "or-vanilla-copyrow-line");
+  line.append(code, copy);
+  row.append(el("span", "or-shop-copyrow-label", label), line);
+  return row;
+};
+
+/**
+ * The way back into an order, for a payer who has only the uuid.
+ *
+ * Discreet and collapsed until it is asked for: on the catalog it is a
+ * footnote, and the payer who needs it is the one the refund screen told to
+ * keep an order id. It accepts the whole checkout URL as readily as the bare
+ * uuid, because both are things people paste.
+ */
+const renderResumeRow = (): HTMLElement => {
+  const wrapper = el("div", "or-shop-resume");
+
+  if (!state.resumeOpen) {
+    wrapper.append(
+      button("Already have an order id? Open it", "or-vanilla-link", () => {
+        state.resumeOpen = true;
+        render();
+      }),
+    );
+    return wrapper;
+  }
+
+  const form = el("form", "or-vanilla-resume-form");
+  const input = el("input", "or-vanilla-resume-input");
+  input.type = "text";
+  input.placeholder = "Paste your order id or checkout link";
+  input.setAttribute("aria-label", "Order id");
+  input.autofocus = true;
+
+  const open = el(
+    "button",
+    "or-vanilla-button or-vanilla-button-light",
+    state.resuming ? "…" : "Open",
+  );
+  open.type = "submit";
+  open.disabled = state.resuming;
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void resumeOrder(input.value);
+  });
+  form.append(input, open);
+  wrapper.append(form);
+
+  if (state.resumeError) wrapper.append(el("p", "or-vanilla-alert", state.resumeError));
+  wrapper.append(el("p", "or-shop-resume-hint", "Orders open in the browser that placed them."));
+  return wrapper;
 };
 
 const render = (): void => {
@@ -301,7 +463,9 @@ const renderCatalog = (): DocumentFragment => {
     grid.append(card);
   }
 
-  stage.append(grid);
+  // A footnote, not a feature: the payer who needs it was told to keep an order
+  // id on the refund screen.
+  stage.append(grid, renderResumeRow());
   fragment.append(stage);
 
   if (state.errorMessage) fragment.append(el("p", "or-vanilla-alert", state.errorMessage));
@@ -366,12 +530,31 @@ const renderCheckout = (): DocumentFragment => {
   // and says so at the top — so the checkout is pinned to light, exactly as
   // every other stack pins it.
   checkout.setAttribute(CHECKOUT_ATTRIBUTES.theme, "light");
+  // NOT `sync-url`: the HOST owns the address bar, because it also has to
+  // restore the order behind `/checkout/:reference` on a cold load. This says
+  // the order HAS such a URL, which is the one thing that decides whether the
+  // element's refund screen tells the payer to bookmark it.
+  checkout.setAttribute(CHECKOUT_ATTRIBUTES.resumable, "true");
   // The browser does not learn from this event that it was fulfilled. It
   // re-reads the order row, which is the only thing that can say so.
   checkout.addEventListener(CHECKOUT_EVENTS.settled, () => void confirmSettlement());
   checkout.addEventListener(CHECKOUT_EVENTS.startOver, startOver);
 
-  stage.append(strip, checkout);
+  // The order id and its URL, on the payment screen. A payer with no account
+  // has nothing else that comes back to this page.
+  const keep = el("div", "or-shop-keeplink");
+  keep.append(
+    el("div", "or-shop-section-title", "Keep this order id"),
+    el(
+      "p",
+      "or-shop-resume-hint",
+      "It is the way back to this payment. The link is already in your address bar.",
+    ),
+    copyRow("Order id", order.reference),
+    copyRow("Checkout link", checkoutUrlFor(order.reference)),
+  );
+
+  stage.append(strip, checkout, keep);
   fragment.append(stage);
 
   const footer = el("div", "or-shop-footer");
@@ -552,6 +735,12 @@ const start = async (): Promise<void> => {
     );
     return;
   }
+
+  // The URL is the way back to a payment. `/checkout/:reference` is read on
+  // load and on every back/forward, so a bookmark, a pasted link and the back
+  // button all land where they say they will.
+  window.addEventListener("popstate", applyLocation);
+  applyLocation();
 
   render();
 };

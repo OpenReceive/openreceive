@@ -10,19 +10,41 @@
 # ShopUser, the cart, or the download. If a future change to this demo needs a
 # fourth hook, that is a signal the boundary moved, and it is worth stopping
 # over.
+require Rails.root.join("lib/button_shop/testkit")
+
 OpenReceive.configure do |config|
   config.parent_controller = "ApplicationController"
   # Secrets load from NWC_URI, LSC_URI_PRIMARY, and LSC_URI_BACKUP.
   # Keep ordinary settings here in the Rails initializer.
   config.price_currencies = ["USD"]
 
-  # Built-in cached live BTC/USD feed (a CoinGecko-compatible primary plus the
-  # OpenReceive fallback mirror). OPENRECEIVE_PRICE_FEED_*_URL env vars override
-  # the URLs for dev and test.
-  config.price_provider = OpenReceive::Rates.create_cached_live_price_feed(
-    currencies: ["USD"],
-    **OpenReceive::Rates.read_price_feed_url_overrides(ENV)
-  )
+  # TESTKIT WALLET MODE, and the only branch in this file.
+  #
+  # `DEMO_WALLET=testkit` replaces THREE THINGS — the wallet, the swap provider
+  # and the price feed — with in-memory fakes, so the whole shop can be clicked
+  # through (Lightning, a swap deposit, a refund) with no NWC_URI, no
+  # FixedFloat keys and no network. Everything else on this page is the
+  # production wiring: the three hooks below, the engine, the migrations, the
+  # controllers and ActionCable all run exactly as they do in compose.
+  #
+  # That is the whole value of it. A test lane that also swapped the engine
+  # would prove the fakes work; this one proves the integration does. See
+  # lib/button_shop/testkit.rb.
+  if ButtonShop::Testkit.enabled?
+    config.nwc_client = ButtonShop::Testkit.wallet
+    config.swap_providers = [ButtonShop::Testkit.swap_provider]
+    # BTC at a fixed $50,000, the same constant the JS StaticPriceProvider
+    # uses, so a $1.00 button is 2,000 sats on every stack.
+    config.price_provider = OpenReceive::Rates::StaticPriceProvider.new
+  else
+    # Built-in cached live BTC/USD feed (a CoinGecko-compatible primary plus the
+    # OpenReceive fallback mirror). OPENRECEIVE_PRICE_FEED_*_URL env vars override
+    # the URLs for dev and test.
+    config.price_provider = OpenReceive::Rates.create_cached_live_price_feed(
+      currencies: ["USD"],
+      **OpenReceive::Rates.read_price_feed_url_overrides(ENV)
+    )
+  end
 
   # THE HOST AUTHORIZES EVERY REQUEST; OpenReceive mints no tokens.
   #

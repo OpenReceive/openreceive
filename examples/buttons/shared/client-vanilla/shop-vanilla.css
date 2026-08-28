@@ -149,3 +149,36 @@
 .or-vanilla .or-shop-stage > * + * {
   margin-top: 10px;
 }
+
+/* ---- the way back into an order
+
+   Two controls the React client gets from Mantine and this one has to draw: the
+   "open an order id" form under the catalog, and the copy button beside a value
+   on the checkout screen. Both render inside SHARED containers
+   (`.or-shop-resume`, `.or-shop-copyrow`), which own the spacing and the
+   borders — these rules are only the widgets. */
+
+.or-vanilla-resume-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.or-vanilla-resume-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--or-line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--or-ink);
+  background: #fff;
+}
+
+.or-vanilla-copyrow-line {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}

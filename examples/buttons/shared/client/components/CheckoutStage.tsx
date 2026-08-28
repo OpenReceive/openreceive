@@ -6,6 +6,7 @@ import type React from "react";
 import { useEffect } from "react";
 import { formatUsdCents } from "../../shop-types.ts";
 import type { ShopStore } from "../stores/ShopStore.ts";
+import { CheckoutLinkNote } from "./CheckoutLink.tsx";
 import { LightningPanel } from "./LightningPanel.tsx";
 import { MethodGrid } from "./MethodGrid.tsx";
 import { SwapDepositPanel } from "./SwapDepositPanel.tsx";
@@ -19,6 +20,16 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
   const isLightning = checkout.pickerKey?.startsWith("method:") ?? false;
   const hasPanel =
     isLightning || Boolean(swap) || Boolean(unavailable) || Boolean(checkout.startingSwapAsset);
+  // While a refund is OWED, the payment column is the refund and nothing else.
+  // `backToMethods` DISMISSES the attempt, which here would hide the one screen
+  // that can claim the money back behind a method grid — so the breadcrumb goes
+  // until the refund is requested. Once it is pending or sent the deposit is
+  // finished with, and switching method is how the payer buys after all.
+  const refundOwed = swap?.state === "refund_required";
+  // The refund screen carries its own, louder copy of the order id, so the
+  // quiet one in the summary stands down rather than putting the same copy
+  // button on the page twice.
+  const refunding = swap?.state.startsWith("refund") ?? false;
 
   // Settlement is proven on the server. When the checkout's own poll says the
   // payment landed, we re-read our own order — the row `config.on_paid` wrote —
@@ -78,6 +89,11 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
               {checkout.errorMessage}
             </Alert>
           ) : null}
+
+          {/* The order id and its URL, on every payment screen and not only the
+              swap one. A payer with no account has nothing else that comes
+              back to this page. */}
+          {refunding ? null : <CheckoutLinkNote checkout={checkout} />}
         </Stack>
 
         <div className="or-checkout-pay">
@@ -92,12 +108,14 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
             <Stack gap="sm">
               {/* Backwards movement is a breadcrumb, not a step back — and it
                   names what is about to change. */}
-              <Anchor component="button" type="button" size="sm" onClick={checkout.backToMethods}>
-                <Group gap={4} wrap="nowrap">
-                  <IconArrowLeft size={14} />
-                  {checkoutLabels.switchPaymentMethod}
-                </Group>
-              </Anchor>
+              {refundOwed ? null : (
+                <Anchor component="button" type="button" size="sm" onClick={checkout.backToMethods}>
+                  <Group gap={4} wrap="nowrap">
+                    <IconArrowLeft size={14} />
+                    {checkoutLabels.switchPaymentMethod}
+                  </Group>
+                </Anchor>
+              )}
 
               {checkout.swapStartError ? (
                 <Alert color="red" variant="light" title={checkoutLabels.swapStartFailedTitle}>

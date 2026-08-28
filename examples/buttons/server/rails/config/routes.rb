@@ -12,6 +12,15 @@ Rails.application.routes.draw do
 
   root "shop#index"
 
+  # The checkout's own URL. A payer with a swap deposit in flight has no
+  # account and no email from us — this path is the only thing that brings them
+  # back to their payment screen, so it has to survive a hard reload and a
+  # bookmark. It renders the SAME SPA shell as the root: the client reads the
+  # uuid off `location.pathname` and asks `shop#show_order` for the summary,
+  # which is the route that decides whether this browser may see it.
+  get "checkout/:reference", to: "shop#index",
+      constraints: { reference: /\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/ }
+
   # The shop's own JSON API. OpenReceive owns none of it.
   #
   # The uuid constraints are not decoration: these are anonymous routes, and a
