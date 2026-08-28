@@ -11,6 +11,8 @@
     "examples/hello-fruit/server/static-html-small-api",
     "examples/hello-fruit/server/nextjs-fullstack",
     "examples/buttons/server/node-express",
+    "examples/buttons/server/nextjs-fullstack",
+    "examples/buttons/server/static-html-small-api",
     "examples/buttons/server/rails"
   ],
   "scripts": {

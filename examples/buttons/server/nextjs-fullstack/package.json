@@ -1,0 +1,32 @@
+{
+  "name": "@openreceive/example-buttons-nextjs-fullstack",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../../../tools/run-with-root-env.mjs next dev -H 127.0.0.1 -p 3002",
+    "build": "next build",
+    "start": "node ../../../../tools/run-with-root-env.mjs next start -H 0.0.0.0 -p ${PORT:-3002}"
+  },
+  "dependencies": {
+    "@mantine/core": "^9.5.2",
+    "@mantine/hooks": "^9.5.2",
+    "@openreceive/browser": "0.3.0",
+    "@openreceive/core": "0.3.0",
+    "@openreceive/http": "0.3.0",
+    "@openreceive/next": "0.3.0",
+    "@openreceive/node": "0.3.0",
+    "@openreceive/provider-data": "0.3.0",
+    "@openreceive/react": "0.3.0",
+    "@tabler/icons-react": "^3.46.0",
+    "mobx": "^6.15.0",
+    "mobx-keystone": "^1.21.0",
+    "mobx-react": "^9.2.1",
+    "next": "^16.3.3",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

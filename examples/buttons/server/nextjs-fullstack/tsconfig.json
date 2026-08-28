@@ -1,0 +1,26 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "incremental": true,
+    "isolatedModules": true,
+    "plugins": [{ "name": "next" }],
+    "allowJs": true,
+    "esModuleInterop": true,
+    "jsx": "preserve",
+    // Next compiles with SWC, which reads THIS tsconfig for the whole project
+    // rather than resolving one per file the way esbuild does. Both settings
+    // are load-bearing for mobx-keystone's decorators — see the long note in
+    // examples/buttons/shared/tsconfig.json, which is the same pair for Vite.
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "../../shared/**/*.ts",
+    "../../shared/**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

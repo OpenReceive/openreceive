@@ -1,0 +1,19 @@
+services:
+  buttons-nextjs-fullstack:
+    build:
+      context: ../../../..
+      dockerfile: examples/buttons/server/nextjs-fullstack/Dockerfile
+    environment:
+      PORT: "3002"
+      # The shop SURVIVES A RESTART, so its database is a volume rather than a
+      # layer in the image.
+      OPENRECEIVE_DEMO_DB: /data
+    env_file:
+      - ../../../../.env
+    volumes:
+      - buttons-nextjs-data:/data
+    expose:
+      - "3002"
+
+volumes:
+  buttons-nextjs-data:

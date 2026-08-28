@@ -1,28 +1,38 @@
 /**
  * Test-only control surface for testkit wallet mode (`DEMO_WALLET=testkit`).
  *
- * Mounted under `/__testkit` ONLY when the demo boots against the
- * `@openreceive/testkit` fakes; in every other mode the whole prefix 404s so
- * the routes cannot be mistaken for a production surface (and the SPA fallback
- * never serves index.html for them).
+ * Live under `/__testkit` ONLY when the demo booted against the
+ * `@openreceive/testkit` fakes; in every other mode the whole prefix answers
+ * 404 (JSON, never the SPA fallback) so the routes cannot be mistaken for a
+ * production surface.
+ *
+ * FRAMEWORK-FREE, the same way shop-routes.ts is: `testkitControl` is the whole
+ * behaviour, and the Express and Next.js adapters below and in the app router
+ * only translate. That is what lets the harness point at any of the three Node
+ * stacks rather than only the one whose glue happened to be written.
  *
  * Payload notes — keyed by what the fakes actually expose:
  * - Invoices are selected by `payment_hash` (or `invoice`), matching
  *   `TestkitInvoiceSelector`.
  * - Swaps are selected by `provider_order_id` (`testkit-swap-N`) and/or
- *   `pay_in_asset` — the testkit swap provider has no notion of the host
- *   order id, so `/swap-step` takes the provider-side keys.
+ *   `pay_in_asset` — the testkit swap provider has no notion of the host order
+ *   id, so `/swap-step` takes the provider-side keys.
  */
 
-import express, { type Express, type Request, type Response, type Router } from "express";
 import type { SwapAttentionReason, SwapProviderState } from "@openreceive/node";
 import type { TestkitReceiveClient, TestkitSwapProvider } from "@openreceive/testkit";
+import express, { type Express, type Request, type Response } from "express";
 
 export const SHOP_TESTKIT_PREFIX = "/__testkit";
 
 export interface ShopTestkitFixtures {
   readonly client: TestkitReceiveClient;
   readonly swap: TestkitSwapProvider;
+}
+
+export interface TestkitResult {
+  readonly status: number;
+  readonly json: unknown;
 }
 
 const SWAP_PROVIDER_STATES: readonly SwapProviderState[] = [
@@ -41,81 +51,71 @@ const SWAP_PROVIDER_STATES: readonly SwapProviderState[] = [
 ];
 
 /**
- * Mount the `/__testkit` control routes. Pass `fixtures` only in testkit
- * wallet mode; with `undefined` the entire prefix answers 404 (JSON, not the
- * SPA fallback), so probing it from any other mode proves the surface is off.
+ * One control call. `action` is the path segment after the prefix.
+ *
+ * `fixtures === undefined` is NOT testkit mode, and every action is a 404 —
+ * probing the surface from any other mode proves it is off.
  */
-export function mountShopTestkitControls(
-  app: Express,
+export const testkitControl = (
+  action: string,
+  body: unknown,
   fixtures: ShopTestkitFixtures | undefined,
-): void {
-  if (fixtures === undefined) {
-    app.use(SHOP_TESTKIT_PREFIX, (_req: Request, res: Response) => {
-      res.status(404).json({ code: "NOT_FOUND", message: "Not found.", retryable: false });
-    });
-    return;
-  }
-  app.use(SHOP_TESTKIT_PREFIX, createTestkitControlRouter(fixtures));
-}
+): TestkitResult => {
+  if (fixtures === undefined) return notFound();
 
-function createTestkitControlRouter(fixtures: ShopTestkitFixtures): Router {
-  const router = express.Router();
-
-  // POST /__testkit/settle { payment_hash } — settle + emit the NWC-02
-  // payment_received notification, exactly like a real wallet would.
-  router.post("/settle", (req, res) => {
-    const paymentHash = readString(req.body, "payment_hash");
-    if (paymentHash === undefined) {
-      return void sendError(res, 400, "payment_hash is required");
-    }
+  // POST /__testkit/settle { payment_hash } — settle and emit the NWC-02
+  // payment_received notification, exactly as a real wallet would.
+  if (action === "settle") {
+    const paymentHash = readString(body, "payment_hash");
+    if (paymentHash === undefined) return invalid("payment_hash is required");
     try {
       const transaction = fixtures.client.settleInvoice(
         { payment_hash: paymentHash },
         { notify: true },
       );
-      sendJson(res, 200, { ok: true, transaction });
+      return { status: 200, json: { ok: true, transaction: plain(transaction) } };
     } catch (error) {
-      sendError(res, 404, messageOf(error));
+      return { status: 404, json: errorBody(404, messageOf(error)) };
     }
-  });
+  }
 
   // POST /__testkit/expire { payment_hash } — force the invoice expired.
-  router.post("/expire", (req, res) => {
-    const paymentHash = readString(req.body, "payment_hash");
-    if (paymentHash === undefined) {
-      return void sendError(res, 400, "payment_hash is required");
-    }
+  if (action === "expire") {
+    const paymentHash = readString(body, "payment_hash");
+    if (paymentHash === undefined) return invalid("payment_hash is required");
     try {
       const transaction = fixtures.client.expireInvoice({ payment_hash: paymentHash });
-      sendJson(res, 200, { ok: true, transaction });
+      return { status: 200, json: { ok: true, transaction: plain(transaction) } };
     } catch (error) {
-      sendError(res, 404, messageOf(error));
+      return { status: 404, json: errorBody(404, messageOf(error)) };
     }
-  });
+  }
 
   // POST /__testkit/swap-step { provider_order_id?, pay_in_asset?, state, attention_reason? }
   // Advance the scripted swap provider: the selected attempt(s) report `state`
   // on their next getStatus poll. `refund_required` and `attention` route
   // through the testkit's force helpers so their bookkeeping applies.
-  router.post("/swap-step", (req, res) => {
-    const providerOrderId = readString(req.body, "provider_order_id");
-    const payInAsset = readString(req.body, "pay_in_asset");
-    const state = readString(req.body, "state");
+  if (action === "swap-step") {
+    const providerOrderId = readString(body, "provider_order_id");
+    const payInAsset = readString(body, "pay_in_asset");
+    const state = readString(body, "state");
     if (providerOrderId === undefined && payInAsset === undefined) {
-      return void sendError(res, 400, "provider_order_id or pay_in_asset is required");
+      return invalid("provider_order_id or pay_in_asset is required");
     }
     if (state === undefined || !SWAP_PROVIDER_STATES.includes(state as SwapProviderState)) {
-      return void sendError(res, 400, `state must be one of: ${SWAP_PROVIDER_STATES.join(", ")}`);
+      return invalid(`state must be one of: ${SWAP_PROVIDER_STATES.join(", ")}`);
     }
+
     const selector = {
       ...(payInAsset === undefined ? {} : { payInAsset }),
       ...(providerOrderId === undefined ? {} : { providerOrderId }),
     } as Parameters<TestkitSwapProvider["script"]>[0];
     const swapState = state as SwapProviderState;
+
     if (swapState === "refund_required") {
       fixtures.swap.forceRefundRequired(selector);
     } else if (swapState === "attention") {
-      const reason = readString(req.body, "attention_reason");
+      const reason = readString(body, "attention_reason");
       fixtures.swap.forceAttention(
         selector,
         ...(reason === undefined ? [] : [reason as SwapAttentionReason]),
@@ -123,31 +123,38 @@ function createTestkitControlRouter(fixtures: ShopTestkitFixtures): Router {
     } else {
       fixtures.swap.script(selector, [swapState]);
     }
-    sendJson(res, 200, { ok: true, state: swapState });
-  });
+    return { status: 200, json: { ok: true, state: swapState } };
+  }
 
   // GET /__testkit/state — debug aid: current wallet invoices + swap counters.
-  router.get("/state", (_req, res) => {
-    sendJson(res, 200, {
-      wallet: {
-        invoices: fixtures.client.listInvoices(),
-      },
-      swap: {
-        create_calls: fixtures.swap.createCalls,
-        quote_calls: fixtures.swap.quoteCalls,
-        status_calls: fixtures.swap.statusCalls,
-        refund_calls: fixtures.swap.refundCalls,
-      },
-    });
-  });
+  if (action === "state") {
+    return {
+      status: 200,
+      json: plain({
+        wallet: { invoices: fixtures.client.listInvoices() },
+        swap: {
+          create_calls: fixtures.swap.createCalls,
+          quote_calls: fixtures.swap.quoteCalls,
+          status_calls: fixtures.swap.statusCalls,
+          refund_calls: fixtures.swap.refundCalls,
+        },
+      }),
+    };
+  }
 
-  // Anything else under the prefix 404s inside the router — never falls
-  // through to the SPA fallback.
-  router.use((_req, res) => {
-    res.status(404).json({ code: "NOT_FOUND", message: "Not found.", retryable: false });
-  });
+  return notFound();
+};
 
-  return router;
+/** The Express adapter. Pass `fixtures` only in testkit mode. */
+export function mountShopTestkitControls(
+  app: Express,
+  fixtures: ShopTestkitFixtures | undefined,
+): void {
+  app.use(SHOP_TESTKIT_PREFIX, express.json(), (req: Request, res: Response) => {
+    const action = req.path.replace(/^\/+/, "");
+    const result = testkitControl(action, req.body, fixtures);
+    res.status(result.status).json(result.json);
+  });
 }
 
 function readString(body: unknown, field: string): string | undefined {
@@ -156,24 +163,28 @@ function readString(body: unknown, field: string): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-/** JSON response that survives the testkit's bigint msat amounts. */
-function sendJson(res: Response, status: number, payload: unknown): void {
-  res
-    .status(status)
-    .type("application/json")
-    .send(
-      JSON.stringify(payload, (_key, value: unknown) =>
-        typeof value === "bigint" ? Number(value) : value,
-      ),
-    );
+/** The testkit reports msat amounts as bigints, which JSON.stringify refuses. */
+function plain<T>(value: T): unknown {
+  return JSON.parse(
+    JSON.stringify(value, (_key, entry: unknown) =>
+      typeof entry === "bigint" ? Number(entry) : entry,
+    ),
+  );
 }
 
-function sendError(res: Response, status: number, message: string): void {
-  res.status(status).json({
+const notFound = (): TestkitResult => ({ status: 404, json: errorBody(404, "Not found.") });
+
+const invalid = (message: string): TestkitResult => ({
+  status: 400,
+  json: errorBody(400, message),
+});
+
+function errorBody(status: number, message: string) {
+  return {
     code: status === 404 ? "NOT_FOUND" : "INVALID_REQUEST",
     message,
     retryable: false,
-  });
+  };
 }
 
 function messageOf(error: unknown): string {

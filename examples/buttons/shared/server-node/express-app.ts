@@ -8,15 +8,11 @@
  * serve.
  */
 
-import { StaticPriceProvider } from "@openreceive/core";
 import { openReceiveExpress, sendHostRouteError } from "@openreceive/express";
 import { createHost } from "@openreceive/http";
-import { createOpenReceive, type OpenReceive } from "@openreceive/node";
-import { createTestkitReceiveClient, createTestkitSwapProvider } from "@openreceive/testkit";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { resolveCookieSecret } from "./cookie.ts";
 import { createShopServerLogger } from "./logging.ts";
-import { readRequiredShopNwcConnectionString, shopWalletMode } from "./nwc.ts";
 import {
   bootstrap,
   createOrder,
@@ -30,13 +26,13 @@ import {
   showOrder,
 } from "./shop-routes.ts";
 import {
-  config,
   createShopAmountFor,
   createShopAuthorize,
   createShopOnPaid,
 } from "./openreceive-config.ts";
+import { createShopService } from "./service.ts";
 import { openShopStore, type ShopStore } from "./store.ts";
-import { mountShopTestkitControls, type ShopTestkitFixtures } from "./testkit-controls.ts";
+import { mountShopTestkitControls } from "./testkit-controls.ts";
 
 export interface CreateShopExpressAppOptions {
   readonly demoId: string;
@@ -107,30 +103,8 @@ export async function createShopExpressApp(
   // not go through this mount — it is gated on the paid order row.
   app.use(SHOP_IMAGES_PREFIX, express.static(shopArtworkDir));
 
-  // DEMO_WALLET=testkit swaps ONLY the wallet, the swap provider and the price
-  // feed for the in-memory fakes (the E2E harness — no NWC_URI, no network).
-  // Every other code path — store, routes, hooks, production wiring — is
-  // identical.
-  let service: OpenReceive;
-  let testkit: ShopTestkitFixtures | undefined;
-  if (shopWalletMode() === "testkit") {
-    testkit = { client: createTestkitReceiveClient(), swap: createTestkitSwapProvider() };
-    service = await createOpenReceive({
-      ...config,
-      client: testkit.client,
-      priceProviders: [new StaticPriceProvider()],
-      swap: { provider: testkit.swap },
-    });
-    log("openreceive.testkit", "Testkit wallet mode: in-memory fakes, no NWC connection.", {
-      controlPrefix: "/__testkit",
-    });
-  } else {
-    // Boot refuses a missing or invalid NWC before any route is served.
-    service = await createOpenReceive({ ...config, nwc: readRequiredShopNwcConnectionString() });
-  }
-  log("openreceive.ready", "OpenReceive service ready.", {
-    priceCurrencies: service.priceCurrencies,
-  });
+  // The wallet, and whether it is real. See service.ts.
+  const { service, testkit } = await createShopService(log);
 
   // Live routes in testkit mode, a hard 404 on the whole prefix otherwise.
   mountShopTestkitControls(app, testkit);
