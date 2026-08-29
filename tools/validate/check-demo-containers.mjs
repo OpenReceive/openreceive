@@ -331,9 +331,7 @@ for (const demo of nodeDemos) {
   // ABOVE the app-source COPY, keyed on the two manifests alone, or every edit
   // to a controller reinstalls every gem.
   const bundleInstallAt = dockerfile.indexOf("bundle install");
-  const appCopyAt = dockerfile.search(
-    /^COPY examples\/buttons\/server\/rails \./m,
-  );
+  const appCopyAt = dockerfile.search(/^COPY examples\/buttons\/server\/rails \./m);
   expect(bundleInstallAt !== -1, `${dockerfilePath}: must run bundle install`);
   expect(appCopyAt !== -1, `${dockerfilePath}: must copy the Rails app source`);
   expect(

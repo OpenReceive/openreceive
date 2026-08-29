@@ -45,27 +45,33 @@ export const orClasses = {
   wizardHeaderTitle: "text-lg font-bold m-0 sm:text-xl",
   wizardHeaderSubtitle: "text-base-content/65 text-sm m-0 mt-0.5",
   wizardBody: "border-t border-base-content/15 grid gap-3 p-4 sm:p-5",
-  methodGrid: "grid grid-cols-1 items-start gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5",
+  methodGrid:
+    "grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-4",
   methodCardUnavailable:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-content/20 bg-base-100 px-3 py-2 text-left text-base-content opacity-50 cursor-not-allowed shadow-sm sm:px-4",
+    "flex h-full min-h-28 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-3 py-4 text-center text-base-content opacity-50 cursor-not-allowed shadow-sm",
   methodCurrenciesLoading:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-dashed border-base-content/25 bg-base-100 px-3 py-2 text-left text-base-content/70 shadow-sm sm:px-4 sm:col-span-2 lg:col-span-4",
+    "flex min-h-28 w-full flex-col items-center justify-center gap-2 rounded-box border border-dashed border-base-content/25 bg-base-100 px-3 py-4 text-center text-base-content/70 shadow-sm sm:col-span-2 md:col-span-3 lg:col-span-4",
   methodCardReady:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-content/25 bg-base-100 px-3 py-2 text-left text-base-content shadow-sm transition-colors hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
+    "flex h-full min-h-28 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-3 py-4 text-center text-base-content shadow-sm transition-colors hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary cursor-pointer",
   methodCardActiveBitcoin: "border-warning bg-warning/10 ring-1 ring-warning/50",
   methodCardActiveUsdt: "border-success bg-success/10 ring-1 ring-success/50",
   methodCardActiveUsdc: "border-info bg-info/10 ring-1 ring-info/50",
   methodCardActiveSol: "border-primary bg-primary/10 ring-1 ring-primary/50",
   methodCardActiveEth: "border-secondary bg-secondary/10 ring-1 ring-secondary/50",
   methodCardActiveDefault: "border-primary bg-primary/10 ring-1 ring-primary/50",
-  methodIconWrap: "grid size-8 shrink-0 place-items-center overflow-hidden rounded-full sm:size-9",
-  methodIcon: "size-8 aspect-square sm:size-9",
-  methodTitle: "block truncate font-semibold text-sm sm:text-base",
-  methodTitleWrap: "min-w-0 flex-1 text-left",
+  methodIconWrap: "grid size-9 shrink-0 place-items-center overflow-hidden rounded-full sm:size-10",
+  methodIcon: "size-9 aspect-square sm:size-10",
+  methodTitle: "block truncate font-bold text-sm sm:text-base",
+  methodTitleWrap: "min-w-0 w-full text-center",
   methodDetail: "text-base-content/60 text-xs leading-snug",
-  methodDetailMobile: "block truncate text-xs text-base-content/55 sm:hidden",
+  /**
+   * The line under a tile's name: what the Bitcoin tile is, or the networks a
+   * coin can arrive on. Visible at EVERY width — a grid of five bare coin names
+   * is a grid of five questions, and the answer is one short line long.
+   */
+  methodTileDetail: "block text-xs leading-snug text-base-content/60",
   /** Limit / unavailable hint under a payment tile — visible at all breakpoints. */
-  methodLimitHint: "block px-1 text-xs leading-snug text-base-content/55",
+  methodLimitHint: "block px-1 text-center text-xs leading-snug text-base-content/55",
   methodNetworkReveal: "rounded-box border border-base-content/20 bg-base-100 p-3",
   methodNetworkRevealDesktop: "mt-3 hidden sm:block",
   methodNetworkRevealMobile: "ml-4 border-l border-base-content/30 pl-3 sm:hidden",
@@ -99,7 +105,7 @@ export const orClasses = {
   methodNetworkSummaryIconUsdc:
     "grid size-4 place-items-center rounded-full bg-info text-[0.65rem] text-info-content",
   methodConfirmDesktop: "btn btn-primary w-full gap-2",
-  methodTile: "grid min-w-0 content-start gap-0.5",
+  methodTile: "grid h-full min-w-0 content-start gap-0.5",
   breadcrumbs: "breadcrumbs text-sm",
   breadcrumbCurrent: "font-bold",
   routePicker: "grid grid-cols-2 md:grid-cols-4 gap-2",
@@ -132,7 +138,7 @@ export const orClasses = {
    */
   swapNetworkNotice: "alert alert-soft text-sm items-start gap-3",
   swapNetworkWarningIcon: "size-6 shrink-0 stroke-current",
-  swapNetworkWarningContent: "grid gap-1 min-w-0",
+  swapNetworkWarningContent: "grid gap-1 min-w-0 w-full",
   swapNetworkWarningTitle: "font-bold m-0",
   swapNetworkWarningBody: "m-0",
   swapNetworkWarningEmphasis: "font-bold underline",
@@ -149,20 +155,26 @@ export const orClasses = {
    * an alert: "Refund needed" is not a section title, it is the payer being
    * told their money did not go where they sent it for.
    */
-  swapRefundHeading: "alert alert-warning grid gap-1 text-left",
+  swapRefundHeading: "alert alert-error alert-soft items-start gap-3 text-left",
   /**
    * The return callout, which sits ABOVE the refund form rather than under the
    * support details. It is the sentence that decides whether the payer can come
    * back at all, and a payer who has to leave for an address in another wallet
    * reads it before they go, not after they scroll past the form.
    */
-  swapRefundReturn: "alert alert-info alert-soft grid gap-2 text-sm text-left",
+  swapRefundReturn: "alert alert-warning alert-soft items-start gap-3 text-left",
   swapRefundReturnTitle: "font-bold m-0",
-  swapRefundReturnBody: "m-0",
+  swapRefundReturnBody: "m-0 font-semibold",
   swapHeadingTitle: "text-lg font-semibold",
   swapHeadingDetail: "text-base-content/60",
-  swapQr:
-    "justify-self-center w-[min(200px,100%)] block h-auto md:justify-self-start md:w-[min(180px,100%)]",
+  swapQr: "block h-auto w-[min(208px,100%)]",
+  /**
+   * The white card the code sits on. A QR is only scannable against white, and a
+   * bare code floating on the panel background reads as an artifact of the page
+   * rather than the thing to point a phone at.
+   */
+  swapQrFrame:
+    "grid place-items-center justify-self-center rounded-box border border-base-content/15 bg-white p-3 md:justify-self-start [&_svg]:block [&_svg]:h-auto [&_svg]:w-[min(208px,100%)]",
   swapDetails: "grid gap-2 m-0",
   swapDetailsDt: "text-base-content/60 text-xs font-bold uppercase",
   swapDetailsDd: "grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0",
@@ -174,7 +186,7 @@ export const orClasses = {
   swapDetailsActions: "flex flex-wrap gap-2 justify-end",
   detailCopy: "btn btn-sm btn-square btn-ghost",
   swapDetailsLink: "btn btn-sm btn-outline",
-  swapBreakdown: "grid gap-2 py-2 border-t border-base-content/15",
+  swapBreakdown: "grid gap-2 rounded-box border border-base-content/15 bg-base-100 px-3 py-2.5",
   swapBreakdownTitle: "m-0 text-base-content/60 text-xs font-bold uppercase",
   swapBreakdownRows: "grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-baseline m-0",
   swapWaitingTitle: "flex items-baseline justify-between gap-3 min-w-0",
@@ -186,7 +198,28 @@ export const orClasses = {
   transactionDetails: "collapse collapse-arrow bg-base-200",
   transactionDetailsTitle: "collapse-title font-bold min-h-0 py-2",
   transactionDetailsContent: "collapse-content",
-  swapRefund: "grid gap-2",
+  swapRefund: "grid gap-2 rounded-box border border-base-content/15 bg-base-100 px-3 py-2.5",
+  /** Section titles inside a card: the breakdown, the refund form, the keep-this note. */
+  swapSectionTitle: "m-0 text-base-content/60 text-xs font-bold uppercase tracking-wide",
+  swapRefundReason: "m-0 text-base-content/60 text-sm",
+  swapRefundInstruction: "m-0 text-sm",
+  /**
+   * What the provider says about the money — sent, expected, coming back — as a
+   * quiet fact table. Not copy rows: nobody pastes "0.04 SOL" anywhere, and a
+   * column of copy buttons on the worst screen in the flow reads as four more
+   * things to do.
+   */
+  swapFacts: "grid gap-1.5 rounded-box border border-base-content/15 bg-base-100 px-3 py-2.5 m-0",
+  swapFactsRow: "grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3",
+  swapFactsLabel: "text-base-content/60 text-sm m-0",
+  swapFactsValue: "text-sm m-0 tabular-nums",
+  /**
+   * The way back into this payment, on every screen and not only the refund
+   * one. A payer with no account has nothing else that reaches this page again,
+   * and the moment to copy it is BEFORE the deposit goes wrong.
+   */
+  keepOrder: "grid gap-1.5 rounded-box border border-base-content/15 bg-base-100 px-3 py-2.5",
+  keepOrderBody: "m-0 text-base-content/60 text-sm",
   swapRefundInput: "input input-bordered w-full",
   swapRefundInputInvalid: "input input-bordered input-error w-full",
   swapRefundError: "m-0 text-error text-sm",

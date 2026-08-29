@@ -476,6 +476,52 @@ test("elements refund screen tells the payer to bookmark only when the checkout 
     // The refund form survives: a payer on the screen can still submit one.
     assert.match(unbookmarkable, /Review refund address/);
   }
+
+  // AND THE WAY OUT IS NOT OFFERED WHILE THE MONEY IS OWED. "Switch payment
+  // method" puts the method grid over the refund form, which is the only screen
+  // that can claim the deposit back.
+  assert.doesNotMatch(html, /data-or-breadcrumb="swap-asset"/);
+  assert.ok(!html.includes(checkoutLabels.switchPaymentMethod));
+});
+
+// The React twin is in tests/react-checkout-behavior.test.mjs.
+test("elements restore the breadcrumb once the refund is no longer the payer's to request", () => {
+  const wizard = (providerState) =>
+    renderPaymentWizardHtml({
+      selectedSwapAsset: "USDT_SOL",
+      swapOptions: [
+        {
+          pay_in_asset: "USDT_SOL",
+          label: "USDT",
+          network_label: "Solana",
+          provider: "fixedfloat",
+          available: true,
+        },
+      ],
+      swapInvoice: {
+        invoice_id: "or_inv_refund_state",
+        rail: "swap",
+        transaction_state: "pending",
+        swap: {
+          attempt_id: "or_swp_refund_state",
+          provider: "fixedfloat",
+          pay_in_asset: "USDT_SOL",
+          deposit_address: "SoLDeposit",
+          deposit_amount: "15.01",
+          provider_state: providerState,
+          provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+        },
+      },
+    });
+
+  // Owed: no exit.
+  assert.doesNotMatch(wizard("refund_required"), /data-or-breadcrumb="swap-asset"/);
+  // Requested or sent: the deposit is finished with, and switching method is how
+  // the payer buys after all.
+  assert.match(wizard("refund_pending"), /data-or-breadcrumb="swap-asset"/);
+  assert.match(wizard("refunded"), /data-or-breadcrumb="swap-asset"/);
+  // And the ordinary deposit screen keeps it throughout.
+  assert.match(wizard("awaiting_deposit"), /data-or-breadcrumb="swap-asset"/);
 });
 
 test("elements definition fails clearly without DOM custom elements", () => {

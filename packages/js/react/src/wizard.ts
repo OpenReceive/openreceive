@@ -13,8 +13,10 @@ import {
   createMethodGridDisplay,
   createPaymentWizardController,
   createPaymentWizardModel,
+  createSwapDisplayModel,
   createWizardRouteAssetDisplays,
   createWizardRouteDisplays,
+  formatMethodNetworkDetail,
   formatNetworkSummary,
   getNetworkIcon,
   getPaymentMethodIcon,
@@ -42,6 +44,7 @@ import { useCheckoutSession } from "./checkout-session.ts";
 import { useTickingUnixSeconds } from "./hooks.ts";
 import { ProviderTutorialModal, renderProviderOpenAction } from "./provider-tutorial.ts";
 import {
+  renderKeepOrderNote,
   renderSwapActions,
   renderSwapDepositPanel,
   renderSwapPreparing,
@@ -305,6 +308,40 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     selectedSwapAsset === null ? undefined : session.swapQuotes[selectedSwapAsset];
   const selectedSwapLabel = selectedSwapOption?.label ?? "this coin";
 
+  // WHILE A REFUND IS OWED, THE BREADCRUMB STANDS DOWN. The refund screen is
+  // the only screen that can claim the money back, and "switch payment method"
+  // is a click that puts a method grid over it. The attempt is not dismissed by
+  // that click, so the screen is recoverable — but a payer whose deposit came
+  // up short must not be offered the exit as if it were the way forward.
+  //
+  // `refund_required` only: once the refund is pending or sent the deposit is
+  // finished with, and switching method is how the payer buys after all.
+  //
+  // Read through the SAME builder the panel below renders from, rather than a
+  // second reading of `provider_state` here — the breadcrumb and the panel
+  // cannot then disagree about what state the attempt is in.
+  const activeSwapState =
+    activeSwapForAsset === undefined
+      ? undefined
+      : createSwapDisplayModel(activeSwapForAsset, {
+          ...(now === undefined ? {} : { now }),
+          ...(props.resumable === undefined ? {} : { resumable: props.resumable }),
+        })?.state;
+  const refundOwed = activeSwapState === "refund_required";
+  // Any of the three refund states: they all carry the louder "Save this before
+  // you go" callout, and the quiet note below would be the same copy row on the
+  // same screen twice.
+  const refundStage = activeSwapState?.startsWith("refund") ?? false;
+
+  // The way back into this payment, on every screen the wizard renders — see
+  // renderKeepOrderNote. Built once here because all three returns below want it.
+  const keepOrderNote = renderKeepOrderNote({
+    ...(checkout?.reference === undefined ? {} : { reference: checkout.reference }),
+    ...(props.resumable === undefined ? {} : { resumable: props.resumable }),
+    ...(props.clipboard === undefined ? {} : { clipboard: props.clipboard }),
+    ...(props.onError === undefined ? {} : { onError: props.onError }),
+  });
+
   if (selectedSwapAsset !== null) {
     return React.createElement(
       "div",
@@ -314,12 +351,14 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       React.createElement(
         "div",
         { className: orClasses.wizardBody },
-        renderWizardBackBreadcrumb(
-          selectedSwapOption === undefined
-            ? selectedSwapLabel
-            : `${selectedSwapOption.label} · ${selectedSwapOption.network_label}`,
-          clearSwapFocus,
-        ),
+        refundOwed
+          ? null
+          : renderWizardBackBreadcrumb(
+              selectedSwapOption === undefined
+                ? selectedSwapLabel
+                : `${selectedSwapOption.label} · ${selectedSwapOption.network_label}`,
+              clearSwapFocus,
+            ),
         React.createElement(
           "div",
           {
@@ -352,6 +391,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                 ? renderSwapUnavailable(selectedSwapQuote, checkout)
                 : renderSwapPreparing(selectedSwapLabel),
         ),
+        refundStage ? null : keepOrderNote,
       ),
     );
   }
@@ -419,6 +459,15 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           onContinueSwap: selectSwapAsset,
           ...(resolveAssetUrl === undefined ? {} : { resolveAssetUrl }),
         })
+      : null,
+    // On the grid the note is a section of its own, under the tiles: there is no
+    // body to put it in until a method is chosen.
+    selection.selectedMethod === null && keepOrderNote !== null
+      ? React.createElement(
+          "div",
+          { key: "keep-order", className: orClasses.wizardBody },
+          keepOrderNote,
+        )
       : null,
     selection.selectedMethod === null
       ? null
@@ -562,6 +611,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                   );
                 }),
           ),
+          keepOrderNote,
         ),
     activeTutorialProvider === undefined || activeTutorial === null
       ? null
@@ -841,6 +891,14 @@ function renderCompactPaymentMethodSelector(options: {
                 "span",
                 { className: orClasses.methodTitleWrap },
                 React.createElement("span", { className: orClasses.methodTitle }, method.title),
+                // The tile's own description. A grid of five names is a grid of
+                // five questions; `paymentMethods` has carried the answer all
+                // along and only the mobile layout was printing it.
+                React.createElement(
+                  "span",
+                  { className: orClasses.methodTileDetail },
+                  method.detail,
+                ),
               ),
             );
           }
@@ -851,7 +909,6 @@ function renderCompactPaymentMethodSelector(options: {
             selected,
             multiNetwork,
             displayOption,
-            selectedOption,
             starting,
             disabled,
             accent,
@@ -908,15 +965,11 @@ function renderCompactPaymentMethodSelector(options: {
                 "span",
                 { className: orClasses.methodTitleWrap },
                 React.createElement("span", { className: orClasses.methodTitle }, group.label),
-                !disabled && multiNetwork
-                  ? React.createElement(
-                      "span",
-                      { className: orClasses.methodDetailMobile },
-                      selected && selectedOption !== undefined
-                        ? `${selectedOption.network_label} network`
-                        : checkoutLabels.selectNetwork,
-                    )
-                  : null,
+                React.createElement(
+                  "span",
+                  { className: orClasses.methodTileDetail },
+                  formatMethodNetworkDetail(group.options),
+                ),
               ),
             ),
             disabled && limitMessage !== undefined

@@ -14,9 +14,8 @@ const { invoice } = await import("./helpers/react-fixtures.mjs");
 const React = (await import("react")).default;
 const { createRoot } = await import("react-dom/client");
 const { renderToStaticMarkup } = await import("react-dom/server");
-const { Checkout, CheckoutProvider, InvoiceSummary, OpenWalletButton, ThemeScope } = await import(
-  "../packages/js/react/src/index.ts"
-);
+const { Checkout, CheckoutProvider, InvoiceSummary, OpenWalletButton, PaymentWizard, ThemeScope } =
+  await import("../packages/js/react/src/index.ts");
 const { useCheckoutSession } = await import("../packages/js/react/src/checkout-session.ts");
 const { OPENRECEIVE_THEME_STORAGE_KEY, checkoutLabels } = await import(
   "../packages/js/browser/src/headless.ts"
@@ -410,10 +409,9 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
   try {
     const usdt = await until(() => handle.button("USDT"), { label: "USDT tile" });
     usdt.click();
-    const tron = await until(
-      () => handle.buttons().find((button) => /Tron/i.test(button.textContent ?? "")),
-      { label: "Tron network" },
-    );
+    // `button` matches on startsWith: the USDT tile names the networks that coin
+    // can arrive on, so a "contains Tron" match would find the tile itself.
+    const tron = await until(() => handle.button("Tron"), { label: "Tron network" });
     tron.click();
     const cont = await until(() => handle.button(checkoutLabels.continue), {
       label: "continue button",
@@ -791,5 +789,82 @@ test("the session refuses a second start for an asset it already holds instructi
     assert.equal(swapStarts, 2, "a dismissed attempt must not block a fresh start");
   } finally {
     handle.unmount();
+  }
+});
+
+// THE ONE CLICK THAT MUST NOT BE THERE. A swap attempt in `refund_required` is
+// a payer whose deposit came up short: the refund form is the only screen that
+// can claim that money back, and the wizard's "switch payment method"
+// breadcrumb puts a method grid over it. The attempt is not dismissed by that
+// click — the screen is reachable again by re-picking the coin — but it must
+// not be offered as if it were the way forward.
+//
+// The element twin is in tests/elements.test.mjs. Mounted rather than
+// server-rendered because it is the resume-adoption effect that puts the wizard
+// on the attempt the snapshot already carries, with no click at all.
+function swapSnapshot(providerState) {
+  const swapInvoice = {
+    invoice_id: "or_inv_refund_breadcrumb",
+    rail: "swap",
+    transaction_state: "pending",
+    swap: {
+      attempt_id: "or_swp_refund_breadcrumb",
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_SOL",
+      deposit_address: "SoLDeposit",
+      deposit_amount: "15.01",
+      provider_state: providerState,
+      provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+    },
+  };
+  return {
+    checkout_id: "or_chk_refund_breadcrumb",
+    reference: "order-refund-breadcrumb",
+    status: "open",
+    amount_msats: 200000,
+    invoices: [swapInvoice],
+    payment_methods: [
+      {
+        pay_in_asset: "USDT_SOL",
+        label: "USDT",
+        network_label: "Solana",
+        provider: "fixedfloat",
+        available: true,
+      },
+    ],
+  };
+}
+
+test("the wizard breadcrumb stands down while the swap attempt owes a refund", async () => {
+  const handle = mount(
+    React.createElement(PaymentWizard, { checkout: swapSnapshot("refund_required") }),
+  );
+  try {
+    // The refund form is what the payer is looking at.
+    await until(() => handle.text().includes("Refund needed"), { label: "refund screen" });
+    assert.equal(
+      handle.button(checkoutLabels.switchPaymentMethod),
+      undefined,
+      "switching method must not be offered over the screen that claims the deposit back",
+    );
+  } finally {
+    handle.unmount();
+  }
+});
+
+test("the wizard breadcrumb comes back once the refund is out of the payer's hands", async () => {
+  // `refund_pending` and `refunded` are done with the deposit, so switching
+  // method is how the payer buys after all.
+  for (const providerState of ["refund_pending", "refunded", "awaiting_deposit"]) {
+    const handle = mount(
+      React.createElement(PaymentWizard, { checkout: swapSnapshot(providerState) }),
+    );
+    try {
+      await until(() => handle.button(checkoutLabels.switchPaymentMethod) !== undefined, {
+        label: `breadcrumb in ${providerState}`,
+      });
+    } finally {
+      handle.unmount();
+    }
   }
 });

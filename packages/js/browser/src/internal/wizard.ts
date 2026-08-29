@@ -429,6 +429,25 @@ export function formatNetworkSummary(assetLabel: string, networkLabel: string): 
     .replace("{network}", networkLabel);
 }
 
+/**
+ * The line under a coin tile's name: the networks that coin can arrive on,
+ * "Tron · Solana · Ethereum".
+ *
+ * Both renderers read it here, so a tile can never list different networks from
+ * the reveal panel underneath it. Duplicates are dropped rather than repeated:
+ * two USDT_SOL rows from a provider catalog are one network to a payer.
+ */
+export function formatMethodNetworkDetail(
+  options: readonly { readonly network_label: string }[],
+): string {
+  const labels: string[] = [];
+  for (const option of options) {
+    const label = option.network_label.trim();
+    if (label.length > 0 && !labels.includes(label)) labels.push(label);
+  }
+  return labels.join(" · ");
+}
+
 export function formatChooseNetworkHeading(assetLabel: string): string {
   return checkoutLabels.chooseAssetNetwork.replace("{asset}", assetLabel);
 }

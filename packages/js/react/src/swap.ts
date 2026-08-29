@@ -199,18 +199,27 @@ export function renderSwapDepositPanel(options: {
   );
   // The same two strings, as an alert. "Refund needed" is not a section title:
   // it is the payer being told their money did not go where they sent it for.
+  //
+  // Icon beside a stacked title and body, the shape every other callout on this
+  // panel has — an alert whose children are its own grid columns puts the
+  // headline and the explanation side by side and reads as neither.
   const refundHeading = React.createElement(
     "div",
     { className: orClasses.swapRefundHeading, role: "alert" },
+    renderAlertIcon("warning"),
     React.createElement(
-      "strong",
-      { className: orClasses.swapHeadingTitle },
-      display.providerStateLabel,
-    ),
-    React.createElement(
-      "span",
-      { className: orClasses.swapHeadingDetail },
-      display.providerStateDetail,
+      "div",
+      { className: orClasses.swapNetworkWarningContent },
+      React.createElement(
+        "strong",
+        { className: orClasses.swapHeadingTitle },
+        display.providerStateLabel,
+      ),
+      React.createElement(
+        "span",
+        { className: orClasses.swapHeadingDetail },
+        display.providerStateDetail,
+      ),
     ),
   );
   // The "still waiting" states borrow the Lightning section's status card (spinner +
@@ -363,18 +372,12 @@ export function renderSwapDepositPanel(options: {
       },
       refundHeading,
       renderSwapRefundReturnWarning(display, options),
-      renderSwapAmountFacts(display, options),
-      React.createElement(
-        "p",
-        {
-          className: orClasses.swapWarning,
-        },
-        `Use a ${display.networkLabel} address you control. Do not paste the deposit address.`,
-      ),
+      renderSwapAmountFacts(display),
       React.createElement(SwapRefundForm, {
         attemptId: display.attemptId,
         payInAsset: display.payInAsset,
         networkLabel: display.networkLabel,
+        ...(display.refundReason === undefined ? {} : { refundReason: display.refundReason }),
         submittedRefundAddress: display.refundAddress,
         refundAllowed: display.refundAllowed,
         onRefund: options.onRefund,
@@ -392,7 +395,7 @@ export function renderSwapDepositPanel(options: {
       },
       refundHeading,
       renderSwapRefundReturnWarning(display, options),
-      renderSwapAmountFacts(display, options),
+      renderSwapAmountFacts(display),
       React.createElement(
         "dl",
         {
@@ -442,11 +445,15 @@ export function renderSwapDepositPanel(options: {
         {
           className: orClasses.swapDepositLayout,
         },
-        React.createElement(SwapPayloadQRCode, {
-          payload: display.qrPayload,
-          encoder: options.encoder,
-          onError: options.onError,
-        }),
+        React.createElement(
+          "div",
+          { className: orClasses.swapQrFrame },
+          React.createElement(SwapPayloadQRCode, {
+            payload: display.qrPayload,
+            encoder: options.encoder,
+            onError: options.onError,
+          }),
+        ),
         React.createElement(
           "div",
           {
@@ -500,7 +507,7 @@ export function renderSwapDepositPanel(options: {
       { className: orClasses.swapWarning },
       checkoutLabels.supportReviewFacts,
     ),
-    renderSwapAmountFacts(display, options),
+    renderSwapAmountFacts(display),
     renderSwapSupportDetails(display, options, { open: true }),
     backButton,
   );
@@ -574,38 +581,66 @@ function renderSwapNetworkWarning(
   );
 }
 
-function renderSwapAmountFacts(
-  display: SwapDisplayModel,
-  options: {
-    readonly clipboard?: Pick<Clipboard, "writeText">;
-    readonly onError?: (error: unknown) => void;
-  },
-): React.ReactElement | null {
-  const rows = [
+/**
+ * What the provider says about the money: sent, expected, and coming back.
+ *
+ * A fact table, not copy rows. Nobody pastes "0.04 SOL" into anything, and a
+ * column of copy buttons down the worst screen in the flow reads as three more
+ * things the payer is being asked to do. Mirrors
+ * renderElementSwapAmountFactsHtml; keep the two in step.
+ */
+function renderSwapAmountFacts(display: SwapDisplayModel): React.ReactElement | null {
+  const rows: readonly (readonly [string, string])[] = [
     ...(display.depositReceivedAmount === undefined
       ? []
-      : renderSwapCopyRow(
-          "Amount received",
-          `${display.depositReceivedAmount} ${display.assetLabel}`,
-          options,
-        )),
-    ...(display.depositReceivedAmount === undefined
-      ? []
-      : renderSwapCopyRow(
-          "Amount required",
-          `${display.depositAmount} ${display.assetLabel}`,
-          options,
-        )),
+      : ([
+          ["Amount received", `${display.depositReceivedAmount} ${display.assetLabel}`],
+          ["Amount required", `${display.depositAmount} ${display.assetLabel}`],
+        ] as const)),
     ...(display.refundAmount === undefined
       ? []
-      : renderSwapCopyRow(
-          "Estimated refund",
-          `${display.refundAmount} ${display.assetLabel}`,
-          options,
-        )),
+      : ([["Estimated refund", `${display.refundAmount} ${display.assetLabel}`]] as const)),
   ];
   if (rows.length === 0) return null;
-  return React.createElement("dl", { className: orClasses.swapDetails }, rows);
+  return React.createElement(
+    "dl",
+    { className: orClasses.swapFacts },
+    rows.map(([label, value]) =>
+      React.createElement(
+        "div",
+        { key: label, className: orClasses.swapFactsRow },
+        React.createElement("dt", { className: orClasses.swapFactsLabel }, label),
+        React.createElement("dd", { className: orClasses.swapFactsValue }, value),
+      ),
+    ),
+  );
+}
+
+/**
+ * The icon beside a callout. Two shapes, both stroked so they inherit the
+ * alert's own colour: the triangle that means "something went wrong with your
+ * money", and the bookmark that means "keep this".
+ */
+function renderAlertIcon(kind: "warning" | "bookmark"): React.ReactElement {
+  return React.createElement(
+    "svg",
+    {
+      xmlns: "http://www.w3.org/2000/svg",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      className: orClasses.swapNetworkWarningIcon,
+      "aria-hidden": "true",
+    },
+    React.createElement("path", {
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      strokeWidth: 2,
+      d:
+        kind === "warning"
+          ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          : "M17 3H7a2 2 0 00-2 2v16l7-3.5L19 21V5a2 2 0 00-2-2z",
+    }),
+  );
 }
 
 // Explains why the payer sends more crypto than the cart total: the swap provider's
@@ -808,23 +843,78 @@ function renderSwapRefundReturnWarning(
   return React.createElement(
     "div",
     { className: orClasses.swapRefundReturn },
+    renderAlertIcon("bookmark"),
+    React.createElement(
+      "div",
+      { className: orClasses.swapNetworkWarningContent },
+      React.createElement(
+        "p",
+        { className: orClasses.swapRefundReturnTitle },
+        checkoutLabels.refundReturnTitle,
+      ),
+      React.createElement(
+        "p",
+        { className: orClasses.swapRefundReturnBody },
+        display.refundReturnLabel,
+      ),
+      url === undefined
+        ? null
+        : React.createElement(
+            "dl",
+            { className: orClasses.swapDetails },
+            ...renderSwapCopyRow(checkoutLabels.refundReturnUrlLabel, url, {
+              ...options,
+              selectable: true,
+            }),
+          ),
+    ),
+  );
+}
+
+/**
+ * The way back into this payment, on every payment screen and not only the
+ * refund one.
+ *
+ * The refund screen's louder twin above is the same fact after something has
+ * gone wrong. By then the payer may already have closed the tab — so the
+ * reference and its URL are on screen from the moment the payment is, with copy
+ * buttons rather than a sentence about the address bar.
+ *
+ * Resumable checkouts only, for the reason `refundReturnLabel` exists: a
+ * checkout with no URL of its own has no way back to promise.
+ *
+ * Mirrors renderElementKeepOrderNoteHtml; keep the two in step.
+ */
+export function renderKeepOrderNote(options: {
+  readonly reference?: string;
+  readonly resumable?: boolean;
+  readonly clipboard?: Pick<Clipboard, "writeText">;
+  readonly onError?: (error: unknown) => void;
+}): React.ReactElement | null {
+  if (options.resumable !== true) return null;
+  const reference = options.reference ?? "";
+  const url = currentCheckoutUrl();
+  if (reference.length === 0 && url === undefined) return null;
+  const rowOptions = { ...options, selectable: true };
+  return React.createElement(
+    "div",
+    { className: orClasses.keepOrder },
     React.createElement(
       "p",
-      { className: orClasses.swapRefundReturnTitle },
-      checkoutLabels.refundReturnTitle,
+      { className: orClasses.swapSectionTitle },
+      checkoutLabels.keepOrderTitle,
     ),
+    React.createElement("p", { className: orClasses.keepOrderBody }, checkoutLabels.keepOrderBody),
     React.createElement(
-      "p",
-      { className: orClasses.swapRefundReturnBody },
-      display.refundReturnLabel,
+      "dl",
+      { className: orClasses.swapDetails },
+      ...(reference.length === 0
+        ? []
+        : renderSwapCopyRow(checkoutLabels.keepOrderIdLabel, reference, rowOptions)),
+      ...(url === undefined
+        ? []
+        : renderSwapCopyRow(checkoutLabels.keepOrderUrlLabel, url, rowOptions)),
     ),
-    url === undefined
-      ? null
-      : React.createElement(
-          "dl",
-          { className: orClasses.swapDetails },
-          ...renderSwapCopyRow(checkoutLabels.refundReturnUrlLabel, url, options),
-        ),
   );
 }
 
@@ -850,6 +940,7 @@ function SwapRefundForm(props: {
   readonly attemptId: string;
   readonly payInAsset: string;
   readonly networkLabel: string;
+  readonly refundReason?: string;
   readonly submittedRefundAddress?: string;
   readonly refundAllowed: boolean;
   readonly onRefund: (attemptId: string, refundAddress: string, confirm: boolean) => Promise<void>;
@@ -889,12 +980,34 @@ function SwapRefundForm(props: {
           .finally(() => setSubmitting(false));
       },
     },
+    // The form says what it is and why it is here before it asks for anything:
+    // a bare input under a red banner is a payer guessing what to type.
+    React.createElement(
+      "p",
+      { className: orClasses.swapSectionTitle },
+      checkoutLabels.refundSectionTitle,
+    ),
+    props.refundReason === undefined
+      ? null
+      : React.createElement(
+          "p",
+          { className: orClasses.swapRefundReason },
+          checkoutLabels.refundReasonLabel.replace(
+            "{reason}",
+            props.refundReason.replace(/_/g, " "),
+          ),
+        ),
+    React.createElement(
+      "p",
+      { className: orClasses.swapRefundInstruction },
+      checkoutLabels.refundAddressOwnership.replace("{network}", props.networkLabel),
+    ),
     props.submittedRefundAddress === undefined
       ? null
       : React.createElement(
           "p",
           {
-            className: orClasses.swapWarning,
+            className: orClasses.swapRefundInstruction,
           },
           checkoutLabels.confirmRefundTo.replace("{address}", props.submittedRefundAddress),
         ),

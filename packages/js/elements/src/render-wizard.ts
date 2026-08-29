@@ -9,10 +9,13 @@ import {
   checkoutLabels,
   createMethodGridDisplay,
   createPaymentWizardModel,
+  createSwapDisplayModel,
   createSwapUnavailableModel,
   createWizardRouteAssetDisplays,
   createWizardRouteDisplays,
+  currentCheckoutUrl,
   escapeHtml,
+  formatMethodNetworkDetail,
   formatNetworkSummary,
   getNetworkIcon,
   getPaymentMethodIcon,
@@ -31,6 +34,7 @@ import {
   swapAssetMatchesRoute,
   type WizardRouteAssetDisplay,
 } from "@openreceive/browser/headless";
+import { renderElementSwapCopyDetailHtml } from "./dom-helpers.ts";
 import {
   renderProviderOpenActionHtml,
   renderTutorialModalHtml,
@@ -69,6 +73,9 @@ function renderElementSwapUnavailableHtml(
 }
 
 export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
+  // The way back into this payment, on every screen this wizard renders — see
+  // renderElementKeepOrderNoteHtml.
+  const keepOrderNote = renderElementKeepOrderNoteHtml(view);
   const selection: PaymentWizardSelection = {
     selectedMethod: view.selectedMethod ?? null,
     selectedBitcoinRoute: view.selectedBitcoinRoute ?? null,
@@ -107,10 +114,29 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
       view.swapInvoice !== undefined && view.swapInvoice.swap?.pay_in_asset === selectedSwapAsset
         ? view.swapInvoice
         : undefined;
+    // React's twin, with the same reasoning: while the attempt owes a refund
+    // the "switch payment method" breadcrumb is a click that puts a method grid
+    // over the only screen that can claim the money back, so it stands down
+    // until the refund is requested. Built from the SAME display model the
+    // panel renders from — see react/src/wizard.ts.
+    const activeSwapState =
+      activeSwap === undefined
+        ? undefined
+        : createSwapDisplayModel(activeSwap, {
+            ...(view.resumable === undefined ? {} : { resumable: view.resumable }),
+          })?.state;
+    const refundOwed = activeSwapState === "refund_required";
+    // All three refund states carry the louder "Save this before you go"
+    // callout, so the quiet note below stands down rather than putting the same
+    // copy row on the same screen twice.
+    const refundStage = activeSwapState?.startsWith("refund") ?? false;
     return `
       <section part="wizard" class="${orClasses.wizard}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
         <div class="${orClasses.wizardBody}">
-        <div part="wizard-breadcrumbs" class="${orClasses.breadcrumbs}">
+        ${
+          refundOwed
+            ? ""
+            : `<div part="wizard-breadcrumbs" class="${orClasses.breadcrumbs}">
           <button
             part="wizard-breadcrumb"
             class="${orClasses.btnGhost}"
@@ -119,7 +145,8 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
           >${escapeHtml(checkoutLabels.switchPaymentMethod)}</button>
           <span aria-hidden="true">/</span>
           <span part="wizard-breadcrumb-current" class="${orClasses.breadcrumbCurrent}">${escapeHtml(label)}</span>
-        </div>
+        </div>`
+        }
         <div part="wizard-results" class="${orClasses.wizardResults}">
           ${
             activeSwap !== undefined
@@ -160,6 +187,7 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
                   </section>`
           }
         </div>
+        ${refundStage ? "" : keepOrderNote}
         </div>
       </section>
     `;
@@ -177,6 +205,11 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
           : `<p part="wizard-error" role="alert" class="${orClasses.paymentStatusDetail}">${escapeHtml(view.wizardError)}</p>`
       }
       ${methodPicker}
+      ${
+        selection.selectedMethod === null && keepOrderNote.length > 0
+          ? `<div class="${orClasses.wizardBody}">${keepOrderNote}</div>`
+          : ""
+      }
       ${
         selection.selectedMethod === null
           ? ""
@@ -262,6 +295,7 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
           }
         </div>
       `}
+      ${keepOrderNote}
       </div>
       `
       }
@@ -274,6 +308,46 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
         view.decodeLinkUrl,
       )}
     </section>
+  `;
+}
+
+/**
+ * The way back into this payment, on every payment screen and not only the
+ * refund one.
+ *
+ * The refund screen's louder twin is the same fact after something has gone
+ * wrong — by then the payer may already have closed the tab. Resumable
+ * checkouts only, for the reason `refundReturnLabel` exists: a checkout with no
+ * URL of its own has no way back to promise.
+ *
+ * Mirrors renderKeepOrderNote in react/src/swap.ts; keep the two in step.
+ */
+function renderElementKeepOrderNoteHtml(view: ElementsWizardView): string {
+  if (view.resumable !== true) return "";
+  const reference = view.reference ?? "";
+  const url = currentCheckoutUrl();
+  if (reference.length === 0 && url === undefined) return "";
+  return `
+    <div part="keep-order" class="${orClasses.keepOrder}">
+      <p class="${orClasses.swapSectionTitle}">${escapeHtml(checkoutLabels.keepOrderTitle)}</p>
+      <p class="${orClasses.keepOrderBody}">${escapeHtml(checkoutLabels.keepOrderBody)}</p>
+      <dl part="swap-details" class="${orClasses.swapDetails}">
+        ${
+          reference.length === 0
+            ? ""
+            : renderElementSwapCopyDetailHtml(checkoutLabels.keepOrderIdLabel, reference, {
+                selectable: true,
+              })
+        }
+        ${
+          url === undefined
+            ? ""
+            : renderElementSwapCopyDetailHtml(checkoutLabels.keepOrderUrlLabel, url, {
+                selectable: true,
+              })
+        }
+      </dl>
+    </div>
   `;
 }
 
@@ -324,6 +398,7 @@ function renderElementCompactPaymentSelectorHtml(
             </span>
             <span class="${orClasses.methodTitleWrap}">
               <span class="${orClasses.methodTitle}">${escapeHtml(method.title)}</span>
+              <span class="${orClasses.methodTileDetail}">${escapeHtml(method.detail)}</span>
             </span>
           </button>`;
       }
@@ -481,7 +556,6 @@ function renderElementSwapMethodGroupHtml(
     pickerKey,
     selected,
     displayOption,
-    selectedOption,
     multiNetwork,
     starting,
     disabled,
@@ -489,12 +563,9 @@ function renderElementSwapMethodGroupHtml(
     limitMessage,
     panelId,
   } = group;
-  const networkDetail =
-    !disabled && multiNetwork
-      ? selected && selectedOption !== undefined
-        ? `${escapeHtml(selectedOption.network_label)} network`
-        : escapeHtml(checkoutLabels.selectNetwork)
-      : undefined;
+  // The networks this coin can arrive on, at every width. React's twin reads
+  // the same builder — see react/src/wizard.ts.
+  const networkDetail = formatMethodNetworkDetail(group.options);
   const mobileReveal = multiNetwork
     ? `
       <div class="${orClasses.methodNetworkRevealAnim} ${
@@ -542,9 +613,9 @@ function renderElementSwapMethodGroupHtml(
         <span class="${orClasses.methodTitleWrap}">
           <span class="${orClasses.methodTitle}">${escapeHtml(group.label)}</span>
           ${
-            networkDetail === undefined
+            networkDetail.length === 0
               ? ""
-              : `<span class="${orClasses.methodDetailMobile}">${networkDetail}</span>`
+              : `<span class="${orClasses.methodTileDetail}">${escapeHtml(networkDetail)}</span>`
           }
         </span>
       </button>

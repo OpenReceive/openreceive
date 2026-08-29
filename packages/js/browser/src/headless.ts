@@ -283,6 +283,7 @@ export {
   createSwapUnavailableModel,
   createWizardRouteAssetDisplays,
   createWizardRouteDisplays,
+  formatMethodNetworkDetail,
   formatNetworkSummary,
   getNetworkIcon,
   getPaymentMethodIcon,

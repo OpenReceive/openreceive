@@ -140,6 +140,24 @@ export const checkoutLabels = {
   refundNoReturnWarning:
     "Do not close this tab until you have submitted this refund. This checkout has no address " +
     "to return to, so this screen is the only place it can be requested.",
+  /**
+   * The same "how you get back here" fact, BEFORE anything has gone wrong.
+   *
+   * A payer has no account and gets no email from us: the reference and its URL
+   * are the only things that reach this payment again, and the moment to copy
+   * them is while the deposit is still in flight — not after a short send has
+   * put a refund form on the screen. Rendered only on a checkout the host
+   * declared resumable, for the same reason `refundReturnWarning` is: telling a
+   * payer to keep a link that goes nowhere is worse than saying nothing.
+   */
+  keepOrderTitle: "Keep this order id",
+  keepOrderBody: "It is the way back to this payment. The link is already in your address bar.",
+  keepOrderIdLabel: "Order id",
+  keepOrderUrlLabel: "Checkout link",
+  /** The refund form's own heading, and the two lines above its input. */
+  refundSectionTitle: "Refund this deposit",
+  refundReasonLabel: "Reason: {reason}",
+  refundAddressOwnership: "Use a {network} address you control. Do not paste the deposit address.",
 } as const;
 
 export { orClasses } from "../ui-classes.ts";

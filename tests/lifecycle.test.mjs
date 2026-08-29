@@ -176,13 +176,11 @@ function reactSurface(mode) {
             label: `${this.name} USDT picker`,
           });
           picker.click();
-          const network = await until(
-            () =>
-              [...container.querySelectorAll("button")].find((button) =>
-                /Tron/i.test(button.textContent),
-              ),
-            { label: `${this.name} Tron network button` },
-          );
+          // startsWith, not "contains": the USDT TILE names the networks that
+          // coin can arrive on, so "contains Tron" matches the tile itself.
+          const network = await until(() => findButton("Tron"), {
+            label: `${this.name} Tron network button`,
+          });
           network.click();
           const cont = await until(() => findButton("Continue"), {
             label: `${this.name} continue button`,

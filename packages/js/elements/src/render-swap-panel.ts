@@ -112,8 +112,11 @@ export function renderElementSwapPanelHtml(
   // it is the payer being told their money did not go where they sent it for.
   const refundHeading = `
     <div part="swap-heading" class="${orClasses.swapRefundHeading}" role="alert">
-      <strong class="${orClasses.swapHeadingTitle}">${escapeHtml(display.providerStateLabel)}</strong>
-      <span class="${orClasses.swapHeadingDetail}">${escapeHtml(display.providerStateDetail)}</span>
+      ${renderElementAlertIconHtml("warning")}
+      <div class="${orClasses.swapNetworkWarningContent}">
+        <strong class="${orClasses.swapHeadingTitle}">${escapeHtml(display.providerStateLabel)}</strong>
+        <span class="${orClasses.swapHeadingDetail}">${escapeHtml(display.providerStateDetail)}</span>
+      </div>
     </div>
   `;
 
@@ -151,7 +154,7 @@ export function renderElementSwapPanelHtml(
         <p part="swap-instruction" class="${orClasses.swapInstruction}">Pay <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong> to this address</p>
         ${renderElementSwapNetworkWarningHtml(display)}
         <div part="swap-deposit-layout" class="${orClasses.swapDepositLayout}">
-          <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
+          <div part="swap-qr" class="${orClasses.swapQrFrame}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
           <div part="swap-deposit-side" class="${orClasses.swapDepositSide}">
             <dl part="swap-details" class="${orClasses.swapDetails}">
               ${display.copyRows
@@ -215,12 +218,29 @@ export function renderElementSwapPanelHtml(
   if (display.state === "refund_required") {
     const stagedRefundAddress = display.refundAddress;
     const refundFacts = renderElementSwapAmountFactsHtml(display);
+    // The form says what it is and why it is here before it asks for anything —
+    // React's twin does the same; see react/src/swap.ts.
+    const refundFormIntro = `
+      <p class="${orClasses.swapSectionTitle}">${escapeHtml(checkoutLabels.refundSectionTitle)}</p>
+      ${
+        display.refundReason === undefined
+          ? ""
+          : `<p class="${orClasses.swapRefundReason}">${escapeHtml(
+              checkoutLabels.refundReasonLabel.replace(
+                "{reason}",
+                display.refundReason.replace(/_/g, " "),
+              ),
+            )}</p>`
+      }
+      <p class="${orClasses.swapRefundInstruction}">${escapeHtml(
+        checkoutLabels.refundAddressOwnership.replace("{network}", display.networkLabel),
+      )}</p>
+    `;
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${refundHeading}
         ${renderElementSwapRefundReturnWarningHtml(display)}
         ${refundFacts}
-        <p part="swap-warning" class="${orClasses.swapWarning}">Use a ${escapeHtml(display.networkLabel)} address you control. Do not paste the deposit address.</p>
         ${
           stagedRefundAddress === undefined
             ? `
@@ -233,6 +253,7 @@ export function renderElementSwapPanelHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNetworkLabel}="${escapeHtml(display.networkLabel)}"
             ${display.refundAllowed ? `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAllowed}="true"` : ""}
           >
+            ${refundFormIntro}
             <input
               class="${orClasses.swapRefundInput}"
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
@@ -263,7 +284,8 @@ export function renderElementSwapPanelHtml(
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm}="true"
             ${display.refundAllowed ? `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAllowed}="true"` : ""}
           >
-            <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(checkoutLabels.confirmRefundTo.replace("{address}", stagedRefundAddress))}</p>
+            ${refundFormIntro}
+            <p class="${orClasses.swapRefundInstruction}">${escapeHtml(checkoutLabels.confirmRefundTo.replace("{address}", stagedRefundAddress))}</p>
             <input
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
               name="refund_address"
@@ -324,44 +346,68 @@ function renderElementSwapRefundReturnWarningHtml(display: SwapDisplayModel): st
   const url = display.resumable ? currentCheckoutUrl() : undefined;
   return `
     <div part="swap-refund-return" class="${orClasses.swapRefundReturn}">
-      <p class="${orClasses.swapRefundReturnTitle}">${escapeHtml(checkoutLabels.refundReturnTitle)}</p>
-      <p class="${orClasses.swapRefundReturnBody}">${escapeHtml(display.refundReturnLabel)}</p>
-      ${
-        url === undefined
-          ? ""
-          : `<dl part="swap-details" class="${orClasses.swapDetails}">${renderElementSwapCopyDetailHtml(
-              checkoutLabels.refundReturnUrlLabel,
-              url,
-              { selectable: true },
-            )}</dl>`
-      }
+      ${renderElementAlertIconHtml("bookmark")}
+      <div class="${orClasses.swapNetworkWarningContent}">
+        <p class="${orClasses.swapRefundReturnTitle}">${escapeHtml(checkoutLabels.refundReturnTitle)}</p>
+        <p class="${orClasses.swapRefundReturnBody}">${escapeHtml(display.refundReturnLabel)}</p>
+        ${
+          url === undefined
+            ? ""
+            : `<dl part="swap-details" class="${orClasses.swapDetails}">${renderElementSwapCopyDetailHtml(
+                checkoutLabels.refundReturnUrlLabel,
+                url,
+                { selectable: true },
+              )}</dl>`
+        }
+      </div>
     </div>
   `;
 }
 
+/**
+ * What the provider says about the money: sent, expected, and coming back.
+ *
+ * A fact table, not copy rows — see renderSwapAmountFacts in react/src/swap.ts
+ * for the reasoning, and keep the two in step.
+ */
 function renderElementSwapAmountFactsHtml(display: SwapDisplayModel): string {
-  const rows = [
-    display.depositReceivedAmount === undefined
-      ? ""
-      : renderElementSwapCopyDetailHtml(
-          "Amount received",
-          `${display.depositReceivedAmount} ${display.assetLabel}`,
-        ),
-    display.depositReceivedAmount === undefined
-      ? ""
-      : renderElementSwapCopyDetailHtml(
-          "Amount required",
-          `${display.depositAmount} ${display.assetLabel}`,
-        ),
-    display.refundAmount === undefined
-      ? ""
-      : renderElementSwapCopyDetailHtml(
-          "Estimated refund",
-          `${display.refundAmount} ${display.assetLabel}`,
-        ),
-  ].join("");
-  if (rows.length === 0) return "";
-  return `<dl part="swap-details" class="${orClasses.swapDetails}">${rows}</dl>`;
+  const facts: readonly (readonly [string, string])[] = [
+    ...(display.depositReceivedAmount === undefined
+      ? []
+      : ([
+          ["Amount received", `${display.depositReceivedAmount} ${display.assetLabel}`],
+          ["Amount required", `${display.depositAmount} ${display.assetLabel}`],
+        ] as const)),
+    ...(display.refundAmount === undefined
+      ? []
+      : ([["Estimated refund", `${display.refundAmount} ${display.assetLabel}`]] as const)),
+  ];
+  if (facts.length === 0) return "";
+  const rows = facts
+    .map(
+      ([label, value]) => `
+        <div class="${orClasses.swapFactsRow}">
+          <dt class="${orClasses.swapFactsLabel}">${escapeHtml(label)}</dt>
+          <dd class="${orClasses.swapFactsValue}">${escapeHtml(value)}</dd>
+        </div>`,
+    )
+    .join("");
+  return `<dl part="swap-facts" class="${orClasses.swapFacts}">${rows}</dl>`;
+}
+
+/**
+ * The icon beside a callout: the triangle that means "something went wrong with
+ * your money", the bookmark that means "keep this". Stroked, so both inherit
+ * the alert's own colour. React's twin is renderAlertIcon.
+ */
+function renderElementAlertIconHtml(kind: "warning" | "bookmark"): string {
+  const path =
+    kind === "warning"
+      ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+      : "M17 3H7a2 2 0 00-2 2v16l7-3.5L19 21V5a2 2 0 00-2-2z";
+  return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="${orClasses.swapNetworkWarningIcon}" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${path}" />
+    </svg>`;
 }
 
 function renderElementSwapNetworkWarningHtml(

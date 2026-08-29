@@ -148,6 +148,7 @@
         "formatAmountCaption",
         "formatDepositAmount",
         "formatFiatAmount",
+        "formatMethodNetworkDetail",
         "formatMsats",
         "formatNetworkSummary",
         "formatSwapLimit",
