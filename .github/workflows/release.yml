@@ -37,6 +37,13 @@ jobs:
           fi
       - run: npm ci
       - run: npm run check:release
+      # test:package-smoke builds each publishable package against the others'
+      # dist/ output — @openreceive/angular resolves
+      # `@openreceive/elements/wrapper-shared` to a .d.ts that only exists once
+      # elements is built. In ci.yml the smoke inherits that build from
+      # `npm test` (pretest:js), so it passes there and fails here on a fresh
+      # checkout. Build first rather than depend on a neighbouring step.
+      - run: npm run build:packages
       - run: npm run test:package-smoke
       - run: npm run build:docs
       - run: echo "Release dry run complete. Publishing requires explicit maintainer approval."

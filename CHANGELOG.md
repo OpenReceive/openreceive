@@ -104,10 +104,16 @@ runs against `node-express`. Of the gems, only `openreceive-server` changed;
 `openreceive` and `openreceive-rails` are byte-identical to 0.3.1 and ship to
 keep the one-version-for-everything rule.
 
-`release:prepare` now refreshes the Rails demo's `Gemfile.lock` alongside
-`package-lock.json`. The v0.3.1 tag's CI died at `bundle install` with exit 16
-because the three VERSION constants moved and a lockfile pinning them by `path`
-did not; local `test:ci` never sees it, because nothing here sets frozen mode.
+Two release gates that were lying are fixed. `release:prepare` now refreshes the
+Rails demo's `Gemfile.lock` alongside `package-lock.json` — the v0.3.1 tag's CI
+died at `bundle install` with exit 16 because the three VERSION constants moved
+and a lockfile pinning them by `path` did not, and local `test:ci` never sees it
+because nothing here sets frozen mode. And `Release Dry Run`, which had never
+passed on either tag it ever ran for, now builds the packages before smoking
+them: `@openreceive/angular` resolves `@openreceive/elements/wrapper-shared` to
+a `.d.ts` that exists only once elements is built, and a fresh checkout with no
+build step cannot. `ci.yml` hid it by running `npm test` — and so `pretest:js` —
+first.
 
 The live wallet smoke (`npm run test:live`) was NOT run for this release: it
 needs a funded NWC connection.
