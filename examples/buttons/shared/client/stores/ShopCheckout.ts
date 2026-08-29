@@ -15,11 +15,11 @@ import {
   createTransactionDetailsFromState,
   getSwapRefundFormError,
   mergeAttemptIntoSnapshot,
-  normalizeSwapStartInvoice,
   paymentMethods,
   prepareCheckout,
   requestCheckout,
   resolveWizardSelection,
+  resumeSwapAttempt,
   selectCheckoutDisplayInvoice,
   selectCurrentSwapInvoice,
 } from "@openreceive/browser/headless";
@@ -115,9 +115,9 @@ export class ShopCheckout extends Model({
         prefix: this.prefix,
         fetch: csrfFetch,
       });
-      this.applySnapshot(prepared);
-      // THE OTHER HALF OF THE URL. See resumeSwapAttempt.
-      await this.resumeSwapAttempt(reference);
+      // THE OTHER HALF OF THE URL. See resumeSwapAttempt: prepare carries no
+      // attempts, so the deposit is folded back in before the first render.
+      this.applySnapshot(await this.resumeSwapAttempt(reference, prepared));
     } catch (error) {
       this.setError(errorText(error));
     } finally {
@@ -132,32 +132,36 @@ export class ShopCheckout extends Model({
    * without this a bookmarked checkout opens on the method grid and a payer who
    * was told to come back and claim a refund finds a shop.
    *
-   * `POST /swaps/status` addresses ONE attempt by payment hash, with no reuse
-   * test — see ../../checkout-resume.ts for why the hash is the durable handle
-   * and re-picking the coin is not. The route is built by hand because the
-   * packages export no route builder; `normalizeSwapStartInvoice` and
-   * `mergeAttemptIntoSnapshot` are the two halves that turn its answer into the
-   * snapshot the poll controller and every display model already read.
-   *
-   * A miss is silence, not an error: an attempt the server will not serve is a
-   * stale note in this browser, and the payer belongs on the method grid.
+   * `resumeSwapAttempt` is the packaged version of what this used to hand-roll:
+   * it posts `/swaps/status`, which addresses ONE attempt by payment hash with
+   * no reuse test — see ../../checkout-resume.ts for why the hash is the
+   * durable handle and re-picking the coin is not — and folds the answer into
+   * the snapshot the poll controller and every display model already read. A
+   * miss returns the prepared snapshot unchanged, so a stale note in this
+   * browser leaves the payer on the method grid rather than on an error.
    */
-  private resumeSwapAttempt = async (reference: string): Promise<void> => {
+  private resumeSwapAttempt = async (
+    reference: string,
+    prepared: CheckoutSnapshot,
+  ): Promise<CheckoutSnapshot> => {
     const paymentHash = readSwapAttempt(reference);
-    if (!paymentHash) return;
-    const response = await csrfFetch(`${this.prefix}/swaps/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ reference, payment_hash: paymentHash }),
+    if (!paymentHash) return prepared;
+    const resumed = await resumeSwapAttempt({
+      fetch: csrfFetch,
+      prefix: this.prefix,
+      reference,
+      paymentHash,
+      snapshot: prepared,
     });
-    if (!response.ok) {
+    const invoice = resumed.invoices.find((entry) => entry.payment_hash === paymentHash);
+    if (invoice === undefined) {
       forgetSwapAttempt(reference);
-      return;
+      return prepared;
     }
-    const invoice = normalizeSwapStartInvoice(await response.json());
+    // The wizard's own copy of the attempt, so the breadcrumb and the refund
+    // draft read the same one the snapshot carries.
     this.setStartedSwap(invoice);
-    const current = this.snapshotValue;
-    if (current) this.applySnapshot(mergeAttemptIntoSnapshot(invoice, current));
+    return resumed;
   };
 
   // Anything that starts something must be able to stop it. Called from

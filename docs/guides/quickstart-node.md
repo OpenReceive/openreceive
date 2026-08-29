@@ -204,7 +204,8 @@ without touching a database. → [openreceive doctor](api-reference.md#openrecei
 - [Authorization](authorization.md) — your policy boundary
 - [Payment storage](storage.md) — the library-owned table and state machine
 - [Frontend Checkout](frontend-checkout.md) — browser responsibilities
-- [Automated Swaps](automated-swaps.md) — `swap_data` and refunds
+- [Automated Swaps](automated-swaps.md) — `swap_data`, and what turning swaps on commits you to
+- [Swap refunds](swap-refunds.md) — the refund flow, and the per-order URL a payer needs to come back and use it. Read it before setting `LSC_URI_PRIMARY`
 - [Security](security.md) — server-only secret boundaries
 
 Request flow, retry/concurrency semantics, and direct server checkout are

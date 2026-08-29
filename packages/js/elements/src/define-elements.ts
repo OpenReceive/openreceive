@@ -1,5 +1,6 @@
 import {
   type AssetUrlResolver,
+  type BrowserLoggerOption,
   buildMethodGridEntries,
   type CheckoutController,
   type CheckoutInvoiceSnapshot,
@@ -15,10 +16,10 @@ import {
   createCheckoutStateEvent,
   createCheckoutStatusModel,
   createPaymentWizardSelection,
-  createSwapDisplayModel,
-  createThemeChangeEvent,
   createQrPayloadSvg,
   createQrSvg,
+  createSwapDisplayModel,
+  createThemeChangeEvent,
   deriveStatus,
   enterCheckoutResumePath,
   getSwapRefundFormError,
@@ -26,28 +27,26 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_DEFAULT_PREFIX,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_PAYMENT_WIZARD_SELECTORS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
-  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type BrowserLoggerOption,
-  paymentMethods,
   orClasses,
   parseBooleanAttribute,
   parseOptionalInteger,
   parsePaymentMethod,
   parseResolvedTheme,
   parseThemePreference,
+  paymentMethods,
   resolveWizardSelection,
   selectCurrentSwapInvoice,
   syncStoredThemeControls,
   toggleStoredThemeControls,
   updatePaymentWizardSelection,
 } from "@openreceive/browser/headless";
-import { createElementCheckoutSession } from "./element-checkout-session.ts";
 import {
   parseElementRail,
   readElementAmountMsats,
@@ -56,6 +55,7 @@ import {
   showElementCopyFeedback,
   wireSwapSelectAllInputs,
 } from "./dom-helpers.ts";
+import { createElementCheckoutSession } from "./element-checkout-session.ts";
 import { adoptCheckoutStyles } from "./element-styles.ts";
 import {
   renderCheckoutCreateErrorHtml,
@@ -189,6 +189,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       syncResumePath: (reference) => {
         this.syncResumePath(reference);
       },
+      resumePaymentHash: () => this.resumePaymentHash(),
       resolvePollPrefix: (reference) => this.resolvePollPrefix(reference),
       dispatchError: (error) => {
         this.dispatchError(error);
@@ -216,6 +217,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentHash,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumable,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,
@@ -380,6 +382,18 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
         ) === true
       );
+    }
+
+    /**
+     * The swap attempt this order already has in flight, if the host named one.
+     *
+     * Read from the attribute at prepare time rather than captured at
+     * construction: a host that learns the hash asynchronously (its own order
+     * fetch) sets the attribute late, and the create lifecycle re-runs.
+     */
+    private resumePaymentHash(): string | undefined {
+      const value = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentHash);
+      return value === null || value.length === 0 ? undefined : value;
     }
 
     /** Order data belongs to the host; this only performs optional History API sync. */

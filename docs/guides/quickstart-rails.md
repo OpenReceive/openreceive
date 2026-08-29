@@ -286,3 +286,12 @@ One `openreceive_payments` row holds at most one provider order in its
 server-only `swap_data`. The engine filters `swap_data` from Active Record
 inspection and ordinary serialization. Do not explicitly serialize it, log it,
 or return it from your own API; it may contain a provider credential.
+
+**Setting either connection string commits you to refunds.** A swap deposit can
+arrive short or late, which leaves it `refund_required` at the provider with
+only your UI able to claim it — and the payer claims it on a second visit,
+after leaving your page for an address in another wallet. That needs a
+per-order URL your app serves, a route that restores the order behind it, and
+something that restores the ATTEMPT, since `/checkouts/prepare` returns none.
+[Swap refunds](swap-refunds.md) is the whole of it; read it before you set
+`LSC_URI_PRIMARY`.

@@ -25,6 +25,7 @@ const props = withDefaults(defineProps<WrapperCheckoutComponentProps>(), {
   paymentWizard: undefined,
   themeToggle: undefined,
   syncUrl: undefined,
+  resumePaymentHash: undefined,
   resumable: undefined,
 });
 
@@ -45,6 +46,7 @@ const shell = computed(() => {
     syncUrl: props.syncUrl,
     resumePathPrefix: props.resumePathPrefix,
     routeReference: props.routeReference,
+    resumePaymentHash: props.resumePaymentHash,
   });
   return createWrapperCheckoutShellBinding(props.checkout ?? null, {
     ...props.options,
@@ -61,6 +63,9 @@ const shell = computed(() => {
     ...(props.syncUrl === undefined ? {} : { syncUrl: props.syncUrl }),
     ...(props.resumePathPrefix === undefined ? {} : { resumePathPrefix: props.resumePathPrefix }),
     ...(props.routeReference === undefined ? {} : { routeReference: props.routeReference }),
+    ...(props.resumePaymentHash === undefined
+      ? {}
+      : { resumePaymentHash: props.resumePaymentHash }),
     ...(props.resumable === undefined ? {} : { resumable: props.resumable }),
     ...(props.onCopy === undefined ? {} : { onCopy: props.onCopy }),
     ...(props.onOpenWallet === undefined ? {} : { onOpenWallet: props.onOpenWallet }),

@@ -144,6 +144,21 @@ export const orClasses = {
     "grid gap-3 md:grid-cols-[auto_minmax(0,1fr)] md:gap-x-5 md:items-start min-w-0",
   swapDepositSide: "grid gap-3 min-w-0 content-start",
   swapHeading: "flex flex-wrap gap-2 items-center justify-between",
+  /**
+   * The heading on the three refund states. Same content as `swapHeading`, in
+   * an alert: "Refund needed" is not a section title, it is the payer being
+   * told their money did not go where they sent it for.
+   */
+  swapRefundHeading: "alert alert-warning grid gap-1 text-left",
+  /**
+   * The return callout, which sits ABOVE the refund form rather than under the
+   * support details. It is the sentence that decides whether the payer can come
+   * back at all, and a payer who has to leave for an address in another wallet
+   * reads it before they go, not after they scroll past the form.
+   */
+  swapRefundReturn: "alert alert-info alert-soft grid gap-2 text-sm text-left",
+  swapRefundReturnTitle: "font-bold m-0",
+  swapRefundReturnBody: "m-0",
   swapHeadingTitle: "text-lg font-semibold",
   swapHeadingDetail: "text-base-content/60",
   swapQr:

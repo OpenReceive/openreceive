@@ -1,20 +1,21 @@
 import {
+  type BrowserLogger,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
+  checkoutLabels,
   createDetailExternalLink,
-  type DetailLinkKind,
-  createSwapDisplayModel,
-  createTransactionDetails,
   createQrSvgController,
+  createSwapDisplayModel,
+  createSwapUnavailableModel,
+  createTransactionDetails,
+  currentCheckoutUrl,
+  type DetailLinkKind,
   getSwapRefundFormError,
-  type BrowserLogger,
+  orClasses,
   type QrEncoder,
   type SwapDisplayModel,
-  checkoutLabels,
-  createSwapUnavailableModel,
-  swapOptionLimitMessage,
-  orClasses,
   selectCheckoutDisplayInvoice,
+  swapOptionLimitMessage,
   type UnixSeconds,
 } from "@openreceive/browser/headless";
 import * as React from "react";
@@ -196,6 +197,22 @@ export function renderSwapDepositPanel(options: {
       display.providerStateDetail,
     ),
   );
+  // The same two strings, as an alert. "Refund needed" is not a section title:
+  // it is the payer being told their money did not go where they sent it for.
+  const refundHeading = React.createElement(
+    "div",
+    { className: orClasses.swapRefundHeading, role: "alert" },
+    React.createElement(
+      "strong",
+      { className: orClasses.swapHeadingTitle },
+      display.providerStateLabel,
+    ),
+    React.createElement(
+      "span",
+      { className: orClasses.swapHeadingDetail },
+      display.providerStateDetail,
+    ),
+  );
   // The "still waiting" states borrow the Lightning section's status card (spinner +
   // title + detail) so the swap panel that replaces it reads the same.
   const waitingCard = (countdownLabel?: string) =>
@@ -344,7 +361,8 @@ export function renderSwapDepositPanel(options: {
       {
         className: orClasses.swapPanel,
       },
-      heading,
+      refundHeading,
+      renderSwapRefundReturnWarning(display, options),
       renderSwapRefundFacts(display, options),
       React.createElement(
         "p",
@@ -363,7 +381,6 @@ export function renderSwapDepositPanel(options: {
         onError: options.onError,
       }),
       renderSwapSupportDetails(display, options),
-      renderSwapRefundReturnWarning(display),
     );
   }
 
@@ -373,7 +390,8 @@ export function renderSwapDepositPanel(options: {
       {
         className: orClasses.swapPanel,
       },
-      heading,
+      refundHeading,
+      renderSwapRefundReturnWarning(display, options),
       renderSwapRefundFacts(display, options),
       React.createElement(
         "dl",
@@ -396,7 +414,6 @@ export function renderSwapDepositPanel(options: {
             }),
       ),
       renderSwapSupportDetails(display, options),
-      renderSwapRefundReturnWarning(display),
     );
   }
 
@@ -760,13 +777,45 @@ function renderSwapSupportDetails(
   );
 }
 
-function renderSwapRefundReturnWarning(display: SwapDisplayModel): React.ReactElement {
+/**
+ * How the payer gets back here, with the affordance the sentence names.
+ *
+ * `refundReturnLabel` is already the right sentence for this host's routing —
+ * "Bookmark this page, or copy its URL" when the checkout is resumable, "do not
+ * close this tab" when it is not. When there IS a URL, a copy button for it
+ * sits underneath: a payer leaving for an address in another wallet should not
+ * have to know how to copy an address bar on a phone.
+ *
+ * Mirrors renderElementSwapRefundReturnWarningHtml; keep the two in step.
+ */
+function renderSwapRefundReturnWarning(
+  display: SwapDisplayModel,
+  options: {
+    readonly clipboard?: Pick<Clipboard, "writeText">;
+    readonly onError?: (error: unknown) => void;
+  },
+): React.ReactElement {
+  const url = display.resumable ? currentCheckoutUrl() : undefined;
   return React.createElement(
-    "p",
-    {
-      className: orClasses.swapWarning,
-    },
-    display.refundReturnLabel,
+    "div",
+    { className: orClasses.swapRefundReturn },
+    React.createElement(
+      "p",
+      { className: orClasses.swapRefundReturnTitle },
+      checkoutLabels.refundReturnTitle,
+    ),
+    React.createElement(
+      "p",
+      { className: orClasses.swapRefundReturnBody },
+      display.refundReturnLabel,
+    ),
+    url === undefined
+      ? null
+      : React.createElement(
+          "dl",
+          { className: orClasses.swapDetails },
+          ...renderSwapCopyRow(checkoutLabels.refundReturnUrlLabel, url, options),
+        ),
   );
 }
 

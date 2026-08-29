@@ -7,11 +7,13 @@ import {
   SegmentedControl,
   Text,
 } from "@mantine/core";
+import type { CheckoutState } from "@openreceive/browser";
 import { Checkout } from "@openreceive/react";
 import { observer } from "mobx-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadShopBootstrap } from "../../../../shared/bootstrap.ts";
+import { readSwapAttempt, rememberSwapAttempt } from "../../../../shared/checkout-resume.ts";
 import { ShopPanel } from "../../../../shared/client/components/ShopPanel.tsx";
 import { ShopStore } from "../../../../shared/client/stores/ShopStore.ts";
 import { shopTheme } from "../../../../shared/client/theme.ts";
@@ -137,6 +139,25 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
     const [retryNonce, setRetryNonce] = useState(0);
     const retrySameOrder = useCallback(() => setRetryNonce((nonce) => nonce + 1), []);
 
+    // THE ORDER'S DEPOSIT, KEPT ACROSS A CLOSED TAB.
+    //
+    // `/checkouts/prepare` carries no attempts, so a bookmarked checkout would
+    // open on the method grid — and a payer sent away to fetch a refund address
+    // would come back to a shop. The packaged checkout takes the attempt's
+    // payment hash and reopens it; remembering the hash is ours, because the
+    // library owns no order and no storage.
+    //
+    // `onState` is where it comes from: the checkout reports every attempt it
+    // is watching, and a swap attempt names its own hash.
+    const resumePaymentHash = readSwapAttempt(reference);
+    const rememberSwap = useCallback(
+      (state: CheckoutState) => {
+        if (state.rail !== "swap" || !state.payment_hash) return;
+        rememberSwapAttempt(reference, state.payment_hash);
+      },
+      [reference],
+    );
+
     return (
       <>
         <div className="or-shop-stage">
@@ -155,6 +176,7 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
               key={`react-${retryNonce}`}
               onSettled={onSettled}
               onStartOver={retrySameOrder}
+              onState={rememberSwap}
               prefix={prefix}
               reference={reference}
               // NOT `syncUrl`: the HOST owns the address bar here, because it
@@ -163,6 +185,7 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
               // order HAS such a URL, which is the one thing that decides
               // whether the refund screen tells the payer to bookmark it.
               resumable
+              {...(resumePaymentHash ? { resumePaymentHash } : {})}
               // The shop has no dark mode — shop.css hard-codes #fff in several
               // places and says so at the top. A toggle here would half-convert
               // the page, so the packaged checkout is pinned to light like every
@@ -175,8 +198,10 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
               key={`${framework}-${retryNonce}`}
               onSettled={onSettled}
               onStartOver={retrySameOrder}
+              onSwapAttempt={rememberSwap}
               prefix={prefix}
               reference={reference}
+              resumePaymentHash={resumePaymentHash}
             />
           )}
         </div>
@@ -212,9 +237,19 @@ const EmbeddedCheckout: React.FC<{
   readonly framework: Exclude<CheckoutFramework, "react">;
   readonly onSettled: () => void;
   readonly onStartOver: () => void;
+  readonly onSwapAttempt: (state: CheckoutState) => void;
   readonly prefix: string;
   readonly reference: string;
-}> = ({ framework, onSettled, onStartOver, prefix, reference }) => {
+  readonly resumePaymentHash: string;
+}> = ({
+  framework,
+  onSettled,
+  onStartOver,
+  onSwapAttempt,
+  prefix,
+  reference,
+  resumePaymentHash,
+}) => {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -231,7 +266,14 @@ const EmbeddedCheckout: React.FC<{
       // and says so at the top — so every framework is pinned to light.
       themeToggle: false as const,
       onSettled: () => onSettled(),
+      // The three element wrappers deliver state as a DOM CustomEvent rather
+      // than a typed callback; the detail is the same CheckoutState React gets.
+      onState: (event: Event) => {
+        const state = (event as CustomEvent<CheckoutState>).detail;
+        if (state) onSwapAttempt(state);
+      },
     };
+    const resumeProps = resumePaymentHash.length === 0 ? {} : { resumePaymentHash };
 
     const mount = async (): Promise<void> => {
       if (framework === "vue") {
@@ -248,6 +290,7 @@ const EmbeddedCheckout: React.FC<{
           reference,
           prefix,
           resumable: true,
+          ...resumeProps,
           onSettled: options.onSettled,
           onStartOver,
           options,
@@ -270,6 +313,7 @@ const EmbeddedCheckout: React.FC<{
             reference,
             prefix,
             resumable: true,
+            ...resumeProps,
             onSettled: options.onSettled,
             onStartOver,
             options,
@@ -302,6 +346,9 @@ const EmbeddedCheckout: React.FC<{
         component.setInput("reference", reference);
         component.setInput("prefix", prefix);
         component.setInput("resumable", true);
+        if (resumePaymentHash.length > 0) {
+          component.setInput("resumePaymentHash", resumePaymentHash);
+        }
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
         component.setInput("options", options);
@@ -324,7 +371,7 @@ const EmbeddedCheckout: React.FC<{
       cleanup();
       host.replaceChildren();
     };
-  }, [framework, onSettled, onStartOver, prefix, reference]);
+  }, [framework, onSettled, onStartOver, onSwapAttempt, prefix, reference, resumePaymentHash]);
 
   return <div data-framework={framework} ref={hostRef} />;
 };

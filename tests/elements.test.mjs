@@ -454,7 +454,20 @@ test("elements refund screen tells the payer to bookmark only when the checkout 
   assert.match(html, /data-or-swap-refund-allowed="true"/);
   assert.match(html, /Review refund address/);
   assert.ok(html.includes(checkoutLabels.refundReturnWarning));
-  assert.ok(html.indexOf("Payment details") < html.indexOf(checkoutLabels.refundReturnWarning));
+  // THE RETURN WARNING COMES FIRST. It used to sit last, under the support
+  // details, which is the least-read position on the screen for the sentence
+  // that decides whether the payer can come back at all — and they read it on
+  // the way out, to fetch an address from another wallet, not on the way down.
+  assert.ok(
+    html.indexOf(checkoutLabels.refundReturnWarning) < html.indexOf("Review refund address"),
+    "the return warning must precede the refund form",
+  );
+  assert.ok(
+    html.indexOf(checkoutLabels.refundReturnWarning) < html.indexOf("Payment details"),
+    "the return warning must precede the support details",
+  );
+  // The sentence names an affordance ("copy its URL"), so one is rendered.
+  assert.ok(html.includes(checkoutLabels.refundReturnTitle));
 
   for (const resumable of [undefined, false]) {
     const unbookmarkable = wizard(resumable);

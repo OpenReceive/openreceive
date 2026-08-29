@@ -1,10 +1,16 @@
 import { nonEmptyString, recordOrEmpty } from "@openreceive/core";
+import { mergeAttemptIntoSnapshot } from "./checkout-merge.ts";
 import { optionalSafeInteger } from "./checkout-read.ts";
 import { readJsonResponse } from "./checkout-transport.ts";
 import { resolveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
 import { requestHeaders } from "./request-headers.ts";
 import { checkoutRoutes, type Routes } from "./routes.ts";
-import type { BrowserLoggerOption, BrowserLogLevel, CheckoutInvoiceSnapshot } from "./ui.ts";
+import type {
+  BrowserLoggerOption,
+  BrowserLogLevel,
+  CheckoutInvoiceSnapshot,
+  CheckoutSnapshot,
+} from "./ui.ts";
 
 /**
  * What every swap call needs: the fetch to use, and the mount `prefix` its
@@ -130,6 +136,65 @@ export async function startSwapRequest(
       error_message: error instanceof Error ? error.message : String(error),
     });
     throw error;
+  }
+}
+
+/**
+ * Read one swap attempt by payment hash, as a normalized invoice snapshot.
+ *
+ * THIS IS THE ONLY WAY BACK TO AN ATTEMPT THE BROWSER NO LONGER HOLDS.
+ * `POST /checkouts/prepare` answers with the amount and the pay-in catalog and
+ * NO attempts, so a checkout rebuilt from a reference alone opens on the
+ * payment-method grid — and re-selecting the same asset only re-serves the
+ * committed attempt while it is still live and comfortably before expiry, after
+ * which it mints a second deposit address. `/swaps/status` selects one attempt
+ * and applies no reuse test, so it still answers for a deposit that stopped
+ * being payable hours ago. That is what a payer told to bookmark a refund
+ * screen actually needs; see docs/guides/swap-refunds.md.
+ *
+ * Rejects like its siblings — a `BrowserRequestError` carrying `status`, so a
+ * caller can tell an unknown attempt (404) from an outage. {@link
+ * resumeSwapAttempt} is the forgiving wrapper the renderers use.
+ */
+export async function requestSwapStatus(
+  options: SwapRequestOptions & {
+    readonly reference: string;
+    readonly paymentHash: string;
+  },
+): Promise<CheckoutInvoiceSnapshot> {
+  const body = await requestJson(options, checkoutRoutes(options.prefix).swapsStatus, {
+    reference: options.reference,
+    payment_hash: options.paymentHash,
+  });
+  return normalizeSwapStartInvoice(body);
+}
+
+/**
+ * A prepared snapshot, with the host's remembered swap attempt folded back in.
+ *
+ * A FAILURE IS SILENCE, NOT AN ERROR. The payment hash comes from the host's
+ * own storage, which can hold a stale note — an attempt on another visitor's
+ * order, or one the server will no longer serve. Neither is a reason to put an
+ * error screen in front of a payer who can still start a fresh payment, so the
+ * prepared snapshot is returned unchanged and the checkout opens on the method
+ * grid exactly as it would have.
+ *
+ * Shared rather than written twice: React and the custom element both need it
+ * for `resumePaymentHash`, and the rule above is the part that would drift.
+ */
+export async function resumeSwapAttempt(
+  options: SwapRequestOptions & {
+    readonly reference: string;
+    readonly paymentHash: string;
+    readonly snapshot: CheckoutSnapshot;
+  },
+): Promise<CheckoutSnapshot> {
+  if (options.paymentHash.length === 0) return options.snapshot;
+  try {
+    const invoice = await requestSwapStatus(options);
+    return mergeAttemptIntoSnapshot(invoice, options.snapshot);
+  } catch {
+    return options.snapshot;
   }
 }
 

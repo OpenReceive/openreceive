@@ -89,6 +89,15 @@ invoice from this row instead of calling the wallet again — the page keeps
 working even while the wallet is unreachable. Never serialize or log
 `swap_data`.
 
+That re-serve stops at the row's own `expires_at`, less a 60-second buffer:
+after it, a create call mints a replacement attempt instead. It is the same
+rule on both rails, and on the swap rail it means a payer who comes back late
+gets a NEW deposit address. Reaching one specific attempt after that boundary
+is what `POST …/swaps/status` is for — it selects by `payment_hash` and applies
+no reuse test. See
+[API reference → Repeating a create](api-reference.md#repeating-a-create-mint-or-re-serve)
+and [Swap refunds](swap-refunds.md).
+
 **One engine per table.** The two engines write the same FIELDS but not the
 same schema: the JS DDL stores timestamps as unix-seconds `BIGINT`s and
 `checkout_data`/`swap_data` as `TEXT`, while the Rails engine's migration uses

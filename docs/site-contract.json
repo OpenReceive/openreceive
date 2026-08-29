@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "category": "quickstart",
-      "bytes": 9532
+      "bytes": 9719
     },
     {
       "path": "/guides/quickstart-rails",
@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 13981
+      "bytes": 14537
     },
     {
       "path": "/guides/node-orms",
@@ -73,7 +73,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 9913
+      "bytes": 10288
     },
     {
       "path": "/guides/checkout-ux",
@@ -93,7 +93,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 34475
+      "bytes": 34542
     },
     {
       "path": "/guides/automated-swaps",
@@ -103,7 +103,7 @@
       "slug": "automated-swaps",
       "title": "Automated Swaps",
       "category": "guide",
-      "bytes": 7175
+      "bytes": 8095
     },
     {
       "path": "/guides/swap-refunds",
@@ -113,7 +113,7 @@
       "slug": "swap-refunds",
       "title": "Swap Refunds",
       "category": "guide",
-      "bytes": 11738
+      "bytes": 12217
     },
     {
       "path": "/guides/lightning-swap-connect",
@@ -143,7 +143,7 @@
       "slug": "storage",
       "title": "Payment Storage",
       "category": "operations",
-      "bytes": 10706
+      "bytes": 11248
     },
     {
       "path": "/guides/deploying",
@@ -163,7 +163,7 @@
       "slug": "host-testing",
       "title": "Testing Your OpenReceive Integration",
       "category": "guide",
-      "bytes": 4048
+      "bytes": 6665
     },
     {
       "path": "/guides/api-reference",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 84666
+      "bytes": 86442
     },
     {
       "path": "/guides/security",
@@ -243,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 30323
+      "bytes": 30910
     },
     {
       "path": "/api_docs",
@@ -253,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 84666,
+      "bytes": 86442,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -272,7 +272,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 30323,
+      "bytes": 30910,
       "copy_button": true,
       "self_contained": true
     }

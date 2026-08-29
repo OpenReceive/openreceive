@@ -77,22 +77,66 @@ There is deliberately no implicit static fallback: a wallet client must refuse t
 price invoices rather than silently quote a hard-coded rate, so tests opt in
 explicitly.
 
+## Inject a fake wallet client (Rails)
+
+The engine takes the same seams from a Rails initializer. `config.nwc_client`
+skips NWC entirely, `config.swap_providers` replaces the FixedFloat-compatible
+providers built from `LSC_URI_*`, and `OpenReceive::Rates::StaticPriceProvider`
+prices without a network:
+
+```ruby
+OpenReceive.configure do |config|
+  if ENV["DEMO_WALLET"] == "testkit"
+    config.nwc_client = MyFakeWallet.new
+    config.swap_providers = [MyFakeSwapProvider.new]
+    config.price_provider = OpenReceive::Rates::StaticPriceProvider.new
+  end
+  # amount_for, authorize and on_paid stay exactly as they are in production.
+end
+```
+
+Both objects are DUCK-TYPED, so there is no base class to inherit:
+
+- The wallet answers `make_invoice(request)` and `list_transactions(request)`
+  with string-keyed hashes, plus one info method (`preflight`, `get_info`, …)
+  advertising at least `make_invoice` and `list_transactions` — receive-only,
+  because the service refuses a spend-capable wallet unless you override it.
+  Settlement is read from `list_transactions`, on a finality signal, exactly as
+  in production.
+- The swap provider answers `name`, `supported_pay_in_assets`,
+  `pay_in_asset_catalog`, `invoice_expiry_seconds`, `quote`, `create_swap`,
+  `get_status` and `request_refund`. `invoice_expiry_seconds` is a FLOOR the
+  service passes to `make_invoice`: the shadow invoice has to outlive the
+  provider order, so a fake wallet that clamps expiry fails every swap.
+
+A worked pair is
+[`examples/buttons/server/rails/lib/button_shop/testkit/`](../../examples/buttons/server/rails/lib/button_shop/testkit).
+
 ## Click through a full checkout with no wallet
 
-The Buy a Button demo boots against in-process fakes when `DEMO_WALLET=testkit`
-is set — no `NWC_URI`, no network:
+Every stack of the Buy a Button demo boots against in-process fakes when
+`DEMO_WALLET=testkit` is set — no `NWC_URI`, no LSC keys, no network:
 
 ```sh
 DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/node-express
+DEMO_WALLET=testkit bin/dev       # in examples/buttons/server/rails
 ```
 
 The shop, the checkout wizard (all four framework tabs), Lightning invoices,
-and swap flows all work; a test-only control surface under `/__testkit` lets
-you settle or expire invoices and advance swap states from `curl` or a
-browser console. The prefix hard-404s in every other mode, the compose files
-never set `DEMO_WALLET`, and the client-bundle scanner proves no testkit code
-ships — see
+and swap flows all work — including a swap that reaches `refund_required` and a
+refund submitted through the real engine routes. A test-only control surface
+under `/__testkit` lets you settle or expire invoices and advance swap states
+from `curl` or a browser console. The prefix hard-404s in every other mode, the
+compose files never set `DEMO_WALLET`, and the client-bundle scanner proves no
+testkit code ships — see
 [examples/README.md](../../examples/README.md) for the endpoint list.
+
+The Rails fakes are a port of the JS ones with identical fixtures — the same
+payment hashes, the same `testkit-swap-N` order ids, the same deposit
+addresses, BTC at a static $50,000 — so one browser harness drives either
+language. That is worth copying if you run both: a fake that satisfies the
+contract but disagrees with its twin needs a second harness, and the second
+harness is where the two stacks drift apart.
 
 ## The repository's own E2E lane
 
@@ -100,8 +144,12 @@ ships — see
 mode: four-framework mount-and-pay walkthroughs, swap advance + refund,
 expire-and-remint, and resume/theme-toggle behavior. The specs in
 [tests/e2e/](../../tests/e2e) are a working reference for driving a checkout
-end-to-end against the fakes.
+end-to-end against the fakes. That lane boots the node-express stack because it
+needs no database service; the Rails stack answers the same control surface with
+the same fixtures, so the same helpers point at it by changing `baseURL`.
 
 The `@openreceive/testkit` package that powers all of this is internal and
-unpublished; its API may change without notice. The stable seams for your own
-tests are the `client` option and `StaticPriceProvider` above.
+unpublished, and so is the Rails demo's port of it; both APIs may change
+without notice. The stable seams for your own tests are the ones above: the
+`client` option and `StaticPriceProvider` in Node, and `config.nwc_client` /
+`config.swap_providers` / `OpenReceive::Rates::StaticPriceProvider` in Rails.

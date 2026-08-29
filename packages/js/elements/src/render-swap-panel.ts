@@ -4,15 +4,16 @@
 // counterpart is react/src/swap.ts.
 import {
   type CheckoutInvoiceSnapshot,
+  checkoutLabels,
   createSwapDisplayModel,
+  currentCheckoutUrl,
   escapeHtml,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
-  checkoutLabels,
-  swapAssetMatchesRoute,
-  type SwapDisplayModel,
-  swapOptionLimitMessage,
-  type SwapLimitContext,
   orClasses,
+  type SwapDisplayModel,
+  type SwapLimitContext,
+  swapAssetMatchesRoute,
+  swapOptionLimitMessage,
 } from "@openreceive/browser/headless";
 import { renderElementSwapCopyDetailHtml } from "./dom-helpers.ts";
 import { renderTransactionDetailsHtml } from "./transaction-details.ts";
@@ -103,6 +104,14 @@ export function renderElementSwapPanelHtml(
   const supportDetails = renderElementSwapSupportDetailsHtml(display);
   const heading = `
     <div part="swap-heading" class="${orClasses.swapHeading}">
+      <strong class="${orClasses.swapHeadingTitle}">${escapeHtml(display.providerStateLabel)}</strong>
+      <span class="${orClasses.swapHeadingDetail}">${escapeHtml(display.providerStateDetail)}</span>
+    </div>
+  `;
+  // The same two strings, as an alert. "Refund needed" is not a section title:
+  // it is the payer being told their money did not go where they sent it for.
+  const refundHeading = `
+    <div part="swap-heading" class="${orClasses.swapRefundHeading}" role="alert">
       <strong class="${orClasses.swapHeadingTitle}">${escapeHtml(display.providerStateLabel)}</strong>
       <span class="${orClasses.swapHeadingDetail}">${escapeHtml(display.providerStateDetail)}</span>
     </div>
@@ -208,7 +217,8 @@ export function renderElementSwapPanelHtml(
     const refundFacts = renderElementSwapRefundFactsHtml(display);
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
-        ${heading}
+        ${refundHeading}
+        ${renderElementSwapRefundReturnWarningHtml(display)}
         ${refundFacts}
         <p part="swap-warning" class="${orClasses.swapWarning}">Use a ${escapeHtml(display.networkLabel)} address you control. Do not paste the deposit address.</p>
         ${
@@ -265,7 +275,6 @@ export function renderElementSwapPanelHtml(
         `
         }
         ${supportDetails}
-        ${renderElementSwapRefundReturnWarningHtml(display)}
       </section>
     `;
   }
@@ -274,14 +283,14 @@ export function renderElementSwapPanelHtml(
     const refundFacts = renderElementSwapRefundFactsHtml(display);
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
-        ${heading}
+        ${refundHeading}
+        ${renderElementSwapRefundReturnWarningHtml(display)}
         ${refundFacts}
         <dl part="swap-details" class="${orClasses.swapDetails}">
           ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress, { kind: "address", payInAsset: display.payInAsset })}
           ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, { kind: "tx", payInAsset: display.payInAsset })}
         </dl>
         ${supportDetails}
-        ${renderElementSwapRefundReturnWarningHtml(display)}
       </section>
     `;
   }
@@ -296,9 +305,31 @@ export function renderElementSwapPanelHtml(
   `;
 }
 
+/**
+ * How the payer gets back here, with the affordance the sentence names.
+ *
+ * `refundReturnLabel` is already the right sentence for this host's routing —
+ * "Bookmark this page, or copy its URL" when the checkout is resumable, "do not
+ * close this tab" when it is not. When there IS a URL, a copy button for it
+ * sits underneath: a payer leaving for an address in another wallet should not
+ * have to know how to copy an address bar on a phone.
+ */
 function renderElementSwapRefundReturnWarningHtml(display: SwapDisplayModel): string {
+  const url = display.resumable ? currentCheckoutUrl() : undefined;
   return `
-    <p part="swap-refund-return" class="${orClasses.swapWarning}">${escapeHtml(display.refundReturnLabel)}</p>
+    <div part="swap-refund-return" class="${orClasses.swapRefundReturn}">
+      <p class="${orClasses.swapRefundReturnTitle}">${escapeHtml(checkoutLabels.refundReturnTitle)}</p>
+      <p class="${orClasses.swapRefundReturnBody}">${escapeHtml(display.refundReturnLabel)}</p>
+      ${
+        url === undefined
+          ? ""
+          : `<dl part="swap-details" class="${orClasses.swapDetails}">${renderElementSwapCopyDetailHtml(
+              checkoutLabels.refundReturnUrlLabel,
+              url,
+              { selectable: true },
+            )}</dl>`
+      }
+    </div>
   `;
 }
 

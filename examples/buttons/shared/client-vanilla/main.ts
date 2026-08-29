@@ -35,7 +35,9 @@ import {
   buttonsCheckoutResume,
   checkoutUrlFor,
   normalizeOrderReference,
+  readSwapAttempt,
   referenceInLocation,
+  rememberSwapAttempt,
 } from "../checkout-resume.ts";
 import { getJson, postJson } from "../http.ts";
 import {
@@ -535,6 +537,23 @@ const renderCheckout = (): DocumentFragment => {
   // the order HAS such a URL, which is the one thing that decides whether the
   // element's refund screen tells the payer to bookmark it.
   checkout.setAttribute(CHECKOUT_ATTRIBUTES.resumable, "true");
+  // THE ORDER'S DEPOSIT, KEPT ACROSS A CLOSED TAB. `/checkouts/prepare` carries
+  // no attempts, so without this a bookmarked checkout opens on the method grid
+  // and a payer sent away for a refund address comes back to a shop. The
+  // element reopens the attempt this names; remembering it is ours, because the
+  // library owns no order and no storage.
+  const resumePaymentHash = readSwapAttempt(order.reference);
+  if (resumePaymentHash) {
+    checkout.setAttribute(CHECKOUT_ATTRIBUTES.resumePaymentHash, resumePaymentHash);
+  }
+  // Where the hash comes from: the element reports every attempt it watches,
+  // and a swap attempt names its own payment hash.
+  checkout.addEventListener(CHECKOUT_EVENTS.state, (event) => {
+    const state = (event as CustomEvent<{ rail?: string; payment_hash?: string }>).detail;
+    if (state?.rail === "swap" && state.payment_hash) {
+      rememberSwapAttempt(order.reference, state.payment_hash);
+    }
+  });
   // The browser does not learn from this event that it was fulfilled. It
   // re-reads the order row, which is the only thing that can say so.
   checkout.addEventListener(CHECKOUT_EVENTS.settled, () => void confirmSettlement());

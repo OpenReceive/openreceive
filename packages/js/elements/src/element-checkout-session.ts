@@ -21,17 +21,18 @@
 
 import {
   applyCheckoutElementAttributes,
+  type BrowserLoggerOption,
+  type CheckoutPaymentMethod,
   type CheckoutSnapshot,
   createCheckoutElementAttributes,
   createCheckoutSession,
   mergeAttemptIntoCheckout,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
-  type BrowserLoggerOption,
-  type CheckoutPaymentMethod,
-  type SwapSelection,
   prepareCheckout,
   requestCheckout,
+  resumeSwapAttempt,
+  type SwapSelection,
 } from "@openreceive/browser/headless";
 
 /** What the session needs back from the element it drives. */
@@ -49,6 +50,8 @@ export interface ElementCheckoutSessionHost {
   currentThemeOption(): { readonly theme?: "light" | "dark" };
   createMetadata(): Record<string, unknown> | undefined;
   syncResumePath(reference: string): void;
+  /** The payment hash of a swap attempt the host says this order already has. */
+  resumePaymentHash(): string | undefined;
   /** The mount every server route is derived from, or undefined when there is no order. */
   resolvePollPrefix(reference?: string): string | undefined;
   dispatchError(error: unknown): void;
@@ -211,11 +214,26 @@ export function createElementCheckoutSession(
       createError = undefined;
       host.syncResumePath(reference);
       // Lock amount without minting a payer Lightning invoice. Bitcoin selection mints later.
-      const checkout = await prepareCheckout({
+      const prepared = await prepareCheckout({
         prefix,
         reference,
         fetch: globalThis.fetch,
       });
+      // Prepare returns NO attempts, so a checkout rebuilt from a reference
+      // alone opens on the method grid — the wrong screen for a payer who was
+      // told to bookmark a refund. A host that remembered the attempt names it;
+      // `resumeSwapAttempt` swallows a stale hash, leaving the method grid.
+      const resumeHash = host.resumePaymentHash();
+      const checkout =
+        resumeHash === undefined
+          ? prepared
+          : await resumeSwapAttempt({
+              fetch: globalThis.fetch,
+              prefix,
+              reference,
+              paymentHash: resumeHash,
+              snapshot: prepared,
+            });
       // The host may have re-pointed reference/prefix while this was in flight;
       // applying an older order's attributes here would silently show, and poll,
       // the wrong order. The finally block re-runs for whatever is current.

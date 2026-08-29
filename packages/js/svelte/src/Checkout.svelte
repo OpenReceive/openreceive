@@ -1,13 +1,13 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import {
-  createWrapperCheckoutShellBinding,
-  defineElements,
-  validateCheckoutProps,
   type CheckoutElementListeners,
   type CheckoutShellOptions,
   type CheckoutSnapshot,
+  createWrapperCheckoutShellBinding,
+  defineElements,
   type ThemePreference,
+  validateCheckoutProps,
 } from "./index.js";
 
 // Prop names, defaults, and per-mode applicability are the shared contract in
@@ -34,6 +34,7 @@ export let metadata: Record<string, unknown> | undefined = undefined;
 export let syncUrl: boolean | undefined = undefined;
 export let resumePathPrefix: string | undefined = undefined;
 export let routeReference: string | undefined = undefined;
+export let resumePaymentHash: string | undefined = undefined;
 export let resumable: boolean | undefined = undefined;
 export let onCopy: ((event: Event) => void) | undefined = undefined;
 export let onOpenWallet: ((event: Event) => void) | undefined = undefined;
@@ -61,6 +62,7 @@ $: validateCheckoutProps({
   syncUrl,
   resumePathPrefix,
   routeReference,
+  resumePaymentHash,
 });
 
 $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
@@ -78,6 +80,7 @@ $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...(syncUrl === undefined ? {} : { syncUrl }),
   ...(resumePathPrefix === undefined ? {} : { resumePathPrefix }),
   ...(routeReference === undefined ? {} : { routeReference }),
+  ...(resumePaymentHash === undefined ? {} : { resumePaymentHash }),
   ...(resumable === undefined ? {} : { resumable }),
   ...(onCopy === undefined ? {} : { onCopy }),
   ...(onOpenWallet === undefined ? {} : { onOpenWallet }),

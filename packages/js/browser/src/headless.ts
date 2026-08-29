@@ -20,6 +20,22 @@
 // log-field builders, the watcher class, and the create-flow steps that only
 // createCheckoutSession calls.
 
+// The host-side asset seam: packaged icon and tutorial URLs only resolve under
+// Vite/Rollup, so every display builder takes one of these and is handed the
+// packaged PATH instead. `paymentIconPaths` is the same key set for the icons
+// this package owns. `createAssetBaseUrlResolver` is the one-line adapter from
+// the string form of the seam (`assetBaseUrl` / `asset-base-url`) to a resolver.
+// The wallet-suggestion registry, re-exported so the pair reads as one API.
+// `getPaymentWizardRoutes` lives in @openreceive/provider-data and
+// `createWizardRouteDisplays` — which consumes its output and nothing else —
+// lives here; that split is a packaging decision, and a host that had to
+// discover the other package to complete one call was paying for it.
+export type {
+  AssetUrlResolver,
+  PaymentWizardRoute,
+  PaymentWizardRouteRequest,
+} from "@openreceive/provider-data";
+export { createAssetBaseUrlResolver, getPaymentWizardRoutes } from "@openreceive/provider-data";
 export type {
   QrSvgController,
   QrSvgControllerOptions,
@@ -83,6 +99,7 @@ export {
   swapAssetMatchesRoute,
   swapDepositRisk,
 } from "./internal/checkout.ts";
+export type { DetailLinkKind } from "./internal/checkout-links.ts";
 export {
   mergeAttemptIntoCheckout,
   mergeAttemptIntoSnapshot,
@@ -130,11 +147,13 @@ export {
 // host-application behavior (its own storage and order fetch), so its factory
 // and its type both live on the main entry — a surface that cannot construct
 // the controller has no use for its type.
-export { enterCheckoutResumePath } from "./internal/guest-resume.ts";
+export { currentCheckoutUrl, enterCheckoutResumePath } from "./internal/guest-resume.ts";
 export {
   normalizeSwapStartInvoice,
   postJson,
   requestSwapRefund,
+  requestSwapStatus,
+  resumeSwapAttempt,
   startSwapRequest,
 } from "./internal/swap-http.ts";
 // Theme: preference storage, the resolved-theme models the wrappers bind, and
@@ -240,20 +259,6 @@ export {
   paymentIconUrls,
   paymentMethods,
 } from "./internal/ui.ts";
-// The host-side asset seam: packaged icon and tutorial URLs only resolve under
-// Vite/Rollup, so every display builder takes one of these and is handed the
-// packaged PATH instead. `paymentIconPaths` is the same key set for the icons
-// this package owns. `createAssetBaseUrlResolver` is the one-line adapter from
-// the string form of the seam (`assetBaseUrl` / `asset-base-url`) to a resolver.
-export type { AssetUrlResolver } from "@openreceive/provider-data";
-export { createAssetBaseUrlResolver } from "@openreceive/provider-data";
-// The wallet-suggestion registry, re-exported so the pair reads as one API.
-// `getPaymentWizardRoutes` lives in @openreceive/provider-data and
-// `createWizardRouteDisplays` — which consumes its output and nothing else —
-// lives here; that split is a packaging decision, and a host that had to
-// discover the other package to complete one call was paying for it.
-export type { PaymentWizardRoute, PaymentWizardRouteRequest } from "@openreceive/provider-data";
-export { getPaymentWizardRoutes } from "@openreceive/provider-data";
 export type {
   MethodGridContinueDisplay,
   MethodGridDisplay,
@@ -265,16 +270,15 @@ export type {
   SwapUnavailableModel,
   WizardSelection,
 } from "./internal/wizard.ts";
-export type { DetailLinkKind } from "./internal/checkout-links.ts";
 // Payment wizard: the method grid, network selection, and provider tutorials.
 // Swap flows: asset/network pickers, the deposit view model and its fee
 // arithmetic, the refund form, and the swap HTTP calls.
 export {
   assetButtonClasses,
   buildMethodGridEntries,
+  createMethodGridDisplay,
   createPaymentWizardController,
   createPaymentWizardModel,
-  createMethodGridDisplay,
   createPaymentWizardSelection,
   createSwapUnavailableModel,
   createWizardRouteAssetDisplays,

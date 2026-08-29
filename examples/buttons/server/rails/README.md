@@ -31,6 +31,43 @@ stale-looking page is usually a dead webpack process rather than a cache bug.
 repository-root `.env` by server code only, and no part of it reaches a bundle,
 a log or an asset.
 
+## Running it with no wallet
+
+```sh
+DEMO_WALLET=testkit bin/dev     # no NWC_URI, no LSC keys, no network
+```
+
+Testkit mode replaces THREE THINGS — the wallet, the swap provider and the
+price feed — with in-memory fakes, and nothing else: the engine, the three
+hooks, the migrations, the controllers, ActionCable and the SPA are the
+production paths. Postgres is still Postgres; this is a fake wallet, not a
+fake application.
+
+The fakes in [`lib/button_shop/testkit/`](lib/button_shop/testkit) are a PORT
+of `packages/js/testkit`, down to the fixtures: payment hashes are the mint
+counter in 64 hex characters, the Tron deposit address is
+`T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb`, provider orders are `testkit-swap-N`, and
+BTC is a static $50,000 so a $1.00 button is 2,000 sats. That is what lets one
+Playwright suite drive this stack and the three Node stacks with the same
+assertions — a fake that satisfied the contract but not its JS twin would need
+a second harness, and a second harness is where stacks drift.
+`test/lib/testkit_test.rb` pins those values.
+
+The control surface is the same one the Node stacks mount:
+
+- `POST /__testkit/settle { payment_hash }`
+- `POST /__testkit/expire { payment_hash }`
+- `POST /__testkit/swap-step { provider_order_id | pay_in_asset, state }`
+- `GET /__testkit/state`
+
+**The route is declared unconditionally and refuses unconditionally.**
+`ButtonShop::Testkit.enabled?` reads `DEMO_WALLET` and is the only thing
+standing between a production boot and a surface that can settle invoices, so
+every action is a JSON 404 without it —
+`test/controllers/testkit_controller_test.rb` asserts exactly that, in an
+environment that does not set the variable. No compose file sets it either,
+which `npm run check:demo-containers` enforces.
+
 ## Persistence is host-owned
 
 This app owns its Postgres database. OpenReceive has no database configuration

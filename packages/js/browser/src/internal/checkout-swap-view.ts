@@ -9,7 +9,13 @@ import {
   payInAssetNetwork,
   swapAddressNetworkForPayInAsset,
 } from "@openreceive/core";
-import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
+import {
+  formatCountdown,
+  formatDepositAmount,
+  formatFiatAmount,
+  rescaleHalfUp,
+  roundedDiv,
+} from "./checkout-format.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutInvoiceSwapFee,
@@ -19,13 +25,7 @@ import {
   type SwapDisplayModel,
   type SwapFeeBreakdown,
 } from "./ui.ts";
-import {
-  formatCountdown,
-  formatDepositAmount,
-  formatFiatAmount,
-  rescaleHalfUp,
-  roundedDiv,
-} from "./checkout-format.ts";
+import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
 
 /**
  * Turn the provider's fiat equivalents into a display-ready fee breakout. The payer
@@ -207,6 +207,7 @@ export function createSwapDisplayModel(
     ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
     ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
     refundAllowed: swap.provider_state === "refund_required",
+    resumable: options.resumable === true,
     refundReturnLabel:
       options.resumable === true
         ? checkoutLabels.refundReturnWarning

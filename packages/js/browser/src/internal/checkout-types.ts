@@ -2,7 +2,7 @@
 // display/state shapes, element attribute and listener options, theme models,
 // payment-wizard models, and transaction-detail rows. Types only — the values
 // they are derived from live in ./dom-contract.ts.
-import type { UnixSeconds } from "./unix-seconds.ts";
+
 import type { AssetIndexEntry, PaymentWizardRoute } from "@openreceive/provider-data";
 import type { CheckoutStateLabels } from "./checkout-format.ts";
 import type {
@@ -12,6 +12,7 @@ import type {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
 } from "./dom-contract.ts";
+import type { UnixSeconds } from "./unix-seconds.ts";
 
 export interface TransientFeedbackOptions<T> {
   readonly resetValue: T;
@@ -293,6 +294,13 @@ export interface SwapDisplayModel {
    * to notice: render this string, never either label directly.
    */
   readonly refundReturnLabel: string;
+  /**
+   * Whether the host declared this checkout resumable — the fact
+   * {@link SwapDisplayModel.refundReturnLabel} was chosen from. Exposed so a UI
+   * can render the affordance the sentence names (a copy button for the URL)
+   * without re-deriving the decision or string-matching the label.
+   */
+  readonly resumable: boolean;
   readonly refundTxId?: string;
   readonly refundReason?: string;
   readonly depositReceivedAmount?: string;
@@ -400,6 +408,12 @@ export interface CheckoutElementAttributeOptions {
    * Order id from the app router (e.g. Next.js). When set, skip History API URL sync.
    */
   readonly routeReference?: string;
+  /**
+   * Payment hash of a swap attempt this order already has in flight. Create
+   * mode reopens it after prepare instead of showing the method grid; a hash
+   * the server will not serve is ignored.
+   */
+  readonly resumePaymentHash?: string;
   /**
    * Does a payer who closes this tab have a URL that brings them back? Emitted
    * in every mode, because the refund screen it governs shows in every mode.

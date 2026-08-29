@@ -190,6 +190,21 @@ export function enterCheckoutResumePath(
 }
 
 /**
+ * The URL a resumable checkout tells the payer to copy, or `undefined` off a
+ * browser.
+ *
+ * `checkoutLabels.refundReturnWarning` says "Bookmark this page, or copy its
+ * URL", and a sentence that names an affordance should be next to one. Both
+ * renderers read it through this function so the refund screens cannot disagree
+ * about what "its URL" means.
+ */
+export function currentCheckoutUrl(): string | undefined {
+  if (typeof globalThis.location === "undefined") return undefined;
+  const href = globalThis.location.href;
+  return href.length > 0 ? href : undefined;
+}
+
+/**
  * Guest resume fetch for a host-owned order endpoint. OpenReceive ships no order-read route.
  * Pass the result as `fetchOrder` to {@link createGuestCheckoutResume}.
  */

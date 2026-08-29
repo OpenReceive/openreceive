@@ -1,16 +1,17 @@
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
+  checkoutLabels,
   createLightningInvoiceDecodeUrl,
   enterCheckoutResumePath,
   mergeAttemptIntoCheckout,
   mergeAttemptIntoSnapshot,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
-  checkoutLabels,
   orClasses,
   prepareCheckout,
   requestCheckout,
+  resumeSwapAttempt,
   validateCheckoutProps,
 } from "@openreceive/browser/headless";
 import * as React from "react";
@@ -23,8 +24,8 @@ import {
   SatsDetail,
   WaitingState,
 } from "./components.ts";
-import { TransactionDetails } from "./transaction-details.ts";
 import { ThemeToggle, useTheme } from "./theme.ts";
+import { TransactionDetails } from "./transaction-details.ts";
 import type { CheckoutProps } from "./types.ts";
 import { useCheckout } from "./use-checkout.ts";
 import { getCheckoutLogContext, joinClassNames } from "./utils.ts";
@@ -57,6 +58,7 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
     syncUrl: props.syncUrl,
     resumePathPrefix: props.resumePathPrefix,
     routeReference: props.routeReference,
+    resumePaymentHash: props.resumePaymentHash,
   });
   const { checkout } = props;
   if (checkout !== undefined) {
@@ -121,6 +123,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     syncUrl = false,
     resumePathPrefix = "/checkout",
     routeReference,
+    resumePaymentHash,
   } = props;
 
   const [created, setCreated] = React.useState<{
@@ -180,6 +183,21 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       reference,
       ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
     })
+      // A host that remembered this order's swap attempt gets it back on the
+      // screen; prepare returns none, so without this a bookmarked refund opens
+      // on the method grid. `resumeSwapAttempt` swallows a stale hash, so the
+      // failure mode is the checkout the payer would have had anyway.
+      .then((checkout) =>
+        resumePaymentHash === undefined
+          ? checkout
+          : resumeSwapAttempt({
+              fetch: createFetchRef.current ?? globalThis.fetch,
+              prefix: resolvedPrefix,
+              reference,
+              paymentHash: resumePaymentHash,
+              snapshot: checkout,
+            }),
+      )
       .then((checkout) => {
         if (!cancelled) setCreated({ status: "ready", checkout });
       })
@@ -196,7 +214,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [reference, resolvedPrefix, attempt]);
+  }, [reference, resolvedPrefix, resumePaymentHash, attempt]);
 
   const onSwapStarted = React.useCallback(
     (invoice: CheckoutInvoiceSnapshot) => {
@@ -298,6 +316,9 @@ function CheckoutView(
     syncUrl,
     resumePathPrefix: _resumePathPrefix,
     routeReference,
+    // Consumed by CheckoutCreate before the view exists; destructured out here
+    // so it never reaches the rendered <section> as an attribute.
+    resumePaymentHash: _resumePaymentHash,
     resumable,
     onRequestLightning,
     onSwapStarted,

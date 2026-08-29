@@ -251,6 +251,37 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           ? stickySwapInvoiceRef.current
           : undefined;
 
+  // AN ATTEMPT THE SNAPSHOT ALREADY CARRIES IS THE SCREEN THE PAYER IS ON, even
+  // though this session never clicked it. `resumePaymentHash` folds a
+  // remembered attempt into the prepared snapshot, and a wizard that waits for
+  // a click shows the method grid over it — or, once the shadow invoice behind
+  // the swap has expired, an "Invoice expired" panel over a deposit that is
+  // waiting to be refunded. The money is at the provider; the invoice is
+  // bookkeeping, and the refund screen has to win.
+  //
+  // It cannot fight the payer: backing out of a method sets
+  // `dismissedSwapInvoiceId`, which removes the attempt from
+  // `currentSwapInvoice`, so this does not re-adopt what they just left. The
+  // auto-start effect below is a no-op for it, because `activeSwapForAsset`
+  // resolves to the attempt that already exists.
+  // ONCE PER MOUNT, and only before the payer has chosen anything. Re-running it
+  // would fight the breadcrumb: backing out of a method is the payer saying
+  // "show me the others", and an effect that re-adopts the attempt they just
+  // left puts them straight back on it.
+  const resumeAdoptedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (resumeAdoptedRef.current) return;
+    if (selectedSwapAsset !== null) {
+      // The payer picked a coin themselves; there is nothing left to adopt.
+      resumeAdoptedRef.current = true;
+      return;
+    }
+    const payInAsset = currentSwapInvoice?.swap?.pay_in_asset;
+    if (payInAsset === undefined) return;
+    resumeAdoptedRef.current = true;
+    setSelectedSwapAsset(payInAsset);
+  }, [currentSwapInvoice, selectedSwapAsset]);
+
   // Selecting a top-level coin hands the asset to the shared session, which
   // quotes it first (to confirm the amount is in range) and, when available,
   // starts the swap so the payer lands on the deposit address. A start that

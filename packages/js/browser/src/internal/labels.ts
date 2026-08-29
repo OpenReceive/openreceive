@@ -3,11 +3,11 @@
 // declared in ./checkout-types.ts.
 import { compiledStyles } from "../generated/compiled-styles.ts";
 import type {
+  ParseOpenReceiveOptionalIntegerOptions,
   PaymentMethod,
   PaymentMethodOption,
   ResolvedTheme,
   ThemePreference,
-  ParseOpenReceiveOptionalIntegerOptions,
 } from "./checkout-types.ts";
 
 export const checkoutLabels = {
@@ -120,6 +120,10 @@ export const checkoutLabels = {
    * through {@link SwapDisplayModel.refundReturnLabel}, which picks between
    * them from what the host declared; neither should be rendered directly.
    */
+  /** Heading over the return callout on the refund screens. */
+  refundReturnTitle: "Save this before you go",
+  /** Label on the copy row beside the return warning, when there is a URL. */
+  refundReturnUrlLabel: "This page",
   refundReturnWarning:
     "Bookmark this page, or copy its URL. You need it to return to this refund screen.",
   /**

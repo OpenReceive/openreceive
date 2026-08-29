@@ -34,5 +34,12 @@ Rails.application.routes.draw do
       as: :shop_order_download
   get "shop/recent_orders", to: "shop#recent_orders", as: :shop_recent_orders
 
+  # The test-only control surface. It is DECLARED unconditionally and refuses
+  # unconditionally: `ButtonShop::Testkit.control` answers 404 for every action
+  # unless DEMO_WALLET=testkit, so there is one place that decides whether the
+  # surface exists and it is not the routing table. See lib/button_shop/testkit.rb.
+  match "__testkit/:control", to: "testkit#control", via: %i[get post],
+        constraints: { control: /[a-z-]+/ }
+
   get "up" => "rails/health#show", as: :rails_health_check
 end

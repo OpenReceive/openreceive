@@ -44,6 +44,10 @@ function createModeAttributes(options: CheckoutElementAttributeOptions): Checkou
   if (options.routeReference !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference] = options.routeReference;
   }
+  if (options.resumePaymentHash !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentHash] =
+      options.resumePaymentHash;
+  }
   return attributes;
 }
 

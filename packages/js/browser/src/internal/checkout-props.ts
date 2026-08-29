@@ -65,6 +65,22 @@ export interface CheckoutComponentProps {
    */
   readonly routeReference?: string;
   /**
+   * Create mode only. The payment hash of a swap attempt this order already has
+   * in flight, so the checkout REOPENS it instead of starting over.
+   *
+   * `/checkouts/prepare` returns no attempts, so a checkout rebuilt from a
+   * reference alone opens on the payment-method grid — which is the wrong
+   * screen for a payer who was told to bookmark a refund. Supply the hash your
+   * application stored beside the order and the deposit (or its refund screen)
+   * comes back exactly as they left it. A hash the server will not serve is
+   * ignored: the payer lands on the method grid rather than an error.
+   *
+   * The HASH and not the asset, because `/swaps/status` selects one attempt
+   * with no reuse test while re-selecting the asset re-serves the committed
+   * attempt only until it expires. See docs/guides/swap-refunds.md.
+   */
+  readonly resumePaymentHash?: string;
+  /**
    * Does a payer who closes this tab have a URL that brings them back to this
    * checkout? It decides ONE thing: which of the two refund-return warnings the
    * swap deposit panel shows (`SwapDisplayModel.refundReturnLabel`). Telling a
@@ -84,6 +100,7 @@ const CREATE_MODE_ONLY_PROPS = [
   "syncUrl",
   "resumePathPrefix",
   "routeReference",
+  "resumePaymentHash",
 ] as const;
 
 type CreateModeOnlyProp = (typeof CREATE_MODE_ONLY_PROPS)[number];

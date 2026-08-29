@@ -41,13 +41,21 @@ nothing else. For an edit-reload loop, run the variant's own `npm run dev`
 
 ## Running the demo against fakes (no wallet)
 
-The node-express and Next.js stacks boot against in-process fakes when
-`DEMO_WALLET=testkit` is set — no `NWC_URI`, no network, full checkout:
+All four stacks boot against in-process fakes when `DEMO_WALLET=testkit` is
+set — no `NWC_URI`, no LSC keys, no network, full checkout:
 
 ```sh
 cd buttons/server/node-express
 DEMO_WALLET=testkit npm run dev
+
+cd buttons/server/rails
+DEMO_WALLET=testkit bin/dev          # Postgres is still Postgres
 ```
+
+The three Node stacks share `@openreceive/testkit`; Rails has a port of it in
+`buttons/server/rails/lib/button_shop/testkit/`, with the same fixtures, so one
+Playwright suite can drive any of them. What is faked is the wallet, the swap
+provider and the price feed — never the engine, the hooks or the database.
 
 A test-only control surface is mounted under `/__testkit` (hard-404 in every
 other mode):

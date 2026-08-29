@@ -181,30 +181,40 @@ A refund claimed the next morning is exactly the case that outlives the window.
 `{ reference, payment_hash }` addresses one attempt directly, with no reuse test,
 so it still reaches a refund screen a day later. The hash is public, it is the
 payer's own evidence that they paid, and the server stays the authority on what
-the attempt is. Store it beside your order, or in the payer's browser, and use
-it first:
+the attempt is. Store it beside your order, or in the payer's browser.
 
-```ts
-import {
-  mergeAttemptIntoSnapshot,
-  normalizeSwapStartInvoice,
-} from "@openreceive/browser/headless";
+**On a drop-in, that is one prop.** `resumePaymentHash` makes the checkout
+reopen the attempt after prepare instead of showing the method grid:
 
-const response = await fetch(`${prefix}/swaps/status`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ reference, payment_hash: rememberedHash }),
-});
-if (response.ok) {
-  const invoice = normalizeSwapStartInvoice(await response.json());
-  // The poll controller and every display model read the snapshot, so folding
-  // the attempt in is the whole of "put it back on screen".
-  applySnapshot(mergeAttemptIntoSnapshot(invoice, preparedSnapshot));
-}
+```tsx
+<Checkout reference={order.id} resumable resumePaymentHash={order.swapPaymentHash} />
 ```
 
-A miss is silence, not an error: an attempt the server will not serve is a stale
-note, and the payer belongs on the method grid.
+It is create-mode only, and a hash the server will not serve is ignored — the
+payer lands on the method grid rather than an error. Where the hash comes from
+is yours: `onState` reports every attempt the checkout watches, and a swap
+attempt names its own `payment_hash`.
+
+**On a custom UI, it is one call.** `resumeSwapAttempt` is the same thing the
+drop-ins use — it posts `/swaps/status` and folds the answer into the snapshot
+the poll controller and every display model already read:
+
+```ts
+import { resumeSwapAttempt } from "@openreceive/browser/headless";
+
+const snapshot = await resumeSwapAttempt({
+  fetch,
+  prefix,
+  reference,
+  paymentHash: rememberedHash,
+  snapshot: preparedSnapshot,
+});
+```
+
+A miss is silence, not an error: it returns the prepared snapshot unchanged, so
+an attempt the server will not serve leaves the payer on the method grid exactly
+as they would have been. `requestSwapStatus` is the unforgiving version, when
+you want to see the `404` yourself.
 
 ### What each layer buys you
 
@@ -213,7 +223,7 @@ note, and the payer belongs on the method grid.
 | Nothing | loses the order id and the deposit with it | — |
 | Per-order URL + order restore | back on the method grid | back on the method grid |
 | … + re-select the coin | back on the deposit or refund screen | **a new deposit address; the refund is off-screen** |
-| … + the remembered payment hash | back on the refund screen | back on the refund screen |
+| … + `resumePaymentHash` / `resumeSwapAttempt` | back on the refund screen | back on the refund screen |
 
 ## When a payer cannot self-serve
 
@@ -227,14 +237,13 @@ exists to remove. See [Checkout UX → the receipt](checkout-ux.md).
 
 ## Where this is implemented
 
-`examples/buttons` builds it four ways. The two stacks with a custom UI
-(`server/rails`, `server/nextjs-fullstack`) carry all three layers — the URL, the
-order restore, and the remembered payment hash — in
-`examples/buttons/shared/checkout-resume.ts` and
-`shared/client/stores/ShopCheckout.ts`. The two that mount the packaged checkout
-(`server/node-express`, `server/static-html-small-api`) carry the first two and
-leave the third to the drop-in, which is the "re-select the coin" row of the
-table above.
+`examples/buttons` builds it four ways, and all four carry all three layers.
+The two stacks with a custom UI (`server/rails`, `server/nextjs-fullstack`) call
+`resumeSwapAttempt` from `shared/client/stores/ShopCheckout.ts`; the two that
+mount the packaged checkout (`server/node-express`,
+`server/static-html-small-api`) pass `resumePaymentHash` instead. The storage
+either way is `examples/buttons/shared/checkout-resume.ts` — one localStorage
+note per order, written from the checkout's own state callback.
 
 ## Related
 

@@ -905,6 +905,32 @@ the snake_case quote (`provider`,
 [PublicSwap](#publicswap) object — no `{ swap }` wrapper (only `POST …/swaps`
 wraps); `GET …/rates` returns `{ bitcoin: { <currency>: "<price>" } }`.
 
+### Repeating a create: mint, or re-serve
+
+`POST …/checkouts` and `POST …/swaps` do not always mint. **A request mints
+only when the order has no committed attempt it can re-serve; otherwise it
+answers with the attempt the order already has** — no wallet call, no provider
+order, no second row, and no rate-limit charge. That is what makes a reload, a
+back button, or a payer re-picking the same coin safe: they get their own
+deposit instructions back, not a second address to send to.
+
+Re-serving is conditional, and the condition is worth knowing before you build
+resume on top of it. The attempt must be unpaid, live, on the same rail (and,
+for a swap, the same `pay_in_asset`), and more than 60 seconds before its own
+expiry. Past that boundary the same call **mints a replacement** — a fresh
+BOLT11, or a fresh deposit address. A swap's expiry is its shadow Lightning
+invoice's, which the provider sizes to outlive its deposit window (roughly half
+an hour with FixedFloat's defaults), so a payer returning the next day gets a
+new attempt rather than their old one. Two live attempts on the same rail for
+one reference is a `409 CONFLICT`.
+
+**`POST …/swaps/status` has no such window.** It takes
+`{ reference, payment_hash }` and addresses that one attempt directly, so it
+still answers for an attempt that stopped being payable hours ago. That makes
+the payment hash — not the chosen asset — the durable handle for bringing a
+payer back to a deposit or a refund screen; see
+[Swap refunds → The way back](swap-refunds.md#the-way-back).
+
 ### Errors
 
 The error body and the per-route error statuses are generated from the spec.
@@ -1189,10 +1215,14 @@ flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onSta
 `onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`,
 `paymentWizard`, `themeToggle` (default `true`), `defaultTheme`, `storageKey`,
 `decodeLinkUrl`, `assetBaseUrl`, `components`, `classNames`, `syncUrl`,
-`resumePathPrefix`, `routeReference`, `resumable`, `metadata`, `createFetch`,
+`resumePathPrefix`, `routeReference`, `resumable`, `resumePaymentHash`,
+`metadata`, `createFetch`,
 `resolveAssetUrl`.
 
-`resumable` declares whether a payer who closes this tab has a URL that brings
+`resumePaymentHash` (create mode) names a swap attempt this order already has in
+flight, so the checkout reopens it after prepare instead of showing the method
+grid; an unserveable hash is ignored. `resumable` declares whether a payer who
+closes this tab has a URL that brings
 them back. Inferred from `syncUrl` / `routeReference`; set it explicitly when
 your own router owns a per-order route. It picks which return warning the swap
 refund screen shows (`SwapDisplayModel.refundReturnLabel`) — see

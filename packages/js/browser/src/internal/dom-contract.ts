@@ -232,6 +232,12 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    */
   routeReference: "route-reference",
   /**
+   * Create mode only. Payment hash of a swap attempt this order already has in
+   * flight; the element reopens it after prepare instead of showing the method
+   * grid. A hash the server will not serve is ignored.
+   */
+  resumePaymentHash: "resume-payment-hash",
+  /**
    * Does a payer who closes this tab have a URL that brings them back to this
    * checkout? Only the refund screen's copy depends on it — see
    * `SwapDisplayModel.refundReturnLabel`. Unset, the element infers it from

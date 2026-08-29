@@ -1,21 +1,21 @@
 import {
+  type AfterViewInit,
   ChangeDetectorRef,
   Component,
   CUSTOM_ELEMENTS_SCHEMA,
   Input,
-  NgZone,
   inject,
-  type AfterViewInit,
+  NgZone,
   type OnChanges,
 } from "@angular/core";
 import {
   type CheckoutSnapshot,
-  type ThemePreference,
-  type WrapperCheckoutShellBinding,
-  type WrapperCheckoutShellOptions,
   createWrapperCheckoutShellBinding,
   defineElements,
+  type ThemePreference,
   validateCheckoutProps,
+  type WrapperCheckoutShellBinding,
+  type WrapperCheckoutShellOptions,
 } from "@openreceive/angular";
 import type { ElementBindings } from "./element-bindings";
 import { ElementBindingsDirective } from "./openreceive-element-bindings.directive";
@@ -62,6 +62,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() syncUrl?: boolean;
   @Input() resumePathPrefix?: string;
   @Input() routeReference?: string;
+  @Input() resumePaymentHash?: string;
   @Input() resumable?: boolean;
   @Input() onCopy?: (event: Event) => void;
   @Input() onOpenWallet?: (event: Event) => void;
@@ -129,6 +130,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       syncUrl: this.syncUrl,
       resumePathPrefix: this.resumePathPrefix,
       routeReference: this.routeReference,
+      resumePaymentHash: this.resumePaymentHash,
     });
     const options: WrapperCheckoutShellOptions = {
       ...this.options,
@@ -147,6 +149,9 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       ...(this.syncUrl === undefined ? {} : { syncUrl: this.syncUrl }),
       ...(this.resumePathPrefix === undefined ? {} : { resumePathPrefix: this.resumePathPrefix }),
       ...(this.routeReference === undefined ? {} : { routeReference: this.routeReference }),
+      ...(this.resumePaymentHash === undefined
+        ? {}
+        : { resumePaymentHash: this.resumePaymentHash }),
       ...(this.resumable === undefined ? {} : { resumable: this.resumable }),
       ...(this.onCopy === undefined ? {} : { onCopy: this.onCopy }),
       ...(this.onOpenWallet === undefined ? {} : { onOpenWallet: this.onOpenWallet }),

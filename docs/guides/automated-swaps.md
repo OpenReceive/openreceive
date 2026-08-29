@@ -24,9 +24,27 @@ key. Provider `completed` does not fulfill an order unless the wallet also repor
 
 Refunds are authorized by your application and pass the row's `reference`, `paymentHash`, `swapData`, and
 refund address. The wallet client refreshes provider state immediately before requesting the refund
-and refuses states other than `refund_required`. What a payer-facing refund needs around that call —
-the two-step form, and the per-order route that lets them come back and use it — is
-[Swap refunds](swap-refunds.md).
+and refuses states other than `refund_required`.
+
+## Turning swaps on is a commitment to refunds
+
+Lightning either pays or it does not. A swap deposit is an on-chain send that
+can arrive short, or late, and then it is sitting at the provider with
+`refund_required` and only your UI can claim it. **Setting `LSC_URI_PRIMARY`
+therefore adds an obligation that Lightning-only checkouts do not have: the
+payer needs a way back to that attempt after they have closed the tab.**
+
+They almost always will close it. The refund address is in another wallet, on
+another device, and fetching it means leaving your page. So the order needs its
+own URL, your app needs a route that restores the order behind it, and — the
+step that gets missed — something has to restore the ATTEMPT, because
+`/checkouts/prepare` returns none and a checkout rebuilt from the reference
+alone opens on the payment-method grid.
+
+[Swap refunds](swap-refunds.md) is that argument end to end: the two-step form,
+the states a refund is and is not reachable from, and the three layers of the
+route back. Read it before you turn swaps on, not after the first stranded
+deposit.
 
 ## Deposit QR amount prefill
 
