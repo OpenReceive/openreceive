@@ -18,6 +18,14 @@ coverage
 # Local Shakapacker output. The Rails image client stage always rebuilds these.
 **/public/packs*
 
+# Rails run-scratch. Every local `rails`/`bin/ci` run rewrites these, and they
+# are copied in ahead of `bundle install`'s layer — so leaving them in the
+# context re-runs the gem install on builds where nothing shipped changed. The
+# Dockerfile recreates the empty trees.
+**/log/*
+**/tmp/*
+**/public/assets
+
 # Local-only secrets and notes.
 .env
 .env.*

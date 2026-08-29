@@ -327,15 +327,32 @@ for (const demo of nodeDemos) {
     /COPY --from=client [^\n]*public\/packs/.test(dockerfile),
     `${dockerfilePath}: must copy the client stage's public/packs into the Ruby stage`,
   );
+  // `bundle install` is the most expensive step in the Ruby stage. It must sit
+  // ABOVE the app-source COPY, keyed on the two manifests alone, or every edit
+  // to a controller reinstalls every gem.
+  const bundleInstallAt = dockerfile.indexOf("bundle install");
+  const appCopyAt = dockerfile.search(
+    /^COPY examples\/buttons\/server\/rails \./m,
+  );
+  expect(bundleInstallAt !== -1, `${dockerfilePath}: must run bundle install`);
+  expect(appCopyAt !== -1, `${dockerfilePath}: must copy the Rails app source`);
   expect(
-    dockerfile.includes("ARG CLIENT_BUILD_ID"),
-    `${dockerfilePath}: must accept CLIENT_BUILD_ID so demo rebuilds pick up JS`,
+    bundleInstallAt < appCopyAt,
+    `${dockerfilePath}: bundle install must precede the app source COPY, so editing app code does not reinstall gems`,
   );
   const dockerignore = read(".dockerignore");
   expect(
     dockerignore.includes("**/public/packs*"),
     ".dockerignore: must exclude host Shakapacker output from the Rails image context",
   );
+  // Local-run scratch is copied in ahead of the bundle layer; leaving it in the
+  // context makes every build a cold one.
+  for (const pattern of ["**/log/*", "**/tmp/*"]) {
+    expect(
+      dockerignore.includes(pattern),
+      `.dockerignore: must exclude ${pattern} so Rails run-scratch does not bust the image cache`,
+    );
+  }
 
   const composePath = `${demo.dir}/compose.yml`;
   const composeText = read(composePath);
@@ -360,10 +377,6 @@ for (const demo of nodeDemos) {
   expect(
     service.build?.context === "../../../..",
     `${composePath}: build context must be the repo root`,
-  );
-  expect(
-    service.build?.args?.CLIENT_BUILD_ID !== undefined,
-    `${composePath}: must pass CLIENT_BUILD_ID so demo rebuilds pick up JS`,
   );
   expect(service.depends_on?.db !== undefined, `${composePath}: app must depend on host Postgres`);
   expect(

@@ -642,12 +642,11 @@ module OpenReceive
                   "attention_reason" => "provider_reported_emergency"
                 }
               end
-              if (statuses & %w[MORE OVER OVERPAID]).any?
-                return {
-                  "state" => "attention", "attention" => true,
-                  "attention_reason" => "provider_reported_emergency"
-                }
-              end
+              # An overpay (MORE) takes the same self-serve full-refund path as
+              # LESS and EXPIRED — it is what the provider itself does with it.
+              # There is no partial refund of the surplus: the payout invoice is
+              # a fixed amount, so an emergency deposit is returned whole or not
+              # at all.
               result = { "state" => "refund_required" }
               result["refund_reason"] = refund_reason unless refund_reason.nil?
               return result
@@ -662,11 +661,17 @@ module OpenReceive
             }
           end
 
+          # LIMIT rides along with LESS/MORE when the deposit fell outside the
+          # pair's limits. It says nothing the payer can act on beyond the
+          # amount itself, so it names no reason of its own.
           def refund_reason_from_emergency_statuses(statuses)
             less = statuses.include?("LESS")
+            more = (statuses & %w[MORE OVER OVERPAID]).any?
             expired = statuses.include?("EXPIRED")
             return "underpaid_and_late" if less && expired
+            return "overpaid_and_late" if more && expired
             return "underpaid" if less
+            return "overpaid" if more
             return "late_deposit" if expired
 
             nil

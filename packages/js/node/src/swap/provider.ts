@@ -41,10 +41,17 @@ export type SwapAttentionReason =
 
 /**
  * Why a swap attempt entered the refund path (`refund_required` → `refunded`).
- * Mapped from FixedFloat `emergency.status` (LESS / EXPIRED). Overpay (MORE/OVER)
- * goes to `attention`, not here.
+ * Mapped from FixedFloat `emergency.status` (LESS / MORE / EXPIRED). An overpay
+ * refunds the WHOLE deposit like every other emergency: the payout is a
+ * fixed-amount bolt11, so there is nothing to exchange the surplus into and
+ * `choice=EXCHANGE` is not a path this client takes.
  */
-export type SwapRefundReason = "underpaid" | "late_deposit" | "underpaid_and_late";
+export type SwapRefundReason =
+  | "underpaid"
+  | "overpaid"
+  | "late_deposit"
+  | "underpaid_and_late"
+  | "overpaid_and_late";
 
 export interface SwapQuote {
   readonly pay_amount?: string;
@@ -104,7 +111,7 @@ export interface SwapOrder {
   readonly attention_reason?: SwapAttentionReason;
   /**
    * Why a refund is needed, when the attempt is on the refund path. Mapped from
-   * FixedFloat `emergency.status` (LESS / EXPIRED).
+   * FixedFloat `emergency.status` (LESS / MORE / EXPIRED).
    */
   readonly refund_reason?: SwapRefundReason;
   /**

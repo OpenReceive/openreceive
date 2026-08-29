@@ -425,6 +425,12 @@ function getSwapRefundReasonDetail(
     }
     return "The amount received was less than required.";
   }
+  if (refundContext.refundReason === "overpaid") {
+    if (expected !== undefined && received !== undefined) {
+      return `You sent ${received} ${assetLabel} but ${expected} ${assetLabel} was required.`;
+    }
+    return "The amount received was more than required.";
+  }
   if (refundContext.refundReason === "late_deposit") {
     return "Your payment arrived after the payment window closed.";
   }
@@ -433,6 +439,12 @@ function getSwapRefundReasonDetail(
       return `You sent ${received} ${assetLabel} but ${expected} ${assetLabel} was required, and it arrived after the payment window closed.`;
     }
     return "Your payment was under the required amount and arrived after the window closed.";
+  }
+  if (refundContext.refundReason === "overpaid_and_late") {
+    if (expected !== undefined && received !== undefined) {
+      return `You sent ${received} ${assetLabel} but ${expected} ${assetLabel} was required, and it arrived after the payment window closed.`;
+    }
+    return "Your payment was over the required amount and arrived after the window closed.";
   }
   return undefined;
 }

@@ -104,7 +104,7 @@
     },
     "refund_reason": {
       "type": "string",
-      "enum": ["underpaid", "late_deposit", "underpaid_and_late"]
+      "enum": ["underpaid", "overpaid", "late_deposit", "underpaid_and_late", "overpaid_and_late"]
     },
     "deposit_received_amount": {
       "type": "string",

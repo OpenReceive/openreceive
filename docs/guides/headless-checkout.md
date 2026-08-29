@@ -242,8 +242,9 @@ and [Swap refunds](swap-refunds.md).
 | `refund_required` → `refund_pending` → `refunded` | the refund path |
 | `expired`, `failed`, `attention` | terminal, or needs a human |
 
-`refund_reason` is `underpaid`, `late_deposit`, or `underpaid_and_late`.
-An overpayment is `attention`, not a refund.
+`refund_reason` is `underpaid`, `overpaid`, `late_deposit`,
+`underpaid_and_late`, or `overpaid_and_late`. An overpayment is a refund like
+any other emergency: the whole deposit comes back, never the surplus alone.
 
 ## The receipt is not debug output
 

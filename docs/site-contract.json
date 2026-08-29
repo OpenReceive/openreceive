@@ -93,7 +93,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 15839
+      "bytes": 15935
     },
     {
       "path": "/guides/automated-swaps",
@@ -113,7 +113,7 @@
       "slug": "swap-refunds",
       "title": "Swap Refunds",
       "category": "guide",
-      "bytes": 6286
+      "bytes": 6549
     },
     {
       "path": "/guides/lightning-swap-connect",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 86442
+      "bytes": 86479
     },
     {
       "path": "/guides/security",
@@ -253,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 86442,
+      "bytes": 86479,
       "alias_of": "/guides/api-reference"
     },
     {

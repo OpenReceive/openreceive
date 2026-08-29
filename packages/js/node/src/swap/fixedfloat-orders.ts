@@ -211,17 +211,10 @@ function normalizeFixedFloatStatus(
         attention_reason: "provider_reported_emergency",
       };
     }
-    if (
-      emergencyStatuses.includes("MORE") ||
-      emergencyStatuses.includes("OVER") ||
-      emergencyStatuses.includes("OVERPAID")
-    ) {
-      return {
-        state: "attention",
-        attention: true,
-        attention_reason: "provider_reported_emergency",
-      };
-    }
+    // An overpay (MORE) takes the same self-serve full-refund path as LESS and
+    // EXPIRED — it is what the provider itself does with it. There is no
+    // partial refund of the surplus: the payout invoice is a fixed amount, so
+    // an emergency deposit is returned whole or not at all.
     return {
       state: "refund_required",
       ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
@@ -237,9 +230,16 @@ function refundReasonFromEmergencyStatuses(
   statuses: readonly string[],
 ): SwapRefundReason | undefined {
   const less = statuses.includes("LESS");
+  const more =
+    statuses.includes("MORE") || statuses.includes("OVER") || statuses.includes("OVERPAID");
   const expired = statuses.includes("EXPIRED");
+  // LIMIT rides along with LESS/MORE when the deposit fell outside the pair's
+  // limits. It says nothing the payer can act on beyond the amount itself, so
+  // it names no reason of its own.
   if (less && expired) return "underpaid_and_late";
+  if (more && expired) return "overpaid_and_late";
   if (less) return "underpaid";
+  if (more) return "overpaid";
   if (expired) return "late_deposit";
   return undefined;
 }

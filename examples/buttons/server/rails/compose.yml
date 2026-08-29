@@ -2,8 +2,6 @@ x-rails-app: &rails_app
   build:
     context: ../../../..
     dockerfile: examples/buttons/server/rails/Dockerfile
-    args:
-      CLIENT_BUILD_ID: "${CLIENT_BUILD_ID:-}"
   depends_on:
     db:
       condition: service_healthy

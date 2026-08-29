@@ -389,7 +389,7 @@ Payer-safe swap snapshot. No provider tokens or credentials.
 | `depositTxId` | `string?` | Provider-reported deposit transaction id, when known. |
 | `payoutTxId` | `string?` | Provider-reported payout (Lightning pay) transaction id, when known. |
 | `refundTxId` | `string?` | Provider-reported refund transaction id, when a refund was sent. |
-| `refundReason` | `string?` | Why a refund is needed: `"underpaid"`, `"late_deposit"`, or `"underpaid_and_late"`. |
+| `refundReason` | `string?` | Why a refund is needed: `"underpaid"`, `"overpaid"`, `"late_deposit"`, `"underpaid_and_late"`, or `"overpaid_and_late"`. |
 | `refundAmount` | `string?` | Decimal string the provider will return, excluding its network fee. |
 | `attention` | `boolean?` | `true` when this attempt needs operator review. |
 | `attentionReason` | `string?` | Why the attempt needs an operator, when `attention` is set. |

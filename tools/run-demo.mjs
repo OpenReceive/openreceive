@@ -83,10 +83,7 @@ console.log(`Starting ${demo.label} demo -> http://localhost:${demo.port}\n`);
 const child = spawn("docker", composeArgs, {
   cwd: path.join(root, demo.dir),
   stdio: "inherit",
-  env: {
-    ...process.env,
-    ...(demo.kind === "rails" ? { CLIENT_BUILD_ID: String(Date.now()) } : {}),
-  },
+  env: process.env,
 });
 
 child.on("error", (error) => {

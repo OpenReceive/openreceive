@@ -20,15 +20,19 @@ converted. **Exactly one provider state allows it: `refund_required`.**
 | `refund_reason` | What the payer did |
 | --- | --- |
 | `underpaid` | sent less than `deposit_amount` |
+| `overpaid` | sent more than `deposit_amount` |
 | `late_deposit` | sent after the provider's window closed |
-| `underpaid_and_late` | both |
+| `underpaid_and_late` | under and late |
+| `overpaid_and_late` | over and late |
 
-Two cases people expect to be here are not:
+A refund returns the **whole** deposit, including on an overpayment — the
+payout is a fixed-amount bolt11, so there is nothing to exchange a surplus
+into. The order stays unpaid; the payer can pay again after.
 
-- **An overpayment is `attention`, not a refund.** There is no form. It needs
-  a human.
+One case people expect to be here is not:
+
 - **A deposit sent without a required `deposit_memo`** may not be creditable
-  and produces no `refund_required` either.
+  and produces no `refund_required`.
 
 Underpayment is the case a UI can prevent: on token rails the QR has no
 amount, so give the amount its own copy row. See
@@ -153,8 +157,9 @@ unforgiving version if you want the `404`.
 
 ## When a payer cannot self-serve
 
-`attention` (overpayment, double-deposit) has no form. Neither does a
-deposit that missed a required memo. Show the attempt's identifying facts
+`attention` (a second deposit onto a finished order, a provider state we do
+not recognize) has no form. Neither does a deposit that missed a required
+memo. Show the attempt's identifying facts
 (`providerOrderId`, `depositTxId`, `paymentHash`) with copy buttons, and a
 way to reach a human.
 

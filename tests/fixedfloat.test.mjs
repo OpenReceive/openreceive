@@ -302,9 +302,16 @@ test("getStatus maps EMERGENCY responses onto the refund and attention paths", a
       expected: { state: "attention", attention_reason: "provider_reported_emergency" },
     },
     {
+      // The provider refunds an overpay in full — same self-serve path as an
+      // underpay, not a support ticket.
       name: "overpaid",
-      emergency: { status: ["MORE"] },
-      expected: { state: "attention", attention_reason: "provider_reported_emergency" },
+      emergency: { status: ["MORE", "LIMIT"] },
+      expected: { state: "refund_required", refund_reason: "overpaid" },
+    },
+    {
+      name: "overpaid and late",
+      emergency: { status: ["MORE", "EXPIRED"] },
+      expected: { state: "refund_required", refund_reason: "overpaid_and_late" },
     },
   ];
   for (const { name, emergency, expected } of cases) {

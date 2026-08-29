@@ -140,8 +140,10 @@ Exactly one provider state allows a refund: `refund_required`. The server
 re-reads live state at confirm time and answers `409 CONFLICT` for anything
 else. Handle that as a normal outcome.
 
-An overpayment is `attention`, not a refund. So is a deposit that missed a
-required memo. `completed` means the **provider** is done — not settlement.
+An overpayment is `refund_required` — the provider returns the whole deposit,
+because the payout is a fixed-amount bolt11 and there is nothing to exchange
+the surplus into. A deposit that missed a required memo is neither: it needs a
+human. `completed` means the **provider** is done — not settlement.
 Settlement is the wallet sweep, proven by payment hash.
 
 `POST /checkouts/prepare` returns the amount and the pay-in catalog and

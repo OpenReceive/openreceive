@@ -552,8 +552,12 @@ class FixedFloatProviderTest < Minitest::Test
         expected: { "state" => "refund_pending", "refund_reason" => "late_deposit" } },
       { name: "exchange chosen", emergency: { "choice" => "EXCHANGE", "status" => ["LESS"] },
         expected: { "state" => "attention", "attention_reason" => "provider_reported_emergency" } },
-      { name: "overpaid", emergency: { "status" => ["MORE"] },
-        expected: { "state" => "attention", "attention_reason" => "provider_reported_emergency" } }
+      # The provider refunds an overpay in full — same self-serve path as an
+      # underpay, not a support ticket.
+      { name: "overpaid", emergency: { "status" => %w[MORE LIMIT] },
+        expected: { "state" => "refund_required", "refund_reason" => "overpaid" } },
+      { name: "overpaid and late", emergency: { "status" => %w[MORE EXPIRED] },
+        expected: { "state" => "refund_required", "refund_reason" => "overpaid_and_late" } }
     ].each do |kase|
       order = status_for("status" => "EMERGENCY", "emergency" => kase[:emergency])
       expected = kase[:expected]
