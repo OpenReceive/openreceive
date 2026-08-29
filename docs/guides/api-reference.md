@@ -481,7 +481,6 @@ your application's existing database:
 | `onPaid` | `PaymentSettlementHook` | yes | Fulfillment; see [onPaid](#onpaid). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
 | `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
-| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 
 #### onPaid
 
@@ -633,7 +632,6 @@ never call this.
 | `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
 | `signal` | `AbortSignal` | no | External stop signal. |
 | `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
-| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 | `onError` | `(error) => void` | no | Observes per-pass failures. Default: deduplicated `console.warn`. |
 
 **Returns** `Reconciler`. Every pass goes through the durable
@@ -696,7 +694,6 @@ const result = await maybeReconcilePayments({
 | `maxPages` | `number` | no | Page cap per wallet walk. Default `OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES` (50). |
 | `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
 | `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
-| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 | `onError` | `(error) => void` | no | Observes failed scans. Default: `console.warn`. |
 
 The gated pass behind the handler's default request-path opportunistic
@@ -731,7 +728,7 @@ const listener = await startNotificationListener({
 | `service` | `OpenReceive` | yes | Must implement `subscribeWalletNotifications`, else rejects `UNSUPPORTED_METHOD`. |
 | `host` | `Host` | yes | Settlement and pending-attempt source. |
 | `overlapSeconds` | `number` | no | Overlap for fallback scans. |
-| `onError` | `(error) => void` | no | Failure sink. Default: swallowed. |
+| `onError` | `(error) => void` | no | Failure sink. Default: a sanitized `console.warn` — a permanently failing listener is never silent. |
 
 **Returns** `NotificationListener`
 
@@ -779,7 +776,7 @@ const worker = await startNotificationWorker({
 | `host` | `Host` | yes | From [createHost](#createhost). |
 | `pollIntervalMs` | `number` | no | Periodic safety-net pass interval. Default 15000. |
 | `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
-| `onError` | `(error) => void` | no | Failure sink. Default: swallowed. |
+| `onError` | `(error) => void` | no | Failure sink. Default: a sanitized `console.warn` — a permanently failing listener is never silent. |
 
 The optional worker: one separate long-lived process that both runs the
 [notification listener](#startnotificationlistener) (direct
@@ -1061,7 +1058,6 @@ const payments = createSqlPayments(db, options?): SqlPaymentRepository
 | `tableName` | `string` | no | Default `openreceive_payments`. |
 | `metaTableName` | `string` | no | Durable reconcile-gate key/value table. Default `openreceive_meta`. |
 | `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
-| `onBootFailure` | `(message: string) => void` | no | Where the one boot-failure line goes; defaults to `console.error`. Boot precedes any service, so this is the only sink available then — it receives the message only, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` regardless. See [Deploying](deploying.md#where-boot-failures-go). |
 
 The library-owned repository behind `createHost({ db })`, exposed for advanced
 integrations. Owns per-reference commit locking (SQLite `BEGIN IMMEDIATE`,

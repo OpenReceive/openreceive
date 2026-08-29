@@ -102,7 +102,10 @@ const onPaid = async ({ reference, paidAt, query }) => {
     [paidAt, reference],
   );
   if (claimed.length === 0) return; // someone else already fulfilled it
-  await shipOrder(reference);
+  // Same transaction: enqueue the shipping/email work rather than doing it
+  // inline. Anything that reaches outside the transaction survives a rollback
+  // and runs again on the retry.
+  await query("INSERT INTO outbox (kind, reference) VALUES ($1, $2)", ["order_paid", reference]);
 };
 ```
 

@@ -54,7 +54,7 @@ fail over to the backup for that asset. An empty connection is ignored.
 ## Not an environment variable
 
 `OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS` looks like one and is not: it is an
-**exported constant** (900 seconds) in `@openreceive/core`, part of the
+**exported constant** (900 seconds) in `@openreceive/http`, part of the
 attempt-closure rule rather than deployment configuration. Setting it in the
 environment does nothing. See [Storage](storage.md#attempt-state-machine).
 

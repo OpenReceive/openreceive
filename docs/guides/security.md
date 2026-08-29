@@ -66,7 +66,8 @@ and skip NWC entirely.
 
 - The code is still a secret. If it leaks, revoke it at the wallet and
   mint a new one. The library redacts it from its own logs.
-  `npx openreceive doctor` prints the connection redacted.
+  `npx openreceive doctor` reports it as present or missing only, never
+  the value.
 - Custody is the wallet service's.
 - The relay can delay or drop traffic. It cannot forge settlement —
   responses are encrypted between your client key and the wallet.

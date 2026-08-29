@@ -111,7 +111,8 @@ engine can recognise it: at boot it logs
 ```
 [openreceive] config.authorize is still the generated allow-all placeholder —
 anyone holding an order id can mint invoices, poll status, and request refunds
-for it. Safe only while your references are unguessable.
+for it. Safe only while your references are unguessable. Replace it in
+config/initializers/openreceive.rb.
 ```
 
 for as long as it is still there — the same treatment `OpenReceive::LOGGING_ON_PAID`

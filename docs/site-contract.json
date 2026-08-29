@@ -43,7 +43,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "category": "quickstart",
-      "bytes": 6240
+      "bytes": 6497
     },
     {
       "path": "/guides/authorization",
@@ -53,7 +53,7 @@
       "slug": "authorization",
       "title": "Authorization",
       "category": "security",
-      "bytes": 10359
+      "bytes": 10409
     },
     {
       "path": "/guides/rate-limiting",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 86479
+      "bytes": 85119
     },
     {
       "path": "/guides/security",
@@ -183,7 +183,7 @@
       "slug": "security",
       "title": "Security",
       "category": "security",
-      "bytes": 3838
+      "bytes": 3864
     },
     {
       "path": "/guides/provider-registry",
@@ -253,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 86479,
+      "bytes": 85119,
       "alias_of": "/guides/api-reference"
     },
     {
