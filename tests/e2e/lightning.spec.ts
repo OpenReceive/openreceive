@@ -9,6 +9,7 @@ import {
   expectWizardCurrencies,
   mintAttempt,
   openShop,
+  paymentColumn,
   selectFrameworkTab,
   settleTestkitInvoice,
   startCheckout,
@@ -50,7 +51,7 @@ for (const framework of CHECKOUT_FRAMEWORKS) {
     // Settle in the wallet; the page must flip to paid with NO reload — the
     // only way it can learn is its own status polling, and then the shop
     // re-reading its own order row.
-    await expect(page.getByText("Waiting for payment")).toBeVisible();
+    await expect(paymentColumn(page).getByText("Waiting for payment")).toBeVisible();
     await settleTestkitInvoice(page, attempt.paymentHash);
     await expectPaidReceipt(page);
   });

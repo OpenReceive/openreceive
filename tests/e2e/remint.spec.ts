@@ -6,6 +6,7 @@ import {
   expireTestkitInvoice,
   mintAttempt,
   openShop,
+  paymentColumn,
   selectFrameworkTab,
   startCheckout,
 } from "./helpers.ts";
@@ -32,7 +33,7 @@ test("expired invoice reminted on the same order without an error panel", async 
 
   // Kill the invoice in the wallet; polling flips the UI to expired.
   await expireTestkitInvoice(page, first.paymentHash);
-  await expect(page.getByText("Invoice expired")).toBeVisible();
+  await expect(paymentColumn(page).getByText("Invoice expired")).toBeVisible();
 
   // The expired panel's own action. In this host it remounts the checkout on
   // the SAME reference rather than discarding the order — the reference is
@@ -48,7 +49,7 @@ test("expired invoice reminted on the same order without an error panel", async 
 
   // The fresh invoice renders and no error surface appears anywhere.
   await expect(page.locator("[data-openreceive-qr] svg")).toBeVisible();
-  await expect(page.getByText("Waiting for payment")).toBeVisible();
+  await expect(paymentColumn(page).getByText("Waiting for payment")).toBeVisible();
   await expect(page.getByText("Could not start checkout.")).toBeHidden();
   await expect(page.getByRole("alert")).toBeHidden();
 });

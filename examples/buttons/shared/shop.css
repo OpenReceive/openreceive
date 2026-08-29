@@ -225,6 +225,17 @@ body {
   }
 }
 
+/* The packaged checkout prints the order description above its own panel. In
+   the stack that embeds it (node-express) the summary column beside it already
+   shows the product — its picture, its name and its price — so the library's
+   line is the same sentence twice on one screen. Hidden through the two seams
+   the packages expose for exactly this: the data attribute React stamps on it,
+   and the shadow part the element wrappers expose. */
+.or-checkout-pay [data-openreceive-order-description],
+.or-checkout-pay openreceive-checkout::part(order-description) {
+  display: none;
+}
+
 /* A QR code and the values beside it, rather than under them: stacked, the pair
    is ~380px of height that a desktop checkout does not have to spend. The `auto`
    track is the QR at its natural size. */

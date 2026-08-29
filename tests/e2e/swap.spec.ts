@@ -38,7 +38,14 @@ async function startUsdtTronSwap(page: Page): Promise<MintedAttempt> {
   await page.getByRole("button", { name: /USDT/ }).click();
   await expect(page.getByRole("heading", { name: /Choose USDT network/ })).toBeVisible();
   const attempt = await mintAttempt(page, "/openreceive/swaps", async () => {
-    await page.getByRole("button", { name: "Tron" }).first().click();
+    // Scoped to the network step. The USDT TILE now names the networks that coin
+    // can arrive on ("Tron · Solana · Ethereum"), so an unscoped "Tron" match
+    // finds the tile itself and closes the step instead of answering it.
+    await page
+      .getByRole("group", { name: /Choose USDT network/ })
+      .getByRole("button", { name: "Tron" })
+      .first()
+      .click();
     await page.getByRole("button", { name: "Continue" }).first().click();
   });
   expect(attempt.depositAddress).toBe(USDT_TRON_DEPOSIT_ADDRESS);

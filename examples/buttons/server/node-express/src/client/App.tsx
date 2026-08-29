@@ -5,16 +5,20 @@ import {
   Loader,
   MantineProvider,
   SegmentedControl,
+  Stack,
   Text,
 } from "@mantine/core";
 import type { CheckoutState } from "@openreceive/browser";
+import { createCheckoutStatusModel } from "@openreceive/browser/headless";
 import { Checkout } from "@openreceive/react";
 import { observer } from "mobx-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadShopBootstrap } from "../../../../shared/bootstrap.ts";
 import { readSwapAttempt, rememberSwapAttempt } from "../../../../shared/checkout-resume.ts";
+import { OrderStrip } from "../../../../shared/client/components/OrderStrip.tsx";
 import { ShopPanel } from "../../../../shared/client/components/ShopPanel.tsx";
+import { StatusCard } from "../../../../shared/client/components/StatusCard.tsx";
 import { ShopStore } from "../../../../shared/client/stores/ShopStore.ts";
 import { shopTheme } from "../../../../shared/client/theme.ts";
 import { formatUsdCents } from "../../../../shared/shop-types.ts";
@@ -149,9 +153,22 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
     //
     // `onState` is where it comes from: the checkout reports every attempt it
     // is watching, and a swap attempt names its own hash.
+    //
+    // THE SAME CALLBACK FEEDS THE SUMMARY COLUMN. Rails reads its status card
+    // off the keystone store that drives the engine; this stack has no such
+    // store — the packaged checkout drives itself — so the state it reports IS
+    // the source, run through the same `createCheckoutStatusModel` the Rails
+    // store uses. Identical copy beside two different payment panels.
+    //
+    // One `useCallback` with only `reference` in it, deliberately: this
+    // callback is a dependency of the effect that mounts Vue/Svelte/Angular
+    // below, and an identity that changed on every state update would tear the
+    // embedded app down and rebuild it once a second.
     const resumePaymentHash = readSwapAttempt(reference);
+    const [checkoutState, setCheckoutState] = useState<CheckoutState | undefined>(undefined);
     const rememberSwap = useCallback(
       (state: CheckoutState) => {
+        setCheckoutState(state);
         if (state.rail !== "swap" || !state.payment_hash) return;
         rememberSwapAttempt(reference, state.payment_hash);
       },
@@ -160,50 +177,64 @@ const FrameworkCheckout: React.FC<FrameworkCheckoutProps> = observer(
 
     return (
       <>
-        <div className="or-shop-stage">
-          <SegmentedControl
-            aria-label="Checkout framework"
-            data={FRAMEWORKS as unknown as { value: string; label: string }[]}
-            fullWidth
-            onChange={(value) => onFrameworkChange(value as CheckoutFramework)}
-            size="xs"
-            value={framework}
-          />
+        {/* Two columns on a desktop, one on a phone, from the shop's own
+            stylesheet: the summary — what is being bought, where the payment
+            has got to — is the column that does not change when the payer picks
+            a coin; the payment column is the one they act in. The framework tab
+            strip belongs INSIDE that second column, because choosing a
+            framework is a statement about the payment screen and means nothing
+            beside the cart. */}
+        <div className="or-shop-stage or-checkout">
+          <Stack className="or-checkout-summary" gap="md">
+            <OrderStrip shop={shop} />
+            <StatusCard status={createCheckoutStatusModel(checkoutState)} />
+          </Stack>
 
-          {framework === "react" ? (
-            <Checkout
-              defaultTheme="light"
-              key={`react-${retryNonce}`}
-              onSettled={onSettled}
-              onStartOver={retrySameOrder}
-              onState={rememberSwap}
-              prefix={prefix}
-              reference={reference}
-              // NOT `syncUrl`: the HOST owns the address bar here, because it
-              // also has to restore the order behind `/checkout/:reference` on
-              // a cold load — see shared/checkout-resume.ts. This says the
-              // order HAS such a URL, which is the one thing that decides
-              // whether the refund screen tells the payer to bookmark it.
-              resumable
-              {...(resumePaymentHash ? { resumePaymentHash } : {})}
-              // The shop has no dark mode — shop.css hard-codes #fff in several
-              // places and says so at the top. A toggle here would half-convert
-              // the page, so the packaged checkout is pinned to light like every
-              // other stack's.
-              themeToggle={false}
+          <Stack className="or-checkout-pay" gap="sm">
+            <SegmentedControl
+              aria-label="Checkout framework"
+              data={FRAMEWORKS as unknown as { value: string; label: string }[]}
+              fullWidth
+              onChange={(value) => onFrameworkChange(value as CheckoutFramework)}
+              size="xs"
+              value={framework}
             />
-          ) : (
-            <EmbeddedCheckout
-              framework={framework}
-              key={`${framework}-${retryNonce}`}
-              onSettled={onSettled}
-              onStartOver={retrySameOrder}
-              onSwapAttempt={rememberSwap}
-              prefix={prefix}
-              reference={reference}
-              resumePaymentHash={resumePaymentHash}
-            />
-          )}
+
+            {framework === "react" ? (
+              <Checkout
+                defaultTheme="light"
+                key={`react-${retryNonce}`}
+                onSettled={onSettled}
+                onStartOver={retrySameOrder}
+                onState={rememberSwap}
+                prefix={prefix}
+                reference={reference}
+                // NOT `syncUrl`: the HOST owns the address bar here, because it
+                // also has to restore the order behind `/checkout/:reference`
+                // on a cold load — see shared/checkout-resume.ts. This says the
+                // order HAS such a URL, which is the one thing that decides
+                // whether the refund screen tells the payer to bookmark it.
+                resumable
+                {...(resumePaymentHash ? { resumePaymentHash } : {})}
+                // The shop has no dark mode — shop.css hard-codes #fff in
+                // several places and says so at the top. A toggle here would
+                // half-convert the page, so the packaged checkout is pinned to
+                // light like every other stack's.
+                themeToggle={false}
+              />
+            ) : (
+              <EmbeddedCheckout
+                framework={framework}
+                key={`${framework}-${retryNonce}`}
+                onSettled={onSettled}
+                onStartOver={retrySameOrder}
+                onSwapAttempt={rememberSwap}
+                prefix={prefix}
+                reference={reference}
+                resumePaymentHash={resumePaymentHash}
+              />
+            )}
+          </Stack>
         </div>
 
         <div className="or-shop-footer">

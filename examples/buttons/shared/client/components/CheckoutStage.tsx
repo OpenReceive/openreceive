@@ -1,4 +1,4 @@
-import { Alert, Anchor, Button, Group, Image, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Anchor, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { checkoutLabels } from "@openreceive/browser/headless";
 import { IconArrowLeft } from "@tabler/icons-react";
 import { observer } from "mobx-react";
@@ -9,6 +9,8 @@ import type { ShopStore } from "../stores/ShopStore.ts";
 import { CheckoutLinkNote } from "./CheckoutLink.tsx";
 import { LightningPanel } from "./LightningPanel.tsx";
 import { MethodGrid } from "./MethodGrid.tsx";
+import { OrderStrip } from "./OrderStrip.tsx";
+import { StatusCard } from "./StatusCard.tsx";
 import { SwapDepositPanel } from "./SwapDepositPanel.tsx";
 import { TransactionDetailsPanel } from "./TransactionDetailsPanel.tsx";
 
@@ -63,26 +65,7 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
         <Stack gap="md" className="or-checkout-summary">
           <OrderStrip shop={shop} />
 
-          {/* A status line, not a stepper. Progress here is a STATUS: four wire
-              values for status, six phases, twelve provider states, and the
-              forward path is the minority of all three — there is nowhere on a
-              Cart → Pay → Done bar to put an expired invoice or a refund under
-              review. `title` and `detail` are finished payer-facing copy; they
-              are printed, not rewritten. */}
-          <div className="or-shop-status" data-phase={status.phase}>
-            <Group justify="space-between" align="flex-start" wrap="nowrap">
-              <div>
-                <Text className="or-shop-status-title">{status.title}</Text>
-                <Text className="or-shop-status-detail">{status.detail}</Text>
-              </div>
-              {status.waiting ? <Loader size="xs" color="orGreen" /> : null}
-            </Group>
-            {status.countdownLabel ? (
-              <Text className="or-shop-status-countdown">
-                {status.countdownPrefix} {status.countdownLabel}
-              </Text>
-            ) : null}
-          </div>
+          <StatusCard status={status} />
 
           {checkout.errorMessage ? (
             <Alert color="red" variant="light">
@@ -172,31 +155,3 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
     </>
   );
 });
-
-// What the payer is buying, above the amount, on every screen. The checkout
-// renders the total and never the order — OpenReceive owns no line items — so a
-// host that shows nothing here leaves a QR code and a number with no sign of
-// what the number is for. The `description` from `config.amount_for` is the one
-// display string the packages carry; this strip is our own richer version of it.
-const OrderStrip: React.FC<{ shop: ShopStore }> = observer(({ shop }) => (
-  <div className="or-shop-order-strip">
-    <Group gap={6} wrap="nowrap" className="or-shop-order-thumbs">
-      {shop.orderItems.map((item) => (
-        <Image
-          key={item.sku}
-          src={shop.imageFor(item.sku)}
-          alt={item.name}
-          w={34}
-          h={34}
-          radius="sm"
-        />
-      ))}
-    </Group>
-    <div>
-      <Text className="or-shop-order-title">
-        {shop.orderDescription || shop.checkout.description}
-      </Text>
-      <Text className="or-shop-order-total">{formatUsdCents(shop.orderTotalCents)}</Text>
-    </div>
-  </div>
-));

@@ -42,7 +42,10 @@ export async function addButtonToCart(page: Page): Promise<void> {
  */
 export async function startCheckout(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Checkout" }).click();
-  await expect(page.getByText(`OpenReceive button: ${BUTTON_NAME}`)).toBeVisible();
+  // `.first()`: the checkout screen names the product twice — the summary column
+  // beside the payment panel, and the packaged checkout's own order description
+  // (which this shop hides in CSS, but a hidden node still resolves here).
+  await expect(page.getByText(`OpenReceive button: ${BUTTON_NAME}`).first()).toBeVisible();
 }
 
 /**
@@ -73,8 +76,25 @@ export async function expectWizardCurrencies(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: /ETH/ })).toBeVisible();
 }
 
+/**
+ * The payment column — the packaged checkout itself, and nothing beside it.
+ *
+ * This shop puts a summary column next to the payment panel (what is being
+ * bought, and where the payment has got to), and that column renders its status
+ * from the SAME model the panel does — so a bare `getByText("Waiting for
+ * payment")` matches in two places. An assertion about what the CHECKOUT is
+ * showing scopes to this; the locator pierces the wrappers' shadow roots, so it
+ * reads the same on all four framework tabs.
+ */
+export function paymentColumn(page: Page): Locator {
+  return page.locator(".or-checkout-pay");
+}
+
 export function bitcoinTile(page: Page): Locator {
-  return page.getByRole("button", { name: "Bitcoin", exact: true });
+  // Not `exact`: every tile in the grid names itself and then says what it is —
+  // the Bitcoin tile's accessible name carries "Pay a Lightning invoice from any
+  // Bitcoin wallet." with it. `^Bitcoin` still separates it from the swap coins.
+  return page.getByRole("button", { name: /^Bitcoin/ });
 }
 
 /** Everything a spec needs from a minted attempt (checkout or swap create). */
