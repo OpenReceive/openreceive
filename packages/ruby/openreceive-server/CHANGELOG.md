@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.2 - Unreleased
+## 0.3.2 - 2026-08-29
 
 ### An overpaid swap deposit is a refund, not a support ticket
 

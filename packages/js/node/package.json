@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/node",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "The OpenReceive Node service: receive-only NWC wallet client, checkout and swap service, pricing, and the openreceive CLI.",
   "keywords": [
     "bitcoin",
@@ -17,7 +17,7 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@getalby/sdk": "^8.0.3",
-    "@openreceive/core": "0.3.1"
+    "@openreceive/core": "0.3.2"
   },
   "bin": {
     "openreceive": "./bin/openreceive.mjs"

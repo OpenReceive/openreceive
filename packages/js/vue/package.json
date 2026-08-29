@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/vue",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Vue wrapper for the OpenReceive checkout custom element.",
   "keywords": [
     "bitcoin",
@@ -19,8 +19,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.3.1",
-    "@openreceive/elements": "0.3.1"
+    "@openreceive/browser": "0.3.2",
+    "@openreceive/elements": "0.3.2"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0",

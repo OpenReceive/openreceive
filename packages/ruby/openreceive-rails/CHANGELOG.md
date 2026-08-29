@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2 - 2026-08-29
+
+No changes to this gem in 0.3.2. The release is the overpaid-deposit refund
+mapping in `openreceive-server` and the browser packages' `resumePaymentHash`
+resume path; the engine, its generators and the doctor task are byte-identical
+to 0.3.1 and ship to keep the one-version-for-everything rule.
+
+The Rails demo at `examples/buttons/server/rails` gained a testkit mode and a
+`/checkout/:reference` route in this release. Neither is part of this gem.
+
 ## 0.3.1 - 2026-08-28
 
 ### The generated allow-all `config.authorize` is no longer silent

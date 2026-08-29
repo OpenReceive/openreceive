@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.2 - Unreleased
+## 0.3.2 - 2026-08-29
 
 ### An overpaid swap deposit is a refund, not a support ticket
 
@@ -37,6 +37,84 @@ sent and required sit under it, and the deposit transaction and provider order
 render open: on a screen whose whole remaining job is quoting an id to a
 human, a disclosure triangle is the wrong shape. The demo shops stop rendering
 a payable QR under an `attention` status for the same reason.
+
+### A payer can get back to a deposit that is already in flight
+
+A stablecoin deposit has no account behind it and sends no email. The order's
+reference is the whole of the payer's claim on it, and `POST /checkouts/prepare`
+answers with the amount and the pay-in catalog and NO attempts — so a checkout
+rebuilt from a reference alone opened on the payment-method grid. That is the
+wrong screen for someone who was told to bookmark a refund.
+
+`resumePaymentHash` (attribute `resume-payment-hash`) is a create-mode prop on
+the React, element, Vue, Svelte and Angular checkouts: pass the payment hash
+your application stored beside the order and the deposit — or its refund form —
+comes back as the payer left it. **A hash the server will not serve is
+ignored**, because a stale note in host storage is not a reason to put an error
+in front of a payer who can still start a fresh payment; they land on the method
+grid exactly as they would have.
+
+The hash and not the asset, deliberately: `POST /swaps/status` addresses one
+attempt and applies no reuse test, so it still answers for a deposit that
+stopped being payable hours ago, while re-selecting the asset re-serves the
+committed attempt only until it expires and then mints a second address.
+
+Four additive names on `@openreceive/browser` (and `/headless`) for hosts
+driving their own UI: `requestSwapStatus` reads one attempt by hash and rejects
+with a `status`-carrying error; `resumeSwapAttempt` is the forgiving wrapper the
+renderers share, folding the attempt into a prepared snapshot and returning the
+snapshot unchanged on any failure; `currentCheckoutUrl` is the one definition of
+"its URL" that the two refund screens copy; `formatMethodNetworkDetail` joins
+network labels for a method tile. `SwapDisplayModel` gains `resumable`, the
+boolean `refundReturnLabel` was already chosen from, so a UI can render the copy
+button that sentence names without string-matching the label.
+
+### The guides say less
+
+Thirteen guides were rewritten against what the packages actually export, and
+the set shrank by roughly 1,800 lines while gaining a page. `swap-refunds.md`
+is new and is the one that was missing: when `refund_required` happens, which
+`refund_reason` means what, and — the part every stack got wrong — that a refund
+form is only a promise if the payer can reach it again after closing the tab.
+`headless-checkout.md`, `storage.md`, `security.md` and `checkout-ux.md` lost
+the most; three internal notes (`architecture.md`, `checkout-design.md`,
+`scope-lock.md`) now hold the reasoning that was scattered through them.
+
+### Every demo stack runs with no wallet, and every order has a URL
+
+The checkout lives at `/checkout/:reference` on all four Buy a Button stacks,
+which serve the SPA there, put the reference in the address bar the moment the
+order exists, and take a pasted one back in from the catalog. The two custom-UI
+stacks reopen the attempt with `resumePaymentHash`; the two that mount the
+packaged checkout let the payer re-pick their coin.
+
+`DEMO_WALLET=testkit` now boots the Rails stack too —
+`examples/buttons/server/rails/lib/button_shop/testkit/` is a port of
+`packages/js/testkit` down to the fixtures, so one Playwright suite drives all
+four with the same assertions. It fakes the wallet, the swap provider and the
+price feed, and nothing else: the engine, the hooks, the migrations and Postgres
+are the production paths. The `/__testkit` route is declared unconditionally and
+404s unconditionally without the variable, which its own test asserts in an
+environment that does not set it, and which `npm run check:demo-containers`
+enforces against every compose file.
+
+All four stacks — `node-express`, `static-html-small-api`, `nextjs-fullstack`
+and `rails` — were rebuilt against the 0.3.2 packages, and the Playwright suite
+runs against `node-express`. Of the gems, only `openreceive-server` changed;
+`openreceive` and `openreceive-rails` are byte-identical to 0.3.1 and ship to
+keep the one-version-for-everything rule.
+
+`release:prepare` now refreshes the Rails demo's `Gemfile.lock` alongside
+`package-lock.json`. The v0.3.1 tag's CI died at `bundle install` with exit 16
+because the three VERSION constants moved and a lockfile pinning them by `path`
+did not; local `test:ci` never sees it, because nothing here sets frozen mode.
+
+The live wallet smoke (`npm run test:live`) was NOT run for this release: it
+needs a funded NWC connection.
+
+This is a PATCH bump: nothing left the public API. `resumePaymentHash` and the
+four new browser exports are additive, and the swap-status mapping change moves
+attempts out of a terminal state into a recoverable one.
 
 ## 0.3.1 - 2026-08-28
 

@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/core",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Shared OpenReceive primitives: NWC parsing, settlement rules, money math, rates, and error normalization.",
   "keywords": [
     "bitcoin",

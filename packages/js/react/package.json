@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/react",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "React checkout components and hooks for OpenReceive (<Checkout>, useCheckout, PaymentWizard).",
   "keywords": [
     "bitcoin",
@@ -19,8 +19,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.3.1",
-    "@openreceive/core": "0.3.1"
+    "@openreceive/browser": "0.3.2",
+    "@openreceive/core": "0.3.2"
   },
   "peerDependencies": {
     "react": ">=18.0.0"

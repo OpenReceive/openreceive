@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 - 2026-08-29
+
+No changes to this gem in 0.3.2. The release is the overpaid-deposit refund
+mapping in `openreceive-server` and the browser packages' `resumePaymentHash`
+resume path; this gem's wallet, invoice and settlement code is byte-identical to
+0.3.1 and ships to keep the one-version-for-everything rule.
+
 ## 0.3.1 - 2026-08-28
 
 No changes to this gem in 0.3.1. The release is the browser/React `resumable`
