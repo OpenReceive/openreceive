@@ -363,7 +363,7 @@ export function renderSwapDepositPanel(options: {
       },
       refundHeading,
       renderSwapRefundReturnWarning(display, options),
-      renderSwapRefundFacts(display, options),
+      renderSwapAmountFacts(display, options),
       React.createElement(
         "p",
         {
@@ -392,7 +392,7 @@ export function renderSwapDepositPanel(options: {
       },
       refundHeading,
       renderSwapRefundReturnWarning(display, options),
-      renderSwapRefundFacts(display, options),
+      renderSwapAmountFacts(display, options),
       React.createElement(
         "dl",
         {
@@ -483,6 +483,12 @@ export function renderSwapDepositPanel(options: {
 
   // Fallback: any state without an explicit branch above (including a future
   // one) lands on support review rather than a payable deposit screen.
+  //
+  // The heading has already said "Needs attention" and why. What this screen
+  // owes the payer beyond that is the next step and the facts that identify
+  // the deposit to whoever picks it up — so the details are OPEN here. A caret
+  // is right for a screen where the payment is going fine; it is not where the
+  // whole remaining job is quoting an id to a human.
   return React.createElement(
     "section",
     {
@@ -492,9 +498,10 @@ export function renderSwapDepositPanel(options: {
     React.createElement(
       "p",
       { className: orClasses.swapWarning },
-      checkoutLabels.supportReviewNeeded,
+      checkoutLabels.supportReviewFacts,
     ),
-    renderSwapSupportDetails(display, options),
+    renderSwapAmountFacts(display, options),
+    renderSwapSupportDetails(display, options, { open: true }),
     backButton,
   );
 }
@@ -567,7 +574,7 @@ function renderSwapNetworkWarning(
   );
 }
 
-function renderSwapRefundFacts(
+function renderSwapAmountFacts(
   display: SwapDisplayModel,
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
@@ -746,6 +753,7 @@ function renderSwapSupportDetails(
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
   },
+  view: { readonly open?: boolean } = {},
 ): React.ReactElement | null {
   const rowOptions = { ...options, payInAsset: display.payInAsset };
   const rows = [
@@ -767,6 +775,7 @@ function renderSwapSupportDetails(
     "details",
     {
       className: orClasses.swapSupport,
+      ...(view.open === true ? { open: true } : {}),
     },
     React.createElement("summary", { className: orClasses.swapSupportTitle }, "Payment details"),
     React.createElement(

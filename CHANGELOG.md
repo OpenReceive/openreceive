@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.3.2 - Unreleased
+
+### An overpaid swap deposit is a refund, not a support ticket
+
+A payer who sent more than `deposit_amount` landed on `attention` — terminal,
+no form, "This payment needs support review." The provider does not treat it
+that way: lightning-swap opens `refund_required` on `MORE` and takes a full
+`choice=REFUND` for it, exactly as it does for `LESS` and `EXPIRED`. The
+client was the only thing calling it an incident, and the payer's money sat
+behind a sentence with no next step.
+
+`MORE` / `OVER` / `OVERPAID` now map to `refund_required` in both engines, so
+the deposit comes back through the same two-step form as every other
+emergency. The refund is the WHOLE deposit — the payout is a fixed-amount
+bolt11, so there is nothing to exchange a surplus into and `choice=EXCHANGE`
+is not a path this client takes. The order stays unpaid and the payer can pay
+again afterwards.
+
+`refund_reason` gains `overpaid` and `overpaid_and_late` beside the three that
+were there, with payer-facing copy for both. `LIMIT`, which the provider pairs
+with `LESS`/`MORE` when a deposit falls outside the pair's limits, names no
+reason of its own — it says nothing the payer can act on beyond the amount.
+`attention` still holds what genuinely needs a human: `choice=EXCHANGE`, a
+provider status we do not recognize, and the states OpenReceive itself sets.
+
+Attempts already sitting in `attention` heal on their next status read, which
+is the next time the payer opens the checkout.
+
+### The attention screen says what to do
+
+Both renderers printed the same sentence twice — once as the heading detail,
+once as the warning banner underneath it — and then hid the ids behind a
+"Payment details" caret. The banner now carries the next step, the amounts
+sent and required sit under it, and the deposit transaction and provider order
+render open: on a screen whose whole remaining job is quoting an id to a
+human, a disclosure triangle is the wrong shape. The demo shops stop rendering
+a payable QR under an `attention` status for the same reason.
+
 ## 0.3.1 - 2026-08-28
 
 Three changes where a component or an engine was guessing about the host, and

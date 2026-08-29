@@ -214,7 +214,7 @@ export function renderElementSwapPanelHtml(
 
   if (display.state === "refund_required") {
     const stagedRefundAddress = display.refundAddress;
-    const refundFacts = renderElementSwapRefundFactsHtml(display);
+    const refundFacts = renderElementSwapAmountFactsHtml(display);
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${refundHeading}
@@ -280,7 +280,7 @@ export function renderElementSwapPanelHtml(
   }
 
   if (display.state === "refund_pending" || display.state === "refunded") {
-    const refundFacts = renderElementSwapRefundFactsHtml(display);
+    const refundFacts = renderElementSwapAmountFactsHtml(display);
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${refundHeading}
@@ -295,11 +295,17 @@ export function renderElementSwapPanelHtml(
     `;
   }
 
+  // The heading has already said "Needs attention" and why. What this screen
+  // owes the payer beyond that is the next step and the facts that identify
+  // the deposit to whoever picks it up — so the details are OPEN here. A caret
+  // is right for a screen where the payment is going fine; it is not where the
+  // whole remaining job is quoting an id to a human.
   return `
     <section part="swap-panel" class="${orClasses.swapPanel}">
       ${heading}
-      <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(checkoutLabels.supportReviewNeeded)}</p>
-      ${supportDetails}
+      <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(checkoutLabels.supportReviewFacts)}</p>
+      ${renderElementSwapAmountFactsHtml(display)}
+      ${renderElementSwapSupportDetailsHtml(display, { open: true })}
       ${backButton}
     </section>
   `;
@@ -333,7 +339,7 @@ function renderElementSwapRefundReturnWarningHtml(display: SwapDisplayModel): st
   `;
 }
 
-function renderElementSwapRefundFactsHtml(display: SwapDisplayModel): string {
+function renderElementSwapAmountFactsHtml(display: SwapDisplayModel): string {
   const rows = [
     display.depositReceivedAmount === undefined
       ? ""
@@ -461,6 +467,7 @@ function renderElementSwapFeeBreakdownHtml(
 
 function renderElementSwapSupportDetailsHtml(
   display: NonNullable<ReturnType<typeof createSwapDisplayModel>>,
+  options: { readonly open?: boolean } = {},
 ): string {
   if (
     display.depositTxId === undefined &&
@@ -471,7 +478,7 @@ function renderElementSwapSupportDetailsHtml(
     return "";
   }
   return `
-    <details part="swap-support" class="${orClasses.swapSupport}">
+    <details part="swap-support" class="${orClasses.swapSupport}"${options.open === true ? " open" : ""}>
       <summary class="${orClasses.swapSupportTitle}">Payment details</summary>
       <div class="${orClasses.swapSupportContent}">
         <dl part="swap-details" class="${orClasses.swapDetails}">

@@ -367,7 +367,7 @@ function getSwapProviderStateDetail(
   if (state === "refund_required" || state === "refund_pending" || state === "refunded") {
     return getSwapRefundDetail(state, assetLabel, refundContext);
   }
-  if (state === "attention") return "This payment needs support review.";
+  if (state === "attention") return checkoutLabels.supportReviewNeeded;
   if (state === "failed") return "This payment address can no longer be used.";
   return state;
 }

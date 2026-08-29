@@ -71,6 +71,11 @@ export const checkoutLabels = {
   tryAgain: "Try again",
   payWithLightningInstead: "Pay with Lightning instead",
   supportReviewNeeded: "This payment needs support review.",
+  // The heading already carries `supportReviewNeeded`; a banner repeating it
+  // verbatim is the same words twice and no way forward. This is the sentence
+  // that names the next step, above the facts a human needs to find the money.
+  supportReviewFacts:
+    "Contact the shop with the payment details below — they identify this deposit.",
   preparingPaymentAddress: "Preparing payment address",
   preparingPaymentAddressDetail: "Getting your {asset} payment address…",
   createPaymentAddress: "Create {asset} ({network}) payment address",

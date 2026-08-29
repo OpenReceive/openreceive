@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.2 - Unreleased
+
+### An overpaid swap deposit is a refund, not a support ticket
+
+`normalize_status` mapped a FixedFloat-compatible `EMERGENCY` carrying `MORE`
+to `attention`, which is terminal and has no refund form. The provider itself
+opens `refund_required` for an overpay and accepts a full `choice=REFUND`, so
+the gem now does the same: `MORE` / `OVER` / `OVERPAID` fall through to
+`refund_required`, and `refund_reason` gains `overpaid` and
+`overpaid_and_late`. The refund returns the whole deposit — the payout is a
+fixed-amount bolt11, so a surplus has nothing to convert into.
+
 ## 0.3.1 - 2026-08-28
 
 No changes to this gem in 0.3.1. It is byte-identical to 0.3.0 and ships to keep

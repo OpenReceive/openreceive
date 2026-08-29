@@ -411,7 +411,7 @@ test("both renderers read the shared payer-facing strings, not copies", () => {
     "swapStartFailedTitle",
     "tryAgain",
     "payWithLightningInstead",
-    "supportReviewNeeded",
+    "supportReviewFacts",
     "preparingPaymentAddress",
     "preparingPaymentAddressDetail",
     "createPaymentAddress",

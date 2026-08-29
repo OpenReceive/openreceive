@@ -27,13 +27,17 @@ const REFUND_STATES: ReadonlySet<SwapDisplayModel["state"]> = new Set([
  * The swap attempt, as one screen.
  *
  * A refund REPLACES the deposit panel rather than appearing under it. This is
- * the whole reason the two branches are separate components: the deposit
- * branch owns a QR hook, and a component that rendered both would have to run
- * it for a screen with no code on it.
+ * the whole reason the branches are separate components: the deposit branch
+ * owns a QR hook, and a component that rendered both would have to run it for
+ * a screen with no code on it. `attention` replaces it for the same reason —
+ * that deposit address is part of an incident, and a payer who reads "send
+ * 0.030352 SOL" off an attention screen sends good money after stuck money.
  */
 export const SwapDepositPanel: React.FC<SwapPanelProps> = observer(({ checkout, swap }) =>
   REFUND_STATES.has(swap.state) ? (
     <SwapRefundStage checkout={checkout} swap={swap} />
+  ) : swap.state === "attention" ? (
+    <SwapAttentionStage swap={swap} />
   ) : (
     <SwapDepositStage swap={swap} />
   ),
@@ -159,7 +163,7 @@ const SwapRefundStage: React.FC<SwapPanelProps> = observer(({ checkout, swap }) 
 
     <CheckoutLinkAlert checkout={checkout} label={swap.refundReturnLabel} />
 
-    <RefundFacts swap={swap} />
+    <AmountFacts swap={swap} />
 
     {swap.state === "refund_required" ? (
       <RefundForm checkout={checkout} swap={swap} />
@@ -176,8 +180,39 @@ const SwapRefundStage: React.FC<SwapPanelProps> = observer(({ checkout, swap }) 
   </Stack>
 ));
 
+/**
+ * No form, no deposit address — the payer's whole remaining move is quoting
+ * this deposit to a human, so the ids that identify it are the screen, not a
+ * detail behind a caret.
+ */
+const SwapAttentionStage: React.FC<{ swap: SwapDisplayModel }> = observer(({ swap }) => (
+  <Stack gap="sm" className="or-shop-refund-stage">
+    <Alert
+      color="orange"
+      variant="light"
+      icon={<IconAlertTriangle />}
+      title={swap.providerStateLabel}
+    >
+      <Text size="sm">{swap.providerStateDetail}</Text>
+    </Alert>
+
+    <Text size="sm">{checkoutLabels.supportReviewFacts}</Text>
+
+    <AmountFacts swap={swap} />
+
+    <Stack gap={8}>
+      {swap.providerOrderId ? (
+        <CopyRow label="Provider order" value={swap.providerOrderId} />
+      ) : null}
+      {swap.depositTxId ? (
+        <CopyRow label="Deposit transaction" value={swap.depositTxId} truncate />
+      ) : null}
+    </Stack>
+  </Stack>
+));
+
 /** What the provider says about the money: sent, expected, and coming back. */
-const RefundFacts: React.FC<{ swap: SwapDisplayModel }> = ({ swap }) => {
+const AmountFacts: React.FC<{ swap: SwapDisplayModel }> = ({ swap }) => {
   const rows: [string, string | undefined][] = [
     [
       "Amount received",
