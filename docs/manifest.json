@@ -282,6 +282,14 @@
       "public": false
     },
     {
+      "slug": "checkout-design",
+      "title": "Checkout Design Notes",
+      "source_path": "docs/internal/checkout-design.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "release-process",
       "title": "Release Process",
       "source_path": "docs/internal/release-process.md",

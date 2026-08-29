@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "category": "quickstart",
-      "bytes": 9719
+      "bytes": 8712
     },
     {
       "path": "/guides/quickstart-rails",
@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 14537
+      "bytes": 13068
     },
     {
       "path": "/guides/node-orms",
@@ -43,7 +43,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "category": "quickstart",
-      "bytes": 7400
+      "bytes": 6240
     },
     {
       "path": "/guides/authorization",
@@ -63,7 +63,7 @@
       "slug": "rate-limiting",
       "title": "Rate Limiting",
       "category": "security",
-      "bytes": 8160
+      "bytes": 6776
     },
     {
       "path": "/guides/frontend-checkout",
@@ -73,7 +73,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 10288
+      "bytes": 4957
     },
     {
       "path": "/guides/checkout-ux",
@@ -83,7 +83,7 @@
       "slug": "checkout-ux",
       "title": "Checkout UX",
       "category": "guide",
-      "bytes": 15985
+      "bytes": 5888
     },
     {
       "path": "/guides/headless-checkout",
@@ -93,7 +93,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 34542
+      "bytes": 15839
     },
     {
       "path": "/guides/automated-swaps",
@@ -103,7 +103,7 @@
       "slug": "automated-swaps",
       "title": "Automated Swaps",
       "category": "guide",
-      "bytes": 8095
+      "bytes": 3184
     },
     {
       "path": "/guides/swap-refunds",
@@ -113,7 +113,7 @@
       "slug": "swap-refunds",
       "title": "Swap Refunds",
       "category": "guide",
-      "bytes": 12217
+      "bytes": 6286
     },
     {
       "path": "/guides/lightning-swap-connect",
@@ -143,7 +143,7 @@
       "slug": "storage",
       "title": "Payment Storage",
       "category": "operations",
-      "bytes": 11248
+      "bytes": 3368
     },
     {
       "path": "/guides/deploying",
@@ -153,7 +153,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 6693
+      "bytes": 2990
     },
     {
       "path": "/guides/host-testing",
@@ -163,7 +163,7 @@
       "slug": "host-testing",
       "title": "Testing Your OpenReceive Integration",
       "category": "guide",
-      "bytes": 6665
+      "bytes": 5925
     },
     {
       "path": "/guides/api-reference",
@@ -183,7 +183,7 @@
       "slug": "security",
       "title": "Security",
       "category": "security",
-      "bytes": 13224
+      "bytes": 3838
     },
     {
       "path": "/guides/provider-registry",
@@ -193,7 +193,7 @@
       "slug": "provider-registry",
       "title": "Provider Registry",
       "category": "reference",
-      "bytes": 6862
+      "bytes": 3830
     },
     {
       "path": "/guides/price-feeds",
@@ -203,7 +203,7 @@
       "slug": "price-feeds",
       "title": "Price Feeds",
       "category": "reference",
-      "bytes": 2747
+      "bytes": 2408
     },
     {
       "path": "/guides/react-material-ui-recipe",
@@ -223,7 +223,7 @@
       "slug": "custom-checkout-route",
       "title": "Writing Your Own Checkout Route",
       "category": "guide",
-      "bytes": 5503
+      "bytes": 5160
     },
     {
       "path": "/guides/agent-directions-node",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 25105
+      "bytes": 22687
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -243,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 30910
+      "bytes": 28078
     },
     {
       "path": "/api_docs",
@@ -262,7 +262,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25105,
+      "bytes": 22687,
       "copy_button": true,
       "self_contained": true
     },
@@ -272,7 +272,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 30910,
+      "bytes": 28078,
       "copy_button": true,
       "self_contained": true
     }
@@ -355,6 +355,10 @@
     {
       "source": "docs/internal/headless-surface.md",
       "slug": "headless-surface"
+    },
+    {
+      "source": "docs/internal/checkout-design.md",
+      "slug": "checkout-design"
     },
     {
       "source": "docs/internal/release-process.md",

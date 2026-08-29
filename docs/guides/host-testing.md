@@ -138,18 +138,6 @@ language. That is worth copying if you run both: a fake that satisfies the
 contract but disagrees with its twin needs a second harness, and the second
 harness is where the two stacks drift apart.
 
-## The repository's own E2E lane
-
-`npm run test:e2e` runs Playwright specs against exactly this testkit demo
-mode: four-framework mount-and-pay walkthroughs, swap advance + refund,
-expire-and-remint, and resume/theme-toggle behavior. The specs in
-[tests/e2e/](../../tests/e2e) are a working reference for driving a checkout
-end-to-end against the fakes. That lane boots the node-express stack because it
-needs no database service; the Rails stack answers the same control surface with
-the same fixtures, so the same helpers point at it by changing `baseURL`.
-
-The `@openreceive/testkit` package that powers all of this is internal and
-unpublished, and so is the Rails demo's port of it; both APIs may change
-without notice. The stable seams for your own tests are the ones above: the
-`client` option and `StaticPriceProvider` in Node, and `config.nwc_client` /
+The stable seams for your own tests are the `client` option and
+`StaticPriceProvider` in Node, and `config.nwc_client` /
 `config.swap_providers` / `OpenReceive::Rates::StaticPriceProvider` in Rails.

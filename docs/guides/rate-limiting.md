@@ -75,28 +75,16 @@ counts mints and a throttle on anything else could never trigger), `ip`
 
 ## How counting works
 
-There is no separate counter table. Every minted invoice is already persisted
-as an `openreceive_payments` row, and the handler stamps the adapter's client
-IP into its `client_ip` column at creation. The limiter is a `COUNT` over rows
-you store anyway, so limits survive restarts and apply across every instance
-sharing the database. See [Payment storage](storage.md) for the schema.
+The limiter counts `openreceive_payments` rows by `client_ip`. There is no
+separate counter table and no in-memory fallback, so the cap survives
+restarts and applies across every instance sharing the database.
 
-The limit is checked only when a new attempt would actually be minted.
-Re-serving an attempt that is already committed for the order — the reuse path
-— is never throttled, so a capped payer can always re-fetch the instructions
+Reuse is never throttled — a capped payer can still re-fetch instructions
 they were already given.
 
-Persistent counting is **required**. If the payment repository cannot count
-(`countAttemptsFromIp` is missing) and the config supplies no custom counter,
-the handler throws at construction — your server fails to start with a clear
-message instead of silently degrading. There is deliberately no in-memory
-fallback: per-process counts reset on restart and multiply per instance behind
-a load balancer, which silently weakens a security control. Applications on the
-custom-repository escape hatch either implement the
-`countAttemptsFromIp(clientIp, sinceUnixSeconds)` repository method (one
-indexed `COUNT` over the `clientIp` the handler already passes with each
-commit) or disable `rateLimiting` and pass a custom `rateLimitHook` backed by
-their own store.
+A custom repository must implement `countAttemptsFromIp`, or disable
+`rateLimiting` and pass a `rateLimitHook` backed by your own store. The
+handler refuses to start rather than silently running without a counter.
 
 ## Getting the client IP right
 
@@ -142,18 +130,11 @@ OpenReceive.configure do |config|
 end
 ```
 
-Off by default; `true` caps invoice creation at 60 per client IP per rolling
-hour, counted from the engine-owned `openreceive_payments` rows — the same
-persistent counting, minting-only scope, and fail-open missing-IP behavior
-(with a one-time warning) as the JS handler, and the same payer-facing `429`
-message. The client IP defaults to `ActionDispatch::Request#ip`, which honors
-Rails' trusted-proxy configuration; `config.client_ip` supplies a custom
-extractor (a proc receiving the request). For policies the built-in limiter
-cannot express, pass a custom `config.rate_limit` hook instead — it receives
-the same context as `config.authorize` and is mutually exclusive with
-`config.rate_limiting`, which the configuration also refuses to combine with
-the custom-repository hooks (`resolve_checkout`/`on_checkout_created`),
-because row counting needs the engine-owned model.
+Off by default. `true` is the same 60/hour cap as Node. The client IP
+defaults to `ActionDispatch::Request#ip` (honors Rails' trusted proxies);
+`config.client_ip` supplies a custom extractor. For a policy the built-in
+limiter cannot express, pass `config.rate_limit` instead — same context as
+`config.authorize`. Do not combine `rate_limiting` with a custom repository.
 
 ## Custom policies
 

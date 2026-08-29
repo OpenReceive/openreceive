@@ -95,13 +95,10 @@ if (checked?.status === "settled" && checked.paidAt !== undefined) {
 }
 ```
 
-Delivery is at least once. `markPaidOnce` sets the attempt settled exactly once and runs the
-fulfill hook inside the same transaction, only for the first settled attempt for a reference; a sibling
-second settlement is recorded with `status_reason = 'duplicate_settlement'` without fulfilling.
-A notification that carries a finality signal (`settled_at` or wallet state `settled`) for a
-known pending attempt settles it directly through `markPaidOnce`; without that signal, or for an
-unknown hash, it is only a wake-up hint and `list_transactions` scanning decides. The finality
-rule is the same either way — never a preimage alone.
+Delivery is at least once. `markPaidOnce` settles the attempt exactly once
+and runs the fulfill hook in the same transaction, only for the first
+settled attempt on a reference. A second payment to a sibling invoice is
+recorded and never fulfills again. A preimage alone is never settlement.
 
 ## Custom swap routes
 

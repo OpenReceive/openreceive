@@ -174,49 +174,34 @@ list is the short form of https://openreceive.org/guides/checkout-ux.md, for a U
 built on `@openreceive/browser/headless`. Read that before writing components.
 
 - `createCheckoutController` is the engine. Do not hand-roll a poll loop.
-- `createCheckoutStatusModel` for status, and never a Cart → Pay → Done stepper:
-  the wire vocabularies are 4, 6 and 12 values, and mostly outcomes.
+- `createCheckoutStatusModel` for the status line. Do not draw a
+  Cart → Pay → Done stepper. Read the model's `phase`, not the snapshot's.
 - `resolveWizardSelection` decides whether to ask "which network?". A
-  one-network asset (SOL, ETH) must not be asked — ceremony where there is no
-  question teaches the payer to click past USDT, where it is unrecoverable. The
-  `selectedAssetByGroup` map it returns and `createMethodGridDisplay` takes is
-  keyed by GROUP KEY (`USDT`) and valued by the chosen option's `pay_in_asset`
-  (`USDT_TRON`) — not its `network_label`.
-- `createMethodGridDisplay` for tiles, including `limitMessage` ("Minimum amount
-  $2.71") so an unavailable method says why in the payer's own currency.
-- `createSwapDisplayModel` → `display.copyRows` for deposits: address, memo AND
-  the bare amount each get a labelled copy row. `swap.networkWarning*` is scoped
-  per rail; do not hard-code one banner for every asset.
-- `createCheckoutSession` owns the deferred Lightning mint and the swap start,
-  with the guards that make both safe to double-click. To start swaps, pass its
-  `swap` option — `selection` (five accessors over state you already hold),
-  `prefix` and `fetch`, together or not at all. Without it `startSwap` reports
-  through `onError` instead of starting anything.
-- `createQrSvg` / `createQrPayloadSvg` are ASYNC. Handing the promise straight
-  to `dangerouslySetInnerHTML` type-checks and renders `[object Promise]`; use
-  `createQrSvgController`, which also drops an encode that lands after the
-  payload changed.
+  one-network asset starts the swap from the tile. Key `selectedAssetByGroup`
+  by group (`USDT`), valued by `pay_in_asset` (`USDT_TRON`).
+- `createMethodGridDisplay` for tiles, including `limitMessage` so an
+  unavailable method says the minimum in the payer's currency.
+- `createSwapDisplayModel` → `display.copyRows` for deposits: address, memo,
+  and the bare amount each get a copy row. Render `swap.networkWarning*` as
+  the model gives it.
+- `createCheckoutSession` owns mint and swap start. To start swaps, pass its
+  `swap` option (`selection`, `prefix`, `fetch`) together. Without it
+  `startSwap` reports through `onError`.
+- `createQrSvg` is async. Use `createQrSvgController` so you do not render
+  `[object Promise]`.
 - `checkoutLabels` for every payer-facing string. Only write copy it lacks.
-- `stageSwapRefund` then `confirmSwapRefund` — two steps, and only the second
-  submits. Validate with `getSwapRefundFormError`, and treat `409 CONFLICT` as a
-  normal outcome.
-- Tell `createSwapDisplayModel` whether your checkout has a URL the payer can
-  come back to (`{ resumable: true }`) and render `display.refundReturnLabel`;
-  never pick either `checkoutLabels` string yourself. The resume machinery —
-  `createGuestCheckoutResume`, `createGuestOrderFetcher` — is on
-  `@openreceive/browser`, not on `/headless`.
-- A refund REPLACES the deposit panel; it is not a form underneath it. On
-  `refund_required`, `refund_pending` and `refunded`, drop the QR, the address,
-  the amount and the fee breakdown — a payer told to send 15.01 USDT beside a
-  refund notice sends twice — and drop "switch payment method" on
-  `refund_required`, which would dismiss the attempt being refunded.
-- No "Open wallet" button on desktop: it navigates the window that is polling
-  for settlement away from the payment.
-- Wallet suggestions under the invoice come from `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays` (both on `@openreceive/browser/headless`; the
-  registry itself is `@openreceive/provider-data`). Lightning only, present them
-  as suggestions, and host the icons yourself via the `asset-base-url` attribute
-  or they break outside Vite. The registry answers ~37 wallets: pass
+- `stageSwapRefund` then `confirmSwapRefund` — only the second submits.
+  Validate with `getSwapRefundFormError`. Treat `409` as a normal outcome.
+- Pass `{ resumable: true }` to `createSwapDisplayModel` when the payer has
+  a URL they can come back to, and render `display.refundReturnLabel`.
+  Resume helpers (`createGuestCheckoutResume`, `createGuestOrderFetcher`)
+  are on `@openreceive/browser`, not `/headless`.
+- A refund replaces the deposit panel. On `refund_required` also drop
+  "switch payment method".
+- No "Open wallet" button on desktop.
+- Wallet suggestions: `getPaymentWizardRoutes()` +
+  `createWizardRouteDisplays`. Lightning only. Host the icons with
+  `asset-base-url`. The registry answers ~37 wallets: pass
   `providerPreviewLimit` and build "show all" from `display.providerCount`,
   or they push the QR off the screen.
 
@@ -288,8 +273,7 @@ supported.
 The generator emits three things:
 
 - `db/migrate/*_create_openreceive_tables.rb` — one migration creating both
-  engine tables: `openreceive_payments` (including `status` and
-  `status_reason`) and the `openreceive_meta` reconcile gate;
+  engine tables (`openreceive_payments` and `openreceive_meta`);
 - a simplified `config/initializers/openreceive.rb`;
 - the `OpenReceive::Engine` route mount at `/openreceive`.
 
@@ -495,42 +479,22 @@ Build a custom checkout only if this app cannot use a drop-in; then
 
 ### Reconciliation
 
-Settlement runs on the request path by default: every mounted engine payment
-route (not the unauthenticated `GET /rates`) runs one opportunistic reconcile
-pass when attempts are pending, serialized by
-the durable `openreceive_meta` gate from the install migration. The
-gate is shared by all Puma workers on the database, so rapid calls collapse to
-one bounded wallet scan per interval — no scheduled job is needed. Disable or
-tune with `config.opportunistic_reconcile` (`false`, or
+Settlement runs on the request path. You do not need a cron job. Disable or
+tune it with `config.opportunistic_reconcile` (`false`, or
 `{ min_interval_seconds: … }`).
 
-Optionally, run the one long-lived worker:
+Optionally, run one worker so settlement does not wait for the next page
+load:
 
 ```sh
 bin/rails openreceive:notifications
 ```
 
-It listens for NWC-02 `payment_received` notifications — authenticated wallet
-data — and also reconciles periodically
-(`OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS`, default 15), its own
-safety net for notifications missed while it was down. A settled payload
-settles the matching pending attempt directly (same finality rule as scans;
-never a preimage alone); anything less only wakes a reconcile pass.
-→ [rake openreceive:notifications](https://openreceive.org/guides/api-reference.md#rake-openreceivenotifications) ·
-[OpenReceive.listen_for_notifications!](https://openreceive.org/guides/api-reference.md#openreceivelisten_for_notifications)
+→ [rake openreceive:notifications](https://openreceive.org/guides/api-reference.md#rake-openreceivenotifications)
 
-`OpenReceive.reconcile!`, `OpenReceive::ReconcileJob`, and
-`bin/rails openreceive:reconcile` remain one-shot primitives — nothing to
-schedule. `reconcile!` now returns the per-hash check results of the pass.
-→ [OpenReceive.reconcile!](https://openreceive.org/guides/api-reference.md#openreceivereconcile) ·
-[OpenReceive::ReconcileJob](https://openreceive.org/guides/api-reference.md#openreceivereconcilejob)
-
-Each pass reconciles only `pending` attempts — the oldest
-`OpenReceive::Server::RECONCILE_BATCH_SIZE` (200) per pass — with one batched
-wallet scan, so the window stays bounded and a backlog drains over successive
-passes. Settled rows are never overwritten; closing an unpaid
-attempt requires a successful wallet scan past expiry plus the 900-second
-grace, never the local clock alone. Duplicate delivery is harmless.
+`OpenReceive.reconcile!` and `bin/rails openreceive:reconcile` are one-shot
+primitives if you want to drive a pass yourself.
+→ [OpenReceive.reconcile!](https://openreceive.org/guides/api-reference.md#openreceivereconcile)
 
 ### Swap secrets
 

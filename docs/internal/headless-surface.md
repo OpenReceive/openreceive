@@ -1,9 +1,10 @@
 # Headless Surface Inventory
 
 The generated list of every symbol exported by `@openreceive/browser/headless`.
-What each group is for — and the curation rule that decides what gets exported —
-is documented in the developer guide:
+What each group is for is in the developer guide:
 [Headless checkout](../guides/headless-checkout.md).
+Why the surface is curated that way is in
+[Checkout design](checkout-design.md#headless-surface-curation).
 
 This inventory exists so promoting or dropping a symbol cannot silently diverge
 from the docs: the validate gate runs

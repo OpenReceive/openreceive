@@ -47,84 +47,36 @@ when they need the same read-only suggestions.
 
 ## Assets are files your host serves
 
-`icon_path` and the tutorial `path` values name files on disk. The package will
-try to resolve each one to a URL for you, and **that resolution only works for a
-Vite/Rollup chunk served from `/assets/*.js`.** Under any other bundler it
-silently produces something unusable.
+The icons and pay tutorials are files inside the packages. Vite usually
+resolves them. Most other bundlers do not — icons come out blank, and the
+built bundle may contain `file://` paths. Grep for `file://` if images are
+missing.
 
-The resolution reads `import.meta.url`. Webpack — and anything else that
-replaces that expression at build time with the module's own on-disk URL —
-turns every entry into:
-
-```
-file:///app/node_modules/@openreceive/provider-data/dist/assets/provider-icons/strike.png
-```
-
-which is (a) unloadable in a browser and (b) an absolute server path published
-in a public asset. The files are not emitted either, and cannot be: webpack's
-`new URL(…, import.meta.url)` asset detection requires a string literal, and
-both maps build their paths inside a `.map()`, so the bundler never sees an
-asset reference to follow. The failure mode is blank images, no request, and no
-error.
-
-**If your provider icons or pay tutorials are blank, grep your built bundle for
-`file://`.** The packages also log one `console.warn` naming the path the first
-time this happens in a document.
-
-That warning means what it says, and it means it only when it fires. The
-packaged URL tables (`providerIconUrls`, `payTutorialUrls`, `paymentIconUrls`)
-resolve each entry when it is READ, not when the module is imported, so a host
-that supplies a resolver — and therefore never reads one — sees nothing. If you
-are seeing the warning, something is genuinely reaching for a packaged URL: one
-display builder that was not given `resolveAssetUrl`, or a wrapper mounted
-without `assetBaseUrl`. Find that call rather than dismissing the warning.
-
-Three ways to fix it, and you need one of them under any non-Vite bundler:
+Pick one:
 
 1. **Copy the packaged assets next to your bundle.** The demos do this with
-   `copy-openreceive-payment-icons-plugin.ts`, which is the reference
-   implementation.
-2. **Serve the trees and point at them with one string.** `assetBaseUrl` (the
-   `<Checkout>` prop, the Vue/Svelte/Angular prop) and `asset-base-url` (the
-   `<openreceive-checkout>` attribute) take a base URL and join every packaged
-   key to it: `asset-base-url="/openreceive-assets"` loads
-   `assets/icons/btc.svg` from `/openreceive-assets/assets/icons/btc.svg`. The
-   layout it expects is exactly what the copy plugin above produces, so a Rails
-   app can add
+   `copy-openreceive-payment-icons-plugin.ts`.
+2. **Serve the trees and pass one base URL.** `assetBaseUrl` (React / Vue /
+   Svelte / Angular) and `asset-base-url` (the custom element) join every
+   packaged path to it. Example: `asset-base-url="/openreceive-assets"` loads
+   `/openreceive-assets/assets/icons/btc.svg`. Put
    `node_modules/@openreceive/provider-data/dist/assets` and
-   `node_modules/@openreceive/browser/dist/assets` under one served root and be
-   done. This is the only fix that reaches plain `<openreceive-checkout>` markup
-   and the non-React wrappers, because `defineElements` is first-write-wins and
-   all three of them call it with no options.
-3. **Serve the files yourself and map each path.** Every display
-   builder in `@openreceive/browser/headless`, `PaymentWizard` in
-   `@openreceive/react`, and `defineElements` in `@openreceive/elements` take an
-   optional `resolveAssetUrl: (packagedPath: string) => string`. It is handed
-   the packaged path (`assets/provider-icons/strike.png`) and returns whatever
-   URL your host serves it at. The registry's own `icon_path` and tutorial
-   `path` strings are the keys, and `WizardProviderDisplay.iconPath` carries the
-   key on the display row so you do not have to go back to the registry for it.
-   `createAssetBaseUrlResolver(base)` from `@openreceive/browser/headless` is
-   the one-line resolver option 2 is built on.
+   `node_modules/@openreceive/browser/dist/assets` under that root. This is
+   the option that works with plain `<openreceive-checkout>` markup.
+3. **Map each path yourself.** Display builders take
+   `resolveAssetUrl: (packagedPath) => url`.
+   `createAssetBaseUrlResolver(base)` from
+   `@openreceive/browser/headless` is option 2 as a function.
 
-`@openreceive/browser`'s own payment icons (`assets/icons/*.svg`) have the same
-contract, keyed by `paymentIconPaths`.
+`@openreceive/browser`'s own payment icons (`assets/icons/*.svg`) use the
+same contract, keyed by `paymentIconPaths`.
 
 ## Route Model
 
 Crypto routes start with an asset such as `btc`, `usdt`, or `eth` and resolve to
-provider references under `crypto_routes`. The payment wizard offers only the
-Bitcoin Lightning method, so `btc-lightning` is the only route it shows — every
-provider suggestion the payer sees is a way to pay the Lightning invoice
-directly. The registry still carries routes for other assets (swap services and
-exchanges that convert the payer's asset into a Lightning payment), but no UI
-surfaces them today.
-`getPaymentWizardRoutes()` with no arguments returns exactly that route, so the
-minimal call is the correct one for a checkout. `getPaymentWizardRoutes({ asset })`
-or `getPaymentWizardRoutes({ route })` names another of the registry's routes
-deliberately — the default never stands in for one you asked for and did not get,
-so an unknown asset or route, and the routeless fiat assets (`usd`, `eur`, `gbp`),
-all still return `[]`.
+provider references under `crypto_routes`. The payment wizard shows Bitcoin Lightning only.
+`getPaymentWizardRoutes()` with no arguments returns that route. Pass
+`{ asset }` or `{ route }` only when you deliberately want another list.
 
 Provider entries include conservative availability metadata:
 

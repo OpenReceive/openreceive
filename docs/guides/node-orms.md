@@ -53,21 +53,8 @@ createHost({ db: typeOrmDb(dataSource, "postgres"), ... });
 createHost({ db: sequelizeDb(sequelize, "postgres"), ... });
 ```
 
-What each factory settles so you don't have to:
-
-- `knexDb` normalizes the per-driver result shape: the pg driver wraps rows in
-  `{ rows }`, the sqlite3 driver resolves the rows array itself.
-- `prismaDb` routes each statement to `$queryRawUnsafe` or `$executeRawUnsafe`
-  by whether it returns rows — including `RETURNING` clauses, which the
-  `onPaid` claim below depends on.
-- `typeOrmDb` runs transaction statements through the transaction's own
-  `EntityManager`, never the `DataSource` — falling back would execute
-  settlement statements outside the transaction.
-- `sequelizeDb` binds parameters through Sequelize's `bind` option and threads
-  the managed transaction into every statement inside it — Sequelize carries
-  the transaction on the same instance, so without that, settlement statements
-  would run on the instance's own pool outside the transaction. It also reads
-  rows out of the `[rows, metadata]` pair a SELECT resolves.
+Use the factory for your ORM. Each one makes settlement SQL run on the
+same transaction as `onPaid`.
 
 ## Schema and `onPaid`
 
@@ -92,13 +79,9 @@ the two cannot drift). Keep every column:
 
 See [Payment storage](storage.md) for the full column semantics.
 
-The same file also creates `openreceive_meta` (`key`, `value`, `rev`) in the
-same database — one migration, both tables — and, where the ORM's migration
-format can seed rows, seeds its `schema_version` marker (see
-[Payment storage](storage.md#schema-version)). The `transaction_scan_gate` row is
-the durable claim that collapses the request-path reconcile passes of every
-instance into one wallet scan per interval, so keep it even though no code of yours
-touches it.
+The same file also creates `openreceive_meta`. Keep it — the library uses it
+to share one wallet scan across every instance. See
+[Payment storage](storage.md).
 
 `onPaid({ reference, paymentHash, paidAt, details?, query })` runs inside the
 library's settlement transaction, only for the first settled attempt for a reference.

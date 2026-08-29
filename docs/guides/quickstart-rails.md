@@ -29,8 +29,7 @@ supported.
 The generator emits three things:
 
 - `db/migrate/*_create_openreceive_tables.rb` — one migration creating both
-  engine tables: `openreceive_payments` (including `status` and
-  `status_reason`) and the `openreceive_meta` reconcile gate;
+  engine tables (`openreceive_payments` and `openreceive_meta`);
 - a simplified `config/initializers/openreceive.rb`;
 - the `OpenReceive::Engine` route mount at `/openreceive`.
 
@@ -236,42 +235,22 @@ Build a custom checkout only if this app cannot use a drop-in; then
 
 ## Reconciliation
 
-Settlement runs on the request path by default: every mounted engine payment
-route (not the unauthenticated `GET /rates`) runs one opportunistic reconcile
-pass when attempts are pending, serialized by
-the durable `openreceive_meta` gate from the install migration. The
-gate is shared by all Puma workers on the database, so rapid calls collapse to
-one bounded wallet scan per interval — no scheduled job is needed. Disable or
-tune with `config.opportunistic_reconcile` (`false`, or
+Settlement runs on the request path. You do not need a cron job. Disable or
+tune it with `config.opportunistic_reconcile` (`false`, or
 `{ min_interval_seconds: … }`).
 
-Optionally, run the one long-lived worker:
+Optionally, run one worker so settlement does not wait for the next page
+load:
 
 ```sh
 bin/rails openreceive:notifications
 ```
 
-It listens for NWC-02 `payment_received` notifications — authenticated wallet
-data — and also reconciles periodically
-(`OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS`, default 15), its own
-safety net for notifications missed while it was down. A settled payload
-settles the matching pending attempt directly (same finality rule as scans;
-never a preimage alone); anything less only wakes a reconcile pass.
-→ [rake openreceive:notifications](api-reference.md#rake-openreceivenotifications) ·
-[OpenReceive.listen_for_notifications!](api-reference.md#openreceivelisten_for_notifications)
+→ [rake openreceive:notifications](api-reference.md#rake-openreceivenotifications)
 
-`OpenReceive.reconcile!`, `OpenReceive::ReconcileJob`, and
-`bin/rails openreceive:reconcile` remain one-shot primitives — nothing to
-schedule. `reconcile!` now returns the per-hash check results of the pass.
-→ [OpenReceive.reconcile!](api-reference.md#openreceivereconcile) ·
-[OpenReceive::ReconcileJob](api-reference.md#openreceivereconcilejob)
-
-Each pass reconciles only `pending` attempts — the oldest
-`OpenReceive::Server::RECONCILE_BATCH_SIZE` (200) per pass — with one batched
-wallet scan, so the window stays bounded and a backlog drains over successive
-passes. Settled rows are never overwritten; closing an unpaid
-attempt requires a successful wallet scan past expiry plus the 900-second
-grace, never the local clock alone. Duplicate delivery is harmless.
+`OpenReceive.reconcile!` and `bin/rails openreceive:reconcile` are one-shot
+primitives if you want to drive a pass yourself.
+→ [OpenReceive.reconcile!](api-reference.md#openreceivereconcile)
 
 ## Swap secrets
 

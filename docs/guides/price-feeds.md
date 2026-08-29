@@ -48,10 +48,6 @@ those convert directly to `amount_msats` and never call a price provider.
 - Override feed URLs only if needed: `OPENRECEIVE_PRICE_FEED_PRIMARY_URL` /
   `OPENRECEIVE_PRICE_FEED_FALLBACK_URL` (must still serve Simple Price JSON).
 
-Cache behavior: reads are served from a 60-second process-local cache; a
-refresh tries the primary feed (5s timeout) then the fallback (10s timeout —
-both abort rather than inheriting the runtime's multi-minute default); entries
-older than the 600-second quote TTL are never used to price an invoice, and a
-cache window longer than that TTL is rejected at construction. Concurrent
-callers on a cold cache join the one in-flight refresh instead of failing. The
-cache is an optimization only — no payment truth depends on it.
+Rates are cached briefly in the process. A stale or missing rate fails
+closed rather than minting a mispriced invoice. The cache is an optimization
+only — no payment truth depends on it.

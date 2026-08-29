@@ -25,9 +25,8 @@ identical.
 npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequelize | knex
 ```
 
-`openreceive scaffold payments` emits one schema/migration file for your ORM —
-`openreceive_payments` plus `openreceive_meta`, the durable reconcile gate —
-and a wiring guide; it never touches a database.
+`openreceive scaffold payments` emits one schema/migration file for your ORM
+and a wiring guide. It never touches a database.
 → [openreceive scaffold payments](api-reference.md#openreceive-scaffold-payments)
 
 Then run the emitted migration through your normal workflow (for example
@@ -123,35 +122,23 @@ app.use(openreceive);
 // checkout for everyone: app.set("trust proxy", 1)  (see the rate-limiting guide)
 ```
 
-The middleware runs wallet preflight lazily (the first request awaits it) and
-runs the opportunistic reconcile on every OpenReceive request; restarts and
-payers who close the page are covered because any later call wins the gate and
-settles their invoices. `authorize` runs on every request with
-`{ action, request, resource, native }`.
+The first request checks the wallet. Later OpenReceive requests also settle
+pending invoices, so a payer who closes the tab is still covered.
+`authorize` runs on every request.
 → [openReceiveExpress](api-reference.md#openreceiveexpress) ·
 [authorize context](api-reference.md#the-authorize-context)
 
-`rateLimiting: true` is opt-in on purpose — set it for public web shops, and
-leave it off for point-of-sale or any deployment where payers share one IP.
-Limits, custom messages, and how counting works: → [Rate limiting](rate-limiting.md)
+`rateLimiting: true` is for public web shops. Leave it off for point-of-sale,
+where many payers share one IP. → [Rate limiting](rate-limiting.md)
 
-Composing the pieces yourself — a shared wallet client, a custom payments
-repository, or direct handler tests — is fully supported: build them with
-`createOpenReceive` and `createHost`, and pass
-`{ service, host, authorize }` to the same adapter.
-`maybeReconcilePayments` exposes the same gated settlement pass for
-your own routes or middleware.
+An optional worker, `startNotificationWorker({ service, host })`, listens for
+wallet payment notifications so settlement does not wait for the next page
+load. → [startNotificationWorker](api-reference.md#startnotificationworker)
+
+Composing the pieces yourself (`createOpenReceive` + `createHost`) is
+supported when you need a shared wallet client or a custom repository.
 → [createOpenReceive](api-reference.md#createopenreceive) ·
-[createHost](api-reference.md#createhost) ·
-[maybeReconcilePayments](api-reference.md#maybereconcilepayments)
-
-Optionally, run one separate worker process with
-`startNotificationWorker({ service, host })`: it subscribes to NWC-02
-`payment_received` notifications — authenticated wallet data — and runs a periodic reconcile
-pass in the same process. A settled payload settles the matching pending attempt directly
-(same finality rule as scans; never a preimage alone); anything less only wakes a scan, and
-the worker's own periodic pass is the safety net for notifications missed while it was down.
-→ [startNotificationWorker](api-reference.md#startnotificationworker)
+[createHost](api-reference.md#createhost)
 
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns the order id the page will pass as
@@ -208,6 +195,6 @@ without touching a database. → [openreceive doctor](api-reference.md#openrecei
 - [Swap refunds](swap-refunds.md) — the refund flow, and the per-order URL a payer needs to come back and use it. Read it before setting `LSC_URI_PRIMARY`
 - [Security](security.md) — server-only secret boundaries
 
-Request flow, retry/concurrency semantics, and direct server checkout are
-covered across [Authorization](authorization.md), [Payment storage](storage.md),
-and the [API reference](api-reference.md).
+More on wiring, storage, and routes:
+[Authorization](authorization.md), [Payment storage](storage.md),
+[API reference](api-reference.md).
