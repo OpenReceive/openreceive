@@ -21,7 +21,7 @@
 
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { markdownTwin, SITE_OWNED_PATHS } from "./site-paths.mjs";
+import { markdownTwin, SITE_OWNED_PATHS, SITE_REDIRECTS } from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -109,6 +109,9 @@ const contract = {
   // so removing or renaming one breaks a payload that is already pasted into
   // other people's editors and cannot be recalled.
   site_owned: SITE_OWNED_PATHS.map((urlPath) => ({ path: urlPath, must_exist: true })),
+  // Permanent redirects the site must keep serving (an additive field:
+  // contract v2 consumers that predate it ignore it safely).
+  site_redirects: SITE_REDIRECTS.map((redirect) => ({ ...redirect, must_exist: true })),
   // Contributor documentation. Never publish these: they describe unreleased
   // internals, release keys and forbidden changes.
   never_publish: manifest.docs

@@ -11,7 +11,14 @@ export const SITE_OWNED_PATHS = [
   "/contact",
   "/get_a_nwc_code_to_receive_payments",
   "/set_up_swap_provider",
+  "/llms.txt",
 ];
+
+// Paths the site serves as permanent redirects, not pages. /agents.md is the
+// older agent-index convention; the site 301s it to /llms.txt so a tool that
+// guesses the old name still lands on the canonical index. Contract-checked
+// like site_owned: removing the redirect 404s integrations already probing it.
+export const SITE_REDIRECTS = [{ from: "/agents.md", to: "/llms.txt", status: 301 }];
 
 // Every page the site renders from a source in THIS repo is also served as raw
 // markdown at the same URL with `.md` appended.

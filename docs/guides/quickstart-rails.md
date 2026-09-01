@@ -13,6 +13,17 @@ That is the whole install: `openreceive-rails` depends on `openreceive`,
 `NWC_URI` — works with nothing else added. Hosts that bring their own NWC
 client set `config.nwc_client` instead.
 
+One native prerequisite: `nwc-ruby`'s `rbsecp256k1` builds libsecp256k1 from
+source, so minimal images (`ruby:3.3-slim`, fresh Docker builds) need the
+autotools or `bundle install` dies at `autoreconf: not found`. Before
+bundling:
+
+```sh
+apt-get install -y autoconf automake libtool build-essential pkg-config
+```
+
+Full Ruby images and typical developer machines already have these.
+
 Then run:
 
 ```sh
@@ -225,6 +236,28 @@ import "@openreceive/elements/styles.css"; // or link the compiled styles.css
 // relative to the markup does not matter.
 defineElements();
 ```
+
+Bundling with esbuild (jsbundling-rails)? Two things:
+
+1. Build ESM and load it as a module. esbuild's default IIFE output evaluates
+   a dependency's Node fallback in the browser and throws
+   `ReferenceError: __filename is not defined`:
+
+   ```sh
+   esbuild app/javascript/application.js --bundle --format=esm --outdir=app/assets/builds
+   ```
+
+   ```erb
+   <%= javascript_include_tag "application", type: "module" %>
+   ```
+
+2. Serve the payment-method icons. They are files shipped in
+   `@openreceive/browser` and `@openreceive/provider-data` — not in
+   `@openreceive/elements` — and only Vite-style bundlers resolve them from
+   the import. Merge both packages' `dist/assets` trees into
+   `public/openreceive-assets/assets/` and set
+   `asset-base-url="/openreceive-assets"` on the element
+   ([Provider registry](provider-registry.md#assets-are-files-your-host-serves)).
 
 The element creates the checkout for `reference`, then renders and polls
 itself. React/Vue/Svelte/Angular apps use the matching wrapper package

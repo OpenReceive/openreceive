@@ -25,7 +25,7 @@ the sats land in the wallet the merchant connected.
 The one required credential is a receive-only NWC code (Nostr Wallet Connect):
 a string from the merchant's wallet that can create invoices and read their
 status, and cannot spend. A swap provider (an "LSC" code) optionally lets the
-payer send USDT, USDC, ETH, SOL or TRX instead, converted into that same
+payer send USDT, USDC, ETH or SOL instead, converted into that same
 Lightning payment. You supply those credentials and three hooks — `config.authorize`,
 `config.amount_for`, `config.on_paid`;
 OpenReceive supplies invoices, polling, settlement and the checkout UI. It never
@@ -52,24 +52,36 @@ Do this before installing the gem or editing files.
    missing one; do not stop to ask about altcoins that are already configured.
    If only `NWC_URI` is set, Bitcoin already works: continue, and raise the
    altcoin question at step 4 rather than blocking on it.
-3. If `NWC_URI` is missing or empty, stop and tell the user:
+3. If `NWC_URI` is missing or empty, stop and tell the user exactly what to
+   create:
 
    > OpenReceive cannot issue an invoice without a receive-only NWC code. Get
-   > one at https://openreceive.org/get_a_nwc_code_to_receive_payments, set it
-   > as `NWC_URI` in this app's server environment, and tell me when it's set.
+   > one at https://openreceive.org/get_a_nwc_code_to_receive_payments, then
+   > put `NWC_URI=<the code>` in this app's server environment — for most apps
+   > that is a `.env` file in the project root — and tell me when it's set.
 
-   Wait for the user. Do not invent a placeholder value and do not continue.
+   Wait for the user before wiring OpenReceive; do not invent a placeholder
+   value. Waiting is not idleness: you may write `.env.example` with the
+   variable NAMES only (`NWC_URI=`, `LSC_URI_PRIMARY=`) so the merchant has a
+   file to copy, and keep building the parts of the host that do not touch
+   OpenReceive — the order model, the cart, the routes. The stop guards the
+   credential, not the rest of the app.
 4. If `LSC_URI_PRIMARY` was not already set, ask the user: "Do you want to
-   accept altcoins and stablecoins (USDT, USDC, ETH, SOL, TRX) as well as
+   accept altcoins and stablecoins (USDT, USDC, ETH, SOL) as well as
    Bitcoin?"
 
    - Yes → send them to https://openreceive.org/set_up_swap_provider for a
-     swap-provider (LSC) code, and have them set `LSC_URI_PRIMARY` in the same
-     server environment. Wait for them, same as above.
+     swap-provider (LSC) code, to set as `LSC_URI_PRIMARY` in the same server
+     environment. Do NOT wait for it: no application code reads the value, so
+     the integration is identical with or without it — the engine picks it up
+     from the environment and swaps switch on. What a yes DOES change is the
+     refund route back (the swap non-negotiable below): build it as part of
+     this integration, not when the code arrives.
    - No → skip it. Bitcoin over Lightning works with `NWC_URI` alone, and you
      can add a swap provider later without changing application code.
-5. Check the environment again and confirm `NWC_URI` is present (plus
-   `LSC_URI_PRIMARY` if they asked for altcoins).
+5. Check the environment again and confirm `NWC_URI` is present.
+   `LSC_URI_PRIMARY` may land later; swaps stay off until it does, and no code
+   changes when it arrives.
 6. If OpenReceive is ALREADY installed here, check the installed versions of
    `openreceive-rails` and `@openreceive/browser` against the release named at
    the top of this file. The headless display models below do not exist in
@@ -125,9 +137,12 @@ itself, and they hold for every integration.
 - Show the payer the transaction record: `createTransactionDetails(...)` rows,
   collapsed behind a caret, on the live checkout AND on the receipt. A payment
   hash and a deposit txid are the only evidence a payer has that they paid you.
-  (It returns no rows while the rail is `checkout_lock` — before the payer has
-  chosen anything there is no transaction — so render the caret only when the
-  rows are non-empty.)
+  `<openreceive-checkout>` / React's `<Checkout>` already render this panel and
+  the `description` — these two rules cost you code only on a custom UI or your
+  own receipt page, never a reason to replace the drop-in. (It returns no rows
+  while the rail is `checkout_lock` — before the payer has chosen anything
+  there is no transaction — so render the caret only when the rows are
+  non-empty.)
 - HTTP JSON is snake_case; the browser packages' TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
 
@@ -256,6 +271,17 @@ That is the whole install: `openreceive-rails` depends on `openreceive`,
 `openreceive-server` and `nwc-ruby`, so the default wallet client — built from
 `NWC_URI` — works with nothing else added. Hosts that bring their own NWC
 client set `config.nwc_client` instead.
+
+One native prerequisite: `nwc-ruby`'s `rbsecp256k1` builds libsecp256k1 from
+source, so minimal images (`ruby:3.3-slim`, fresh Docker builds) need the
+autotools or `bundle install` dies at `autoreconf: not found`. Before
+bundling:
+
+```sh
+apt-get install -y autoconf automake libtool build-essential pkg-config
+```
+
+Full Ruby images and typical developer machines already have these.
 
 Then run:
 
@@ -469,6 +495,28 @@ import "@openreceive/elements/styles.css"; // or link the compiled styles.css
 // relative to the markup does not matter.
 defineElements();
 ```
+
+Bundling with esbuild (jsbundling-rails)? Two things:
+
+1. Build ESM and load it as a module. esbuild's default IIFE output evaluates
+   a dependency's Node fallback in the browser and throws
+   `ReferenceError: __filename is not defined`:
+
+   ```sh
+   esbuild app/javascript/application.js --bundle --format=esm --outdir=app/assets/builds
+   ```
+
+   ```erb
+   <%= javascript_include_tag "application", type: "module" %>
+   ```
+
+2. Serve the payment-method icons. They are files shipped in
+   `@openreceive/browser` and `@openreceive/provider-data` — not in
+   `@openreceive/elements` — and only Vite-style bundlers resolve them from
+   the import. Merge both packages' `dist/assets` trees into
+   `public/openreceive-assets/assets/` and set
+   `asset-base-url="/openreceive-assets"` on the element
+   ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets-are-files-your-host-serves)).
 
 The element creates the checkout for `reference`, then renders and polls
 itself. React/Vue/Svelte/Angular apps use the matching wrapper package

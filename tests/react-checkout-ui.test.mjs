@@ -222,7 +222,7 @@ test("React checkout supports design-system component and class slots", () => {
   assert.match(settledHtml, />Payment received</);
 });
 
-test("React checkout render prop can replace default visible markup", () => {
+test("React checkout children compose above the shipped payment UI", () => {
   const html = renderToStaticMarkup(
     React.createElement(
       Checkout,
@@ -256,7 +256,15 @@ test("React checkout render prop can replace default visible markup", () => {
   assert.match(html, /data-status="pending"/);
   assert.match(html, /data-countdown=/);
   assert.match(html, />lightning:lnbc-render-prop /);
-  assert.doesNotMatch(html, /aria-label="Lightning invoice"/);
+  // Children NEVER replace the payment UI: an order summary passed as children
+  // must not cost the payer the copy button, amount, and theme toggle. The
+  // custom markup renders first, in the custom element's order-slot position.
+  assert.match(html, />Copy invoice</);
+  assert.match(html, /data-openreceive-theme-toggle/);
+  assert.ok(
+    html.indexOf("data-custom-checkout") < html.indexOf("Copy invoice"),
+    "children render above the shipped payment UI",
+  );
 });
 
 test("React provider shares checkout state with a consumer hook", () => {

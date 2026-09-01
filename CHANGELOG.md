@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Checkout children compose instead of replacing the payment UI
+
+Passing anything as `<Checkout>` children — even the one-line order summary
+the docs recommend — silently replaced the QR, the method tiles, and the
+whole payment flow, so a first store's checkout could ship as a description
+with no way to pay. Children now render above the shipped payment UI, in the
+same position as the custom element's `order` slot, exactly as the docs
+always said they did. A host that wants its own checkout builds on
+`useCheckout` or `@openreceive/browser/headless`, not on `children`.
+
+### The host can lock the checkout theme
+
+`<Checkout theme="dark" | "light" | "system">` locks the theme: it wins over
+the payer's stored preference (`localStorage["openreceive.theme"]`) and any
+ancestor `ThemeScope`, and hides the toggle, so a checkout embedded in a page
+that is always dark can never come up as a white card. `ThemeScope` and
+`useTheme` accept the same `theme` option. The custom element's `theme`
+attribute already behaved this way; the element wrappers do not forward it
+yet (docs/internal/wrapper-parity.md tracks the gap).
+
+`themeToggle={false}` now hides the control but still stamps `data-theme` —
+hiding the toggle no longer renders an unstyled checkout.
+
+The theme toggle is labeled by the action ("switch to dark mode"), not the
+current state: a checkout stuck light on a dark page used to announce
+"light mode" at the payer.
+
 ## 0.3.2 - 2026-08-29
 
 ### An overpaid swap deposit is a refund, not a support ticket

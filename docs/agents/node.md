@@ -24,7 +24,7 @@ the sats land in the wallet the merchant connected.
 The one required credential is a receive-only NWC code (Nostr Wallet Connect):
 a string from the merchant's wallet that can create invoices and read their
 status, and cannot spend. A swap provider (an "LSC" code) optionally lets the
-payer send USDT, USDC, ETH, SOL or TRX instead, converted into that same
+payer send USDT, USDC, ETH or SOL instead, converted into that same
 Lightning payment. You supply those credentials and three hooks — `authorize`, `amountFor`,
 `onPaid`;
 OpenReceive supplies invoices, polling, settlement and the checkout UI. It never
@@ -46,24 +46,36 @@ Do this before installing packages or editing files.
    missing one; do not stop to ask about altcoins that are already configured.
    If only `NWC_URI` is set, Bitcoin already works: continue, and raise the
    altcoin question at step 4 rather than blocking on it.
-3. If `NWC_URI` is missing or empty, stop and tell the user:
+3. If `NWC_URI` is missing or empty, stop and tell the user exactly what to
+   create:
 
    > OpenReceive cannot issue an invoice without a receive-only NWC code. Get
-   > one at https://openreceive.org/get_a_nwc_code_to_receive_payments, set it
-   > as `NWC_URI` in this app's server environment, and tell me when it's set.
+   > one at https://openreceive.org/get_a_nwc_code_to_receive_payments, then
+   > put `NWC_URI=<the code>` in this app's server environment — for most apps
+   > that is a `.env` file in the project root — and tell me when it's set.
 
-   Wait for the user. Do not invent a placeholder value and do not continue.
+   Wait for the user before wiring OpenReceive; do not invent a placeholder
+   value. Waiting is not idleness: you may write `.env.example` with the
+   variable NAMES only (`NWC_URI=`, `LSC_URI_PRIMARY=`) so the merchant has a
+   file to copy, and keep building the parts of the host that do not touch
+   OpenReceive — the order model, the cart, the routes. The stop guards the
+   credential, not the rest of the app.
 4. If `LSC_URI_PRIMARY` was not already set, ask the user: "Do you want to
-   accept altcoins and stablecoins (USDT, USDC, ETH, SOL, TRX) as well as
+   accept altcoins and stablecoins (USDT, USDC, ETH, SOL) as well as
    Bitcoin?"
 
    - Yes → send them to https://openreceive.org/set_up_swap_provider for a
-     swap-provider (LSC) code, and have them set `LSC_URI_PRIMARY` in the same
-     server environment. Wait for them, same as above.
+     swap-provider (LSC) code, to set as `LSC_URI_PRIMARY` in the same server
+     environment. Do NOT wait for it: no application code reads the value, so
+     the integration is identical with or without it — the library picks it up
+     from the environment and swaps switch on. What a yes DOES change is the
+     refund route back (the swap non-negotiable below): build it as part of
+     this integration, not when the code arrives.
    - No → skip it. Bitcoin over Lightning works with `NWC_URI` alone, and you
      can add a swap provider later without changing application code.
-5. Check the environment again and confirm `NWC_URI` is present (plus
-   `LSC_URI_PRIMARY` if they asked for altcoins).
+5. Check the environment again and confirm `NWC_URI` is present.
+   `LSC_URI_PRIMARY` may land later; swaps stay off until it does, and no code
+   changes when it arrives.
 6. If OpenReceive is ALREADY installed here, check the installed versions of
    `@openreceive/node` and `@openreceive/browser` against the release named at
    the top of this file. The headless display models below do not exist in
@@ -116,9 +128,12 @@ itself, and they hold for every integration.
 - Show the payer the transaction record: `createTransactionDetails(...)` rows,
   collapsed behind a caret, on the live checkout AND on the receipt. A payment
   hash and a deposit txid are the only evidence a payer has that they paid you.
-  (It returns no rows while the rail is `checkout_lock` — before the payer has
-  chosen anything there is no transaction — so render the caret only when the
-  rows are non-empty.)
+  `<Checkout>` / `<openreceive-checkout>` already render this panel and the
+  `description` — these two rules cost you code only on a custom UI or your own
+  receipt page, never a reason to replace the drop-in. (It returns no rows
+  while the rail is `checkout_lock` — before the payer has chosen anything
+  there is no transaction — so render the caret only when the rows are
+  non-empty.)
 - HTTP JSON is snake_case; TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
 
@@ -258,6 +273,15 @@ identical.
 | Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
+On a fresh project, also install what this guide assumes is already there: the
+framework and an env loader (`npm install express dotenv`), plus your ORM
+before step 2 (`npm install prisma @prisma/client` on the Prisma path) —
+`openreceive scaffold` emits files for the ORM you name but never installs it.
+
+npm environments that run with `ignore-scripts` (some editor sandboxes) skip
+Prisma's engine download and esbuild's binary postinstall, so a typecheck or
+build that fails only there is environmental, not a code problem.
+
 ### 2. Migrate the payment tables
 
 ```sh
@@ -272,6 +296,11 @@ Then run the emitted migration through your normal workflow (for example
 `npx prisma migrate dev`). OpenReceive owns the tables' logic at runtime; there
 is nothing else to generate. Details:
 [Payment storage](https://openreceive.org/guides/storage.md), [Node ORM recipes](https://openreceive.org/guides/node-orms.md).
+
+No ORM? A bare driver handle (`pg`, `node:sqlite`, `better-sqlite3`) is a
+supported `db` in step 4, and there is no scaffold flavor for it — execute the
+same DDL once yourself with `paymentsSchemaSql(dialect)` from
+`@openreceive/http` instead of scaffolding.
 
 ### 3. Add wallet credentials
 
@@ -305,6 +334,7 @@ wallet client and the host; there is no background reconciler —
 settlement piggybacks on requests through the durable gate.
 
 ```ts
+import "dotenv/config"; // loads .env into process.env; nothing else does
 import express from "express";
 import { openReceiveExpress } from "@openreceive/express";
 import { db, orders, sessions } from "./app.ts"; // your existing database handle and models
@@ -355,10 +385,12 @@ const openreceive = openReceiveExpress({
   // many payers share the terminal's IP.
   rateLimiting: true,
 });
-app.use(openreceive);
 // Behind a reverse proxy or load balancer, rate limiting needs the real client
 // IP — without this every payer shares the proxy's IP and one abuser can lock
-// checkout for everyone: app.set("trust proxy", 1)  (see the rate-limiting guide)
+// checkout for everyone. Delete the line only if the app faces the network
+// directly (see the rate-limiting guide).
+app.set("trust proxy", 1);
+app.use(openreceive);
 ```
 
 The first request checks the wallet. Later OpenReceive requests also settle
@@ -406,6 +438,24 @@ import "@openreceive/react/styles.css";
 The checkout renders, polls, and settles itself. The compiled `styles.css`
 sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
 plain `<link rel="stylesheet">` works with no build step.
+
+`<Checkout>` is complete as rendered: it already shows the `description` from
+`amountFor` and the collapsed transaction-details panel. Do not build a custom
+UI to satisfy those rules — they only become your job if you replace the
+drop-in ([Checkout UX](https://openreceive.org/guides/checkout-ux.md)).
+
+Match the host page's theme: by default the checkout follows the payer's
+stored choice, then the system scheme. If this page is always one theme, lock
+it — `<Checkout theme="dark" … />` (`theme` attribute on the custom element) —
+so a white card never lands on a dark page. The checkout is styled by CSS
+variables under `data-theme`; [Frontend checkout](https://openreceive.org/guides/frontend-checkout.md) has
+the knobs.
+
+Outside Vite/Rollup (esbuild, webpack, a plain script tag) the packaged
+payment-method icons cannot resolve their own URLs — the drop-in needs this
+exactly as a custom UI does. Serve the two packages' `dist/assets` trees and
+pass the base as `assetBaseUrl="/openreceive-assets"`
+([Provider registry](https://openreceive.org/guides/provider-registry.md#assets-are-files-your-host-serves)).
 
 That is the whole loop: your server owns the price and the order, the payer gets
 an invoice, and `onPaid` runs once inside the settlement transaction.

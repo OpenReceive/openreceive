@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "category": "quickstart",
-      "bytes": 8712
+      "bytes": 10673
     },
     {
       "path": "/guides/quickstart-rails",
@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 13068
+      "bytes": 14337
     },
     {
       "path": "/guides/node-orms",
@@ -43,7 +43,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "category": "quickstart",
-      "bytes": 6497
+      "bytes": 6720
     },
     {
       "path": "/guides/authorization",
@@ -73,7 +73,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 4957
+      "bytes": 6589
     },
     {
       "path": "/guides/checkout-ux",
@@ -153,7 +153,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 2990
+      "bytes": 4631
     },
     {
       "path": "/guides/host-testing",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 85119
+      "bytes": 85492
     },
     {
       "path": "/guides/security",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 22687
+      "bytes": 25749
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -243,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 28078
+      "bytes": 30393
     },
     {
       "path": "/api_docs",
@@ -253,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 85119,
+      "bytes": 85492,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -262,7 +262,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22687,
+      "bytes": 25749,
       "copy_button": true,
       "self_contained": true
     },
@@ -272,7 +272,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 28078,
+      "bytes": 30393,
       "copy_button": true,
       "self_contained": true
     }
@@ -300,6 +300,18 @@
     },
     {
       "path": "/set_up_swap_provider",
+      "must_exist": true
+    },
+    {
+      "path": "/llms.txt",
+      "must_exist": true
+    }
+  ],
+  "site_redirects": [
+    {
+      "from": "/agents.md",
+      "to": "/llms.txt",
+      "status": 301,
       "must_exist": true
     }
   ],

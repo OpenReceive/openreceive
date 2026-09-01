@@ -338,6 +338,7 @@ function CheckoutView(
     pollIntervalMs,
     paymentWizard = true,
     themeToggle = true,
+    theme: lockedTheme,
     defaultTheme,
     storageKey,
     components,
@@ -364,10 +365,15 @@ function CheckoutView(
   const theme = useTheme({
     defaultTheme,
     storageKey,
+    theme: lockedTheme,
   });
-  // An ancestor ThemeScope already stamps data-theme and renders the page toggle;
-  // only a standalone checkout owns them.
-  const ownsTheme = themeToggle && !theme.fromScope;
+  // An ancestor ThemeScope already stamps data-theme and renders the page
+  // toggle; a standalone checkout stamps its own — with or without the toggle,
+  // because hiding the control must not unstyle the widget. The toggle itself
+  // renders only when there is something to toggle: not under a scope, and not
+  // when the host locked the theme.
+  const stampsTheme = !theme.fromScope;
+  const ownsTheme = themeToggle && !theme.fromScope && lockedTheme === undefined;
   const [swapFocused, setSwapFocused] = React.useState(false);
   const QRCodeComponent = components?.QRCode ?? QRCode;
   const InvoiceSummaryComponent = components?.InvoiceSummary ?? InvoiceSummary;
@@ -429,233 +435,234 @@ function CheckoutView(
       className: joinClassNames(className, orClasses.root, classNames?.root),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
       // Under ThemeScope, inherit data-theme from the page. Standalone Checkout owns it.
-      ...(ownsTheme ? theme.attributes : {}),
+      ...(stampsTheme ? theme.attributes : {}),
     },
-    customChildren === undefined
-      ? [
-          // Above the amount and OUTSIDE the Lightning pane, which drops out on
-          // the swap deposit panel, on expiry and on the receipt — the payer
-          // needs to know what they are buying on all four screens.
-          checkoutModel.checkout.description === undefined ||
-          checkoutModel.checkout.description === ""
-            ? null
-            : React.createElement(
-                "p",
-                {
-                  key: "order-description",
-                  className: joinClassNames(
-                    orClasses.orderDescription,
-                    classNames?.orderDescription,
-                  ),
-                  [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.orderDescription]: "",
-                },
-                checkoutModel.checkout.description,
-              ),
-          ownsTheme
-            ? React.createElement(ThemeToggle, {
-                key: "theme",
-                className: classNames?.themeToggle,
-                theme: theme.theme,
-                resolvedTheme: theme.resolvedTheme,
-                onThemeChange: theme.setTheme,
-                ButtonComponent,
-              })
-            : null,
-          mintingLightning
-            ? React.createElement(
+    [
+      // Order context from the host, composed ABOVE the shipped payment UI —
+      // the same position as the custom element's `order` slot. Children never
+      // replace the payment UI; a host that wants its own checkout builds on
+      // useCheckout / @openreceive/browser/headless instead.
+      customChildren === undefined
+        ? null
+        : React.createElement(React.Fragment, { key: "order-children" }, customChildren),
+      ...[
+        // Above the amount and OUTSIDE the Lightning pane, which drops out on
+        // the swap deposit panel, on expiry and on the receipt — the payer
+        // needs to know what they are buying on all four screens.
+        checkoutModel.checkout.description === undefined ||
+        checkoutModel.checkout.description === ""
+          ? null
+          : React.createElement(
+              "p",
+              {
+                key: "order-description",
+                className: joinClassNames(orClasses.orderDescription, classNames?.orderDescription),
+                [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.orderDescription]: "",
+              },
+              checkoutModel.checkout.description,
+            ),
+        ownsTheme
+          ? React.createElement(ThemeToggle, {
+              key: "theme",
+              className: classNames?.themeToggle,
+              theme: theme.theme,
+              resolvedTheme: theme.resolvedTheme,
+              onThemeChange: theme.setTheme,
+              ButtonComponent,
+            })
+          : null,
+        mintingLightning
+          ? React.createElement(
+              "div",
+              {
+                key: "minting-lightning",
+                className: orClasses.creating,
+              },
+              React.createElement("span", {
+                className: orClasses.spinner,
+                "aria-hidden": "true",
+              }),
+              React.createElement("p", null, checkoutLabels.preparingPayment),
+            )
+          : null,
+        hideLightning
+          ? null
+          : React.createElement(
+              "div",
+              {
+                key: "payment-layout",
+                className:
+                  expired || settled ? orClasses.paymentLayoutExpired : orClasses.paymentLayout,
+              },
+              lightningPane,
+              React.createElement(
                 "div",
                 {
-                  key: "minting-lightning",
-                  className: orClasses.creating,
+                  key: "payment-info",
+                  className: orClasses.paymentInfo,
                 },
-                React.createElement("span", {
-                  className: orClasses.spinner,
-                  "aria-hidden": "true",
+                expired || settled
+                  ? null
+                  : React.createElement(
+                      "p",
+                      {
+                        key: "invoice-title",
+                        className: joinClassNames(orClasses.invoiceTitle, classNames?.invoiceTitle),
+                      },
+                      checkoutLabels.bitcoinLightningInvoice,
+                    ),
+                React.createElement(WaitingState, {
+                  key: "waiting",
+                  waiting: checkoutModel.waiting,
+                  statusTitle: checkoutModel.statusTitle,
+                  statusDetail: checkoutModel.statusDetail,
+                  settled,
+                  className: classNames?.waiting,
                 }),
-                React.createElement("p", null, checkoutLabels.preparingPayment),
-              )
-            : null,
-          hideLightning
-            ? null
-            : React.createElement(
-                "div",
-                {
-                  key: "payment-layout",
-                  className:
-                    expired || settled ? orClasses.paymentLayoutExpired : orClasses.paymentLayout,
-                },
-                lightningPane,
-                React.createElement(
-                  "div",
-                  {
-                    key: "payment-info",
-                    className: orClasses.paymentInfo,
-                  },
-                  expired || settled
-                    ? null
-                    : React.createElement(
-                        "p",
-                        {
-                          key: "invoice-title",
-                          className: joinClassNames(
-                            orClasses.invoiceTitle,
-                            classNames?.invoiceTitle,
-                          ),
-                        },
-                        checkoutLabels.bitcoinLightningInvoice,
+                checkoutModel.countdownLabel === undefined
+                  ? null
+                  : React.createElement(
+                      "div",
+                      {
+                        key: "countdown",
+                        className: joinClassNames(orClasses.countdown, classNames?.countdown),
+                      },
+                      checkoutModel.countdownPrefix,
+                      " ",
+                      React.createElement(
+                        "strong",
+                        { className: orClasses.countdownStrong },
+                        checkoutModel.countdownLabel,
                       ),
-                  React.createElement(WaitingState, {
-                    key: "waiting",
-                    waiting: checkoutModel.waiting,
-                    statusTitle: checkoutModel.statusTitle,
-                    statusDetail: checkoutModel.statusDetail,
-                    settled,
-                    className: classNames?.waiting,
-                  }),
-                  checkoutModel.countdownLabel === undefined
-                    ? null
+                    ),
+                showSummaryMeta
+                  ? React.createElement(InvoiceSummaryComponent, {
+                      key: "summary",
+                      status: checkoutModel.status,
+                      PaymentStateComponent,
+                      className: classNames?.summary,
+                      classNames,
+                    })
+                  : null,
+                settled
+                  ? React.createElement(TransactionDetails, {
+                      key: "transaction-details",
+                      // The model IS the checkout state, so the panel reads
+                      // the same derivation the rest of the screen does. It
+                      // used to re-flatten the snapshot separately, which
+                      // reported the displayed ATTEMPT's transaction /
+                      // workflow state on a checkout the state already knows
+                      // is paid.
+                      //
+                      // The SAME panel the swap flow renders one screen
+                      // earlier. A payer's whole evidence that they paid is a
+                      // payment hash and, on a swap, a deposit txid — so the
+                      // most keep-worthy screen gets copy buttons and
+                      // explorer links, not un-copyable text. No
+                      // `decodeLinkUrl` is passed, so the bolt11 never
+                      // reaches a third party.
+                      state: checkoutModel,
+                      className: classNames?.details,
+                      onError,
+                    })
+                  : expired
+                    ? React.createElement(
+                        "div",
+                        {
+                          key: "expired-actions",
+                          className: joinClassNames(orClasses.actions, classNames?.actions),
+                          [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
+                        },
+                        React.createElement(
+                          ButtonComponent ?? "button",
+                          {
+                            type: "button",
+                            className: orClasses.btn,
+                            onClick: startOver,
+                          },
+                          checkoutLabels.startOver,
+                        ),
+                      )
                     : React.createElement(
                         "div",
                         {
-                          key: "countdown",
-                          className: joinClassNames(orClasses.countdown, classNames?.countdown),
+                          key: "actions",
+                          className: joinClassNames(orClasses.actions, classNames?.actions),
+                          [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
                         },
-                        checkoutModel.countdownPrefix,
-                        " ",
-                        React.createElement(
-                          "strong",
-                          { className: orClasses.countdownStrong },
-                          checkoutModel.countdownLabel,
-                        ),
+                        React.createElement(CopyButton, {
+                          key: "copy-invoice",
+                          invoice: checkoutModel.invoice,
+                          copyInvoice: checkoutModel.copyInvoice,
+                          onError,
+                          logger,
+                          ButtonComponent,
+                          className: classNames?.copyButton,
+                        }),
+                        // Opt-in slot: the default checkout ships no wallet button, so a
+                        // desktop payer is never sent to a handler that does not exist.
+                        OpenWalletButtonComponent === undefined
+                          ? null
+                          : React.createElement(OpenWalletButtonComponent, {
+                              key: "open-wallet",
+                              invoice: checkoutModel.invoice,
+                              openWallet: checkoutModel.openWallet,
+                              onError,
+                              logger,
+                              ButtonComponent,
+                              className: classNames?.openWalletButton,
+                            }),
+                        decodeInvoiceHref === undefined
+                          ? null
+                          : React.createElement(
+                              "a",
+                              {
+                                key: "decode-invoice",
+                                className: orClasses.btn,
+                                href: decodeInvoiceHref,
+                                rel: "noreferrer",
+                                target: "_blank",
+                              },
+                              checkoutLabels.decodeInvoice,
+                            ),
                       ),
-                  showSummaryMeta
-                    ? React.createElement(InvoiceSummaryComponent, {
-                        key: "summary",
-                        status: checkoutModel.status,
-                        PaymentStateComponent,
-                        className: classNames?.summary,
-                        classNames,
-                      })
-                    : null,
-                  settled
-                    ? React.createElement(TransactionDetails, {
-                        key: "transaction-details",
-                        // The model IS the checkout state, so the panel reads
-                        // the same derivation the rest of the screen does. It
-                        // used to re-flatten the snapshot separately, which
-                        // reported the displayed ATTEMPT's transaction /
-                        // workflow state on a checkout the state already knows
-                        // is paid.
-                        //
-                        // The SAME panel the swap flow renders one screen
-                        // earlier. A payer's whole evidence that they paid is a
-                        // payment hash and, on a swap, a deposit txid — so the
-                        // most keep-worthy screen gets copy buttons and
-                        // explorer links, not un-copyable text. No
-                        // `decodeLinkUrl` is passed, so the bolt11 never
-                        // reaches a third party.
-                        state: checkoutModel,
-                        className: classNames?.details,
-                        onError,
-                      })
-                    : expired
-                      ? React.createElement(
-                          "div",
-                          {
-                            key: "expired-actions",
-                            className: joinClassNames(orClasses.actions, classNames?.actions),
-                            [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
-                          },
-                          React.createElement(
-                            ButtonComponent ?? "button",
-                            {
-                              type: "button",
-                              className: orClasses.btn,
-                              onClick: startOver,
-                            },
-                            checkoutLabels.startOver,
-                          ),
-                        )
-                      : React.createElement(
-                          "div",
-                          {
-                            key: "actions",
-                            className: joinClassNames(orClasses.actions, classNames?.actions),
-                            [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
-                          },
-                          React.createElement(CopyButton, {
-                            key: "copy-invoice",
-                            invoice: checkoutModel.invoice,
-                            copyInvoice: checkoutModel.copyInvoice,
-                            onError,
-                            logger,
-                            ButtonComponent,
-                            className: classNames?.copyButton,
-                          }),
-                          // Opt-in slot: the default checkout ships no wallet button, so a
-                          // desktop payer is never sent to a handler that does not exist.
-                          OpenWalletButtonComponent === undefined
-                            ? null
-                            : React.createElement(OpenWalletButtonComponent, {
-                                key: "open-wallet",
-                                invoice: checkoutModel.invoice,
-                                openWallet: checkoutModel.openWallet,
-                                onError,
-                                logger,
-                                ButtonComponent,
-                                className: classNames?.openWalletButton,
-                              }),
-                          decodeInvoiceHref === undefined
-                            ? null
-                            : React.createElement(
-                                "a",
-                                {
-                                  key: "decode-invoice",
-                                  className: orClasses.btn,
-                                  href: decodeInvoiceHref,
-                                  rel: "noreferrer",
-                                  target: "_blank",
-                                },
-                                checkoutLabels.decodeInvoice,
-                              ),
-                        ),
-                ),
               ),
-          paymentWizard && !settled && (!expired || swapFocused)
-            ? React.createElement(PaymentWizard, {
-                key: "wizard",
-                // Only pass invoice when it's a real bolt11 (non-empty, non-deferred).
-                invoice: checkoutModel.invoice || undefined,
-                checkout: checkoutModel.checkout,
-                className: classNames?.wizard,
-                logger,
-                onError,
-                onSwapFocusChange: setSwapFocused,
-                prefix,
-                qrEncoder,
-                decodeLinkUrl,
-                logContext: getCheckoutLogContext({
-                  invoice_id: checkoutModel.invoice_id,
-                  payment_hash: checkoutModel.payment_hash,
-                  amount_msats: checkoutModel.amount_msats,
-                }),
-                onProviderCopy,
-                onCopy,
-                onRequestLightning,
-                onSwapStarted,
-                resolveAssetUrl,
-                assetBaseUrl,
-                // Whether a payer who closes the tab has a URL to come back
-                // to. Explicit wins — only the host knows about a per-order
-                // route of its own; otherwise infer it from the two props that
-                // put the reference in the URL.
-                resumable: resumable ?? (syncUrl === true || routeReference !== undefined),
-                // The engine's staged refund address rides the controller this
-                // model owns, so a poll cannot wipe a review in progress.
-                swapRefund: checkoutModel,
-              })
-            : null,
-        ]
-      : customChildren,
+            ),
+        paymentWizard && !settled && (!expired || swapFocused)
+          ? React.createElement(PaymentWizard, {
+              key: "wizard",
+              // Only pass invoice when it's a real bolt11 (non-empty, non-deferred).
+              invoice: checkoutModel.invoice || undefined,
+              checkout: checkoutModel.checkout,
+              className: classNames?.wizard,
+              logger,
+              onError,
+              onSwapFocusChange: setSwapFocused,
+              prefix,
+              qrEncoder,
+              decodeLinkUrl,
+              logContext: getCheckoutLogContext({
+                invoice_id: checkoutModel.invoice_id,
+                payment_hash: checkoutModel.payment_hash,
+                amount_msats: checkoutModel.amount_msats,
+              }),
+              onProviderCopy,
+              onCopy,
+              onRequestLightning,
+              onSwapStarted,
+              resolveAssetUrl,
+              assetBaseUrl,
+              // Whether a payer who closes the tab has a URL to come back
+              // to. Explicit wins — only the host knows about a per-order
+              // route of its own; otherwise infer it from the two props that
+              // put the reference in the URL.
+              resumable: resumable ?? (syncUrl === true || routeReference !== undefined),
+              // The engine's staged refund address rides the controller this
+              // model owns, so a poll cannot wipe a review in progress.
+              swapRefund: checkoutModel,
+            })
+          : null,
+      ],
+    ],
   );
 }

@@ -166,7 +166,7 @@ test("React theme toggle renders a package-owned light/dark switch", () => {
   );
 
   assert.match(html, /data-openreceive-theme-toggle/);
-  assert.match(html, /dark mode/);
+  assert.match(html, /switch to light mode/);
   assert.doesNotMatch(html, /or-theme-toggle-icon-dark/);
 });
 
@@ -198,7 +198,7 @@ test("React theme scope applies package-owned theme attributes and toggle", () =
   assert.match(html, /class="topbar"/);
   assert.match(html, /class="[^"]*theme-button/);
   assert.match(html, /data-openreceive-theme-toggle/);
-  assert.match(html, /dark mode/);
+  assert.match(html, /switch to light mode/);
   assert.match(html, /<section class="checkout">Checkout<\/section>/);
 });
 
@@ -287,7 +287,7 @@ test("browser checkout theme resolution builds a full theme model", () => {
     theme: "system",
     resolvedTheme: "dark",
     nextTheme: "light",
-    toggleLabel: "dark mode",
+    toggleLabel: "switch to light mode",
     attributes: {
       "data-theme": "dark",
       "data-openreceive-theme": "dark",
@@ -309,7 +309,7 @@ test("browser checkout theme preference round-trips through storage", () => {
     theme: "dark",
     resolvedTheme: "dark",
     nextTheme: "light",
-    toggleLabel: "dark mode",
+    toggleLabel: "switch to light mode",
     attributes: {
       "data-theme": "dark",
       "data-openreceive-theme": "dark",
@@ -376,7 +376,7 @@ test("browser checkout stored theme controls sync and toggle together", () => {
   assert.equal(controlTheme.resolvedTheme, "light");
   assert.equal(controlAttrs["data-openreceive-theme"], "light");
   assert.equal(checkoutControlAttrs.theme, "light");
-  assert.equal(toggleControl.textContent, "light mode");
+  assert.equal(toggleControl.textContent, "switch to dark mode");
   const toggledControlTheme = toggleStoredThemeControls(
     {
       toggle: toggleControl,
@@ -384,7 +384,7 @@ test("browser checkout stored theme controls sync and toggle together", () => {
     { storage },
   );
   assert.equal(toggledControlTheme.resolvedTheme, "dark");
-  assert.equal(toggleControl.textContent, "dark mode");
+  assert.equal(toggleControl.textContent, "switch to light mode");
 });
 
 test("browser checkout wizard selection is a pure state machine", () => {

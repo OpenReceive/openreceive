@@ -56,6 +56,10 @@ createHost({ db: sequelizeDb(sequelize, "postgres"), ... });
 Use the factory for your ORM. Each one makes settlement SQL run on the
 same transaction as `onPaid`.
 
+Prisma-specific trap: the Prisma CLI auto-loads `.env` for every command. If
+that file holds a container-path `DATABASE_URL`, host-side migrations break —
+see [Deploying → Node in Docker](deploying.md#node-in-docker).
+
 ## Schema and `onPaid`
 
 The scaffolded migration renders the canonical DDL in `@openreceive/core`

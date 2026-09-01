@@ -58,6 +58,41 @@ If boot fails, later requests answer `503 WALLET_UNAVAILABLE`. `await ready`
 rejects. Pass `onBootFailure` on the Node adapters to send that one line to
 your logger.
 
+## Node in Docker
+
+There is no scaffolded Docker path; these are the rules that matter:
+
+- **Never bake wallet URIs into the image.** No `COPY .env`, no `ARG` or
+  `ENV` carrying `NWC_URI` / `LSC_URI_*`, and `.env` in `.dockerignore`.
+  Inject secrets at runtime: compose `env_file`, orchestrator secrets.
+- **Multi-stage build.** A build stage installs dev dependencies and
+  compiles; the runtime stage copies production `node_modules` and the build
+  output only.
+- **Prisma needs a `DATABASE_URL` to run `prisma generate` at build time.**
+  Give it a dummy value in the build stage; the real one arrives at runtime.
+- **Migrate on boot, not at build.** The database is not reachable while the
+  image builds; run `npx prisma migrate deploy` (or your ORM's equivalent) in
+  the entrypoint before starting the server.
+- **SQLite lives on a volume.** A database file inside the container
+  filesystem is erased by the next deploy.
+
+Prisma's CLI auto-loads `.env` for **every** command, including ones you run
+on the host outside Docker: a container-path `DATABASE_URL`
+(`file:/data/shop.db`) in `.env` silently breaks host-side
+`prisma migrate deploy`. Keep two URLs — the host path in the dockerignored
+`.env`, the container path injected at runtime — and never let one masquerade
+as the other.
+
+## Rails in Docker
+
+`openreceive-rails → nwc-ruby → rbsecp256k1` compiles libsecp256k1 from
+source, so slim images need the autotools in the build stage — without them
+`bundle install` fails at `autoreconf: not found`:
+
+```dockerfile
+RUN apt-get update && apt-get install -y autoconf automake libtool build-essential pkg-config
+```
+
 ## Operational monitoring
 
 `attention` rows need an operator. Payers never see them — they still look

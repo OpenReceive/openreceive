@@ -51,7 +51,9 @@ export function getNextThemePreference(
 }
 
 export function getThemeToggleLabel(resolvedTheme: ResolvedTheme): string {
-  return `${resolvedTheme} mode`;
+  // The label names the ACTION, not the state: a checkout stuck light on a dark
+  // page must offer "switch to dark mode", not announce "light mode" at it.
+  return `switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`;
 }
 
 export function createThemeModel(

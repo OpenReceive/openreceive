@@ -1209,7 +1209,9 @@ Snapshot mode: `checkout` (+ `prefix` for polling; `prefix` defaults to `/openre
 bare snapshot polls). `polling={false}` renders without status polling and leaves the swap
 flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onState`,
 `onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`,
-`paymentWizard`, `themeToggle` (default `true`), `defaultTheme`, `storageKey`,
+`paymentWizard`, `theme` (host lock: wins over the stored preference and hides
+the toggle), `themeToggle` (default `true`; `false` hides the control but the
+checkout still stamps `data-theme`), `defaultTheme`, `storageKey`,
 `decodeLinkUrl`, `assetBaseUrl`, `components`, `classNames`, `syncUrl`,
 `resumePathPrefix`, `routeReference`, `resumable`, `resumePaymentHash`,
 `metadata`, `createFetch`,
@@ -1224,9 +1226,11 @@ your own router owns a per-order route. It picks which return warning the swap
 refund screen shows (`SwapDisplayModel.refundReturnLabel`) — see
 [Checkout UX → The refund screens](checkout-ux.md#the-refund-screens).
 
-The shared prop surface — everything up to and including `assetBaseUrl` above,
-plus `checkout` and `reference` — has the same names and defaults in the Vue,
-Svelte and Angular wrappers. The rest is React-only: `components`, `classNames`,
+The shared prop surface — everything up to and including `assetBaseUrl` above
+except `theme`, plus `checkout` and `reference` — has the same names and
+defaults in the Vue, Svelte and Angular wrappers. `theme` is React-only as a
+prop; the custom element carries the same lock as its `theme` attribute. The
+rest is React-only: `components`, `classNames`,
 `children` and `createFetch` have no wrapper equivalent, `resolveAssetUrl` is a
 function and so cannot cross an HTML attribute (pass `assetBaseUrl` instead), and
 `polling` / `pollIntervalMs` reach the wrappers only through their `options`
@@ -1236,7 +1240,9 @@ the full table.
 `children` is React-only: a node, or a render prop receiving the live `useCheckout` model.
 It is the slot for order context — a line-item summary, a thumbnail, a "you are buying"
 strip — which the checkout otherwise never shows, since it renders the amount and never the
-order. See [Frontend checkout → Show the payer what they are buying](frontend-checkout.md#show-the-payer-what-they-are-buying).
+order. Children compose above the shipped payment UI (the custom element's `order`-slot
+position) and never replace it.
+See [Frontend checkout → Show the payer what they are buying](frontend-checkout.md#show-the-payer-what-they-are-buying).
 
 ### useCheckout
 

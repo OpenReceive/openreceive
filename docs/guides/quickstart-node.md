@@ -19,6 +19,15 @@ identical.
 | Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
+On a fresh project, also install what this guide assumes is already there: the
+framework and an env loader (`npm install express dotenv`), plus your ORM
+before step 2 (`npm install prisma @prisma/client` on the Prisma path) —
+`openreceive scaffold` emits files for the ORM you name but never installs it.
+
+npm environments that run with `ignore-scripts` (some editor sandboxes) skip
+Prisma's engine download and esbuild's binary postinstall, so a typecheck or
+build that fails only there is environmental, not a code problem.
+
 ## 2. Migrate the payment tables
 
 ```sh
@@ -33,6 +42,11 @@ Then run the emitted migration through your normal workflow (for example
 `npx prisma migrate dev`). OpenReceive owns the tables' logic at runtime; there
 is nothing else to generate. Details:
 [Payment storage](storage.md), [Node ORM recipes](node-orms.md).
+
+No ORM? A bare driver handle (`pg`, `node:sqlite`, `better-sqlite3`) is a
+supported `db` in step 4, and there is no scaffold flavor for it — execute the
+same DDL once yourself with `paymentsSchemaSql(dialect)` from
+`@openreceive/http` instead of scaffolding.
 
 ## 3. Add wallet credentials
 
@@ -66,6 +80,7 @@ wallet client and the host; there is no background reconciler —
 settlement piggybacks on requests through the durable gate.
 
 ```ts
+import "dotenv/config"; // loads .env into process.env; nothing else does
 import express from "express";
 import { openReceiveExpress } from "@openreceive/express";
 import { db, orders, sessions } from "./app.ts"; // your existing database handle and models
@@ -116,10 +131,12 @@ const openreceive = openReceiveExpress({
   // many payers share the terminal's IP.
   rateLimiting: true,
 });
-app.use(openreceive);
 // Behind a reverse proxy or load balancer, rate limiting needs the real client
 // IP — without this every payer shares the proxy's IP and one abuser can lock
-// checkout for everyone: app.set("trust proxy", 1)  (see the rate-limiting guide)
+// checkout for everyone. Delete the line only if the app faces the network
+// directly (see the rate-limiting guide).
+app.set("trust proxy", 1);
+app.use(openreceive);
 ```
 
 The first request checks the wallet. Later OpenReceive requests also settle
@@ -167,6 +184,24 @@ import "@openreceive/react/styles.css";
 The checkout renders, polls, and settles itself. The compiled `styles.css`
 sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
 plain `<link rel="stylesheet">` works with no build step.
+
+`<Checkout>` is complete as rendered: it already shows the `description` from
+`amountFor` and the collapsed transaction-details panel. Do not build a custom
+UI to satisfy those rules — they only become your job if you replace the
+drop-in ([Checkout UX](checkout-ux.md)).
+
+Match the host page's theme: by default the checkout follows the payer's
+stored choice, then the system scheme. If this page is always one theme, lock
+it — `<Checkout theme="dark" … />` (`theme` attribute on the custom element) —
+so a white card never lands on a dark page. The checkout is styled by CSS
+variables under `data-theme`; [Frontend checkout](frontend-checkout.md) has
+the knobs.
+
+Outside Vite/Rollup (esbuild, webpack, a plain script tag) the packaged
+payment-method icons cannot resolve their own URLs — the drop-in needs this
+exactly as a custom UI does. Serve the two packages' `dist/assets` trees and
+pass the base as `assetBaseUrl="/openreceive-assets"`
+([Provider registry](provider-registry.md#assets-are-files-your-host-serves)).
 
 That is the whole loop: your server owns the price and the order, the payer gets
 an invoice, and `onPaid` runs once inside the settlement transaction.

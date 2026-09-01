@@ -57,6 +57,7 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
   const storageKey = options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY;
   const storage = options.storage;
   const defaultTheme = options.defaultTheme;
+  const lockedTheme = options.theme;
   // Storage and matchMedia only exist in the browser. Reading them during the first
   // render made every SSR host (the repo's own Next demo included) hydrate a different
   // `data-theme` than it served; useSyncExternalStore renders the deterministic default
@@ -88,10 +89,12 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
     getServerSystemDark,
   );
 
-  const themeModel = createThemeModel(theme, { systemDark });
+  // A locked theme wins over whatever storage says, on the server render too.
+  const themeModel = createThemeModel(lockedTheme ?? theme, { systemDark });
 
   const setTheme = React.useCallback(
     (nextTheme: ThemePreference) => {
+      if (lockedTheme !== undefined) return;
       lastSetTheme.set(storageKey, nextTheme);
       writeThemePreference(nextTheme, {
         storage,
@@ -99,7 +102,7 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
       });
       notifyStoredThemeChange();
     },
-    [storage, storageKey],
+    [storage, storageKey, lockedTheme],
   );
 
   const toggleTheme = React.useCallback(() => {
@@ -107,7 +110,7 @@ function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
   }, [setTheme, themeModel.nextTheme]);
 
   return {
-    theme,
+    theme: lockedTheme ?? theme,
     resolvedTheme: themeModel.resolvedTheme,
     model: themeModel,
     nextTheme: themeModel.nextTheme,
@@ -124,9 +127,11 @@ export function useTheme(options: UseThemeOptions = {}): UseThemeResult {
   const scoped = React.useContext(ThemeContext);
   const local = useLocalTheme(options);
   const storageKey = options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY;
-  // Prefer an ancestor ThemeScope so nested Checkout stays in sync with the page toggle.
+  // Prefer an ancestor ThemeScope so nested Checkout stays in sync with the page
+  // toggle — unless the host locked this instance with `theme`, which wins.
   if (
     scoped !== null &&
+    options.theme === undefined &&
     options.storage === undefined &&
     (options.storageKey === undefined || options.storageKey === storageKey) &&
     options.defaultTheme === undefined
@@ -177,6 +182,7 @@ export function ThemeScope(props: ThemeScopeProps): React.ReactElement {
     defaultTheme,
     storageKey,
     storage,
+    theme: lockedTheme,
     themeToggle = false,
     topbarClassName,
     themeToggleClassName,
@@ -188,8 +194,11 @@ export function ThemeScope(props: ThemeScopeProps): React.ReactElement {
     defaultTheme,
     storageKey,
     storage,
+    theme: lockedTheme,
   });
   const scopedChildren = typeof children === "function" ? children(theme) : children;
+  // A locked scope has nothing to toggle; the control would be a dead button.
+  const showsToggle = themeToggle && lockedTheme === undefined;
 
   return React.createElement(
     ThemeContext.Provider,
@@ -201,7 +210,7 @@ export function ThemeScope(props: ThemeScopeProps): React.ReactElement {
         ...elementProps,
         ...theme.attributes,
       },
-      themeToggle
+      showsToggle
         ? React.createElement(
             "div",
             {

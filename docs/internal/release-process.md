@@ -105,6 +105,11 @@ The release owner also checks:
 - Local package artifact smoke passes.
 - Demo build passes.
 - Live wallet smoke passes when a trusted `NWC_URI` is available in the environment.
+- After publishing: openreceive.org is redeployed with this release's docs
+  bundle (`bin/rails docs:sync`, the JS build, then deploy, in the site repo).
+  Until that happens the public site keeps serving the previous release's
+  guides and footer version — the guides the freshly published packages link
+  to are the ones that must be live.
 
 For a prepare preview without editing files:
 

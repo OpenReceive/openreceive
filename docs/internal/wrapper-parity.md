@@ -37,6 +37,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | `qrEncoder`, `logger` | – | yes | element-owned | both |
 | `resolveAssetUrl` | – | yes | element-owned (use `assetBaseUrl`) | both |
 | `components`, `classNames`, `children` | – | yes | not representable | both |
+| `theme` (host lock) | – (stored preference applies) | yes (React-only prop) | element `theme` attribute; wrappers don't forward it yet | both |
 | `options` | `{}` | – (props are flat) | yes (escape hatch for the rest of `CheckoutShellOptions`) | both |
 
 `prefix` is the ONLY URL prop, in all four wrappers (G5). The create, prepare,
@@ -78,9 +79,14 @@ Mode rules:
   `reference` of `""` counts as absent and is rejected the same way.
 - The create-only props do nothing in snapshot mode. Each wrapper warns once when
   one is passed with a `checkout` present.
-- `themeToggle: false` means the host owns theming: no package toggle is rendered
-  and no `data-theme` is stamped. React additionally treats an ancestor
-  `ThemeScope` as the owner, because the scope already renders a page toggle.
+- In React, `themeToggle: false` hides the packaged toggle but the checkout
+  still stamps `data-theme` — hiding the control must not unstyle the widget.
+  An ancestor `ThemeScope` is the one thing that takes the stamp over (the
+  scope already owns `data-theme` and renders a page toggle). React's `theme`
+  prop locks the theme outright: it wins over the stored preference and any
+  scope, and hides the toggle. The element wrappers still gate both the toggle
+  and the stamp on `themeToggle` (`ownTheme` in `createCheckoutShellModel`) —
+  parity gap to close when the `theme` prop is forwarded through them.
 
 ## Where the prop list lives
 

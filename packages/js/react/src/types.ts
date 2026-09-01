@@ -207,12 +207,24 @@ export interface CheckoutProps
   readonly children?: CheckoutChildren;
   /** Passed through to the payment wizard. See {@link PaymentWizardProps.resolveAssetUrl}. */
   readonly resolveAssetUrl?: AssetUrlResolver;
+  /**
+   * Lock the checkout to one theme. Wins over the stored preference and any
+   * ancestor ThemeScope, and hides the toggle: a host embedding the checkout in
+   * a page that is already dark passes `theme="dark"` and is done. `"system"`
+   * locks to `prefers-color-scheme`, ignoring the stored preference. Unset (the
+   * default), the payer's stored choice applies, falling back to
+   * `defaultTheme`, falling back to the system scheme. The custom element's
+   * `theme` attribute is the same lock.
+   */
+  readonly theme?: ThemePreference;
 }
 
 export interface UseThemeOptions {
   readonly defaultTheme?: ThemePreference;
   readonly storageKey?: string;
   readonly storage?: Storage;
+  /** Lock: this preference wins over storage and scope, and `setTheme` becomes a no-op. */
+  readonly theme?: ThemePreference;
 }
 
 export interface UseThemeResult {
@@ -243,6 +255,8 @@ export interface ThemeScopeProps extends Omit<React.HTMLAttributes<HTMLElement>,
   readonly defaultTheme?: ThemePreference;
   readonly storageKey?: string;
   readonly storage?: Storage;
+  /** Lock: this preference wins over storage, and the toggle is not rendered. */
+  readonly theme?: ThemePreference;
   readonly themeToggle?: boolean;
   readonly topbarClassName?: string;
   readonly themeToggleClassName?: string;

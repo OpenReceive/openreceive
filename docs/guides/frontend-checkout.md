@@ -50,15 +50,48 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
   will not serve is ignored. See [Swap refunds](swap-refunds.md).
 - `assetBaseUrl` — where you serve the packaged icons. Required under most
   bundlers that are not Vite. See [Provider registry](provider-registry.md#assets-are-files-your-host-serves).
-- `themeToggle`, `defaultTheme`, `children`, `components`, `classNames` —
-  chrome. `children` and `components` / `classNames` are React-only. Vue,
-  Svelte, and Angular wrap the same custom element; they take `assetBaseUrl`
-  instead of `resolveAssetUrl`.
+- `theme`, `themeToggle`, `defaultTheme`, `children`, `components`,
+  `classNames` — chrome; see [Theme](#theme) below. `children` and
+  `components` / `classNames` are React-only. Vue, Svelte, and Angular wrap
+  the same custom element; they take `assetBaseUrl` instead of
+  `resolveAssetUrl`.
 
 `useCheckout` is the hook behind `<Checkout>` if you want the same engine
 with your own layout. It returns the live snapshot, status labels, and
 `copyInvoice` / `openWallet` / `retry`. Use `openWallet` on touch devices
 only. Use `checkoutLabels` for any string you put on the screen.
+
+Importing `@openreceive/react` plus its `styles.css` adds roughly 530 kB
+minified (~150 kB gzipped) to a production chunk. If that matters on the rest
+of your site, lazy-load the checkout route so only payers download it.
+
+## Theme
+
+The checkout stamps `data-theme="light"` / `"dark"` on its root and styles
+itself from CSS variables under it. Resolution order: the payer's stored
+choice (`localStorage["openreceive.theme"]`), then `defaultTheme`, then the
+system `prefers-color-scheme`.
+
+If the embedding page is always one theme, lock it and skip all of that:
+
+```tsx
+<Checkout reference={order.id} prefix="/openreceive" theme="dark" />
+```
+
+```html
+<openreceive-checkout reference="ord_123" theme="dark"></openreceive-checkout>
+```
+
+The lock wins over the stored preference and any ancestor `ThemeScope`, and
+hides the toggle — a locked theme has nothing to toggle. `theme="system"`
+locks to `prefers-color-scheme` alone.
+
+`themeToggle={false}` hides the packaged toggle button but the checkout still
+stamps and styles its resolved theme. `defaultTheme` is the starting point
+only until the payer makes a choice; use `theme` when the host, not the
+payer, owns the decision. Server-rendered pages paint the default before the
+stored preference applies on mount — a host that must avoid that one-frame
+flash passes `theme` or a server-readable `storage`.
 
 ## Show the payer what they are buying
 
@@ -104,6 +137,10 @@ render prop:
   )}
 </Checkout>
 ```
+
+Children compose: they render above the shipped payment UI (the same position
+as the custom element's `order` slot) and never replace it. To build your own
+checkout instead, use `useCheckout` or the headless API — not `children`.
 
 The custom element uses a named slot:
 

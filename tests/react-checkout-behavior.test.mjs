@@ -300,6 +300,44 @@ test("a standalone checkout owns its theme toggle and flips data-theme", async (
   }
 });
 
+test("the theme prop locks the checkout over the stored preference and hides the toggle", async () => {
+  // A host embedding the checkout in a page it knows is dark passes theme="dark"
+  // and is done — the payer's stored choice, defaultTheme, and the toggle all
+  // lose to the lock.
+  globalThis.localStorage.setItem(OPENRECEIVE_THEME_STORAGE_KEY, "light");
+  const snapshot = invoice({ invoice_id: "or_inv_theme_lock", invoice: "lnbc-theme-lock" });
+  const handle = mount(
+    React.createElement(Checkout, { checkout: snapshot, polling: false, theme: "dark" }),
+  );
+  try {
+    await until(() => handle.container.querySelector("[data-openreceive-theme='dark']") !== null, {
+      label: "locked theme",
+    });
+    assert.equal(handle.container.querySelector("[data-openreceive-theme-toggle]"), null);
+  } finally {
+    handle.unmount();
+    globalThis.localStorage.removeItem(OPENRECEIVE_THEME_STORAGE_KEY);
+  }
+});
+
+test("themeToggle={false} hides the control but still stamps data-theme", async () => {
+  // Hiding the toggle used to unstyle the widget: ownsTheme gated both the
+  // button and the data-theme stamp, so opting out of the control rendered a
+  // themeless checkout.
+  const snapshot = invoice({ invoice_id: "or_inv_theme_stamp", invoice: "lnbc-theme-stamp" });
+  const handle = mount(
+    React.createElement(Checkout, { checkout: snapshot, polling: false, themeToggle: false }),
+  );
+  try {
+    await until(() => handle.container.querySelector("[data-openreceive-theme]") !== null, {
+      label: "stamped theme without toggle",
+    });
+    assert.equal(handle.container.querySelector("[data-openreceive-theme-toggle]"), null);
+  } finally {
+    handle.unmount();
+  }
+});
+
 test("the checkout theme survives hydration without a server/client mismatch", async () => {
   // Reading localStorage/matchMedia during the first render made SSR hosts hydrate a
   // different data-theme than they served.
