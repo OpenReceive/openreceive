@@ -76,7 +76,7 @@ jobs:
           for name in $GEM_ORDER; do
             file="$GEM_OUT/$name.gem"
             version="$(ruby -rrubygems/package -e 'puts Gem::Package.new(ARGV[0]).spec.version' "$file")"
-            if curl -fsS -o /dev/null "https://rubygems.org/api/v2/rubygems/$name/versions/$version.json"; then
+            if curl -fs -o /dev/null "https://rubygems.org/api/v2/rubygems/$name/versions/$version.json"; then
               echo "$name $version is already on RubyGems — skipping"
               continue
             fi
