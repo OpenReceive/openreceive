@@ -45,5 +45,13 @@ jobs:
       # checkout. Build first rather than depend on a neighbouring step.
       - run: npm run build:packages
       - run: npm run test:package-smoke
+      # With ci.yml (test:ci:core, the Ruby lanes, the Rails example) these make
+      # the two per-push workflows cover every step of `npm run test:ci`, which
+      # is what lets release:publish skip the local suite when both are green
+      # on the commit being published (tools/release/npm-release.mjs).
+      - run: npm run check:demo-containers
+      - run: npm run test -w @openreceive/example-buttons-rails
+      - run: npm run build:demo
+      - run: npm run scan:client-bundles
       - run: npm run build:docs
       - run: echo "Release dry run complete. Publishing requires explicit maintainer approval."

@@ -77,7 +77,8 @@ function usage() {
     "  --out <dir>                         Release output dir (default: .release/npm/<version>).",
     "  --dry-run                           Show changes or npm publish commands without applying (skips test:ci).",
     "  --allow-dirty                       Allow prepare/publish from a dirty worktree.",
-    "  --skip-tests                        Skip npm run test:ci during publish.",
+    "  --skip-tests                        Skip npm run test:ci during publish (automatic when CI",
+    "                                      and Release Dry Run are green on HEAD).",
     "  --otp <code>                        npm one-time password for publish.",
     "  --root <dir>                        Repository root, useful for tests.",
   ].join("\n");
@@ -147,6 +148,39 @@ function run(command, args, root, options = {}) {
       ...extraEnv,
     },
   });
+}
+
+// The two workflows that run on every push of a release commit — CI
+// (test:ci:core, the Ruby lanes, the Rails example) and Release Dry Run
+// (check:release, the package builds and smoke, the demo builds, build:docs;
+// tools/validate/check-workflows.mjs pins the step lists) — together cover
+// every step of `npm run test:ci`. When both are green on the exact commit
+// being published, running the suite again locally proves nothing, so publish
+// skips it and says so. Anything short of that certainty — gh missing or
+// logged out, a run missing, failed or still in progress, a worktree that
+// differs from HEAD — runs the suite as before.
+const RELEASE_GATE_WORKFLOWS = ["CI", "Release Dry Run"];
+
+function greenReleaseGateRuns(root) {
+  if (gitStatus(root).length !== 0) return undefined;
+  let runs;
+  try {
+    const head = run("git", ["rev-parse", "HEAD"], root).trim();
+    const fields = "workflowName,status,conclusion,url";
+    const list = ["run", "list", "--commit", head, "--limit", "50", "--json", fields];
+    runs = JSON.parse(run("gh", list, root));
+  } catch {
+    return undefined;
+  }
+  const green = RELEASE_GATE_WORKFLOWS.map((name) =>
+    runs.find(
+      (entry) =>
+        entry.workflowName === name &&
+        entry.status === "completed" &&
+        entry.conclusion === "success",
+    ),
+  );
+  return green.every(Boolean) ? green : undefined;
 }
 
 function gitStatus(root) {
@@ -554,12 +588,23 @@ function main() {
     assertCleanWorktree(root, args, "release:publish");
     assertVersionsReady(root, targetVersion);
     // Dry-run is a fast preview and skips the suite, matching gem-release's
-    // dry-run; the REAL publish always runs test:ci unless --skip-tests is
-    // passed deliberately.
+    // dry-run; the REAL publish runs test:ci unless --skip-tests is passed
+    // deliberately or CI already ran every step of it on this exact commit
+    // (see greenReleaseGateRuns).
     if (args["dry-run"] === true) {
       console.error("dry-run: skipping `npm run test:ci` — a real release:publish runs it first.");
-    } else if (args["skip-tests"] !== true) {
-      run("npm", ["run", "test:ci"], root, { stdio: "inherit" });
+    } else if (args["skip-tests"] === true) {
+      console.error("--skip-tests: skipping `npm run test:ci`.");
+    } else {
+      const green = greenReleaseGateRuns(root);
+      if (green === undefined) {
+        run("npm", ["run", "test:ci"], root, { stdio: "inherit" });
+      } else {
+        console.error(
+          "Skipping `npm run test:ci`: every step of it already passed on this commit in",
+        );
+        for (const entry of green) console.error(`- ${entry.workflowName}: ${entry.url}`);
+      }
     }
     for (const packageName of PUBLIC_PACKAGE_NAMES) {
       assertNotPublished(packageName, targetVersion, root);

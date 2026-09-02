@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Publishing trusts green CI
+
+`npm run release:publish` no longer re-runs `npm run test:ci` when the `CI` and
+`Release Dry Run` workflows are both green on the exact commit being published.
+The 0.4.0 release ran the suite twice back to back on the same commit — once in
+the tag's dry run, once locally — for no extra evidence. To make the pair a
+faithful stand-in, `release.yml` gained the four `test:ci` steps that only the
+weekly Demos lane used to run (`check:demo-containers`, the Rails example's
+catalog check, `build:demo`, `scan:client-bundles`), and `check:workflows` pins
+them. Without a green pair (no `gh`, a missing, failed or in-progress run, a
+dirty worktree) the suite runs locally as before; `--skip-tests` still skips it
+unconditionally.
+
 ## 0.4.0 - 2026-09-02
 
 ### Payment icons ship inside the JavaScript

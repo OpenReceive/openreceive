@@ -47,6 +47,12 @@ const requiredWorkflows = {
   "release.yml": [
     "npm run check:release",
     "npm run test:package-smoke",
+    // Together with ci.yml these cover all of `npm run test:ci`; release:publish
+    // relies on that to skip the local suite when both are green on HEAD.
+    "npm run check:demo-containers",
+    "npm run test -w @openreceive/example-buttons-rails",
+    "npm run build:demo",
+    "npm run scan:client-bundles",
     "does not match package.json version",
     "Release dry run complete",
   ],

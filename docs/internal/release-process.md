@@ -48,6 +48,15 @@ runs the local release gate, builds exact tarballs under
 npm, and publishes only the public package family. Pass
 `--otp <code>` when npm requires a one-time password.
 
+The local gate (`npm run test:ci`) is skipped automatically when the `CI` and
+`Release Dry Run` workflows are both green on the exact commit being published:
+between them they run every step of `test:ci`, so pushing the tag and then
+publishing once both are green halves the wall clock. The check uses `gh run
+list`, so source `.env.release` first (it exports `GH_CONFIG_DIR` and `GH_REPO`
+for the release identity); if `gh` is missing, logged out, or either run is
+absent, failed, or still in progress, the suite runs locally as before. Pass
+`--skip-tests` to skip it without the check.
+
 Just before tagging, date the changelog headings (root and per-gem) for the
 release:
 
@@ -141,7 +150,9 @@ enabled:
 - `.github/workflows/provider-registry.yml` validates canonical provider data.
 - `.github/workflows/security.yml` runs secret and client-bundle boundary
   checks.
-- `.github/workflows/release.yml` is a release dry run only.
+- `.github/workflows/release.yml` is a release dry run only; with `ci.yml` it
+  covers every `test:ci` step, which is what `release:publish` relies on to
+  skip the local suite.
 - `.github/workflows/publish.yml` keeps publishing disabled until explicit
   maintainer approval.
 
