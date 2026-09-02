@@ -266,12 +266,36 @@ done
 # ---------------------------------------------------------------------------
 step "Result"
 
+# A gem in `pushed` was confirmed by checksum in confirm_landed, and one in
+# `skipped` was found on RubyGems with a matching checksum before any push.
+# Report those from that evidence rather than asking RubyGems again: the
+# index sits behind a CDN that can answer one request with a miss seconds
+# after ten polls said yes, and the 0.4.0 run printed NOT PUBLISHED for a gem
+# it had verified moments earlier. Only a gem with no recorded outcome is
+# re-queried, with the same patience confirm_landed has.
+settled() {
+  local candidate
+  for candidate in "${pushed[@]}" "${skipped[@]}"; do
+    [ "$candidate" = "$1" ] && return 0
+  done
+  return 1
+}
+
+published_eventually() {
+  local _
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    published "$1" "$2" && return 0
+    sleep 3
+  done
+  return 1
+}
+
 for i in "${!GEM_ORDER[@]}"; do
   name="${GEM_ORDER[$i]}"
   gem_version="${GEM_VERSIONS[$i]}"
   if [ "$DRY_RUN" = true ]; then
     printf '  %-20s %s (dry-run)\n' "$name" "$gem_version"
-  elif published "$name" "$gem_version"; then
+  elif settled "$name" || published_eventually "$name" "$gem_version"; then
     printf '  %-20s %s  live: https://rubygems.org/gems/%s/versions/%s\n' \
       "$name" "$gem_version" "$name" "$gem_version"
   else
