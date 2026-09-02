@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 - 2026-09-02
+
+Version lockstep with the 0.4.0 npm release (payment icons compiled into
+`@openreceive/browser`). No functional change in this gem.
+
 ## 0.3.3 - 2026-09-02
 
 ### The gem carries the agent skills

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 - Unreleased
+## 0.4.0 - 2026-09-02
 
 ### Payment icons ship inside the JavaScript
 
@@ -37,6 +37,17 @@ strings (the generator refuses `<script>`, `on*=` handlers,
 still files, still served through `assetBaseUrl` / `resolveAssetUrl`. The
 demos' `copy-openreceive-payment-icons-plugin.ts` is renamed
 `copy-openreceive-provider-assets-plugin.ts` and copies only those.
+
+### Release notes
+
+All four Buy a Button examples (`examples/buttons/server/node-express`,
+`static-html-small-api`, `nextjs-fullstack`, `rails`) were rebuilt against the
+0.4.0 workspace packages through `npm run build:demo` in the release gate. The
+Vite and webpack examples no longer copy `@openreceive/browser`'s icon
+directory; only `@openreceive/provider-data`'s images are copied.
+
+The live wallet smoke (`npm run test:live`) was NOT run for this release: it
+needs a funded NWC connection.
 
 ## 0.3.3 - 2026-09-02
 

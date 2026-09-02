@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 - 2026-09-02
+
+Version lockstep with the 0.4.0 npm release. The README's `authorize` example
+now states the resource guarantee: `context[:resource][:reference]` is always a
+validated non-empty String (200 characters or fewer) by the time the hook runs,
+and `payment_hash` is nil except on `payment.check`, `swap.read`, and
+`swap.refund`. No functional change.
+
 ## 0.3.3 - 2026-09-02
 
 ### Error messages state the fix and link the doc

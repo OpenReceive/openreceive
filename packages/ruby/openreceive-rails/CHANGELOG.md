@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 - 2026-09-02
+
+Version lockstep with the 0.4.0 npm release. The generated initializer's
+`config.authorize` comment now states the resource guarantee:
+`context[:resource][:reference]` is always a validated non-empty String
+(200 characters or fewer) by the time the lambda runs, and `payment_hash` is
+nil except on `payment.check`, `swap.read`, and `swap.refund`. No functional
+change.
+
 ## 0.3.3 - 2026-09-02
 
 ### A missing migration says so, with the fix
