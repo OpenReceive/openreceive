@@ -260,7 +260,7 @@ for (const phrase of [
   "Workflow safety validation passes through `npm run check:workflows`.",
   "Package artifact dry run passes through `npm run build:packages`.",
   ".github/workflows/release.yml",
-  ".github/workflows/publish.yml",
+  ".github/workflows/publish-gems.yml",
   "Live wallet smoke passes when a trusted `NWC_URI` is available in the environment.",
   "Do not publish",
 ]) {

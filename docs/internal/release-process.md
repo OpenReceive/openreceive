@@ -72,24 +72,33 @@ their `VERSION` constants and changelog headings, and `npm run check:release`
 fails on any drift. Sibling gem dependencies are exact-pinned through the
 shared `VERSION` constant, so no manual gemspec edits are needed.
 
+The gems publish from CI. Pushing the `v<version>` tag starts
+`.github/workflows/publish-gems.yml`, which waits for a human approval in the
+`rubygems` GitHub environment (only `v*` tags may reach it), builds the three
+gems in a `ruby:3.4` container, exchanges a GitHub OIDC token for a 15-minute
+push-only RubyGems key (Trusted Publishing — each gem lists this repository,
+this workflow filename and this environment as its trusted publisher on
+rubygems.org), and pushes in dependency order (`openreceive`,
+`openreceive-server`, `openreceive-rails`). No RubyGems credential is stored
+anywhere and no OTP is typed: a trusted-publisher key satisfies the
+`rubygems_mfa_required` metadata every gemspec carries. A re-run after a partial
+push skips whatever already landed.
+
 ```sh
-npm run release:gem:plan
-npm run release:gem:build
-npm run release:gem:publish -- --otp <code>
+gh run watch                       # approve the rubygems environment when prompted
+gem fetch openreceive -v <version> # the bytes RubyGems holds are CI's build, not a local one
 ```
 
-`release:gem:plan` is read-only and reports version drift.
-`release:gem:build` builds all three `.gem` artifacts under
-`.release/gems/<version>` (CI builds the gems via `./tools/ci/ruby-gem-build.sh`
+`npm run release:gem:plan` is read-only and reports version drift, and
+`npm run release:gem:build` builds the three `.gem` artifacts locally under
+`.release/gems/<version>` (CI also builds them via `./tools/ci/ruby-gem-build.sh`
 on every push/PR). RubyGems rewrites prerelease versions — a workspace version
 of `0.2.0-alpha.0` becomes `0.2.0.pre.alpha.0` in both the artifact filename and
 what rubygems.org reports — so the artifact directory is named for the workspace
 version while the files inside carry the RubyGems form, and `gem install`
-needs `--pre` to select a prerelease. `release:gem:publish` requires a clean worktree, runs
-`npm run test:ruby`, checks the target versions are not already on RubyGems,
-rebuilds, and pushes in dependency order (`openreceive`,
-`openreceive-server`, `openreceive-rails`). The RubyGems account requires MFA
-(`rubygems_mfa_required` is set in every gemspec); pass `--otp <code>`.
+needs `--pre` to select a prerelease. If the workflow cannot run,
+`tools/release/push-gems.sh --otp <code>` is the manual fallback: it pushes the
+local build with the maintainer's API key and one fresh OTP per gem.
 
 Publish the npm packages and the gems from the same prepared commit so both
 registries carry identical versions.
@@ -153,11 +162,15 @@ enabled:
 - `.github/workflows/release.yml` is a release dry run only; with `ci.yml` it
   covers every `test:ci` step, which is what `release:publish` relies on to
   skip the local suite.
-- `.github/workflows/publish.yml` keeps publishing disabled until explicit
-  maintainer approval.
+- `.github/workflows/publish-gems.yml` publishes the gems on a `v*` tag through
+  RubyGems Trusted Publishing, gated by the `rubygems` environment's required
+  approval. It is the only workflow allowed to run `gem push`; npm publishing
+  stays local. Do not publish from any other workflow.
 
 `npm run check:workflows` requires read-only workflow permissions, expected
-commands, concurrency groups, and the disabled publish path.
+commands, concurrency groups, and that `gem push` appears only in the gem
+publish workflow, whose jobs must run in the `rubygems` environment with
+exactly `contents: read` + `id-token: write`.
 
 ## Tagging
 

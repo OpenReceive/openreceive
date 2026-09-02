@@ -56,8 +56,18 @@ const requiredWorkflows = {
     "does not match package.json version",
     "Release dry run complete",
   ],
-  "publish.yml": ["npm run check:release", "Publishing is disabled"],
+  // The one workflow that publishes. RubyGems trusts this filename (with the
+  // `rubygems` environment) as the gems' trusted publisher, so its checks
+  // below are part of the trust boundary.
+  "publish-gems.yml": ["does not match package.json version", "gem build", "gem push"],
 };
+
+// RubyGems.org's three trusted-publisher entries name this file and this
+// environment; the environment requires a human approval and admits only v*
+// tags. Any other workflow that ran `gem push` would be a second, ungated
+// publisher, so the string is allowed here and nowhere else.
+const gemPublishWorkflow = "publish-gems.yml";
+const gemPublishEnvironment = "rubygems";
 
 const forbiddenText = [
   "pull_request_target",
@@ -74,13 +84,13 @@ const forbiddenText = [
   "npm publish",
   "docker push",
   "gh release create",
-  // The repo's own publish entry points: workflows may dry-run releases but
-  // must never publish (publish.yml exists solely to say publishing is
-  // disabled).
+  // The repo's own npm/gem publish entry points: workflows may dry-run
+  // releases but never publish through these; the gems publish only through
+  // `gem push` in publish-gems.yml (see gemPublishWorkflow).
   "npm run release:publish",
   "npm run release:gem:publish",
-  "gem push",
 ];
+const gemPushText = "gem push";
 
 // The Ruby engine lanes run only inside ruby:* containers; the entry scripts
 // must never run on the runner host (no gems or toolchains on the host).
@@ -206,6 +216,34 @@ function checkContainerLanes(relativePath, workflow) {
   }
 }
 
+// The trusted-publisher contract: every job runs in the gated environment,
+// requests the OIDC token and nothing more, and only a v* tag can start it.
+function checkGemPublishWorkflow(relativePath, workflow) {
+  const tags = workflow.on?.push?.tags;
+  expect(
+    Array.isArray(tags) && tags.length === 1 && tags[0] === "v*",
+    `${relativePath}: push trigger must be exactly the v* tags`,
+  );
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    expect(
+      job.environment === gemPublishEnvironment,
+      `${relativePath}: ${jobName} must run in the ${gemPublishEnvironment} environment`,
+    );
+    const permissions = job.permissions === undefined ? {} : job.permissions;
+    expect(
+      permissions.contents === "read" &&
+        permissions["id-token"] === "write" &&
+        Object.keys(permissions).length === 2,
+      `${relativePath}: ${jobName} permissions must be exactly contents: read + id-token: write`,
+    );
+    expect(
+      typeof containerImage(job) === "string" && containerImage(job).startsWith("ruby:"),
+      `${relativePath}: ${jobName} must build and push inside a ruby:* container`,
+    );
+  }
+}
+
 function checkNodeSetup(relativePath, workflow) {
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const [jobName, job] of Object.entries(jobs)) {
@@ -262,6 +300,14 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
 
   for (const forbidden of forbiddenText) {
     expect(!text.includes(forbidden), `${relativePath}: forbidden workflow text ${forbidden}`);
+  }
+  if (fileName === gemPublishWorkflow) {
+    checkGemPublishWorkflow(relativePath, workflow);
+  } else {
+    expect(
+      !text.includes(gemPushText),
+      `${relativePath}: forbidden workflow text ${gemPushText} (only ${gemPublishWorkflow} publishes gems)`,
+    );
   }
 
   checkActionPins(relativePath, workflow, text);

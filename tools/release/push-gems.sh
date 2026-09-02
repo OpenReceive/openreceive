@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 #
+# FALLBACK ONLY. Since 2026-09-02 the gems publish from CI on the v* tag
+# (.github/workflows/publish-gems.yml, RubyGems Trusted Publishing, no OTP).
+# Use this script when that workflow cannot run.
+#
 # Push the built OpenReceive gems to RubyGems, one prompt at a time, and PROVE
-# each one landed before moving on. This is step 2.11 of the release runbook as
-# a script, and it exists because that step has three sharp edges:
+# each one landed before moving on. This is the manual path of step 2.11 of the
+# release runbook as a script, and it exists because that step has three sharp
+# edges:
 #
 #   1. `gem push` falls back to ~/.local/share/gem/credentials whenever
 #      GEM_HOST_API_KEY is unset, so a bare shell authenticates as the wrong

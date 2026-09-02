@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Gems publish from CI without an OTP
+
+`.github/workflows/publish-gems.yml` pushes `openreceive`, `openreceive-server`
+and `openreceive-rails` on every `v*` tag through RubyGems Trusted Publishing:
+the job trades a GitHub OIDC token for a 15-minute push-only key, so no
+RubyGems credential is stored and no TOTP code is typed (a trusted-publisher key
+satisfies `rubygems_mfa_required`). The `rubygems` GitHub environment gates the
+job behind a required approval and admits only `v*` tags. `check:workflows` now
+allows `gem push` in that one workflow and pins its environment, permissions
+and container; the placeholder `publish.yml` is gone. `tools/release/push-gems.sh`
+remains the manual, OTP-per-gem fallback.
+
 ### Publishing trusts green CI
 
 `npm run release:publish` no longer re-runs `npm run test:ci` when the `CI` and
