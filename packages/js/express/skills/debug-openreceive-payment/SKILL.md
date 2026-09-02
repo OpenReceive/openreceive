@@ -40,6 +40,7 @@ same diagnostics redacted, always exit 0 — safe to share.
 | Status | Meaning | Where to look |
 | --- | --- | --- |
 | 403 FORBIDDEN | Your own `authorize` hook denied it, or the request looked cross-site. Check the session/cookie actually reaches the checkout routes. https://openreceive.org/guides/authorization.md |
+| Never 403s — any visitor can mint, poll, or refund for any reference | The opposite failure: on Rails the generated `config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE` placeholder is still installed (the engine warns at boot; `bin/rails openreceive:doctor` reports it). Replace it with the app's real ownership check. https://openreceive.org/guides/authorization.md |
 | 404 NOT_FOUND | `amountFor` returned `null` (unknown reference), or the `payment_hash` does not belong to that reference. |
 | 409 CONFLICT | **Normal state, not a bug**: the reference already settled, or an unpaid checkout for that method is already live. Show it as order state; never retry-loop. |
 | 503 retryable | The host hook failed while persisting the attempt (instructions withheld), or the wallet is unavailable. Read the server log for the underlying error. |

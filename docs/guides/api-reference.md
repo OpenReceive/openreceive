@@ -1339,9 +1339,13 @@ simplified `config/initializers/openreceive.rb`, and the engine route mount at
 `/openreceive`. The migration adapts to the app's configured database adapter:
 PostgreSQL, SQLite, and MySQL (`mysql2`/`trilogy`) are supported. The
 `OpenReceivePayment` model is engine-owned — no model file is generated. The
-generated initializer ships `config.on_paid = OpenReceive::LOGGING_ON_PAID`, a
-logging placeholder that fulfills nothing; the engine warns every time your
-application boots while it is still configured.
+generated initializer ships two placeholders:
+`config.on_paid = OpenReceive::LOGGING_ON_PAID`, which only logs and fulfills
+nothing, and `config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE`, which
+allows every request and treats possession of the reference as authorization —
+safe only while references are unguessable. The engine warns every time your
+application boots while either is still configured; replace both before
+anything real.
 
 | Flag | Meaning |
 | --- | --- |
@@ -1382,9 +1386,9 @@ OpenReceive.configure do |config|
   end
 
   # REQUIRED. The trusted price for a reference (your order id). Return
-  # { "currency" => "USD", "value" => "12.00" } or { "sats" => 1200 }, or nil
-  # when there is nothing to pay for (a 404). Called only where a price is
-  # minted or quoted; payer input never carries an amount.
+  # { currency: "USD", value: "12.00" } or { sats: 1200 } (string keys work
+  # too), or nil when there is nothing to pay for (a 404). Called only where a
+  # price is minted or quoted; payer input never carries an amount.
   #
   # An optional "description" beside the price is what the payer is buying, in
   # your own words: one display string, echoed on the prepare and create
@@ -1393,8 +1397,8 @@ OpenReceive.configure do |config|
   # number.
   config.amount_for = lambda do |reference|
     order = Order.find_by(id: reference)
-    order && { "currency" => "USD", "value" => order.total.to_s,
-               "description" => "#{order.line_items.size} items" }
+    order && { currency: "USD", value: order.total.to_s,
+               description: "#{order.line_items.size} items" }
   end
 
   # REQUIRED. Fulfillment. Runs inside the settlement transaction, only for
@@ -1410,8 +1414,13 @@ OpenReceive.configure do |config|
   # write. (The JS engine hands `onPaid` a `query` because nothing wraps it
   # there.) Same rule as JS otherwise: database writes only — anything
   # reaching outside the transaction survives a rollback and runs again.
+  # The WHERE clause is the lock: a second fulfillment path of yours (admin
+  # action, replayed job) claims zero rows and does nothing.
   config.on_paid = lambda do |settlement|
-    Order.find(settlement.reference).update!(status: "paid")
+    claimed = Order
+                .where(id: settlement.reference, state: "awaiting_payment")
+                .update_all(state: "paid", paid_at: Time.at(settlement.paid_at).utc)
+    next if claimed.zero? # someone else already fulfilled it
   end
 
   # Per-IP invoice cap for public web shops. Off by default — never throttle
@@ -1467,6 +1476,22 @@ OpenReceive::ReconcileJob.perform_later
 One reconciliation pass wrapped for your ActiveJob backend — a one-shot
 primitive. Nothing to schedule: request-path opportunistic reconcile is the
 default settlement driver.
+
+### rake openreceive:doctor
+
+```sh
+bin/rails openreceive:doctor
+```
+
+Step 0 of the agent directions as one command. Reports credential PRESENCE
+(`NWC_URI`, `LSC_URI_*`) — every line is `set` or `unset`, and no secret value
+is ever printed, echoed, or partially shown, which is what makes it safe to
+run in a shared terminal or paste into an issue. Alongside that: whether
+`OpenReceive.configure` ran, which of the three hooks are missing or still the
+generated placeholders (`LOGGING_ON_PAID`, `ALLOW_ALL_AUTHORIZE`), where the
+engine is mounted, and a best-effort wallet preflight — the same eager check a
+production boot runs, reported sanitized rather than raised. The Node CLI's
+`npx openreceive doctor` is the equivalent outside Rails.
 
 ### rake openreceive:reconcile
 

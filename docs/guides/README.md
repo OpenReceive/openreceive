@@ -23,9 +23,11 @@
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md)
 
-Building this with a coding agent? Hand it one of the agent-directions files
-instead of a reading list: [Node](../agents/node.md) or
-[Rails](../agents/rails.md). Each is Step 0, the rules no API call can state for
+Building this with a coding agent? Hand it one of the agent-directions
+payloads instead of a reading list:
+[Node](https://openreceive.org/agent-directions/node.md) or
+[Rails](https://openreceive.org/agent-directions/rails.md) — the byte-exact
+files behind the site's copy button (in this repo: `docs/agents/`). Each is Step 0, the rules no API call can state for
 itself, and the matching quickstart inlined in full, so it works pasted into an
 editor with no network access. Both are generated — edit
 `docs/agents/src/<stack>.md` and run `npm run build:docs`.

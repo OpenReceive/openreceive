@@ -104,7 +104,9 @@ itself, and they hold for every integration.
   reject payer-supplied amounts.
 - `config.authorize` runs on every request, and the `resource` it receives is a
   CLAIM the payer made, not proof. Read the framework session; never trust a
-  body field.
+  body field. The generator installs `OpenReceive::ALLOW_ALL_AUTHORIZE`, a
+  placeholder that allows everything (the engine warns at boot while it is
+  set) — replace it with this app's real ownership check, same as `on_paid`.
 - `config.on_paid` must be idempotent. It runs once per `reference` — your order
   id, one per thing you fulfill, created before checkout, kept across retries,
   never reused. A fresh id per page load lets one order be paid twice.

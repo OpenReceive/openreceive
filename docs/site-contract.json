@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 1399
+      "bytes": 1550
     },
     {
       "path": "/guides/quickstart-node",
@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 14337
+      "bytes": 14684
     },
     {
       "path": "/guides/node-orms",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 86369
+      "bytes": 87673
     },
     {
       "path": "/guides/security",
@@ -243,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 30393
+      "bytes": 30955
     },
     {
       "path": "/api_docs",
@@ -253,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 86369,
+      "bytes": 87673,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -282,7 +282,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 30393,
+      "bytes": 30955,
       "copy_button": true,
       "self_contained": true
     }

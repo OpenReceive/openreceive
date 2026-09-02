@@ -196,7 +196,12 @@ The generated initializer ships
 the settlement and fulfills nothing. Replace it with your real fulfillment (as
 above); the engine warns every time your application boots while the
 placeholder is still configured, because orders would otherwise be recorded as settled without ever
-being fulfilled.
+being fulfilled. The same applies to
+`config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE`, the generated
+allow-all placeholder: it treats possession of the reference as
+authorization, which is safe only while references are unguessable, and the
+engine warns at boot until you replace it with your own ownership check (as
+above). Replace both, not just `on_paid`.
 
 The amount always comes from your own order record; payer-supplied amounts are
 rejected. Advanced hooks (`resolve_checkout`, `on_checkout_created`) remain as
