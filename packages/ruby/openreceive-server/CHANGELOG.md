@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.3 - 2026-09-02
+
+### Error messages state the fix and link the doc
+
+The spend-capable refusal now mirrors the Node engine: the receive-only
+framing, the leaked-code-drains-the-wallet rationale, the get-a-code URL, and
+the override spelled `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` (previously
+`=1`). Wallet preflight failures carry the same URL. The 403 for a denied
+reference names the host's authorize hook and links the authorization guide,
+and the handler's required-hook `ArgumentError`s say how to fix themselves.
+
+### The gem carries the agent skills
+
+`skills/` ships in the gem — the integrate and debug playbooks for coding
+agents, kept byte-identical to the repository tree by
+`npm run generate:skills`.
+
 ## 0.3.2 - 2026-08-29
 
 ### An overpaid swap deposit is a refund, not a support ticket

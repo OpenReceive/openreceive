@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.3 - 2026-09-02
 
 ### OpenReceive ships as agent skills
 
@@ -86,6 +86,20 @@ hiding the toggle no longer renders an unstyled checkout.
 The theme toggle is labeled by the action ("switch to dark mode"), not the
 current state: a checkout stuck light on a dark page used to announce
 "light mode" at the payer.
+
+### Release notes
+
+All four Buy a Button examples (`examples/buttons/server/node-express`,
+`static-html-small-api`, `nextjs-fullstack`, `rails`) were rebuilt against the
+0.3.3 workspace packages through `npm run build:demo` in the release gate.
+
+The live wallet smoke (`npm run test:live`) was NOT run for this release: it
+needs a funded NWC connection.
+
+This is a PATCH bump: nothing left the public API. The doctor flags, the
+`DoctorWalletClient` seam, and the skills shipped inside every package are
+additive; the checkout-children change makes the component do what its docs
+always said; error-message rewrites keep every pinned wire message and code.
 
 ## 0.3.2 - 2026-08-29
 

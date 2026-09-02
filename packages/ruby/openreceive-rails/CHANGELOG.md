@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.3 - 2026-09-02
+
+### A missing migration says so, with the fix
+
+When the `openreceive_meta` table is absent, the engine now raises
+`OpenReceive::ConfigurationError` naming the exact commands —
+`bin/rails generate openreceive:install`, then `bin/rails db:migrate` — and
+linking the storage guide, instead of leaking a raw
+`ActiveRecord::StatementInvalid` from the first query. The check runs only on
+request-serving paths, so `db:migrate`, `db:prepare`, and the generator are
+unaffected, and a healed database is retried rather than remembered as broken.
+
+### NWC configuration errors reach Node parity
+
+A missing `NWC_URI` explains the receive-only requirement and links the
+get-a-code page (still starting with the pinned "Set NWC_URI"); a malformed
+one is framed as "set, but not a valid NWC code" with the parse reason and the
+same URL, instead of surfacing the bare parse error. `validate!` failures
+(authorize, amount_for, on_paid, rate limiting, opportunistic reconcile) each
+state their fix and link the owning guide, and the rate-limiting client-IP
+warning links the rate-limiting guide.
+
+### The gem carries the agent skills
+
+`skills/` ships in the gem — the integrate and debug playbooks for coding
+agents, kept byte-identical to the repository tree by
+`npm run generate:skills`.
+
 ## 0.3.2 - 2026-08-29
 
 No changes to this gem in 0.3.2. The release is the overpaid-deposit refund

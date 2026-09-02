@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3 - 2026-09-02
+
+### The gem carries the agent skills
+
+`skills/integrate-openreceive` and `skills/debug-openreceive-payment` (the
+open SKILL.md format) now ship inside the gem, so a coding agent working in an
+app that installed OpenReceive finds the integration and debugging playbooks
+with no network. The copies are kept byte-identical to the repository's
+canonical `skills/` tree by `npm run generate:skills`.
+
 ## 0.3.2 - 2026-08-29
 
 No changes to this gem in 0.3.2. The release is the overpaid-deposit refund
