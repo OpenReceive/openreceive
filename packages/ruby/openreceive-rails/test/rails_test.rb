@@ -488,6 +488,54 @@ class SchemaVersionGateTest < Minitest::Test
     seed_schema_version(OpenReceive::Server::PAYMENTS_SCHEMA_VERSION + 1)
     assert_equal [], OpenReceivePayment.reconcilable_attempts
   end
+
+  # A database the install migration never ran against is refused with the fix
+  # and the storage guide, not the raw StatementInvalid the first payments
+  # query would raise. Fires from the request-serving paths only, so
+  # db:migrate and the generator still run against an empty database.
+  def test_missing_tables_are_diagnosed_with_the_install_fix
+    drop_meta_table!
+
+    error = assert_raises(OpenReceive::ConfigurationError) { OpenReceivePayment.reconcilable_attempts }
+    assert_match(/openreceive_meta table does not exist/, error.message)
+    assert_match(%r{bin/rails generate openreceive:install}, error.message)
+    assert_match(%r{bin/rails db:migrate}, error.message)
+    assert_match(%r{https://openreceive\.org/guides/storage\.md}, error.message)
+
+    assert_raises(OpenReceive::ConfigurationError) do
+      OpenReceiveMeta.claim_reconcile_gate(now: Time.now.to_i, interval_seconds: 2)
+    end
+
+    # The refusal is not memoized: once the host migrates, this process serves.
+    recreate_meta_table!
+    assert_equal [], OpenReceivePayment.reconcilable_attempts
+  ensure
+    recreate_meta_table!
+  end
+
+  def drop_meta_table!
+    connection = ActiveRecord::Base.connection
+    connection.drop_table(:openreceive_meta)
+    connection.schema_cache.clear!
+    OpenReceiveMeta.reset_column_information
+    reset_schema_check!
+  end
+
+  # Idempotent: restores the shared in-memory schema (mirrors the definition at
+  # the top of this file) for whatever test runs next.
+  def recreate_meta_table!
+    connection = ActiveRecord::Base.connection
+    unless connection.table_exists?(:openreceive_meta)
+      connection.create_table(:openreceive_meta, id: false) do |t|
+        t.string :key, null: false, primary_key: true
+        t.text :value, null: false
+        t.bigint :rev, null: false, default: 0
+      end
+    end
+    connection.schema_cache.clear!
+    OpenReceiveMeta.reset_column_information
+    reset_schema_check!
+  end
 end
 
 class ConfigurationContractTest < Minitest::Test

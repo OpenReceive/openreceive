@@ -37,6 +37,40 @@ const AGENT_PAYLOADS = [
   { path: "/agent-directions/rails.md", source: "docs/agents/rails.md", stack: "rails" },
 ];
 
+// Pages served under agent-discovery paths: site-owned names whose content is
+// nonetheless a markdown source here. Rendered and twinned like a guide, but
+// sourced outside docs/guides so they join neither the guides index nor the
+// payload reading-list gate.
+const AGENT_PAGES = [
+  {
+    path: "/agents",
+    source: "docs/site/agents.md",
+    kind: "agents-page",
+    slug: "agents",
+    title: "Using OpenReceive with coding agents",
+    category: "agents",
+  },
+];
+
+// Verbatim artifacts for machine discovery: serve `source`'s bytes at `path`
+// with `content_type`, unrendered. /llms.txt is generated from the manifest by
+// tools/docs/generate-llms-txt.mjs; /openapi.yaml is the normative HTTP
+// contract, published as the exact repo file so the two can never drift.
+const AGENT_ARTIFACTS = [
+  {
+    path: "/llms.txt",
+    source: "docs/site/llms.txt",
+    content_type: "text/markdown; charset=utf-8",
+    kind: "llms-index",
+  },
+  {
+    path: "/openapi.yaml",
+    source: "spec/openapi/openreceive-http.v1.yaml",
+    content_type: "application/yaml; charset=utf-8",
+    kind: "openapi",
+  },
+];
+
 const manifest = JSON.parse(readFileSync(path.join(root, "docs/manifest.json"), "utf8"));
 const release = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
 const bySlug = new Map(manifest.docs.map((doc) => [doc.slug, doc]));
@@ -76,6 +110,19 @@ for (const alias of ALIASES) {
   });
 }
 
+for (const page of AGENT_PAGES) {
+  publish.push({
+    path: page.path,
+    markdown_path: markdownTwin(page.path),
+    source: page.source,
+    kind: page.kind,
+    slug: page.slug,
+    title: page.title,
+    category: page.category,
+    bytes: statSync(path.join(root, page.source)).size,
+  });
+}
+
 // The copy-button payloads are served as raw markdown as well as copied, so an
 // agent that CAN fetch has one URL to fetch and everyone else pastes the same
 // bytes.
@@ -91,12 +138,15 @@ const copyButton = AGENT_PAYLOADS.map(({ path: urlPath, source, stack }) => ({
 }));
 
 const contract = {
-  // v2 adds `markdown_path` to every entry rendered from a source here: the
+  // v2 added `markdown_path` to every entry rendered from a source here: the
   // site must serve the raw markdown at that URL, because the agent directions
-  // now link it instead of the page. A site that ignored the field would 404
-  // every reading-list link in a payload someone has already pasted, so this is
-  // a version bump and not an additive field.
-  contract_version: 2,
+  // link it instead of the page. v3 adds `agent_discovery` — /llms.txt and
+  // /openapi.yaml served verbatim from sources here, the /agents page, and the
+  // head links. A version bump rather than an additive field both times,
+  // because the skills and directions generated alongside the contract link
+  // these URLs: a site that ignored the section would 404 links already
+  // running in other people's editors.
+  contract_version: 3,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.
@@ -112,6 +162,30 @@ const contract = {
   // Permanent redirects the site must keep serving (an additive field:
   // contract v2 consumers that predate it ignore it safely).
   site_redirects: SITE_REDIRECTS.map((redirect) => ({ ...redirect, must_exist: true })),
+  // Machine-discovery surface for coding agents (contract v3). `artifacts` are
+  // served verbatim — the named source's exact bytes at `path`, with
+  // `content_type`, no rendering and no chrome. `head_links` are obligations on
+  // rendered pages: every page carries <link rel="describedby" href="/llms.txt">,
+  // and every publish[] entry with a `markdown_path` links it as
+  // <link rel="alternate" type="text/markdown" href="...">. `skills` points at
+  // the installable agent skills this repo ships; the /agents page in
+  // publish[] explains them to people.
+  agent_discovery: {
+    artifacts: AGENT_ARTIFACTS.map((artifact) => ({
+      ...artifact,
+      bytes: statSync(path.join(root, artifact.source)).size,
+    })),
+    head_links: {
+      describedby: "/llms.txt",
+      markdown_alternates: true,
+    },
+    skills: {
+      repository: "https://github.com/OpenReceive/openreceive",
+      names: ["integrate-openreceive", "debug-openreceive-payment"],
+      claude_code: "/plugin marketplace add OpenReceive/openreceive",
+      skills_cli: "npx skills add OpenReceive/openreceive",
+    },
+  },
   // Contributor documentation. Never publish these: they describe unreleased
   // internals, release keys and forbidden changes.
   never_publish: manifest.docs

@@ -29,12 +29,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import {
-  MARKDOWN_SUFFIX,
-  MARKDOWN_TWINNED_SITE_PAGES,
-  markdownTwin,
-  SITE_OWNED_PATHS,
-} from "./site-paths.mjs";
+import { isServablePath, MARKDOWN_SUFFIX, markdownTwin } from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -172,8 +167,7 @@ export function unservedUrls(payload, publicSlugs) {
     const raw = (match[1] ?? "/").replace(/[,)]+$/, "");
     const url = raw.endsWith(MARKDOWN_SUFFIX) ? raw : raw.replace(/\.+$/, "");
     const [pathname] = url.split("#");
-    if (SITE_OWNED_PATHS.includes(pathname)) continue;
-    if (servesMarkdown(pathname, publicSlugs)) continue;
+    if (isServablePath(pathname, publicSlugs)) continue;
     bad.push(pathname);
   }
   return [...new Set(bad)];
@@ -194,20 +188,6 @@ export function unlistedGuides(payload, publicSlugs, stack) {
     .filter((slug) => !linked.has(slug))
     .filter((slug) => UNLISTED_GUIDES[slug] === undefined && slug !== `quickstart-${stack}`)
     .sort();
-}
-
-/**
- * `/guides/<slug>` and its `.md` twin, plus `/guides.md` and `/api_docs.md` —
- * the twins of the two site-owned pages the site generates from this repo.
- * `/contact.md` and friends are NOT twinned: those pages are hand-authored on
- * the site and there is no markdown behind them.
- */
-function servesMarkdown(pathname, publicSlugs) {
-  const isTwin = pathname.endsWith(MARKDOWN_SUFFIX);
-  const page = isTwin ? pathname.slice(0, -MARKDOWN_SUFFIX.length) : pathname;
-  if (isTwin && MARKDOWN_TWINNED_SITE_PAGES.includes(page)) return true;
-  const guide = page.match(/^\/guides\/([a-z0-9-]+)$/);
-  return Boolean(guide) && publicSlugs.has(guide[1]);
 }
 
 const { publicSlugs } = readManifestSlugs();

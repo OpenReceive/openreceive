@@ -50,6 +50,21 @@ export { OPENRECEIVE_PAYMENTS_SCHEMA_VERSION } from "@openreceive/core";
  */
 export const OPENRECEIVE_RECONCILE_BATCH_SIZE = 200 as const;
 
+/**
+ * Dialect-aware "that table is absent" sniffing for the schema-version probe.
+ * sqlite (node:sqlite and better-sqlite3) reports "no such table"; postgres
+ * raises SQLSTATE 42P01 ("relation ... does not exist"). Everything else —
+ * connection refused, permissions — is not a migration diagnosis.
+ */
+function isMissingTableError(error: unknown, dialect: "postgres" | "sqlite"): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (dialect === "postgres") {
+    const code = (error as { code?: unknown } | null)?.code;
+    return code === "42P01" || /relation .+ does not exist/i.test(message);
+  }
+  return /no such table/i.test(message);
+}
+
 function parseClaimedAt(value: unknown): number | undefined {
   try {
     const parsed = JSON.parse(String(value)) as { claimed_at?: unknown };
@@ -180,7 +195,10 @@ export function createSqlPayments(
   // One probe per repository, on first use: a database written by a NEWER
   // library must not be operated by this one (columns or state transitions it
   // does not know about). An unreadable or absent marker means "not versioned"
-  // — the pre-versioned migrations could not seed a row — and is not a refusal.
+  // — the pre-versioned migrations could not seed a row — and is not a refusal,
+  // EXCEPT when the meta table itself does not exist: that is diagnosable as
+  // "the migration never ran here", and saying so beats the raw driver error
+  // the first payments query would raise a moment later.
   let schemaVersionChecked: Promise<void> | undefined;
   const assertSupportedSchema = (): Promise<void> => {
     schemaVersionChecked ??= (async () => {
@@ -192,8 +210,17 @@ export function createSqlPayments(
         );
         const value = rows[0]?.value;
         stored = value === undefined ? undefined : Number(asString(value, "value"));
-      } catch {
-        return;
+      } catch (error) {
+        // Any other read failure (connection refused, permissions) keeps the
+        // silent pre-versioned behavior; the real query surfaces it.
+        if (!isMissingTableError(error, adapter.dialect)) return;
+        throw new TypeError(
+          `The ${metaTable} table does not exist — the OpenReceive tables have not been migrated ` +
+            "in this database. Run `npx openreceive scaffold payments --orm <your orm>` and apply " +
+            "the emitted migration through your normal workflow (or execute " +
+            "paymentsSchemaSql(dialect) directly for bare drivers). " +
+            "https://openreceive.org/guides/storage.md",
+        );
       }
       if (stored === undefined || !Number.isInteger(stored)) return;
       if (stored > OPENRECEIVE_PAYMENTS_SCHEMA_VERSION) {

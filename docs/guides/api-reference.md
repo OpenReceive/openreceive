@@ -1305,14 +1305,25 @@ Every generated file carries the exactly-once fulfillment note.
 
 ```sh
 npx openreceive doctor
+npx openreceive doctor --db db/production.sqlite3 --url http://localhost:3000
 ```
 
-Checks the storage-free server configuration: prints the Node version and
-working directory, and validates `NWC_URI` presence and parseability (printed
-redacted) and `LSC_URI_*` connections. Exit code `1` when `NWC_URI` is missing
-or invalid, or when a configured `LSC_URI_*` value fails to parse.
-`openreceive debug-report` prints the same as a redacted support report
-(always exit `0`).
+Checks the server configuration and says what to fix. Always: the Node
+version, working directory, `NWC_URI` presence and parseability (printed
+redacted), and `LSC_URI_*` connections. When `NWC_URI` parses, it also probes
+the wallet over the relay — the same preflight boot runs — and reports whether
+the code is receive-only (`--offline` skips the probe; no database is touched
+by default). Exit code `1` when any check fails; every failing line states its
+own fix. `openreceive debug-report` prints the same as a redacted support
+report (always exit `0`).
+
+| Option | Meaning |
+| --- | --- |
+| `--db <target>` | Also check the payment tables exist: a SQLite file path, or a `postgres://` / `mysql://` URL (the matching driver — `pg` / `mysql2` — is loaded from your project). |
+| `--url <base-url>` | Also check the OpenReceive routes answer on a running app: an unknown path under the prefix must return the router's own JSON 404. |
+| `--prefix <path>` | Route prefix for `--url` (default `/openreceive`). |
+| `--table-name <name>`, `--meta-table-name <name>` | Table names for `--db`, when the scaffold was run with overrides. |
+| `--offline` | Skip the wallet relay probe. |
 
 ## Rails
 

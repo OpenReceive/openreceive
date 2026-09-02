@@ -112,12 +112,17 @@ export interface Host {
  */
 export function createHost(options: CreateHostOptions): Host {
   if (options?.amountFor === undefined) {
-    throw new TypeError("OpenReceive host requires amountFor.");
+    throw new TypeError(
+      "OpenReceive host requires amountFor — the host owns prices. Pass amountFor(reference) " +
+        'returning the amount to charge (for example { currency: "USD", value: "9.99" }), or ' +
+        "null for an unknown reference. https://openreceive.org/guides/api-reference.md#createhost",
+    );
   }
   if (options.onPaid === undefined) {
     throw new TypeError(
       "OpenReceive host requires onPaid (per-reference settlement context in db mode; the raw " +
-        "settlement event in custom repository mode).",
+        "settlement event in custom repository mode). Pass onPaid to fulfill the order — it runs " +
+        "exactly once per reference. https://openreceive.org/guides/api-reference.md#onpaid",
     );
   }
 
@@ -135,20 +140,38 @@ export function createHost(options: CreateHostOptions): Host {
     };
   } else {
     if (options.payments?.listForReference === undefined) {
-      throw new TypeError("OpenReceive host requires db or payments.listForReference.");
+      throw new TypeError(
+        "OpenReceive host requires db or payments.listForReference. Pass db (your database " +
+          "handle; the library owns the openreceive tables in it), or a complete custom " +
+          "PaymentRepository. https://openreceive.org/guides/storage.md",
+      );
     }
     if (options.payments.commitAttempt === undefined) {
-      throw new TypeError("OpenReceive host requires payments.commitAttempt.");
+      throw new TypeError(
+        "OpenReceive host requires payments.commitAttempt — the attempt write committed before " +
+          "payer instructions are exposed. Implement it, or pass db to use the built-in SQL " +
+          "repository. https://openreceive.org/guides/storage.md",
+      );
     }
     if (options.payments.listReconcilableAttempts === undefined) {
-      throw new TypeError("OpenReceive host requires payments.listReconcilableAttempts.");
+      throw new TypeError(
+        "OpenReceive host requires payments.listReconcilableAttempts — the pending-attempt batch " +
+          "reconciliation scans. Implement it, or pass db to use the built-in SQL repository. " +
+          "https://openreceive.org/guides/storage.md",
+      );
     }
     if (options.payments.recordReconciliation === undefined) {
-      throw new TypeError("OpenReceive host requires payments.recordReconciliation.");
+      throw new TypeError(
+        "OpenReceive host requires payments.recordReconciliation — how a scan outcome (settled/" +
+          "expired/attention) is written back. Implement it, or pass db to use the built-in SQL " +
+          "repository. https://openreceive.org/guides/storage.md",
+      );
     }
     if (typeof options.payments.recordSettlement !== "function") {
       throw new TypeError(
-        "OpenReceive host requires payments.recordSettlement (the write-once settlement claim).",
+        "OpenReceive host requires payments.recordSettlement (the write-once settlement claim). " +
+          "Implement it, or pass db to use the built-in SQL repository. " +
+          "https://openreceive.org/guides/storage.md",
       );
     }
     payments = options.payments;

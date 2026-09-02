@@ -909,7 +909,8 @@
       ],
       "types": [
         "CliIo",
-        "CliOptions"
+        "CliOptions",
+        "DoctorWalletClient"
       ]
     }
   },

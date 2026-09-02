@@ -30,10 +30,26 @@ module OpenReceive
       # returns nil the limiter fails open for that request.
       def initialize(service:, authorize:, resolve_checkout:, on_checkout_created:, on_paid:,
                      rate_limit: nil, client_ip: nil)
-        raise ArgumentError, "authorize is required" if authorize.nil?
-        raise ArgumentError, "resolve_checkout is required" if resolve_checkout.nil?
-        raise ArgumentError, "on_checkout_created is required" if on_checkout_created.nil?
-        raise ArgumentError, "on_paid is required" if on_paid.nil?
+        if authorize.nil?
+          raise ArgumentError,
+                "authorize is required — authentication belongs to the host application. " \
+                "https://openreceive.org/guides/authorization.md"
+        end
+        if resolve_checkout.nil?
+          raise ArgumentError,
+                "resolve_checkout is required — it resolves a reference to the host-owned " \
+                "amount and attempt. https://openreceive.org/guides/api-reference.md"
+        end
+        if on_checkout_created.nil?
+          raise ArgumentError,
+                "on_checkout_created is required — it persists the attempt before payer " \
+                "instructions are returned. https://openreceive.org/guides/api-reference.md"
+        end
+        if on_paid.nil?
+          raise ArgumentError,
+                "on_paid is required — it durably records settlement. " \
+                "https://openreceive.org/guides/api-reference.md"
+        end
         @service = service
         @authorize = authorize
         @resolve_checkout = resolve_checkout
@@ -350,7 +366,13 @@ module OpenReceive
 
       def authorize!(action, request, resource)
         context = { action: action, request: request, resource: resource }
-        raise ForbiddenError, "Not authorized for this action." unless @authorize.call(context)
+        return if @authorize.call(context)
+
+        # Byte-identical to the JS handler's FORBIDDEN message (same wire contract).
+        raise ForbiddenError,
+              "Not authorized for this action. The application's authorize hook denied it; " \
+              "if this is unexpected, check that the payer's session reaches the checkout " \
+              "routes. https://openreceive.org/guides/authorization.md"
       end
 
       def commit(checkout, swap_data = nil, request = nil)

@@ -1,20 +1,21 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { readFileSync } from "node:fs";
-import { hash, memoryPaymentsDb } from "./helpers/factories.mjs";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
 import {
+  createHost,
+  createSqlPayments,
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   OPENRECEIVE_RECONCILE_BATCH_SIZE,
-  createHost,
-  createSqlPayments,
   paymentsSchemaSql,
   reconcileHostPayments,
 } from "../packages/js/http/src/index.ts";
-import { resolveSqlAdapter } from "../packages/js/http/src/sql-adapters.ts";
 // Internal decision table: imported from the module directly (it is
 // deliberately not on the public package surface).
 import { reconciliationTransition } from "../packages/js/http/src/payment-repository.ts";
+import { resolveSqlAdapter } from "../packages/js/http/src/sql-adapters.ts";
+import { hash, memoryPaymentsDb } from "./helpers/factories.mjs";
 
 function swapData(asset, expiresAt = 1_600) {
   return {
@@ -719,6 +720,54 @@ test("a repository refuses to serve a database written by a newer library", asyn
   db.prepare("DELETE FROM openreceive_meta WHERE key = 'schema_version'").run();
   const unversioned = createSqlPayments(db, { clock: () => 1_000 });
   assert.deepEqual(await unversioned.listReconcilableAttempts(), []);
+});
+
+test("a database whose tables were never migrated is refused with the migration fix", async () => {
+  const bare = new DatabaseSync(":memory:"); // no openreceive schema applied
+  const payments = createSqlPayments(bare, { clock: () => 1_000 });
+  const unmigrated = (error) => {
+    assert.ok(error instanceof TypeError);
+    assert.match(error.message, /openreceive_meta table does not exist/);
+    assert.match(error.message, /npx openreceive scaffold payments --orm/);
+    assert.match(error.message, /https:\/\/openreceive\.org\/guides\/storage\.md/);
+    return true;
+  };
+  // The refusal surfaces on first repository use, whichever entry point that is.
+  await assert.rejects(payments.listReconcilableAttempts(), unmigrated);
+  await assert.rejects(payments.commitAttempt(checkoutInput("order-unmigrated", "a")), unmigrated);
+});
+
+test("a missing meta table is diagnosed on postgres by its 42P01 error code", async () => {
+  const missing = Object.assign(new Error('relation "openreceive_meta" does not exist'), {
+    code: "42P01",
+  });
+  const adapter = {
+    dialect: "postgres",
+    query: async () => {
+      throw missing;
+    },
+    transaction: async (run) => run(adapter),
+  };
+  const payments = createSqlPayments(adapter, { clock: () => 1_000 });
+  await assert.rejects(payments.listReconcilableAttempts(), /have not been migrated/);
+});
+
+test("a schema probe failing for any other reason stays silent, as before versioning", async () => {
+  // Connection refused on the meta read must not masquerade as "not migrated";
+  // the probe is swallowed and the real query decides.
+  let calls = 0;
+  const adapter = {
+    dialect: "sqlite",
+    query: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("connect ECONNREFUSED 127.0.0.1:5432");
+      return [];
+    },
+    transaction: async (run) => run(adapter),
+  };
+  const payments = createSqlPayments(adapter, { clock: () => 1_000 });
+  assert.deepEqual(await payments.listReconcilableAttempts(), []);
+  assert.equal(calls, 2, "the probe failed, then the real query ran");
 });
 
 test("listReconcilableAttempts returns an oldest-first batch, not the whole backlog", async () => {

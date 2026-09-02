@@ -218,8 +218,12 @@ Map that shape onto the models in THIS app.
 npx openreceive doctor
 ```
 
-`openreceive doctor` checks Node, `NWC_URI`, and swap-provider configuration
-without touching a database. → [openreceive doctor](api-reference.md#openreceive-doctor)
+`openreceive doctor` checks Node, `NWC_URI`, and swap-provider configuration,
+and probes the wallet relay to confirm the code is receive-only. Add
+`--db <file-or-url>` to confirm the migration ran, and
+`--url http://localhost:3000` to confirm the routes are mounted; every failing
+line states its own fix.
+→ [openreceive doctor](api-reference.md#openreceive-doctor)
 
 ## Next
 

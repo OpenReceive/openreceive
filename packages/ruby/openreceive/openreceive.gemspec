@@ -16,7 +16,8 @@ Gem::Specification.new do |spec|
   spec.homepage = "https://openreceive.org"
   # bigdecimal is a bundled gem from Ruby 3.4; declare it explicitly.
   spec.add_dependency "bigdecimal"
-  spec.files = Dir["lib/**/*.rb", "README.md", "CHANGELOG.md", "LICENSE"]
+  # skills/ is the agent-skills copy kept in sync by `npm run generate:skills`.
+  spec.files = Dir["lib/**/*.rb", "skills/**/*.md", "README.md", "CHANGELOG.md", "LICENSE"]
   spec.require_paths = ["lib"]
   spec.metadata = {
     "homepage_uri" => "https://openreceive.org",

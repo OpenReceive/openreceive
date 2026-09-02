@@ -244,6 +244,13 @@ command.
 
 ## Documentation
 
+Integrating with a coding agent? OpenReceive ships installable
+[agent skills](skills/) — `npx skills add OpenReceive/openreceive`, or
+`/plugin marketplace add OpenReceive/openreceive` in Claude Code — plus
+self-contained per-stack agent directions, `/llms.txt`, and the OpenAPI
+contract at [openreceive.org/agents](https://openreceive.org/agents). Working
+on OpenReceive itself? That is [AGENTS.md](AGENTS.md).
+
 Start with the [developer guides](docs/guides/README.md):
 
 - [Node quickstart](docs/guides/quickstart-node.md)

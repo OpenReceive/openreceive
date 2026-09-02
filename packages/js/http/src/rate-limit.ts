@@ -91,7 +91,7 @@ export function createIpRateLimit(config: IpRateLimitConfig = {}): RateLimit {
         "countAttemptsFromIp in the rateLimiting config, or disable rateLimiting and use " +
         "a custom rateLimitHook backed by your own store. There is deliberately no " +
         "in-memory fallback: per-process counts reset on restart and multiply per " +
-        "instance behind a load balancer.",
+        "instance behind a load balancer. https://openreceive.org/guides/rate-limiting.md",
     );
   }
   const message = config.message ?? DEFAULT_MESSAGE;
@@ -111,7 +111,7 @@ export function createIpRateLimit(config: IpRateLimitConfig = {}): RateLimit {
         console.warn(
           "[openreceive] rateLimiting allowed a request with no attributable client IP " +
             "(fail-open). If every request logs no IP, the adapter is not supplying one " +
-            "and rate limiting is inactive — see the rate limiting guide.",
+            "and rate limiting is inactive — see https://openreceive.org/guides/rate-limiting.md",
         );
       }
       return true;

@@ -24,9 +24,24 @@ class OpenReceiveMeta < ActiveRecord::Base
   # written by a NEWER library must not be operated by this one (columns or
   # state transitions it does not know about). An unreadable or absent marker
   # means "not versioned" — the pre-versioned migrations could not seed a row —
-  # and is not a refusal. Mirrors the JS repository's assertSupportedSchema.
+  # and is not a refusal. A missing TABLE is different: that is diagnosable as
+  # "the install migration never ran here", and saying so beats the raw
+  # StatementInvalid the first payments query would raise a moment later.
+  # Mirrors the JS repository's assertSupportedSchema.
+  #
+  # Reached only from the request-serving paths (every OpenReceivePayment
+  # entry point and the reconcile gate) — never unconditionally at boot — so
+  # `db:migrate`, `db:prepare`, the install generator, and asset builds still
+  # run against an unmigrated database. A raise is not memoized: once the host
+  # runs the migration, the same process starts serving.
   def self.assert_supported_schema!
     @schema_version_checked ||= begin
+      unless table_exists?
+        raise OpenReceive::ConfigurationError,
+              "The openreceive_meta table does not exist — the OpenReceive tables have not been " \
+              "migrated in this database. Run `bin/rails generate openreceive:install`, then " \
+              "`bin/rails db:migrate`. https://openreceive.org/guides/storage.md"
+      end
       stored = stored_schema_version
       if !stored.nil? && stored > OpenReceive::Server::PAYMENTS_SCHEMA_VERSION
         raise OpenReceive::ConfigurationError,

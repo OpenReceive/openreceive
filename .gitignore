@@ -8,6 +8,12 @@
 
 private_private_infra_details.txt
 
+# Local planning files and the private scratch directory. Never committed;
+# these names have existed locally and must not reach the public repo.
+or-master-plan.txt
+or-to-do.txt
+/private/
+
 .DS_Store
 
 # Local Claude Code project memory (path-leaking, machine-specific).

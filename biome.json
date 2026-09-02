@@ -24,6 +24,7 @@
       "!**/log",
       "!**/storage",
       "!tools/validate/public-api.snapshot.json",
+      "!docs/site-contract.json",
       "!**/building",
       "!**/*.svg",
       "!**/*.css"

@@ -198,7 +198,8 @@ module OpenReceive
       def initialize(reason)
         super(
           "OpenReceive wallet preflight failed: #{reason} Use a receive-only " \
-          "NWC connection advertising make_invoice and list_transactions."
+          "NWC connection advertising make_invoice and list_transactions. " \
+          "Get one here: #{OpenReceive::NWC_CODE_HELP_URL}"
         )
       end
     end
@@ -206,14 +207,17 @@ module OpenReceive
     # Boot-time refusal: the configured NWC connection advertises spend methods.
     # OpenReceive is receive-only; a spend-capable code in a receive deployment
     # is a live theft risk, so preflight fails closed instead of booting.
+    # Mirrors the JS core formatSpendCapabilityRefusedMessage.
     class SpendCapableWalletError < StandardError
       def initialize(methods)
         super(
-          "The configured NWC connection advertises spend methods " \
-          "(#{Array(methods).join(', ')}). OpenReceive is receive-only; use a " \
-          "receive-only NWC code, or override explicitly with " \
-          "config.allow_spend_capable_wallet = true or " \
-          "OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=1."
+          "This NWC connection is NOT receive-only.\n" \
+          "The wallet info event advertises spend method(s): #{Array(methods).join(', ')}.\n" \
+          "A leaked spend-capable NWC code lets an attacker drain the wallet, " \
+          "so OpenReceive refuses to boot with it.\n" \
+          "Get a receive-only NWC code here: #{OpenReceive::NWC_CODE_HELP_URL}\n" \
+          "If this wallet cannot mint a receive-only code and you accept the risk, set " \
+          "allow_spend_capable_wallet: true (or OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true)."
         )
       end
     end

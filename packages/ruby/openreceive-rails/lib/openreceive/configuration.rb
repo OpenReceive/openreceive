@@ -147,16 +147,23 @@ module OpenReceive
     end
 
     def validate!
-      raise ConfigurationError, "OpenReceive.config.authorize is required." if @authorize.nil?
+      if @authorize.nil?
+        raise ConfigurationError,
+              "OpenReceive.config.authorize is required — authentication belongs to the host. " \
+              "Set config.authorize in config/initializers/openreceive.rb to check the payer's " \
+              "session. https://openreceive.org/guides/authorization.md"
+      end
       if @rate_limiting && @rate_limit
         raise ConfigurationError,
-              "Set either OpenReceive.config.rate_limiting or a custom rate_limit hook, not both."
+              "Set either OpenReceive.config.rate_limiting or a custom rate_limit hook, not " \
+              "both: rate_limiting is the built-in per-IP limiter, rate_limit replaces it with " \
+              "your own policy. https://openreceive.org/guides/rate-limiting.md"
       end
       if @rate_limiting && advanced_hooks?
         raise ConfigurationError,
               "config.rate_limiting counts engine-owned OpenReceivePayment rows; with a custom " \
               "repository (resolve_checkout/on_checkout_created), pass a custom rate_limit hook " \
-              "backed by your own store instead."
+              "backed by your own store instead. https://openreceive.org/guides/rate-limiting.md"
       end
       if @opportunistic_reconcile && advanced_hooks?
         # Same fail-at-construction idiom as the JS handler: the default
@@ -166,19 +173,28 @@ module OpenReceive
               "config.opportunistic_reconcile (on by default) scans engine-owned " \
               "OpenReceivePayment rows through the shared openreceive_meta gate; with a custom " \
               "repository (resolve_checkout/on_checkout_created), set " \
-              "config.opportunistic_reconcile = false and run your own settlement worker."
+              "config.opportunistic_reconcile = false and run your own settlement worker. " \
+              "https://openreceive.org/guides/storage.md"
       end
       if @on_paid.nil?
-        raise ConfigurationError, "OpenReceive.config.on_paid is required to durably record settlement."
+        raise ConfigurationError,
+              "OpenReceive.config.on_paid is required to durably record settlement. Set " \
+              "config.on_paid to fulfill the order — it runs once, for the reference's first " \
+              "settled attempt. https://openreceive.org/guides/api-reference.md#openreceiveconfigure"
       end
       if @resolve_checkout.nil? != @on_checkout_created.nil?
         raise ConfigurationError,
-              "OpenReceive.config.resolve_checkout and on_checkout_created must be configured together (advanced mode)."
+              "OpenReceive.config.resolve_checkout and on_checkout_created must be configured " \
+              "together (advanced mode). Set both, or neither and use quickstart amount_for. " \
+              "https://openreceive.org/guides/api-reference.md#openreceiveconfigure"
       end
       if !advanced_hooks? && @amount_for.nil?
         raise ConfigurationError,
               "Set OpenReceive.config.amount_for (quickstart), " \
-              "or resolve_checkout and on_checkout_created (advanced)."
+              "or resolve_checkout and on_checkout_created (advanced). " \
+              "amount_for(reference) returns the amount to charge — e.g. { \"sats\" => 2100 } — " \
+              "or nil for an unknown reference. " \
+              "https://openreceive.org/guides/api-reference.md#openreceiveconfigure"
       end
       resolved_nwc_client
       true
@@ -234,7 +250,8 @@ module OpenReceive
             warned_unattributable = true
             rails_logger&.warn(
               "[openreceive] rate limiting is enabled but no client IP could be resolved; " \
-              "attempts from this request are not counted. Configure config.client_ip."
+              "attempts from this request are not counted. Configure config.client_ip. " \
+              "https://openreceive.org/guides/rate-limiting.md"
             )
           end
           next true
@@ -377,21 +394,52 @@ module OpenReceive
       return @nwc_client unless @nwc_client.nil?
 
       connection = @nwc || ENV["NWC_URI"]&.strip
-      if connection.nil? || connection.empty?
-        raise ConfigurationError, "Set NWC_URI, or configure OpenReceive.config.nwc/nwc_client explicitly."
-      end
+      raise ConfigurationError, missing_nwc_message if connection.nil? || connection.empty?
       return connection if connection.respond_to?(:make_invoice) || connection.respond_to?(:makeInvoice)
 
+      # Parse with the engine's own parser first, so a malformed code surfaces
+      # as a framed configuration error (what is wrong, the fix, the help URL)
+      # rather than a bare parse failure from whichever layer touched it first.
+      begin
+        OpenReceive.parse_nwc_uri(connection)
+      rescue OpenReceive::NwcUriParseError => e
+        raise ConfigurationError, invalid_nwc_message(e.message)
+      end
       OpenReceive::NwcRubyReceiveClient.new(
         client: build_nwc_ruby_client(connection), connection_uri: connection
       )
+    end
+
+    # Mirrors the JS core formatMissingNwcMessage: what is missing, the
+    # concrete fix, and where to get a receive-only code.
+    def missing_nwc_message
+      [
+        "OpenReceive needs a receive-only NWC code to receive payments.",
+        "Set NWC_URI to your receive-only Nostr Wallet Connect connection string, " \
+        "or configure OpenReceive.config.nwc/nwc_client explicitly.",
+        "Get one here: #{OpenReceive::NWC_CODE_HELP_URL}"
+      ].join("\n")
+    end
+
+    # Mirrors the JS core formatInvalidNwcMessage; the subject names where the
+    # bad value came from so the operator knows which setting to fix.
+    def invalid_nwc_message(reason)
+      subject = @nwc.nil? ? "NWC_URI" : "OpenReceive.config.nwc"
+      [
+        "#{subject} is set, but it is not a valid NWC code.",
+        "Reason: #{reason}",
+        "Get a receive-only NWC code here: #{OpenReceive::NWC_CODE_HELP_URL}"
+      ].join("\n")
     end
 
     def build_nwc_ruby_client(connection)
       require "nwc_ruby"
       ::NwcRuby::Client.from_uri(connection)
     rescue LoadError
-      raise ConfigurationError, "Install nwc-ruby or configure nwc_client."
+      raise ConfigurationError,
+            "Install nwc-ruby (add `gem \"nwc-ruby\"` to the Gemfile) or configure " \
+            "OpenReceive.config.nwc_client with your own NWC client. " \
+            "https://openreceive.org/guides/api-reference.md#openreceiveconfigure"
     end
   end
 

@@ -72,7 +72,28 @@ class OpenReceiveDefaultNwcClientTest < Minitest::Test
     configure_quickstart
 
     error = assert_raises(OpenReceive::ConfigurationError) { OpenReceive.config.validate! }
+    assert_includes error.message, "needs a receive-only NWC code"
     assert_includes error.message, "Set NWC_URI"
+    assert_includes error.message, OpenReceive::NWC_CODE_HELP_URL
+  end
+
+  # Mirrors the JS formatInvalidNwcMessage framing: what is wrong, the parse
+  # reason, and where to get a receive-only code — not a bare parse error.
+  def test_an_invalid_uri_fails_closed_with_the_framed_help
+    configure_quickstart { |config| config.nwc = "https://example.com" }
+
+    error = assert_raises(OpenReceive::ConfigurationError) { OpenReceive.config.validate! }
+    assert_includes error.message, "OpenReceive.config.nwc is set, but it is not a valid NWC code."
+    assert_includes error.message, "Reason:"
+    assert_includes error.message, OpenReceive::NWC_CODE_HELP_URL
+  end
+
+  def test_an_invalid_env_uri_names_the_environment_variable
+    ENV["NWC_URI"] = "nostr+walletconnect://not-a-pubkey"
+    configure_quickstart
+
+    error = assert_raises(OpenReceive::ConfigurationError) { OpenReceive.config.validate! }
+    assert_includes error.message, "NWC_URI is set, but it is not a valid NWC code."
   end
 
   private

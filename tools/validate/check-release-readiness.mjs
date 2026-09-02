@@ -175,7 +175,14 @@ for (const { relativePath, manifest } of packages) {
       manifest.repository?.url === "git+https://github.com/openreceive/openreceive.git",
       `${relativePath}: repository.url must be git+https://github.com/openreceive/openreceive.git`,
     );
-    for (const requiredFile of ["README.md", "LICENSE"]) {
+    for (const requiredFile of [
+      "README.md",
+      "LICENSE",
+      // The agent-skills copy every package ships; `npm run generate:skills`
+      // materializes it and `npm run check:docs` keeps it in sync.
+      "skills/integrate-openreceive/SKILL.md",
+      "skills/debug-openreceive-payment/SKILL.md",
+    ]) {
       expect(
         existsSync(path.join(root, packageDir, requiredFile)),
         `${packageDir}: missing ${requiredFile}`,
@@ -206,6 +213,8 @@ for (const gemName of GEM_NAMES) {
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "skills/integrate-openreceive/SKILL.md",
+    "skills/debug-openreceive-payment/SKILL.md",
   ]) {
     expect(existsSync(path.join(gemRoot, requiredFile)), `${gemPath}: missing ${requiredFile}`);
   }
@@ -244,6 +253,8 @@ for (const { manifest } of packages) {
 for (const phrase of [
   "npm run test:ci",
   "Changelog updated.",
+  "Agent skills describe the current public API.",
+  "npm run generate:skills",
   "Public package manifests are public while testkit stays private.",
   "Package versions match the intended tag.",
   "Workflow safety validation passes through `npm run check:workflows`.",

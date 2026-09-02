@@ -1,0 +1,17 @@
+{
+  "name": "openreceive",
+  "metadata": {
+    "description": "Agent skills for OpenReceive: integrate inbound Bitcoin Lightning payments into a Node.js or Rails application, and debug a failing integration."
+  },
+  "owner": {
+    "name": "OpenReceive",
+    "email": "info@openreceive.org"
+  },
+  "plugins": [
+    {
+      "name": "openreceive",
+      "source": "./",
+      "description": "Integrate OpenReceive inbound Bitcoin Lightning payments into an application, and debug a failing integration. Ships the integrate-openreceive and debug-openreceive-payment skills."
+    }
+  ]
+}

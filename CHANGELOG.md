@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+### OpenReceive ships as agent skills
+
+Two skills in the open SKILL.md format now travel with the library:
+`integrate-openreceive` (stack detection, the three server objects, the
+`authorize`/`amountFor`/`onPaid` contract, 409 semantics, the secret boundary,
+scaffolding, and testing against a fake wallet — with the full per-stack agent
+directions as references) and `debug-openreceive-payment` (doctor-first
+triage: boot failures, request-time 403/404/409, settlement timing, swap
+refunds, each symptom with its fix). They install from the repo
+(`npx skills add OpenReceive/openreceive`, or Claude Code
+`/plugin marketplace add OpenReceive/openreceive` via the new
+`.claude-plugin/marketplace.json`), are discovered from the `.agents/skills/`
+mirror, and ship inside every npm package and gem, so an agent working in an
+app that already installed OpenReceive finds them with no network.
+`npm run generate:skills` keeps the mirrors byte-identical (checked in CI),
+and the release checklist now requires the skills to describe the released
+API.
+
+The site contract moves to v3 for the same audience: openreceive.org now
+serves `/llms.txt` (generated here from the docs manifest), the normative
+OpenAPI file verbatim at `/openapi.yaml`, an `/agents` page, and llms.txt v2
+discovery tags (`rel="describedby"`, markdown alternates) — so a browsing
+agent can find the whole documentation surface from any page.
+
+### Error messages state the fix and link the doc
+
+Every integrator-facing setup error now says what to do about itself and
+links the guide that owns the answer — the boot/mount "requires amountFor /
+onPaid / authorize / host" family, the composed-options error, the
+rate-limiting conflicts, and the reconcile-gate requirement, in both engines.
+The 403 for a denied reference now names the authorize hook and links the
+authorization guide. Ruby reaches parity with the JS NWC messages: missing,
+invalid, and spend-capable `NWC_URI` failures carry the same receive-only
+framing and the get-a-code URL (the long-dormant `NWC_CODE_HELP_URL` constant
+finally earns its keep), and the spend override is spelled `=true` in both
+engines.
+
+A missing migration also stops surfacing as a raw driver error. When the
+`openreceive_meta` probe finds the table absent, both engines now raise a
+configuration error naming the exact fix — `npx openreceive scaffold
+payments --orm <yours>` on Node, `bin/rails generate openreceive:install`
+then `db:migrate` on Rails — instead of leaking `no such table` from the
+first query. Any other probe failure (connection refused, permissions) keeps
+the old silent tolerance, and a healed database is retried, not remembered
+as broken.
+
+### `openreceive doctor` proves the integration, not just the env
+
+The doctor used to stop at parsing `NWC_URI`. It now probes the wallet over
+the relay — the same preflight boot runs — and reports receive-only or the
+exact refusal; `--db <sqlite file | postgres:// | mysql://>` confirms the
+`openreceive_payments` + `openreceive_meta` migration actually ran, and
+`--url http://localhost:3000` confirms the routes answer on the running app
+(recognized by the router's own JSON 404, which no framework fallback
+produces). Every failing line states its own fix and links the guide that
+owns it. The default run still touches no database, and `--offline` keeps the
+old fully-offline behavior; `debug-report` stays exit-0 and redacted.
+
 ### Checkout children compose instead of replacing the payment UI
 
 Passing anything as `<Checkout>` children — even the one-line order summary

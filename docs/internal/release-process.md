@@ -94,6 +94,11 @@ npm run test:ci
 The release owner also checks:
 
 - Changelog updated.
+- Agent skills describe the current public API. A release that changes the
+  public API updates `skills/*/SKILL.md` in the same change, and
+  `npm run generate:skills` has been run so the `.agents/skills/` twin and
+  every package and gem copy match (`npm run check:docs` enforces the sync,
+  not the prose).
 - Public package manifests are public while testkit stays private.
 - Package versions match the intended tag.
 - Ruby gem versions match the workspace version and `npm run release:gem:build` passes.

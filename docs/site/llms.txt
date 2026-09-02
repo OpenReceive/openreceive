@@ -1,0 +1,52 @@
+# OpenReceive
+
+> Open-source libraries for accepting inbound Bitcoin Lightning payments
+> directly into a wallet the application owner controls. OpenReceive never
+> holds funds, has no accounts or API keys, and connects through a receive-only
+> Nostr Wallet Connect (NWC) code. This index describes OpenReceive 0.3.2.
+
+Every documentation link below is raw markdown — fetch it directly, no browser
+needed. Appending `.md` to any guide page URL returns the same document as
+markdown.
+
+## Start here
+
+- [Node quickstart](https://openreceive.org/guides/quickstart-node.md): Express, Fastify, or Next.js server with any frontend
+- [Rails quickstart](https://openreceive.org/guides/quickstart-rails.md)
+- [Agent directions, Node](https://openreceive.org/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
+- [Agent directions, Rails](https://openreceive.org/agent-directions/rails.md)
+
+## Guides
+
+The index is [/guides.md](https://openreceive.org/guides.md).
+
+- [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)
+- [Authorization](https://openreceive.org/guides/authorization.md)
+- [Rate Limiting](https://openreceive.org/guides/rate-limiting.md)
+- [Frontend Checkout](https://openreceive.org/guides/frontend-checkout.md)
+- [Checkout UX](https://openreceive.org/guides/checkout-ux.md)
+- [Headless Checkout](https://openreceive.org/guides/headless-checkout.md)
+- [Automated Swaps](https://openreceive.org/guides/automated-swaps.md)
+- [Swap Refunds](https://openreceive.org/guides/swap-refunds.md)
+- [Lightning Swap Connect URI](https://openreceive.org/guides/lightning-swap-connect.md)
+- [Environment Variables](https://openreceive.org/guides/environment-variables.md)
+- [Payment Storage](https://openreceive.org/guides/storage.md)
+- [Deploying OpenReceive](https://openreceive.org/guides/deploying.md)
+- [Testing Your OpenReceive Integration](https://openreceive.org/guides/host-testing.md)
+- [API Reference](https://openreceive.org/guides/api-reference.md)
+- [Security](https://openreceive.org/guides/security.md)
+- [Provider Registry](https://openreceive.org/guides/provider-registry.md)
+- [Price Feeds](https://openreceive.org/guides/price-feeds.md)
+- [React Material UI Recipe](https://openreceive.org/guides/react-material-ui-recipe.md)
+- [Writing Your Own Checkout Route](https://openreceive.org/guides/custom-checkout-route.md)
+
+## Machine-readable specifications
+
+- [OpenReceive HTTP OpenAPI](https://openreceive.org/openapi.yaml): the normative contract for every mounted route
+
+## Agent resources
+
+- [Using OpenReceive with coding agents](https://openreceive.org/agents.md): skills, install commands, and which artifact answers which question
+- [Agent skills](https://github.com/OpenReceive/openreceive/tree/master/skills): integrate-openreceive and debug-openreceive-payment — `npx skills add OpenReceive/openreceive`, or Claude Code `/plugin marketplace add OpenReceive/openreceive`
+- [Contributor rules](https://github.com/OpenReceive/openreceive/blob/master/AGENTS.md): the invariants for changes to OpenReceive itself
+- [GitHub repository](https://github.com/OpenReceive/openreceive)

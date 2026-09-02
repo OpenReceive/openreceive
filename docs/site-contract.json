@@ -1,5 +1,5 @@
 {
-  "contract_version": 2,
+  "contract_version": 3,
   "release_version": "0.3.2",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "category": "quickstart",
-      "bytes": 10673
+      "bytes": 10873
     },
     {
       "path": "/guides/quickstart-rails",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 85492
+      "bytes": 86369
     },
     {
       "path": "/guides/security",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 25749
+      "bytes": 25949
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -253,8 +253,18 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 85492,
+      "bytes": 86369,
       "alias_of": "/guides/api-reference"
+    },
+    {
+      "path": "/agents",
+      "markdown_path": "/agents.md",
+      "source": "docs/site/agents.md",
+      "kind": "agents-page",
+      "slug": "agents",
+      "title": "Using OpenReceive with coding agents",
+      "category": "agents",
+      "bytes": 2245
     },
     {
       "path": "/agent-directions/node.md",
@@ -262,7 +272,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25749,
+      "bytes": 25949,
       "copy_button": true,
       "self_contained": true
     },
@@ -305,16 +315,48 @@
     {
       "path": "/llms.txt",
       "must_exist": true
-    }
-  ],
-  "site_redirects": [
+    },
     {
-      "from": "/agents.md",
-      "to": "/llms.txt",
-      "status": 301,
+      "path": "/openapi.yaml",
+      "must_exist": true
+    },
+    {
+      "path": "/agents",
       "must_exist": true
     }
   ],
+  "site_redirects": [],
+  "agent_discovery": {
+    "artifacts": [
+      {
+        "path": "/llms.txt",
+        "source": "docs/site/llms.txt",
+        "content_type": "text/markdown; charset=utf-8",
+        "kind": "llms-index",
+        "bytes": 3161
+      },
+      {
+        "path": "/openapi.yaml",
+        "source": "spec/openapi/openreceive-http.v1.yaml",
+        "content_type": "application/yaml; charset=utf-8",
+        "kind": "openapi",
+        "bytes": 23190
+      }
+    ],
+    "head_links": {
+      "describedby": "/llms.txt",
+      "markdown_alternates": true
+    },
+    "skills": {
+      "repository": "https://github.com/OpenReceive/openreceive",
+      "names": [
+        "integrate-openreceive",
+        "debug-openreceive-payment"
+      ],
+      "claude_code": "/plugin marketplace add OpenReceive/openreceive",
+      "skills_cli": "npx skills add OpenReceive/openreceive"
+    }
+  },
   "never_publish": [
     {
       "source": "docs/internal/README.md",

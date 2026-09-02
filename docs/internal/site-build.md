@@ -32,7 +32,7 @@ directions link the former.
 
 ## `contract_version`
 
-The contract is at **v2**. A site that reads it should refuse to publish a
+The contract is at **v3**. A site that reads it should refuse to publish a
 version it does not understand rather than publish part of it — a half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -41,6 +41,13 @@ contract is how a payload ends up linking a page nobody serves.
   source here. This is a version bump rather than an additive field because the
   directions generated alongside it link `markdown_path`, so a site that ignores
   the field serves 404s for its entire reading list.
+- **v3** — adds `agent_discovery` (below) and the `/agents` page in
+  `publish[]`, and retires the `/agents.md → /llms.txt` redirect (`/agents.md`
+  is now the markdown twin of the `/agents` page). A version bump for the same
+  reason as v2: the agent skills and directions generated alongside the
+  contract link `/llms.txt`, `/openapi.yaml`, and `/agents.md`, so a site that
+  ignored the section would 404 links already running in other people's
+  editors.
 
 `release_version` moves with every library release and says nothing about the
 shape of this file; `contract_version` moves only when the site has to do
@@ -63,10 +70,23 @@ something new.
    ships a reading list that resolves to blank pages.
 5. Serve the two `agent-directions-payload` entries as **raw markdown**, and use
    the same bytes behind the copy button.
-6. Publish nothing in `never_publish[]`. Those are contributor docs — release
+6. Serve every `agent_discovery.artifacts[]` entry **verbatim**: the named
+   `source` file's exact bytes at `path`, with the given `content_type`, no
+   rendering and no chrome. Today that is `/llms.txt` (generated here from the
+   manifest — do not write your own) and `/openapi.yaml` (the normative
+   `spec/openapi/openreceive-http.v1.yaml`, copied so the two can never
+   drift — never regenerate or reformat it).
+7. Honour `agent_discovery.head_links` on rendered pages: every page carries
+   `<link rel="describedby" href="/llms.txt">`, and every `publish[]` entry
+   with a `markdown_path` links it as
+   `<link rel="alternate" type="text/markdown" href="…">` — the llms.txt v2
+   discovery convention, so a browsing agent finds the markdown without
+   guessing.
+8. Publish nothing in `never_publish[]`. Those are contributor docs — release
    keys, unreleased internals, forbidden-change lists.
-7. Confirm every path in `site_owned[]` still resolves. Those pages are yours,
-   not generated from here, and the directions link to them.
+9. Confirm every path in `site_owned[]` still resolves. Most are yours; the
+   agent-discovery trio (`/llms.txt`, `/openapi.yaml`, `/agents`) is listed
+   there as must-exist but sourced from this repo as described above.
 
 ## The routes
 
@@ -76,6 +96,9 @@ something new.
 | `api-docs` | `/api_docs` | Alias of `/guides/api-reference`, kept because the directions and the site have always linked it. |
 | `agent-directions` | `/guides/agent-directions-node`, `…-rails` | The payload as a normal page, for people reading it. |
 | `agent-directions-payload` | `/agent-directions/node.md`, `/rails.md` | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
+| `agents-page` | `/agents` | The coding-agents entrypoint (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
+| `llms-index` | `/llms.txt` | `agent_discovery.artifacts[]` — verbatim bytes of `docs/site/llms.txt`. |
+| `openapi` | `/openapi.yaml` | `agent_discovery.artifacts[]` — verbatim bytes of the normative OpenAPI file. |
 
 Every one of those except the payloads — which are already markdown — also
 carries a `markdown_path`, which is always the `path` with `.md` appended:
@@ -115,17 +138,19 @@ absolute, and already points at a `.md`, which is the point of them.
 - Put the button on the matching quickstart page, and say what it is: directions
   for a coding agent, including the quickstart itself.
 
-## Recommended: `/llms.txt` and `/llms-full.txt`
+## `/llms.txt`, and the recommended `/llms-full.txt`
 
-The contract has everything needed to generate both — `llms.txt` as a titled
-link index over `publish[]`, `llms-full.txt` as the concatenation of the guide
-sources. Agents look for these paths by convention, and they cost one build
-step. They do not replace the copy button: `llms-full.txt` is the whole corpus,
-while the payload is the one-prompt subset with Step 0 in front of it.
+`/llms.txt` is no longer yours to generate: since contract v3 it is an
+`agent_discovery` artifact — serve the committed `docs/site/llms.txt` byte for
+byte. It is generated here from the manifest
+(`tools/docs/generate-llms-txt.mjs`), links every guide's markdown twin, and is
+stamped with the release version, so a site-side copy could only drift from
+the docs set it indexes.
 
-In `llms.txt`, link each entry's `markdown_path`, not its `path`. The file
-exists to be read by something without a browser, and pointing it at the page
-would reintroduce the empty shell one level of indirection later.
+`/llms-full.txt` remains recommended and site-generated: the concatenation of
+the `publish[]` guide sources, for agents that want the whole corpus in one
+fetch. It does not replace the copy button — the payload is the one-prompt
+subset with Step 0 in front of it.
 
 ## What breaks integrations
 
@@ -138,7 +163,10 @@ somewhere:
   is hardest to notice from a browser
 - the `/api_docs` alias
 - any path in `site_owned[]` — today `/contact`,
-  `/get_a_nwc_code_to_receive_payments`, `/set_up_swap_provider`, `/guides`, `/`
+  `/get_a_nwc_code_to_receive_payments`, `/set_up_swap_provider`, `/guides`,
+  `/`, and the agent-discovery trio `/llms.txt`, `/openapi.yaml`, `/agents`
+  (the shipped agent skills link all three, and skills travel inside published
+  npm packages and gems — they cannot be recalled at all)
 
 If one has to change, change it here first: add the slug to the manifest, run
 `npm run build:docs`, and let the directions regenerate against the new name.

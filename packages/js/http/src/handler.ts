@@ -188,18 +188,36 @@ interface Runtime extends CreateHttpHandlerOptions {
 }
 
 export function createHttpHandler(options: CreateHttpHandlerOptions): HttpHandler {
-  if (options?.service === undefined) throw new TypeError("HTTP handler requires service.");
-  if (options.authorize === undefined) {
-    throw new TypeError("HTTP handler requires authorize; authentication belongs to the host.");
+  if (options?.service === undefined) {
+    throw new TypeError(
+      "HTTP handler requires service: pass the wallet service built by createOpenReceive(). " +
+        "https://openreceive.org/guides/api-reference.md#createopenreceive",
+    );
   }
-  if (options.host === undefined) throw new TypeError("HTTP handler requires host.");
+  if (options.authorize === undefined) {
+    throw new TypeError(
+      "HTTP handler requires authorize; authentication belongs to the host. Pass an authorize " +
+        "hook that checks the payer's session may act on context.resource.reference. " +
+        "https://openreceive.org/guides/authorization.md",
+    );
+  }
+  if (options.host === undefined) {
+    throw new TypeError(
+      "HTTP handler requires host: build it with createHost({ amountFor, onPaid, db }) and pass " +
+        "it beside service and authorize. https://openreceive.org/guides/api-reference.md#createhost",
+    );
+  }
   // rateLimiting: false means disabled, so it composes with a custom rateLimitHook.
   if (
     options.rateLimiting !== undefined &&
     options.rateLimiting !== false &&
     options.rateLimitHook !== undefined
   ) {
-    throw new TypeError("Pass either rateLimiting or a custom rateLimitHook, not both.");
+    throw new TypeError(
+      "Pass either rateLimiting or a custom rateLimitHook, not both: rateLimiting is the " +
+        "built-in per-IP limiter, rateLimitHook replaces it with your own policy. " +
+        "https://openreceive.org/guides/rate-limiting.md",
+    );
   }
   const rateLimit = options.rateLimitHook ?? resolveRateLimiting(options);
   // Opportunistic reconcile is the default settlement path; it needs the
@@ -216,7 +234,8 @@ export function createHttpHandler(options: CreateHttpHandlerOptions): HttpHandle
       "Opportunistic reconcile (on by default) requires payments.claimReconcileGate — a durable " +
         "compare-and-set gate shared by every worker (the built-in SQL repository implements it " +
         "over openreceive_meta). Implement it on the custom repository, or pass " +
-        "opportunisticReconcile: false and run your own settlement worker.",
+        "opportunisticReconcile: false and run your own settlement worker. " +
+        "https://openreceive.org/guides/storage.md",
     );
   }
   // The IP that gets stored on committed rows must be the same value the
@@ -657,7 +676,13 @@ async function enforceAuthorize(
   native?: unknown,
 ): Promise<void> {
   if (!(await runtime.authorize({ action, request, resource, native }))) {
-    throw new HttpError(403, "FORBIDDEN", "Not authorized for this action.");
+    throw new HttpError(
+      403,
+      "FORBIDDEN",
+      "Not authorized for this action. The application's authorize hook denied it; if this is " +
+        "unexpected, check that the payer's session reaches the checkout routes. " +
+        "https://openreceive.org/guides/authorization.md",
+    );
   }
 }
 

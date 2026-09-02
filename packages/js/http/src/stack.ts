@@ -161,6 +161,8 @@ export function isStackOptions(
     return true;
   }
   throw new TypeError(
-    "OpenReceive composed options require host: pass { service, host, authorize }, or use the all-in-one form with wallet/storage/amountFor.",
+    "OpenReceive composed options require host: pass { service, host, authorize } (host built by " +
+      "createHost), or use the all-in-one form with wallet/storage/amountFor. " +
+      "https://openreceive.org/guides/api-reference.md#framework-adapters",
   );
 }
