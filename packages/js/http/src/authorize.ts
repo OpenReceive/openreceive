@@ -12,6 +12,12 @@ export type AuthorizeAction =
  * every order-scoped route; `paymentHash` is also set on `payment.check`,
  * `swap.read`, and `swap.refund`. Either value identifies a row — it does not
  * prove this caller owns it.
+ *
+ * Both are optional because the type spans every action, not because a
+ * policy has to nil-check them: the handler has already rejected a missing,
+ * empty, or over-long `reference` (400, MAX_REFERENCE_LENGTH) by the time
+ * `authorize` runs, so `reference` is always a non-empty trimmed string at
+ * runtime, and `paymentHash` is undefined on the other four actions.
  */
 export interface AuthorizeResource {
   reference?: string;

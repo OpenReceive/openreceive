@@ -39,37 +39,54 @@ The package exposes immutable objects so route helpers cannot accidentally
 mutate the source. Provider entries include `icon_path` values, and some include
 walkthrough tutorial paths. These are **local files shipped inside the package**
 — browser code is never pointed at remote favicon URLs — which also means your
-host has to be able to serve them. See below.
+host has to be able to serve them. See [Assets](#assets) below.
 
 Node receive servers do not re-host this static catalog. Browser UI packages
 import it directly, and server-side apps can import `@openreceive/provider-data`
 when they need the same read-only suggestions.
 
-## Assets are files your host serves
+## Assets
 
-The icons and pay tutorials are files inside the packages. Vite usually
-resolves them. Most other bundlers do not — icons come out blank, and the
-built bundle may contain `file://` paths. Grep for `file://` if images are
-missing.
+Two kinds of image, two rules.
 
-Pick one:
+**Payment-method icons** (Bitcoin, Lightning, USDT, …) need nothing from
+you. They are compiled into `@openreceive/browser`'s JavaScript: the
+drop-in draws them inline inside its shadow root, and `paymentIconUrls` /
+`getPaymentMethodIcon` and friends answer `data:image/svg+xml` URIs for any
+`<img>` of your own. No file to copy, no loader, no base URL, under any
+bundler. The only thing that can get in the way is a Content-Security-Policy
+`img-src` that forbids `data:` — and only if you put those URIs in your own
+`<img>` (the drop-in's inline SVG is not subject to `img-src`). Allow
+`data:` there, or serve files as below.
 
-1. **Copy the packaged assets next to your bundle.** The demos do this with
-   `copy-openreceive-payment-icons-plugin.ts`.
-2. **Serve the trees and pass one base URL.** `assetBaseUrl` (React / Vue /
-   Svelte / Angular) and `asset-base-url` (the custom element) join every
-   packaged path to it. Example: `asset-base-url="/openreceive-assets"` loads
-   `/openreceive-assets/assets/icons/btc.svg`. Put
-   `node_modules/@openreceive/provider-data/dist/assets` and
-   `node_modules/@openreceive/browser/dist/assets` under that root. This is
-   the option that works with plain `<openreceive-checkout>` markup.
+**Provider icons and pay tutorials** (`@openreceive/provider-data`, PNG and
+WebP, about 580 KB) are files your host serves. Vite usually resolves them
+from the import. Most other bundlers do not — the images come out blank, and
+the built bundle may contain `file://` paths (grep for `file://` if images
+are missing; the console also warns once). Pick one:
+
+1. **Serve the tree and pass one base URL.** Copy
+   `node_modules/@openreceive/provider-data/dist/assets` to somewhere your
+   server serves — say `public/openreceive-assets/assets` — and set
+   `assetBaseUrl="/openreceive-assets"` (React / Vue / Svelte / Angular) or
+   `asset-base-url="/openreceive-assets"` (the custom element). Every packaged
+   path is joined to it: `/openreceive-assets/assets/provider-icons/strike.png`.
+   This is the one that works with plain `<openreceive-checkout>` markup, and
+   the one to reach for.
+2. **Copy the files next to your bundle** so the packaged URLs resolve on
+   their own. The demos do this with
+   `examples/buttons/shared/copy-openreceive-provider-assets-plugin.ts`
+   (Vite) and `copy-webpack-plugin` (the Rails demo).
 3. **Map each path yourself.** Display builders take
    `resolveAssetUrl: (packagedPath) => url`.
-   `createAssetBaseUrlResolver(base)` from
-   `@openreceive/browser/headless` is option 2 as a function.
+   `createAssetBaseUrlResolver(base)` from `@openreceive/browser/headless`
+   is option 1 as a function.
 
-`@openreceive/browser`'s own payment icons (`assets/icons/*.svg`) use the
-same contract, keyed by `paymentIconPaths`.
+A base URL or resolver, once set, is honoured for the payment icons too —
+they are then served as files from the same root (`assets/icons/<id>.svg`,
+keyed by `paymentIconPaths`; `@openreceive/browser/dist/assets` still ships
+them). That is the escape hatch for a strict `img-src`; otherwise there is no
+reason to copy them.
 
 ## Route Model
 

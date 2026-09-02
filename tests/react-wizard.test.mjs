@@ -30,6 +30,7 @@ import {
   toggleStoredThemeControls,
   updatePaymentWizardSelection,
   writeThemePreference,
+  paymentIconUrls,
 } from "@openreceive/browser/headless";
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { applyCheckoutThemeAttributes } from "../packages/js/browser/src/internal/theme.ts";
@@ -262,23 +263,19 @@ test("browser checkout provider icon and tutorial helpers", () => {
 test("browser checkout route, method, and network icon helpers", () => {
   assert.equal(getRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getRouteNetworkLabel("usdt-tron"), "usdt-tron");
-  assert.match(getPaymentMethodIcon("bitcoin"), /assets\/icons\/btc\.svg/);
-  assert.match(
-    getRouteIcon({ symbol: "btc", route: "btc-lightning" }),
-    /assets\/icons\/lightning\.svg/,
-  );
-  assert.match(getRouteIcon({ symbol: "usdt", route: "usdt-tron" }), /assets\/icons\/usdt\.svg/);
-  assert.match(
-    getSwapOptionIcon({ label: "USDT", network_label: "Tron" }),
-    /assets\/icons\/usdt\.svg/,
-  );
-  assert.match(
-    getSwapOptionIcon({ label: "USDC", network_label: "Solana" }),
-    /assets\/icons\/usdc\.svg/,
-  );
-  assert.match(getNetworkIcon("Tron"), /assets\/icons\/trx\.svg/);
-  assert.match(getNetworkIcon("Solana"), /assets\/icons\/sol\.svg/);
-  assert.match(getNetworkIcon("Ethereum"), /assets\/icons\/eth\.svg/);
+  // Without a resolver every getter answers the packaged data: URI of its icon.
+  assert.equal(getPaymentMethodIcon("bitcoin"), paymentIconUrls.btc);
+  assert.equal(getRouteIcon({ symbol: "btc", route: "btc-lightning" }), paymentIconUrls.lightning);
+  assert.equal(getRouteIcon({ symbol: "usdt", route: "usdt-tron" }), paymentIconUrls.usdt);
+  assert.equal(getSwapOptionIcon({ label: "USDT", network_label: "Tron" }), paymentIconUrls.usdt);
+  assert.equal(getSwapOptionIcon({ label: "USDC", network_label: "Solana" }), paymentIconUrls.usdc);
+  assert.equal(getNetworkIcon("Tron"), paymentIconUrls.trx);
+  assert.equal(getNetworkIcon("Solana"), paymentIconUrls.sol);
+  assert.equal(getNetworkIcon("Ethereum"), paymentIconUrls.eth);
+  // With one, the packaged path goes through it — the host serves the file.
+  const resolve = (packagedPath) => `/served/${packagedPath}`;
+  assert.equal(getPaymentMethodIcon("bitcoin", resolve), "/served/assets/icons/btc.svg");
+  assert.equal(getNetworkIcon("Tron", resolve), "/served/assets/icons/trx.svg");
 });
 
 test("browser checkout theme resolution builds a full theme model", () => {
@@ -419,7 +416,8 @@ test("browser checkout wizard selection is a pure state machine", () => {
   const lightningRouteAsset = routeAssetDisplays.find((asset) => asset.id === "btc-lightning");
   assert.equal(lightningRouteAsset?.selected, true);
   assert.equal(lightningRouteAsset?.subtitle, "Lightning Network");
-  assert.match(lightningRouteAsset?.icon ?? "", /assets\/icons\/lightning\.svg/);
+  assert.equal(lightningRouteAsset?.iconId, "lightning");
+  assert.equal(lightningRouteAsset?.icon, paymentIconUrls.lightning);
 });
 
 test("browser checkout wizard route displays carry provider entries", () => {

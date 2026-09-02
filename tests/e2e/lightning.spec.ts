@@ -5,6 +5,7 @@ import {
   BUTTON_PRICE,
   BUTTON_SATS,
   CHECKOUT_FRAMEWORKS,
+  expectInlinePaymentIcons,
   expectPaidReceipt,
   expectWizardCurrencies,
   mintAttempt,
@@ -13,6 +14,7 @@ import {
   selectFrameworkTab,
   settleTestkitInvoice,
   startCheckout,
+  watchIconRequests,
 } from "./helpers.ts";
 
 /**
@@ -27,11 +29,17 @@ for (const framework of CHECKOUT_FRAMEWORKS) {
   test(`${framework} tab: lightning checkout settles without reload${smokeTag}`, async ({
     page,
   }) => {
+    const iconRequests = watchIconRequests(page);
     await openShop(page);
     await addButtonToCart(page);
     await startCheckout(page);
     await selectFrameworkTab(page, framework);
     await expectWizardCurrencies(page);
+    // The icons come out of the JS bundle: nothing copied next to the chunk,
+    // no icon file requested, nothing 404s.
+    await expectInlinePaymentIcons(page);
+    expect(iconRequests.iconFileRequests).toEqual([]);
+    expect(iconRequests.notFound).toEqual([]);
 
     // Selecting Bitcoin mints the bolt11 through POST /openreceive/checkouts.
     const attempt = await mintAttempt(page, "/openreceive/checkouts", async () => {

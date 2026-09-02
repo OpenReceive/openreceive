@@ -18,7 +18,9 @@ OpenReceive.configure do |config|
   #                        cookies, or headers from it, as in a controller
   #   context[:resource] — { reference:, payment_hash: } copied from the
   #                        payer's JSON body. It names an order; it does not
-  #                        prove this caller owns it.
+  #                        prove this caller owns it. reference is always a
+  #                        validated non-empty String (≤200 chars); payment_hash
+  #                        is nil except on payment.check / swap.read / swap.refund.
   # Return true to allow the request, false for a 403.
   #
   # The default below is a NAMED PLACEHOLDER, and the engine warns at boot for

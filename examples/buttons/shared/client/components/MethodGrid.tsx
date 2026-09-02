@@ -25,11 +25,11 @@ type MethodGroup = MethodGridGroupDisplay<CheckoutPaymentMethod>;
 // display model already decided.
 //
 // The icon getters take an OPTIONAL asset resolver and are called here without
-// one, so the packaged URLs resolve against `import.meta.url`. Under webpack
-// that is a dead `file://` path, which is why this demo's webpack config
-// rewrites the expression to the running script's URL and copies the packaged
-// icons next to the chunk. Vite resolves it natively. See
-// config/webpack/openreceive-import-meta-url-loader.js.
+// one: the payment icons are compiled into @openreceive/browser and come back
+// as `data:` URIs, so no bundler has to find a file for them. (The provider
+// logos and pay tutorials elsewhere in the checkout are still files; the Rails
+// demo's webpack config copies those next to the chunk — see
+// config/webpack/openreceive-import-meta-url-loader.js.)
 export const MethodGrid: React.FC<{ checkout: ShopCheckout }> = observer(({ checkout }) => {
   const grid = checkout.methodGrid;
 

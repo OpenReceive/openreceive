@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "category": "quickstart",
-      "bytes": 10873
+      "bytes": 11151
     },
     {
       "path": "/guides/quickstart-rails",
@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 14684
+      "bytes": 14891
     },
     {
       "path": "/guides/node-orms",
@@ -53,7 +53,7 @@
       "slug": "authorization",
       "title": "Authorization",
       "category": "security",
-      "bytes": 10409
+      "bytes": 12911
     },
     {
       "path": "/guides/rate-limiting",
@@ -73,7 +73,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 6589
+      "bytes": 6668
     },
     {
       "path": "/guides/checkout-ux",
@@ -83,7 +83,7 @@
       "slug": "checkout-ux",
       "title": "Checkout UX",
       "category": "guide",
-      "bytes": 5888
+      "bytes": 5868
     },
     {
       "path": "/guides/headless-checkout",
@@ -93,7 +93,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 15965
+      "bytes": 16530
     },
     {
       "path": "/guides/automated-swaps",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 87673
+      "bytes": 87839
     },
     {
       "path": "/guides/security",
@@ -193,7 +193,7 @@
       "slug": "provider-registry",
       "title": "Provider Registry",
       "category": "reference",
-      "bytes": 3830
+      "bytes": 4973
     },
     {
       "path": "/guides/price-feeds",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 25949
+      "bytes": 26227
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -243,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 30955
+      "bytes": 31162
     },
     {
       "path": "/api_docs",
@@ -253,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 87673,
+      "bytes": 87839,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -272,7 +272,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25949,
+      "bytes": 26227,
       "copy_button": true,
       "self_contained": true
     },
@@ -282,7 +282,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 30955,
+      "bytes": 31162,
       "copy_button": true,
       "self_contained": true
     }

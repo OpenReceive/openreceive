@@ -16,6 +16,7 @@ import {
   createWizardRouteAssetDisplays,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   paymentIconPaths,
+  paymentIconUrls,
 } from "@openreceive/browser/headless";
 import { PaymentWizard } from "@openreceive/react";
 import { renderPaymentWizardHtml } from "../packages/js/elements/src/render-wizard.ts";
@@ -84,13 +85,16 @@ test("the route asset display carries the packaged key next to the resolved URL"
 test("both renderers point their wizard icons at the base URL", () => {
   const resolveAssetUrl = createAssetBaseUrlResolver("/or-assets");
 
+  // A host that serves the files has chosen to (a strict `img-src` without
+  // `data:`, say): the element then keeps the `<img>` form instead of inlining.
   const html = renderPaymentWizardHtml({
     selectedMethod: null,
     selectedBitcoinRoute: null,
     swapOptions: [],
     resolveAssetUrl,
   });
-  assert.match(html, /\/or-assets\/assets\/icons\//);
+  assert.match(html, /<img[^>]*src="\/or-assets\/assets\/icons\//);
+  assert.doesNotMatch(html, /<svg/);
   assert.doesNotMatch(html, /file:\/\//);
 
   // React takes the string directly; nothing else about the render changes.
@@ -99,6 +103,31 @@ test("both renderers point their wizard icons at the base URL", () => {
   );
   assert.match(react, /\/or-assets\/assets\/icons\//);
   assert.doesNotMatch(react, /file:\/\//);
+});
+
+test("without a resolver the icons need nothing from the host", () => {
+  // The element inlines the packaged markup into its shadow root: no request,
+  // no `<img>`, no `file://`, nothing to copy.
+  const html = renderPaymentWizardHtml({
+    selectedMethod: null,
+    selectedBitcoinRoute: null,
+    swapOptions: [],
+  });
+  assert.doesNotMatch(html, /assets\/icons\//);
+  assert.doesNotMatch(html, /file:\/\//);
+  assert.doesNotMatch(html, /<img/, "payment icons are inline; no provider grid is drawn yet");
+  assert.match(html, /<svg[^>]*role="img" aria-label="Bitcoin"/);
+
+  // React keeps `<img>` — it renders into the light DOM — and gets the same
+  // icon as a data: URI, which no bundler has to resolve.
+  const react = renderToStaticMarkup(React.createElement(PaymentWizard, {}));
+  assert.match(react, /src="data:image\/svg\+xml,/);
+  assert.doesNotMatch(react, /assets\/icons\//);
+  assert.doesNotMatch(react, /file:\/\//);
+  assert.equal(paymentIconUrls.btc.startsWith("data:image/svg+xml,"), true);
+  const [display] = createWizardRouteAssetDisplays(getBitcoinAssets());
+  assert.equal(display.iconId, "lightning");
+  assert.equal(display.icon, paymentIconUrls.lightning);
 });
 
 test("an explicit resolver wins over the base URL", () => {

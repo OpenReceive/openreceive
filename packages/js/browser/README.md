@@ -25,39 +25,21 @@ will move without notice.
 
 ## Icon assets
 
-The checkout UI (used directly or via `@openreceive/react` /
-`@openreceive/elements`) loads its payment-method icons from
-`dist/assets/icons/*.svg` **by URL at runtime** — the SVGs are not inlined into
-the JS. Each URL is resolved with `new URL()` against the module's own
-`import.meta.url`:
+The payment-method icons (`btc`, `lightning`, `usdt`, …) are compiled into
+this package's JavaScript — nothing to copy, serve, or configure, under any
+bundler:
 
-- module emitted as `…/assets/<chunk>.js` (typical Vite/Rollup output) →
-  icons resolve to a sibling `…/assets/icons/*.svg`;
-- any other module URL → `./assets/icons/*.svg` next to the module file.
+- The custom element (`@openreceive/elements`, and the Vue/Svelte/Angular
+  wrappers over it) draws them inline in its shadow root from
+  `paymentIconSvgs`.
+- Everything that wants a URL — `@openreceive/react`, the display models,
+  `getPaymentMethodIcon` and friends, your own `<img>` — gets the same icons
+  from `paymentIconUrls` as `data:image/svg+xml` URIs. If your
+  Content-Security-Policy `img-src` forbids `data:`, allow it, or pass
+  `assetBaseUrl` / `resolveAssetUrl` and the icons are served as files
+  instead (`dist/assets/icons/*.svg` still ships, keyed by
+  `paymentIconPaths`).
 
-Bundlers do not follow these dynamic URLs, so your app must serve the icon
-files where the resolution lands. Per setup:
-
-- **Plain `<script type="module">` / import map**: serve the package's `dist/`
-  directory as-is (e.g. `/vendor/openreceive/dist/index.js`). The icons already
-  sit at `dist/assets/icons/`, so nothing to copy.
-- **Vite / Rollup**: chunks are emitted under `assets/`, so serve the icons at
-  `assets/icons/` in the same output — either copy
-  `node_modules/@openreceive/browser/dist/assets/icons` into
-  `public/assets/icons/`, or copy it into the build output from a small
-  `writeBundle` plugin (the repo demos use
-  `examples/buttons/shared/copy-openreceive-payment-icons-plugin.ts`).
-- **webpack / Next.js**: copy the icons next to your emitted bundles with
-  `copy-webpack-plugin` (the repo's Rails Shakapacker demo copies
-  `node_modules/@openreceive/browser/dist/assets/icons` to
-  `<packs output>/js/assets/icons`). Note webpack can compile `import.meta.url`
-  to a build-machine `file://` URL; always confirm the URLs the page actually
-  requests (see below) and place — or serve — the icons at that path.
-
-To verify a setup, check the DevTools network panel for `…/icons/*.svg`
-requests, or log `paymentIconUrls` (exported from
-`@openreceive/browser/headless`) to see every resolved URL.
-
-`@openreceive/provider-data` follows the same contract for its runtime images
-(`dist/assets/provider-icons`, `dist/assets/pay_tutorials`); the copy recipes
-above handle those directories the same way.
+`@openreceive/provider-data`'s wallet logos and pay tutorials are files
+(PNG/WebP) your host serves; see
+[docs/guides/provider-registry.md](../../../docs/guides/provider-registry.md#assets).

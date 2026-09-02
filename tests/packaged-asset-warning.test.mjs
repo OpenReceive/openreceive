@@ -1,8 +1,8 @@
 // The packaged-asset `file:` warning, and the one thing it must never do: fire
 // at someone who did it right.
 //
-// The three packaged URL tables (`providerIconUrls`, `payTutorialUrls`,
-// `paymentIconUrls`) used to resolve every entry eagerly with
+// The two packaged URL tables (`providerIconUrls`, `payTutorialUrls`) used to
+// resolve every entry eagerly with
 // `Object.fromEntries`, which called `assetUrl` — and therefore
 // `warnOnFileAssetUrl` — at IMPORT time, before any host resolver could be
 // consulted. A host serving the packaged `dist/assets` trees itself and passing
@@ -45,6 +45,9 @@ test("importing the packaged URL tables warns about nothing", async () => {
     assert.ok(Object.keys(providerData.providerIconUrls).length > 0);
     assert.ok(Object.keys(providerData.payTutorialUrls).length > 0);
     assert.ok(Object.keys(headless.paymentIconUrls).length > 0);
+    // Payment icons are compiled in as data: URIs — nothing to resolve, so
+    // reading them can never be the thing that warns.
+    assert.ok(headless.paymentIconUrls.btc.startsWith("data:image/svg+xml,"));
     assert.deepEqual(
       spy.warnings,
       [],
@@ -55,7 +58,6 @@ test("importing the packaged URL tables warns about nothing", async () => {
     for (const [table, key] of [
       [providerData.providerIconUrls, "assets/provider-icons/strike.png"],
       [providerData.payTutorialUrls, "assets/pay_tutorials/strike-1.webp"],
-      [headless.paymentIconUrls, "btc"],
     ]) {
       const descriptor = Object.getOwnPropertyDescriptor(table, key);
       assert.equal(typeof descriptor?.get, "function", key);

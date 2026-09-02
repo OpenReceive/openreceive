@@ -92,11 +92,13 @@ export interface ElementsWizardView {
   /** Host-chosen bolt11 decoder base URL; omitted, the tutorial shows no decode link. */
   readonly decodeLinkUrl?: string;
   /**
-   * Rewrite a packaged asset path (`assets/icons/btc.svg`,
-   * `assets/provider-icons/strike.png`) into a URL this host can serve. The
+   * Rewrite a packaged asset path (`assets/provider-icons/strike.png`,
+   * `assets/pay_tutorials/strike-1.webp`) into a URL this host can serve. The
    * packaged URLs only resolve under Vite/Rollup; every other bundler needs
-   * this or the icons come out as dead `file://` links. `defineElements` passes
-   * its own down to here.
+   * this or the provider images come out as dead `file://` links. The
+   * payment-method icons are drawn inline from compiled-in markup and need
+   * nothing; given a resolver they are served as files through it instead.
+   * `defineElements` passes its own down to here.
    */
   readonly resolveAssetUrl?: AssetUrlResolver;
   readonly paymentHash?: string;
@@ -128,8 +130,9 @@ export interface DefineElementsOptions {
   readonly logger?: BrowserLoggerOption;
   /**
    * Element-owned, like `qrEncoder` and `logger`: how this host resolves the
-   * packaged icon and tutorial paths. Omitted, the packaged URLs are used —
+   * packaged provider-image paths. Omitted, the packaged URLs are used —
    * correct under Vite/Rollup and dead `file://` links under anything else.
+   * (Payment-method icons are compiled in and unaffected.)
    */
   readonly resolveAssetUrl?: AssetUrlResolver;
 }

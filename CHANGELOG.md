@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0 - Unreleased
+
+### Payment icons ship inside the JavaScript
+
+The eleven payment-method icons (`btc`, `crypto`, `eth`, `lightning`, `ltc`,
+`sol`, `trx`, `usdc`, `usdt`, `xmr`, `xrp`) are now compiled into
+`@openreceive/browser` — about 7 KB of SVG text generated from
+`src/assets/icons/*.svg` by `npm run generate:payment-icons` (checked in CI).
+No host has to copy, serve, or resolve an icon file any more, under any
+bundler: no `import.meta.url` games, no copy plugin, no loader, no
+`assetBaseUrl` for these. The custom element draws them inline in its shadow
+root (`role="img"` with the tile's label); everything that carries a URL —
+`@openreceive/react`, the display models, `getPaymentMethodIcon` /
+`getNetworkIcon` / `getSwapOptionIcon` — gets the same icons as
+percent-encoded `data:image/svg+xml` URIs.
+
+New on `@openreceive/browser/headless`: `paymentIconSvgs` (the markup),
+`PaymentIconId`, the `getPaymentMethodIconId` / `getNetworkIconId` /
+`getSwapOptionIconId` twins of the URL getters, and
+`WizardRouteAssetDisplay.iconId` — the key a headless renderer needs to draw
+an icon inline the way the element does.
+
+**Behaviour change:** the VALUES of `paymentIconUrls` (and of every icon
+getter called without a resolver) change from file URLs to `data:` URIs.
+Anything string-matching them for `assets/icons/…` breaks. A host resolver
+or `assetBaseUrl` still wins over the packaged value, exactly as before, and
+`dist/assets/icons/*.svg` plus the `./assets/*` export keep shipping, so an
+existing copy-and-serve setup keeps working — it is now only needed as the
+escape hatch for a CSP `img-src` without `data:`. Inline SVG is confined to
+the element's own shadow-root renderer and to these build-gated first-party
+strings (the generator refuses `<script>`, `on*=` handlers,
+`<foreignObject>`, `<style>`, `<image>` and external `href`s).
+
+`@openreceive/provider-data`'s wallet logos and pay tutorials are unchanged:
+still files, still served through `assetBaseUrl` / `resolveAssetUrl`. The
+demos' `copy-openreceive-payment-icons-plugin.ts` is renamed
+`copy-openreceive-provider-assets-plugin.ts` and copies only those.
+
 ## 0.3.3 - 2026-09-02
 
 ### OpenReceive ships as agent skills

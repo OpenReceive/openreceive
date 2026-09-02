@@ -48,8 +48,10 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
 - `resumePaymentHash` — reopen that attempt after prepare, instead of the
   method grid. `/checkouts/prepare` returns no attempts. A hash the server
   will not serve is ignored. See [Swap refunds](swap-refunds.md).
-- `assetBaseUrl` — where you serve the packaged icons. Required under most
-  bundlers that are not Vite. See [Provider registry](provider-registry.md#assets-are-files-your-host-serves).
+- `assetBaseUrl` — where you serve `@openreceive/provider-data`'s wallet
+  logos and pay tutorials. Required under most bundlers that are not Vite.
+  The payment-method icons are compiled in and need nothing. See
+  [Provider registry](provider-registry.md#assets).
 - `theme`, `themeToggle`, `defaultTheme`, `children`, `components`,
   `classNames` — chrome; see [Theme](#theme) below. `children` and
   `components` / `classNames` are React-only. Vue, Svelte, and Angular wrap

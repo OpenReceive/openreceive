@@ -158,10 +158,11 @@ assert(
   "@openreceive/browser: readJsonResponse is an engine internal, not a public export"
 );
 assert(
-  browserHeadless.paymentIconUrls.lightning.includes("/dist/assets/icons/lightning.svg") &&
-    browserHeadless.paymentIconUrls.btc.includes("/dist/assets/icons/btc.svg") &&
-    !browserHeadless.paymentIconUrls.btc.includes("/browser/assets/icons/"),
-  "@openreceive/browser/headless: method icon URLs must resolve to packaged dist assets"
+  browserHeadless.paymentIconUrls.lightning.startsWith("data:image/svg+xml,") &&
+    browserHeadless.paymentIconUrls.btc.startsWith("data:image/svg+xml,") &&
+    browserHeadless.paymentIconSvgs.btc.startsWith("<svg") &&
+    browserHeadless.paymentIconPaths.btc === "assets/icons/btc.svg",
+  "@openreceive/browser/headless: payment icons must be compiled in (data: URIs + inline markup)"
 );
 
 const coreRoot = await import("@openreceive/core");
@@ -233,6 +234,8 @@ for (const packageName of ["vue", "svelte", "angular"]) {
     \`@openreceive/\${packageName}: styles.css must import the shared browser styles\`
   );
 }
+// Back-compat: the .svg files keep shipping (and the "./assets/*" export keeps
+// resolving) for hosts with an existing copy/serve setup.
 assert(
   existsSync("node_modules/@openreceive/browser/dist/assets/icons/btc.svg"),
   "@openreceive/browser: checkout icon assets must be packaged"

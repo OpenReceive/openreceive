@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig, loadEnv } from "vite";
 import * as vueCompiler from "vue/compiler-sfc";
-import { copyPaymentIconsPlugin } from "../../shared/copy-openreceive-payment-icons-plugin.ts";
+import { copyProviderAssetsPlugin } from "../../shared/copy-openreceive-provider-assets-plugin.ts";
 import { createButtonsExpressServer } from "./src/server/create-server.ts";
 
 const demoRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
       vue({ compiler: vueCompiler }),
       svelte(),
       react(),
-      copyPaymentIconsPlugin(repoRoot),
+      copyProviderAssetsPlugin(repoRoot),
       {
         name: "openreceive-buttons-api",
         async configureServer(server) {

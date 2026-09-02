@@ -2,12 +2,9 @@ import { cpSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 
+// Only @openreceive/provider-data's images. The payment-method icons in
+// @openreceive/browser are compiled into its JavaScript and need no copying.
 const RUNTIME_ASSET_DIRS = [
-  {
-    src: ["packages", "js", "browser", "dist", "assets", "icons"],
-    dest: ["assets", "icons"],
-    missing: "run npm run build -w @openreceive/browser first.",
-  },
   {
     src: ["packages", "js", "provider-data", "dist", "assets", "provider-icons"],
     dest: ["assets", "provider-icons"],
@@ -21,16 +18,16 @@ const RUNTIME_ASSET_DIRS = [
 ] as const;
 
 /**
- * Copy OpenReceive runtime images next to the Vite JS chunk so
- * `new URL("./icons/…", import.meta.url)` and rewritten provider-data
- * `./provider-icons/…` / `./pay_tutorials/…` paths from `/assets/*.js` resolve.
+ * Copy OpenReceive's provider images next to the Vite JS chunk so the
+ * rewritten provider-data `./provider-icons/…` / `./pay_tutorials/…` paths
+ * resolve from `/assets/*.js`.
  */
-export function copyPaymentIconsPlugin(
+export function copyProviderAssetsPlugin(
   repoRoot: string,
   options: { readonly destRoot?: string } = {},
 ): Plugin {
   return {
-    name: "copy-openreceive-payment-icons",
+    name: "copy-openreceive-provider-assets",
     writeBundle(writeOptions) {
       const outDir = options.destRoot ?? writeOptions.dir;
       if (outDir === undefined) return;

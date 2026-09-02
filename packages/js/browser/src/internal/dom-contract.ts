@@ -257,9 +257,11 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * Vue/Svelte/Angular wrappers can reach it (a function cannot cross an HTML
    * attribute). Every packaged key is a relative path under one `assets/` root,
    * so the value is joined to it directly: `asset-base-url="/openreceive-assets"`
-   * makes `assets/icons/btc.svg` load from
-   * `/openreceive-assets/assets/icons/btc.svg`. A `resolveAssetUrl` passed to
-   * `defineElements` wins over it.
+   * makes `assets/provider-icons/strike.png` load from
+   * `/openreceive-assets/assets/provider-icons/strike.png`. Only the provider
+   * images need it; the payment-method icons are compiled in and drawn inline
+   * unless a base URL is set, in which case they are served as files too. A
+   * `resolveAssetUrl` passed to `defineElements` wins over it.
    */
   assetBaseUrl: "asset-base-url",
   /** `polling="false"` renders the snapshot without status polling (no POST /payments/check). */

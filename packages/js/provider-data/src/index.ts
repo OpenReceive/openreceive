@@ -6,7 +6,9 @@ export { payTutorialUrls };
 export { providerIconUrls };
 // The packaged asset URLs above only resolve under Vite/Rollup. `AssetUrlResolver`
 // is the seam for every other host, and `warnOnFileAssetUrl` is the diagnostic
-// that says out loud when the packaged resolution has failed.
+// that says out loud when the packaged resolution has failed. (These are the
+// only packaged files left that need a host: @openreceive/browser's payment
+// icons are compiled into its JavaScript.)
 export {
   type AssetUrlResolver,
   createAssetBaseUrlResolver,

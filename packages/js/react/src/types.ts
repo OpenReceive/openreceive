@@ -288,10 +288,12 @@ export interface PaymentWizardProps {
   readonly decodeLinkUrl?: string;
   /**
    * Rewrite a packaged asset path (`assets/provider-icons/strike.png`,
-   * `assets/icons/btc.svg`) into a URL this host can serve. The packaged URLs
-   * only resolve under Vite/Rollup; every other bundler needs this, or the
-   * method icons, provider logos and pay tutorials come out as dead `file://`
-   * links. See docs/guides/provider-registry.md.
+   * `assets/pay_tutorials/strike-1.webp`) into a URL this host can serve. The
+   * packaged URLs only resolve under Vite/Rollup; every other bundler needs
+   * this, or the provider logos and pay tutorials come out as dead `file://`
+   * links. The payment-method icons are compiled in as `data:` URIs and need
+   * nothing; given a resolver they go through it too (`assets/icons/btc.svg`).
+   * See docs/guides/provider-registry.md.
    */
   readonly resolveAssetUrl?: AssetUrlResolver;
   /**

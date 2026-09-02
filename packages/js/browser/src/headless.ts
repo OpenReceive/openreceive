@@ -20,11 +20,14 @@
 // log-field builders, the watcher class, and the create-flow steps that only
 // createCheckoutSession calls.
 
-// The host-side asset seam: packaged icon and tutorial URLs only resolve under
-// Vite/Rollup, so every display builder takes one of these and is handed the
-// packaged PATH instead. `paymentIconPaths` is the same key set for the icons
-// this package owns. `createAssetBaseUrlResolver` is the one-line adapter from
-// the string form of the seam (`assetBaseUrl` / `asset-base-url`) to a resolver.
+// The host-side asset seam: provider icons and tutorial images are files whose
+// packaged URLs only resolve under Vite/Rollup, so every display builder takes
+// one of these and is handed the packaged PATH instead. The payment icons this
+// package owns are compiled in (`paymentIconSvgs` / `paymentIconUrls`) and
+// need no seam, but `paymentIconPaths` keeps them addressable through it for a
+// host that serves the files anyway. `createAssetBaseUrlResolver` is the
+// one-line adapter from the string form of the seam (`assetBaseUrl` /
+// `asset-base-url`) to a resolver.
 // The wallet-suggestion registry, re-exported so the pair reads as one API.
 // `getPaymentWizardRoutes` lives in @openreceive/provider-data and
 // `createWizardRouteDisplays` — which consumes its output and nothing else —
@@ -189,6 +192,7 @@ export type {
   CheckoutStatusModel,
   CheckoutStatusRefresh,
   CreateCheckoutShellOptions,
+  PaymentIconId,
   PaymentMethod,
   PaymentWizardController,
   PaymentWizardModel,
@@ -218,9 +222,11 @@ export type {
 // coercers. `docs/internal/wrapper-parity.md` is the human-readable table.
 // Styling tokens: the contract with the shipped stylesheet, so the element's
 // HTML strings and React's elements carry the same class names.
-// The icon-asset contract's diagnostic: packages/js/browser/README.md tells
-// integrators to log it when icons 404, and tools/validate/package-smoke.mjs
-// asserts the packaged URLs resolve into dist/assets/icons.
+// The payment icons, three ways: `paymentIconSvgs` is the markup (what the
+// custom element draws inline), `paymentIconUrls` the same icons as `data:`
+// URIs for any `<img src>`, and `paymentIconPaths` the packaged file paths for
+// the asset seam. The `get…IconId` getters beside the URL getters below answer
+// the key a headless renderer needs to pick one.
 export {
   checkoutElementStyles,
   checkoutLabels,
@@ -256,6 +262,7 @@ export {
   parseResolvedTheme,
   parseThemePreference,
   paymentIconPaths,
+  paymentIconSvgs,
   paymentIconUrls,
   paymentMethods,
 } from "./internal/ui.ts";
@@ -286,10 +293,13 @@ export {
   formatMethodNetworkDetail,
   formatNetworkSummary,
   getNetworkIcon,
+  getNetworkIconId,
   getPaymentMethodIcon,
+  getPaymentMethodIconId,
   getRouteIconPath,
   getRouteNetworkLabel,
   getSwapOptionIcon,
+  getSwapOptionIconId,
   getSwapRefundFormError,
   getWizardEmptyMessage,
   networkButtonClasses,

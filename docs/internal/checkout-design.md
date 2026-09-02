@@ -178,13 +178,21 @@ has room for it. A fixed-height panel should pass `providerPreviewLimit`
 (`OPENRECEIVE_PROVIDER_PREVIEW_LIMIT` is the number the shipped styles are
 drawn against) and build "show all" from `display.providerCount`.
 
-Packaged URLs resolve against `import.meta.url`, which only works under
-Vite/Rollup. Other bundlers yield dead `file://` links that also publish
-the server's directory layout. Serve the packages' `dist/assets` trees and
-point at them with `assetBaseUrl` / `asset-base-url`. `resolveAssetUrl` is
-the function form — it cannot cross an HTML attribute, so it is
-React-and-`defineElements` only. Grep the built bundle for `file://`
-before shipping.
+The payment-method icons are compiled into `@openreceive/browser`
+(`paymentIconSvgs`, generated from `src/assets/icons/*.svg`): the custom
+element draws them inline in its shadow root, and `paymentIconUrls` hands the
+same markup to any `<img>` as `data:` URIs. No host serves them. Inline SVG
+is allowed only there, for those build-gated first-party strings.
+
+`@openreceive/provider-data`'s images are files. Their packaged URLs resolve
+against `import.meta.url`, which only works under Vite/Rollup; other bundlers
+yield dead `file://` links that also publish the server's directory layout.
+Serve that package's `dist/assets` tree and point at it with `assetBaseUrl` /
+`asset-base-url`. `resolveAssetUrl` is the function form — it cannot cross an
+HTML attribute, so it is React-and-`defineElements` only. A resolver, when
+set, is also honoured for the payment icons (served as files from the same
+root), which is the escape hatch for an `img-src` without `data:`. Grep the
+built bundle for `file://` before shipping.
 
 ## Headless surface curation
 

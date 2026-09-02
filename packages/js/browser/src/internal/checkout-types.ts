@@ -4,6 +4,7 @@
 // they are derived from live in ./dom-contract.ts.
 
 import type { AssetIndexEntry, PaymentWizardRoute } from "@openreceive/provider-data";
+import type { PaymentIconId } from "../generated/payment-icon-svgs.ts";
 import type { CheckoutStateLabels } from "./checkout-format.ts";
 import type {
   CheckoutElementEventName,
@@ -837,8 +838,11 @@ export interface WizardRouteAssetDisplay {
   readonly id: string;
   readonly label: string;
   readonly subtitle: string;
+  /** The icon as a URL: the packaged `data:` URI, or the host resolver's answer. */
   readonly icon: string;
-  /** The packaged key behind `icon`, for a host serving the files itself. */
+  /** The key behind `icon`, into `paymentIconSvgs` for a renderer drawing it inline. */
+  readonly iconId: PaymentIconId;
+  /** The packaged path behind `icon`, for a host serving the files itself. */
   readonly iconPath: string;
   readonly selected: boolean;
 }

@@ -1377,7 +1377,9 @@ OpenReceive.configure do |config|
   #                        { payment_hash: } on payment.check, swap.read, and
   #                        swap.refund. Copied from the payer's JSON body
   #                        before any lookup: it names an order, it does NOT
-  #                        prove this caller may touch it.
+  #                        prove this caller may touch it. reference is always
+  #                        a validated non-empty String (≤200 chars);
+  #                        payment_hash is nil on the other four actions.
   # Return true to allow, false for a 403. Look the order up in YOUR data and
   # decide whether THIS caller may perform THIS action on it.
   config.authorize = lambda do |context|

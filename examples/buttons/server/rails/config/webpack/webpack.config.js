@@ -13,27 +13,25 @@ webpackConfig.watchOptions = {
   ignored: ["**/node_modules/**", "**/public/packs/**", "**/public/packs-test/**", "**/tmp/**"],
 };
 
-// The packaged UI's images resolve against `import.meta.url`; see the loader
-// for why webpack needs help with that, and CopyPlugin below for where the
-// images have to be for the rewritten URL to find them.
+// @openreceive/provider-data's images (provider logos, pay tutorials) resolve
+// against `import.meta.url`; see the loader for why webpack needs help with
+// that, and CopyPlugin below for where the images have to be for the rewritten
+// URL to find them. The payment-method icons in @openreceive/browser are
+// compiled into its JavaScript and need neither.
 webpackConfig.module.rules.push({
-  test: /(?:[\\/]packages[\\/]js|[\\/]@openreceive)[\\/](?:browser|provider-data)[\\/]dist[\\/].*\.js$/,
+  test: /(?:[\\/]packages[\\/]js|[\\/]@openreceive)[\\/]provider-data[\\/]dist[\\/].*\.js$/,
   loader: path.join(__dirname, "openreceive-import-meta-url-loader.js"),
 });
 
 webpackConfig.plugins.push(
-  // Packaged payment icons, provider icons and pay-tutorial images, next to
-  // the emitted chunk (/packs/js/…) — the same job the Vite demos do with
-  // copy-openreceive-payment-icons-plugin. This is what makes the URLs the
+  // Provider icons and pay-tutorial images, next to the emitted chunk
+  // (/packs/js/…) — the same job the Vite demos do with
+  // copy-openreceive-provider-assets-plugin. This is what makes the URLs the
   // loader above rewrites actually resolve, which is in turn why
   // shared/client/components/MethodGrid.tsx can call the icon getters with no
   // asset resolver at all.
   new CopyPlugin({
     patterns: [
-      {
-        from: path.join(repoRoot, "packages/js/browser/dist/assets/icons"),
-        to: "js/assets/icons",
-      },
       {
         from: path.join(repoRoot, "packages/js/provider-data/dist/assets/provider-icons"),
         to: "js/assets/provider-icons",

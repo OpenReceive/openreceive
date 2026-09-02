@@ -374,6 +374,8 @@ const openreceive = openReceiveExpress({
       : null;
   },
   // Your own access check: may this caller do this action to this reference?
+  // `resource.reference` is your own order id, sent back by the payer's
+  // browser — a claim, not proof — already validated as a non-empty string.
   authorize: async ({ action, request, resource }) =>
     orders.viewerMay(
       await sessions.currentUser(request),
@@ -451,11 +453,13 @@ so a white card never lands on a dark page. The checkout is styled by CSS
 variables under `data-theme`; [Frontend checkout](https://openreceive.org/guides/frontend-checkout.md) has
 the knobs.
 
-Outside Vite/Rollup (esbuild, webpack, a plain script tag) the packaged
-payment-method icons cannot resolve their own URLs — the drop-in needs this
-exactly as a custom UI does. Serve the two packages' `dist/assets` trees and
-pass the base as `assetBaseUrl="/openreceive-assets"`
-([Provider registry](https://openreceive.org/guides/provider-registry.md#assets-are-files-your-host-serves)).
+The payment-method icons are compiled into `@openreceive/browser` and need
+nothing from your bundler. The wallet logos and pay tutorials are files in
+`@openreceive/provider-data`, and outside Vite/Rollup (esbuild, webpack, a
+plain script tag) they cannot resolve their own URLs — the drop-in needs this
+exactly as a custom UI does. Serve that package's `dist/assets` tree and pass
+the base as `assetBaseUrl="/openreceive-assets"`
+([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
 
 That is the whole loop: your server owns the price and the order, the payer gets
 an invoice, and `onPaid` runs once inside the settlement transaction.

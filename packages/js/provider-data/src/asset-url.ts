@@ -105,11 +105,12 @@ let warnedFileAssetUrl = false;
  * Shout once when a packaged asset resolved to `file:`.
  *
  * Under webpack (and anything else that replaces `import.meta.url` at build
- * time with the module's own on-disk URL) every entry in the packaged icon and
+ * time with the module's own on-disk URL) every entry in the provider-icon and
  * tutorial maps comes out as `file:///…/node_modules/@openreceive/…`. That is
  * unloadable in a browser AND it publishes the server's directory layout, and
  * it fails silently: blank images, no request, no error. One warning naming the
- * path turns that into a five-minute fix.
+ * path turns that into a five-minute fix. (The payment-method icons are not in
+ * this failure mode: @openreceive/browser compiles them in.)
  *
  * Node and SSR are not the failure — `import.meta.url` IS a file URL there, and
  * nothing is being painted — so the check only fires in a document.
@@ -121,11 +122,11 @@ export function warnOnFileAssetUrl(packagedPath: string, resolved: string): void
   warnedFileAssetUrl = true;
   globalThis.console?.warn(
     `[openreceive] Packaged asset "${packagedPath}" resolved to ${resolved}. This bundler did ` +
-      "not rewrite import.meta.url, so provider icons, pay tutorials and payment icons cannot " +
-      "load (and the path leaks the server's layout). Copy the packaged assets next to your " +
-      "bundle — see the demos' copy-openreceive-payment-icons-plugin.ts — or serve them yourself " +
-      "and point at them — asset-base-url on <openreceive-checkout> (or the assetBaseUrl " +
-      "prop on any wrapper), or resolveAssetUrl for a custom mapping. " +
+      "not rewrite import.meta.url, so provider icons and pay tutorials cannot load (and the " +
+      "path leaks the server's layout). Copy @openreceive/provider-data's packaged assets next " +
+      "to your bundle — see the demos' copy-openreceive-provider-assets-plugin.ts — or serve " +
+      "them yourself and point at them — asset-base-url on <openreceive-checkout> (or the " +
+      "assetBaseUrl prop on any wrapper), or resolveAssetUrl for a custom mapping. " +
       "docs/guides/provider-registry.md has all three.",
   );
 }

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
-import { copyPaymentIconsPlugin } from "../../shared/copy-openreceive-payment-icons-plugin.ts";
+import { copyProviderAssetsPlugin } from "../../shared/copy-openreceive-provider-assets-plugin.ts";
 import { createButtonsStaticServer } from "./src/server/create-server.ts";
 
 const demoRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
       watch: { ignored: ["**/.data/**"] },
     },
     plugins: [
-      copyPaymentIconsPlugin(repoRoot),
+      copyProviderAssetsPlugin(repoRoot),
       {
         name: "openreceive-buttons-static-api",
         async configureServer(server) {

@@ -19,6 +19,40 @@ export const BUTTON_NAME = "Safety Orange";
 export const BUTTON_PRICE = "$1.00";
 export const BUTTON_SATS = "2,000 sats";
 
+/**
+ * Watch the page for the two ways a payment icon used to break: a request for
+ * a packaged icon FILE (they are compiled into @openreceive/browser now, so
+ * none may happen) and any 404 at all. Install before navigating.
+ */
+export function watchIconRequests(page: Page): {
+  readonly iconFileRequests: string[];
+  readonly notFound: string[];
+} {
+  const iconFileRequests: string[] = [];
+  const notFound: string[] = [];
+  page.on("request", (request) => {
+    if (/\/assets\/icons\/[a-z]+\.svg/.test(request.url())) iconFileRequests.push(request.url());
+  });
+  page.on("response", (response) => {
+    if (response.status() === 404) notFound.push(response.url());
+  });
+  return { iconFileRequests, notFound };
+}
+
+/**
+ * The payment-method icons of the wizard, however the framework draws them:
+ * React puts the `data:` URI in an `<img>`; the custom element (Vue, Svelte,
+ * Angular wrap it) inlines the SVG inside its shadow root, which Playwright
+ * pierces.
+ */
+export async function expectInlinePaymentIcons(page: Page): Promise<void> {
+  const tile = bitcoinTile(page);
+  const icon = tile.locator('img[src^="data:image/svg+xml,"], svg[role="img"]').first();
+  await expect(icon).toBeVisible();
+  const box = await icon.boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThan(8);
+}
+
 /** Open the shop and wait for the catalog to be interactive. */
 export async function openShop(page: Page): Promise<void> {
   await page.goto("/");

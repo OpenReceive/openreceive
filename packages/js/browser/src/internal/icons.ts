@@ -1,81 +1,56 @@
-// Payment icon URLs, resolved against this module's own URL so the same code
-// works from source, from the packaged dist, and from a host bundler's chunk.
-import { lazyAssetUrlTable, warnOnFileAssetUrl } from "@openreceive/provider-data";
+// Payment-method icons. The SVG markup is compiled into the package (see
+// ../generated/payment-icon-svgs.ts), so nothing here depends on where the
+// module was loaded from: no host has to copy or serve an icon file, under any
+// bundler. The same strings back two representations —
+//
+// - `paymentIconSvgs`: raw markup, which the shipped custom element draws
+//   inline in its shadow root (no CSP image rule, no page-CSS bleed).
+// - `paymentIconUrls`: `data:image/svg+xml` URIs derived from it, for every
+//   seam that carries a URL string — display models, `<img src>`, the React
+//   wrapper, headless hosts.
+//
+// `paymentIconPaths` is the third table: the PACKAGED path of each icon
+// (`assets/icons/<id>.svg`), for a host that serves the files itself and maps
+// them through `AssetUrlResolver` / `assetBaseUrl`. That seam still wins over
+// the packaged value everywhere, so a strict-CSP host whose `img-src` lacks
+// `data:` keeps its escape hatch.
+import {
+  OPENRECEIVE_PAYMENT_ICON_IDS,
+  type PaymentIconId,
+  paymentIconSvgs,
+} from "../generated/payment-icon-svgs.ts";
 import type { PaymentMethod } from "./checkout-types.ts";
 
-const OPENRECEIVE_PAYMENT_ICON_IDS = [
-  "btc",
-  "crypto",
-  "eth",
-  "lightning",
-  "ltc",
-  "sol",
-  "trx",
-  "usdc",
-  "usdt",
-  "xmr",
-  "xrp",
-] as const;
-export type PaymentIconId = (typeof OPENRECEIVE_PAYMENT_ICON_IDS)[number];
+export { type PaymentIconId, paymentIconSvgs };
 
 /** Packaged location of the icon files inside `@openreceive/browser`. */
 const PACKAGED_ICON_PREFIX = "assets/icons/";
 
-declare const __filename: string | undefined;
-
-const moduleUrl =
-  typeof import.meta.url === "string" && import.meta.url.length > 0
-    ? import.meta.url
-    : fileUrlFromPath(__filename as string);
-
-function fileUrlFromPath(path: string): string {
-  const normalized = path.replace(/\\/g, "/");
-  const absolute = normalized.startsWith("/") ? normalized : `/${normalized}`;
-  return `file://${encodeURI(absolute).replace(/#/g, "%23").replace(/\?/g, "%3F")}`;
-}
-
 /**
- * Resolve a payment icon against this module's URL.
- *
- * - Source (`src/internal/`, where this module lives): `../assets/icons/`
- * - Packaged `dist/*.js`: `./assets/icons/`
- * - Host Vite/Rollup app chunks under `/assets/*.js`: `./icons/` (demos copy
- *   package icons next to the emitted JS so URLs are `/assets/icons/*.svg`)
- */
-function paymentIconRoot(): string {
-  if (moduleUrl.includes("/src/internal/")) return "../assets/icons/";
-  try {
-    const { pathname } = new URL(moduleUrl);
-    if (/\/assets\/[^/]+\.js$/i.test(pathname)) return "./icons/";
-  } catch {
-    // ignore invalid module URLs and fall through
-  }
-  return "./assets/icons/";
-}
-
-function paymentIconUrl(file: string): string {
-  const resolved = new URL(`${paymentIconRoot()}${file}`, moduleUrl).href;
-  warnOnFileAssetUrl(`${PACKAGED_ICON_PREFIX}${file}`, resolved);
-  return resolved;
-}
-
-/**
- * The packaged PATH of each icon, independent of how (or whether) this module
- * managed to resolve it to a URL. A host whose bundler leaves
- * `import.meta.url` alone serves these files itself and maps them by path —
+ * The packaged PATH of each icon, for a host serving `dist/assets` itself —
  * see `AssetUrlResolver`.
  */
-export const paymentIconPaths: Readonly<Record<PaymentIconId, string>> = Object.fromEntries(
-  OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, `${PACKAGED_ICON_PREFIX}${id}.svg`]),
+export const paymentIconPaths: Readonly<Record<PaymentIconId, string>> = Object.freeze(
+  Object.fromEntries(
+    OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, `${PACKAGED_ICON_PREFIX}${id}.svg`]),
+  ),
 ) as Readonly<Record<PaymentIconId, string>>;
 
-// Lazy, like the two tables in @openreceive/provider-data: reading a packaged
-// URL is what the file: warning is about, so importing this module must not
-// count as reading one. See lazyAssetUrlTable.
-export const paymentIconUrls: Readonly<Record<PaymentIconId, string>> = lazyAssetUrlTable(
-  OPENRECEIVE_PAYMENT_ICON_IDS,
-  (id) => paymentIconUrl(`${id}.svg`),
-);
+/**
+ * Percent-encoded, not base64: smaller, and the markup stays readable in the
+ * DOM inspector. Only the characters that break a URL or an HTML attribute are
+ * encoded; `decodeURIComponent` of the payload gives the SVG back byte-for-byte.
+ */
+function svgDataUri(svg: string): string {
+  return `data:image/svg+xml,${svg.replace(/[%#"<>&]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`;
+}
+
+/** Each packaged payment icon as a `data:image/svg+xml` URI, keyed by id. */
+export const paymentIconUrls: Readonly<Record<PaymentIconId, string>> = Object.freeze(
+  Object.fromEntries(
+    OPENRECEIVE_PAYMENT_ICON_IDS.map((id) => [id, svgDataUri(paymentIconSvgs[id])]),
+  ),
+) as Readonly<Record<PaymentIconId, string>>;
 
 export const paymentMethodIconIds: Readonly<Record<PaymentMethod, PaymentIconId>> = {
   bitcoin: "btc",

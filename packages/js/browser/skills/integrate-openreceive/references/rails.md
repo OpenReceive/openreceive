@@ -411,7 +411,9 @@ OpenReceive.configure do |config|
   #                        cookies, or headers from it, as in a controller
   #   context[:resource] — { reference:, payment_hash: } copied from the
   #                        payer's JSON body. It names an order; it does not
-  #                        prove this caller owns it.
+  #                        prove this caller owns it. reference is always a
+  #                        validated non-empty String (≤200 chars); payment_hash
+  #                        is nil except on payment.check / swap.read / swap.refund.
   # Return true to allow, false for a 403. Here: only the signed-in customer
   # who placed the order may act on it.
   config.authorize = lambda do |context|
@@ -517,13 +519,13 @@ Bundling with esbuild (jsbundling-rails)? Two things:
    <%= javascript_include_tag "application", type: "module" %>
    ```
 
-2. Serve the payment-method icons. They are files shipped in
-   `@openreceive/browser` and `@openreceive/provider-data` — not in
-   `@openreceive/elements` — and only Vite-style bundlers resolve them from
-   the import. Merge both packages' `dist/assets` trees into
-   `public/openreceive-assets/assets/` and set
+2. Serve the provider images. The payment-method icons are compiled into
+   `@openreceive/browser` and need nothing, but the wallet logos and pay
+   tutorials are files shipped in `@openreceive/provider-data`, and only
+   Vite-style bundlers resolve them from the import. Copy that package's
+   `dist/assets` tree to `public/openreceive-assets/assets/` and set
    `asset-base-url="/openreceive-assets"` on the element
-   ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets-are-files-your-host-serves)).
+   ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
 
 The element creates the checkout for `reference`, then renders and polls
 itself. React/Vue/Svelte/Angular apps use the matching wrapper package

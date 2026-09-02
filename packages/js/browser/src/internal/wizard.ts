@@ -37,11 +37,14 @@ import {
 } from "./ui.ts";
 
 /**
- * Every icon and tutorial image below is a FILE the host has to be able to
- * serve. The packaged URLs only resolve under Vite/Rollup (see
+ * Provider icons and tutorial images are FILES the host has to be able to
+ * serve; the packaged URLs only resolve under Vite/Rollup (see
  * `@openreceive/provider-data`'s `assetUrl`), so each display builder takes an
- * optional resolver and hands it the packaged PATH instead. Omitted, the
- * packaged URL is used exactly as before.
+ * optional resolver and hands it the packaged PATH instead. Payment icons are
+ * compiled into this package (`paymentIconUrls` are `data:` URIs), so they need
+ * nothing from the host — but a resolver, when given, still wins: a host that
+ * serves the files has chosen to, and a strict `img-src` without `data:` is
+ * one reason to.
  */
 function resolvePaymentIcon(id: PaymentIconId, resolveAssetUrl?: AssetUrlResolver): string {
   return resolveAssetUrl === undefined
@@ -131,12 +134,14 @@ export function createWizardRouteAssetDisplays(
 ): readonly WizardRouteAssetDisplay[] {
   return assets.map((asset) => {
     const id = asset.route ?? asset.symbol;
+    const iconId = routeIconId(asset);
     return {
       id,
       label: asset.label,
       subtitle: getRouteNetworkLabel(id),
-      icon: getRouteIcon(asset, options.resolveAssetUrl),
-      iconPath: getRouteIconPath(asset),
+      icon: resolvePaymentIcon(iconId, options.resolveAssetUrl),
+      iconId,
+      iconPath: paymentIconPaths[iconId],
       selected: options.selectedRoute === id,
     };
   });
@@ -210,36 +215,53 @@ function createWizardProviderDisplay(
   };
 }
 
+// Each `get…Icon` getter answers a URL; its `get…IconId` twin answers the key
+// behind it, which is what a renderer drawing `paymentIconSvgs` inline needs.
+// Same decision, two representations — the id getters are the one place the
+// mapping lives.
+
+export function getPaymentMethodIconId(method: PaymentMethod): PaymentIconId {
+  return paymentMethodIconIds[method];
+}
+
 export function getPaymentMethodIcon(
   method: PaymentMethod,
   resolveAssetUrl?: AssetUrlResolver,
 ): string {
-  return resolvePaymentIcon(paymentMethodIconIds[method], resolveAssetUrl);
+  return resolvePaymentIcon(getPaymentMethodIconId(method), resolveAssetUrl);
 }
 
-export function getAssetIcon(symbol: string, resolveAssetUrl?: AssetUrlResolver): string {
-  return resolvePaymentIcon(assetIconIds[symbol] ?? "crypto", resolveAssetUrl);
+function assetIconId(symbol: string): PaymentIconId {
+  return assetIconIds[symbol] ?? "crypto";
 }
 
-/** Icon for a swap network label (Tron → trx, Solana → sol, Ethereum → eth). */
-export function getNetworkIcon(networkLabel: string, resolveAssetUrl?: AssetUrlResolver): string {
+/** Icon id for a swap network label (Tron → trx, Solana → sol, Ethereum → eth). */
+export function getNetworkIconId(networkLabel: string): PaymentIconId {
   const key = networkLabel.trim().toLowerCase();
-  if (key === "tron" || key === "trx") return resolvePaymentIcon("trx", resolveAssetUrl);
-  if (key === "solana" || key === "sol") return resolvePaymentIcon("sol", resolveAssetUrl);
-  if (key === "ethereum" || key === "eth") return resolvePaymentIcon("eth", resolveAssetUrl);
-  return resolvePaymentIcon("crypto", resolveAssetUrl);
+  if (key === "tron" || key === "trx") return "trx";
+  if (key === "solana" || key === "sol") return "sol";
+  if (key === "ethereum" || key === "eth") return "eth";
+  return "crypto";
+}
+
+export function getNetworkIcon(networkLabel: string, resolveAssetUrl?: AssetUrlResolver): string {
+  return resolvePaymentIcon(getNetworkIconId(networkLabel), resolveAssetUrl);
 }
 
 /**
- * Icon for a swap pay-in option card. Always the token/coin mark (USDT, USDC, SOL, …).
- * Network marks (Tron/Solana/Ethereum) belong only in the network reveal via
- * {@link getNetworkIcon}.
+ * Icon id for a swap pay-in option card. Always the token/coin mark (USDT,
+ * USDC, SOL, …). Network marks (Tron/Solana/Ethereum) belong only in the
+ * network reveal via {@link getNetworkIconId}.
  */
+export function getSwapOptionIconId(option: { readonly label: string }): PaymentIconId {
+  return assetIconId(option.label.trim().toLowerCase());
+}
+
 export function getSwapOptionIcon(
   option: { readonly label: string },
   resolveAssetUrl?: AssetUrlResolver,
 ): string {
-  return getAssetIcon(option.label.trim().toLowerCase(), resolveAssetUrl);
+  return resolvePaymentIcon(getSwapOptionIconId(option), resolveAssetUrl);
 }
 
 export interface SwapMethodGroup<T extends { readonly label: string }> {
@@ -1095,7 +1117,7 @@ export function getRouteIconPath(asset: Pick<AssetIndexEntry, "route" | "symbol"
 function routeIconId(asset: Pick<AssetIndexEntry, "route" | "symbol">): PaymentIconId {
   const routeId = asset.route ?? asset.symbol;
   if (asset.symbol === "btc" && routeId.includes("lightning")) return "lightning";
-  return assetIconIds[asset.symbol] ?? "crypto";
+  return assetIconId(asset.symbol);
 }
 
 export function createPaymentWizardState(request: PaymentWizardRequest): PaymentWizardState {

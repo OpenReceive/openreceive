@@ -1023,6 +1023,35 @@ test("asset-base-url points the wizard icons at the host's own assets", async ()
   }
 });
 
+// Without a base URL there is nothing to serve: the payment icons are compiled
+// into @openreceive/browser and drawn inline in the shadow root — no `<img>`,
+// no request, no `file://`, and labelled for assistive tech from the tile.
+test("without asset-base-url the wizard icons are inline SVG", async () => {
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-inline-icons", 21_000),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  const element = mount({ reference: "order-inline-icons", prefix: "/openreceive" });
+
+  try {
+    const tile = await untilLocal(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "method grid" },
+    );
+    const inline = tile.querySelector('svg[role="img"]');
+    assert.ok(inline, "the Bitcoin tile draws its icon as inline SVG");
+    assert.equal(inline.getAttribute("aria-label"), "Bitcoin");
+    assert.equal(tile.querySelector("img"), null);
+    const imgSources = [...element.shadowRoot.querySelectorAll("img")].map((img) =>
+      img.getAttribute("src"),
+    );
+    assert.ok(!imgSources.some((src) => src?.includes("assets/icons/")));
+    assert.ok(!imgSources.some((src) => src?.startsWith("file:")));
+  } finally {
+    element.remove();
+  }
+});
+
 // The host's order description reaches the element the only way it can: off the
 // prepare response, through the snapshot. There is deliberately no attribute for
 // it — an attribute would let the payer write the copy next to the amount.

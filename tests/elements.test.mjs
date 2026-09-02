@@ -86,8 +86,9 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(firstStep, />Crypto</);
   assert.doesNotMatch(firstStep, /Credit Card/);
   assert.doesNotMatch(firstStep, /Bank Transfer/);
-  assert.match(firstStep, /assets\/icons\/btc\.svg/);
-  assert.doesNotMatch(firstStep, /assets\/icons\/card\.svg/);
+  // The Bitcoin tile's icon is compiled-in SVG drawn inline, not a file URL.
+  assert.match(firstStep, /<svg[^>]*role="img" aria-label="Bitcoin"/);
+  assert.doesNotMatch(firstStep, /assets\/icons\//);
   assert.doesNotMatch(firstStep, /change payment method/);
 
   const loadingStep = renderPaymentWizardHtml({

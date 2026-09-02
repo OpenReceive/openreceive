@@ -41,7 +41,9 @@ async function authorize({ action, request, resource, native }) {
   // native   — the Express `req`, when you need middleware-attached state
   //            (req.session). Omit it from the destructure if you don't.
   // resource — { reference?, paymentHash? } copied from the payer's JSON.
-  //            A claim, not proof; see below.
+  //            A claim, not proof; see below. At runtime `reference` is always
+  //            a validated non-empty string (≤200 chars); `paymentHash` is
+  //            undefined except on payment.check / swap.read / swap.refund.
   const user = await sessions.currentUser(request);
   return orders.viewerMay(user, resource.reference, action);
 }
@@ -131,6 +133,23 @@ this caller own the order?" The hash is never an authorization capability.
 every action sends both. On the shipped routes `reference` is always set;
 `paymentHash` is set on the three attempt-scoped actions above.
 
+By the time `authorize` runs, the handler has already rejected a missing,
+empty, or over-long body `reference` (`400`, limit 200 characters, whitespace
+trimmed), so `resource.reference` is always a non-empty string at runtime —
+the `?` describes the union of actions, not a value you have to nil-check.
+`resource.paymentHash` is present only on `payment.check`, `swap.read`, and
+`swap.refund` and is `undefined` elsewhere; it is printed on the invoice QR,
+so it proves even less than `reference` does.
+
+Where `resource.reference` comes from: it is your own order id, finishing a
+round trip. Your page (or prepare endpoint) gave the checkout client a
+`reference`, the client sends it back in the JSON body of every checkout
+call, and the handler copies it out of that body into `resource` — before
+touching the database. It left your server and came back through the payer's
+browser, so any caller can send any order id they have ever seen. Look the
+row up in your own data and check that this session may perform this action
+on it.
+
 ## Reading a framework session
 
 `request` is always a Fetch API `Request`. Express session middleware attaches
@@ -154,12 +173,32 @@ config.authorize = lambda do |context|
   # context[:action]   — same seven action strings as above
   # context[:request]  — the ActionDispatch::Request (session, cookies, headers)
   # context[:resource] — { reference:, payment_hash: } from the payer's body —
-  #                      a claim, not proof (see above)
+  #                      a claim, not proof (see below). reference is always a
+  #                      validated non-empty String (≤200 chars); payment_hash
+  #                      is nil except on payment.check / swap.read / swap.refund.
   # `Order` is your own model (any name) — the check runs against YOUR data.
   order = Order.find_by(id: context[:resource][:reference])
   order && order.user_id == context[:request].session[:user_id]
 end
 ```
+
+**Where `context[:resource][:reference]` comes from.** It is your own order
+id, finishing a round trip: your page (or prepare endpoint) gave the checkout
+client a `reference`, the client sends it back in the JSON body of every
+checkout call, and the engine copies it out of that body into
+`context[:resource]` — before touching the database. It left your server and
+came back through the payer's browser, so by the time your lambda sees it,
+it is payer input like any other: any caller can send any order id they have
+ever seen. Look the row up in your own data and check that this session
+may perform this action on it.
+
+By the time `authorize` runs, the handler has already rejected a missing,
+empty, or over-long body `reference` (`400`, limit 200 characters), so
+`context[:resource][:reference]` is always a non-empty `String` — no nil
+check needed. `context[:resource][:payment_hash]` is present only on the
+attempt-scoped actions (`payment.check`, `swap.read`, `swap.refund`) and is
+`nil` elsewhere; it is printed on the invoice QR, so it proves even less
+than `reference` does.
 
 Your application keeps its own authentication and `current_user` logic — the
 policy reads the session however the rest of your app does. The engine also

@@ -39,8 +39,11 @@ export interface CheckoutComponentProps {
    * the string form of the `resolveAssetUrl` seam. Packaged icon and tutorial
    * keys are relative paths under one `assets/` root, so the value is joined to
    * them directly: `assetBaseUrl="/openreceive-assets"` loads
-   * `assets/icons/btc.svg` from `/openreceive-assets/assets/icons/btc.svg`.
-   * Needed under every bundler that does not rewrite `import.meta.url` — see
+   * `assets/provider-icons/strike.png` from
+   * `/openreceive-assets/assets/provider-icons/strike.png`. Needed for the
+   * provider images under every bundler that does not rewrite
+   * `import.meta.url`; the payment-method icons are compiled in and need
+   * nothing (a base URL, when set, serves them as files too) — see
    * docs/guides/provider-registry.md.
    */
   readonly assetBaseUrl?: string;
