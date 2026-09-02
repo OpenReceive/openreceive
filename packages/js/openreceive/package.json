@@ -1,6 +1,6 @@
 {
   "name": "openreceive",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "The openreceive command-line tool (scaffold payment tables, check the NWC connection). The library ships as the @openreceive/* packages.",
   "keywords": [
     "bitcoin",
@@ -18,7 +18,7 @@
     "openreceive": "./bin/openreceive.mjs"
   },
   "dependencies": {
-    "@openreceive/node": "0.4.0"
+    "@openreceive/node": "0.4.1"
   },
   "files": [
     "bin",

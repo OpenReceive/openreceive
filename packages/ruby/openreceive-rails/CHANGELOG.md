@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 - 2026-09-02
+
+Version lockstep with the 0.4.1 npm release. First version published from CI
+through RubyGems Trusted Publishing (`.github/workflows/publish-gems.yml`)
+instead of a maintainer's API key and OTP. No functional change in this gem.
+
 ## 0.4.0 - 2026-09-02
 
 Version lockstep with the 0.4.0 npm release. The generated initializer's

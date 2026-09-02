@@ -235,7 +235,10 @@ function printPlan(root, args) {
   console.log("Next commands:");
   if (!ready) console.log("- npm run release:prepare -- --version <x.y.z>  (fix version drift)");
   console.log("- npm run release:gem:build");
-  console.log("- npm run release:gem:publish -- --otp <code>");
+  console.log(
+    "- git push origin v<version>   # .github/workflows/publish-gems.yml pushes the gems (approve the rubygems environment)",
+  );
+  console.log("- fallback: tools/release/push-gems.sh --otp <code>");
 }
 
 function main() {

@@ -2,7 +2,7 @@
 
 The npm release surface, all versioned in lockstep:
 
-- OpenReceive `0.4.0`
+- OpenReceive `0.4.1`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -174,7 +174,7 @@ exactly `contents: read` + `id-token: write`.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.4.0` — no release tags exist yet,
+Tag the prepared release commit once, as `v0.4.1` — no release tags exist yet,
 and per-package tags are deliberately not used while every package and gem
 releases in lockstep with the workspace version. Introduce per-package tags
 only if versions ever diverge, after the contract is stable enough to avoid

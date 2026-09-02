@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/angular",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Angular wrapper for the OpenReceive checkout custom element.",
   "keywords": [
     "bitcoin",
@@ -20,8 +20,8 @@
   "module": "./dist/fesm2022/openreceive-angular.mjs",
   "types": "./dist/types/openreceive-angular.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.4.0",
-    "@openreceive/elements": "0.4.0"
+    "@openreceive/browser": "0.4.1",
+    "@openreceive/elements": "0.4.1"
   },
   "peerDependencies": {
     "@angular/core": ">=17.0.0"

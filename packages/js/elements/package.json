@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/elements",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "The OpenReceive checkout custom element (<openreceive-checkout>) and theme toggle.",
   "keywords": [
     "bitcoin",
@@ -20,7 +20,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.4.0"
+    "@openreceive/browser": "0.4.1"
   },
   "exports": {
     ".": {

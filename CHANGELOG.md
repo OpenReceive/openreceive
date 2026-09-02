@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-09-02
+
+Tooling-only release: no package or gem changes its public API. It exists to
+exercise the new gem publishing path end to end. The four Buy a Button examples
+resolve the workspace packages by path and run 0.4.1; the live wallet smoke was
+skipped.
 
 ### Gems publish from CI without an OTP
 
