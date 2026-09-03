@@ -121,8 +121,16 @@ Run from the repo root on a clean, current `master`.
    match `package.json`.
 
 7. Approve the gem publish. `Publish Gems` stops at the `rubygems` environment
-   until a required reviewer approves it: Actions → Publish Gems → the run →
-   "Review deployments" → tick `rubygems` → "Approve and deploy". The job then
+   until a required reviewer approves it in the browser (the approval cannot
+   be scripted from this machine). Print the run's URL and open it:
+
+   ```sh
+   gh run list --workflow publish-gems.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
+   ```
+
+   It has the shape `https://github.com/OpenReceive/openreceive/actions/runs/<id>`
+   and shows "waiting" until approved. On that page: "Review deployments" →
+   tick `rubygems` → "Approve and deploy". The job then
    builds the three gems in a `ruby:3.4` container, exchanges its OIDC token for
    a 15-minute push-only key, and pushes `openreceive`, `openreceive-server`,
    `openreceive-rails` in that order (siblings are exact-pinned, so the order
