@@ -122,7 +122,10 @@ Run from the repo root on a clean, current `master`.
 
 7. Approve the gem publish. `Publish Gems` stops at the `rubygems` environment
    until a required reviewer approves it in the browser (the approval cannot
-   be scripted from this machine). Print the run's URL and open it:
+   be scripted from this machine). Print the run's URL and hand it to the
+   maintainer straight away — the gems, and the GitHub release that needs the
+   published gems, wait on that click. Whoever runs the release (a person or
+   an agent) reports this URL as a release step, not as a footnote:
 
    ```sh
    gh run list --workflow publish-gems.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
