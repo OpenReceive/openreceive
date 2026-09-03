@@ -1,6 +1,6 @@
 {
   "contract_version": 3,
-  "release_version": "0.4.1",
+  "release_version": "0.4.2",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
   "how_to_update": "docs/internal/site-build.md",
@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Node Framework Quickstart",
       "category": "quickstart",
-      "bytes": 11151
+      "bytes": 11328
     },
     {
       "path": "/guides/quickstart-rails",
@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 14891
+      "bytes": 14991
     },
     {
       "path": "/guides/node-orms",
@@ -73,7 +73,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 6668
+      "bytes": 6964
     },
     {
       "path": "/guides/checkout-ux",
@@ -93,7 +93,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 16530
+      "bytes": 16891
     },
     {
       "path": "/guides/automated-swaps",
@@ -233,7 +233,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 26227
+      "bytes": 26404
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -243,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 31162
+      "bytes": 31262
     },
     {
       "path": "/api_docs",
@@ -272,7 +272,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 26227,
+      "bytes": 26404,
       "copy_button": true,
       "self_contained": true
     },
@@ -282,7 +282,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 31162,
+      "bytes": 31262,
       "copy_button": true,
       "self_contained": true
     }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2 - 2026-09-03
+
+Version lockstep with the 0.4.2 npm release (the scoped frontend stylesheet).
+No Ruby changes.
+
 ## 0.4.1 - 2026-09-02
 
 Version lockstep with the 0.4.1 npm release. First version published from CI

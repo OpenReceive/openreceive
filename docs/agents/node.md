@@ -1,6 +1,6 @@
 # OpenReceive agent directions (Node.js)
 
-These directions describe OpenReceive 0.4.1.
+These directions describe OpenReceive 0.4.2.
 
 Add OpenReceive to a Node application — the app you are already working in. You
 do not need a copy of the OpenReceive source: the packages are on npm, and the
@@ -439,7 +439,9 @@ import "@openreceive/react/styles.css";
 
 The checkout renders, polls, and settles itself. The compiled `styles.css`
 sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
-plain `<link rel="stylesheet">` works with no build step.
+plain `<link rel="stylesheet">` works with no build step — and scoped: every
+rule applies only inside what OpenReceive renders, so the sheet is safe next
+to any CSS framework (Mantine, Bootstrap, your own reset) in any import order.
 
 `<Checkout>` is complete as rendered: it already shows the `description` from
 `amountFor` and the collapsed transaction-details panel. Do not build a custom

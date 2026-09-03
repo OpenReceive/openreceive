@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.4.2 - 2026-09-03
+
+### The stylesheet no longer touches host elements
+
+Every shipped `styles.css` (`@openreceive/react`, `@openreceive/elements`,
+`@openreceive/browser`, and the `@import` forwarders in `vue`, `svelte`,
+`angular`) is now scoped: each rule applies only on or under an element
+carrying `data-openreceive-root`, which the React `<Checkout>` and
+`<ThemeToggle>` and the Vue/Svelte/Angular shell stamp on themselves. Loading
+the sheet into a host page changes nothing the library did not render.
+
+Before, the sheet was one global Tailwind + daisyUI compile: the preflight
+zeroed every element's margin and padding, `h1`–`h6` lost their size, `img`
+went block-level, `:root` received the theme variables, and daisyUI's `.btn`,
+`.card`, `.badge`, `.input`, `.modal` repainted any host element sharing the
+name. The cascade made it worse than specificity suggests — the sheet's
+`@layer` blocks are declared at import position, and a later layer beats an
+earlier one outright — so a Mantine host imported first lost the padding on
+every SegmentedControl label ("Pay with crypto" clipped to "Pay with crypt").
+
+A host that was, accidentally, relying on the leaked preflight or theme
+variables must now bring its own. The one visible change inside the checkout:
+its root now carries the preflight's `html` rules (the Tailwind font stack,
+`line-height: 1.5`, `tab-size: 4`), matching what the custom element always
+did in its shadow root, so a React checkout that used to inherit the host's
+`body` font renders in the system font stack. Set `font-family: inherit` on
+the root (`className`) to keep the host font. daisyUI's page scroll lock while
+a provider tutorial is open no longer reaches `<html>`.
+
+Custom markup styled from `orClasses` needs the marker on its own container,
+together with the resolved `data-theme` — the palette starts at that root, not
+at the page's `:root`. `OPENRECEIVE_STYLE_ROOT_ATTRIBUTE` /
+`OPENRECEIVE_STYLE_ROOT_SELECTOR` are exported from
+`@openreceive/browser/headless`, and the shell binding's `rootAttributes`
+carries the marker unconditionally (`CheckoutShellRootAttributes`). Under
+`ThemeScope` the checkout still leaves `data-openreceive-theme` to the scope
+but mirrors the resolved `data-theme` on its own root; the React `ThemeToggle`
+stamps both too, so it paints correctly on its own in a page header.
+
+The transform is a postcss pass (`tools/package/scope-styles.mjs`) over the one
+compile, applied to the file copies only — `src/generated/compiled-styles.ts`,
+injected into the custom elements' shadow roots, keeps the unscoped preflight.
+Pinned by a unit test, the package smoke (every selector of every shipped
+sheet carries the marker; the shadow compile does not), and an e2e host page
+whose layered and Bootstrap-ish styles compute identically with and without
+the sheet.
+
+The gems carry no CSS and release in lockstep; the four Buy a Button examples
+run 0.4.2 from the workspace; the live wallet smoke was skipped.
+
 ## 0.4.1 - 2026-09-02
 
 Tooling-only release: no package or gem changes its public API. It exists to
