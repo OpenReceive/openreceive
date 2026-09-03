@@ -43,7 +43,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "category": "quickstart",
-      "bytes": 6720
+      "bytes": 6702
     },
     {
       "path": "/guides/authorization",
@@ -173,7 +173,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 87839
+      "bytes": 99652
     },
     {
       "path": "/guides/security",
@@ -253,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 87839,
+      "bytes": 99652,
       "alias_of": "/guides/api-reference"
     },
     {
