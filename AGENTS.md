@@ -1,6 +1,6 @@
 # OpenReceive Agent Rules
 
-This is a greenfield project with no compatibility or migration constraint, and no current users. Optimize for a
+Optimize for a
 small, honest API and a good developer experience.
 
 ## Non-negotiables
