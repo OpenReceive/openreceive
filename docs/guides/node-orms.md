@@ -5,8 +5,8 @@ You never hand-write a payment repository. OpenReceive owns the
 
 1. **The migration.** `npx openreceive scaffold payments --orm prisma`
    (or `drizzle | typeorm | sequelize | knex`, `--dialect postgres | sqlite`)
-   emits one migration/schema file — `openreceive_payments` and the sibling
-   `openreceive_meta` reconcile gate together — plus a wiring guide. Run it
+   emits one migration/schema file that creates two tables,
+   `openreceive_payments` and `openreceive_meta`, plus a wiring guide. Run it
    through your normal migration workflow.
 2. **The `db` handle** passed to `createHost({ db, ... })`.
 

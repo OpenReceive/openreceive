@@ -27,7 +27,15 @@ const service = await createOpenReceive(); // reads NWC_URI (and LSC_URI_*) from
 // every option below is optional: createOpenReceive({ nwc, allowSpendCapableWallet, swap, … })
 ```
 
-Builds the wallet client. Preflight runs before the promise resolves and
+Builds the wallet client.
+
+**Where it fits:** Call this once, when your server starts, and keep the result
+for the life of the process, the same way you keep a database pool. Every other
+call in this section is a method on the object it returns. If you use a
+framework adapter in its all-in-one form you never call this yourself: hand it
+`{ nwc }` and it builds the client for you.
+
+Preflight runs before the promise resolves and
 **fails closed**: a missing/invalid NWC URI, a wallet without `make_invoice` +
 `list_transactions`, unsupported encryption, or an advertised spend method
 (without the override) throws `ConfigError` (`MISSING_NWC`, `INVALID_NWC`,
@@ -70,7 +78,16 @@ const prepared = await service.prepareCheckout({
 ```
 
 Resolves the charged Lightning amount without minting an invoice or committing
-an attempt. Used by the HTTP prepare route so the UI can show the sats total
+an attempt.
+
+**Where it fits:** Use this when the payer lands on your checkout page and you
+want to show the total in sats, or the coins they could pay with, before they
+commit to anything. Nothing is minted and nothing is written, so it is safe to
+call on every page load. Most applications never call it directly: the mounted
+`POST …/checkouts/prepare` route wraps it, and the shipped checkout UI calls
+that route.
+
+Used by the HTTP prepare route so the UI can show the sats total
 and swap options before create.
 
 **Parameters**
@@ -96,7 +113,17 @@ const checkout = await service.createCheckout({
 });
 ```
 
-Mints a payer-safe invoice. On the wire the same object is the generated
+Mints a payer-safe invoice.
+
+**Where it fits:** This is the call for the moment your user clicks "Pay with
+Lightning" on an order you have already priced. Call it from server-side code
+only, with the price from your own database, and store the returned
+`paymentHash` against the order, because that hash is how you check, refund, or
+resume the attempt later. If you mount an adapter, `POST …/checkouts` does this
+for you and also persists the attempt; call it yourself only when you are
+building your own route.
+
+On the wire the same object is the generated
 snake_case `WireCheckout`; the browser's polled `CheckoutSnapshot` is the
 client-held snapshot of that wire shape. The wallet must honor the requested
 expiry: when the minted invoice's real payable window deviates from
@@ -157,7 +184,16 @@ const checks = await service.reconcilePayments({
 });
 ```
 
-Looks up known invoices in wallet history. A pure batched wallet read — no
+Looks up known invoices in wallet history.
+
+**Where it fits:** You'll want this when you are running your own settlement
+loop, or writing an admin tool that asks "has this invoice been paid yet?" for
+one or many hashes at once. Feed it every pending attempt you have on file and
+act on what comes back. If you use the host you don't need it:
+[reconcileHostPayments](#reconcilehostpayments) calls it for you, writes the
+outcome back, and fires `onPaid`.
+
+A pure batched wallet read — no
 persistence. Pass a one-element `attempts` array to check a single invoice.
 `settled` requires `settled_at` or a wallet transaction state of `settled`; a
 preimage alone is never finality. A truncated walk **omits** the hash rather
@@ -218,6 +254,13 @@ const unsubscribe = await service.subscribeWalletNotifications((notification) =>
 });
 ```
 
+**Where it fits:** This is the low-level way to be told when a payment arrives,
+instead of polling for it. Use it in a long-running process, not in a web
+request, and only if you are writing your own listener. Most applications use
+[startNotificationWorker](#startnotificationworker) instead: it subscribes for
+you, marks matching attempts settled, and falls back to a scan when a
+notification is unclear.
+
 **Parameters**
 
 | Name | Type | Required | Meaning |
@@ -249,6 +292,14 @@ const { enabled, options } = await service.listSwapOptions({
 ```
 
 Lists whether swaps are configured and the pay-in methods for that amount.
+
+**Where it fits:** Call this when you are drawing the "how would you like to
+pay?" screen and need to know whether to show stablecoin buttons at all, and
+which of them are within the provider's limits for this amount. It is a read, so
+call it whenever the amount is known. Over HTTP the same list arrives as
+`payment_methods` on the prepare, create, and check responses, so a browser
+client never needs a separate call.
+
 Behavior is in [Automated swaps](automated-swaps.md).
 
 **Parameters**
@@ -293,7 +344,15 @@ const quote = await service.quoteSwap({
 ```
 
 Quotes one pay-in asset for an amount you own without minting an invoice or
-creating a provider order — the call behind `POST …/swaps/quote`. The result is
+creating a provider order — the call behind `POST …/swaps/quote`.
+
+**Where it fits:** Use it when the payer has tapped one specific coin and you
+want to show "send 12.40 USDT" before they commit. Nothing is created at the
+provider, so it is fine to call as they browse between options. The shipped
+payment wizard calls the quote route as the payer picks, so you'll only call
+this yourself when building your own picker.
+
+The result is
 camelCase (the HTTP handler converts to the snake_case wire shape).
 
 **Parameters**
@@ -327,7 +386,15 @@ const swap = await service.createSwap({
 ```
 
 Creates a swap attempt: a shadow Lightning invoice plus on-chain deposit
-instructions. `swapData` must stay server-only.
+instructions.
+
+**Where it fits:** This is the swap counterpart of `createCheckout`: the call
+for the moment the payer confirms "pay with USDT on Tron" on a priced order.
+Call it server-side, store the whole result on the attempt row, and hand only
+the `PublicSwap` fields and the `checkout` to the browser. The adapters' `POST
+…/swaps` route does exactly that when you mount one.
+
+`swapData` must stay server-only.
 
 **Parameters**
 
@@ -355,7 +422,16 @@ const status = await service.getSwap({ reference, paymentHash, swapData });
 const refunded = await service.refundSwap({ reference, paymentHash, swapData, refundAddress });
 ```
 
-Both refresh provider state using the `swapData` you loaded. `refundSwap`
+Both refresh provider state using the `swapData` you loaded.
+
+**Where it fits:** Call `getSwap` when you need the current state of a swap: on
+a status endpoint the browser polls, or on an admin page. Call `refundSwap` when
+a payer asks for their money back after an underpaid or late deposit and you
+have their refund address. Both need the `swapData` you saved when the swap was
+created, so call them from your server. The mounted `…/swaps/status` and
+`…/swaps/refunds` routes do this for you.
+
+`refundSwap`
 refuses any provider state other than `refund_required`.
 
 **Parameters**
@@ -417,6 +493,12 @@ provider wire shape:
 const { bitcoin } = await service.listRates(); // or ({ currencies: ["USD", "EUR"] })
 ```
 
+**Where it fits:** You'll use this for display, not for pricing: a "1 BTC =
+$65,000" footer, a currency switcher, a rough sats preview before an order
+exists. When it is time to charge, price the order with `prepareCheckout` or
+`createCheckout` instead, because they lock the quote onto the invoice; a rate
+you read here can move before the payer pays.
+
 **Parameters**
 
 | Name | Type | Required | Meaning |
@@ -443,6 +525,10 @@ await service.close();
 **Returns** `Promise<void>`. Closes the underlying wallet client, releasing its
 relay connection. Stop the notifications worker first (if you run one).
 
+**Where it fits:** At the end of a script, a one-off job, or a test, after the
+last wallet call. The paragraphs below say why a long-running server can usually
+skip it.
+
 The wallet client is created lazily on the first wallet call, so `close()` is a
 no-op for a wallet client that never minted or scanned.
 
@@ -468,6 +554,13 @@ held in a variable named `host`.
 ```ts
 const host = createHost(options: CreateHostOptions): Host
 ```
+
+**Where it fits:** Write this once, next to where you build the wallet client.
+It is where your own code plugs in: `amountFor` looks up the price, `onPaid`
+marks the order paid, and `db` is the database connection you already have. Pass
+the result to an adapter or to the reconcile functions. With an adapter in
+all-in-one form you give the adapter the same three things and it calls
+`createHost` for you.
 
 Default (`db`) mode — OpenReceive owns the `openreceive_payments` rows inside
 your application's existing database:
@@ -577,6 +670,12 @@ Every order-scoped route calls `authorize(context)` before any wallet or
 database work; returning `false` produces `403 FORBIDDEN`. The same shape is
 used by the optional `rateLimitHook` (`false` → `429`).
 
+**Where it fits:** You write `authorize` where you would write a controller's
+"is this their order?" check: look up `resource.reference` in your data, compare
+it with whoever is logged in on `request` or `native`, and return a boolean.
+Every payment route runs it first, so this one function is your whole access
+policy for OpenReceive.
+
 Two deliberate exceptions: `GET …/rates` has no order to authorize and is never
 authorized, and the durably-gated opportunistic reconcile pass runs before
 authorization — it reads only OpenReceive's own attempt rows and the wallet, and
@@ -614,6 +713,11 @@ const reconciler = await startReconciler({
   // optional: pollIntervalMs, overlapSeconds, signal, clock, onError
 });
 ```
+
+**Where it fits:** Use this only when you want a background loop that scans the
+wallet on a timer and nothing else, for example on a wallet that cannot send
+notifications. Most applications skip it: the request-path pass settles orders
+as payers poll, and the notifications worker already includes this loop.
 
 A polling primitive: used internally by
 [startNotificationWorker](#startnotificationworker) and
@@ -659,6 +763,11 @@ const checks = await reconcileHostPayments({
 });
 ```
 
+**Where it fits:** This is the one-shot call: check everything pending and
+fulfill what settled. Use it from a cron job, a script, or an admin button when
+you want a pass now and want the results back. The gated pass and the worker
+call it for you, so it rarely belongs in a normal request.
+
 One bounded pass: list the pending attempts (the oldest
 `OPENRECEIVE_RECONCILE_BATCH_SIZE` — 200; like every `OPENRECEIVE_*` name in
 this section it is a constant exported by `@openreceive/http`, not an
@@ -682,6 +791,13 @@ const result = await maybeReconcilePayments({
   // optional: minIntervalSeconds, scanTimeoutMs, maxPages, overlapSeconds, clock, onError
 });
 ```
+
+**Where it fits:** Call this from routes of your own that a waiting payer hits,
+such as a custom order-status endpoint, so settlement gets a chance to run there
+without a separate worker. It is cheap to call often: it does nothing when
+nothing is pending, and the durable gate makes many web instances share one
+wallet scan. The mounted routes already call it, so you only add it where you
+have built your own.
 
 **Parameters**
 
@@ -720,6 +836,11 @@ const listener = await startNotificationListener({
   // optional: overlapSeconds, onError
 });
 ```
+
+**Where it fits:** Use it when you already run your own periodic reconcile and
+only want the notification part: one long-running process that settles an order
+the moment the wallet announces the payment. If you don't have that loop, use
+[startNotificationWorker](#startnotificationworker), which does both.
 
 **Parameters**
 
@@ -767,6 +888,13 @@ const worker = await startNotificationWorker({
   // optional: pollIntervalMs, overlapSeconds, onError
 });
 ```
+
+**Where it fits:** Run this when you want orders marked paid within a second of
+the payment arriving, instead of on the payer's next poll. Put it in a small
+script of its own and run it as a separate process next to your web server (a
+`worker` line in your Procfile). Stop it before you call `service.close()`. It
+is optional: a web deployment with no worker still settles every order through
+the request-path pass.
 
 **Parameters**
 
@@ -1013,6 +1141,11 @@ app.use(openReceiveExpress(options)): ExpressMiddleware
 Express middleware; handles requests under its prefix and calls `next()` for
 everything else. The untouched Express `req` is passed as `native`.
 
+**Where it fits:** This is the one line that puts OpenReceive in an Express app:
+`app.use(...)` it once at startup, before your 404 handler, and every checkout,
+status, swap, and rates route exists under `/openreceive`. Put your session
+middleware ahead of it so `authorize` can read `native.session`.
+
 ### openReceiveFastify
 
 ```ts
@@ -1021,6 +1154,11 @@ await fastify.register(openReceiveFastify, options)
 
 Fastify plugin; registers a catch-all under `prefix`. The untouched Fastify
 request is passed as `native`.
+
+**Where it fits:** Register it once during app setup, after whatever plugin
+gives you sessions or auth decorations, since `authorize` sees the same request
+object. Shutdown is handled for you: the plugin closes the wallet client with
+the app.
 
 ### openReceiveNextHandlers
 
@@ -1031,6 +1169,12 @@ export const { GET, POST } = openReceiveNextHandlers(options)
 Next.js App Router handlers; mount as a catch-all route
 (`app/openreceive/[...openreceive]/route.ts`). The incoming `NextRequest` is
 passed as `native`.
+
+**Where it fits:** Create one catch-all route file, export what this returns,
+and the whole route set is live. Keep it on the Node runtime, not the Edge
+runtime, because it needs your database driver and a relay connection. Read
+cookies or headers from `request` inside `authorize` the way you would in any
+route handler.
 
 **Returns** the App Router handler object
 
@@ -1049,6 +1193,11 @@ passed as `native`.
 ```ts
 const payments = createSqlPayments(db, options?): SqlPaymentRepository
 ```
+
+**Where it fits:** You'll only call this directly in the composed form, when you
+want to hold the repository yourself: to look at attempts with
+`listForReference` in an admin tool, or to share one repository between a host
+and a test. `createHost({ db })` builds it for you otherwise.
 
 **Parameters**
 
@@ -1090,6 +1239,11 @@ pass `opportunisticReconcile: false`; handler construction throws otherwise.
 paymentsSchemaSql(dialect: "postgres" | "sqlite", tableName?, metaTableName?): string
 ```
 
+**Where it fits:** Use this when writing the migration that creates
+OpenReceive's two tables in your own migration tool: call it, execute the string
+it returns, done. If you use one of the supported ORMs, `npx openreceive
+scaffold payments` renders the same DDL in that ORM's migration format instead.
+
 **Parameters**
 
 | Name | Type | Required | Meaning |
@@ -1098,10 +1252,10 @@ paymentsSchemaSql(dialect: "postgres" | "sqlite", tableName?, metaTableName?): s
 | `tableName` | `string` | no | Payments table name. Default `openreceive_payments`. |
 | `metaTableName` | `string` | no | Reconcile-gate table name. Default `openreceive_meta`. |
 
-**Returns** `string` — the canonical `openreceive_payments` `CREATE TABLE` /
-index DDL for that dialect, plus the sibling `openreceive_meta` gate table
-(`key TEXT PRIMARY KEY, value TEXT NOT NULL, rev` — the durable reconcile
-gate; `metaTableName` renames it) and its `schema_version` seed row. The
+**Returns** `string` — the DDL for two tables in that dialect:
+`openreceive_payments` (the attempts, with its indexes) and `openreceive_meta`
+(the reconcile gate: `key TEXT PRIMARY KEY, value TEXT NOT NULL, rev`, seeded
+with a `schema_version` row). `tableName` and `metaTableName` rename them. The
 statements themselves live in `@openreceive/core`
 (`paymentsDdlStatements` in `payments-ddl.ts`) — the one source of
 truth this helper and the scaffold CLI's ORM migrations both render from. Run
@@ -1122,6 +1276,12 @@ interface SqlAdapter {
 }
 ```
 
+**Where it fits:** You implement this when your database access goes through
+something the library does not know: a driver it has no binding for, a
+connection wrapper of your own, an ORM without a named factory below. Two
+methods, and the contract is simple: pass the SQL through unchanged and make
+`transaction` real. Check the ORM factories first; most people never write one.
+
 `query` receives each statement already written for the adapter's declared
 dialect (`?` on sqlite, `$1`-style on postgres) and must pass it to the driver
 VERBATIM — nothing rewrites placeholders, in either direction. It returns
@@ -1137,7 +1297,14 @@ createHost({ db: typeOrmDb(dataSource, "sqlite") }); // sequelizeDb(sequelize, �
 ```
 
 Named `SqlAdapter` factories for the ORM handles `createSqlPayments` cannot
-accept directly. The parameter types (`KnexLike`, `PrismaLike`, `TypeOrmLike`,
+accept directly.
+
+**Where it fits:** Pick the one matching your ORM and pass its result as `db`
+wherever you would have passed a pg pool, right where you build the host, using
+the ORM handle your application already shares. That is the whole persistence
+wiring.
+
+The parameter types (`KnexLike`, `PrismaLike`, `TypeOrmLike`,
 `SequelizeLike`) are structural, so no ORM dependency is added. `dialect`
 (`SqlDialect`) is required — nothing on the handles states it reliably. Each
 factory owns its ORM's raw-query quirks: `knexDb` normalizes the per-driver
@@ -1284,10 +1451,15 @@ the string form of `resolveAssetUrl`, and the only form plain markup can carry. 
 npx openreceive scaffold payments [options]
 ```
 
-Emits one schema/migration file for your ORM — `openreceive_payments` and the
-`openreceive_meta` reconcile gate together — plus an `OPENRECEIVE_PAYMENTS.md`
-wiring guide, nothing else. Never opens a database connection or runs
-migrations.
+Emits one schema/migration file for your ORM that creates two tables,
+`openreceive_payments` (the payment attempts) and `openreceive_meta` (the
+reconcile gate), plus an `OPENRECEIVE_PAYMENTS.md` wiring guide. Nothing else:
+it never opens a database connection or runs migrations.
+
+**Where it fits:** Run it once, at the start of the integration, from the
+directory that holds your ORM's migrations, then apply the migration the way you
+apply your own. Commit the generated file; you will not run this again unless
+you change table names.
 
 Every generated file carries the exactly-once fulfillment note.
 
@@ -1308,7 +1480,14 @@ npx openreceive doctor
 npx openreceive doctor --db db/production.sqlite3 --url http://localhost:3000
 ```
 
-Checks the server configuration and says what to fix. Always: the Node
+Checks the server configuration and says what to fix.
+
+**Where it fits:** Run it first, before writing any code, on the machine the app
+will run on, and again whenever a deploy misbehaves. Run it when the payment
+page says the wallet is unavailable and you don't know why. Once the app is up,
+add `--db` and `--url` to check the tables and the routes too.
+
+Always: the Node
 version, working directory, `NWC_URI` presence and parseability (printed
 redacted), and `LSC_URI_*` connections. When `NWC_URI` parses, it also probes
 the wallet over the relay — the same preflight boot runs — and reports whether
@@ -1336,7 +1515,14 @@ bin/rails generate openreceive:install
 Emits one migration — `db/migrate/*_create_openreceive_tables.rb`, creating
 both `openreceive_payments` and the `openreceive_meta` reconcile gate — a
 simplified `config/initializers/openreceive.rb`, and the engine route mount at
-`/openreceive`. The migration adapts to the app's configured database adapter:
+`/openreceive`.
+
+**Where it fits:** Run it once right after adding the gem, then `bin/rails
+db:migrate`. The files it creates are where the rest of the integration goes:
+the three hooks below go in the initializer, and the browser packages point
+their `prefix` at the mount.
+
+The migration adapts to the app's configured database adapter:
 PostgreSQL, SQLite, and MySQL (`mysql2`/`trilogy`) are supported. The
 `OpenReceivePayment` model is engine-owned — no model file is generated. The
 generated initializer ships two placeholders:
@@ -1357,6 +1543,12 @@ anything real.
 ```ruby
 OpenReceive.configure do |config| ... end
 ```
+
+**Where it fits:** This lives in `config/initializers/openreceive.rb` and runs
+at boot. It is the only place your application and OpenReceive meet: `authorize`
+is your "is this their order?" check, `amount_for` is your price lookup, and
+`on_paid` is where you mark the order paid. Everything else in the engine is
+generic; these three are the integration.
 
 Three hooks are required — authorization, the trusted price, and fulfillment —
 plus a handful of optional settings:
@@ -1476,7 +1668,14 @@ OpenReceive::ReconcileJob.perform_later
 ```
 
 One reconciliation pass wrapped for your ActiveJob backend — a one-shot
-primitive. Nothing to schedule: request-path opportunistic reconcile is the
+primitive.
+
+**Where it fits:** Enqueue it from your own code when you want a scan soon but
+not inside the request: after a support agent presses "re-check payment", or
+from a scheduler if you run one. It is a convenience around
+`OpenReceive.reconcile!`, not something the engine requires.
+
+Nothing to schedule: request-path opportunistic reconcile is the
 default settlement driver.
 
 ### rake openreceive:doctor
@@ -1485,7 +1684,14 @@ default settlement driver.
 bin/rails openreceive:doctor
 ```
 
-Step 0 of the agent directions as one command. Reports credential PRESENCE
+Step 0 of the agent directions as one command.
+
+**Where it fits:** Run it first, before touching the initializer, and again
+after every deploy or credential change. It tells you which of the three hooks
+are still placeholders and whether the wallet answers, without printing a
+secret, so its output is safe to paste into an issue.
+
+Reports credential PRESENCE
 (`NWC_URI`, `LSC_URI_*`) — every line is `set` or `unset`, and no secret value
 is ever printed, echoed, or partially shown, which is what makes it safe to
 run in a shared terminal or paste into an issue. Alongside that: whether
@@ -1504,6 +1710,10 @@ bin/rails openreceive:reconcile
 Equivalent one-pass rake task — a one-shot primitive; prints the number of
 attempts scanned.
 
+**Where it fits:** Use it from a cron entry, a console, or a runbook when you
+want to force a scan now: after a wallet outage, or while finding out why an
+order is still unpaid. Day to day the request-path pass does this for you.
+
 ### rake openreceive:notifications
 
 ```sh
@@ -1517,11 +1727,20 @@ which also reconciles periodically
 (`OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS`, default 15) — its own
 safety net for notifications missed while it was down.
 
+**Where it fits:** Run it as its own long-running process (a `worker` line in
+your Procfile) when you want orders marked paid the moment the wallet sees the
+payment. Without it the app still settles every order, just on the payer's next
+status poll.
+
 ### OpenReceive.reconcile!
 
 ```ruby
 OpenReceive.reconcile!(overlap_seconds: 60, now: nil, max_pages: nil, deadline: nil) # => Array<Hash>
 ```
+
+**Where it fits:** Call it from your own job, script, or console when you want
+one pass now and want the results back in Ruby, for example to show them in an
+admin view. The rake task and the job above are thin wrappers around it.
 
 **Parameters**
 
@@ -1553,7 +1772,14 @@ OpenReceive.maybe_reconcile!(now: nil) # => Hash
 The gated pass behind the engine's request-path opportunistic reconcile (an
 `around_action` on the engine's controllers — exactly one gate claim per
 request), exported for routes and middleware of your own: they never auto-run
-it, and Rack applications call it themselves. Never raises — a failed
+it, and Rack applications call it themselves.
+
+**Where it fits:** Add it to a controller action of your own that a waiting
+payer polls, such as an order-status endpoint, so settlement gets a chance to
+run there too. It is safe to call on every request: it returns at once when
+nothing is pending or another worker just scanned.
+
+Never raises — a failed
 or timed-out scan warns and returns `scan_failed`, leaving the gate claimed so
 a broken wallet cannot stampede. Returns
 `{ "reason" => "ran", "checks" => [...] }` (the per-hash check hashes) or
@@ -1566,6 +1792,12 @@ OpenReceive.listen_for_notifications!(overlap_seconds: 60)
 ```
 
 Subscribes to the configured NWC client's `payment_received` notifications.
+
+**Where it fits:** You'll only call this yourself when writing your own worker
+instead of `rake openreceive:notifications`, for instance to run it under your
+own supervisor with your own logging. It blocks, so it belongs in a dedicated
+process, never in a request or a job with a timeout.
+
 Same direct-settlement semantics as the Node listener: a payload satisfying
 the shared settlement rule that matches a pending attempt settles directly
 through the engine's `mark_paid_once!`/`on_paid` path with no wallet scan for
