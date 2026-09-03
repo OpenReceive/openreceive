@@ -17,6 +17,7 @@ import { createPriceFeed, listRates, quoteRates, readPriceCurrencies } from "./s
 import {
   createNwcEndpointLogger,
   emitLog,
+  summarizeReconcilePass,
   summarizeSwapProviderApiRequest,
   summarizeSwapProviderApiResponse,
 } from "./service/logging.ts";
@@ -146,27 +147,37 @@ export async function createOpenReceive(
         // while attempts are pending), so operators can watch settlement
         // discovery and the batched list_transactions window without turning
         // on debug logging. Per-page detail stays at debug
-        // (nwc.list_transactions.*).
+        // (nwc.list_transactions.*). One line per poll, and a short one: this
+        // fires on every status poll while a payer waits.
+        const settledCount = results.filter((result) => result.status === "settled").length;
+        const pendingCount = results.filter((result) => result.status === "pending").length;
+        const notFoundCount = results.filter((result) => result.status === "not_found").length;
         emitLog(
           nodeOptions,
           "info",
           "payment.reconcile.completed",
-          "NWC payment reconciliation completed.",
+          summarizeReconcilePass({
+            attemptCount: input.attempts.length,
+            resultCount: results.length,
+            settledCount,
+            pendingCount,
+            notFoundCount,
+          }),
           {
+            attempt_count: input.attempts.length,
+            settled_count: settledCount,
+            pending_count: pendingCount,
+            // Zero-valued extras stay off the line; the message already says
+            // what was decided.
+            ...(notFoundCount === 0 ? {} : { not_found_count: notFoundCount }),
             // Attempts scanned vs hashes decided: results collapse duplicate
             // hashes and omit any the wallet walk could not reach, so a gap
             // between these two is how a truncated scan shows up in the log.
-            attempt_count: input.attempts.length,
-            result_count: results.length,
-            settled_count: results.filter((result) => result.status === "settled").length,
-            pending_count: results.filter((result) => result.status === "pending").length,
-            not_found_count: results.filter((result) => result.status === "not_found").length,
+            ...(results.length === input.attempts.length ? {} : { result_count: results.length }),
             // All pending attempts share these walks: one creation-time window,
             // never one wallet call per invoice.
-            list_transactions_walks: walks.length,
-            ...(walks[0] === undefined
-              ? {}
-              : { window_from: walks[0].from, window_until: walks[0].until }),
+            walks: walks.length,
+            ...(walks[0] === undefined ? {} : { window: `${walks[0].from}..${walks[0].until}` }),
           },
         );
         return results;

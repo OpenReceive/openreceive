@@ -6,6 +6,17 @@
   themes: light --default, dark;
 }
 
+/* Container-query breakpoints. Tailwind's defaults (@sm 24rem, @md 28rem,
+   @lg 32rem) are far smaller than its viewport ones; the checkout layouts were
+   designed at the viewport values and now measure the drop-in's own inline
+   size instead (the root is the `@container`), so the values carry over.
+   `--container-*` also scales `max-w-sm`-style utilities — none are used here. */
+@theme {
+  --container-sm: 40rem;
+  --container-md: 48rem;
+  --container-lg: 64rem;
+}
+
 @source "./ui-classes.ts";
 @source "./internal/**/*.{ts,tsx}";
 

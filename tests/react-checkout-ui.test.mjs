@@ -354,12 +354,26 @@ test("React <Checkout reference> enters create mode and renders the creating pla
   assert.match(html, /openreceive-checkout-creating/);
   assert.match(html, /Creating checkout/);
   assert.doesNotMatch(html, />Copy invoice</);
+  // The placeholder is the checkout's own root — style root, theme, surface
+  // padding — not an unthemed section that flashes white on a dark host.
+  assert.match(html, /data-openreceive-root=""/);
+  assert.match(html, /data-theme="light"/);
+  assert.match(html, /class="[^"]*\bp-4\b[^"]*openreceive-checkout-creating/);
 
   // A create with the default prefix (no prefix prop) also enters create mode.
   const defaultPrefixHtml = renderToStaticMarkup(
     React.createElement(Checkout, { reference: "ord-2" }),
   );
   assert.match(defaultPrefixHtml, /openreceive-checkout-creating/);
+});
+
+test("React <Checkout reference theme=dark> themes the creating placeholder", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(Checkout, { reference: "ord-1", theme: "dark" }),
+  );
+  assert.match(html, /openreceive-checkout-creating/);
+  assert.match(html, /<section[^>]*data-theme="dark"/);
+  assert.match(html, /data-openreceive-theme="dark"/);
 });
 
 test("React <Checkout checkout> renders a supplied snapshot", () => {

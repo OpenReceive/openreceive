@@ -59,6 +59,31 @@ export function createNwcEndpointLogger(
   return (entry) => emitEvent(options, entry);
 }
 
+/**
+ * The message of `payment.reconcile.completed`: what the pass decided, in a
+ * few words — "1 pending", "1 settled, 2 pending", "3 pending of 4 attempts"
+ * when the walk could not reach every hash (a truncated scan). Zero counts
+ * stay out; this line prints on every status poll while a payer waits.
+ */
+export function summarizeReconcilePass(input: {
+  readonly attemptCount: number;
+  readonly resultCount: number;
+  readonly settledCount: number;
+  readonly pendingCount: number;
+  readonly notFoundCount: number;
+}): string {
+  const decided = [
+    [input.settledCount, "settled"],
+    [input.pendingCount, "pending"],
+    [input.notFoundCount, "not found"],
+  ]
+    .filter(([count]) => (count as number) > 0)
+    .map(([count, label]) => `${count} ${label}`);
+  const summary = decided.length === 0 ? "0 decided" : decided.join(", ");
+  const attempts = `${input.attemptCount} ${input.attemptCount === 1 ? "attempt" : "attempts"}`;
+  return input.resultCount === input.attemptCount ? summary : `${summary} of ${attempts}`;
+}
+
 export function sanitizeEvent(entry: LogEvent): LogEvent {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {

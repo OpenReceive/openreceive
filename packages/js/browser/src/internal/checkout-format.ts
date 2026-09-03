@@ -3,7 +3,13 @@
 // hash / timestamp / invoice, and the HTML escaper every string renderer runs
 // values through. Pure functions over values — nothing here reads a snapshot.
 
-import { ceilDiv, formatDecimal, isBitcoinAmountCurrency, parseDecimal } from "@openreceive/core";
+import {
+  ceilDiv,
+  decimalScaleFactor,
+  formatDecimal,
+  isBitcoinAmountCurrency,
+  parseDecimal,
+} from "@openreceive/core";
 
 export function formatCountdown(seconds: number): string {
   const safeSeconds = Math.max(0, Math.trunc(seconds));
@@ -87,10 +93,26 @@ export function formatFiatAmount(
   // "SAT" and "SATS" are one currency to core's isBitcoinAmountCurrency, so
   // they render alike here rather than "SAT" falling through as pseudo-fiat.
   if (isBitcoinAmountCurrency(fiat.currency)) return `${fiat.value} sats`;
-  return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
+  const value = formatFiatValue(fiat.value);
+  return fiat.currency === "USD" ? `$${value}` : `${value} ${fiat.currency}`;
 }
 
-/** Combined QR caption, e.g. `19,174 sats / $12.00 US`. */
+/**
+ * Money at exactly two decimals with thousands grouping: "87.0" (a Ruby
+ * BigDecimal echo of the host's price) and "87" both render as "87.00",
+ * "1234.5" as "1,234.50". Exact bigint math — a display value with more than
+ * two decimals rounds half up, never through a binary float. Our own server
+ * sent the string, so a malformed one throws (parseDecimal) rather than
+ * quietly printing garbage on the payment screen.
+ */
+export function formatFiatValue(value: string): string {
+  const { units, scale } = parseDecimal(value, "fiat.value");
+  const cents = scale <= 2 ? units * decimalScaleFactor(2 - scale) : rescaleHalfUp(units, scale, 2);
+  const [whole, fraction] = formatDecimal(cents, 2).split(".");
+  return `${BigInt(whole).toLocaleString("en-US")}.${fraction}`;
+}
+
+/** Combined QR caption, e.g. `19,174 sats / $12.00 USD` — the ISO code, because "$" alone does not say which dollar. */
 export function formatAmountCaption(options: {
   readonly amountLabel?: string;
   readonly fiatLabel?: string;
@@ -99,8 +121,8 @@ export function formatAmountCaption(options: {
   const fiat =
     options.fiatLabel === undefined
       ? undefined
-      : options.fiatCurrency === "USD" && !options.fiatLabel.endsWith(" US")
-        ? `${options.fiatLabel} US`
+      : options.fiatCurrency === "USD" && !options.fiatLabel.endsWith(" USD")
+        ? `${options.fiatLabel} USD`
         : options.fiatLabel;
   if (options.amountLabel !== undefined && fiat !== undefined) {
     return `${options.amountLabel} / ${fiat}`;

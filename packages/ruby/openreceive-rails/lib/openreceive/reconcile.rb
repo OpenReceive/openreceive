@@ -230,17 +230,25 @@ module OpenReceive
     # attempts are pending), so operators can watch settlement discovery and
     # the batched list_transactions window without raising the log level. All
     # pending attempts share one creation-time window walked at most twice —
-    # never one wallet call per invoice.
+    # never one wallet call per invoice. One short line per poll: this fires
+    # on every status poll while a payer waits. Mirrors the JS
+    # payment.reconcile.completed line.
     def log_reconcile_pass(attempts, results, overlap_seconds, observed_at)
       logger = openreceive_logger
       return if logger.nil?
 
       counts = results.group_by { |checked| checked["status"] }.transform_values(&:length)
+      decided = %w[settled pending not_found].filter_map do |status|
+        count = counts[status]
+        "#{count} #{status.tr('_', ' ')}" unless count.nil? || count.zero?
+      end
+      decided = ["0 decided"] if decided.empty?
+      # Attempts scanned vs hashes decided: a gap is how a truncated scan shows up.
+      scanned = results.length == attempts.length ? "" : " of #{attempts.length} attempts"
       window_from = [attempts.map { |attempt| Integer(attempt.fetch("created_at")) }.min - overlap_seconds, 0].max
       logger.info(
-        "[openreceive] reconcile pass: #{attempts.length} pending attempt(s) in one " \
-        "batched list_transactions window (from #{window_from} until #{observed_at + overlap_seconds}, <=2 walks): " \
-        "#{counts.map { |status, count| "#{count} #{status}" }.join(', ')}"
+        "[openreceive] payment.reconcile.completed: #{decided.join(', ')}#{scanned} " \
+        "attempt_count=#{attempts.length} window=#{window_from}..#{observed_at + overlap_seconds}"
       )
     rescue StandardError
       # Diagnostics must never affect the pass.

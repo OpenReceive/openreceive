@@ -61,11 +61,45 @@ test("createConsoleLogger emits timestamped LEVEL-prefixed lines and filters by 
 
   assert.equal(lines.length, 1);
   assert.equal(lines[0].method, "info");
+  // One console argument, one line: fields ride inline as key=value. Passed as
+  // a second argument, Node printed any object past ~70 characters across
+  // several lines — a reconcile pass was ten lines on every status poll.
+  assert.deepEqual(lines[0].args, [
+    "[2026-07-30T00:01:58.332Z] INFO [openreceive:test] payment.check.completed: NWC payment settlement poll completed. status=settled",
+  ]);
+});
+
+test("createConsoleLogger keeps every field on the one line", () => {
+  const lines = [];
+  const logger = createConsoleLogger({
+    prefix: "openreceive",
+    minLevel: "info",
+    now: () => new Date("2026-07-30T00:01:58.332Z"),
+    console: { info: (...args) => lines.push(args) },
+  });
+  logger({
+    level: "info",
+    event: "payment.reconcile.completed",
+    message: "1 pending",
+    attempt_count: 1,
+    settled_count: 0,
+    pending_count: 1,
+    walks: 2,
+    window: "1788447941..1788448061",
+    error_message: "rate limit: try again",
+    nested: { code: "E_RATE", retryable: true },
+    tags: ["a", "b"],
+    skipped: undefined,
+  });
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].length, 1);
   assert.equal(
-    lines[0].args[0],
-    "[2026-07-30T00:01:58.332Z] INFO [openreceive:test] payment.check.completed: NWC payment settlement poll completed.",
+    lines[0][0],
+    "[2026-07-30T00:01:58.332Z] INFO [openreceive] payment.reconcile.completed: 1 pending " +
+      "attempt_count=1 settled_count=0 pending_count=1 walks=2 window=1788447941..1788448061 " +
+      `error_message="rate limit: try again" nested={ code: 'E_RATE', retryable: true } tags=[ 'a', 'b' ]`,
   );
-  assert.deepEqual(lines[0].args[1], { status: "settled" });
+  assert.doesNotMatch(lines[0][0], /\n/);
 });
 
 test("createAppConsoleLogger includes timestamps and honors minLevel", () => {
@@ -87,11 +121,9 @@ test("createAppConsoleLogger includes timestamps and honors minLevel", () => {
   log("openreceive.on_paid", "Checkout settled.", { reference: "o1" }, "warn");
 
   assert.equal(lines.length, 1);
-  assert.equal(
-    lines[0][0],
-    "[2026-07-30T00:01:58.332Z] WARN [buttons:test:server] openreceive.on_paid: Checkout settled.",
-  );
-  assert.deepEqual(lines[0][1], { reference: "o1" });
+  assert.deepEqual(lines[0], [
+    "[2026-07-30T00:01:58.332Z] WARN [buttons:test:server] openreceive.on_paid: Checkout settled. reference=o1",
+  ]);
 });
 
 test("createOpenReceive attaches a console logger when the host omits logger", async () => {

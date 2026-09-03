@@ -50,7 +50,7 @@ for (const framework of CHECKOUT_FRAMEWORKS) {
     // Invoice screen: QR, amount matching the cart, working copy button.
     await expect(page.getByText("Bitcoin Lightning invoice")).toBeVisible();
     await expect(page.locator("[data-openreceive-qr] svg")).toBeVisible();
-    await expect(page.getByText(`${BUTTON_SATS} / ${BUTTON_PRICE} US`)).toBeVisible();
+    await expect(page.getByText(`${BUTTON_SATS} / ${BUTTON_PRICE} USD`)).toBeVisible();
     await page.getByRole("button", { name: "Copy invoice" }).click();
     await expect(page.getByText("Copied!")).toBeVisible();
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());

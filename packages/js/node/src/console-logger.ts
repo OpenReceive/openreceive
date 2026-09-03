@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import { compact } from "@openreceive/core";
 import { logLevelOrder, readLogLevelFromEnvironment, resolveLogLevel } from "./log-level.ts";
 import type { LogEvent, Logger, LogLevel } from "./service/types.ts";
@@ -19,7 +20,10 @@ export interface CreateConsoleLoggerOptions {
  * Logger that writes OpenReceive {@link LogEvent} values to the console.
  * Pair with the auto-attached file logger, or pass as `createOpenReceive({ logger })`.
  *
- * Format: `[ISO8601] LEVEL [prefix] event: message { fields }`
+ * Format: `[ISO8601] LEVEL [prefix] event: message key=value key=value`, one
+ * line per event. The fields used to ride along as a second console argument,
+ * which Node prints as a multi-line object once it passes ~70 characters — a
+ * reconcile pass with eight counters was ten lines on every status poll.
  */
 export function createConsoleLogger(options: CreateConsoleLoggerOptions = {}): Logger {
   const prefix = options.prefix ?? "openreceive";
@@ -50,8 +54,8 @@ export function createConsoleLogger(options: CreateConsoleLoggerOptions = {}): L
         prefix,
         event,
         message,
+        fields: compact(fields),
       }),
-      compact(fields),
     );
   };
 }
@@ -102,8 +106,8 @@ export function createAppConsoleLogger(options: CreateAppConsoleLoggerOptions): 
         prefix: options.prefix,
         event,
         message,
+        fields: compact(fields),
       }),
-      compact(fields),
     );
   };
 }
@@ -114,6 +118,25 @@ function formatConsoleLogLine(input: {
   readonly prefix: string;
   readonly event: string;
   readonly message: string;
+  readonly fields: Record<string, unknown>;
 }): string {
-  return `[${input.at}] ${input.level.toUpperCase()} [${input.prefix}] ${input.event}: ${input.message}`;
+  const head = `[${input.at}] ${input.level.toUpperCase()} [${input.prefix}] ${input.event}: ${input.message}`;
+  const fields = Object.entries(input.fields).map(
+    ([key, value]) => `${key}=${formatFieldValue(value)}`,
+  );
+  return fields.length === 0 ? head : `${head} ${fields.join(" ")}`;
+}
+
+/**
+ * One token per field: bare numbers, booleans and plain words; anything with
+ * whitespace or quoting is JSON-quoted, and objects/arrays print in Node's
+ * single-line inspect form so a nested error summary still fits one line.
+ */
+function formatFieldValue(value: unknown): string {
+  if (typeof value === "string")
+    return /^[\w.\-:/@+]*$/.test(value) ? value : JSON.stringify(value);
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return inspect(value, { breakLength: Number.POSITIVE_INFINITY, compact: true, depth: 4 });
 }

@@ -98,7 +98,32 @@ stamps and styles its resolved theme. `defaultTheme` is the starting point
 only until the payer makes a choice; use `theme` when the host, not the
 payer, owns the decision. Server-rendered pages paint the default before the
 stored preference applies on mount — a host that must avoid that one-frame
-flash passes `theme` or a server-readable `storage`.
+flash passes `theme` or a server-readable `storage`. The "Creating checkout…"
+and "Could not start checkout." screens that precede a created checkout carry
+the same resolved theme.
+
+## Layout and surface
+
+The checkout lays itself out by its **own width**, not the viewport's. Its
+root is a CSS size query container (`container-type: inline-size`, named
+`openreceive`), and every internal breakpoint is a container query at the
+usual values — one column of payment methods under 40rem of checkout width,
+two from 40rem, three from 48rem, four from 64rem; the two-column wallet list
+from 48rem. A checkout mounted in a 560px card on a 1280px page lays out like
+a 560px screen. The one thing this asks of the host: give the root a width.
+It is a block-level element, so any normal container does; as a flex or grid
+item, add `flex: 1` / `width: 100%` — an inline-size container cannot size
+itself from its contents. Container queries and `cqw` units have been in every
+browser since 2023.
+
+The root paints the theme's `base-100` surface and pads and rounds itself
+(`p-4`, `rounded-box`). A host that draws its own card around the checkout
+and wants no second surface sets `--root-bg: transparent` on
+`[data-openreceive-root]`; a host that wants a tighter or looser inset
+overrides `padding` there. Both work because every rule in the shipped
+stylesheet is wrapped in `:where()` and carries **zero specificity**: a
+host's own selector, however plain, wins on the same property. That is a
+compatibility promise, not an accident.
 
 ## Show the payer what they are buying
 

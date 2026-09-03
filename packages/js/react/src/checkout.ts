@@ -125,7 +125,19 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     resumePathPrefix = "/checkout",
     routeReference,
     resumePaymentHash,
+    theme: lockedTheme,
+    defaultTheme,
+    storageKey,
   } = props;
+  // The creating and error screens are themed like the checkout they precede:
+  // the same resolution CheckoutView runs (lock, ancestor ThemeScope, stored
+  // choice, system), stamped as `data-theme` on their root. Without it both
+  // screens painted the light palette on a dark host — a white flash on every
+  // checkout open, and an all-white error screen.
+  const theme = useTheme({ defaultTheme, storageKey, theme: lockedTheme });
+  const themeAttributes = theme.fromScope
+    ? { "data-theme": theme.resolvedTheme }
+    : theme.attributes;
 
   const [created, setCreated] = React.useState<{
     readonly status: "pending" | "ready" | "error";
@@ -243,33 +255,41 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     });
   }
 
+  // Both pre-create screens are the same root the checkout will render into
+  // (surface, padding, theme), with the notice body inside — the custom
+  // element nests them the same way.
   if (created.status === "error") {
     return React.createElement(
       "section",
       {
         className: joinClassNames(
           className,
+          orClasses.root,
           classNames?.root,
-          orClasses.creating,
           "openreceive-checkout-error",
         ),
         [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
         [OPENRECEIVE_STYLE_ROOT_ATTRIBUTE]: "",
+        ...themeAttributes,
       },
-      React.createElement("p", { role: "alert" }, "Could not start checkout."),
-      // The thrown error carries the server's payer-facing text (e.g. the
-      // rate-limit message or "Exchange rates are temporarily unavailable").
-      created.errorMessage === undefined
-        ? null
-        : React.createElement("p", null, created.errorMessage),
       React.createElement(
-        "button",
-        {
-          type: "button",
-          className: orClasses.btn,
-          onClick: () => setAttempt((count) => count + 1),
-        },
-        "Try again",
+        "div",
+        { className: orClasses.creating },
+        React.createElement("p", { role: "alert" }, "Could not start checkout."),
+        // The thrown error carries the server's payer-facing text (e.g. the
+        // rate-limit message or "Exchange rates are temporarily unavailable").
+        created.errorMessage === undefined
+          ? null
+          : React.createElement("p", null, created.errorMessage),
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: orClasses.btn,
+            onClick: () => setAttempt((count) => count + 1),
+          },
+          "Try again",
+        ),
       ),
     );
   }
@@ -279,18 +299,23 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     {
       className: joinClassNames(
         className,
+        orClasses.root,
         classNames?.root,
-        orClasses.creating,
         "openreceive-checkout-creating",
       ),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
       [OPENRECEIVE_STYLE_ROOT_ATTRIBUTE]: "",
+      ...themeAttributes,
     },
-    React.createElement("span", {
-      className: orClasses.spinner,
-      "aria-hidden": "true",
-    }),
-    React.createElement("p", null, "Creating checkout…"),
+    React.createElement(
+      "div",
+      { className: orClasses.creating },
+      React.createElement("span", {
+        className: orClasses.spinner,
+        "aria-hidden": "true",
+      }),
+      React.createElement("p", null, "Creating checkout…"),
+    ),
   );
 }
 

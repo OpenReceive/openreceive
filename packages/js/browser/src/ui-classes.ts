@@ -4,7 +4,18 @@
  */
 
 export const orClasses = {
-  root: "grid gap-3 min-w-0",
+  /**
+   * The drop-in's own box. It is a size QUERY CONTAINER (container-type: inline-size): every
+   * `@sm:` / `@md:` / `@lg:` variant below keys on this element's inline size,
+   * never on the viewport — the host decides how wide the checkout is, and a
+   * 560px card on a 1280px page must lay out like a 560px screen. The rem
+   * breakpoints are the viewport ones (see styles.source.css). daisyUI paints
+   * the theme's base-100 on this root, so it pads and rounds itself too: a
+   * painted surface with content flush against its edges is never right. No
+   * container variant may appear on THIS string — a container cannot query
+   * itself.
+   */
+  root: "grid gap-3 min-w-0 rounded-box p-4 @container/openreceive",
   /**
    * What the payer is buying, above the amount. Present only when the host
    * returned a `description` from its amount hook — the checkout renders the
@@ -12,12 +23,13 @@ export const orClasses = {
    * default path has.
    */
   orderDescription: "text-base font-semibold leading-snug m-0 min-w-0",
-  paymentLayout: "grid gap-3 grid-cols-[auto_minmax(0,1fr)] gap-x-3 md:gap-x-5 items-start min-w-0",
+  paymentLayout:
+    "grid gap-3 grid-cols-[auto_minmax(0,1fr)] gap-x-3 @md:gap-x-5 items-start min-w-0",
   paymentLayoutExpired: "grid gap-3 grid-cols-1 items-start min-w-0",
   lightningPane: "grid gap-2 items-start justify-items-start min-w-0",
-  qr: "justify-self-start w-[min(148px,38vw)] md:w-[min(200px,36vw)] [&_svg]:block [&_svg]:w-full [&_svg]:h-auto",
+  qr: "justify-self-start w-[min(148px,38cqw)] @md:w-[min(200px,36cqw)] [&_svg]:block [&_svg]:w-full [&_svg]:h-auto",
   satsDetail:
-    "text-base-content/60 text-sm leading-snug justify-self-start max-w-[min(148px,38vw)] md:max-w-[min(200px,36vw)]",
+    "text-base-content/60 text-sm leading-snug justify-self-start max-w-[min(148px,38cqw)] @md:max-w-[min(200px,36cqw)]",
   invoiceTitle: "m-0 text-sm font-semibold leading-tight",
   paymentInfo: "grid gap-1.5 min-w-0 content-start",
   meta: "flex flex-wrap gap-1.5 items-center",
@@ -39,18 +51,19 @@ export const orClasses = {
   settledIcon: "size-8 shrink-0 text-success",
   countdown: "text-base-content/60 text-sm",
   countdownStrong: "text-base-content font-semibold",
-  creating: "grid gap-2 place-items-center p-4",
+  /** The spinner/notice body of the creating, minting and create-error screens; sits inside `root`, which pads. */
+  creating: "grid gap-2 place-items-center",
   wizard: "overflow-hidden rounded-box border border-base-content/20 bg-base-200 grid gap-0",
-  wizardHeader: "grid gap-0.5 px-4 py-4 sm:px-5",
-  wizardHeaderTitle: "text-lg font-bold m-0 sm:text-xl",
+  wizardHeader: "grid gap-0.5 px-4 py-4 @sm:px-5",
+  wizardHeaderTitle: "text-lg font-bold m-0 @sm:text-xl",
   wizardHeaderSubtitle: "text-base-content/65 text-sm m-0 mt-0.5",
-  wizardBody: "border-t border-base-content/15 grid gap-3 p-4 sm:p-5",
+  wizardBody: "border-t border-base-content/15 grid gap-3 p-4 @sm:p-5",
   methodGrid:
-    "grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-4",
+    "grid grid-cols-1 items-stretch gap-2 @sm:grid-cols-2 @sm:gap-3 @md:grid-cols-3 @lg:grid-cols-4",
   methodCardUnavailable:
     "flex h-full min-h-28 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-3 py-4 text-center text-base-content opacity-50 cursor-not-allowed shadow-sm",
   methodCurrenciesLoading:
-    "flex min-h-28 w-full flex-col items-center justify-center gap-2 rounded-box border border-dashed border-base-content/25 bg-base-100 px-3 py-4 text-center text-base-content/70 shadow-sm sm:col-span-2 md:col-span-3 lg:col-span-4",
+    "flex min-h-28 w-full flex-col items-center justify-center gap-2 rounded-box border border-dashed border-base-content/25 bg-base-100 px-3 py-4 text-center text-base-content/70 shadow-sm @sm:col-span-2 @md:col-span-3 @lg:col-span-4",
   methodCardReady:
     "flex h-full min-h-28 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-3 py-4 text-center text-base-content shadow-sm transition-colors hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary cursor-pointer",
   methodCardActiveBitcoin: "border-warning bg-warning/10 ring-1 ring-warning/50",
@@ -59,9 +72,10 @@ export const orClasses = {
   methodCardActiveSol: "border-primary bg-primary/10 ring-1 ring-primary/50",
   methodCardActiveEth: "border-secondary bg-secondary/10 ring-1 ring-secondary/50",
   methodCardActiveDefault: "border-primary bg-primary/10 ring-1 ring-primary/50",
-  methodIconWrap: "grid size-9 shrink-0 place-items-center overflow-hidden rounded-full sm:size-10",
-  methodIcon: "size-9 aspect-square sm:size-10",
-  methodTitle: "block truncate font-bold text-sm sm:text-base",
+  methodIconWrap:
+    "grid size-9 shrink-0 place-items-center overflow-hidden rounded-full @sm:size-10",
+  methodIcon: "size-9 aspect-square @sm:size-10",
+  methodTitle: "block truncate font-bold text-sm @sm:text-base",
   methodTitleWrap: "min-w-0 w-full text-center",
   methodDetail: "text-base-content/60 text-xs leading-snug",
   /**
@@ -73,20 +87,20 @@ export const orClasses = {
   /** Limit / unavailable hint under a payment tile — visible at all breakpoints. */
   methodLimitHint: "block px-1 text-center text-xs leading-snug text-base-content/55",
   methodNetworkReveal: "rounded-box border border-base-content/20 bg-base-100 p-3",
-  methodNetworkRevealDesktop: "mt-3 hidden sm:block",
-  methodNetworkRevealMobile: "ml-4 border-l border-base-content/30 pl-3 sm:hidden",
-  methodNetworkRevealMobileUsdt: "ml-4 border-l border-success/40 pl-3 sm:hidden",
-  methodNetworkRevealMobileUsdc: "ml-4 border-l border-info/40 pl-3 sm:hidden",
+  methodNetworkRevealDesktop: "mt-3 hidden @sm:block",
+  methodNetworkRevealMobile: "ml-4 border-l border-base-content/30 pl-3 @sm:hidden",
+  methodNetworkRevealMobileUsdt: "ml-4 border-l border-success/40 pl-3 @sm:hidden",
+  methodNetworkRevealMobileUsdc: "ml-4 border-l border-info/40 pl-3 @sm:hidden",
   methodNetworkRevealAnim:
-    "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none sm:hidden",
+    "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none @sm:hidden",
   methodNetworkRevealAnimOpen: "mt-2 grid-rows-[1fr] opacity-100",
   methodNetworkRevealAnimClosed: "grid-rows-[0fr] opacity-0",
   methodNetworkRevealInner: "min-h-0 overflow-hidden",
   methodNetworkLayout:
-    "grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_minmax(8rem,auto)] lg:items-start",
+    "grid gap-3 @lg:grid-cols-[9rem_minmax(0,1fr)_minmax(8rem,auto)] @lg:items-start",
   methodNetworkHeading: "text-sm font-semibold text-base-content m-0",
   methodNetworkHint: "mt-0.5 text-xs text-base-content/55 m-0",
-  methodNetworkGrid: "grid grid-cols-1 gap-2 min-[390px]:grid-cols-3 items-start",
+  methodNetworkGrid: "grid grid-cols-1 gap-2 @min-[390px]:grid-cols-3 items-start",
   methodNetworkButton:
     "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border border-base-content/25 bg-base-100 px-3 text-sm text-base-content shadow-sm hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
   methodNetworkButtonUnavailable:
@@ -108,7 +122,7 @@ export const orClasses = {
   methodTile: "grid h-full min-w-0 content-start gap-0.5",
   breadcrumbs: "breadcrumbs text-sm",
   breadcrumbCurrent: "font-bold",
-  routePicker: "grid grid-cols-2 md:grid-cols-4 gap-2",
+  routePicker: "grid grid-cols-2 @md:grid-cols-4 gap-2",
   routeButton:
     "card card-border bg-base-100 grid gap-1.5 content-start min-h-[120px] p-2.5 text-left cursor-pointer hover:border-primary",
   routeButtonSelected:
@@ -117,16 +131,16 @@ export const orClasses = {
   wizardEmpty: "alert",
   wizardRoute: "grid gap-3",
   wizardRouteHeading: "flex flex-wrap items-center gap-2",
-  providerGrid: "grid grid-cols-1 md:grid-cols-2 gap-2",
+  providerGrid: "grid grid-cols-1 @md:grid-cols-2 gap-2",
   providerCard:
-    "card card-border bg-base-100 p-3 grid gap-2 items-center grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-x-2 md:gap-y-1",
+    "card card-border bg-base-100 p-3 grid gap-2 items-center grid-cols-[minmax(0,1fr)_auto] @md:grid-cols-[minmax(0,1fr)_auto_auto] @md:gap-x-2 @md:gap-y-1",
   providerHeading: "flex gap-2 items-center min-w-0",
   providerIcon: "rounded size-7 shrink-0",
   providerName: "font-semibold truncate m-0 min-w-0",
   providerKind: "text-base-content/60 text-sm m-0 justify-self-end text-right",
-  providerActions: "col-span-2 flex w-full md:col-span-1 md:w-auto md:justify-self-end",
-  providerOpen: "btn btn-outline btn-sm w-full md:w-auto",
-  swapActions: "grid gap-2.5 grid-cols-1 md:grid-cols-3",
+  providerActions: "col-span-2 flex w-full @md:col-span-1 @md:w-auto @md:justify-self-end",
+  providerOpen: "btn btn-outline btn-sm w-full @md:w-auto",
+  swapActions: "grid gap-2.5 grid-cols-1 @md:grid-cols-3",
   swapAction: "grid gap-2",
   swapEstimate: "text-base-content/60 m-0 text-sm",
   swapWarning: "alert alert-warning text-sm",
@@ -143,11 +157,11 @@ export const orClasses = {
   swapNetworkWarningBody: "m-0",
   swapNetworkWarningEmphasis: "font-bold underline",
   swapProgress: "text-base-content/60 m-0",
-  swapInstruction: "m-0 text-base-content text-base font-bold text-center md:text-left",
+  swapInstruction: "m-0 text-base-content text-base font-bold text-center @md:text-left",
   swapStart: "btn btn-outline",
   swapPanel: "grid gap-3",
   swapDepositLayout:
-    "grid gap-3 md:grid-cols-[auto_minmax(0,1fr)] md:gap-x-5 md:items-start min-w-0",
+    "grid gap-3 @md:grid-cols-[auto_minmax(0,1fr)] @md:gap-x-5 @md:items-start min-w-0",
   swapDepositSide: "grid gap-3 min-w-0 content-start",
   swapHeading: "flex flex-wrap gap-2 items-center justify-between",
   /**
@@ -174,7 +188,7 @@ export const orClasses = {
    * rather than the thing to point a phone at.
    */
   swapQrFrame:
-    "grid place-items-center justify-self-center rounded-box border border-base-content/15 bg-white p-3 md:justify-self-start [&_svg]:block [&_svg]:h-auto [&_svg]:w-[min(208px,100%)]",
+    "grid place-items-center justify-self-center rounded-box border border-base-content/15 bg-white p-3 @md:justify-self-start [&_svg]:block [&_svg]:h-auto [&_svg]:w-[min(208px,100%)]",
   swapDetails: "grid gap-2 m-0",
   swapDetailsDt: "text-base-content/60 text-xs font-bold uppercase",
   swapDetailsDd: "grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0",
