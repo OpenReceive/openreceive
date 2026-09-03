@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
+  OPENRECEIVE_STYLE_ROOT_ATTRIBUTE,
   OPENRECEIVE_THEME_STORAGE_KEY,
   createThemeModel,
   orClasses,
@@ -165,6 +166,11 @@ export function ThemeToggle(props: ThemeToggleProps): React.ReactElement {
     title: themeModel.toggleLabel,
     type,
     [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle]: "",
+    // The toggle can stand alone in host markup (a ThemeScope topbar, a site
+    // header), so it is a stylesheet root of its own and carries the theme it
+    // is painted in: the scoped sheet's palette starts at the nearest root.
+    [OPENRECEIVE_STYLE_ROOT_ATTRIBUTE]: "",
+    "data-theme": activeTheme,
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
       onClick?.(event);
       if (event.defaultPrevented) return;

@@ -185,7 +185,9 @@ import "@openreceive/react/styles.css";
 
 The checkout renders, polls, and settles itself. The compiled `styles.css`
 sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
-plain `<link rel="stylesheet">` works with no build step.
+plain `<link rel="stylesheet">` works with no build step — and scoped: every
+rule applies only inside what OpenReceive renders, so the sheet is safe next
+to any CSS framework (Mantine, Bootstrap, your own reset) in any import order.
 
 `<Checkout>` is complete as rendered: it already shows the `description` from
 `amountFor` and the collapsed transaction-details panel. Do not build a custom

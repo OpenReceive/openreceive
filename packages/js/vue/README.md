@@ -10,6 +10,7 @@ The component ships as a raw SFC on the `@openreceive/vue/checkout.vue` subpath
 ```vue
 <script setup lang="ts">
 import Checkout from "@openreceive/vue/checkout.vue";
+// Scoped to what OpenReceive renders: safe next to any CSS framework, in any order.
 import "@openreceive/vue/styles.css";
 </script>
 

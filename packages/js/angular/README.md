@@ -26,6 +26,7 @@ export class CheckoutPageComponent {
 ```
 
 ```css
+/* Scoped to what OpenReceive renders: safe next to any CSS framework, in any order. */
 @import "@openreceive/angular/styles.css";
 ```
 

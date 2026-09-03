@@ -9,6 +9,7 @@ components render unstyled.
 
 ```tsx
 import { Checkout } from "@openreceive/react";
+// Scoped to what OpenReceive renders: safe next to any CSS framework, in any order.
 import "@openreceive/react/styles.css";
 
 export function Pay() {

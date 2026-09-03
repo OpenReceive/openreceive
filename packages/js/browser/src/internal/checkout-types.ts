@@ -497,7 +497,7 @@ export interface CheckoutShellThemeToggleBinding {
 
 export interface CheckoutShellModel {
   readonly theme: ThemeModel;
-  readonly rootAttributes: Partial<ThemeModel["attributes"]>;
+  readonly rootAttributes: CheckoutShellRootAttributes;
   readonly checkout: CheckoutShellCheckoutBinding;
   readonly themeToggle: CheckoutShellThemeToggleBinding | null;
 }
@@ -522,7 +522,7 @@ export interface CreateCheckoutShellOptions extends CheckoutShellOptions {
 
 export interface CheckoutShellElements {
   readonly theme: ThemeModel;
-  readonly rootAttributes: Partial<ThemeModel["attributes"]>;
+  readonly rootAttributes: CheckoutShellRootAttributes;
   readonly checkout: HTMLElement;
   readonly themeToggle: HTMLElement | null;
 }
@@ -781,6 +781,15 @@ export interface ThemeModel {
     readonly theme: ResolvedTheme;
   };
 }
+
+/**
+ * What the Vue/Svelte/Angular shell `<section>` carries: the stylesheet scope
+ * marker always (see OPENRECEIVE_STYLE_ROOT_ATTRIBUTE in dom-contract.ts), the
+ * theme stamp only when the shell owns the theme.
+ */
+export type CheckoutShellRootAttributes = Partial<ThemeModel["attributes"]> & {
+  readonly "data-openreceive-root": "";
+};
 
 export interface PaymentWizardRequest {
   readonly selectedMethod: PaymentMethod | null;

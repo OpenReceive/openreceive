@@ -104,6 +104,18 @@ export const OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES = {
 export const OPENRECEIVE_CHECKOUT_DATA_SELECTORS = attributeSelectors(
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
 );
+/**
+ * The stylesheet scope marker. The shipped `styles.css` is rewritten at build
+ * time (tools/package/scope-styles.mjs) so every rule — preflight, theme
+ * variables, daisyUI components — applies only on or under an element carrying
+ * this attribute; loaded into a host page it is otherwise inert. Every
+ * light-DOM entry the packages render stamps it (React `<Checkout>` and
+ * `<ThemeToggle>`, the Vue/Svelte/Angular shell). Custom markup styled from
+ * `orClasses` needs it on its own container, together with the resolved
+ * `data-theme`, because the theme palette no longer flows from `:root`.
+ */
+export const OPENRECEIVE_STYLE_ROOT_ATTRIBUTE = "data-openreceive-root" as const;
+export const OPENRECEIVE_STYLE_ROOT_SELECTOR = `[${OPENRECEIVE_STYLE_ROOT_ATTRIBUTE}]` as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PARTS = {
   copy: "copy",
   startOver: "start-over",

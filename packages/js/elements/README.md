@@ -6,6 +6,7 @@ The OpenReceive checkout custom element (`<openreceive-checkout>`) and theme tog
 
 ```js
 import { defineElements } from "@openreceive/elements";
+// Scoped to what OpenReceive renders: safe next to any CSS framework, in any order.
 import "@openreceive/elements/styles.css";
 
 // Registers <openreceive-checkout> and <openreceive-theme-toggle> with the

@@ -159,6 +159,10 @@ Styling tokens (shared with the shipped `styles.css`):
   `networkMobileRevealClasses`,
   `networkSummaryIconClasses`.
 - `OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES`, `createCheckoutProviderCopyEvent`.
+- `OPENRECEIVE_STYLE_ROOT_ATTRIBUTE` (`data-openreceive-root`): the shipped
+  `styles.css` is scoped to it, so custom markup styled from `orClasses` sits
+  under a container that carries it plus the resolved `data-theme` — the theme
+  palette starts at that root, not at the page's `:root`.
 
 Element plumbing lives on `@openreceive/elements`, not here:
 `defineElements`, `createThemeToggleElement`,

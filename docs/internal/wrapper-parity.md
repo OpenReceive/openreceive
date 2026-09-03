@@ -82,7 +82,13 @@ Mode rules:
 - In React, `themeToggle: false` hides the packaged toggle but the checkout
   still stamps `data-theme` — hiding the control must not unstyle the widget.
   An ancestor `ThemeScope` is the one thing that takes the stamp over (the
-  scope already owns `data-theme` and renders a page toggle). React's `theme`
+  scope already owns `data-openreceive-theme` and renders a page toggle); the
+  checkout under it still mirrors the resolved `data-theme` on its own root,
+  because the shipped stylesheet is scoped to `data-openreceive-root` and
+  paints the palette from that root, never from an ancestor outside it. Every
+  light-DOM root the packages render carries `data-openreceive-root`: the
+  React `<Checkout>` and `<ThemeToggle>`, and the wrapper shell `<section>`
+  (`rootAttributes`, unconditionally). React's `theme`
   prop locks the theme outright: it wins over the stored preference and any
   scope, and hides the toggle. The element wrappers still gate both the toggle
   and the stamp on `themeToggle` (`ownTheme` in `createCheckoutShellModel`) —

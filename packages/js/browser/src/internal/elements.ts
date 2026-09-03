@@ -1,6 +1,7 @@
 import { deriveStatus } from "../status.ts";
 import { assertDisplayInvoice } from "./checkout-invoice.ts";
 import { isPaidCheckoutSnapshot, selectCheckoutDisplayInvoice } from "./checkout-state.ts";
+import { OPENRECEIVE_STYLE_ROOT_ATTRIBUTE } from "./dom-contract.ts";
 import { applyThemeAttributes, createStoredThemeModel } from "./theme.ts";
 import {
   type CheckoutElementAttributeOptions,
@@ -229,7 +230,12 @@ export function createCheckoutShellModel(
   const ownTheme = options.themeToggle !== false;
   return {
     theme,
-    rootAttributes: ownTheme ? theme.attributes : {},
+    // The scope marker is unconditional: the shipped stylesheet only reaches
+    // elements under it, whoever owns the theme.
+    rootAttributes: {
+      [OPENRECEIVE_STYLE_ROOT_ATTRIBUTE]: "",
+      ...(ownTheme ? theme.attributes : {}),
+    },
     checkout: {
       tagName: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
       attributes: createCheckoutElementAttributes(snapshot, {

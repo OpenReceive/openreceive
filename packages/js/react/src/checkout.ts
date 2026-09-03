@@ -7,6 +7,7 @@ import {
   mergeAttemptIntoCheckout,
   mergeAttemptIntoSnapshot,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
+  OPENRECEIVE_STYLE_ROOT_ATTRIBUTE,
   OPENRECEIVE_DEFAULT_PREFIX,
   orClasses,
   prepareCheckout,
@@ -253,6 +254,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
           "openreceive-checkout-error",
         ),
         [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
+        [OPENRECEIVE_STYLE_ROOT_ATTRIBUTE]: "",
       },
       React.createElement("p", { role: "alert" }, "Could not start checkout."),
       // The thrown error carries the server's payer-facing text (e.g. the
@@ -282,6 +284,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         "openreceive-checkout-creating",
       ),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
+      [OPENRECEIVE_STYLE_ROOT_ATTRIBUTE]: "",
     },
     React.createElement("span", {
       className: orClasses.spinner,
@@ -434,8 +437,13 @@ function CheckoutView(
       ...sectionProps,
       className: joinClassNames(className, orClasses.root, classNames?.root),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
-      // Under ThemeScope, inherit data-theme from the page. Standalone Checkout owns it.
-      ...(stampsTheme ? theme.attributes : {}),
+      [OPENRECEIVE_STYLE_ROOT_ATTRIBUTE]: "",
+      // A standalone Checkout owns its theme and stamps both attributes. Under
+      // ThemeScope the scope is the theme root (`data-openreceive-theme` stays
+      // on it), but the resolved `data-theme` is mirrored here too: the scoped
+      // stylesheet paints the palette from the checkout's own root, not from
+      // an ancestor outside it.
+      ...(stampsTheme ? theme.attributes : { "data-theme": theme.resolvedTheme }),
     },
     [
       // Order context from the host, composed ABOVE the shipped payment UI —

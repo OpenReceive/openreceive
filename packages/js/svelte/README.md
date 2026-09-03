@@ -11,6 +11,7 @@ once.
 ```svelte
 <script lang="ts">
 import Checkout from "@openreceive/svelte/checkout.svelte";
+// Scoped to what OpenReceive renders: safe next to any CSS framework, in any order.
 import "@openreceive/svelte/styles.css";
 </script>
 

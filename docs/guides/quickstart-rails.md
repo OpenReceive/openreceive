@@ -225,7 +225,8 @@ The engine serves JSON checkout routes only — rendering is your view. Any
 OpenReceive frontend package works against the `/openreceive` mount; the
 smallest is the custom element (its default `prefix` is already
 `/openreceive`, and the package ships a self-contained `styles.css` a plain
-stylesheet link can serve):
+stylesheet link can serve; it is scoped to what OpenReceive renders, so it
+sits safely next to any CSS framework in any order):
 
 ```erb
 <%# app/views/orders/pay.html.erb %>

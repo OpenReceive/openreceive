@@ -13,6 +13,7 @@ import {
   type CheckoutElementListeners,
   type CheckoutShellModel,
   type CheckoutShellOptions,
+  type CheckoutShellRootAttributes,
   type CheckoutSnapshot,
   createCheckoutElementAttributes,
   createCheckoutElementListeners,
@@ -39,6 +40,7 @@ export type {
   CheckoutElementListeners,
   CheckoutShellElements,
   CheckoutShellOptions,
+  CheckoutShellRootAttributes,
   CheckoutSnapshot,
   CreateCheckoutShellOptions,
   CheckoutComponentProps,
@@ -104,7 +106,7 @@ export interface WrapperThemeToggleBinding {
 
 export interface WrapperCheckoutShellBinding {
   readonly theme: ThemeModel;
-  readonly rootAttributes: Partial<ThemeModel["attributes"]>;
+  readonly rootAttributes: CheckoutShellRootAttributes;
   readonly checkout: WrapperCheckoutBinding;
   readonly themeToggle: WrapperThemeToggleBinding | null;
 }

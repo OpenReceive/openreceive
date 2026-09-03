@@ -74,6 +74,11 @@ itself from CSS variables under it. Resolution order: the payer's stored
 choice (`localStorage["openreceive.theme"]`), then `defaultTheme`, then the
 system `prefers-color-scheme`.
 
+The stylesheet never reaches past that root: every rule in `styles.css` is
+scoped to `data-openreceive-root`, which the checkout, the theme toggle and
+the wrapper shell stamp on themselves. Your page keeps its own resets,
+headings, buttons and theme variables whatever order the sheets load in.
+
 If the embedding page is always one theme, lock it and skip all of that:
 
 ```tsx

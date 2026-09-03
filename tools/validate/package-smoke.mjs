@@ -12,7 +12,15 @@ import {
 
 const root = process.cwd();
 const npmTimeoutMs = Number(process.env.OPENRECEIVE_PACKAGE_SMOKE_NPM_TIMEOUT_MS ?? 120_000);
-const localSmokeDependencies = new Set(["@getalby/sdk", "commander", "qrcode", "react", "yaml"]);
+// postcss is only here to parse the shipped stylesheets for the scope pin below.
+const localSmokeDependencies = new Set([
+  "@getalby/sdk",
+  "commander",
+  "postcss",
+  "qrcode",
+  "react",
+  "yaml",
+]);
 
 // The wrapper packages (angular/svelte/vue) all `export *` from
 // @openreceive/elements/wrapper-shared, so these three strings ARE the wrapper
@@ -121,7 +129,8 @@ function writeImportSmoke(installDir, packages) {
     path.join(installDir, "smoke.mjs"),
     `import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import postcss from "postcss";
 import * as browserHeadless from "@openreceive/browser/headless";
 import * as browserMain from "@openreceive/browser";
 import providerRegistryJson from "@openreceive/provider-data/registry.json" with { type: "json" };
@@ -226,6 +235,39 @@ for (const packageName of ["elements", "react"]) {
     \`@openreceive/\${packageName}: styles.css must be the self-contained compiled sheet\`
   );
 }
+// The shipped FILE sheets are inert outside OpenReceive-rendered subtrees:
+// every selector of every rule, under every @layer/@media/@supports, carries
+// the data-openreceive-root scope (tools/package/scope-styles.mjs). Loading
+// one into a host page must restyle nothing the library did not render.
+for (const packageName of ["browser", "elements", "react"]) {
+  const stylesPath = \`node_modules/@openreceive/\${packageName}/dist/styles.css\`;
+  const unscoped = [];
+  postcss.parse(readFileSync(stylesPath, "utf8")).walkRules((rule) => {
+    for (let node = rule.parent; node && node.type !== "root"; node = node.parent) {
+      if (node.type === "atrule" && /keyframes$/i.test(node.name)) return;
+    }
+    for (const selector of rule.selectors) {
+      if (!selector.includes("data-openreceive-")) unscoped.push(selector);
+    }
+  });
+  assert.deepEqual(
+    unscoped,
+    [],
+    \`@openreceive/\${packageName}: styles.css must be scoped to [data-openreceive-root]\`
+  );
+}
+// ...while the copy the custom elements inject into their shadow roots keeps
+// the unscoped preflight: there the shadow boundary is the scope.
+assert(
+  readdirSync("node_modules/@openreceive/browser/dist")
+    .filter((name) => name.endsWith(".js"))
+    .some((name) =>
+      readFileSync(\`node_modules/@openreceive/browser/dist/\${name}\`, "utf8").includes(
+        "*,:after,:before,::backdrop"
+      )
+    ),
+  "@openreceive/browser: the shadow-DOM compile must keep the unscoped preflight"
+);
 for (const packageName of ["vue", "svelte", "angular"]) {
   const stylesPath = \`node_modules/@openreceive/\${packageName}/dist/styles.css\`;
   assert(existsSync(stylesPath), \`@openreceive/\${packageName}: styles.css export must be packaged\`);
