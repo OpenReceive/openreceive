@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.4.3 - 2026-09-03
+
+Four embedding fixes found mounting the drop-in in a 560px card on a
+1280px page, plus a quieter server log while a payer waits.
+
+### The checkout lays itself out by its own width
+
+Every responsive rule in the checkout used to be a viewport media query
+(`sm:` / `md:` / `lg:` in `orClasses`, and `vw`-based QR widths). The
+drop-in is an embedded component: the host decides its box, and that box is
+routinely far narrower than the viewport. In a 560px card on a 1280px page
+the `md:` two-column wallet list fired and split 560px into two 234px cards,
+whose icon-and-name column collapsed to 1.6px — the 28px provider icon was
+crushed to a sliver and the name truncated to nothing. The same page at a
+700px viewport was perfect.
+
+The root (`orClasses.root`) is now a CSS size query container
+(`container-type: inline-size`, named `openreceive`), and every internal
+breakpoint is a container query — `@sm:` / `@md:` / `@lg:` /
+`@min-[390px]:` — at the SAME rem values as before (40rem, 48rem, 64rem;
+set in `styles.source.css`, since Tailwind's container defaults are much
+smaller). The QR and its caption size in `cqw`. A checkout mounted in a
+sidebar, modal or split view lays out like a screen of that width. Container
+queries and `cqw` have shipped in every browser since 2023; there is no
+fallback and none is needed for a payments page.
+
+What this asks of the host: give the root a width. It is block-level, so any
+normal container does; as a flex or grid item it needs `flex: 1` or
+`width: 100%`, because an inline-size container cannot size itself from its
+contents. A host that had widened its page so the two-column layout had room
+(twotensors' 760px container) can shrink it again.
+
+### The pre-create screens are themed
+
+The React "Creating checkout…" spinner and "Could not start checkout." error
+screens rendered without the resolved `data-theme`, so both painted the
+light palette on a dark host — a white flash on every checkout open, and an
+all-white error screen. They now resolve the theme exactly as the checkout
+does (lock, ancestor `ThemeScope`, stored choice, system) and render as the
+checkout's own root, surface and padding included. The custom element
+already did this.
+
+### The root pads its own surface
+
+daisyUI paints the theme's `base-100` on the checkout root, and the root had
+zero padding: a visible colour slab with the QR, status copy and caption
+flush against its edges, plain to see on any host whose background is not
+exactly `base-100`. The root now pads and rounds itself (`p-4`,
+`rounded-box`) on every stack, including the creating and error screens. A
+host that draws its own card and wants no second surface sets
+`--root-bg: transparent` on `[data-openreceive-root]`, and a host that wants
+a different inset overrides `padding` there. Both work because every rule in
+the shipped stylesheet is `:where()`-wrapped and carries zero specificity —
+a host's own selector, however plain, wins on the same property. That is now
+a documented compatibility promise (`docs/guides/frontend-checkout.md`,
+"Layout and surface").
+
+### The caption under the QR is money
+
+`112,128 sats / $87.0 US` is now `112,128 sats / $87.00 USD`. Fiat values
+render at exactly two decimals with thousands grouping through exact bigint
+math (`formatFiatValue` in the browser package's checkout formatter), so a
+Ruby `BigDecimal` echo of `87.0` and a Node `87.00` print alike, and the
+dollar carries its ISO code. The same formatter feeds the transaction
+details' fiat row and the swap limit hints, which already had two decimals.
+
+### One line per status poll
+
+`payment.reconcile.completed` fires on every status poll while a payer
+waits. On Node it printed ten lines: the console logger passed its fields as
+a second `console.info` argument, and Node breaks any object past ~70
+characters across lines. `createConsoleLogger` and `createAppConsoleLogger`
+now print one line per event with fields inline as `key=value` (strings with
+whitespace JSON-quoted, nested values in single-line inspect form), and the
+reconcile event's message is the decision itself — `1 pending`,
+`1 settled, 2 pending`, `3 pending of 4 attempts` when a walk was truncated —
+with zero-valued extras dropped and the two walk timestamps folded into one
+`window=from..until` field. `attempt_count`, `settled_count` and
+`pending_count` stay as structured fields. The Rails engine's line is the
+same shape (`[openreceive] payment.reconcile.completed: 1 pending
+attempt_count=1 window=…`). A host that also wants Rails' own request
+logging quiet for the poll route uses Rails' knobs (`config.log_level`,
+`Rails.logger.silence`), which this gem does not touch.
+
+Tests: the e2e suite gained `embedded-layout.spec.ts` (a 560px host box on a
+1280px viewport — provider icons ≥ 24px, names visible, root a query
+container with ≥ 16px padding, QR in `cqw`, tutorial modal still covering
+the viewport, on React and the custom element); React unit tests pin
+`data-theme` on both pre-create screens; `checkout-format.test.mjs` pins the
+money formatter and the caption.
+
 ## 0.4.2 - 2026-09-03
 
 ### The stylesheet no longer touches host elements

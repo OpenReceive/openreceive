@@ -1,6 +1,6 @@
 # OpenReceive agent directions (Node.js)
 
-These directions describe OpenReceive 0.4.2.
+These directions describe OpenReceive 0.4.3.
 
 Add OpenReceive to a Node application — the app you are already working in. You
 do not need a copy of the OpenReceive source: the packages are on npm, and the

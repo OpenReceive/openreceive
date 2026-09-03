@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.3 - 2026-09-03
+
+Version lockstep with the 0.4.3 npm release (container-query checkout
+layout, themed pre-create screens, padded root, money caption).
+
+The opportunistic reconcile pass logs one short line per status poll:
+`[openreceive] payment.reconcile.completed: 1 pending attempt_count=1
+window=<from>..<until>` — what the pass decided (zero counts dropped, `of N
+attempts` when a truncated walk could not reach every hash), the same shape
+as the Node engine's line. It replaces the sentence about batched
+`list_transactions` windows. Rails' own request logging for the poll route
+is unchanged; use `config.log_level` or `Rails.logger.silence` there.
+
 ## 0.4.2 - 2026-09-03
 
 Version lockstep with the 0.4.2 npm release (the scoped frontend stylesheet).

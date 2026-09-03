@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3 - 2026-09-03
+
+Version lockstep with the 0.4.3 npm release (container-query checkout
+layout, themed pre-create screens, padded root, money caption). No Ruby
+changes in this gem.
+
 ## 0.4.2 - 2026-09-03
 
 Version lockstep with the 0.4.2 npm release (the scoped frontend stylesheet).
