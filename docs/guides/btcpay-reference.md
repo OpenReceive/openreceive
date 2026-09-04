@@ -70,7 +70,7 @@ connection string.
 | --- | --- |
 | `LscPrimary` | The Lightning Swap Connect URI (`lightning+swapconnect://host/path?key=…&secret=…`). Server-only; the setup page shows it redacted and never sends it back to the browser. |
 | `LscBackup` | A second LSC URI, used only while the primary has failed within the last 60 seconds. |
-| `SwapsEnabled` | Whether the checkout offers swap pills. Requires the store's Lightning node to be an OpenReceive connection. |
+| `SwapsEnabled` | Whether the checkout offers swap pills. The setup page derives it from `LscPrimary` (saved code = on); Greenfield follows the same rule unless `swapsEnabled` is sent explicitly. Requires the store's Lightning node to be an OpenReceive connection. |
 | `EnabledPayInAssets` | Subset of `SOL_SOL`, `USDT_TRON`, `USDT_SOL`, `USDC_SOL`, `ETH_ETH`, `USDT_ETH`, `USDC_ETH`. Empty means every asset the provider supports. |
 | `LastPreflight` | Non-secret snapshot of the last wallet test: when, ok or the code, methods, encryption, notifications, network, relay round trip. |
 

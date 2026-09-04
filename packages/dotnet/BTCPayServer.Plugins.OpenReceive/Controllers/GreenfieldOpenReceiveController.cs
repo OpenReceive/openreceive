@@ -60,6 +60,7 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
         public bool? AllowSpendCapableWallet { get; set; }
         public string? LscPrimary { get; set; }
         public string? LscBackup { get; set; }
+        /// <summary>Optional: when omitted, swaps follow the primary code (a saved code means on, none means off).</summary>
         public bool? SwapsEnabled { get; set; }
         public List<string>? EnabledPayInAssets { get; set; }
     }
@@ -112,7 +113,8 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
             store = await _stores.FindStore(storeId) ?? store;
             walletAfter = true;
         }
-        if (request.SwapsEnabled is { } enabled)
+        var swapsEnabled = request.SwapsEnabled ?? (request.LscPrimary is null ? (bool?)null : lscPrimary is not null);
+        if (swapsEnabled is { } enabled)
         {
             if (enabled && !walletAfter)
                 return UnprocessableEntity(new { code = "wallet_required", message = "Swaps settle into your OpenReceive wallet. Connect a receive-only NWC code first." });

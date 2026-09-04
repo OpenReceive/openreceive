@@ -230,10 +230,12 @@ on any other Lightning backend sees no swap options.
    backup code is used only while the primary is down.
 2. Click **Test provider** to fetch the provider's catalog and see which
    assets it offers right now, with their limits.
-3. Tick **Offer swaps at checkout**, choose the assets to offer, and click
-   **Save swap settings**.
+3. Choose the assets to offer and click **Save swap settings**. A saved
+   primary code is what turns swaps on; removing it turns them off. There is
+   no separate switch (the Greenfield `swapsEnabled` field can still pause
+   swaps while keeping the code).
 
-Saving with swaps on raises **Store → Checkout → Invoice expiration** to 60
+Saving a code raises **Store → Checkout → Invoice expiration** to 60
 minutes when it is shorter. A swap needs at least 45 minutes of invoice life:
 the provider's deposit window plus its settlement time. Swap creation is
 refused when an invoice has less than the provider's window left (30 minutes

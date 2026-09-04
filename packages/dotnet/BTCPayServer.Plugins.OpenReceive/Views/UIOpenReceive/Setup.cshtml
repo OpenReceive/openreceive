@@ -20,7 +20,11 @@
             <h3 class="mt-3">1. Wallet</h3>
             @if (Model.HasWallet)
             {
-                <p class="small">✅ Current Lightning node: <code class="text-break">@Model.LightningNode</code> — an OpenReceive connection. Invoices are minted in this wallet.@if (Model.LastPreflight is { } lastTest) { <span class="text-muted"> Last test: @(lastTest.Ok ? "ok" : $"refused ({lastTest.Code})") at @lastTest.CheckedAt.ToString("u").</span> }</p>
+                <p class="small mb-1">✅ Current Lightning node: <code class="text-break">@Model.LightningNode</code> — an OpenReceive connection. Invoices are minted in this wallet.</p>
+                @if (Model.LastPreflight is { } lastTest)
+                {
+                    <p class="small text-muted">Last test: @(lastTest.Ok ? "ok" : $"refused ({lastTest.Code})") at @lastTest.CheckedAt.ToString("u").</p>
+                }
             }
             else
             {
@@ -28,15 +32,8 @@
             }
             @if (Model.HasWallet)
             {
-                @* Connected: nothing to paste. The health check (wallet preflight, notifications, provider, expiration) runs in place; replacing is tucked away. *@
-                <div class="d-flex gap-2 mb-3">
-                    <button name="command" type="submit" value="health-check" class="btn btn-primary">Run a health check</button>
-                </div>
-                @if (Model.HealthCheck is { } health)
-                {
-                    <partial name="_HealthProbes" model="health" />
-                }
-                <details class="mb-4" open="@Model.ChangeWalletOpen">
+                @* Connected: nothing to paste. Replacing is tucked away; the health check (wallet preflight, notifications, provider, expiration) runs in place below it. *@
+                <details class="mb-3" open="@Model.ChangeWalletOpen">
                     <summary class="text-muted" style="cursor:pointer">Change NWC receive code</summary>
                     <div class="form-group mt-3">
                         <label asp-for="NwcUri" class="form-label">New receive-only NWC code</label>
@@ -46,10 +43,20 @@
                     </div>
                     <partial name="_SpendOverride" model="Model" />
                     <div class="d-flex gap-2">
-                        <button name="command" type="submit" value="test-wallet" class="btn btn-secondary">Test this code</button>
                         <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Switch to this wallet</button>
                     </div>
                 </details>
+                <div class="d-flex gap-2 mb-3">
+                    <button name="command" type="submit" value="health-check" class="btn btn-primary">Run a health check</button>
+                </div>
+                @if (Model.HealthCheck is { } health)
+                {
+                    <div class="mb-4">
+                        <partial name="_HealthProbes" model="health" />
+                        @* The results live only in this response: OK is a plain reload of the page. *@
+                        <a asp-action="Setup" asp-route-storeId="@Model.StoreId" class="btn btn-secondary">OK</a>
+                    </div>
+                }
             }
             else
             {
@@ -140,12 +147,7 @@
                     </ul>
                 </div></div>
             }
-            <div class="form-group form-check">
-                <input asp-for="SwapsEnabled" type="checkbox" class="form-check-input" />
-                <label asp-for="SwapsEnabled" class="form-check-label">Offer swaps at checkout</label>
-                <span asp-validation-for="SwapsEnabled" class="text-danger d-block"></span>
-                <div class="form-text">Saving with swaps on sets this store's invoice expiration to 60 minutes (currently @Model.InvoiceExpirationMinutes) when it is shorter: a swap needs at least @Model.MinimumSwapInvoiceMinutes minutes of invoice life.</div>
-            </div>
+            <p class="form-text">A saved primary code turns swaps on at checkout; removing it turns them off. Saving a code sets this store's invoice expiration to 60 minutes (currently @Model.InvoiceExpirationMinutes) when it is shorter: a swap needs at least @Model.MinimumSwapInvoiceMinutes minutes of invoice life.</p>
             <div class="form-group">
                 <label class="form-label">Assets to offer</label>
                 <div class="form-text mb-1">Leave every box unchecked to offer everything the provider supports.</div>

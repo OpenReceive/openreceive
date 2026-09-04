@@ -118,7 +118,7 @@ test("setup page: a spend-capable code is refused with the reason, and admitted 
   await expect(page.getByLabel("This wallet cannot mint a receive-only code")).toHaveCount(0);
   await page.getByText("Change NWC receive code").click();
   await page.getByLabel("New receive-only NWC code").fill(spend);
-  await page.getByRole("button", { name: "Test this code" }).click();
+  await page.getByRole("button", { name: "Switch to this wallet" }).click();
   await expect(page.getByText("Wallet refused")).toBeVisible();
   await expect(page.locator(".card", { hasText: "Wallet refused" })).toContainText("pay_invoice");
   await expect(page.locator(".card", { hasText: "Wallet refused" })).toContainText(
@@ -129,11 +129,21 @@ test("setup page: a spend-capable code is refused with the reason, and admitted 
   await page
     .getByLabel("This wallet cannot mint a receive-only code and I accept the risk")
     .check();
-  await page.getByRole("button", { name: "Test this code" }).click();
-  await expect(page.getByText("Wallet ready")).toBeVisible();
-  await expect(page.locator(".card", { hasText: "Wallet ready" })).toContainText(
-    "NOT receive-only",
-  );
+  await page.getByRole("button", { name: "Switch to this wallet" }).click();
+  await expect(
+    page.getByText("This store now receives Lightning payments into your NWC wallet."),
+  ).toBeVisible();
+  await expect(page.getByText("Current Lightning node")).toContainText("allow-spend=true");
+
+  // Back to the receive-only wallet for the checkout specs. The override stays ticked
+  // until it is unticked: the checkbox is on the page while the override is on.
+  await page.getByText("Change NWC receive code").click();
+  await page.getByLabel("New receive-only NWC code").fill(await testkitNwcUri(request));
+  await page
+    .getByLabel("This wallet cannot mint a receive-only code and I accept the risk")
+    .uncheck();
+  await page.getByRole("button", { name: "Switch to this wallet" }).click();
+  await expect(page.getByText("Current Lightning node")).not.toContainText("allow-spend=true");
 });
 
 test("checkout: a Lightning invoice minted in the NWC wallet flips to paid in the browser", async ({
@@ -169,22 +179,28 @@ test("setup page: connect the swap provider, enable swaps, and the doctor is all
   await expect(page.getByText("Provider fake-lsc-7788")).toBeVisible();
   await expect(page.getByText(/USDT · Tron — available/)).toBeVisible();
 
+  // A saved primary code is what turns swaps on: there is no separate switch.
   await page.getByLabel("Lightning Swap Connect code (primary)").fill(lsc);
-  await page.getByLabel("Offer swaps at checkout").check();
   await page.getByRole("button", { name: "Save swap settings" }).click();
   await expect(
     page.getByText(/Invoice expiration raised to 60 minutes|Swap settings saved/),
   ).toBeVisible();
-  await expect(page.getByLabel("Offer swaps at checkout")).toBeChecked();
+  await expect(page.getByText("Saved: lightning+swapconnect://fake-lsc:7788/?key=…&secret=…")).toBeVisible();
 
   // The probes render in place on the setup page (the same list as the /doctor page).
   await page.getByRole("button", { name: "Run a health check" }).click();
   await expect(page.getByRole("heading", { name: "OpenReceive", exact: true })).toBeVisible();
+  // The results do not pop the "Change NWC receive code" box open.
+  await expect(page.getByLabel("New receive-only NWC code")).toBeHidden();
   const probes = page.locator(".list-group-item");
   await expect(probes).toHaveCount(10);
   await expect(page.locator(".list-group-item", { hasText: "⚠️" })).toHaveCount(0);
   await expect(page.getByText("Provider fake-lsc-7788 reachable")).toBeVisible();
   await expect(page.getByText("Invoice expiration covers the provider window")).toBeVisible();
+  // OK puts the results away again.
+  await page.getByRole("link", { name: "OK", exact: true }).click();
+  await expect(page.locator(".list-group-item")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Run a health check" })).toBeVisible();
 });
 
 test("checkout: pay with USDT on Tron through the swap component until BTCPay shows Invoice Paid", async ({

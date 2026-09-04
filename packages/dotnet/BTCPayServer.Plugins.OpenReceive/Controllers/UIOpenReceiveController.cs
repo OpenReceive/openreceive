@@ -62,11 +62,10 @@ public sealed class UIOpenReceiveController : Controller
                 await TestWalletAsync(vm, store, cancellationToken);
                 break;
             case "health-check":
-                vm.HealthCheck = await BuildDoctorAsync(store, cancellationToken);
-                vm.Preflight = vm.HealthCheck.Preflight;
+                vm.HealthCheck = await BuildDoctorAsync(store, cancellationToken); // the probes carry the preflight; no separate card
                 break;
             case "use-wallet":
-                if (await UseWalletAsync(vm, store))
+                if (await UseWalletAsync(vm, store, cancellationToken))
                 {
                     TempData[WellKnownTempData.SuccessMessage] = "This store now receives Lightning payments into your NWC wallet. Invoices are minted there; the saved code is never shown again.";
                     return RedirectToAction(nameof(Setup), new { storeId });
@@ -76,9 +75,9 @@ public sealed class UIOpenReceiveController : Controller
                 await TestProviderAsync(vm, store, cancellationToken);
                 break;
             case "save-swaps":
-                if (await SaveSwapsAsync(vm, store, cancellationToken))
+                if (await SaveSwapsAsync(vm, store, cancellationToken) is { } swapsOn)
                 {
-                    TempData[WellKnownTempData.SuccessMessage] = vm.SwapsEnabled ? "Swap settings saved. Payers can now pay with USDT, USDC, ETH or SOL." : "Swap settings saved.";
+                    TempData[WellKnownTempData.SuccessMessage] = swapsOn ? "Swap settings saved. Payers can now pay with USDT, USDC, ETH or SOL." : "Swap settings saved. Swaps are off until a provider code is saved.";
                     return RedirectToAction(nameof(Setup), new { storeId });
                 }
                 break;
@@ -183,12 +182,26 @@ public sealed class UIOpenReceiveController : Controller
         }
     }
 
-    private async Task<bool> UseWalletAsync(SetupViewModel vm, StoreData store)
+    private async Task<bool> UseWalletAsync(SetupViewModel vm, StoreData store, CancellationToken cancellationToken)
     {
         var nwc = ResolveNwcInput(vm, store);
         if (nwc is null)
         {
             ModelState.AddModelError(nameof(vm.NwcUri), "Paste your NWC code first.");
+            return false;
+        }
+        // The preflight first, as its own report: a refusal shows the capability card (and the
+        // risk checkbox when a spend method is the reason), not just an error line.
+        var client = _settings.CreateClient(nwc, vm.AllowSpendCapableWallet, out var parseError);
+        if (client is null)
+        {
+            ModelState.AddModelError(nameof(vm.NwcUri), parseError ?? "Invalid NWC code.");
+            return false;
+        }
+        vm.Preflight = await client.PreflightAsync(cancellationToken);
+        if (!vm.Preflight.Ok)
+        {
+            ModelState.AddModelError(nameof(vm.NwcUri), vm.Preflight.Message ?? "The wallet failed the preflight.");
             return false;
         }
         var error = await _settings.UseAsLightningNodeAsync(store, nwc, vm.AllowSpendCapableWallet, User);
@@ -236,7 +249,8 @@ public sealed class UIOpenReceiveController : Controller
         }
     }
 
-    private async Task<bool> SaveSwapsAsync(SetupViewModel vm, StoreData store, CancellationToken cancellationToken)
+    /// <summary>Saves the provider codes; a saved primary code IS "swaps on". Returns whether swaps are on, or null when the form was refused.</summary>
+    private async Task<bool?> SaveSwapsAsync(SetupViewModel vm, StoreData store, CancellationToken cancellationToken)
     {
         var settings = await _settings.GetAsync(store.Id);
         // Like the NWC code: the saved LSC codes never come back into the form. An empty
@@ -255,25 +269,21 @@ public sealed class UIOpenReceiveController : Controller
                 ModelState.AddModelError(field, localError);
             }
         }
-        if (vm.SwapsEnabled && _settings.GetConnection(store) is null)
+        if (primary is not null && _settings.GetConnection(store) is null)
         {
-            ModelState.AddModelError(nameof(vm.SwapsEnabled), "Swaps settle into your OpenReceive wallet. Connect a receive-only NWC code first.");
+            ModelState.AddModelError(nameof(vm.LscPrimary), "Swaps settle into your OpenReceive wallet. Connect a receive-only NWC code first.");
         }
-        if (vm.SwapsEnabled && primary is null)
-        {
-            ModelState.AddModelError(nameof(vm.LscPrimary), "Swaps need a Lightning Swap Connect code.");
-        }
-        if (!ModelState.IsValid) return false;
+        if (!ModelState.IsValid) return null;
         settings.LscPrimary = primary;
         settings.LscBackup = backup;
-        settings.SwapsEnabled = vm.SwapsEnabled;
+        settings.SwapsEnabled = primary is not null;
         settings.EnabledPayInAssets = (vm.EnabledPayInAssets ?? new List<string>()).Where(OpenReceiveTables.SwapPayInAssets.Contains).ToList();
         await _settings.SetAsync(store.Id, settings);
-        if (vm.SwapsEnabled && await _settings.EnsureInvoiceExpirationAsync(store, SwapService.RecommendedInvoiceExpiration))
+        if (settings.SwapsEnabled && await _settings.EnsureInvoiceExpirationAsync(store, SwapService.RecommendedInvoiceExpiration))
         {
             TempData[WellKnownTempData.SuccessMessage] = "Invoice expiration raised to 60 minutes so swaps have time to settle.";
         }
-        return true;
+        return settings.SwapsEnabled;
     }
 
     /// <summary>A store owner cannot point the server at a local-network provider; a server admin can.</summary>
@@ -297,7 +307,6 @@ public sealed class UIOpenReceiveController : Controller
         vm.SavedRedactedLscBackup = settings.LscBackup is null ? null : LscUri.Redact(settings.LscBackup);
         if (!Request.HasFormContentType)
         {
-            vm.SwapsEnabled = settings.SwapsEnabled;
             vm.EnabledPayInAssets = settings.EnabledPayInAssets.Count == 0 ? OpenReceiveTables.SwapPayInAssets.ToList() : settings.EnabledPayInAssets;
         }
         vm.InvoiceExpirationMinutes = (int)store.GetStoreBlob().InvoiceExpiration.TotalMinutes;
@@ -329,7 +338,6 @@ public sealed class SetupViewModel
     public string? SavedRedactedLscBackup { get; set; }
     public bool RemoveLscPrimary { get; set; }
     public bool RemoveLscBackup { get; set; }
-    public bool SwapsEnabled { get; set; }
     public List<string>? EnabledPayInAssets { get; set; }
     public List<OpenReceiveSwapAssetInfo> Assets { get; set; } = new();
     public List<ProviderAssetStatus>? ProviderTest { get; set; }
