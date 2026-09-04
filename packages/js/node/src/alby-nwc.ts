@@ -16,6 +16,7 @@ import {
   type ListTransactionsResult,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
+  OPENRECEIVE_NWC_NOTIFICATION_TYPES,
   OpenReceiveError,
   type ReceiveNwcClient,
   type ParsedNwcConnection,
@@ -24,6 +25,9 @@ import {
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 import { normalizeNwcWalletError, WalletPreflightError } from "./nwc/errors.ts";
+
+// Defense in depth for clients that ignore the requested type filter.
+const NOTIFICATION_TYPES: ReadonlySet<string> = new Set(OPENRECEIVE_NWC_NOTIFICATION_TYPES);
 import {
   type NormalizedListTransactions,
   normalizeListTransactionsResult,
@@ -447,7 +451,7 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
       "debug",
       "nwc.notifications.subscribe.requested",
       "Subscribing to NWC-02 payment_received notifications.",
-      { notification_types: ["payment_received"] },
+      { notification_types: OPENRECEIVE_NWC_NOTIFICATION_TYPES },
     );
 
     let subscription: unknown;
@@ -457,7 +461,7 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
         (rawNotification: unknown) => {
           const notification = normalizeNwcNotification(rawNotification);
           // Defense in depth: some clients ignore the requested type filter.
-          if (notification.type !== "payment_received") return;
+          if (!NOTIFICATION_TYPES.has(notification.type)) return;
           // Log only the type and payment hash — never the payload.
           this.#log(
             "debug",
@@ -474,7 +478,7 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
             // Notification hints must never break the subscription.
           }
         },
-        ["payment_received"],
+        [...OPENRECEIVE_NWC_NOTIFICATION_TYPES],
       );
     } catch (error) {
       const normalized = normalizeNwcWalletError(error);

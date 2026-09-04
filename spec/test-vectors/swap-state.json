@@ -1,0 +1,233 @@
+{
+  "schema_version": "0.1.0",
+  "provider": "fixedfloat",
+  "rule": "A FixedFloat order body's status, its emergency block and whether a refund transaction is present map to exactly one OpenReceive swap state plus optional attention/refund reasons. Every engine's FixedFloat-compatible provider must produce these results from its production status normalizer.",
+  "how_to_read": [
+    "status is the provider's order status, compared case-insensitively.",
+    "emergency is the provider's emergency block when present: choice (NONE, REFUND, EXCHANGE) and status (an array of LESS, MORE, OVER, OVERPAID, EXPIRED, LIMIT; a bare string is accepted as a one-item list). Absent means the body carried no emergency block.",
+    "refund_tx_present says whether the body (or the persisted order) already carries a refund transaction id (back.tx.id / refund.tx.id).",
+    "expected is the exact normalized result: state, plus attention:true and attention_reason when the state is attention, plus refund_reason when one can be derived from the emergency statuses. Keys not listed must be absent, not null.",
+    "Emitted attention reasons here must be a subset of spec/data/kernel-tables.json swap.attention_reasons, and every non-reserved reason there must appear in at least one case; npm run validate checks both."
+  ],
+  "cases": [
+    {
+      "name": "NEW is awaiting deposit",
+      "status": "NEW",
+      "refund_tx_present": false,
+      "expected": { "state": "awaiting_deposit" }
+    },
+    {
+      "name": "status compares case-insensitively",
+      "status": "new",
+      "refund_tx_present": false,
+      "expected": { "state": "awaiting_deposit" }
+    },
+    {
+      "name": "PENDING is confirming",
+      "status": "PENDING",
+      "refund_tx_present": false,
+      "expected": { "state": "confirming" }
+    },
+    {
+      "name": "EXCHANGE is exchanging",
+      "status": "EXCHANGE",
+      "refund_tx_present": false,
+      "expected": { "state": "exchanging" }
+    },
+    {
+      "name": "WITHDRAW is paying the invoice",
+      "status": "WITHDRAW",
+      "refund_tx_present": false,
+      "expected": { "state": "paying_invoice" }
+    },
+    {
+      "name": "DONE is completed, never settled",
+      "status": "DONE",
+      "refund_tx_present": false,
+      "expected": { "state": "completed" }
+    },
+    {
+      "name": "DONE with a refund transaction is refunded",
+      "status": "DONE",
+      "refund_tx_present": true,
+      "expected": { "state": "refunded" }
+    },
+    {
+      "name": "FINISHED with a refund transaction is refunded",
+      "status": "FINISHED",
+      "refund_tx_present": true,
+      "expected": { "state": "refunded" }
+    },
+    {
+      "name": "FINISHED without a refund transaction is not a known status",
+      "status": "FINISHED",
+      "refund_tx_present": false,
+      "expected": {
+        "state": "attention",
+        "attention": true,
+        "attention_reason": "provider_status_unrecognized"
+      }
+    },
+    {
+      "name": "EXPIRED is expired",
+      "status": "EXPIRED",
+      "refund_tx_present": false,
+      "expected": { "state": "expired" }
+    },
+    {
+      "name": "FAILED is failed",
+      "status": "FAILED",
+      "refund_tx_present": false,
+      "expected": { "state": "failed" }
+    },
+    {
+      "name": "any status containing FAIL is failed",
+      "status": "PAYOUT_FAILED",
+      "refund_tx_present": false,
+      "expected": { "state": "failed" }
+    },
+    {
+      "name": "an unknown status is attention, not an emergency",
+      "status": "SOMETHING_NEW",
+      "refund_tx_present": false,
+      "expected": {
+        "state": "attention",
+        "attention": true,
+        "attention_reason": "provider_status_unrecognized"
+      }
+    },
+    {
+      "name": "emergency underpaid, no choice yet",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["LESS"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "underpaid" }
+    },
+    {
+      "name": "emergency with the provider's NONE choice is still refund required",
+      "status": "EMERGENCY",
+      "emergency": { "choice": "NONE", "status": ["LESS"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "underpaid" }
+    },
+    {
+      "name": "emergency late deposit",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["EXPIRED"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "late_deposit" }
+    },
+    {
+      "name": "emergency underpaid and late",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["LESS", "EXPIRED"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "underpaid_and_late" }
+    },
+    {
+      "name": "emergency overpaid refunds in full, LIMIT adds nothing",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["MORE", "LIMIT"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "overpaid" }
+    },
+    {
+      "name": "emergency OVER is an overpaid alias",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["OVER"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "overpaid" }
+    },
+    {
+      "name": "emergency OVERPAID is an overpaid alias",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["OVERPAID"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "overpaid" }
+    },
+    {
+      "name": "emergency overpaid and late",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["MORE", "EXPIRED"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "overpaid_and_late" }
+    },
+    {
+      "name": "emergency LIMIT alone names no refund reason",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["LIMIT"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required" }
+    },
+    {
+      "name": "emergency with no status list names no refund reason",
+      "status": "EMERGENCY",
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required" }
+    },
+    {
+      "name": "emergency status as a bare string is a one-item list",
+      "status": "EMERGENCY",
+      "emergency": { "status": "LESS" },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "underpaid" }
+    },
+    {
+      "name": "emergency statuses compare case-insensitively",
+      "status": "EMERGENCY",
+      "emergency": { "status": ["less", "expired"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_required", "refund_reason": "underpaid_and_late" }
+    },
+    {
+      "name": "refund chosen, not yet paid out",
+      "status": "EMERGENCY",
+      "emergency": { "choice": "REFUND", "status": ["EXPIRED"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_pending", "refund_reason": "late_deposit" }
+    },
+    {
+      "name": "refund choice compares case-insensitively",
+      "status": "EMERGENCY",
+      "emergency": { "choice": "refund", "status": ["LESS"] },
+      "refund_tx_present": false,
+      "expected": { "state": "refund_pending", "refund_reason": "underpaid" }
+    },
+    {
+      "name": "refund chosen and paid out is refunded",
+      "status": "EMERGENCY",
+      "emergency": { "choice": "REFUND", "status": ["LESS"] },
+      "refund_tx_present": true,
+      "expected": { "state": "refunded", "refund_reason": "underpaid" }
+    },
+    {
+      "name": "refund chosen and paid out without a derivable reason",
+      "status": "EMERGENCY",
+      "emergency": { "choice": "REFUND", "status": ["LIMIT"] },
+      "refund_tx_present": true,
+      "expected": { "state": "refunded" }
+    },
+    {
+      "name": "exchange chosen needs review",
+      "status": "EMERGENCY",
+      "emergency": { "choice": "EXCHANGE", "status": ["LESS"] },
+      "refund_tx_present": false,
+      "expected": {
+        "state": "attention",
+        "attention": true,
+        "attention_reason": "provider_reported_emergency"
+      }
+    },
+    {
+      "name": "exchange chosen with a refund transaction still needs review",
+      "status": "EMERGENCY",
+      "emergency": { "choice": "EXCHANGE", "status": ["MORE"] },
+      "refund_tx_present": true,
+      "expected": {
+        "state": "attention",
+        "attention": true,
+        "attention_reason": "provider_reported_emergency"
+      }
+    }
+  ]
+}

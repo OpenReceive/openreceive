@@ -7,6 +7,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { parse as parseYaml } from "yaml";
 import { root } from "../shared/root.mjs";
 import { walkFiles } from "../shared/walk-files.mjs";
+import { checkVectorCoverage } from "./vector-coverage.mjs";
 
 function readJson(relativePath) {
   try {
@@ -333,6 +334,113 @@ function validateStorageFreeTree() {
   );
 }
 
+// spec/data/kernel-tables.json is the one hand-edited copy of the vocabularies
+// every engine shares. The OpenAPI document and the JSON Schemas restate some of
+// them as enums; the vectors restate two numbers. All of those must agree.
+function validateKernelTables() {
+  const tables = readJson("spec/data/kernel-tables.json");
+  const openapi = readYaml("spec/openapi/openreceive-http.v1.yaml");
+  const schemas = openapi.components.schemas;
+  const swapOrder = readJson("spec/schemas/swap-order.schema.json");
+  const same = (left, right, label) =>
+    assert(JSON.stringify(left) === JSON.stringify(right), `${label} drifted from kernel-tables`);
+
+  const assets = tables.swap.pay_in_assets.map((asset) => asset.pay_in_asset);
+  const states = tables.swap.states.map((state) => state.state);
+  const attentionReasons = tables.swap.attention_reasons.map((row) => row.reason);
+  same(schemas.SwapPayInAsset.enum, assets, "OpenAPI SwapPayInAsset");
+  same(schemas.SwapProviderState.enum, states, "OpenAPI SwapProviderState");
+  same(swapOrder.properties.pay_in_asset.enum, assets, "swap-order.schema pay_in_asset");
+  same(swapOrder.properties.provider_state.enum, states, "swap-order.schema provider_state");
+  same(
+    swapOrder.properties.attention_reason.enum,
+    attentionReasons,
+    "swap-order.schema attention_reason",
+  );
+  same(
+    swapOrder.properties.refund_reason.enum,
+    tables.swap.refund_reasons,
+    "swap-order.schema refund_reason",
+  );
+  assert(new Set(assets).size === assets.length, "pay_in_assets must be unique");
+  assert(new Set(states).size === states.length, "swap states must be unique");
+  for (const asset of tables.swap.pay_in_assets) {
+    assert(
+      asset.pay_in_asset === `${asset.coin}_${asset.pay_in_asset.split("_")[1]}`,
+      `${asset.pay_in_asset}: pay_in_asset must be COIN_NETWORK`,
+    );
+  }
+  const completed = tables.swap.states.find((state) => state.state === "completed");
+  assert(
+    completed?.terminal === false,
+    "completed must stay non-terminal (provider completion is not settlement)",
+  );
+
+  const retryable = tables.errors.retryable_codes;
+  const errorCodes = readJson("spec/schemas/error.schema.json").properties.code.enum;
+  for (const code of retryable) {
+    assert(errorCodes.includes(code), `retryable code ${code} is not an error code`);
+  }
+
+  const reconciliation = readJson("spec/test-vectors/attempt-reconciliation.json");
+  assert(
+    reconciliation.expiry_grace_seconds === tables.attempts.expiry_grace_seconds,
+    "attempt-reconciliation expiry_grace_seconds drifted from kernel-tables",
+  );
+  const scan = readJson("spec/test-vectors/wallet-scan-truncation.json");
+  assert(
+    scan.page_limit === tables.nwc.transaction_page_limit,
+    "wallet-scan-truncation page_limit drifted from kernel-tables",
+  );
+
+  // swap-state: emitted attention reasons ⊆ the table, and every non-reserved
+  // reason in the table is produced by at least one case.
+  const swapState = readJson("spec/test-vectors/swap-state.json");
+  const emitted = new Set();
+  for (const item of swapState.cases) {
+    assert(
+      states.includes(item.expected.state),
+      `${item.name}: unknown state ${item.expected.state}`,
+    );
+    if (item.expected.attention_reason !== undefined) {
+      assert(
+        item.expected.state === "attention",
+        `${item.name}: attention_reason on a non-attention state`,
+      );
+      assert(
+        item.expected.attention === true,
+        `${item.name}: attention state must carry attention: true`,
+      );
+      assert(
+        attentionReasons.includes(item.expected.attention_reason),
+        `${item.name}: attention_reason ${item.expected.attention_reason} is not in kernel-tables`,
+      );
+      emitted.add(item.expected.attention_reason);
+    }
+    if (item.expected.refund_reason !== undefined) {
+      assert(
+        tables.swap.refund_reasons.includes(item.expected.refund_reason),
+        `${item.name}: refund_reason ${item.expected.refund_reason} is not in kernel-tables`,
+      );
+    }
+  }
+  for (const row of tables.swap.attention_reasons) {
+    if (row.reserved === true) continue;
+    assert(
+      emitted.has(row.reason),
+      `attention reason ${row.reason} has no swap-state vector producing it`,
+    );
+  }
+}
+
+// Every vector family must have a consumer in every engine, or a written
+// exclusion (spec/test-vectors/coverage.json).
+function validateVectorCoverage() {
+  const { failures, report } = checkVectorCoverage();
+  for (const line of report) console.log(`vector coverage: ${line}`);
+  assert(failures.length === 0, failures.join("\n"));
+}
+
 // Docs restate the spec's route/error tables, and the curated headless symbol
 // surface, only through generated blocks; fail when any block drifted.
 function validateGeneratedDocTables() {
@@ -406,6 +514,8 @@ validateSchemaInstances();
 validateMoneyVectors();
 validateSettlementVectors();
 validateContracts();
+validateKernelTables();
+validateVectorCoverage();
 validateStorageFreeTree();
 validateGeneratedDocTables();
 console.log("OpenReceive host-owned payment contracts and vectors: ok");

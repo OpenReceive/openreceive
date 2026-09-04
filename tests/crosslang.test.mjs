@@ -11,12 +11,14 @@ import {
 } from "@openreceive/core";
 import { isValidAddressForSwapNetwork } from "@openreceive/core/swap-address";
 import { normalizeNwcWalletError } from "../packages/js/node/src/nwc/errors.ts";
+import { normalizeFixedFloatStatus } from "../packages/js/node/src/swap/fixedfloat-orders.ts";
 import {
   normalizeListTransactionsResult,
   normalizeMakeInvoiceResult,
   summarizeWalletCapabilities,
   toNip47ListTransactionsParams,
   toNip47MakeInvoiceParams,
+  validateMakeInvoiceRequest,
 } from "../packages/js/node/src/nwc/normalize.ts";
 
 // The JS twin of tools/conformance/ruby-crosslang.rb. Every shared vector
@@ -64,6 +66,36 @@ test("fiat-to-msats vectors price through the production quote", () => {
           source: family.source,
           asOf: 0,
         }),
+      item.name,
+    );
+  }
+});
+
+test("amount-boundaries vectors gate through the production invoice validation", () => {
+  for (const item of vector("amount-boundaries").cases) {
+    const request = { amount_msats: BigInt(item.amount_msats), description: "vector" };
+    if (item.valid) {
+      assert.doesNotThrow(() => validateMakeInvoiceRequest(request), item.name);
+    } else {
+      assert.throws(() => validateMakeInvoiceRequest(request), item.name);
+    }
+  }
+});
+
+test("swap-state vectors map through the production FixedFloat status normalizer", () => {
+  const family = vector("swap-state");
+  assert.equal(family.provider, "fixedfloat");
+  for (const item of family.cases) {
+    const actual = normalizeFixedFloatStatus(
+      item.status,
+      item.emergency ?? {},
+      item.refund_tx_present ? "refund-tx" : undefined,
+    );
+    // Keys the vector leaves out must be absent (not undefined) on the wire, so the
+    // comparison is on the compacted object.
+    assert.deepEqual(
+      Object.fromEntries(Object.entries(actual).filter(([, value]) => value !== undefined)),
+      item.expected,
       item.name,
     );
   }

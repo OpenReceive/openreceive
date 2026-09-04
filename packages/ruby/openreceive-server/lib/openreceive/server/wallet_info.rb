@@ -10,8 +10,10 @@ module OpenReceive
     # encryption-mode choice, spend-capability detection, and receive
     # readiness must be identical in both engines.
     module WalletInfo
-      REQUIRED_RECEIVE_METHODS = %w[make_invoice list_transactions].freeze
-      SPEND_METHODS = %w[pay_invoice multi_pay_invoice pay_keysend multi_pay_keysend].freeze
+      # Kernel vocabulary (spec/data/kernel-tables.json), shared with the JS
+      # engine and the BTCPay plugin.
+      REQUIRED_RECEIVE_METHODS = OpenReceive::Generated::NWC_REQUIRED_RECEIVE_METHODS
+      SPEND_METHODS = OpenReceive::Generated::NWC_SPEND_METHODS
 
       module_function
 

@@ -1,3 +1,11 @@
+// Kernel vocabularies shared by every engine (spec/data/kernel-tables.json).
+export {
+  OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
+  OPENRECEIVE_NWC_NOTIFICATION_TYPES,
+  OPENRECEIVE_NWC_REQUIRED_RECEIVE_METHODS,
+  OPENRECEIVE_NWC_SPEND_METHODS,
+  OPENRECEIVE_TRANSACTION_PAGE_LIMIT,
+} from "./generated/contracts.ts";
 // Errors
 export type { ErrorBody, ErrorCode } from "./errors/index.ts";
 export {

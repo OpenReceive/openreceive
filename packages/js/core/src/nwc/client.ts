@@ -1,4 +1,9 @@
-export const OPENRECEIVE_NWC_METADATA_MAX_BYTES = 3900 as const;
+import {
+  type GeneratedNwcEncryptionMode,
+  OPENRECEIVE_NWC_METADATA_MAX_BYTES,
+} from "../generated/contracts.ts";
+
+export { OPENRECEIVE_NWC_METADATA_MAX_BYTES };
 const NWC_URI_PROTOCOL = "nostr+walletconnect:" as const;
 const NWC_REDACTED_SECRET = "[REDACTED]" as const;
 export const OPENRECEIVE_NWC_CODE_HELP_URL =
@@ -6,7 +11,7 @@ export const OPENRECEIVE_NWC_CODE_HELP_URL =
 
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
-export type NwcEncryptionMode = "nip04" | "nip44_v2";
+export type NwcEncryptionMode = GeneratedNwcEncryptionMode;
 
 export type NwcUriParseErrorCode =
   | "invalid_uri"

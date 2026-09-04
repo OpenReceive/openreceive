@@ -17,6 +17,8 @@ import {
   OPENRECEIVE_MAX_AMOUNT_MSATS,
   OPENRECEIVE_MIN_AMOUNT_MSATS,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
+  OPENRECEIVE_NWC_REQUIRED_RECEIVE_METHODS,
+  OPENRECEIVE_NWC_SPEND_METHODS,
   type TransactionState,
   type ParsedNwcConnection,
   type ReceiveNwcClient,
@@ -27,13 +29,10 @@ import {
 import { HEX_64 } from "../hex.ts";
 import { ReceiveCheckoutValidationError } from "./errors.ts";
 
-export const REQUIRED_RECEIVE_METHODS = ["make_invoice", "list_transactions"] as const;
-export const SPEND_METHODS = [
-  "pay_invoice",
-  "multi_pay_invoice",
-  "pay_keysend",
-  "multi_pay_keysend",
-] as const;
+// The method sets are kernel vocabulary (spec/data/kernel-tables.json), shared
+// with the Ruby engine and the BTCPay plugin.
+const REQUIRED_RECEIVE_METHODS = OPENRECEIVE_NWC_REQUIRED_RECEIVE_METHODS;
+const SPEND_METHODS = OPENRECEIVE_NWC_SPEND_METHODS;
 
 /**
  * Normalized NWC-02 wallet notification. `transaction` is the notification

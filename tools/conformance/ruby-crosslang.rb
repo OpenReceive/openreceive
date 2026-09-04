@@ -220,6 +220,22 @@ vector("error-normalization").fetch("cases").each do |kase|
   end
 end
 
+# swap-state: the FixedFloat status + emergency + refund-tx → state/reason
+# mapping, through the production normalizer (the same one get_status runs).
+swap_state = vector("swap-state")
+raise "swap-state parity failed: unexpected provider" unless swap_state.fetch("provider") == "fixedfloat"
+swap_state.fetch("cases").each do |kase|
+  actual = OpenReceive::Server::Swap::FixedFloatProvider.normalize_status(
+    kase.fetch("status"),
+    kase.fetch("emergency", {}),
+    kase.fetch("refund_tx_present") ? "refund-tx" : nil
+  )
+  unless actual == kase.fetch("expected")
+    raise "swap-state parity failed: #{kase.fetch('name')} " \
+          "(expected #{kase.fetch('expected').inspect}, got #{actual.inspect})"
+  end
+end
+
 raise "fiat parity failed" unless OpenReceive.quote_fiat_to_msats(
   fiat_value: "10.00", btc_fiat_price: "50000.00"
 ) == 20_000_000
@@ -299,4 +315,4 @@ vectors.fetch("vectors").each do |vector|
   raise "reconciliation parity failed: #{vector.fetch('name')}" unless actual == vector.fetch("expected")
 end
 
-puts "ruby storage-free conformance: ok (fiat, amounts, settlement, make-invoice, nwc-info, nwc-uri, errors, reconciliation, rate-limit-window, swap-address, wallet-scan-truncation)"
+puts "ruby storage-free conformance: ok (fiat, amounts, settlement, make-invoice, nwc-info, nwc-uri, errors, reconciliation, rate-limit-window, swap-address, swap-state, wallet-scan-truncation)"

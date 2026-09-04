@@ -166,7 +166,11 @@ function extractFixedFloatOrderFields(
   };
 }
 
-function normalizeFixedFloatStatus(
+/**
+ * FixedFloat status + emergency block + refund-tx presence → OpenReceive state and
+ * reasons. Pinned across engines by spec/test-vectors/swap-state.json.
+ */
+export function normalizeFixedFloatStatus(
   status: string,
   emergency: Record<string, unknown> | undefined,
   refundTxId: string | undefined,

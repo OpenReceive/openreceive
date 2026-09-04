@@ -1,4 +1,8 @@
-import { OPENRECEIVE_ERROR_CODES, type GeneratedErrorCode } from "../generated/contracts.ts";
+import {
+  type GeneratedErrorCode,
+  OPENRECEIVE_ERROR_CODES,
+  OPENRECEIVE_RETRYABLE_ERROR_CODES,
+} from "../generated/contracts.ts";
 
 export type ErrorCode = GeneratedErrorCode;
 
@@ -37,13 +41,9 @@ export class OpenReceiveError extends Error implements ErrorBody {
 }
 
 const OPENRECEIVE_ERROR_CODE_SET = new Set<string>(OPENRECEIVE_ERROR_CODES);
-const OPENRECEIVE_RETRYABLE_ERROR_CODE_SET = new Set<string>([
-  "RATE_LIMITED",
-  "QUOTA_EXCEEDED",
-  "TIMEOUT",
-  "WALLET_UNAVAILABLE",
-  "INTERNAL",
-] satisfies readonly ErrorCode[]);
+const OPENRECEIVE_RETRYABLE_ERROR_CODE_SET = new Set<string>(
+  OPENRECEIVE_RETRYABLE_ERROR_CODES satisfies readonly ErrorCode[],
+);
 
 export function isErrorCode(value: unknown): value is ErrorCode {
   return typeof value === "string" && OPENRECEIVE_ERROR_CODE_SET.has(value);

@@ -3,9 +3,8 @@ import {
   type TransactionSettlementStatus,
   classifyTransactionSettlement,
 } from "./settlement/index.ts";
+import { OPENRECEIVE_TRANSACTION_PAGE_LIMIT } from "./generated/contracts.ts";
 import { unixSeconds } from "./values.ts";
-
-const OPENRECEIVE_TRANSACTION_PAGE_LIMIT = 20 as const;
 
 /** {@link TransactionSettlementStatus} plus `not_found`: the hash was not in the scanned window. */
 export type PaymentStatus = TransactionSettlementStatus | "not_found";

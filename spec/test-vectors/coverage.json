@@ -1,0 +1,34 @@
+{
+  "schema_version": "0.1.0",
+  "description": "Which engine consumes which vector family. npm run validate (tools/validate/vector-coverage.mjs) reads every family under spec/test-vectors, searches each engine's test roots for a consumer, and fails when a family has neither a consumer nor an exclusion below. A consumer is a test source that names the family as `<family>.json` or `vector(\"<family>\")`. Adding a vector therefore means adding it to every engine, or writing down here why an engine is exempt. Adding an engine means adding an entry here with its test roots; an engine whose roots do not exist yet is reported as absent and skipped, so the entry can be written before the code.",
+  "families_note": "A family is one spec/test-vectors/<family>.json file, or the http-golden/ directory as the single family `http-golden`.",
+  "engines": {
+    "js": {
+      "roots": ["tests"],
+      "extensions": [".mjs", ".ts"],
+      "exclusions": {}
+    },
+    "ruby": {
+      "roots": [
+        "packages/ruby/openreceive/test",
+        "packages/ruby/openreceive-server/test",
+        "packages/ruby/openreceive-rails/test",
+        "tools/conformance"
+      ],
+      "extensions": [".rb"],
+      "exclusions": {
+        "provider-route.crypto-usdt": "Provider wizard route data; the wizard is browser-side (@openreceive/provider-data) and the Ruby engine ships no wizard."
+      }
+    },
+    "dotnet": {
+      "roots": ["packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests"],
+      "extensions": [".cs"],
+      "exclusions": {
+        "fiat-to-msats.usd": "BTCPay owns fiat rates (plugin plan 0.13); the plugin ports no price math.",
+        "rate-limit-window": "BTCPay owns request budgets and store permissions; the plugin mounts no OpenReceive HTTP routes.",
+        "http-golden": "The plugin exposes BTCPay-shaped routes, not the OpenReceive HTTP contract (plugin plan 0.17).",
+        "provider-route.crypto-usdt": "Provider wizard route data; the plugin ships no wizard (plugin plan 0.11)."
+      }
+    }
+  }
+}

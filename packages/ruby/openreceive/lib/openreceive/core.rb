@@ -5,15 +5,19 @@ require "json"
 require "uri"
 
 require_relative "version"
+# Generated kernel vocabularies (spec/data/kernel-tables.json); required here as
+# well as from openreceive.rb because tests and nwc_ruby.rb load core directly.
+require_relative "generated/tables"
 
 module OpenReceive
   NWC_CODE_HELP_URL = "https://openreceive.org/get_a_nwc_code_to_receive_payments"
-  NWC_METADATA_MAX_BYTES = 3900
-  MIN_AMOUNT_MSATS = 1000
-  MAX_AMOUNT_MSATS = 9_007_199_254_740_991
-  # Mirrors JS OPENRECEIVE_TRANSACTION_PAGE_LIMIT: the page size every
-  # wallet-history walk requests.
-  TRANSACTION_PAGE_LIMIT = 20
+  # Kernel constants shared with the JS engine and the BTCPay plugin, generated
+  # from spec/data/kernel-tables.json into OpenReceive::Generated.
+  NWC_METADATA_MAX_BYTES = Generated::NWC_METADATA_MAX_BYTES
+  MIN_AMOUNT_MSATS = Generated::MIN_AMOUNT_MSATS
+  MAX_AMOUNT_MSATS = Generated::MAX_AMOUNT_MSATS
+  # The page size every wallet-history walk requests.
+  TRANSACTION_PAGE_LIMIT = Generated::TRANSACTION_PAGE_LIMIT
   HEX_64_PATTERN = /\A[0-9a-fA-F]{64}\z/
 
   class NwcUriParseError < StandardError
@@ -295,14 +299,10 @@ module OpenReceive
       "#{text[0..query_start]}#{redacted}#{text[query_end..]}"
     end
 
-    # Canonical OpenReceive error codes (mirrors the JS generated contract).
-    ERROR_CODES = %w[
-      NOT_IMPLEMENTED RESTRICTED UNAUTHORIZED FORBIDDEN RATE_LIMITED QUOTA_EXCEEDED
-      INTERNAL UNSUPPORTED_ENCRYPTION
-      OTHER NOT_FOUND TIMEOUT INVALID_REQUEST WALLET_UNAVAILABLE
-      INVOICE_EXPIRED UNSUPPORTED_METHOD CONFLICT
-    ].freeze
-    RETRYABLE_ERROR_CODES = %w[RATE_LIMITED QUOTA_EXCEEDED TIMEOUT WALLET_UNAVAILABLE INTERNAL].freeze
+    # Canonical OpenReceive error codes and the retryable subset, generated from
+    # spec/schemas/error.schema.json and spec/data/kernel-tables.json.
+    ERROR_CODES = Generated::ERROR_CODES
+    RETRYABLE_ERROR_CODES = Generated::RETRYABLE_ERROR_CODES
     # Wallet/library spellings that map onto canonical codes (mirrors JS
     # NWC_ERROR_CODE_ALIASES).
     ERROR_CODE_ALIASES = {

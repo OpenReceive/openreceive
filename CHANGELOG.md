@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+
+### One copy of every shared vocabulary
+
+The tables both engines had typed by hand — the seven pay-in assets, the
+twelve swap states with their phase and terminal flag, the attention, refund
+and availability reasons, the NWC required-receive and spend method sets, the
+encryption-mode preference, the notification types, the wallet page limit,
+the metadata byte cap, the attempt expiry grace, and the retryable error
+codes — now live once in `spec/data/kernel-tables.json`. `npm run
+generate:models` renders that file into `@openreceive/core`
+(`generated/contracts.ts`), `@openreceive/node` (`generated/swap-tables.ts`),
+the `openreceive` gem (`OpenReceive::Generated`), and a C# file at
+`packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs`
+for the BTCPay plugin. Engine code reads the rendering; `npm run
+check:generated` fails when one is stale, and `npm run validate` fails when
+the OpenAPI document, a JSON Schema, or a vector restates a value
+differently.
+
+`@openreceive/core` gains the public constants
+`OPENRECEIVE_NWC_REQUIRED_RECEIVE_METHODS`, `OPENRECEIVE_NWC_SPEND_METHODS`,
+`OPENRECEIVE_NWC_NOTIFICATION_TYPES`, `OPENRECEIVE_TRANSACTION_PAGE_LIMIT`,
+and `OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS` (the last is still re-exported
+from `@openreceive/http`, unchanged for hosts).
+
+### The FixedFloat status mapping is a shared vector
+
+`spec/test-vectors/swap-state.json` pins how a FixedFloat order status, its
+emergency block, and a present refund transaction map to an OpenReceive swap
+state and reasons, through each engine's production normalizer. Both engines
+already agreed; the vector keeps it that way for the third.
+
+Four attention reasons that no engine has emitted since 0.1.1 —
+`provider_order_creation_stale`, `provider_order_creation_failed`,
+`provider_order_creation_needs_reconcile`, and
+`provider_order_expires_after_shadow_invoice` — are removed from the schema
+and the `SwapAttentionReason` type. `provider_completed_without_wallet_settlement`
+stays as a reserved reason. No engine's wire output changes.
+
+### Vector coverage is checked per engine
+
+`spec/test-vectors/coverage.json` names each engine's test roots and its
+exclusions with a reason; `npm run validate` fails when a vector family has
+neither a consumer nor an exclusion in an engine. The JS suite gained the
+`amount-boundaries` consumer it was missing. `docs/internal/conformance.md`
+now documents the kernel boundary — the module list a new engine ports
+against vectors, versus the host glue it writes fresh — and the checklist for
+adding an engine.
+
 ## 0.4.3 - 2026-09-03
 
 Four embedding fixes found mounting the drop-in in a 560px card on a

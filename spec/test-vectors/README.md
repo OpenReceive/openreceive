@@ -17,6 +17,11 @@ Formats in use (one per file family):
   refund/deposit addresses), `rate-limit-window` (which timestamp column the
   per-IP budget counts on — `inserted_at` — plus the
   `(client_ip, inserted_at)` index and window-membership cases).
+- **`provider` + `cases`** — `swap-state`: the FixedFloat status, emergency block,
+  and refund-tx presence → OpenReceive swap state plus attention/refund reasons,
+  run through each engine's production status normalizer. Emitted attention
+  reasons must be a subset of `spec/data/kernel-tables.json`, and every
+  non-reserved reason there must appear in at least one case.
 - **`version` + `valid`/`invalid`** — `lsc-uri`: parse expectations for valid
   `lightning+swapconnect://` URIs and a list of URIs that must be refused.
 - **`expiry_grace_seconds` + `vectors`** — `attempt-reconciliation`: the
@@ -55,3 +60,11 @@ Formats in use (one per file family):
   identical — change both together.
 `provider-route.*.json` files (`request` + `expected`) describe provider wizard
 routes and are consumed by the provider-data tests.
+
+## Coverage
+
+`coverage.json` lists each engine's test roots and its per-family exclusions with a
+reason. `npm run validate` fails when a family has neither a consumer nor an exclusion in
+an engine whose roots exist; an engine with no roots yet is reported as absent. Adding a
+vector means adding its consumer to every engine (or an exclusion); adding an engine means
+adding its entry here first.

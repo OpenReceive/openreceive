@@ -10,10 +10,10 @@ module OpenReceive
       # Seconds past an attempt's expiry during which reconciliation still scans
       # for a settlement before closing the attempt. Covers clock skew and
       # wallets that accept a payment moments after nominal invoice expiry.
-      # The value 900 is pinned by spec/test-vectors/attempt-reconciliation.json
-      # ("expiry_grace_seconds", asserted by tools/conformance/ruby-crosslang.rb)
-      # and mirrored by JS OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS.
-      EXPIRY_GRACE_SECONDS = 900
+      # The value comes from spec/data/kernel-tables.json (generated into
+      # OpenReceive::Generated), is pinned by spec/test-vectors/attempt-
+      # reconciliation.json, and is the JS OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS.
+      EXPIRY_GRACE_SECONDS = OpenReceive::Generated::ATTEMPT_EXPIRY_GRACE_SECONDS
 
       module_function
 

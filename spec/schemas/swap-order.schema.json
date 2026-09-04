@@ -93,14 +93,11 @@
     "attention_reason": {
       "type": "string",
       "enum": [
-        "provider_completed_without_wallet_settlement",
-        "provider_order_creation_failed",
-        "provider_order_creation_needs_reconcile",
-        "provider_order_creation_stale",
-        "provider_order_expires_after_shadow_invoice",
         "provider_reported_emergency",
-        "provider_status_unrecognized"
-      ]
+        "provider_status_unrecognized",
+        "provider_completed_without_wallet_settlement"
+      ],
+      "description": "Why the attempt needs review. The vocabulary is spec/data/kernel-tables.json swap.attention_reasons; provider_completed_without_wallet_settlement is reserved and not emitted by any engine yet."
     },
     "refund_reason": {
       "type": "string",
@@ -121,7 +118,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["currency", "pay_in_fiat", "payout_fiat"],
-      "description": "Fiat equivalents explaining why the payer sends more than the cart total: pay_in_fiat is the value of the crypto they send, payout_fiat is what the merchant receives, and the gap is the swap fee. Display only \u2014 the Lightning invoice amount remains the price authority.",
+      "description": "Fiat equivalents explaining why the payer sends more than the cart total: pay_in_fiat is the value of the crypto they send, payout_fiat is what the merchant receives, and the gap is the swap fee. Display only — the Lightning invoice amount remains the price authority.",
       "properties": {
         "currency": {
           "type": "string",

@@ -1,76 +1,23 @@
 import type { SwapAddressNetwork } from "@openreceive/core/swap-address";
+import {
+  type GeneratedSwapAssetInfo,
+  type GeneratedSwapPayInAsset,
+  OPENRECEIVE_SWAP_ASSET_INFO,
+  OPENRECEIVE_SWAP_PAY_IN_ASSETS,
+} from "../generated/swap-tables.ts";
 
-export const OPENRECEIVE_SWAP_PAY_IN_ASSETS = [
-  "SOL_SOL",
-  "USDT_TRON",
-  "USDT_SOL",
-  "USDC_SOL",
-  "ETH_ETH",
-  "USDT_ETH",
-  "USDC_ETH",
-] as const;
+// The asset table is kernel vocabulary (spec/data/kernel-tables.json), generated
+// into this package, the Ruby engine, and the BTCPay plugin alike. This module
+// adds the lookups and the provider network matching on top of it.
+export { OPENRECEIVE_SWAP_PAY_IN_ASSETS };
 
-export type SwapPayInAsset = (typeof OPENRECEIVE_SWAP_PAY_IN_ASSETS)[number];
+export type SwapPayInAsset = GeneratedSwapPayInAsset;
 
-export interface SwapAssetInfo {
-  readonly pay_in_asset: SwapPayInAsset;
-  readonly label: string;
-  readonly network_label: string;
-  readonly coin: string;
+export interface SwapAssetInfo extends GeneratedSwapAssetInfo {
   readonly network: SwapAddressNetwork;
 }
 
-const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = {
-  SOL_SOL: {
-    pay_in_asset: "SOL_SOL",
-    label: "SOL",
-    network_label: "Solana",
-    coin: "SOL",
-    network: "SOL",
-  },
-  USDT_TRON: {
-    pay_in_asset: "USDT_TRON",
-    label: "USDT",
-    network_label: "Tron",
-    coin: "USDT",
-    network: "TRX",
-  },
-  USDT_SOL: {
-    pay_in_asset: "USDT_SOL",
-    label: "USDT",
-    network_label: "Solana",
-    coin: "USDT",
-    network: "SOL",
-  },
-  USDC_SOL: {
-    pay_in_asset: "USDC_SOL",
-    label: "USDC",
-    network_label: "Solana",
-    coin: "USDC",
-    network: "SOL",
-  },
-  ETH_ETH: {
-    pay_in_asset: "ETH_ETH",
-    label: "ETH",
-    network_label: "Ethereum",
-    coin: "ETH",
-    network: "ETH",
-  },
-  USDT_ETH: {
-    pay_in_asset: "USDT_ETH",
-    label: "USDT",
-    network_label: "Ethereum",
-    coin: "USDT",
-    network: "ETH",
-  },
-  USDC_ETH: {
-    pay_in_asset: "USDC_ETH",
-    label: "USDC",
-    network_label: "Ethereum",
-    coin: "USDC",
-    network: "ETH",
-  },
-} as const;
+const ASSET_INFO: Readonly<Record<SwapPayInAsset, SwapAssetInfo>> = OPENRECEIVE_SWAP_ASSET_INFO;
 
 export function isSwapPayInAsset(value: unknown): value is SwapPayInAsset {
   return (

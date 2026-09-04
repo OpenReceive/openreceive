@@ -1,7 +1,8 @@
 import {
+  OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
+  type PaymentDetails,
   type TransactionSettlementStatus,
   unixSeconds,
-  type PaymentDetails,
 } from "@openreceive/core";
 import type { Checkout, SwapData } from "@openreceive/node";
 import type { CheckoutCreatedInput } from "./handler.ts";
@@ -21,12 +22,9 @@ import type { CheckoutCreatedInput } from "./handler.ts";
 /** Seconds of remaining life required before a live attempt is reused instead of reminted. */
 export const OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS = 60 as const;
 
-/**
- * Seconds past an attempt's expiry during which reconciliation still scans for a
- * settlement before closing the attempt. Covers clock skew and wallets that
- * accept a payment moments after nominal invoice expiry.
- */
-export const OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS = 900 as const;
+// The grace window is a kernel constant (spec/data/kernel-tables.json), re-exported
+// here because hosts have always imported it from @openreceive/http.
+export { OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS };
 
 /**
  * Lifecycle of one payment attempt: {@link TransactionSettlementStatus} plus

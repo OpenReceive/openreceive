@@ -1,43 +1,26 @@
+import type {
+  GeneratedSwapAttentionReason,
+  GeneratedSwapAvailabilityReason,
+  GeneratedSwapProviderState,
+  GeneratedSwapRefundReason,
+} from "../generated/swap-tables.ts";
 import type { SwapPayInAsset } from "./assets.ts";
 import type { TransientSwapCache } from "./limits-cache.ts";
 
-export type SwapProviderState =
-  | "creating_provider_order"
-  | "awaiting_deposit"
-  | "confirming"
-  | "exchanging"
-  | "paying_invoice"
-  | "completed"
-  | "expired"
-  | "refund_required"
-  | "refund_pending"
-  | "refunded"
-  | "attention"
-  | "failed";
+// The state and reason vocabularies are kernel tables (spec/data/kernel-tables.json)
+// generated into every engine; the names below are this package's spelling of them.
+export type SwapProviderState = GeneratedSwapProviderState;
 
-export type SwapAvailabilityReason =
-  | "provider_unconfigured"
-  | "amount_too_small"
-  | "amount_too_large"
-  | "pair_temporarily_unavailable"
-  | "region_unsupported"
-  | "provider_rate_limited"
-  | "provider_unreachable";
+export type SwapAvailabilityReason = GeneratedSwapAvailabilityReason;
 
 /**
  * Why a swap attempt entered the `attention` state and needs human/support review.
  * Every code path that sets `attention: true` records one of these so a dashboard or
- * runbook can branch on the cause instead of a bare boolean. See the "Attention"
- * section of docs/internal/swap-operations.md for the per-reason operator runbook.
+ * runbook can branch on the cause instead of a bare boolean. The FixedFloat status
+ * mapping that produces them is pinned by spec/test-vectors/swap-state.json;
+ * `provider_completed_without_wallet_settlement` is reserved and not emitted yet.
  */
-export type SwapAttentionReason =
-  | "provider_completed_without_wallet_settlement"
-  | "provider_order_creation_stale"
-  | "provider_order_creation_failed"
-  | "provider_order_creation_needs_reconcile"
-  | "provider_reported_emergency"
-  | "provider_status_unrecognized"
-  | "provider_order_expires_after_shadow_invoice";
+export type SwapAttentionReason = GeneratedSwapAttentionReason;
 
 /**
  * Why a swap attempt entered the refund path (`refund_required` → `refunded`).
@@ -46,12 +29,7 @@ export type SwapAttentionReason =
  * fixed-amount bolt11, so there is nothing to exchange the surplus into and
  * `choice=EXCHANGE` is not a path this client takes.
  */
-export type SwapRefundReason =
-  | "underpaid"
-  | "overpaid"
-  | "late_deposit"
-  | "underpaid_and_late"
-  | "overpaid_and_late";
+export type SwapRefundReason = GeneratedSwapRefundReason;
 
 export interface SwapQuote {
   readonly pay_amount?: string;

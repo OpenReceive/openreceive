@@ -5,44 +5,15 @@ require "openreceive"
 module OpenReceive
   module Server
     module Swap
-      # Ruby port of packages/js/node/src/swap/assets.ts: the OpenReceive
+      # Ruby twin of packages/js/node/src/swap/assets.ts: the OpenReceive
       # pay-in asset catalog (labels, network labels, provider matching) and
       # the network helpers the FixedFloat provider uses to map /ccies rows.
       module Assets
-        PAY_IN_ASSETS = %w[
-          SOL_SOL USDT_TRON USDT_SOL USDC_SOL ETH_ETH USDT_ETH USDC_ETH
-        ].freeze
-
-        ASSET_INFO = {
-          "SOL_SOL" => {
-            "pay_in_asset" => "SOL_SOL", "label" => "SOL", "network_label" => "Solana",
-            "coin" => "SOL", "network" => "SOL"
-          }.freeze,
-          "USDT_TRON" => {
-            "pay_in_asset" => "USDT_TRON", "label" => "USDT", "network_label" => "Tron",
-            "coin" => "USDT", "network" => "TRX"
-          }.freeze,
-          "USDT_SOL" => {
-            "pay_in_asset" => "USDT_SOL", "label" => "USDT", "network_label" => "Solana",
-            "coin" => "USDT", "network" => "SOL"
-          }.freeze,
-          "USDC_SOL" => {
-            "pay_in_asset" => "USDC_SOL", "label" => "USDC", "network_label" => "Solana",
-            "coin" => "USDC", "network" => "SOL"
-          }.freeze,
-          "ETH_ETH" => {
-            "pay_in_asset" => "ETH_ETH", "label" => "ETH", "network_label" => "Ethereum",
-            "coin" => "ETH", "network" => "ETH"
-          }.freeze,
-          "USDT_ETH" => {
-            "pay_in_asset" => "USDT_ETH", "label" => "USDT", "network_label" => "Ethereum",
-            "coin" => "USDT", "network" => "ETH"
-          }.freeze,
-          "USDC_ETH" => {
-            "pay_in_asset" => "USDC_ETH", "label" => "USDC", "network_label" => "Ethereum",
-            "coin" => "USDC", "network" => "ETH"
-          }.freeze
-        }.freeze
+        # The asset table is kernel vocabulary (spec/data/kernel-tables.json),
+        # generated into every engine; this module adds the lookups and the
+        # provider network matching on top of it.
+        PAY_IN_ASSETS = OpenReceive::Generated::SWAP_PAY_IN_ASSETS
+        ASSET_INFO = OpenReceive::Generated::SWAP_ASSET_INFO
 
         module_function
 

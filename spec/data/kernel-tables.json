@@ -1,0 +1,126 @@
+{
+  "schema_version": "0.1.0",
+  "description": "The closed vocabularies and fixed numbers every OpenReceive engine must share. This file is the ONLY hand-edited copy: npm run generate:models renders it into packages/js/core/src/generated/contracts.ts, packages/js/node/src/generated/swap-tables.ts, packages/ruby/openreceive/lib/openreceive/generated/tables.rb and packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs, and npm run check:generated fails when any rendering is stale. Error codes and payment statuses are NOT here: they come from spec/schemas/error.schema.json and the OpenAPI document, which the same generator already reads. npm run validate cross-checks every enum below against the OpenAPI and JSON Schema copies, so the spec cannot disagree with itself.",
+  "nwc": {
+    "required_receive_methods": ["make_invoice", "list_transactions"],
+    "spend_methods": ["pay_invoice", "multi_pay_invoice", "pay_keysend", "multi_pay_keysend"],
+    "encryption_modes": ["nip44_v2", "nip04"],
+    "encryption_modes_note": "Preference order: the first mode the wallet advertises wins. No advertised list at all means the NIP-47 baseline nip04. Spelling aliases (nip44, nip_44, nip_04) are normalization, pinned by test-vectors/nwc-info.json, not vocabulary.",
+    "notification_types": ["payment_received"],
+    "transaction_page_limit": 20,
+    "metadata_max_bytes": 3900
+  },
+  "attempts": {
+    "expiry_grace_seconds": 900,
+    "expiry_grace_seconds_note": "Seconds past an attempt's expiry during which reconciliation still scans before closing it. test-vectors/attempt-reconciliation.json carries the same number and npm run validate asserts they agree."
+  },
+  "errors": {
+    "retryable_codes": [
+      "RATE_LIMITED",
+      "QUOTA_EXCEEDED",
+      "TIMEOUT",
+      "WALLET_UNAVAILABLE",
+      "INTERNAL"
+    ]
+  },
+  "swap": {
+    "pay_in_assets": [
+      {
+        "pay_in_asset": "SOL_SOL",
+        "label": "SOL",
+        "network_label": "Solana",
+        "coin": "SOL",
+        "network": "SOL"
+      },
+      {
+        "pay_in_asset": "USDT_TRON",
+        "label": "USDT",
+        "network_label": "Tron",
+        "coin": "USDT",
+        "network": "TRX"
+      },
+      {
+        "pay_in_asset": "USDT_SOL",
+        "label": "USDT",
+        "network_label": "Solana",
+        "coin": "USDT",
+        "network": "SOL"
+      },
+      {
+        "pay_in_asset": "USDC_SOL",
+        "label": "USDC",
+        "network_label": "Solana",
+        "coin": "USDC",
+        "network": "SOL"
+      },
+      {
+        "pay_in_asset": "ETH_ETH",
+        "label": "ETH",
+        "network_label": "Ethereum",
+        "coin": "ETH",
+        "network": "ETH"
+      },
+      {
+        "pay_in_asset": "USDT_ETH",
+        "label": "USDT",
+        "network_label": "Ethereum",
+        "coin": "USDT",
+        "network": "ETH"
+      },
+      {
+        "pay_in_asset": "USDC_ETH",
+        "label": "USDC",
+        "network_label": "Ethereum",
+        "coin": "USDC",
+        "network": "ETH"
+      }
+    ],
+    "states_note": "phase is the coarse bucket a UI branches on; terminal states stop provider polling and UI refresh. completed is deliberately NOT terminal: provider completion is not wallet settlement.",
+    "states": [
+      { "state": "creating_provider_order", "phase": "preparing", "terminal": false },
+      { "state": "awaiting_deposit", "phase": "awaiting_deposit", "terminal": false },
+      { "state": "confirming", "phase": "processing", "terminal": false },
+      { "state": "exchanging", "phase": "processing", "terminal": false },
+      { "state": "paying_invoice", "phase": "processing", "terminal": false },
+      { "state": "completed", "phase": "settling", "terminal": false },
+      { "state": "expired", "phase": "terminal", "terminal": true },
+      { "state": "refund_required", "phase": "refund", "terminal": false },
+      { "state": "refund_pending", "phase": "refund", "terminal": false },
+      { "state": "refunded", "phase": "terminal", "terminal": true },
+      { "state": "attention", "phase": "attention", "terminal": true },
+      { "state": "failed", "phase": "terminal", "terminal": true }
+    ],
+    "attention_reasons_note": "Every reason an engine may write into attention_reason. A reason without reserved:true must be produced by at least one case in test-vectors/swap-state.json (npm run validate enforces it). reserved:true names a reason the vocabulary holds for a transition no engine emits yet.",
+    "attention_reasons": [
+      {
+        "reason": "provider_reported_emergency",
+        "meaning": "The provider raised an emergency and chose to exchange rather than refund; funds may be in limbo."
+      },
+      {
+        "reason": "provider_status_unrecognized",
+        "meaning": "The provider returned a status this engine does not know; do not guess a state."
+      },
+      {
+        "reason": "provider_completed_without_wallet_settlement",
+        "reserved": true,
+        "meaning": "The provider reported completed but the wallet never settled the invoice after a bounded wait. Reserved for a settlement poller; neither engine emits it today."
+      }
+    ],
+    "refund_reasons": [
+      "underpaid",
+      "overpaid",
+      "late_deposit",
+      "underpaid_and_late",
+      "overpaid_and_late"
+    ],
+    "availability_reasons": [
+      "provider_unconfigured",
+      "amount_too_small",
+      "amount_too_large",
+      "pair_temporarily_unavailable",
+      "region_unsupported",
+      "provider_rate_limited",
+      "provider_unreachable"
+    ]
+  }
+}
