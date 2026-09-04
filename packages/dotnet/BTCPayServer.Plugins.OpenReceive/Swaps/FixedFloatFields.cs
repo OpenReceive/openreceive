@@ -35,15 +35,24 @@ internal static partial class FixedFloatFields
             }
             if (element.ValueKind != JsonValueKind.Number) return null;
             if (element.TryGetInt64(out var integer)) return integer.ToString(CultureInfo.InvariantCulture);
-            if (element.TryGetDouble(out var real) && double.IsFinite(real)) return real.ToString("R", CultureInfo.InvariantCulture);
+            if (element.TryGetDecimal(out var exact)) return exact.ToString(CultureInfo.InvariantCulture);
+            if (element.TryGetDouble(out var real) && double.IsFinite(real)) return PlainDecimal(real);
             return null;
         }
         if (value.TryGetValue<long>(out var l)) return l.ToString(CultureInfo.InvariantCulture);
         if (value.TryGetValue<int>(out var i)) return i.ToString(CultureInfo.InvariantCulture);
         if (value.TryGetValue<decimal>(out var d)) return d.ToString(CultureInfo.InvariantCulture);
-        if (value.TryGetValue<double>(out var real2) && double.IsFinite(real2)) return real2.ToString("R", CultureInfo.InvariantCulture);
+        if (value.TryGetValue<double>(out var real2) && double.IsFinite(real2)) return PlainDecimal(real2);
         return null;
     }
+
+    /// <summary>
+    /// A JSON number as plain decimal text, never exponent notation: "R" renders 0.00000001
+    /// as 1E-08, which is not an amount downstream (the decimal-amount check, the wei
+    /// conversion). Decimal is exact for every amount a provider quotes; the double path is
+    /// the fallback for a magnitude decimal cannot hold.
+    /// </summary>
+    private static string PlainDecimal(double real) => real.ToString("0.############################", CultureInfo.InvariantCulture);
 
     public static string? OptionalStringField(JsonObject? record, string field) =>
         record is null ? null : OptionalCoercedString(record[field]);

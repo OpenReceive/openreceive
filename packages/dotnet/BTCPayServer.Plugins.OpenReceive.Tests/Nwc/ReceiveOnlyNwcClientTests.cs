@@ -451,6 +451,30 @@ public sealed class ReceiveOnlyNwcClientTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
     }
 
+    [Fact]
+    public async Task Listen_recovers_a_dropped_push_through_the_periodic_sweep()
+    {
+        await using var h = new Harness();
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        h.Transport.DropNotifications = true;
+
+        using var listener = new NwcNotificationListener(h.Client, h.Transport, h.State.Memo, NullLogger.Instance, sweepInterval: TimeSpan.FromMilliseconds(200));
+        var waiting = listener.WaitInvoice(Bounded());
+        await h.Backend.SettleAsync(invoice.Id);
+        var paid = await waiting.WaitAsync(WaitBound);
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(invoice.Id, paid.Id);
+        Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
+        Assert.True(h.Transport.Count("list_transactions") >= 2); // the sweep's walk, not a push, found it
+
+        // The push path and the sweep share one queue: the settlement was emitted once.
+        await Task.Delay(500);
+        var again = listener.WaitInvoice(new CancellationTokenSource(TimeSpan.FromMilliseconds(300)).Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => again);
+    }
+
     // ---- Listen: polling ----
 
     [Fact]

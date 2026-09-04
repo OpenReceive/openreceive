@@ -73,6 +73,9 @@ public sealed class OpenReceivePluginDbContext : DbContext
         swap.Property(s => s.StateChangedAt).HasColumnName("state_changed_at");
         swap.Property(s => s.LastPolledAt).HasColumnName("last_polled_at");
         swap.Property(s => s.WalletSettledAt).HasColumnName("wallet_settled_at");
+        // Postgres' system column xmin as the concurrency token: no migration, and every
+        // UPDATE is "WHERE xmin = <loaded>" (EfSwapStore turns a miss into SwapConcurrencyException).
+        swap.Property(s => s.Version).HasColumnName("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
         swap.Ignore(s => s.IsTerminal);
         swap.HasIndex(s => s.InvoiceId).HasDatabaseName("ix_openreceive_swaps_invoice_id");
         swap.HasIndex(s => s.StoreId).HasDatabaseName("ix_openreceive_swaps_store_id");

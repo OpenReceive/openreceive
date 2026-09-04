@@ -367,24 +367,29 @@ public sealed class SwapServiceTests
     public async Task Lightning_payment_stamps_the_row_and_slows_the_poll_cadence()
     {
         var h = new Harness();
-        h.Core.Script("USDT_TRON", ["completed"]);
+        h.Core.Script("USDT_TRON", ["paying_invoice", "completed"]);
         var model = await h.Create("USDT_TRON");
-        Assert.Equal("completed", (await h.Poll(model.SwapId)).State);
+        Assert.Equal("paying_invoice", (await h.Poll(model.SwapId)).State);
 
         await h.Service.OnLightningPaymentAsync(InvoiceId, PaymentHash.ToUpperInvariant(), CancellationToken.None);
 
         var row = await h.Row(model.SwapId);
         Assert.Equal(h.Now, row.WalletSettledAt);
         Assert.Equal(30, SwapService.PollIntervalSeconds(row));
-        Assert.Equal("completed", row.State);
+        Assert.Equal("paying_invoice", row.State);
         Assert.True((await h.Service.GetAsync(InvoiceId, model.SwapId, CancellationToken.None))!.WalletSettled);
 
-        // Cadence: 6 s later the row is not due; 30 s later it is. Stays completed either way.
-        Assert.Equal(0, await h.Service.PollOnceAsync(CancellationToken.None));
+        // Cadence: 6 s later the row is not due; 30 s later it is, and the provider reports completed.
         h.Now += 6;
         Assert.Equal(0, await h.Service.PollOnceAsync(CancellationToken.None));
+        Assert.Equal("completed", (await h.Poll(model.SwapId, SwapService.SettledPollSeconds)).State);
+
+        // Completed with the Lightning side settled: that swap is done. The row stays as the
+        // record, leaves the poll set for good, and never turns into attention.
         Assert.Equal("completed", (await h.Poll(model.SwapId, SwapService.CompletedWithoutSettlementSeconds + 10)).State);
         Assert.False((await h.Row(model.SwapId)).Attention);
+        Assert.False(SwapService.IsPolled(await h.Row(model.SwapId)));
+        Assert.Empty(await h.Store.DueAsync(h.Now + 3600, SwapService.PollBatchSize, CancellationToken.None));
 
         // A payment for another hash never stamps this row.
         var other = new Harness();
@@ -539,6 +544,98 @@ public sealed class SwapServiceTests
     }
 
     // ---- Provider down ----
+
+    [Fact]
+    public async Task Create_keeps_the_old_order_when_the_provider_refuses_the_replacement()
+    {
+        var h = new Harness();
+        h.Invoices.Invoices[InvoiceId] = h.Invoice(expiresAt: h.Now + 7200);
+        var first = await h.Create("USDT_TRON");
+        h.Now += 900 - SwapService.ReserveWindowSeconds + 1; // inside the reserve window: a replacement is due
+        h.Core.ForceCreateError("Fake LSC create failed: pair paused.");
+
+        var error = await Assert.ThrowsAsync<SwapRequestException>(() => h.Create("USDT_TRON"));
+
+        Assert.Equal(502, error.Status);
+        Assert.Equal("provider_refused", error.Code);
+        Assert.DoesNotContain("pair paused", error.Message); // the provider's words stay in the log line
+        // The provider order comes first, so a refusal leaves the old order live for its last minute.
+        var old = await h.Row(first.SwapId);
+        Assert.Equal("awaiting_deposit", old.State);
+        Assert.Single(h.Core.Orders);
+        Assert.Equal(first.SwapId, (await h.Store.FindLiveAsync(InvoiceId, "USDT_TRON", CancellationToken.None))!.Id);
+    }
+
+    [Fact]
+    public async Task Create_keeps_an_order_the_provider_is_processing_however_close_to_the_deadline()
+    {
+        var h = new Harness();
+        h.Invoices.Invoices[InvoiceId] = h.Invoice(expiresAt: h.Now + 7200);
+        h.Core.Script("USDT_TRON", ["confirming"]);
+        var first = await h.Create("USDT_TRON");
+        Assert.Equal("confirming", (await h.Poll(first.SwapId)).State);
+        h.Now += 900; // past the provider's deadline, but the deposit is in and the provider is on it
+
+        var again = await h.Create("USDT_TRON");
+
+        Assert.Equal(first.SwapId, again.SwapId);
+        Assert.Equal("confirming", again.State);
+        Assert.Single(h.Core.Orders); // no fresh order minted underneath a deposit in flight
+    }
+
+    // ---- Concurrency: the row version ----
+
+    [Fact]
+    public async Task A_stale_copy_of_a_row_cannot_overwrite_a_refund_that_landed_first()
+    {
+        var h = new Harness();
+        h.Core.ForceRefundRequired("USDT_TRON", "underpaid");
+        var model = await h.Create("USDT_TRON");
+        Assert.Equal("refund_required", (await h.Poll(model.SwapId)).State);
+
+        // A poller pass loaded its copy before the payer's refund landed.
+        var stale = await h.Row(model.SwapId);
+        var pending = await h.Service.RefundAsync(InvoiceId, model.SwapId, ValidTronAddress, CancellationToken.None);
+        Assert.Equal("refund_pending", pending.State);
+
+        stale.LastPolledAt = h.Now;
+        await Assert.ThrowsAsync<SwapConcurrencyException>(() => h.Store.UpdateAsync(stale, CancellationToken.None));
+
+        var row = await h.Row(model.SwapId);
+        Assert.Equal(ValidTronAddress, row.RefundAddress);
+        Assert.Equal("refund_pending", row.State);
+        Assert.Equal(stale.Version + 1, row.Version);
+
+        // The next poll re-reads the row: the refund survives, and a second request is still refused.
+        var polled = await h.Poll(model.SwapId);
+        Assert.Equal(ValidTronAddress, polled.RefundAddress);
+        Assert.Equal("refund_pending", polled.State);
+        var again = await Assert.ThrowsAsync<SwapRequestException>(() => h.Service.RefundAsync(InvoiceId, model.SwapId, ValidTronAddress, CancellationToken.None));
+        Assert.Equal("refund_already_requested", again.Code);
+    }
+
+    [Fact]
+    public async Task Every_write_carries_the_version_it_loaded()
+    {
+        var h = new Harness();
+        var model = await h.Create("USDT_TRON");
+        var v1 = await h.Row(model.SwapId);
+        Assert.Equal(1u, v1.Version);
+
+        await h.Poll(model.SwapId);
+        var v2 = await h.Row(model.SwapId);
+        Assert.Equal(2u, v2.Version);
+
+        await h.Service.OnLightningRemintAsync(InvoiceId, CancellationToken.None);
+        var v3 = await h.Row(model.SwapId);
+        Assert.Equal(3u, v3.Version);
+        Assert.Equal(SwapService.PluginReasonReminted, v3.PluginReason);
+
+        // The copy from before the re-mint is stale; the remint annotation cannot be undone by it.
+        v2.PluginReason = null;
+        await Assert.ThrowsAsync<SwapConcurrencyException>(() => h.Store.UpdateAsync(v2, CancellationToken.None));
+        Assert.Equal(SwapService.PluginReasonReminted, (await h.Row(model.SwapId)).PluginReason);
+    }
 
     [Fact]
     public async Task Provider_rate_limit_during_create_is_a_503_and_backs_the_provider_off()

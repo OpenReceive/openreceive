@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="../buildMultiTargeting/BTCPayServer.Plugins.OpenReceive.props" />
-</Project>

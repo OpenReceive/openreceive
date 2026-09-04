@@ -13,22 +13,33 @@ namespace BTCPayServer.Plugins.OpenReceive.Swaps;
 
 /// <summary>
 /// Persistence for swap rows. The EF implementation is the runtime; the in-memory one
-/// keeps <see cref="SwapService"/> testable without Postgres. Both enforce the same
-/// invariant the partial unique index backs: one live order per invoice + asset.
+/// keeps <see cref="SwapService"/> testable without Postgres. Both enforce the same two
+/// invariants: one live order per invoice + asset (the partial unique index), and an
+/// update only lands on the row version it loaded (<see cref="OpenReceiveSwap.Version"/>).
 /// </summary>
 public interface ISwapStore
 {
-    /// <summary>A cross-worker lock for one creation key (Postgres advisory lock at runtime).</summary>
+    /// <summary>A cross-worker lock for one key (Postgres advisory lock at runtime).</summary>
     Task<IAsyncDisposable> LockAsync(string key, CancellationToken cancellationToken);
     Task<OpenReceiveSwap?> GetAsync(string id, CancellationToken cancellationToken);
     Task<OpenReceiveSwap?> FindLiveAsync(string invoiceId, string payInAsset, CancellationToken cancellationToken);
     Task<IReadOnlyList<OpenReceiveSwap>> ForInvoiceAsync(string invoiceId, CancellationToken cancellationToken);
     Task<IReadOnlyList<OpenReceiveSwap>> ForStoreAsync(string storeId, int limit, CancellationToken cancellationToken);
-    /// <summary>Non-terminal rows, least recently polled first.</summary>
-    Task<IReadOnlyList<OpenReceiveSwap>> LiveAsync(int limit, CancellationToken cancellationToken);
+    /// <summary>Rows due for a provider refresh at <paramref name="now"/> (<see cref="SwapService.IsDue"/>), least recently polled first.</summary>
+    Task<IReadOnlyList<OpenReceiveSwap>> DueAsync(long now, int limit, CancellationToken cancellationToken);
     Task<int> CountAttentionAsync(string storeId, CancellationToken cancellationToken);
     Task InsertAsync(OpenReceiveSwap swap, CancellationToken cancellationToken);
+    /// <summary>Writes the row; throws <see cref="SwapConcurrencyException"/> when the stored row is no longer the version this copy loaded.</summary>
     Task UpdateAsync(OpenReceiveSwap swap, CancellationToken cancellationToken);
+}
+
+/// <summary>An update lost the race: the row changed since this copy was loaded. Reload and decide again.</summary>
+public sealed class SwapConcurrencyException : Exception
+{
+    public SwapConcurrencyException(string swapId, Exception? inner = null)
+        : base($"swap {swapId} changed since it was loaded", inner)
+    {
+    }
 }
 
 public static class SwapStates
@@ -99,11 +110,20 @@ public sealed class EfSwapStore : ISwapStore
         return await context.Swaps.AsNoTracking().Where(s => s.StoreId == storeId).OrderByDescending(s => s.CreatedAt).Take(limit).ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<OpenReceiveSwap>> LiveAsync(int limit, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<OpenReceiveSwap>> DueAsync(long now, int limit, CancellationToken cancellationToken)
     {
         await using var context = _factory.CreateContext();
         var terminal = SwapStates.TerminalStates;
-        return await context.Swaps.AsNoTracking().Where(s => !terminal.Contains(s.State))
+        var pendingBefore = now - SwapService.PollSeconds;
+        var settledBefore = now - SwapService.SettledPollSeconds;
+        // SwapService.IsDue in SQL: live, not a completed order whose Lightning side settled,
+        // and past its cadence — so a backlog never pins the poller to the same 200 rows.
+        return await context.Swaps.AsNoTracking()
+            .Where(s => !terminal.Contains(s.State))
+            .Where(s => s.State != "completed" || s.WalletSettledAt == null)
+            .Where(s => s.LastPolledAt == null
+                        || (s.WalletSettledAt == null && s.LastPolledAt <= pendingBefore)
+                        || (s.WalletSettledAt != null && s.LastPolledAt <= settledBefore))
             .OrderBy(s => s.LastPolledAt ?? 0).Take(limit).ToListAsync(cancellationToken);
     }
 
@@ -124,15 +144,23 @@ public sealed class EfSwapStore : ISwapStore
     {
         await using var context = _factory.CreateContext();
         context.Swaps.Update(swap);
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException e)
+        {
+            throw new SwapConcurrencyException(swap.Id, e);
+        }
     }
 }
 
-/// <summary>Test double with the same one-live-order rule.</summary>
+/// <summary>Test double with the same one-live-order and same-version-only rules.</summary>
 public sealed class InMemorySwapStore : ISwapStore
 {
     private readonly ConcurrentDictionary<string, OpenReceiveSwap> _rows = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly object _write = new();
 
     public IReadOnlyCollection<OpenReceiveSwap> Rows => _rows.Values.ToArray();
 
@@ -163,29 +191,42 @@ public sealed class InMemorySwapStore : ISwapStore
     public Task<IReadOnlyList<OpenReceiveSwap>> ForStoreAsync(string storeId, int limit, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<OpenReceiveSwap>>(_rows.Values.Where(r => r.StoreId == storeId).OrderByDescending(r => r.CreatedAt).Take(limit).Select(Clone).ToList());
 
-    public Task<IReadOnlyList<OpenReceiveSwap>> LiveAsync(int limit, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<OpenReceiveSwap>>(_rows.Values.Where(r => !r.IsTerminal).OrderBy(r => r.LastPolledAt ?? 0).Take(limit).Select(Clone).ToList());
+    public Task<IReadOnlyList<OpenReceiveSwap>> DueAsync(long now, int limit, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<OpenReceiveSwap>>(_rows.Values.Where(r => SwapService.IsDue(r, now)).OrderBy(r => r.LastPolledAt ?? 0).Take(limit).Select(Clone).ToList());
 
     public Task<int> CountAttentionAsync(string storeId, CancellationToken cancellationToken) =>
         Task.FromResult(_rows.Values.Count(r => r.StoreId == storeId && r.Attention));
 
     public Task InsertAsync(OpenReceiveSwap swap, CancellationToken cancellationToken)
     {
-        if (!swap.IsTerminal && _rows.Values.Any(r => r.InvoiceId == swap.InvoiceId && r.PayInAsset == swap.PayInAsset && !r.IsTerminal))
+        lock (_write)
         {
-            throw new InvalidOperationException("duplicate live swap for invoice + asset (unique index)");
+            if (!swap.IsTerminal && _rows.Values.Any(r => r.InvoiceId == swap.InvoiceId && r.PayInAsset == swap.PayInAsset && !r.IsTerminal))
+            {
+                throw new InvalidOperationException("duplicate live swap for invoice + asset (unique index)");
+            }
+            if (_rows.Values.Any(r => r.Provider == swap.Provider && r.ProviderOrderId == swap.ProviderOrderId))
+            {
+                throw new InvalidOperationException("duplicate provider order (unique index)");
+            }
+            swap.Version = 1;
+            _rows[swap.Id] = Clone(swap);
         }
-        if (_rows.Values.Any(r => r.Provider == swap.Provider && r.ProviderOrderId == swap.ProviderOrderId))
-        {
-            throw new InvalidOperationException("duplicate provider order (unique index)");
-        }
-        _rows[swap.Id] = Clone(swap);
         return Task.CompletedTask;
     }
 
     public Task UpdateAsync(OpenReceiveSwap swap, CancellationToken cancellationToken)
     {
-        _rows[swap.Id] = Clone(swap);
+        lock (_write)
+        {
+            // The optimistic rule Postgres enforces through xmin: a stale copy never overwrites a newer row.
+            if (!_rows.TryGetValue(swap.Id, out var stored) || stored.Version != swap.Version)
+            {
+                throw new SwapConcurrencyException(swap.Id);
+            }
+            swap.Version++;
+            _rows[swap.Id] = Clone(swap);
+        }
         return Task.CompletedTask;
     }
 

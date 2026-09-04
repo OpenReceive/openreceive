@@ -17,15 +17,18 @@ namespace BTCPayServer.Plugins.OpenReceive.Nwc;
 /// truncation-safe) refreshes it for EVERY caller: BTCPay's GetInvoice on creation,
 /// on startup for each pending invoice and after a re-mint all read the same memo, and
 /// a cold or stale memo pays one walk, never one per hash. The refresh cadence stretches
-/// with the age of the newest invoice this process minted (2 s / 6 s / 12 s) and IS the
-/// NWC scan budget for the connection, exactly as the durable gate is for the other
-/// engines. It is a cache of wallet truth, not state: two BTCPay workers each hold one.
+/// with the age of the newest live invoice — minted here, or seen pending in a walk after
+/// a restart (2 s / 6 s / 12 s) — and IS the NWC scan budget for the connection, exactly
+/// as the durable gate is for the other engines. It is a cache of wallet truth, not
+/// state: two BTCPay workers each hold one.
 /// </summary>
 public sealed class ScanMemo
 {
     public static readonly TimeSpan Window = TimeSpan.FromHours(24);
     public const int OverlapSeconds = 60;
     public const int MaxPagesPerView = 25;
+    /// <summary>A pending row younger than this, seen in a walk, counts as a live checkout for the cadence.</summary>
+    public const int FreshInvoiceSeconds = 300;
 
     private readonly ListTransactionsPage _list;
     private readonly Func<long> _clock;
@@ -52,19 +55,19 @@ public sealed class ScanMemo
     /// <summary>False while the last walk hit its page cap or a wallet that ignores offset.</summary>
     public bool Complete => _complete;
 
-    /// <summary>Called by the client after every make_invoice so the cadence tracks live checkouts.</summary>
+    /// <summary>Called by the client after every make_invoice (and by a walk for a fresh pending row) so the cadence tracks live checkouts.</summary>
     public void NoteInvoiceMinted(long createdAt)
     {
         lock (_gate)
         {
-            _newestMintedAt = _newestMintedAt is { } current ? Math.Max(current, createdAt) : createdAt;
+            NoteMinted(createdAt);
         }
     }
 
     /// <summary>
-    /// The refresh interval: 2 s while the newest invoice this process minted is under
-    /// two minutes old, 6 s under five minutes, else 12 s (settlement-sweeps.md numbers;
-    /// a cadence heuristic, never a correctness input).
+    /// The refresh interval: 2 s while the newest live invoice is under two minutes old,
+    /// 6 s under five minutes, else 12 s (settlement-sweeps.md numbers; a cadence
+    /// heuristic, never a correctness input).
     /// </summary>
     public TimeSpan CurrentInterval
     {
@@ -98,7 +101,12 @@ public sealed class ScanMemo
         }
     }
 
-    /// <summary>Refreshes when stale (older than <see cref="CurrentInterval"/>) or forced; concurrent callers share one walk.</summary>
+    /// <summary>
+    /// Refreshes when stale (older than <see cref="CurrentInterval"/>) or forced; concurrent
+    /// callers share one walk. The walk runs on its own lifetime: a caller that gives up
+    /// (an aborted checkout request) stops waiting, it does not cancel the walk under the
+    /// listener and everyone else sharing it. Each page request is bounded by the transport.
+    /// </summary>
     public Task RefreshAsync(bool force, CancellationToken cancellationToken)
     {
         Task work;
@@ -112,10 +120,10 @@ public sealed class ScanMemo
             {
                 var stale = _refreshedAt == long.MinValue || _clock() - _refreshedAt >= (long)CurrentInterval.TotalSeconds;
                 if (!force && !stale) return Task.CompletedTask;
-                work = _inflight = WalkAsync(cancellationToken);
+                work = _inflight = WalkAsync();
             }
         }
-        return work;
+        return work.WaitAsync(cancellationToken);
     }
 
     /// <summary>Settled rows observed since the last drain, in the order they were noticed.</summary>
@@ -130,22 +138,41 @@ public sealed class ScanMemo
         }
     }
 
-    private async Task WalkAsync(CancellationToken cancellationToken)
+    private async Task WalkAsync()
     {
         var now = _clock();
         var from = Math.Max(0, now - (long)Window.TotalSeconds);
         var until = now + OverlapSeconds;
-        var settled = await WalletScan.WalkAsync(_list, from, until, includeUnpaid: false, expected: null, MaxPagesPerView, cancellationToken).ConfigureAwait(false);
-        var unpaid = await WalletScan.WalkAsync(_list, from, until, includeUnpaid: true, expected: null, MaxPagesPerView, cancellationToken).ConfigureAwait(false);
+        var settled = await WalletScan.WalkAsync(_list, from, until, includeUnpaid: false, expected: null, MaxPagesPerView, CancellationToken.None).ConfigureAwait(false);
+        var unpaid = await WalletScan.WalkAsync(_list, from, until, includeUnpaid: true, expected: null, MaxPagesPerView, CancellationToken.None).ConfigureAwait(false);
         lock (_gate)
         {
-            foreach (var row in unpaid.ByPaymentHash.Values) Upsert(row);
+            foreach (var row in unpaid.ByPaymentHash.Values)
+            {
+                Upsert(row);
+                if (!Settlement.IsSettled(row) && row.CreatedAt is { } createdAt && now - createdAt < FreshInvoiceSeconds && (row.ExpiresAt is null || row.ExpiresAt > now))
+                {
+                    NoteMinted(createdAt); // a checkout in progress that another process (or this one, before a restart) minted
+                }
+            }
             foreach (var row in settled.ByPaymentHash.Values) Upsert(row);
+            // Rows the window has left behind are outside every future walk: forget them (and
+            // their announcement) so a long-lived process does not grow with the wallet's history.
+            foreach (var hash in _rows.Where(kv => kv.Value.CreatedAt is { } createdAt && createdAt < from).Select(kv => kv.Key).ToList())
+            {
+                _rows.Remove(hash);
+                _settledAnnounced.Remove(hash);
+            }
             _complete = !settled.Truncated && !unpaid.Truncated;
             _refreshedAt = _clock();
         }
         _logger.LogDebug("nwc.scan.memo settled_rows={Settled} unpaid_rows={Unpaid} complete={Complete}",
             settled.ByPaymentHash.Count, unpaid.ByPaymentHash.Count, _complete);
+    }
+
+    private void NoteMinted(long createdAt)
+    {
+        _newestMintedAt = _newestMintedAt is { } current ? Math.Max(current, createdAt) : createdAt;
     }
 
     private void Upsert(NwcTransaction transaction)

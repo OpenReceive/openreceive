@@ -114,7 +114,9 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
         }
         if (preflight.Warning is not null)
         {
-            _logger.LogError("{Warning}", preflight.Warning);
+            // A deliberate, user-checked override: a warning on every preflight, never an error
+            // (an error on every doctor visit only teaches operators to ignore errors).
+            _logger.LogWarning("nwc.preflight.spend_override wallet={Wallet} {Warning}", _state.Uri.WalletPubkey, preflight.Warning);
         }
         var expectedNetwork = Nip47NetworkName(_network);
         var walletNetwork = NormalizeWalletNetwork(summary.Network);
@@ -272,8 +274,9 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
             try
             {
                 var raw = await _state.Transport.RequestAsync("lookup_invoice", new JsonObject { ["payment_hash"] = paymentHash }, cancellation).ConfigureAwait(false);
-                var row = NwcNormalize.Transaction(raw) with { PaymentHash = paymentHash };
-                _state.Memo.Record(row);
+                // The wallet's own hash names the row; the requested one only fills a reply that omits it.
+                var row = NwcNormalize.Transaction(raw);
+                _state.Memo.Record(row.PaymentHash is null ? row with { PaymentHash = paymentHash } : row);
                 return _state.Memo.Lookup(paymentHash);
             }
             catch (NwcRequestException e)

@@ -69,7 +69,7 @@ public sealed class UIOpenReceiveController : Controller
                 }
                 break;
             case "test-provider":
-                await TestProviderAsync(vm, cancellationToken);
+                await TestProviderAsync(vm, store, cancellationToken);
                 break;
             case "save-swaps":
                 if (await SaveSwapsAsync(vm, store, cancellationToken))
@@ -197,12 +197,18 @@ public sealed class UIOpenReceiveController : Controller
         return _settings.GetConnection(store)?.NwcUri;
     }
 
-    private async Task TestProviderAsync(SetupViewModel vm, CancellationToken cancellationToken)
+    private async Task TestProviderAsync(SetupViewModel vm, StoreData store, CancellationToken cancellationToken)
     {
-        var uri = vm.LscPrimary?.Trim();
+        var settings = await _settings.GetAsync(store.Id);
+        var uri = string.IsNullOrWhiteSpace(vm.LscPrimary) ? settings.LscPrimary : vm.LscPrimary.Trim();
         if (string.IsNullOrEmpty(uri))
         {
             ModelState.AddModelError(nameof(vm.LscPrimary), "Paste an LSC code first.");
+            return;
+        }
+        if (await LscEndpointErrorAsync(uri) is { } localError)
+        {
+            ModelState.AddModelError(nameof(vm.LscPrimary), localError);
             return;
         }
         try
@@ -223,6 +229,10 @@ public sealed class UIOpenReceiveController : Controller
     private async Task<bool> SaveSwapsAsync(SetupViewModel vm, StoreData store, CancellationToken cancellationToken)
     {
         var settings = await _settings.GetAsync(store.Id);
+        // Like the NWC code: the saved LSC codes never come back into the form. An empty
+        // field keeps the saved code; the "remove" checkbox clears it; a pasted code replaces it.
+        var primary = string.IsNullOrWhiteSpace(vm.LscPrimary) ? (vm.RemoveLscPrimary ? null : settings.LscPrimary) : vm.LscPrimary.Trim();
+        var backup = string.IsNullOrWhiteSpace(vm.LscBackup) ? (vm.RemoveLscBackup ? null : settings.LscBackup) : vm.LscBackup.Trim();
         foreach (var (field, value) in new[] { (nameof(vm.LscPrimary), vm.LscPrimary), (nameof(vm.LscBackup), vm.LscBackup) })
         {
             if (string.IsNullOrWhiteSpace(value)) continue;
@@ -230,18 +240,22 @@ public sealed class UIOpenReceiveController : Controller
             {
                 ModelState.AddModelError(field, error ?? "Invalid LSC code.");
             }
+            else if (await LscEndpointErrorAsync(value.Trim()) is { } localError)
+            {
+                ModelState.AddModelError(field, localError);
+            }
         }
         if (vm.SwapsEnabled && _settings.GetConnection(store) is null)
         {
             ModelState.AddModelError(nameof(vm.SwapsEnabled), "Swaps settle into your OpenReceive wallet. Connect a receive-only NWC code first.");
         }
-        if (vm.SwapsEnabled && string.IsNullOrWhiteSpace(vm.LscPrimary))
+        if (vm.SwapsEnabled && primary is null)
         {
             ModelState.AddModelError(nameof(vm.LscPrimary), "Swaps need a Lightning Swap Connect code.");
         }
         if (!ModelState.IsValid) return false;
-        settings.LscPrimary = string.IsNullOrWhiteSpace(vm.LscPrimary) ? null : vm.LscPrimary.Trim();
-        settings.LscBackup = string.IsNullOrWhiteSpace(vm.LscBackup) ? null : vm.LscBackup.Trim();
+        settings.LscPrimary = primary;
+        settings.LscBackup = backup;
         settings.SwapsEnabled = vm.SwapsEnabled;
         settings.EnabledPayInAssets = (vm.EnabledPayInAssets ?? new List<string>()).Where(OpenReceiveTables.SwapPayInAssets.Contains).ToList();
         await _settings.SetAsync(store.Id, settings);
@@ -251,6 +265,12 @@ public sealed class UIOpenReceiveController : Controller
         }
         return true;
     }
+
+    /// <summary>A store owner cannot point the server at a local-network provider; a server admin can.</summary>
+    private Task<string?> LscEndpointErrorAsync(string lscUri) =>
+        LscUri.TryParse(lscUri, out var connection, out _) && connection is not null
+            ? _settings.LocalEndpointErrorAsync(new[] { connection.Host }, User)
+            : Task.FromResult<string?>(null);
 
     private async Task<SetupViewModel> BuildSetupAsync(StoreData store, SetupViewModel vm, CancellationToken cancellationToken)
     {
@@ -262,10 +282,11 @@ public sealed class UIOpenReceiveController : Controller
         vm.SavedRedactedNwc = connection is null ? null : NwcUri.Redact(connection.NwcUri);
         if (connection is not null && !Request.HasFormContentType) vm.AllowSpendCapableWallet = connection.AllowSpendCapableWallet;
         vm.LastPreflight = settings.LastPreflight;
+        // Saved LSC codes are shown redacted and never put back into the inputs (they carry a key and a secret).
+        vm.SavedRedactedLscPrimary = settings.LscPrimary is null ? null : LscUri.Redact(settings.LscPrimary);
+        vm.SavedRedactedLscBackup = settings.LscBackup is null ? null : LscUri.Redact(settings.LscBackup);
         if (!Request.HasFormContentType)
         {
-            vm.LscPrimary = settings.LscPrimary;
-            vm.LscBackup = settings.LscBackup;
             vm.SwapsEnabled = settings.SwapsEnabled;
             vm.EnabledPayInAssets = settings.EnabledPayInAssets.Count == 0 ? OpenReceiveTables.SwapPayInAssets.ToList() : settings.EnabledPayInAssets;
         }
@@ -288,6 +309,10 @@ public sealed class SetupViewModel
     public OpenReceiveStoreSettings.PreflightSnapshot? LastPreflight { get; set; }
     public string? LscPrimary { get; set; }
     public string? LscBackup { get; set; }
+    public string? SavedRedactedLscPrimary { get; set; }
+    public string? SavedRedactedLscBackup { get; set; }
+    public bool RemoveLscPrimary { get; set; }
+    public bool RemoveLscBackup { get; set; }
     public bool SwapsEnabled { get; set; }
     public List<string>? EnabledPayInAssets { get; set; }
     public List<OpenReceiveSwapAssetInfo> Assets { get; set; } = new();

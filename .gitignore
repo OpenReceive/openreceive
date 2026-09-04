@@ -58,6 +58,8 @@ examples/buttons/.data/
 # .NET build output (BTCPay plugin workspace)
 packages/dotnet/**/bin/
 packages/dotnet/**/obj/
+packages/dotnet/**/bin-docker/
+packages/dotnet/**/obj-docker/
 packages/dotnet/**/TestResults/
 packages/dotnet/docker/.state/
 tests/e2e-btcpay/test-results/

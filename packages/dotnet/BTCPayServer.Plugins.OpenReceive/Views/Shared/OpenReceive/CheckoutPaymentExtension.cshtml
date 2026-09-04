@@ -6,8 +6,7 @@
 @inject SwapService SwapService
 @inject BtcPayInvoiceSource InvoiceSource
 @{
-    var context = await InvoiceSource.LoadAsync(Model.InvoiceId, Context.RequestAborted);
-    var availability = context is null ? null : await SwapService.AvailabilityAsync(context, Context.RequestAborted);
+    var availability = await CheckoutAvailability.ForRequestAsync(Context, Model.InvoiceId, InvoiceSource, SwapService);
 }
 @if (availability is { Offered: true })
 {

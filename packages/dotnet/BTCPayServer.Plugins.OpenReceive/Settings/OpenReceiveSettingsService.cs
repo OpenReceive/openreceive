@@ -1,14 +1,17 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Client;
 using BTCPayServer.Data;
 using BTCPayServer.Payments;
 using BTCPayServer.Payments.Lightning;
 using BTCPayServer.Plugins.OpenReceive.Nwc;
+using BTCPayServer.Security;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
 using Microsoft.AspNetCore.Authorization;
@@ -64,9 +67,12 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
 
     public async Task<OpenReceiveStoreSettings> GetAsync(string storeId)
     {
+        // A few seconds, not minutes: the cache is process-local, and a second BTCPay
+        // worker must stop offering swaps (or start using a new provider) right after a
+        // save on the first one. Every checkout render and every poller row reads this.
         var settings = await _cache.GetOrCreateAsync(CacheKey(storeId), async entry =>
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5);
             return await _storeRepository.GetSettingAsync<OpenReceiveStoreSettings>(storeId, SettingName) ?? new OpenReceiveStoreSettings();
         });
         return settings ?? new OpenReceiveStoreSettings();
@@ -140,6 +146,11 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
     /// </summary>
     public async Task<string?> UseAsLightningNodeAsync(StoreData store, string nwcUri, bool allowSpendCapableWallet, ClaimsPrincipal user)
     {
+        if (NwcUri.TryParse(nwcUri, out var parsed, out _) && parsed is not null &&
+            await LocalEndpointErrorAsync(parsed.Relays.Select(relay => relay.DnsSafeHost), user) is { } localRelay)
+        {
+            return localRelay;
+        }
         var connectionString = OpenReceiveConnectionString.Format(nwcUri.Trim(), allowSpendCapableWallet);
         var network = BitcoinNetwork;
         var paymentMethodId = LightningPaymentMethodId;
@@ -174,6 +185,21 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
         await _stores.UpdateStore(store);
         _logger.LogInformation("openreceive.setup.lightning_node_set store={Store} wallet={Wallet}", store.Id, NwcUri.Redact(nwcUri));
         return null;
+    }
+
+    /// <summary>
+    /// BTCPay's own rule for Lightning connection strings (a local-network <c>server=</c>
+    /// needs the server-settings permission), applied to the hosts that rule cannot see:
+    /// the relays inside <c>nwc=</c> and the LSC provider. On a shared server a store owner
+    /// must not be able to point the server at loopback, a private range, a link-local
+    /// address or a bare single-label name; a server admin can (the regtest stack does).
+    /// </summary>
+    public async Task<string?> LocalEndpointErrorAsync(IEnumerable<string> hosts, ClaimsPrincipal user)
+    {
+        var local = hosts.Where(host => host.Length > 0 && global::BTCPayServer.Extensions.IsLocalNetwork(host)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (local.Count == 0) return null;
+        var admin = (await _authorization.AuthorizeAsync(user, null, new PolicyRequirement(Policies.CanModifyServerSettings))).Succeeded;
+        return admin ? null : $"{string.Join(", ", local)} is a local network address; only a server admin may connect this server to it.";
     }
 
     /// <summary>Swaps need the invoice to outlive the provider window: raise the store's invoice expiration when it is shorter.</summary>

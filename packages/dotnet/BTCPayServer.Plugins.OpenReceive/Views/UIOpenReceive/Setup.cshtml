@@ -72,13 +72,29 @@
             }
             <div class="form-group">
                 <label asp-for="LscPrimary" class="form-label">Lightning Swap Connect code (primary)</label>
-                <input asp-for="LscPrimary" class="form-control font-monospace" placeholder="lightning+swapconnect://provider.example/?key=…&secret=…" />
+                <input asp-for="LscPrimary" class="form-control font-monospace" placeholder="@(Model.SavedRedactedLscPrimary ?? "lightning+swapconnect://provider.example/?key=…&secret=…")" />
                 <span asp-validation-for="LscPrimary" class="text-danger"></span>
+                @if (Model.SavedRedactedLscPrimary is not null)
+                {
+                    <div class="form-text">Saved: <code>@Model.SavedRedactedLscPrimary</code>. Leave empty to keep it, paste a code to replace it.</div>
+                    <div class="form-check">
+                        <input asp-for="RemoveLscPrimary" type="checkbox" class="form-check-input" />
+                        <label asp-for="RemoveLscPrimary" class="form-check-label">Remove the saved primary code</label>
+                    </div>
+                }
             </div>
             <div class="form-group">
                 <label asp-for="LscBackup" class="form-label">Backup LSC code <small class="text-muted">(used only while the primary is down)</small></label>
-                <input asp-for="LscBackup" class="form-control font-monospace" />
+                <input asp-for="LscBackup" class="form-control font-monospace" placeholder="@Model.SavedRedactedLscBackup" />
                 <span asp-validation-for="LscBackup" class="text-danger"></span>
+                @if (Model.SavedRedactedLscBackup is not null)
+                {
+                    <div class="form-text">Saved: <code>@Model.SavedRedactedLscBackup</code>. Leave empty to keep it.</div>
+                    <div class="form-check">
+                        <input asp-for="RemoveLscBackup" type="checkbox" class="form-check-input" />
+                        <label asp-for="RemoveLscBackup" class="form-check-label">Remove the saved backup code</label>
+                    </div>
+                }
             </div>
             <div class="d-flex gap-2 mb-3">
                 <button name="command" type="submit" value="test-provider" class="btn btn-secondary">Test provider</button>
@@ -103,6 +119,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Assets to offer</label>
+                <div class="form-text mb-1">Leave every box unchecked to offer everything the provider supports.</div>
                 @foreach (var asset in Model.Assets)
                 {
                     var selected = Model.EnabledPayInAssets?.Contains(asset.PayInAsset) == true;

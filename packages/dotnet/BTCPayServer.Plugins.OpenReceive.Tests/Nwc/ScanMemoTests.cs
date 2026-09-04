@@ -195,6 +195,68 @@ public sealed class ScanMemoTests
     }
 
     [Fact]
+    public async Task A_caller_that_gives_up_does_not_cancel_the_shared_walk()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var seen = new List<CancellationToken>();
+        ListTransactionsPage page = async (request, ct) =>
+        {
+            lock (seen) seen.Add(ct);
+            await release.Task;
+            return new ListTransactionsResult { Transactions = Array.Empty<NwcTransaction>() };
+        };
+        var memo = new ScanMemo(page, () => T0, NullLogger.Instance);
+        using var aborted = new CancellationTokenSource();
+
+        var checkout = memo.RefreshAsync(force: true, aborted.Token); // an HTTP request that is about to abort
+        var listener = memo.RefreshAsync(force: true, CancellationToken.None); // the listener sharing that walk
+        aborted.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checkout);
+        Assert.False(listener.IsCompleted);
+
+        release.SetResult();
+        await listener.WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(T0, memo.RefreshedAt);
+        Assert.Equal(2, seen.Count); // one walk: settled view + unpaid view
+        Assert.All(seen, ct => Assert.False(ct.IsCancellationRequested)); // the walk ran on its own lifetime
+    }
+
+    [Fact]
+    public async Task A_walk_forgets_rows_the_window_left_behind()
+    {
+        var (memo, wallet) = NewMemo(() => T0);
+        var outside = T0 - (long)ScanMemo.Window.TotalSeconds - 10;
+        memo.Record(Settled(Hash(1), settledAt: outside) with { CreatedAt = outside });
+        wallet.Rows.Add(Settled(Hash(2)));
+        Assert.Equal(Hash(1), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
+
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+
+        Assert.Null(memo.Lookup(Hash(1)));
+        Assert.NotNull(memo.Lookup(Hash(2)));
+        Assert.Equal(Hash(2), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
+    }
+
+    [Fact]
+    public async Task A_walk_notes_a_fresh_pending_invoice_for_the_cadence()
+    {
+        var (memo, wallet) = NewMemo(() => T0);
+        Assert.Equal(TimeSpan.FromSeconds(12), memo.CurrentInterval);
+        wallet.Rows.Add(Pending(Hash(1), createdAt: T0 - 30)); // minted before a restart, or by another process
+
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+
+        Assert.Equal(TimeSpan.FromSeconds(2), memo.CurrentInterval);
+
+        // A pending row older than the freshness window (a stale, unpaid invoice) does not count.
+        var (cold, coldWallet) = NewMemo(() => T0);
+        coldWallet.Rows.Add(Pending(Hash(2), createdAt: T0 - ScanMemo.FreshInvoiceSeconds - 1));
+        await cold.RefreshAsync(force: true, CancellationToken.None);
+        Assert.Equal(TimeSpan.FromSeconds(12), cold.CurrentInterval);
+    }
+
+    [Fact]
     public async Task A_truncated_walk_leaves_the_memo_incomplete()
     {
         var pages = 0;

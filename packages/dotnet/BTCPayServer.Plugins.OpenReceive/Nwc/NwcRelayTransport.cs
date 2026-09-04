@@ -95,9 +95,11 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
         catch (NwcTransportException e) when (e.DecryptFailed)
         {
             // The wallet may have changed its advertised scheme since we cached ours:
-            // re-read the info event once and retry with whatever it says now.
+            // re-read the info event once (the cached one would only pick the same scheme
+            // again) and retry with whatever it says now.
             _logger.LogWarning("nwc.encryption.renegotiate wallet={Wallet} reason={Reason}", _uri.WalletPubkey, e.Message);
             _scheme = null;
+            _serviceInfo = null;
             var renegotiated = await NegotiateSchemeAsync(cancellationToken).ConfigureAwait(false);
             return await SendAsync(method, parameters, renegotiated, cancellationToken).ConfigureAwait(false);
         }
@@ -249,6 +251,7 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
         evt = await evt.ComputeIdAndSignAsync(_uri.SecretKey, false).ConfigureAwait(false);
         var filter = new NostrSubscriptionFilter
         {
+            Authors = new[] { _uri.WalletPubkey },
             ReferencedEventIds = new[] { evt.Id },
             ReferencedPublicKeys = new[] { evt.PublicKey },
             Kinds = new[] { NIP47.ResponseEventKind },
@@ -260,7 +263,13 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
             if (args.subscriptionId != subscriptionId) return;
             foreach (var received in args.events)
             {
-                if (received.Id != evt.Id) reply.TrySetResult(received);
+                // The relay's filter is a courtesy; the binding is checked here. NNostr only
+                // emits events whose signature verifies, so an event by the wallet pubkey IS
+                // the wallet's: anyone else on a public relay can tag an event with our
+                // request id and our pubkey, and with NIP-04 the decryption key would even
+                // follow the forger's key. The e tag (inside the signed payload) ties the
+                // reply to THIS request, so a relay cannot serve an older wallet reply either.
+                if (IsReplyToRequest(received, evt.Id)) reply.TrySetResult(received);
             }
         }
         client.EventsReceived += OnEvents;
@@ -279,6 +288,12 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
             try { await client.CloseSubscription(subscriptionId, CancellationToken.None).ConfigureAwait(false); } catch { /* socket may be gone */ }
         }
     }
+
+    /// <summary>A NIP-47 response signed by the wallet and addressed to the given request event.</summary>
+    internal bool IsReplyToRequest(NostrEvent received, string requestId) =>
+        received.Kind == NIP47.ResponseEventKind &&
+        string.Equals(received.PublicKey, _uri.WalletPubkey, StringComparison.OrdinalIgnoreCase) &&
+        received.GetTaggedData("e").Contains(requestId, StringComparer.OrdinalIgnoreCase);
 
     private async Task<string> DecryptAsync(NostrEvent evt, NIP47.EncryptionScheme scheme)
     {

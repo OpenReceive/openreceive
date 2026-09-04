@@ -53,6 +53,14 @@ order, and the code each refusal carries:
 `lookup_invoice` is never required. When the wallet grants it, the client uses
 it as a single-hash refresh between scans.
 
+Relay hosts, and the LSC provider host, on the local network (loopback, RFC
+1918, link-local, `.internal`/`.local`/`.lan`, or a bare single-label name)
+need the server-settings permission: BTCPay's own rule for `server=` in a
+Lightning connection string, applied by the setup page and the Greenfield
+route to the hosts that rule cannot see. BTCPay's generic Lightning node page
+does not look inside `nwc=`; on a shared server, keep store owners on the
+plugin's page.
+
 ## Store settings
 
 Kept in BTCPay's per-store settings under the name `OpenReceive`; never in the
@@ -60,7 +68,7 @@ connection string.
 
 | Field | Meaning |
 | --- | --- |
-| `LscPrimary` | The Lightning Swap Connect URI (`lightning+swapconnect://host/path?key=…&secret=…`). Server-only. |
+| `LscPrimary` | The Lightning Swap Connect URI (`lightning+swapconnect://host/path?key=…&secret=…`). Server-only; the setup page shows it redacted and never sends it back to the browser. |
 | `LscBackup` | A second LSC URI, used only while the primary has failed within the last 60 seconds. |
 | `SwapsEnabled` | Whether the checkout offers swap pills. Requires the store's Lightning node to be an OpenReceive connection. |
 | `EnabledPayInAssets` | Subset of `SOL_SOL`, `USDT_TRON`, `USDT_SOL`, `USDC_SOL`, `ETH_ETH`, `USDT_ETH`, `USDC_ETH`. Empty means every asset the provider supports. |
@@ -76,8 +84,8 @@ shorter. The plugin never lowers it.
 | Route | Permission | Body / result |
 | --- | --- | --- |
 | `GET /api/v1/stores/{storeId}/openreceive/settings` | view store settings | `lightningNodeIsOpenReceive`, `lightningNode` (redacted), `allowSpendCapableWallet`, `swapsEnabled`, `lscPrimaryConfigured`, `lscBackupConfigured`, `enabledPayInAssets`, `invoiceExpirationMinutes`, `lastPreflight` |
-| `PUT /api/v1/stores/{storeId}/openreceive/settings` | modify store settings | any of `nwcUri`, `allowSpendCapableWallet`, `lscPrimary`, `lscBackup`, `swapsEnabled`, `enabledPayInAssets`; `nwcUri` runs the preflight and makes the wallet the Lightning node. 422 with `wallet_refused`, `wallet_required`, `lsc_required` or `invalid_lsc_uri` when refused. |
-| `POST /api/v1/stores/{storeId}/openreceive/wallet/test` | modify store settings | `{ nwcUri?, allowSpendCapableWallet? }` → the preflight snapshot (also stored as `lastPreflight`) |
+| `PUT /api/v1/stores/{storeId}/openreceive/settings` | modify store settings | any of `nwcUri`, `allowSpendCapableWallet`, `lscPrimary`, `lscBackup`, `swapsEnabled`, `enabledPayInAssets`; `nwcUri` runs the preflight and makes the wallet the Lightning node; `allowSpendCapableWallet` alone re-saves the current code with that override. Every field is checked before anything is written. 422 with `wallet_refused`, `wallet_required`, `lsc_required`, `invalid_lsc_uri`, `invalid_pay_in_asset` or `endpoint_not_allowed` when refused. |
+| `POST /api/v1/stores/{storeId}/openreceive/wallet/test` | modify store settings | `{ nwcUri?, allowSpendCapableWallet? }` → the preflight snapshot (also stored as `lastPreflight`); an omitted override means the saved one |
 | `GET /api/v1/stores/{storeId}/openreceive/swaps?limit=50` | view store settings | recent swap rows |
 | `GET /api/v1/stores/{storeId}/openreceive/invoices/{invoiceId}/swaps` | view store settings | the invoice's swap rows |
 
@@ -153,9 +161,20 @@ plugin stops offering swaps for that invoice but keeps polling the rows,
 because an order already paying the old BOLT11 most likely still lands.
 
 Polling: every 5 seconds per live row, 30 seconds once the invoice's
-Lightning side settled. A row with no deposit 15 minutes after the provider's
-window closes is closed as `expired`. A `completed` row without wallet
-settlement for 30 minutes becomes `attention`.
+Lightning side settled, in batches of 200 due rows selected in SQL (least
+recently polled first, so a backlog rotates). A `completed` row whose
+Lightning side settled is done: it leaves the poll set and stays as the
+record. A row with no deposit 15 minutes after the provider's window closes
+is closed as `expired`. A `completed` row without wallet settlement for 30
+minutes becomes `attention`.
+
+Every row carries a version (Postgres `xmin`). The poller, a payer's refund
+and BTCPay's payment event each write only the version they loaded; a write
+that lost the race is re-read and applied again when it must land (a refund
+address, a Lightning stamp, a re-mint mark) or left to the next tick when it
+was a status refresh. Creating and refunding also take a Postgres advisory
+lock per invoice and asset, or per swap, so two workers never mint two
+orders or send the provider two refund addresses.
 
 ## Settlement
 
@@ -169,7 +188,10 @@ only answers its questions.
 - `GetInvoice` → the connection's scan memo: one `list_transactions` walk
   (settled view, then unpaid view; pages of 20; 24-hour window; deduplicated;
   truncation-safe) shared by every caller, refreshed every 2, 6 or 12 seconds
-  depending on the age of the newest invoice this process minted. Paid when
+  depending on the age of the newest live invoice (minted by this process, or
+  seen pending in a walk after a restart). A caller that gives up (an aborted
+  checkout request) stops waiting without cancelling the shared walk; rows
+  older than the window are forgotten after a walk. Paid when
   the settlement rule says settled (`settled_at > 0`, or `state` /
   `transaction_state` equal to `settled`; a preimage alone never), Expired
   only when the wallet's own row says expired or failed, Unpaid otherwise,
@@ -177,8 +199,15 @@ only answers its questions.
 - `Listen` → `payment_received` notifications (kind 23197 under NIP-44,
   23196 under NIP-04) when the wallet advertises them: a payload with a
   finality signal and an amount settles directly; without an amount the hash
-  is refreshed first; without a finality signal one bounded scan runs. Else
-  the poll listener, which is the memo refresh.
+  is refreshed first; without a finality signal one bounded scan runs. Behind
+  the pushes a memo pass every 60 seconds is the safety net for a push the
+  relay dropped; both paths emit through one queue, so a settlement seen by
+  both is reported once. Else the poll listener, which is the memo refresh.
+- Every NIP-47 reply is bound to the wallet: the relay filter and a local
+  check require the wallet's pubkey as author (NNostr verifies the
+  signature), the response kind, and an `e` tag naming the request. Nobody
+  else on a public relay can answer for the wallet, and a relay cannot serve
+  an older reply.
 - Everything that could spend (`Pay`, keysend, `OpenChannel`,
   `GetDepositAddress`, `ConnectTo`, `CancelInvoice`, `ListChannels`,
   `GetPayment`, `ListPayments`) throws "OpenReceive is receive-only". `GetInfo`
@@ -213,11 +242,12 @@ categories. Secrets never appear; the wallet is named by its pubkey.
 | `nwc.invoice.created` | `make_invoice` succeeded (hash, msats, expiry) |
 | `nwc.listen.start` | BTCPay opened a listener (`mode=notifications` or `poll`) |
 | `nwc.notification.received` | a `payment_received` arrived (type, hash) |
-| `nwc.scan.settled`, `nwc.scan.memo` (debug), `nwc.scan.failed` (warning) | the poll listener |
+| `nwc.scan.settled`, `nwc.scan.memo` (debug), `nwc.scan.failed` (warning once, then debug until `nwc.scan.recovered`) | the poll listener |
+| `nwc.notification.settled`, `nwc.sweep.failed` (warning once, then debug until `nwc.sweep.recovered`) | the notification listener's emit and its periodic sweep |
 | `openreceive.setup.lightning_node_set`, `openreceive.setup.invoice_expiration_raised` | the setup page or API wrote store config |
 | `swap.created`, `swap.state`, `swap.wallet_settled`, `swap.refund.requested` | the swap lifecycle |
 | `swap.create.failed`, `swap.catalog.failed`, `swap.poll.failed`, `swap.provider.down` (warnings) | provider trouble; `swap.provider.down` starts the 60-second backup window |
-| the spend-capability warning (error) | on every preflight of an overridden connection |
+| `nwc.preflight.spend_override` (warning) | on every preflight of an overridden connection |
 
 ## Database
 
@@ -226,8 +256,9 @@ migration (`20260903000000_InitialSwaps`) applied by BTCPay at startup with
 its own migrations history table. Indexes: `invoice_id`, `store_id`, unique
 `(provider, provider_order_id)`, and unique `(invoice_id, pay_in_asset)`
 restricted to non-terminal rows, which is what makes "one live order per
-invoice and asset" hold across BTCPay workers. The provider token is a plain
-column, like every other BTCPay credential; guard the database.
+invoice and asset" hold across BTCPay workers. Every update is conditional on
+the row's `xmin` (no extra column). The provider token is a plain column,
+like every other BTCPay credential; guard the database.
 
 Nothing is written for plain Lightning invoices: BTCPay's invoices and
 payments are the record.
@@ -240,9 +271,15 @@ payments are the record.
 - **Rotating the LSC code**: save the new URI. Rows created under the old
   provider name are polled by name, so keep the old URI as backup until they
   are terminal.
-- **Two BTCPay workers**: fine. The scan memo is per process (each pays one
-  walk per interval), swap creation takes a Postgres advisory lock, and the
-  unique index is the last line.
+- **Two BTCPay workers**: fine for correctness. Row writes are versioned,
+  creation and refunds take advisory locks, the poller's due set is computed
+  in SQL so both share one backlog, and the settings cache is 5 seconds, so a
+  save on one worker reaches the other within that. What is per process: the
+  scan memo (each worker pays one walk per interval) and the provider weight
+  budget (two workers can spend twice the provider's per-minute allowance).
+- **Beside the Nostr plugin**: each plugin loads its own copy of NNostr in
+  its own load context (BTCPay's loader shares host types only), so the two
+  never fight over an assembly version; they also do not share relay sockets.
 - **Upgrading BTCPay**: the plugin declares `BTCPayServer >= 2.4.2`. Rebuild
   against the new version when BTCPay changes its Lightning interfaces; the
   Nostr and Blink plugins are the canary.
@@ -257,7 +294,7 @@ payments are the record.
 
 | Command | What it proves |
 | --- | --- |
-| `npm run test:dotnet` | 269 unit tests: every shared vector family the `dotnet` coverage entry does not exclude, the kernel against an in-process wallet, the swap service against the fake provider |
+| `npm run test:dotnet` | 283 unit tests: every shared vector family the `dotnet` coverage entry does not exclude, the kernel against an in-process wallet, the swap service against the fake provider |
 | `packages/dotnet/docker/up.sh`, then `e2e.sh` | the whole path over HTTP against BTCPay 2.4.2 in Docker |
 | `packages/dotnet/docker/test-e2e.sh` | the same legs as xunit, inside the .NET SDK image |
 | `packages/dotnet/docker/browser-e2e.sh` or `npm run test:e2e:btcpay` | the setup page, doctor and checkout in Chromium, including the swap component to "Invoice Paid" |

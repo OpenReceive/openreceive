@@ -56,6 +56,7 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
     {
         /// <summary>Receive-only NWC code; when set, becomes the store's Lightning node (validated).</summary>
         public string? NwcUri { get; set; }
+        /// <summary>With no <see cref="NwcUri"/>, re-saves the store's current connection with this override (re-validated).</summary>
         public bool? AllowSpendCapableWallet { get; set; }
         public string? LscPrimary { get; set; }
         public string? LscBackup { get; set; }
@@ -78,36 +79,50 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
     {
         var store = await _stores.FindStore(storeId);
         if (store is null) return NotFound();
-        var current = _settings.GetConnection(store);
-        if (!string.IsNullOrWhiteSpace(request.NwcUri))
+        // Everything is checked before anything is written: a refused field never leaves a
+        // half-applied store (a wallet saved, a provider not).
+        var settings = await _settings.GetAsync(store.Id);
+        var lscPrimary = settings.LscPrimary;
+        var lscBackup = settings.LscBackup;
+        foreach (var (uri, apply) in new (string?, Action<string?>)[] { (request.LscPrimary, v => lscPrimary = v), (request.LscBackup, v => lscBackup = v) })
         {
-            var error = await _settings.UseAsLightningNodeAsync(store, request.NwcUri, request.AllowSpendCapableWallet ?? current?.AllowSpendCapableWallet ?? false, User);
+            if (uri is null) continue;
+            if (!Validate(uri, out var connection, out var lscError)) return UnprocessableEntity(new { code = "invalid_lsc_uri", message = lscError });
+            if (connection is not null && await _settings.LocalEndpointErrorAsync(new[] { connection.Host }, User) is { } localError)
+                return UnprocessableEntity(new { code = "endpoint_not_allowed", message = localError });
+            apply(Trimmed(uri));
+        }
+        List<string>? assets = null;
+        if (request.EnabledPayInAssets is not null)
+        {
+            var unknown = request.EnabledPayInAssets.Where(asset => !OpenReceiveTables.SwapPayInAssets.Contains(asset)).ToList();
+            if (unknown.Count > 0)
+                return UnprocessableEntity(new { code = "invalid_pay_in_asset", message = $"Unknown pay-in asset(s): {string.Join(", ", unknown)}. Known: {string.Join(", ", OpenReceiveTables.SwapPayInAssets)}. An empty list offers every asset." });
+            assets = request.EnabledPayInAssets.Distinct(StringComparer.Ordinal).ToList();
+        }
+        var current = _settings.GetConnection(store);
+        var nwc = string.IsNullOrWhiteSpace(request.NwcUri)
+            ? request.AllowSpendCapableWallet is null ? null : current?.NwcUri
+            : request.NwcUri;
+        var walletAfter = current is not null;
+        if (nwc is not null)
+        {
+            var error = await _settings.UseAsLightningNodeAsync(store, nwc, request.AllowSpendCapableWallet ?? current?.AllowSpendCapableWallet ?? false, User);
             if (error is not null) return UnprocessableEntity(new { code = "wallet_refused", message = error });
             store = await _stores.FindStore(storeId) ?? store;
-        }
-        var settings = await _settings.GetAsync(store.Id);
-        if (request.LscPrimary is not null)
-        {
-            if (!Validate(request.LscPrimary, out var primaryError)) return UnprocessableEntity(new { code = "invalid_lsc_uri", message = primaryError });
-            settings.LscPrimary = Trimmed(request.LscPrimary);
-        }
-        if (request.LscBackup is not null)
-        {
-            if (!Validate(request.LscBackup, out var backupError)) return UnprocessableEntity(new { code = "invalid_lsc_uri", message = backupError });
-            settings.LscBackup = Trimmed(request.LscBackup);
+            walletAfter = true;
         }
         if (request.SwapsEnabled is { } enabled)
         {
-            if (enabled && _settings.GetConnection(store) is null)
+            if (enabled && !walletAfter)
                 return UnprocessableEntity(new { code = "wallet_required", message = "Swaps settle into your OpenReceive wallet. Connect a receive-only NWC code first." });
-            if (enabled && string.IsNullOrWhiteSpace(settings.LscPrimary))
+            if (enabled && string.IsNullOrWhiteSpace(lscPrimary))
                 return UnprocessableEntity(new { code = "lsc_required", message = "Swaps need a Lightning Swap Connect code." });
             settings.SwapsEnabled = enabled;
         }
-        if (request.EnabledPayInAssets is not null)
-        {
-            settings.EnabledPayInAssets = request.EnabledPayInAssets.Where(OpenReceiveTables.SwapPayInAssets.Contains).ToList();
-        }
+        settings.LscPrimary = lscPrimary;
+        settings.LscBackup = lscBackup;
+        if (assets is not null) settings.EnabledPayInAssets = assets;
         await _settings.SetAsync(store.Id, settings);
         if (settings.SwapsEnabled) await _settings.EnsureInvoiceExpirationAsync(store, SwapService.RecommendedInvoiceExpiration);
         return Ok(await BuildAsync(await _stores.FindStore(storeId) ?? store));
@@ -119,9 +134,11 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
     {
         var store = await _stores.FindStore(storeId);
         if (store is null) return NotFound();
-        var nwc = string.IsNullOrWhiteSpace(request.NwcUri) ? _settings.GetConnection(store)?.NwcUri : request.NwcUri;
+        var current = _settings.GetConnection(store);
+        var nwc = string.IsNullOrWhiteSpace(request.NwcUri) ? current?.NwcUri : request.NwcUri;
         if (nwc is null) return UnprocessableEntity(new { code = "nwc_required", message = "nwcUri is required." });
-        var client = _settings.CreateClient(nwc, request.AllowSpendCapableWallet ?? false, out var error);
+        // The saved override applies to a test of the saved code, exactly as it does on save.
+        var client = _settings.CreateClient(nwc, request.AllowSpendCapableWallet ?? current?.AllowSpendCapableWallet ?? false, out var error);
         if (client is null) return UnprocessableEntity(new { code = "invalid_nwc_uri", message = error });
         var report = await client.PreflightAsync(cancellationToken);
         var settings = await _settings.GetAsync(store.Id);
@@ -176,10 +193,10 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
         updatedAt = row.UpdatedAt,
     };
 
-    private static bool Validate(string uri, out string? error)
+    private static bool Validate(string uri, out LscConnection? connection, out string? error)
     {
-        if (string.IsNullOrWhiteSpace(uri)) { error = null; return true; }
-        return LscUri.TryParse(uri.Trim(), out _, out error);
+        if (string.IsNullOrWhiteSpace(uri)) { connection = null; error = null; return true; }
+        return LscUri.TryParse(uri.Trim(), out connection, out error);
     }
 
     private static string? Trimmed(string uri) => string.IsNullOrWhiteSpace(uri) ? null : uri.Trim();

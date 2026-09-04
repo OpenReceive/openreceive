@@ -39,6 +39,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="BTCPayServer.Plugins.OpenReceive.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- NIP-47 over Nostr, with the NIP-44 v2 negotiation merged in 0.0.55. -->
     <PackageReference Include="NNostr.Client" Version="0.0.55" />
   </ItemGroup>

@@ -55,6 +55,12 @@ public sealed class OpenReceiveSwap
     public long? LastPolledAt { get; set; }
     /// <summary>Set when BTCPay recorded the Lightning payment for this row's hash.</summary>
     public long? WalletSettledAt { get; set; }
+    /// <summary>
+    /// Optimistic-concurrency token: Postgres' <c>xmin</c> at runtime, a counter in the
+    /// in-memory store. An update carries the value it loaded and fails when the row moved
+    /// on, so the poller, a payer's refund and BTCPay's payment event never overwrite each other.
+    /// </summary>
+    public uint Version { get; set; }
 
     public bool IsTerminal => OpenReceiveTables.SwapStates.TryGetValue(State, out var info) && info.Terminal;
 

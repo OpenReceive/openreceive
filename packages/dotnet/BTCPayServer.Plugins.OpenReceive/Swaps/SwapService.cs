@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -25,6 +24,12 @@ public sealed class SwapService
     public const int ReserveWindowSeconds = 60;
     public const int NoDepositGraceSeconds = 15 * 60;
     public const int CompletedWithoutSettlementSeconds = 30 * 60;
+    /// <summary>Provider poll cadence while the deposit could still change the outcome.</summary>
+    public const int PollSeconds = 5;
+    /// <summary>Provider poll cadence once the invoice's Lightning side settled.</summary>
+    public const int SettledPollSeconds = 30;
+    public const int PollBatchSize = 200;
+    private const int MutateAttempts = 3;
     public static readonly TimeSpan RecommendedInvoiceExpiration = TimeSpan.FromMinutes(60);
     public static readonly TimeSpan MinimumInvoiceExpiration = TimeSpan.FromMinutes(45);
 
@@ -34,7 +39,6 @@ public sealed class SwapService
     private readonly ISwapInvoiceSource _invoices;
     private readonly ILogger<SwapService> _logger;
     private readonly Func<long> _clock;
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _creationGates = new(StringComparer.Ordinal);
 
     public SwapService(
         ISwapStore store,
@@ -144,6 +148,11 @@ public sealed class SwapService
         {
             throw new SwapRequestException(400, "invalid_pay_in_asset", "Unknown pay-in asset.");
         }
+        // One creation at a time per invoice + asset, across every BTCPay worker (a Postgres
+        // advisory lock at runtime). The invoice is read INSIDE the lock: a payer who waited
+        // behind another create sees the invoice as it is now (paid, expired, partially paid),
+        // not as it was when the request arrived.
+        await using var dbLock = await _store.LockAsync($"create:{invoiceId}:{payInAsset}", cancellationToken);
         var invoice = await _invoices.LoadAsync(invoiceId, cancellationToken) ?? throw new SwapRequestException(404, "invoice_not_found", "Invoice not found.");
         var availability = await AvailabilityAsync(invoice, cancellationToken);
         if (!availability.Offered)
@@ -162,50 +171,52 @@ public sealed class SwapService
             throw new SwapRequestException(409, offer.Reason ?? "asset_unavailable", offer.Message ?? "This asset is temporarily unavailable.");
         }
 
-        var key = $"{invoice.StoreId}:{invoice.InvoiceId}:{payInAsset}";
-        var gate = _creationGates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken);
-        try
+        var now = _clock();
+        var live = await _store.FindLiveAsync(invoice.InvoiceId, payInAsset, cancellationToken);
+        if (live is not null && !Supersedable(live, now))
         {
-            await using var dbLock = await _store.LockAsync(key, cancellationToken);
-            var now = _clock();
-            var live = await _store.FindLiveAsync(invoice.InvoiceId, payInAsset, cancellationToken);
-            if (live is not null)
+            return Model(live, invoice);
+        }
+        // The provider order first: when the provider refuses, the old order (if any) keeps its
+        // last minute instead of being closed for nothing.
+        var order = await CreateProviderOrderAsync(invoice.StoreId, new CreateSwapInput(payInAsset, availability.Bolt11!, availability.InvoiceAmountMsats), cancellationToken);
+        if (live is not null)
+        {
+            var closed = await MutateAsync(live.Id, row =>
             {
-                if (live.ProviderExpiresAt - ReserveWindowSeconds > now)
-                {
-                    return Model(live, invoice);
-                }
-                // Too close to the provider's deadline to be worth showing again: close it and mint a fresh order.
-                live.State = "expired";
-                live.StateReason = "superseded_near_provider_expiry";
-                Touch(live, now, stateChanged: true);
-                await _store.UpdateAsync(live, cancellationToken);
+                if (!Supersedable(row, now)) return;
+                row.State = "expired";
+                row.StateReason = "superseded_near_provider_expiry";
+                Touch(row, now, stateChanged: true);
+            }, cancellationToken);
+            if (!closed.IsTerminal)
+            {
+                // A deposit reached the old order in the meantime: that order is the payer's; the fresh one is never shown.
+                return Model(closed, invoice);
             }
-            var order = await CreateProviderOrderAsync(invoice.StoreId, new CreateSwapInput(payInAsset, availability.Bolt11!, availability.InvoiceAmountMsats), cancellationToken);
-            var row = new OpenReceiveSwap
-            {
-                StoreId = invoice.StoreId,
-                InvoiceId = invoice.InvoiceId,
-                PaymentHash = availability.PaymentHash!,
-                Bolt11 = availability.Bolt11!,
-                InvoiceAmountMsats = availability.InvoiceAmountMsats,
-                CreatedAt = now,
-                UpdatedAt = now,
-                StateChangedAt = now,
-                LastPolledAt = now,
-            };
-            Apply(row, order, now);
-            await _store.InsertAsync(row, cancellationToken);
-            _logger.LogInformation("swap.created invoice={Invoice} asset={Asset} provider={Provider} order={Order} state={State}",
-                invoice.InvoiceId, payInAsset, row.Provider, row.ProviderOrderId, row.State);
-            return Model(row, invoice);
         }
-        finally
+        var row = new OpenReceiveSwap
         {
-            gate.Release();
-        }
+            StoreId = invoice.StoreId,
+            InvoiceId = invoice.InvoiceId,
+            PaymentHash = availability.PaymentHash!,
+            Bolt11 = availability.Bolt11!,
+            InvoiceAmountMsats = availability.InvoiceAmountMsats,
+            CreatedAt = now,
+            UpdatedAt = now,
+            StateChangedAt = now,
+            LastPolledAt = now,
+        };
+        Apply(row, order, now);
+        await _store.InsertAsync(row, cancellationToken);
+        _logger.LogInformation("swap.created invoice={Invoice} asset={Asset} provider={Provider} order={Order} state={State}",
+            invoice.InvoiceId, payInAsset, row.Provider, row.ProviderOrderId, row.State);
+        return Model(row, invoice);
     }
+
+    /// <summary>Too close to the provider's deadline to be worth showing again, and still waiting for a deposit: close it and mint afresh.</summary>
+    private static bool Supersedable(OpenReceiveSwap live, long now) =>
+        live.State == "awaiting_deposit" && live.DepositTxId is null && live.ProviderExpiresAt - ReserveWindowSeconds <= now;
 
     private async Task<SwapOrder> CreateProviderOrderAsync(string storeId, CreateSwapInput input, CancellationToken cancellationToken)
     {
@@ -235,11 +246,12 @@ public sealed class SwapService
             }
         }
         var classified = last is null ? null : SwapTransportFailures.Classify(last);
+        // The provider's own words stay in the log line above; the anonymous payer gets stable wording.
         throw classified switch
         {
             SwapTransportFailure.RateLimited => new SwapRequestException(503, "provider_rate_limited", "The swap provider is rate limited. Try again in a minute."),
             SwapTransportFailure.Unreachable => new SwapRequestException(502, "provider_unreachable", "The swap provider is temporarily unreachable."),
-            _ => new SwapRequestException(502, "provider_refused", last?.Message ?? "The swap provider refused the order."),
+            _ => new SwapRequestException(502, "provider_refused", "The swap provider refused the order. Try another asset, or pay the Lightning invoice."),
         };
     }
 
@@ -252,6 +264,9 @@ public sealed class SwapService
 
     public async Task<SwapCheckoutModel> RefundAsync(string invoiceId, string swapId, string refundAddress, CancellationToken cancellationToken)
     {
+        // The first refund address the provider accepts is final: one refund request at a
+        // time per swap, across workers, and the row is read inside that lock.
+        await using var dbLock = await _store.LockAsync($"refund:{swapId}", cancellationToken);
         var row = await _store.GetAsync(swapId, cancellationToken);
         if (row is null || !string.Equals(row.InvoiceId, invoiceId, StringComparison.Ordinal))
         {
@@ -274,14 +289,18 @@ public sealed class SwapService
         Apply(row, fresh, now);
         if (row.State != "refund_required")
         {
-            await _store.UpdateAsync(row, cancellationToken);
+            await SaveAsync(row, cancellationToken);
             throw new SwapRequestException(409, "refund_not_required", $"The provider reports this swap as {row.State}; a refund cannot be requested now.");
         }
         await provider.RequestRefundAsync(ToOrder(row), address, cancellationToken);
-        row.RefundAddress = address;
-        row.State = "refund_pending";
-        Touch(row, now, stateChanged: true);
-        await _store.UpdateAsync(row, cancellationToken);
+        // The provider has the address now: this write must land whatever the poller did meanwhile.
+        row = await MutateAsync(row.Id, r =>
+        {
+            Apply(r, fresh, now);
+            r.RefundAddress = address;
+            r.State = "refund_pending";
+            Touch(r, now, stateChanged: true);
+        }, cancellationToken);
         _logger.LogInformation("swap.refund.requested swap={Swap} provider={Provider} order={Order}", row.Id, row.Provider, row.ProviderOrderId);
         return Model(row, await _invoices.LoadAsync(invoiceId, cancellationToken));
     }
@@ -294,31 +313,44 @@ public sealed class SwapService
 
     // ---- Poller ----
 
-    /// <summary>One pass over live rows: refresh provider state for the ones whose cadence is due.</summary>
+    /// <summary>One pass over the rows whose cadence is due: refresh provider state for each.</summary>
     public async Task<int> PollOnceAsync(CancellationToken cancellationToken)
     {
         var now = _clock();
         var refreshed = 0;
-        foreach (var row in await _store.LiveAsync(200, cancellationToken))
+        foreach (var row in await _store.DueAsync(now, PollBatchSize, cancellationToken))
         {
-            if (row.LastPolledAt is { } last && now - last < PollIntervalSeconds(row)) continue;
             try
             {
                 await RefreshRowAsync(row, cancellationToken);
                 refreshed++;
             }
+            catch (SwapConcurrencyException)
+            {
+                // A payer's refund, BTCPay's payment event or another worker wrote the row first: the next tick re-reads it.
+            }
             catch (Exception e) when (e is not OperationCanceledException)
             {
                 _logger.LogWarning("swap.poll.failed swap={Swap} provider={Provider} error={Error}", row.Id, row.Provider, e.Message);
                 row.LastPolledAt = _clock();
-                await _store.UpdateAsync(row, cancellationToken);
+                await SaveAsync(row, cancellationToken);
             }
         }
         return refreshed;
     }
 
+    /// <summary>
+    /// Rows the poller still refreshes: live, and not a completed order whose Lightning side
+    /// already settled — that swap is done; the row stays as the record, off the hot set.
+    /// </summary>
+    public static bool IsPolled(OpenReceiveSwap row) => !row.IsTerminal && !(row.State == "completed" && row.WalletSettledAt is not null);
+
     /// <summary>5 s while the deposit could still change the outcome; 30 s once the invoice's Lightning side settled.</summary>
-    public static int PollIntervalSeconds(OpenReceiveSwap row) => row.WalletSettledAt is null ? 5 : 30;
+    public static int PollIntervalSeconds(OpenReceiveSwap row) => row.WalletSettledAt is null ? PollSeconds : SettledPollSeconds;
+
+    /// <summary>The poller's selection rule; <see cref="EfSwapStore.DueAsync"/> is the same rule in SQL.</summary>
+    public static bool IsDue(OpenReceiveSwap row, long now) =>
+        IsPolled(row) && (row.LastPolledAt is not { } last || now - last >= PollIntervalSeconds(row));
 
     public async Task RefreshRowAsync(OpenReceiveSwap row, CancellationToken cancellationToken)
     {
@@ -328,7 +360,7 @@ public sealed class SwapService
         {
             _logger.LogWarning("swap.poll.provider_missing swap={Swap} provider={Provider}", row.Id, row.Provider);
             row.LastPolledAt = now;
-            await _store.UpdateAsync(row, cancellationToken);
+            await SaveAsync(row, cancellationToken);
             return;
         }
         var fresh = await provider.GetStatusAsync(ToOrder(row), cancellationToken);
@@ -365,10 +397,13 @@ public sealed class SwapService
         foreach (var row in await _store.ForInvoiceAsync(invoiceId, cancellationToken))
         {
             if (row.WalletSettledAt is not null || !string.Equals(row.PaymentHash, paymentHash, StringComparison.OrdinalIgnoreCase)) continue;
-            row.WalletSettledAt = now;
-            Touch(row, now, stateChanged: false);
-            await _store.UpdateAsync(row, cancellationToken);
-            _logger.LogInformation("swap.wallet_settled swap={Swap} invoice={Invoice} state={State}", row.Id, invoiceId, row.State);
+            var stamped = await MutateAsync(row.Id, r =>
+            {
+                if (r.WalletSettledAt is not null) return;
+                r.WalletSettledAt = now;
+                Touch(r, now, stateChanged: false);
+            }, cancellationToken);
+            _logger.LogInformation("swap.wallet_settled swap={Swap} invoice={Invoice} state={State}", stamped.Id, invoiceId, stamped.State);
         }
     }
 
@@ -379,9 +414,49 @@ public sealed class SwapService
         foreach (var row in await _store.ForInvoiceAsync(invoiceId, cancellationToken))
         {
             if (row.IsTerminal || row.PluginReason == PluginReasonReminted) continue;
-            row.PluginReason = PluginReasonReminted;
-            Touch(row, now, stateChanged: false);
+            await MutateAsync(row.Id, r =>
+            {
+                if (r.PluginReason == PluginReasonReminted) return;
+                r.PluginReason = PluginReasonReminted;
+                Touch(r, now, stateChanged: false);
+            }, cancellationToken);
+        }
+    }
+
+    // ---- Writes ----
+
+    /// <summary>
+    /// A write that must land: reload the row, apply the change, save; a lost race (the
+    /// poller or another worker wrote first) reloads and applies again on the newer row.
+    /// </summary>
+    private async Task<OpenReceiveSwap> MutateAsync(string id, Action<OpenReceiveSwap> mutate, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var row = await _store.GetAsync(id, cancellationToken) ?? throw new InvalidOperationException($"swap {id} is gone");
+            mutate(row);
+            try
+            {
+                await _store.UpdateAsync(row, cancellationToken);
+                return row;
+            }
+            catch (SwapConcurrencyException) when (attempt < MutateAttempts)
+            {
+            }
+        }
+    }
+
+    /// <summary>An opportunistic write (a status refresh): losing the race is fine, the next poll re-reads the row.</summary>
+    private async Task<bool> SaveAsync(OpenReceiveSwap row, CancellationToken cancellationToken)
+    {
+        try
+        {
             await _store.UpdateAsync(row, cancellationToken);
+            return true;
+        }
+        catch (SwapConcurrencyException)
+        {
+            return false;
         }
     }
 

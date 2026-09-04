@@ -235,8 +235,16 @@ by default), and after any partial Lightning payment on the invoice.
 
 The LSC code is a bearer credential. It lives in the plugin's per-store
 settings, server-side only; the provider's order token never reaches a
-browser or a log. [Lightning Swap Connect](https://openreceive.org/guides/lightning-swap-connect.md) is the
-format.
+browser or a log, and the setup page never shows a saved code again: it
+displays it redacted, an empty field keeps it, a pasted code replaces it, and
+a checkbox removes it. [Lightning Swap Connect](https://openreceive.org/guides/lightning-swap-connect.md) is
+the format.
+
+A relay or provider on the local network (loopback, a private range, a
+link-local address, a `.internal`/`.local`/`.lan` name or a bare single-label
+host) can only be saved by a server admin. That is BTCPay's own rule for
+Lightning connection strings, applied to the hosts BTCPay's check does not
+see.
 
 ### 5. The doctor
 
@@ -309,10 +317,15 @@ Every route takes a Greenfield API key with the store permission shown.
 | `GET /api/v1/stores/{storeId}/openreceive/swaps?limit=50` | view store settings | Recent swap rows for the store |
 | `GET /api/v1/stores/{storeId}/openreceive/invoices/{invoiceId}/swaps` | view store settings | Swap rows for one invoice |
 
-Swap rows never include the provider token. A refused update answers with a
+Swap rows never include the provider token. A refused update changes nothing
+(every field is checked before anything is written) and answers with a
 `code`: `wallet_refused` (the preflight said no, with its message),
-`wallet_required`, `lsc_required`, `invalid_lsc_uri`, `nwc_required`,
-`invalid_nwc_uri`.
+`wallet_required`, `lsc_required`, `invalid_lsc_uri`, `invalid_pay_in_asset`
+(an unknown asset name; an empty list offers every asset),
+`endpoint_not_allowed` (a local-network relay or provider without server
+admin rights), `nwc_required`, `invalid_nwc_uri`. `allowSpendCapableWallet`
+on its own re-saves the store's current code with that override, through the
+same preflight.
 
 The payer's swap routes are anonymous and addressed by invoice id plus swap
 id (the invoice id is the bearer, as for BTCPay's own checkout page; a repeat

@@ -1,5 +1,6 @@
 using System;
 using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Abstractions.Services;
 using BTCPayServer.Lightning;
@@ -48,14 +49,15 @@ public class OpenReceivePlugin : BaseBTCPayServerPlugin
         services.AddSingleton<SwapInvoiceEventsService>();
         services.AddHostedService(provider => provider.GetRequiredService<SwapInvoiceEventsService>());
 
-        // The plugin's own table inside BTCPay's database, migrated by BTCPay at startup.
+        // The plugin's own table inside BTCPay's database, migrated by BTCPay at startup —
+        // as a startup task, i.e. before the poller and the event listener above start.
         services.AddSingleton<OpenReceiveDbContextFactory>();
         services.AddDbContext<OpenReceivePluginDbContext>((provider, options) =>
         {
             var factory = provider.GetRequiredService<OpenReceiveDbContextFactory>();
             factory.ConfigureBuilder(options);
         });
-        services.AddHostedService<PluginMigrationRunner>();
+        services.AddStartupTask<PluginMigrationRunner>();
 
         // UI.
         services.AddUIExtension("store-integrations-nav", "OpenReceive/Nav");

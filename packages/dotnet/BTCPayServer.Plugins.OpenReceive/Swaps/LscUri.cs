@@ -9,7 +9,11 @@ using System.Text.RegularExpressions;
 namespace BTCPayServer.Plugins.OpenReceive.Swaps;
 
 /// <summary>One parsed Lightning Swap Connect credential. <see cref="Secret"/> never belongs in a log line.</summary>
-public sealed record LscConnection(string BaseUrl, string ProviderId, string Key, string Secret);
+public sealed record LscConnection(string BaseUrl, string ProviderId, string Key, string Secret)
+{
+    /// <summary>The provider's host name, for the local-network policy.</summary>
+    public string Host => new Uri(BaseUrl).DnsSafeHost;
+}
 
 /// <summary>
 /// Lightning Swap Connect URIs: <c>lightning+swapconnect://host[:port][/path]?key=…&amp;secret=…</c>.
@@ -124,6 +128,12 @@ public static partial class LscUri
             return false;
         }
     }
+
+    /// <summary>The URI with both credentials masked, for display: <c>lightning+swapconnect://host/path/?key=…&amp;secret=…</c>.</summary>
+    public static string Redact(string value) =>
+        TryParse(value, out var connection, out _) && connection is not null
+            ? $"{Protocol}//{connection.BaseUrl["https://".Length..]}?key=…&secret=…"
+            : $"{Protocol}//…";
 
     public static string Format(string baseUrl, string key, string secret)
     {
