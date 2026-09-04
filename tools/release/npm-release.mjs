@@ -20,6 +20,7 @@ import {
 } from "../package/build-artifacts.mjs";
 
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs";
+import { DOTNET_PLUGIN_CSPROJ, updateDotnetPluginVersion } from "./dotnet-plugin.mjs";
 import { GEM_NAMES, gemDir, gemVersionFilePath } from "./gem-release.mjs";
 
 const PUBLIC_PACKAGE_NAMES = OPENRECEIVE_PUBLIC_PACKAGE_NAMES;
@@ -265,6 +266,7 @@ function updateVersions(root, targetVersion) {
   }
 
   changed.push(...updateRubyGemVersions(root, currentVersion, targetVersion));
+  changed.push(...updateDotnetPluginVersion(root, targetVersion));
   changed.push(...refreshPathGemLockfiles(root));
   changed.push(...updateTextVersionReferences(root, currentVersion, targetVersion));
   run("npm", ["install", "--package-lock-only", "--ignore-scripts"], root, {
@@ -438,6 +440,7 @@ function dryRunPrepare(root, targetVersion) {
     files: [
       ...files,
       ...gemFiles,
+      DOTNET_PLUGIN_CSPROJ,
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "package-lock.json",

@@ -47,7 +47,11 @@ export const MARKDOWN_TWINNED_SITE_PAGES = ["/api_docs", "/guides", "/agents"];
 
 // The copy-button payload URLs. generate-site-contract.mjs owns their sources;
 // this list only makes them servable to the link check below.
-export const AGENT_PAYLOAD_PATHS = ["/agent-directions/node.md", "/agent-directions/rails.md"];
+export const AGENT_PAYLOAD_PATHS = [
+  "/agent-directions/node.md",
+  "/agent-directions/rails.md",
+  "/agent-directions/btcpay.md",
+];
 
 /**
  * Whether openreceive.org serves this pathname: a site-owned path, an agent

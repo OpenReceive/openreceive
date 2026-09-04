@@ -18,6 +18,7 @@ swaps / settlement beyond the integrator happy path.
 13. [Checkout Design](checkout-design.md) - why the status model, deposit warnings, QR encoding, and refund staging work the way they do.
 14. [Release Process](release-process.md) - the release runbook: prepare, gate, tag, approve the gem publish, npm publish, GitHub release.
 15. [Forbidden Without Approval](forbidden-without-approval.md) - changes that need explicit approval.
+16. [BTCPay Plugin Manual E2E Checklist](btcpay-e2e.md) - what only a real wallet, a real provider and the Nostr plugin can prove, per release.
 
 The custom-route escape hatch moved to the developer guides:
 [Writing your own checkout route](../guides/custom-checkout-route.md).

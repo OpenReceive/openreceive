@@ -6,8 +6,8 @@ import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   buildPackageTarballs,
-  localPackageDirectory,
   localPackageDependency,
+  localPackageDirectory,
 } from "../package/build-artifacts.mjs";
 
 const root = process.cwd();

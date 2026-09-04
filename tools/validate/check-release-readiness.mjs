@@ -3,7 +3,12 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs";
-import { GEM_NAMES, readGemVersion, gemDir } from "../release/gem-release.mjs";
+import {
+  DOTNET_PLUGIN_CSPROJ,
+  dotnetPluginVersion,
+  readDotnetPluginVersion,
+} from "../release/dotnet-plugin.mjs";
+import { GEM_NAMES, gemDir, readGemVersion } from "../release/gem-release.mjs";
 
 const root = process.cwd();
 const packageRoot = path.join(root, "packages/js");
@@ -189,6 +194,16 @@ for (const { relativePath, manifest } of packages) {
       );
     }
   }
+}
+
+// The BTCPay plugin releases in lockstep too (System.Version: no prerelease suffix).
+{
+  const pluginVersion = readDotnetPluginVersion(root);
+  expect(pluginVersion !== undefined, `${DOTNET_PLUGIN_CSPROJ}: missing <Version>`);
+  expect(
+    pluginVersion === dotnetPluginVersion(releaseVersion),
+    `${DOTNET_PLUGIN_CSPROJ}: plugin version ${pluginVersion} must match ${dotnetPluginVersion(releaseVersion)} (run npm run release:prepare)`,
+  );
 }
 
 // Ruby gems release in lockstep with the npm workspace version.

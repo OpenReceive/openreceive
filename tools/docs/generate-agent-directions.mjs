@@ -66,6 +66,11 @@ const STACKS = [
     source: "docs/agents/src/rails.md",
     quickstart: "docs/guides/quickstart-rails.md",
   },
+  {
+    stack: "btcpay",
+    source: "docs/agents/src/btcpay.md",
+    quickstart: "docs/guides/quickstart-btcpay.md",
+  },
 ];
 
 /**
@@ -85,10 +90,41 @@ const STACKS = [
 const UNLISTED_GUIDES = {
   "agent-directions-node": "this payload's own page",
   "agent-directions-rails": "this payload's own page",
+  "agent-directions-btcpay": "this payload's own page",
   guides: "linked as the index at the end of the reading list, not as an entry",
-  "quickstart-node": "inlined in full below, or the other stack's",
-  "quickstart-rails": "inlined in full below, or the other stack's",
+  "quickstart-node": "inlined in full below, or another stack's",
+  "quickstart-rails": "inlined in full below, or another stack's",
+  "quickstart-btcpay": "inlined in full below, or another stack's",
   "node-orms": "Node only; the Rails engine owns its tables",
+};
+
+/**
+ * Guides one stack's payload may skip on top of the shared list. The BTCPay
+ * plugin has no host hooks, no `openreceive_payments` table, no mounted routes
+ * and no browser package: BTCPay's checkout is the UI and BTCPay owns pricing,
+ * budgets and authorization. Listing the library guides there would send an
+ * agent to install npm packages into a BTCPay deployment. The Node and Rails
+ * payloads keep linking every one of these.
+ */
+const UNLISTED_GUIDES_BY_STACK = {
+  btcpay: {
+    authorization:
+      "BTCPay's store permissions and invoice ids authorize; there is no authorize hook",
+    storage: "the plugin owns openreceive_swaps inside BTCPay's database, not openreceive_payments",
+    "frontend-checkout": "BTCPay's checkout is the UI; the plugin ships no browser package",
+    "checkout-ux": "BTCPay's checkout is the UI; the plugin's Vue component already follows it",
+    "headless-checkout": "no @openreceive/browser in a BTCPay deployment",
+    "custom-checkout-route": "the plugin mounts no OpenReceive routes to replace",
+    "provider-registry": "no wallet wizard; BTCPay's checkout offers the wallets",
+    "price-feeds": "BTCPay owns fiat rates",
+    "host-testing": "no host hooks to test; packages/dotnet/docker is the end-to-end stack",
+    "rate-limiting": "BTCPay's public-invoice rate-limit zone covers the swap routes",
+    "environment-variables":
+      "no environment variables; every setting lives in BTCPay's store settings",
+    deploying: "BTCPay's own deployment; settlement is BTCPay's LightningListener",
+    "api-reference": "documents the library API; the plugin's routes are in the BTCPay quickstart",
+    "react-material-ui-recipe": "a custom browser UI recipe; not applicable inside BTCPay",
+  },
 };
 
 const GUIDE_URL = (slug) => `https://openreceive.org/guides/${slug}`;
@@ -184,9 +220,15 @@ export function unlistedGuides(payload, publicSlugs, stack) {
       (match) => match[1],
     ),
   );
+  const stackUnlisted = UNLISTED_GUIDES_BY_STACK[stack] ?? {};
   return [...publicSlugs]
     .filter((slug) => !linked.has(slug))
-    .filter((slug) => UNLISTED_GUIDES[slug] === undefined && slug !== `quickstart-${stack}`)
+    .filter(
+      (slug) =>
+        UNLISTED_GUIDES[slug] === undefined &&
+        stackUnlisted[slug] === undefined &&
+        slug !== `quickstart-${stack}`,
+    )
     .sort();
 }
 
@@ -228,7 +270,7 @@ for (const { stack, source, quickstart } of STACKS) {
     problems.push(
       `${target}: ${unlisted.join(", ")} ${unlisted.length === 1 ? "is" : "are"} published in ` +
         `docs/manifest.json but never linked from the payload. Add it to the reading list in ` +
-        `${source}, or give it a reason in UNLISTED_GUIDES in this generator.`,
+        `${source}, or give it a reason in UNLISTED_GUIDES (or UNLISTED_GUIDES_BY_STACK) in this generator.`,
     );
   }
 

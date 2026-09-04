@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+### A BTCPay Server plugin: the third engine
+
+`packages/dotnet/BTCPayServer.Plugins.OpenReceive` is a BTCPay Server plugin
+(BTCPay ≥ 2.4.2, .NET 10) that makes a receive-only NWC wallet a store's
+Lightning node. It registers a Lightning connection-string handler for
+`type=openreceive;nwc=<NWC URI>[;allow-spend=true]` — and only that: a bare
+`nostr+walletconnect://` string stays the Nostr plugin's, so both plugins can
+be installed at once. Saving the string runs the receive-only preflight
+through BTCPay's own validation path (UI and Greenfield): `make_invoice` +
+`list_transactions` required, `lookup_invoice` an optional fast path,
+`nip44_v2` preferred with `nip04` fallback, any spend method refused unless
+the override is ticked, and the wallet's network checked against BTCPay's.
+The client never calls a NIP-47 `pay_*` method, so every send-side BTCPay
+feature is unavailable by design; top-up invoices are unsupported.
+
+BTCPay's `LightningListener` is the settlement authority. `GetInvoice` is
+served from one per-connection `ScanMemo` — the `openreceive_meta` gate
+transplanted into memory: one `list_transactions` walk (settled and unpaid
+views, 24-hour window, pages of 20, deduped, truncation-safe) refreshed on
+the 2/6/12 s cadence serves every hash BTCPay asks about. An unknown hash is
+reported `Unpaid`, never null or `Expired`, because either would make BTCPay
+drop a live invoice; BTCPay's own state machine owns expiry. Wallets with
+`payment_received` notifications settle directly under the AGENTS.md
+finality rule; the scan is the safety net.
+
+An optional swap rail lets a payer settle a BTCPay invoice with USDT, USDC,
+ETH or SOL through a Lightning Swap Connect provider. The provider order is
+aimed at the invoice's existing BOLT11, so there is no second payment
+method and no second settlement path. The checkout shows one pill per asset
+(one pseudo payment-method id `OpenReceiveSwap_<asset>` each, matched by a
+Vue component of the same name), and the payer routes are addressed by
+invoice id and swap id: `POST /api/plugins/openreceive/swaps`,
+`GET …/swaps/{invoiceId}/{swapId}`, `POST …/swaps/{invoiceId}/{swapId}/refund`.
+Swaps require the OpenReceive connection, set the store's invoice
+expiration to 60 minutes (minimum 45), are refused when an invoice has less
+than the provider's window left or after any partial payment, and live in
+the plugin's own `openreceive_swaps` table (schema
+`BTCPayServer.Plugins.OpenReceive`), migrated by BTCPay at startup. Provider
+polling runs every 5 s (30 s once the invoice's Lightning side settled). The
+poller is the first emitter of the reserved attention reason
+`provider_completed_without_wallet_settlement` (completed for 30 minutes
+without wallet settlement); a swap with no deposit 15 minutes past the
+provider's expiry is closed as expired. The provider token is server-only.
+
+A guided setup page (Store → OpenReceive: paste → Test connection → Use as
+this store's Lightning node; swaps section), a doctor page, a dashboard
+setup card, swap rows on the invoice page, and a Greenfield-style API
+(`GET/PUT /api/v1/stores/{storeId}/openreceive/settings`,
+`POST …/openreceive/wallet/test`, `GET …/openreceive/swaps`,
+`GET …/openreceive/invoices/{invoiceId}/swaps`, Greenfield API-key auth
+with store permissions) ship in this first version.
+
+Tests: an xunit v3 project consumes every vector family the `dotnet` entry
+of `spec/test-vectors/coverage.json` does not exclude; `OpenReceive.TestkitNwc`
+is a NIP-47 wallet service (in-memory or LND-backed, with an HTTP control
+API) and `OpenReceive.FakeLsc` a fake FixedFloat-compatible provider with
+`/__testkit/` controls. `packages/dotnet/docker/` is a regtest stack in
+Docker Compose — `up.sh` builds and funds everything, `e2e.sh` proves a
+Lightning payment, a swap, a refund and the spend-capable refusal over HTTP.
+`npm run test:dotnet` runs the unit suite (skipping clearly without a .NET
+10 SDK or the BTCPay submodule) and CI runs it in its own job.
+
+Docs: `docs/guides/quickstart-btcpay.md`, agent directions for the BTCPay
+stack (`docs/agents/btcpay.md`, mirrored into the skills), the plugin and
+workspace READMEs, `docs/internal/btcpay-e2e.md`, and the conformance,
+scope-lock, package-ownership and test-command-map records. The plugin is
+not yet listed in the BTCPay plugin directory; install it by hand or through
+the Plugin Builder.
+
 ### One copy of every shared vocabulary
 
 The tables both engines had typed by hand — the seven pay-in assets, the

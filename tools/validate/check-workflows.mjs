@@ -23,6 +23,9 @@ const requiredWorkflows = {
     // The Rails example must run per-push, not only in the weekly demos lane
     // (a schema break in it once shipped unexecuted).
     "bin/ci",
+    // The C# engine (BTCPay plugin): vector conformance + kernel tests, in its
+    // own job because compiling BTCPay Server is slow.
+    "dotnet test packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests",
   ],
   "conformance.yml": [
     "npm run validate",

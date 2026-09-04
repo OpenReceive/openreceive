@@ -17,8 +17,9 @@ the full quickstart), or paste the one-prompt agent directions:
   `.agents/skills/` directory automatically.
 - No installer? Copy the agent directions for your stack and paste them into
   your agent: [Node](https://openreceive.org/agent-directions/node.md) ·
-  [Rails](https://openreceive.org/agent-directions/rails.md). Each is
-  self-contained, quickstart included.
+  [Rails](https://openreceive.org/agent-directions/rails.md) ·
+  [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md). Each
+  is self-contained, quickstart included.
 
 Every `@openreceive/*` npm package and OpenReceive gem also ships the skills in
 its own `skills/` directory, so an agent working in a project that already

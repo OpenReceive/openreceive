@@ -27,7 +27,13 @@
       "!docs/site-contract.json",
       "!**/building",
       "!**/*.svg",
-      "!**/*.css"
+      "!**/*.css",
+      "!packages/dotnet/submodules",
+      "!packages/dotnet/docker/.state",
+      "!**/bin",
+      "!**/obj",
+      "!**/bin-docker",
+      "!**/obj-docker"
     ]
   },
   "formatter": {

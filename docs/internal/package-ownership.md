@@ -21,8 +21,17 @@ parallel work. Shared contract files still need lead coordination.
 | Testkit package | `packages/js/testkit` | Implemented | Conformance lane |
 | Ruby core package | `packages/ruby/openreceive` | Implemented (vector-backed) | Ecosystem lane |
 | Ruby server + Rails | `packages/ruby/openreceive-server`, `openreceive-rails` | Implemented | Ecosystem lane |
+| BTCPay Server plugin | `packages/dotnet/BTCPayServer.Plugins.OpenReceive` | Implemented (vector-backed, third engine) | Ecosystem lane |
+| BTCPay plugin tests | `packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests` | Implemented | Conformance lane |
+| Testkit NWC wallet service + fake LSC provider | `packages/dotnet/OpenReceive.TestkitNwc`, `packages/dotnet/OpenReceive.FakeLsc` | Implemented | Conformance lane |
+| BTCPay regtest stack | `packages/dotnet/docker/**` | Implemented | Conformance lane |
+| BTCPay source pin | `packages/dotnet/submodules/btcpayserver` (submodule, v2.4.2) | Pinned per release | Lead |
 | Buy a Button examples | `examples/buttons/**` | Implemented | Example lane |
 | Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem lanes |
+
+`packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs` is
+generated from `spec/data/kernel-tables.json` and follows the lead-owned contract files, not
+the plugin lane.
 
 Why this many packages: each framework adapter (`express`, `fastify`, `next`;
 `react`, `vue`, `svelte`, `angular`) carries its own framework peer

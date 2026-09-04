@@ -49,15 +49,16 @@ gem "openreceive-rails"
 
 Pick your stack:
 
-| Stack         | Quickstart                                          |
-| ------------- | --------------------------------------------------- |
-| Node.js       | [Node quickstart](docs/guides/quickstart-node.md)   |
-| Ruby on Rails | [Rails quickstart](docs/guides/quickstart-rails.md) |
-| BTCPay Server | Coming soon                                         |
+| Stack         | Quickstart                                            |
+| ------------- | ----------------------------------------------------- |
+| Node.js       | [Node quickstart](docs/guides/quickstart-node.md)     |
+| Ruby on Rails | [Rails quickstart](docs/guides/quickstart-rails.md)   |
+| BTCPay Server | [BTCPay quickstart](docs/guides/quickstart-btcpay.md) |
 
-On all platforms: Your server owns the price and the order, the payer
-gets a QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the settlement
-transaction.
+On Node and Rails: your server owns the price and the order, the payer gets
+a QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the
+settlement transaction. On BTCPay Server the plugin makes your NWC wallet the
+store's Lightning node, and BTCPay's own invoices and settlement do the rest.
 
 ## Security defaults
 
@@ -256,6 +257,7 @@ Start with the [developer guides](docs/guides/README.md):
 - [Node quickstart](docs/guides/quickstart-node.md)
 - [Node ORM recipes](docs/guides/node-orms.md)
 - [Rails quickstart](docs/guides/quickstart-rails.md)
+- [BTCPay Server quickstart](docs/guides/quickstart-btcpay.md)
 - [Frontend checkout](docs/guides/frontend-checkout.md)
 - [Headless checkout](docs/guides/headless-checkout.md)
 - [Writing your own checkout route](docs/guides/custom-checkout-route.md)

@@ -75,6 +75,11 @@ Swap providers are configured with `LSC_URI_PRIMARY` and optional
 primary; the backup is consulted only when the primary is down. See
 [Environment variables](environment-variables.md).
 
+The BTCPay Server plugin reads no environment variables: the primary and
+backup codes are pasted into Store → OpenReceive and kept in the plugin's
+per-store settings ([BTCPay quickstart](quickstart-btcpay.md)). The same
+primary-then-backup rule applies.
+
 ## Security requirements
 
 An LSC URI is a bearer credential. Anyone who obtains it can exercise whatever

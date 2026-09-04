@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 1550
+      "bytes": 1677
     },
     {
       "path": "/guides/quickstart-node",
@@ -34,6 +34,16 @@
       "title": "Rails Quickstart",
       "category": "quickstart",
       "bytes": 16078
+    },
+    {
+      "path": "/guides/quickstart-btcpay",
+      "markdown_path": "/guides/quickstart-btcpay.md",
+      "source": "docs/guides/quickstart-btcpay.md",
+      "kind": "guide",
+      "slug": "quickstart-btcpay",
+      "title": "BTCPay Server Quickstart",
+      "category": "quickstart",
+      "bytes": 12758
     },
     {
       "path": "/guides/node-orms",
@@ -103,7 +113,7 @@
       "slug": "automated-swaps",
       "title": "Automated Swaps",
       "category": "guide",
-      "bytes": 3184
+      "bytes": 3528
     },
     {
       "path": "/guides/swap-refunds",
@@ -123,7 +133,7 @@
       "slug": "lightning-swap-connect",
       "title": "Lightning Swap Connect URI",
       "category": "reference",
-      "bytes": 4009
+      "bytes": 4266
     },
     {
       "path": "/guides/environment-variables",
@@ -246,6 +256,16 @@
       "bytes": 32349
     },
     {
+      "path": "/guides/agent-directions-btcpay",
+      "markdown_path": "/guides/agent-directions-btcpay.md",
+      "source": "docs/agents/btcpay.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-btcpay",
+      "title": "Agent Directions: BTCPay Server",
+      "category": "quickstart",
+      "bytes": 19164
+    },
+    {
       "path": "/api_docs",
       "markdown_path": "/api_docs.md",
       "source": "docs/guides/api-reference.md",
@@ -264,7 +284,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 2245
+      "bytes": 2318
     },
     {
       "path": "/agent-directions/node.md",
@@ -283,6 +303,16 @@
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 32349,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/btcpay.md",
+      "source": "docs/agents/btcpay.md",
+      "kind": "agent-directions-payload",
+      "stack": "btcpay",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 19164,
       "copy_button": true,
       "self_contained": true
     }
@@ -333,7 +363,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 3161
+        "bytes": 3479
       },
       {
         "path": "/openapi.yaml",
@@ -421,6 +451,10 @@
     {
       "source": "docs/internal/site-build.md",
       "slug": "site-build"
+    },
+    {
+      "source": "docs/internal/btcpay-e2e.md",
+      "slug": "btcpay-e2e"
     },
     {
       "source": "docs/internal/forbidden-without-approval.md",

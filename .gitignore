@@ -54,3 +54,9 @@ tests/orms/generated/
 # The Node stacks' SQLite databases and cookie secrets. The shop SURVIVES a
 # restart, so unlike a disposable checkout demo these are real local state.
 examples/buttons/.data/
+
+# .NET build output (BTCPay plugin workspace)
+packages/dotnet/**/bin/
+packages/dotnet/**/obj/
+packages/dotnet/**/TestResults/
+packages/dotnet/docker/.state/

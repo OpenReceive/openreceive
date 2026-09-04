@@ -20,6 +20,11 @@ Thanks for helping build OpenReceive. The short version:
 - `packages/ruby/` — the dependency-free core, the Service and Rack app, and
   the mountable Rails engine: a second settlement implementation checked
   against the shared vectors.
+- `packages/dotnet/` — the BTCPay Server plugin (C#), its xunit vector tests,
+  the NIP-47 testkit wallet service, the fake swap provider and the Docker
+  regtest stack: the third settlement engine. Builds against the pinned
+  BTCPay submodule (`git submodule update --init --depth 1
+  packages/dotnet/submodules/btcpayserver`) or `BTCPAY_SERVER_ROOT`.
 - `examples/buttons/server/` — Express, static HTML, Next.js, and Rails
   demos; demo order models are ordinary application code.
 - `tools/` — validation, conformance, package-smoke, documentation, and

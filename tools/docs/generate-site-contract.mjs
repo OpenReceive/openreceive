@@ -35,6 +35,7 @@ const ALIASES = [{ path: "/api_docs", slug: "api-reference", kind: "api-docs" }]
 const AGENT_PAYLOADS = [
   { path: "/agent-directions/node.md", source: "docs/agents/node.md", stack: "node" },
   { path: "/agent-directions/rails.md", source: "docs/agents/rails.md", stack: "rails" },
+  { path: "/agent-directions/btcpay.md", source: "docs/agents/btcpay.md", stack: "btcpay" },
 ];
 
 // Pages served under agent-discovery paths: site-owned names whose content is

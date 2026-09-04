@@ -24,6 +24,22 @@ Every provider, rate-source, and settlement-rule change is therefore two impleme
 a conformance-vector update, and that cost is accepted knowingly. It is recorded here so the
 decision is re-made on purpose rather than inherited.
 
+The BTCPay Server plugin (`packages/dotnet`, C#) is a deliberate third settlement engine,
+decided 2026-09-03. It ports the kernel rows in `conformance.md` against the shared vectors
+and writes its host glue against BTCPay 2.4.2. Every kernel change is now three
+implementations plus a vector update. Two things are different about this engine and are
+accepted on purpose. First, it owns no `openreceive_payments` table and no reconcile gate:
+BTCPay's invoices are the reference and BTCPay's payments are the settlement record, so the
+gate survives only as the in-memory `ScanMemo` (`settlement-sweeps.md`), and the plugin's one
+table is `openreceive_swaps` inside BTCPay's Postgres, migrated by BTCPay at startup. Second,
+it is the first and only emitter of the attention reason
+`provider_completed_without_wallet_settlement`, which stays `reserved` in
+`spec/data/kernel-tables.json`: the plugin's poller flags a swap the provider reports
+`completed` whose Lightning side has not settled within 30 minutes, a time-based transition
+the JS and Ruby engines do not make. The asymmetry is recorded here rather than papered over;
+if either other engine gains the transition, the reason loses its reserved flag and gains a
+decision-table vector.
+
 ## Schema internals
 
 The canonical DDL lives in `@openreceive/core` — `paymentsDdlStatements` in

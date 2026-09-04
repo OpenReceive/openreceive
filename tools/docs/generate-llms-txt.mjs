@@ -29,8 +29,10 @@ const release = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")
 const LISTED_ELSEWHERE = new Set([
   "quickstart-node",
   "quickstart-rails",
+  "quickstart-btcpay",
   "agent-directions-node",
   "agent-directions-rails",
+  "agent-directions-btcpay",
   "guides",
 ]);
 
@@ -41,9 +43,10 @@ const guideLines = manifest.docs
 const content = `# OpenReceive
 
 > Open-source libraries for accepting inbound Bitcoin Lightning payments
-> directly into a wallet the application owner controls. OpenReceive never
-> holds funds, has no accounts or API keys, and connects through a receive-only
-> Nostr Wallet Connect (NWC) code. This index describes OpenReceive ${release}.
+> directly into a wallet the application owner controls, plus a BTCPay Server
+> plugin that does the same for a BTCPay store. OpenReceive never holds funds,
+> has no accounts or API keys, and connects through a receive-only Nostr
+> Wallet Connect (NWC) code. This index describes OpenReceive ${release}.
 
 Every documentation link below is raw markdown — fetch it directly, no browser
 needed. Appending \`.md\` to any guide page URL returns the same document as
@@ -53,8 +56,10 @@ markdown.
 
 - [Node quickstart](${SITE}/guides/quickstart-node${MARKDOWN_SUFFIX}): Express, Fastify, or Next.js server with any frontend
 - [Rails quickstart](${SITE}/guides/quickstart-rails${MARKDOWN_SUFFIX})
+- [BTCPay Server quickstart](${SITE}/guides/quickstart-btcpay${MARKDOWN_SUFFIX}): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
 - [Agent directions, Node](${SITE}/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
 - [Agent directions, Rails](${SITE}/agent-directions/rails.md)
+- [Agent directions, BTCPay Server](${SITE}/agent-directions/btcpay.md)
 
 ## Guides
 

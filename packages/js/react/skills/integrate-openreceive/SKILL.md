@@ -5,7 +5,8 @@ description: >
   Use when adding Bitcoin, Lightning, or crypto checkout to a Node.js, Express,
   Fastify, Next.js, Rails, React, Vue, Svelte, Angular, or plain-HTML
   application with OpenReceive (the @openreceive/* npm packages or the
-  openreceive-rails gem).
+  openreceive-rails gem), or when connecting a BTCPay Server store to a
+  receive-only NWC wallet with the OpenReceive plugin.
 license: MIT
 ---
 
@@ -25,6 +26,9 @@ code** (`NWC_URI`).
    no network access:
    - Node (Express / Fastify / Next.js): [references/node.md](references/node.md)
    - Rails: [references/rails.md](references/rails.md)
+   - BTCPay Server: [references/btcpay.md](references/btcpay.md) — a plugin,
+     configured in BTCPay's store UI or Greenfield API; no application code,
+     no npm packages, no gem. The rest of this file is about the library.
 3. Follow its **Step 0** first: confirm `NWC_URI` is set in the server
    environment before writing code. Never print the value; never invent a
    placeholder.

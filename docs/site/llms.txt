@@ -1,9 +1,10 @@
 # OpenReceive
 
 > Open-source libraries for accepting inbound Bitcoin Lightning payments
-> directly into a wallet the application owner controls. OpenReceive never
-> holds funds, has no accounts or API keys, and connects through a receive-only
-> Nostr Wallet Connect (NWC) code. This index describes OpenReceive 0.4.3.
+> directly into a wallet the application owner controls, plus a BTCPay Server
+> plugin that does the same for a BTCPay store. OpenReceive never holds funds,
+> has no accounts or API keys, and connects through a receive-only Nostr
+> Wallet Connect (NWC) code. This index describes OpenReceive 0.4.3.
 
 Every documentation link below is raw markdown — fetch it directly, no browser
 needed. Appending `.md` to any guide page URL returns the same document as
@@ -13,8 +14,10 @@ markdown.
 
 - [Node quickstart](https://openreceive.org/guides/quickstart-node.md): Express, Fastify, or Next.js server with any frontend
 - [Rails quickstart](https://openreceive.org/guides/quickstart-rails.md)
+- [BTCPay Server quickstart](https://openreceive.org/guides/quickstart-btcpay.md): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
 - [Agent directions, Node](https://openreceive.org/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
 - [Agent directions, Rails](https://openreceive.org/agent-directions/rails.md)
+- [Agent directions, BTCPay Server](https://openreceive.org/agent-directions/btcpay.md)
 
 ## Guides
 

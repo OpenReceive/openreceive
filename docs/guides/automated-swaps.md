@@ -10,6 +10,12 @@ Turn swaps on with `LSC_URI_PRIMARY` (and optional `LSC_URI_BACKUP`) —
 only the primary is used. Backup is for outage, not for assets the primary
 omits. [Lightning Swap Connect](lightning-swap-connect.md) is the URI format.
 
+On BTCPay Server the plugin's setup page takes the same codes, and the swap
+targets the BTCPay invoice's existing Lightning BOLT11; the provider states
+and reasons below are the same, but the refund form lives on BTCPay's own
+checkout page ([BTCPay quickstart](quickstart-btcpay.md)). The rest of this
+guide is about the Node and Rails hosts.
+
 OpenReceive quotes a small fixed list of pay-in assets into Lightning. It does
 not merge the provider's full market dump.
 

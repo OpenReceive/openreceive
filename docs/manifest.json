@@ -26,6 +26,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-btcpay",
+      "title": "BTCPay Server Quickstart",
+      "source_path": "docs/guides/quickstart-btcpay.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "source_path": "docs/guides/node-orms.md",
@@ -306,6 +314,14 @@
       "public": false
     },
     {
+      "slug": "btcpay-e2e",
+      "title": "BTCPay Plugin Manual E2E Checklist",
+      "source_path": "docs/internal/btcpay-e2e.md",
+      "category": "process",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "forbidden-without-approval",
       "title": "Forbidden Without Approval",
       "source_path": "docs/internal/forbidden-without-approval.md",
@@ -325,6 +341,14 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "source_path": "docs/agents/rails.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-btcpay",
+      "title": "Agent Directions: BTCPay Server",
+      "source_path": "docs/agents/btcpay.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true
