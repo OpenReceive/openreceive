@@ -38,7 +38,7 @@
     "typescript": "^6.0.3",
     "webpack": "^5.93.0",
     "webpack-assets-manifest": "^5.2.1",
-    "webpack-cli": "^6.0.1",
+    "webpack-cli": "^7.2.2",
     "webpack-dev-server": "^5.2.0",
     "webpack-merge": "^6.0.1"
   }
