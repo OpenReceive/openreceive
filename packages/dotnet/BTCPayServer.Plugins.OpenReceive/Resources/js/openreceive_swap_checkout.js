@@ -182,6 +182,18 @@ window.OpenReceiveSwapCheckout = (() => {
 
   return {
     register(Vue, config) {
+      // BTCPay's own pills (Bitcoin, Lightning, LNURL) get the ₿ mark so every pill in the row
+      // carries its coin. The rule lives in <head>: anything inside BTCPay's Vue root is
+      // re-rendered (and a <style> there dropped) when the checkout app mounts.
+      if (config.btcIcon && !document.getElementById("openreceive-pill-style")) {
+        const style = document.createElement("style");
+        style.id = "openreceive-pill-style";
+        style.textContent =
+          '.btcpay-pills > a.payment-method:not(.openreceive-pill)::before{content:"";display:inline-block;width:16px;height:16px;margin-right:.35rem;vertical-align:-3px;background:url("' +
+          config.btcIcon +
+          '") center/contain no-repeat}';
+        document.head.appendChild(style);
+      }
       for (const asset of config.assets) {
         Vue.component(`OpenReceiveSwap_${asset}Checkout`, definition(asset, config));
       }

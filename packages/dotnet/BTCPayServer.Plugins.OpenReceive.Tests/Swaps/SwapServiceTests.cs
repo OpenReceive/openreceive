@@ -148,13 +148,14 @@ public sealed class SwapServiceTests
         {
             Assert.False(offer.Available);
             Assert.Equal("amount_too_small", offer.Reason);
-            Assert.Matches(@"^at least \d+\.\d{2} USD$", offer.Limit);
+            Assert.Matches(@"^at least \d+\.\d{2} USD$", offer.Limit!.ToString());
+            Assert.Equal("USD", offer.Limit.Unit);
         });
         // Without a price the bound falls back to the provider's own figure in the pay asset.
         h.Invoices.Invoices[InvoiceId] = h.Invoice() with { InvoiceAmountMsats = 1_000 };
         var bare = await h.Availability();
-        Assert.All(bare.Assets, offer => Assert.StartsWith("at least ", offer.Limit));
-        Assert.Contains(bare.Assets, offer => offer.Limit!.EndsWith(offer.AssetLabel, StringComparison.Ordinal));
+        Assert.All(bare.Assets, offer => Assert.Equal("at least", offer.Limit!.Word));
+        Assert.Contains(bare.Assets, offer => offer.Limit!.Unit == offer.AssetLabel);
     }
 
     [Fact]

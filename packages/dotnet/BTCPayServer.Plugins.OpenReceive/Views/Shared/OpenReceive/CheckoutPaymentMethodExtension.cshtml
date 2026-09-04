@@ -9,19 +9,20 @@
 }
 @if (availability is { Offered: true })
 {
+    @* BTCPay's own pills get the ₿ mark through a rule the checkout script puts in <head> (see openreceive_swap_checkout.js). *@
     foreach (var offer in availability.Assets)
     {
         var pmId = "OpenReceiveSwap_" + offer.PayInAsset;
         var icon = offer.PayInAsset.Split('_')[0].ToLowerInvariant();
         if (offer.Available)
         {
-            <a href="#@pmId" class="btcpay-pill m-0 payment-method" :class="{ active: pmId === '@pmId' }" v-on:click.prevent="changePaymentMethod('@pmId')" title="Pay with @offer.AssetLabel on @offer.NetworkLabel">
+            <a href="#@pmId" class="btcpay-pill m-0 payment-method openreceive-pill" :class="{ active: pmId === '@pmId' }" v-on:click.prevent="changePaymentMethod('@pmId')" title="Pay with @offer.AssetLabel on @offer.NetworkLabel">
                 <img src="~/Resources/img/@(icon).svg" alt="" style="width:16px;height:16px;margin-right:.35rem;vertical-align:-3px" />@offer.AssetLabel · @offer.NetworkLabel
             </a>
         }
         else
         {
-            <span class="btcpay-pill m-0 payment-method" style="opacity:.5;cursor:not-allowed" title="@offer.Message@(offer.Limit is null ? "" : $" {offer.Limit}.")">
+            <span class="btcpay-pill m-0 payment-method openreceive-pill" style="opacity:.5;cursor:not-allowed" title="@offer.Message@(offer.Limit is null ? "" : $" {offer.Limit}.")">
                 <img src="~/Resources/img/@(icon).svg" alt="" style="width:16px;height:16px;margin-right:.35rem;vertical-align:-3px" />@offer.AssetLabel · @offer.NetworkLabel
             </span>
         }
@@ -32,17 +33,26 @@
         @* Why the greyed pills are greyed, in words a shopper can act on (the JS checkout's "your cart total must be at least $2.43"). *@
         <div class="w-100 small text-muted text-center mt-1">
             @{
-                var tooSmall = unavailable.Where(a => a.Reason == "amount_too_small").ToList();
-                var tooLarge = unavailable.Where(a => a.Reason == "amount_too_large").ToList();
+                var tooSmall = unavailable.Where(a => a.Reason == "amount_too_small").OrderBy(a => a.Limit?.Amount ?? decimal.MaxValue).ToList();
+                var tooLarge = unavailable.Where(a => a.Reason == "amount_too_large").OrderByDescending(a => a.Limit?.Amount ?? 0).ToList();
                 var others = unavailable.Where(a => a.Reason is not ("amount_too_small" or "amount_too_large")).GroupBy(a => a.Message ?? "Temporarily unavailable").ToList();
+                // One line, lowest bar first, the unit once at the end when every bound shares it (the invoice currency).
+                string Bounds(IEnumerable<SwapAssetOffer> offers)
+                {
+                    var list = offers.ToList();
+                    var units = list.Select(a => a.Limit?.Unit).Where(u => u is not null).Distinct().ToList();
+                    var shared = units.Count == 1 ? units[0] : null;
+                    var items = list.Select(a => a.Limit is null ? $"{a.AssetLabel} · {a.NetworkLabel}" : $"{a.AssetLabel} · {a.NetworkLabel} {a.Limit.AmountText}{(shared is null ? " " + a.Limit.Unit : "")}");
+                    return string.Join(", ", items) + (shared is null ? "" : " " + shared);
+                }
             }
             @if (tooSmall.Count > 0)
             {
-                <div>Below the minimum for this invoice: @string.Join(", ", tooSmall.Select(a => $"{a.AssetLabel} · {a.NetworkLabel}{(a.Limit is null ? "" : $" ({a.Limit})")}"))</div>
+                <div>Minimum for this invoice: @Bounds(tooSmall)</div>
             }
             @if (tooLarge.Count > 0)
             {
-                <div>Above the maximum for this invoice: @string.Join(", ", tooLarge.Select(a => $"{a.AssetLabel} · {a.NetworkLabel}{(a.Limit is null ? "" : $" ({a.Limit})")}"))</div>
+                <div>Maximum for this invoice: @Bounds(tooLarge)</div>
             }
             @foreach (var group in others)
             {

@@ -141,7 +141,14 @@ public sealed class SwapCheckoutModel
 /// 9.12 USD"), in the invoice's currency at the invoice's own rate, like the JS checkout's
 /// "your cart total must be at least $2.43".
 /// </summary>
-public sealed record SwapAssetOffer(string PayInAsset, string AssetLabel, string NetworkLabel, bool Available, string? Reason, string? Message, string? Limit = null);
+public sealed record SwapAssetOffer(string PayInAsset, string AssetLabel, string NetworkLabel, bool Available, string? Reason, string? Message, SwapOfferLimit? Limit = null);
+
+/// <summary>An amount bound behind a refusal: "at least" / "at most", the figure, and its unit (the invoice currency, or the pay asset).</summary>
+public sealed record SwapOfferLimit(string Word, decimal Amount, string Unit)
+{
+    public string AmountText => Amount.ToString(Amount == decimal.Truncate(Amount) && Unit.Length > 3 ? "0.##" : "0.00", System.Globalization.CultureInfo.InvariantCulture);
+    public override string ToString() => $"{Word} {AmountText} {Unit}";
+}
 
 /// <summary>Whether swaps are offered for one invoice, and why not.</summary>
 public sealed record SwapAvailability(

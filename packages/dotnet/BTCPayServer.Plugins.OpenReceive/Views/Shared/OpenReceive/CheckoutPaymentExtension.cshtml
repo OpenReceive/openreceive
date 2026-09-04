@@ -92,6 +92,7 @@
                 invoiceId: @Safe.Json(Model.InvoiceId),
                 statusUrl: statusUrl,
                 labels: @Safe.Json(OpenReceiveTables.SwapAssetInfo.ToDictionary(kv => kv.Key, kv => new { asset = kv.Value.Label, network = kv.Value.NetworkLabel })),
+                btcIcon: @Safe.Json(Url.Content("~/Resources/img/btc.svg")),
             });
         })();
     </script>

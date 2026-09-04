@@ -136,7 +136,7 @@ public sealed class SwapService
         return new SwapAvailability(true, null, offers, bolt11, paymentHash, amountMsats, minimumSeconds);
     }
 
-    private static SwapAssetOffer Offer(string asset, bool available, string? reason, string? message, string? limit = null)
+    private static SwapAssetOffer Offer(string asset, bool available, string? reason, string? message, SwapOfferLimit? limit = null)
     {
         var info = OpenReceiveTables.SwapAssetInfo[asset];
         return new SwapAssetOffer(asset, info.Label, info.NetworkLabel, available, reason, message, limit);
@@ -147,15 +147,17 @@ public sealed class SwapService
     /// away from the bound so the shopper never lands exactly on a refused amount; the
     /// provider's pay-asset figure when the invoice carries no price.
     /// </summary>
-    private static string Limit(string word, long boundMsats, string? payAmount, SwapInvoiceContext invoice, long amountMsats, string asset)
+    private static SwapOfferLimit? Limit(string word, long boundMsats, string? payAmount, SwapInvoiceContext invoice, long amountMsats, string asset)
     {
         if (invoice.InvoicePrice > 0 && invoice.InvoiceCurrency.Length > 0 && amountMsats > 0)
         {
             var fiat = invoice.InvoicePrice * boundMsats / amountMsats;
             var rounded = word == "at least" ? Math.Ceiling(fiat * 100) / 100 : Math.Floor(fiat * 100) / 100;
-            return $"{word} {rounded.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)} {invoice.InvoiceCurrency}";
+            return new SwapOfferLimit(word, rounded, invoice.InvoiceCurrency);
         }
-        return payAmount is null ? word : $"{word} {payAmount.TrimEnd('0').TrimEnd('.')} {OpenReceiveTables.SwapAssetInfo[asset].Label}";
+        return payAmount is not null && decimal.TryParse(payAmount, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var pay)
+            ? new SwapOfferLimit(word, pay, OpenReceiveTables.SwapAssetInfo[asset].Label)
+            : null;
     }
 
     // ---- Create / read / refund (payer routes) ----
