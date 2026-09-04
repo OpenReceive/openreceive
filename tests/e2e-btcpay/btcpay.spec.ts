@@ -96,12 +96,11 @@ test("setup page: paste a receive-only NWC code, test it, make it the store's Li
   await expect(
     page.getByText("This store now receives Lightning payments into your NWC wallet."),
   ).toBeVisible();
-  await expect(page.getByText("Current Lightning node")).toContainText(
-    "type=openreceive;nwc=nostr+walletconnect://",
-  );
-  await expect(page.getByText("Current Lightning node")).toContainText("secret=[REDACTED]");
-  // Once saved, the page shows only the redacted string: the secret is not in the HTML.
+  // Once saved, the page shows a calm one-liner (wallet id, relay), never the code.
+  await expect(page.getByText("Wallet connected.")).toBeVisible();
+  await expect(page.getByText("Invoices are minted in wallet")).toContainText("relay-tls");
   expect(await page.content()).not.toContain(secretOf(nwc));
+  expect(await page.content()).not.toContain(nwc.slice(0, 60)); // not even the pubkey-bearing prefix; the placeholder is generic
   // The store nav now carries the plugin entry.
   await expect(page.locator("#Nav-OpenReceive")).toBeVisible();
 });
@@ -133,7 +132,7 @@ test("setup page: a spend-capable code is refused with the reason, and admitted 
   await expect(
     page.getByText("This store now receives Lightning payments into your NWC wallet."),
   ).toBeVisible();
-  await expect(page.getByText("Current Lightning node")).toContainText("allow-spend=true");
+  await expect(page.getByText("Spend-capable override on.")).toBeVisible();
 
   // Back to the receive-only wallet for the checkout specs. The override stays ticked
   // until it is unticked: the checkbox is on the page while the override is on.
@@ -143,7 +142,8 @@ test("setup page: a spend-capable code is refused with the reason, and admitted 
     .getByLabel("This wallet cannot mint a receive-only code and I accept the risk")
     .uncheck();
   await page.getByRole("button", { name: "Switch to this wallet" }).click();
-  await expect(page.getByText("Current Lightning node")).not.toContainText("allow-spend=true");
+  await expect(page.getByText("Wallet connected.")).toBeVisible();
+  await expect(page.getByText("Spend-capable override on.")).toHaveCount(0);
 });
 
 test("checkout: a Lightning invoice minted in the NWC wallet flips to paid in the browser", async ({
@@ -185,7 +185,11 @@ test("setup page: connect the swap provider, enable swaps, and the doctor is all
   await expect(
     page.getByText(/Invoice expiration raised to 60 minutes|Swap settings saved/),
   ).toBeVisible();
-  await expect(page.getByText("Saved: lightning+swapconnect://fake-lsc:7788/?key=…&secret=…")).toBeVisible();
+  await expect(page.getByText("Swaps on.")).toBeVisible();
+  await expect(page.getByText("Provider fake-lsc")).toBeVisible();
+  // The form is folded away once a code is saved; the key and secret are not in the HTML.
+  await expect(page.getByLabel("Lightning Swap Connect code (primary)")).toBeHidden();
+  expect(await page.content()).not.toContain("test-secret");
 
   // The probes render in place on the setup page (the same list as the /doctor page).
   await page.getByRole("button", { name: "Run a health check" }).click();

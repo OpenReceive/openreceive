@@ -27,7 +27,9 @@ public sealed record SwapInvoiceContext(
     long InvoiceAmountMsats,
     bool HasPartialPayments,
     long ExpiresAt,
-    bool LightningNodeIsOpenReceive);
+    bool LightningNodeIsOpenReceive,
+    decimal InvoicePrice = 0,
+    string InvoiceCurrency = "");
 
 public interface ISwapInvoiceSource
 {
@@ -85,6 +87,8 @@ public sealed class BtcPayInvoiceSource : ISwapInvoiceSource
             amountMsats,
             invoice.GetPayments(true).Count > 0,
             invoice.ExpirationTime.ToUnixTimeSeconds(),
-            _settings.GetConnection(store) is not null);
+            _settings.GetConnection(store) is not null,
+            invoice.Price,
+            invoice.Currency ?? string.Empty);
     }
 }

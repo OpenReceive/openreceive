@@ -130,7 +130,11 @@ hidden): `lightning_node_not_openreceive`, `swaps_disabled`,
 ## Checkout integration
 
 BTCPay's checkout is a Vue 2 app. The plugin renders one pill per offered
-asset with the pseudo payment-method id `OpenReceiveSwap_<asset>`, and
+asset with the pseudo payment-method id `OpenReceiveSwap_<asset>`; an asset
+the invoice cannot use is a greyed pill, and one line under the pill row says
+why in the shopper's terms ("Below the minimum for this invoice: USDT · Tron
+(at least 9.12 USD)"), the bound converted at the invoice's own rate, as the
+JS checkout does. The plugin
 registers a Vue component named `OpenReceiveSwap_<asset>Checkout`, which is
 the name BTCPay mounts for a plugin method. BTCPay stops refreshing invoice
 status while a plugin method is selected, so the component polls the swap

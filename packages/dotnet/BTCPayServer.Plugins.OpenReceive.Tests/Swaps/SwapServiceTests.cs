@@ -135,6 +135,29 @@ public sealed class SwapServiceTests
     }
 
     [Fact]
+    public async Task An_invoice_below_the_provider_minimum_says_the_minimum_in_the_invoices_currency()
+    {
+        var h = new Harness();
+        // 1 sat priced at 0.01 USD: below every provider minimum; the rate the limit is expressed at is price / msats.
+        h.Invoices.Invoices[InvoiceId] = h.Invoice() with { InvoiceAmountMsats = 1_000, InvoicePrice = 0.01m, InvoiceCurrency = "USD" };
+
+        var availability = await h.Availability();
+
+        Assert.True(availability.Offered);
+        Assert.All(availability.Assets, offer =>
+        {
+            Assert.False(offer.Available);
+            Assert.Equal("amount_too_small", offer.Reason);
+            Assert.Matches(@"^at least \d+\.\d{2} USD$", offer.Limit);
+        });
+        // Without a price the bound falls back to the provider's own figure in the pay asset.
+        h.Invoices.Invoices[InvoiceId] = h.Invoice() with { InvoiceAmountMsats = 1_000 };
+        var bare = await h.Availability();
+        Assert.All(bare.Assets, offer => Assert.StartsWith("at least ", offer.Limit));
+        Assert.Contains(bare.Assets, offer => offer.Limit!.EndsWith(offer.AssetLabel, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Availability_is_not_offered_with_a_reason_for_each_gate()
     {
         var h = new Harness();

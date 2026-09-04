@@ -6,7 +6,7 @@
 {
     <li class="nav-item">
         <a permission="@Policies.CanModifyStoreSettings" layout-menu-item="@nameof(PluginNavPages.Setup)" asp-controller="UIOpenReceive" asp-action="Setup" asp-route-storeId="@storeId" class="nav-link" id="Nav-OpenReceive">
-            <vc:icon symbol="wallet-new" />
+            <partial name="OpenReceive/_Icon" />
             <span>OpenReceive</span>
         </a>
     </li>

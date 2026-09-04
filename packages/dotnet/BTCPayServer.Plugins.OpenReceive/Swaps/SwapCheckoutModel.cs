@@ -135,8 +135,13 @@ public sealed class SwapCheckoutModel
     }
 }
 
-/// <summary>One pill on the checkout: an asset and whether it can be paid with right now.</summary>
-public sealed record SwapAssetOffer(string PayInAsset, string AssetLabel, string NetworkLabel, bool Available, string? Reason, string? Message);
+/// <summary>
+/// One pill on the checkout: an asset and whether it can be paid with right now.
+/// <see cref="Limit"/> is the shopper-facing bound behind an amount refusal ("at least
+/// 9.12 USD"), in the invoice's currency at the invoice's own rate, like the JS checkout's
+/// "your cart total must be at least $2.43".
+/// </summary>
+public sealed record SwapAssetOffer(string PayInAsset, string AssetLabel, string NetworkLabel, bool Available, string? Reason, string? Message, string? Limit = null);
 
 /// <summary>Whether swaps are offered for one invoice, and why not.</summary>
 public sealed record SwapAvailability(

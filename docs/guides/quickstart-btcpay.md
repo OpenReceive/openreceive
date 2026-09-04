@@ -72,10 +72,11 @@ connected).
    connection string `type=openreceive;nwc=<NWC URI>` into the store's
    BTC-Lightning payment method through BTCPay's own validation path, and
    enables LNURL-pay the way BTCPay's Lightning settings page does. From
-   then on the page shows the connection redacted with a **Run a health
-   check** button that shows the probes in place (the wallet preflight among
-   them); a collapsed **Change NWC receive code** disclosure holds the box
-   for a new code and its **Switch to this wallet** button.
+   then on the section is one line ("Wallet connected. Invoices are minted
+   in wallet 3869…0c76 via relay.example") with a **Run a health check**
+   button that shows the probes in place (the wallet preflight among them);
+   a collapsed **Change NWC receive code** disclosure holds the box for a
+   new code and its **Switch to this wallet** button.
 
 The setup page is the whole install. You never open BTCPay's Lightning node
 screen, and the plugin never reads the internal node.
@@ -105,7 +106,9 @@ on any other Lightning backend sees no swap options.
 3. Choose the assets to offer and click **Save swap settings**. A saved
    primary code is what turns swaps on; removing it turns them off. There is
    no separate switch (the Greenfield `swapsEnabled` field can still pause
-   swaps while keeping the code).
+   swaps while keeping the code). Once saved, the section is one line
+   ("Swaps on. Provider ff.io. Assets: …") and the form sits behind
+   **Change swap provider or assets**.
 
 Saving a code raises **Store → Checkout → Invoice expiration** to 60
 minutes when it is shorter. A swap needs at least 45 minutes of invoice life:

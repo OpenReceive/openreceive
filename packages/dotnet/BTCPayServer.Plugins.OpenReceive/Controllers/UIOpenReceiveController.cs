@@ -301,10 +301,24 @@ public sealed class UIOpenReceiveController : Controller
         vm.LightningNode = _settings.DescribeLightningNode(store);
         vm.SavedRedactedNwc = connection is null ? null : NwcUri.Redact(connection.NwcUri);
         if (connection is not null && !Request.HasFormContentType) vm.AllowSpendCapableWallet = connection.AllowSpendCapableWallet;
+        if (connection is not null && NwcUri.TryParse(connection.NwcUri, out var uri, out _) && uri is not null)
+        {
+            // The calm one-liner for a connected wallet: who, through which relay(s), never the string.
+            vm.WalletShortId = $"{uri.WalletPubkey[..8]}…{uri.WalletPubkey[^4..]}";
+            vm.WalletRelayHosts = string.Join(", ", uri.Relays.Select(r => r.Host));
+            vm.WalletLud16 = uri.Lud16;
+        }
         vm.LastPreflight = settings.LastPreflight;
         // Saved LSC codes are shown redacted and never put back into the inputs (they carry a key and a secret).
         vm.SavedRedactedLscPrimary = settings.LscPrimary is null ? null : LscUri.Redact(settings.LscPrimary);
         vm.SavedRedactedLscBackup = settings.LscBackup is null ? null : LscUri.Redact(settings.LscBackup);
+        vm.SwapsConfigured = settings.LscPrimary is not null && settings.SwapsEnabled;
+        vm.SwapPrimaryHost = settings.LscPrimary is not null && LscUri.TryParse(settings.LscPrimary, out var primary, out _) && primary is not null ? primary.Host : null;
+        vm.SwapBackupHost = settings.LscBackup is not null && LscUri.TryParse(settings.LscBackup, out var backup, out _) && backup is not null ? backup.Host : null;
+        vm.AssetsSummary = settings.EnabledPayInAssets.Count == 0 || settings.EnabledPayInAssets.Count == OpenReceiveTables.SwapPayInAssets.Count
+            ? "all the provider supports"
+            : string.Join(", ", settings.EnabledPayInAssets.Select(a => OpenReceiveTables.SwapAssetInfo.TryGetValue(a, out var info) ? info.Label + " · " + info.NetworkLabel : a));
+        vm.ChangeSwapsOpen = vm.ProviderTest is not null || !string.IsNullOrWhiteSpace(vm.LscPrimary) || !string.IsNullOrWhiteSpace(vm.LscBackup) || !ModelState.IsValid;
         if (!Request.HasFormContentType)
         {
             vm.EnabledPayInAssets = settings.EnabledPayInAssets.Count == 0 ? OpenReceiveTables.SwapPayInAssets.ToList() : settings.EnabledPayInAssets;
@@ -336,6 +350,15 @@ public sealed class SetupViewModel
     public string? LscBackup { get; set; }
     public string? SavedRedactedLscPrimary { get; set; }
     public string? SavedRedactedLscBackup { get; set; }
+    public string? WalletShortId { get; set; }
+    public string? WalletRelayHosts { get; set; }
+    public string? WalletLud16 { get; set; }
+    public bool SwapsConfigured { get; set; }
+    public string? SwapPrimaryHost { get; set; }
+    public string? SwapBackupHost { get; set; }
+    public string AssetsSummary { get; set; } = string.Empty;
+    /// <summary>The "Change swap provider or assets" disclosure stays open while the form is being worked on.</summary>
+    public bool ChangeSwapsOpen { get; set; }
     public bool RemoveLscPrimary { get; set; }
     public bool RemoveLscBackup { get; set; }
     public List<string>? EnabledPayInAssets { get; set; }

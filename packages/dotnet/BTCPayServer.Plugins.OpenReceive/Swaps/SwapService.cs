@@ -121,12 +121,14 @@ public sealed class SwapService
             }
             if (entry.MinimumInvoiceAmountMsats is { } min && amountMsats < min)
             {
-                offers.Add(Offer(asset, false, "amount_too_small", FixedFloatQuote.AvailabilityMessage("amount_too_small")));
+                offers.Add(Offer(asset, false, "amount_too_small", FixedFloatQuote.AvailabilityMessage("amount_too_small"),
+                    Limit("at least", min, entry.MinimumPayAmount, invoice, amountMsats, asset)));
                 continue;
             }
             if (entry.MaximumInvoiceAmountMsats is { } max && amountMsats > max)
             {
-                offers.Add(Offer(asset, false, "amount_too_large", FixedFloatQuote.AvailabilityMessage("amount_too_large")));
+                offers.Add(Offer(asset, false, "amount_too_large", FixedFloatQuote.AvailabilityMessage("amount_too_large"),
+                    Limit("at most", max, entry.MaximumPayAmount, invoice, amountMsats, asset)));
                 continue;
             }
             offers.Add(Offer(asset, true, null, null));
@@ -134,10 +136,26 @@ public sealed class SwapService
         return new SwapAvailability(true, null, offers, bolt11, paymentHash, amountMsats, minimumSeconds);
     }
 
-    private static SwapAssetOffer Offer(string asset, bool available, string? reason, string? message)
+    private static SwapAssetOffer Offer(string asset, bool available, string? reason, string? message, string? limit = null)
     {
         var info = OpenReceiveTables.SwapAssetInfo[asset];
-        return new SwapAssetOffer(asset, info.Label, info.NetworkLabel, available, reason, message);
+        return new SwapAssetOffer(asset, info.Label, info.NetworkLabel, available, reason, message, limit);
+    }
+
+    /// <summary>
+    /// The bound in the invoice's currency, at the invoice's own rate (price / msats), rounded
+    /// away from the bound so the shopper never lands exactly on a refused amount; the
+    /// provider's pay-asset figure when the invoice carries no price.
+    /// </summary>
+    private static string Limit(string word, long boundMsats, string? payAmount, SwapInvoiceContext invoice, long amountMsats, string asset)
+    {
+        if (invoice.InvoicePrice > 0 && invoice.InvoiceCurrency.Length > 0 && amountMsats > 0)
+        {
+            var fiat = invoice.InvoicePrice * boundMsats / amountMsats;
+            var rounded = word == "at least" ? Math.Ceiling(fiat * 100) / 100 : Math.Floor(fiat * 100) / 100;
+            return $"{word} {rounded.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)} {invoice.InvoiceCurrency}";
+        }
+        return payAmount is null ? word : $"{word} {payAmount.TrimEnd('0').TrimEnd('.')} {OpenReceiveTables.SwapAssetInfo[asset].Label}";
     }
 
     // ---- Create / read / refund (payer routes) ----

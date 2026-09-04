@@ -21,9 +21,33 @@
         }
         else
         {
-            <span class="btcpay-pill m-0 payment-method" style="opacity:.5;cursor:not-allowed" title="@offer.Message">
+            <span class="btcpay-pill m-0 payment-method" style="opacity:.5;cursor:not-allowed" title="@offer.Message@(offer.Limit is null ? "" : $" {offer.Limit}.")">
                 <img src="~/Resources/img/@(icon).svg" alt="" style="width:16px;height:16px;margin-right:.35rem;vertical-align:-3px" />@offer.AssetLabel · @offer.NetworkLabel
             </span>
         }
+    }
+    var unavailable = availability.Assets.Where(a => !a.Available).ToList();
+    if (unavailable.Count > 0)
+    {
+        @* Why the greyed pills are greyed, in words a shopper can act on (the JS checkout's "your cart total must be at least $2.43"). *@
+        <div class="w-100 small text-muted text-center mt-1">
+            @{
+                var tooSmall = unavailable.Where(a => a.Reason == "amount_too_small").ToList();
+                var tooLarge = unavailable.Where(a => a.Reason == "amount_too_large").ToList();
+                var others = unavailable.Where(a => a.Reason is not ("amount_too_small" or "amount_too_large")).GroupBy(a => a.Message ?? "Temporarily unavailable").ToList();
+            }
+            @if (tooSmall.Count > 0)
+            {
+                <div>Below the minimum for this invoice: @string.Join(", ", tooSmall.Select(a => $"{a.AssetLabel} · {a.NetworkLabel}{(a.Limit is null ? "" : $" ({a.Limit})")}"))</div>
+            }
+            @if (tooLarge.Count > 0)
+            {
+                <div>Above the maximum for this invoice: @string.Join(", ", tooLarge.Select(a => $"{a.AssetLabel} · {a.NetworkLabel}{(a.Limit is null ? "" : $" ({a.Limit})")}"))</div>
+            }
+            @foreach (var group in others)
+            {
+                <div>@group.Key.TrimEnd('.'): @string.Join(", ", group.Select(a => $"{a.AssetLabel} · {a.NetworkLabel}"))</div>
+            }
+        </div>
     }
 }
