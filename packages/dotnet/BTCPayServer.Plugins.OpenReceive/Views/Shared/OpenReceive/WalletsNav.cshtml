@@ -1,0 +1,13 @@
+@inject IScopeProvider ScopeProvider
+@{
+    var storeId = ScopeProvider.GetCurrentStoreId();
+}
+@if (!string.IsNullOrEmpty(storeId))
+{
+    <li class="nav-item">
+        <a permission="@Policies.CanModifyStoreSettings" layout-menu-item="@nameof(PluginNavPages.Setup)" asp-controller="UIOpenReceive" asp-action="Setup" asp-route-storeId="@storeId" class="nav-link" id="WalletNav-OpenReceive">
+            <vc:icon symbol="wallet-new" />
+            <span>OpenReceive wallet</span>
+        </a>
+    </li>
+}

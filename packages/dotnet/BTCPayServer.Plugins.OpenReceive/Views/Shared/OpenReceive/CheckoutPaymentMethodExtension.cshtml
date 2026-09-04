@@ -1,0 +1,30 @@
+@using BTCPayServer.Plugins.OpenReceive.Swaps
+@using BTCPayServer.Services.Invoices
+@using BTCPayServer.Services.Stores
+@model BTCPayServer.Models.InvoicingModels.CheckoutModel
+@inject SwapService SwapService
+@inject BtcPayInvoiceSource InvoiceSource
+@{
+    var context = await InvoiceSource.LoadAsync(Model.InvoiceId, Context.RequestAborted);
+    var availability = context is null ? null : await SwapService.AvailabilityAsync(context, Context.RequestAborted);
+}
+@if (availability is { Offered: true })
+{
+    foreach (var offer in availability.Assets)
+    {
+        var pmId = "OpenReceiveSwap_" + offer.PayInAsset;
+        var icon = offer.PayInAsset.Split('_')[0].ToLowerInvariant();
+        if (offer.Available)
+        {
+            <a href="#@pmId" class="btcpay-pill m-0 payment-method" :class="{ active: pmId === '@pmId' }" v-on:click.prevent="changePaymentMethod('@pmId')" title="Pay with @offer.AssetLabel on @offer.NetworkLabel">
+                <img src="~/Resources/img/@(icon).svg" alt="" style="width:16px;height:16px;margin-right:.35rem;vertical-align:-3px" />@offer.AssetLabel · @offer.NetworkLabel
+            </a>
+        }
+        else
+        {
+            <span class="btcpay-pill m-0 payment-method" style="opacity:.5;cursor:not-allowed" title="@offer.Message">
+                <img src="~/Resources/img/@(icon).svg" alt="" style="width:16px;height:16px;margin-right:.35rem;vertical-align:-3px" />@offer.AssetLabel · @offer.NetworkLabel
+            </span>
+        }
+    }
+}

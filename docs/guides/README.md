@@ -3,7 +3,7 @@
 1. [Node quickstart](quickstart-node.md)
 2. [Node ORM recipes](node-orms.md)
 3. [Rails quickstart](quickstart-rails.md)
-4. [BTCPay Server quickstart](quickstart-btcpay.md)
+4. [BTCPay Server quickstart](quickstart-btcpay.md) — and its [reference](btcpay-reference.md)
 5. [Authorization and the host](authorization.md)
 6. [Rate limiting](rate-limiting.md)
 7. [Frontend checkout](frontend-checkout.md)

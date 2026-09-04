@@ -1,0 +1,99 @@
+@using BTCPayServer.Plugins.OpenReceive.Generated
+@using BTCPayServer.Plugins.OpenReceive.Swaps
+@using BTCPayServer.Services.Invoices
+@using BTCPayServer.Services.Stores
+@model BTCPayServer.Models.InvoicingModels.CheckoutModel
+@inject SwapService SwapService
+@inject BtcPayInvoiceSource InvoiceSource
+@{
+    var context = await InvoiceSource.LoadAsync(Model.InvoiceId, Context.RequestAborted);
+    var availability = context is null ? null : await SwapService.AvailabilityAsync(context, Context.RequestAborted);
+}
+@if (availability is { Offered: true })
+{
+    <template id="openreceive-swap-checkout-template">
+        <div class="payment-box openreceive-swap" :data-state="swap ? swap.state : 'loading'">
+            <div v-if="error" class="alert alert-danger text-break">{{ error }}</div>
+            <div v-else-if="!swap" class="text-center py-4"><div class="spinner-border" role="status"></div><p class="mt-3 mb-0">Preparing your {{ assetLabel }} payment address…</p></div>
+            <template v-else>
+                <div v-if="swap.phase === 'awaiting_deposit'">
+                    <div class="alert py-2 px-3 mb-3" :class="swap.deposit_risk === 'pinned' ? 'alert-info' : 'alert-warning'">
+                        <strong>{{ swap.network_warning_title }}</strong>
+                        <div class="small">{{ swap.network_warning }}</div>
+                    </div>
+                    <div class="qr-container clipboard-button" :data-clipboard="swap.deposit_address">
+                        <div><qrcode :value="swap.deposit_uri" tag="div" :options="qrOptions" /></div>
+                    </div>
+                    <div class="input-group mt-3">
+                        <div class="form-floating">
+                            <input type="text" class="form-control-plaintext" id="or-swap-amount" readonly :value="swap.deposit_amount + ' ' + swap.asset_label" style="cursor:pointer" @@click="copy(swap.deposit_amount)" />
+                            <label for="or-swap-amount">Amount ({{ swap.asset_label }} on {{ swap.network_label }})</label>
+                        </div>
+                        <button type="button" class="btn btn-link" @@click="copy(swap.deposit_amount)">{{ copied === swap.deposit_amount ? 'Copied' : 'Copy' }}</button>
+                    </div>
+                    <div class="input-group mt-2">
+                        <div class="form-floating">
+                            <input type="text" class="form-control-plaintext text-truncate" id="or-swap-address" readonly :value="swap.deposit_address" style="cursor:pointer" @@click="copy(swap.deposit_address)" />
+                            <label for="or-swap-address">Address</label>
+                        </div>
+                        <button type="button" class="btn btn-link" @@click="copy(swap.deposit_address)">{{ copied === swap.deposit_address ? 'Copied' : 'Copy' }}</button>
+                    </div>
+                    <div v-if="swap.deposit_memo" class="input-group mt-2">
+                        <div class="form-floating">
+                            <input type="text" class="form-control-plaintext" id="or-swap-memo" readonly :value="swap.deposit_memo" @@click="copy(swap.deposit_memo)" />
+                            <label for="or-swap-memo">Memo / tag (required)</label>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted mt-3">
+                        <span v-if="swap.fee">Includes the provider's fee: {{ swap.fee.pay_in_fiat }} {{ swap.fee.currency }} sent → {{ swap.fee.payout_fiat }} {{ swap.fee.currency }} received</span>
+                        <span>Address valid for <strong>{{ countdown }}</strong></span>
+                    </div>
+                </div>
+                <div v-else-if="swap.phase === 'processing' || swap.phase === 'settling' || swap.phase === 'preparing'" class="text-center py-3">
+                    <div class="spinner-border mb-3" role="status"></div>
+                    <h5 class="mb-1">{{ swap.label }}</h5>
+                    <p class="text-muted mb-0">{{ swap.detail }}</p>
+                    <p v-if="swap.deposit_tx_id" class="small text-muted text-break mt-2 mb-0">Deposit tx {{ swap.deposit_tx_id }}</p>
+                </div>
+                <div v-else-if="swap.phase === 'refund'">
+                    <div class="alert alert-warning">
+                        <strong>{{ swap.label }}</strong>
+                        <div class="small">{{ swap.detail }}<span v-if="swap.refund_reason"> Reason: {{ refundReasonText }}.</span></div>
+                        <div v-if="swap.deposit_received_amount" class="small">Received: {{ swap.deposit_received_amount }} {{ swap.asset_label }} (expected {{ swap.deposit_amount }}).</div>
+                    </div>
+                    <div v-if="swap.state === 'refund_required'">
+                        <label class="form-label" for="or-swap-refund-address">Your {{ swap.asset_label }} refund address on {{ swap.network_label }}</label>
+                        <input type="text" class="form-control" id="or-swap-refund-address" v-model.trim="refundAddress" placeholder="Paste an address you control" />
+                        <div v-if="refundError" class="text-danger small mt-1">{{ refundError }}</div>
+                        <button type="button" class="btn btn-primary rounded-pill w-100 mt-3" :disabled="refunding || !refundAddress" @@click="requestRefund">Request refund</button>
+                        <p class="small text-muted mt-2 mb-0">Keep this page open: you will need it to come back to this refund.</p>
+                    </div>
+                    <div v-else class="small">
+                        <div v-if="swap.refund_address" class="text-break">Refund address: {{ swap.refund_address }}</div>
+                        <div v-if="swap.refund_tx_id" class="text-break">Refund tx: {{ swap.refund_tx_id }}</div>
+                        <div v-if="swap.refund_amount">Amount: {{ swap.refund_amount }} {{ swap.asset_label }}</div>
+                    </div>
+                </div>
+                <div v-else class="alert" :class="swap.phase === 'attention' ? 'alert-danger' : 'alert-secondary'">
+                    <strong>{{ swap.label }}</strong>
+                    <div class="small">{{ swap.detail }}<span v-if="swap.attention_reason"> ({{ swap.attention_reason }})</span></div>
+                    <div class="small mt-1">Provider order {{ swap.provider_order_id }} — quote this when contacting support.</div>
+                </div>
+            </template>
+        </div>
+    </template>
+    <script src="~/Resources/js/openreceive_swap_checkout.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            const assets = @Safe.Json(availability.Assets.Where(a => a.Available).Select(a => a.PayInAsset).ToArray());
+            const api = @Safe.Json(Url.Content("~/api/plugins/openreceive/swaps"));
+            OpenReceiveSwapCheckout.register(Vue, {
+                assets: assets,
+                apiBase: api,
+                invoiceId: @Safe.Json(Model.InvoiceId),
+                statusUrl: statusUrl,
+                labels: @Safe.Json(OpenReceiveTables.SwapAssetInfo.ToDictionary(kv => kv.Key, kv => new { asset = kv.Value.Label, network = kv.Value.NetworkLabel })),
+            });
+        })();
+    </script>
+}

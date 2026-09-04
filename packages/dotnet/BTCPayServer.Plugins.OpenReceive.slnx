@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="BTCPayServer.Plugins.OpenReceive/BTCPayServer.Plugins.OpenReceive.csproj" />
+  <Project Path="BTCPayServer.Plugins.OpenReceive.Tests/BTCPayServer.Plugins.OpenReceive.Tests.csproj" />
+  <Project Path="OpenReceive.IntegrationTests/OpenReceive.IntegrationTests.csproj" />
+  <Project Path="OpenReceive.TestkitNwc/OpenReceive.TestkitNwc.csproj" />
+  <Project Path="OpenReceive.FakeLsc/OpenReceive.FakeLsc.csproj" />
+</Solution>

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OpenReceive.FakeLsc</RootNamespace>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NBitcoin" Version="10.0.8" />
+    <PackageReference Include="BTCPayServer.Lightning.All" Version="1.7.6" />
+  </ItemGroup>
+
+</Project>

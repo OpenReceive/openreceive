@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "dgSpecHash": "RLZ7TRmMeDY=",
+  "success": true,
+  "projectFilePath": "/work/packages/dotnet/OpenReceive.IntegrationTests/OpenReceive.IntegrationTests.csproj",
+  "expectedPackageFiles": [
+    "/root/.nuget/packages/microsoft.applicationinsights/2.23.0/microsoft.applicationinsights.2.23.0.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.bcl.asyncinterfaces/6.0.0/microsoft.bcl.asyncinterfaces.6.0.0.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.codecoverage/18.8.1/microsoft.codecoverage.18.8.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.net.test.sdk/18.8.1/microsoft.net.test.sdk.18.8.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.testing.extensions.telemetry/1.9.1/microsoft.testing.extensions.telemetry.1.9.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.testing.extensions.trxreport.abstractions/1.9.1/microsoft.testing.extensions.trxreport.abstractions.1.9.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.testing.platform/1.9.1/microsoft.testing.platform.1.9.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.testing.platform.msbuild/1.9.1/microsoft.testing.platform.msbuild.1.9.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.testplatform.objectmodel/18.8.1/microsoft.testplatform.objectmodel.18.8.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.testplatform.testhost/18.8.1/microsoft.testplatform.testhost.18.8.1.nupkg.sha512",
+    "/root/.nuget/packages/microsoft.win32.registry/5.0.0/microsoft.win32.registry.5.0.0.nupkg.sha512",
+    "/root/.nuget/packages/xunit.analyzers/1.27.0/xunit.analyzers.1.27.0.nupkg.sha512",
+    "/root/.nuget/packages/xunit.runner.visualstudio/3.1.5/xunit.runner.visualstudio.3.1.5.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3/3.2.2/xunit.v3.3.2.2.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3.assert/3.2.2/xunit.v3.assert.3.2.2.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3.common/3.2.2/xunit.v3.common.3.2.2.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3.core.mtp-v1/3.2.2/xunit.v3.core.mtp-v1.3.2.2.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3.extensibility.core/3.2.2/xunit.v3.extensibility.core.3.2.2.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3.mtp-v1/3.2.2/xunit.v3.mtp-v1.3.2.2.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3.runner.common/3.2.2/xunit.v3.runner.common.3.2.2.nupkg.sha512",
+    "/root/.nuget/packages/xunit.v3.runner.inproc.console/3.2.2/xunit.v3.runner.inproc.console.3.2.2.nupkg.sha512"
+  ],
+  "logs": []
+}

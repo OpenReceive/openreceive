@@ -21,7 +21,9 @@
         "tests/*.test.mjs",
         "tools/**/*.mjs",
         "tests/e2e/playwright.config.ts",
-        "tests/e2e/*.spec.ts"
+        "tests/e2e/*.spec.ts",
+        "tests/e2e-btcpay/playwright.config.ts",
+        "tests/e2e-btcpay/*.spec.ts"
       ],
       "project": ["tests/**", "tools/**"]
     },

@@ -34,6 +34,14 @@
       "public": true
     },
     {
+      "slug": "btcpay-reference",
+      "title": "BTCPay Plugin Reference",
+      "source_path": "docs/guides/btcpay-reference.md",
+      "category": "reference",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "source_path": "docs/guides/node-orms.md",

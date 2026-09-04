@@ -1,0 +1,53 @@
+@using BTCPayServer.Plugins.OpenReceive.Controllers
+@using BTCPayServer.Plugins.OpenReceive.Generated
+@using BTCPayServer.Plugins.OpenReceive.Swaps
+@model DoctorViewModel
+@{
+    ViewData.SetLayoutModel(new LayoutModel(nameof(PluginNavPages.Doctor), "OpenReceive doctor"));
+}
+<div class="sticky-header-setup"></div>
+<div class="sticky-header d-sm-flex align-items-center justify-content-between">
+    <h2 class="mb-0">OpenReceive doctor</h2>
+    <div class="d-flex gap-3 mt-3 mt-sm-0">
+        <a asp-action="Setup" asp-route-storeId="@Model.StoreId" class="btn btn-secondary">Setup</a>
+    </div>
+</div>
+<partial name="_StatusMessage" />
+<p class="text-muted">Read-only probes of this store's wallet and swap configuration, run now. Lightning node: <strong>@(Model.LightningNode ?? "none")</strong>.</p>
+<div class="list-group mb-4">
+    @foreach (var probe in Model.Probes)
+    {
+        <div class="list-group-item d-flex align-items-start gap-3">
+            <span class="fs-5">@(probe.Ok ? "✅" : "⚠️")</span>
+            <div class="flex-grow-1">
+                <div class="fw-semibold">@probe.Name</div>
+                <div class="small text-muted" style="white-space: pre-line">@probe.Detail</div>
+            </div>
+            @if (!probe.Ok && probe.FixUrl is not null)
+            {
+                <a href="@probe.FixUrl" class="btn btn-sm btn-outline-secondary">Fix</a>
+            }
+        </div>
+    }
+</div>
+@if (Model.RecentSwaps.Count > 0)
+{
+    <h4>Recent swaps</h4>
+    <div class="table-responsive-md">
+        <table class="table table-hover">
+            <thead><tr><th>Created</th><th>Invoice</th><th>Asset</th><th>Provider order</th><th>State</th></tr></thead>
+            <tbody>
+            @foreach (var swap in Model.RecentSwaps)
+            {
+                <tr>
+                    <td>@DateTimeOffset.FromUnixTimeSeconds(swap.CreatedAt).ToString("u")</td>
+                    <td><a asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@swap.InvoiceId">@swap.InvoiceId</a></td>
+                    <td>@OpenReceiveTables.SwapAssetInfo[swap.PayInAsset].Label · @OpenReceiveTables.SwapAssetInfo[swap.PayInAsset].NetworkLabel</td>
+                    <td>@swap.Provider / @swap.ProviderOrderId</td>
+                    <td><span class="badge @(swap.Attention ? "bg-danger" : swap.IsTerminal ? "bg-secondary" : "bg-info")">@SwapStateCopy.For(swap.State).Label</span>@(swap.WalletSettledAt is not null ? " · Lightning settled" : "")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

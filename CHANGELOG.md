@@ -71,6 +71,16 @@ scope-lock, package-ownership and test-command-map records. The plugin is
 not yet listed in the BTCPay plugin directory; install it by hand or through
 the Plugin Builder.
 
+Verified in Docker: the regtest stack in `packages/dotnet/docker` (BTCPay
+2.4.2 image, two LND nodes, a TLS relay, the testkit wallet, the fake
+provider), `e2e.sh` over HTTP, `OpenReceive.IntegrationTests` (xunit) and a
+Playwright suite (`tests/e2e-btcpay`, `npm run test:e2e:btcpay` or
+`docker/browser-e2e.sh` in the Playwright image) that drives the setup page,
+the doctor, BTCPay's checkout paying a Lightning invoice, the swap component
+through to "Invoice Paid" with no reload, the refund form and the pill switch
+in Chromium. Merchant guide: `docs/guides/quickstart-btcpay.md`; reference:
+`docs/guides/btcpay-reference.md`.
+
 ### One copy of every shared vocabulary
 
 The tables both engines had typed by hand — the seven pay-in assets, the

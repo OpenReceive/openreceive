@@ -95,6 +95,8 @@ const UNLISTED_GUIDES = {
   "quickstart-node": "inlined in full below, or another stack's",
   "quickstart-rails": "inlined in full below, or another stack's",
   "quickstart-btcpay": "inlined in full below, or another stack's",
+  "btcpay-reference":
+    "the BTCPay plugin's reference; linked from the BTCPay payload, another stack's otherwise",
   "node-orms": "Node only; the Rails engine owns its tables",
 };
 
@@ -118,7 +120,8 @@ const UNLISTED_GUIDES_BY_STACK = {
     "provider-registry": "no wallet wizard; BTCPay's checkout offers the wallets",
     "price-feeds": "BTCPay owns fiat rates",
     "host-testing": "no host hooks to test; packages/dotnet/docker is the end-to-end stack",
-    "rate-limiting": "BTCPay's public-invoice rate-limit zone covers the swap routes",
+    "rate-limiting":
+      "BTCPay owns request budgets; the swap routes are bounded by the invoice-id bearer and the provider weight budget",
     "environment-variables":
       "no environment variables; every setting lives in BTCPay's store settings",
     deploying: "BTCPay's own deployment; settlement is BTCPay's LightningListener",

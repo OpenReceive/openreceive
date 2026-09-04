@@ -23,6 +23,7 @@ markdown.
 
 The index is [/guides.md](https://openreceive.org/guides.md).
 
+- [BTCPay Plugin Reference](https://openreceive.org/guides/btcpay-reference.md)
 - [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)
 - [Authorization](https://openreceive.org/guides/authorization.md)
 - [Rate Limiting](https://openreceive.org/guides/rate-limiting.md)

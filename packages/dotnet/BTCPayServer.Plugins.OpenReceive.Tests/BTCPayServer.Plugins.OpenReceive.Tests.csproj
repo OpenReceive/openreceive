@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>BTCPayServer.Plugins.OpenReceive.Tests</RootNamespace>
+    <NoWarn>$(NoWarn);NU1903;xUnit1051</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BTCPayServer.Plugins.OpenReceive/BTCPayServer.Plugins.OpenReceive.csproj" />
+    <ProjectReference Include="$(BtcPayServerRoot)BTCPayServer/BTCPayServer.csproj" />
+    <ProjectReference Include="../OpenReceive.TestkitNwc/OpenReceive.TestkitNwc.csproj" />
+    <ProjectReference Include="../OpenReceive.FakeLsc/OpenReceive.FakeLsc.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,37 @@
+@model BTCPayServer.Models.StoreViewModels.LightningNodeViewModel
+@{
+    if (Model.CryptoCode != "BTC")
+    {
+        return;
+    }
+}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const accordion = document.getElementById("CustomNodeSupport");
+        const template = document.getElementById("openreceive-nwc");
+        if (accordion && template) accordion.appendChild(template.content.cloneNode(true));
+    });
+</script>
+<template id="openreceive-nwc">
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="OpenReceiveNwcHeader">
+            <button type="button" class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#OpenReceiveNwcContent" aria-controls="OpenReceiveNwcContent" aria-expanded="false">
+                <span><strong>OpenReceive</strong> — receive-only Nostr Wallet Connect</span>
+                <vc:icon symbol="caret-down"/>
+            </button>
+        </h2>
+        <div id="OpenReceiveNwcContent" class="accordion-collapse collapse" aria-labelledby="OpenReceiveNwcHeader" data-bs-parent="#CustomNodeSupport">
+            <div class="accordion-body">
+                <p>Receive Lightning payments straight into your own wallet with a <strong>receive-only</strong> NWC code. The connection is checked on save: it must grant <code>make_invoice</code> and <code>list_transactions</code> and must not advertise any spend method.</p>
+                <ul class="pb-2">
+                    <li><code><b>type=</b>openreceive;<b>nwc=</b>nostr+walletconnect://b889ff5b1513b641e2a139f661a661364979c5beee91842f8f0ef42ab558e9d4?relay=wss%3A%2F%2Frelay.example.com&amp;secret=…</code></li>
+                </ul>
+                <p class="mb-0">
+                    Easier: use the guided <a asp-controller="UIOpenReceive" asp-action="Setup" asp-route-storeId="@Model.StoreId">OpenReceive setup page</a>, which tests the code and writes this string for you.
+                    A bare <code>nostr+walletconnect://…</code> string is <em>not</em> handled by OpenReceive (the Nostr plugin claims it, without the receive-only check).
+                    Get a receive-only code: <a href="https://openreceive.org/get_a_nwc_code_to_receive_payments" target="_blank" rel="noreferrer noopener">openreceive.org</a>.
+                </p>
+            </div>
+        </div>
+    </div>
+</template>

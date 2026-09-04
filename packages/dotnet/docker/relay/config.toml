@@ -1,0 +1,24 @@
+# nostr-rs-relay for the OpenReceive regtest stack. Everything default except the
+# advertised URL and a permissive event policy (NIP-47 uses ephemeral kinds 2319x).
+[info]
+relay_url = "wss://relay-tls/"
+name = "openreceive-regtest"
+description = "Local relay for the OpenReceive BTCPay plugin end-to-end stack"
+
+[database]
+data_directory = "/usr/src/app/db"
+
+[network]
+address = "0.0.0.0"
+port = 8080
+
+[limits]
+messages_per_sec = 0
+max_subscriptions = 256
+max_event_bytes = 131072
+max_ws_message_bytes = 131072
+max_ws_frame_bytes = 131072
+reject_future_seconds = 1800
+
+[verified_users]
+mode = "disabled"

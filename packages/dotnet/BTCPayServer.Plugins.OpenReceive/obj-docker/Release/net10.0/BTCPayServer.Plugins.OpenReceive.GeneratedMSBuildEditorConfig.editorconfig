@@ -1,0 +1,64 @@
+is_global = true
+build_property.TargetFramework = net10.0
+build_property.TargetFrameworkIdentifier = .NETCoreApp
+build_property.TargetFrameworkVersion = v10.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property.EntryPointFilePath = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = BTCPayServer.Plugins.OpenReceive
+build_property.RootNamespace = BTCPayServer.Plugins.OpenReceive
+build_property.ProjectDir = /work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 10.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = /work/packages/dotnet/BTCPayServer.Plugins.OpenReceive
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 10.0
+build_property.EnableCodeStyleSeverity = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/Shared/OpenReceive/CheckoutPaymentExtension.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL09wZW5SZWNlaXZlL0NoZWNrb3V0UGF5bWVudEV4dGVuc2lvbi5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/Shared/OpenReceive/CheckoutPaymentMethodExtension.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL09wZW5SZWNlaXZlL0NoZWNrb3V0UGF5bWVudE1ldGhvZEV4dGVuc2lvbi5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/Shared/OpenReceive/DashboardSetupGuide.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL09wZW5SZWNlaXZlL0Rhc2hib2FyZFNldHVwR3VpZGUuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/Shared/OpenReceive/InvoiceSwapPayments.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL09wZW5SZWNlaXZlL0ludm9pY2VTd2FwUGF5bWVudHMuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/Shared/OpenReceive/LNPaymentMethodSetupTab.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL09wZW5SZWNlaXZlL0xOUGF5bWVudE1ldGhvZFNldHVwVGFiLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/Shared/OpenReceive/Nav.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL09wZW5SZWNlaXZlL05hdi5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/Shared/OpenReceive/WalletsNav.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL09wZW5SZWNlaXZlL1dhbGxldHNOYXYuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/UIOpenReceive/Doctor.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvVUlPcGVuUmVjZWl2ZS9Eb2N0b3IuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/UIOpenReceive/Setup.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvVUlPcGVuUmVjZWl2ZS9TZXR1cC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/work/packages/dotnet/BTCPayServer.Plugins.OpenReceive/Views/_ViewImports.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvX1ZpZXdJbXBvcnRzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 

@@ -1,0 +1,68 @@
+@using BTCPayServer.Plugins.OpenReceive.Generated
+@using BTCPayServer.Plugins.OpenReceive.Swaps
+@model BTCPayServer.Models.InvoicingModels.InvoiceDetailsModel
+@inject SwapService SwapService
+@{
+    var swaps = await SwapService.ForInvoiceAsync(Model.Id, Context.RequestAborted);
+}
+@if (swaps.Count > 0)
+{
+    <h3 class="mt-4 mb-3">OpenReceive swaps</h3>
+    <div class="table-responsive-md">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Asset</th>
+                    <th>Deposit</th>
+                    <th>Provider / order</th>
+                    <th>State</th>
+                    <th>Refund</th>
+                    <th>Transactions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var swap in swaps)
+            {
+                var asset = OpenReceiveTables.SwapAssetInfo[swap.PayInAsset];
+                var copy = SwapStateCopy.For(swap.State);
+                <tr>
+                    <td>@asset.Label · @asset.NetworkLabel</td>
+                    <td>
+                        <span data-sensitive>@swap.DepositAmount @asset.Label</span><br/>
+                        <small class="text-muted text-break">@swap.DepositAddress</small>
+                    </td>
+                    <td>@swap.Provider<br/><small class="text-muted">@swap.ProviderOrderId</small></td>
+                    <td>
+                        <span class="badge @(swap.Attention ? "bg-danger" : swap.IsTerminal ? "bg-secondary" : "bg-info")">@copy.Label</span>
+                        @if (swap.WalletSettledAt is not null)
+                        {
+                            <span class="badge bg-success">Lightning settled</span>
+                        }
+                        @if (swap.AttentionReason is not null)
+                        {
+                            <br/><small class="text-danger">@swap.AttentionReason</small>
+                        }
+                        @if (swap.PluginReason is not null)
+                        {
+                            <br/><small class="text-warning">@swap.PluginReason</small>
+                        }
+                        @if (swap.StateReason is not null)
+                        {
+                            <br/><small class="text-muted">@swap.StateReason</small>
+                        }
+                    </td>
+                    <td>
+                        @if (swap.RefundReason is not null) { <span>@swap.RefundReason</span><br/> }
+                        @if (swap.RefundAddress is not null) { <small class="text-break">@swap.RefundAddress</small><br/> }
+                        @if (swap.RefundTxId is not null) { <small class="text-muted text-break">tx @swap.RefundTxId</small> }
+                    </td>
+                    <td>
+                        @if (swap.DepositTxId is not null) { <small class="text-break">in: @swap.DepositTxId</small><br/> }
+                        @if (swap.PayoutTxId is not null) { <small class="text-break">out: @swap.PayoutTxId</small> }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>BTCPayServer.Plugins.OpenReceive</RootNamespace>
+    <AssemblyName>BTCPayServer.Plugins.OpenReceive</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Plugin identity. Version is stamped by `npm run release:prepare` in lockstep with the workspace. -->
+  <PropertyGroup>
+    <Product>OpenReceive</Product>
+    <Description>Receive Lightning payments into your own wallet with a receive-only NWC code, and accept USDT, USDC, ETH and SOL through a Lightning Swap Connect provider.</Description>
+    <Version>0.4.3</Version>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- Plugin development properties -->
+  <PropertyGroup>
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+    <PreserveCompilationContext>false</PreserveCompilationContext>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+
+  <!-- The host provides BTCPayServer and everything it references; never copy those DLLs into the plugin output. -->
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <Properties>StaticWebAssetsEnabled=false</Properties>
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native;build;buildTransitive;contentFiles</ExcludeAssets>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\**" />
+    <ProjectReference Include="$(BtcPayServerRoot)BTCPayServer/BTCPayServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NIP-47 over Nostr, with the NIP-44 v2 negotiation merged in 0.0.55. -->
+    <PackageReference Include="NNostr.Client" Version="0.0.55" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,19 @@
+<Project>
+  <!--
+    Where the BTCPay Server source tree lives. Contributors who already have a
+    BTCPay checkout (or a CI image that mounts one) point BTCPAY_SERVER_ROOT at
+    it and skip the submodule; everyone else gets the pinned submodule.
+  -->
+  <PropertyGroup>
+    <BtcPayServerRoot Condition="'$(BtcPayServerRoot)' == '' and '$(BTCPAY_SERVER_ROOT)' != ''">$(BTCPAY_SERVER_ROOT)</BtcPayServerRoot>
+    <BtcPayServerRoot Condition="'$(BtcPayServerRoot)' == ''">$(MSBuildThisFileDirectory)submodules/btcpayserver</BtcPayServerRoot>
+    <BtcPayServerRoot>$([MSBuild]::EnsureTrailingSlash('$(BtcPayServerRoot)'))</BtcPayServerRoot>
+    <OpenReceiveSpecRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..', '..'))</OpenReceiveSpecRoot>
+    <!--
+      docker/build-plugin.sh builds with BaseIntermediateOutputPath=obj-docker/ and
+      BaseOutputPath=bin-docker/ so a container build never shares intermediates with a
+      host build of the same tree. Keep both trees out of every project's default globs.
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj-docker/**;bin-docker/**;obj/**;bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

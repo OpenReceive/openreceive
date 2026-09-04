@@ -60,3 +60,4 @@ packages/dotnet/**/bin/
 packages/dotnet/**/obj/
 packages/dotnet/**/TestResults/
 packages/dotnet/docker/.state/
+tests/e2e-btcpay/test-results/

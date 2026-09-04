@@ -50,6 +50,7 @@
     "test:e2e": "playwright test --config tests/e2e",
     "test:orms": "prisma generate --schema tests/orms/schema.prisma && node --import tsx --test tests/orms/*.test.mjs",
     "test:e2e:smoke": "playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
+    "test:e2e:btcpay": "playwright test --config tests/e2e-btcpay/playwright.config.ts",
     "test:ruby": "bash tools/ci/ruby-tests.sh",
     "test:dotnet": "node tools/dotnet/test.mjs",
     "test:live:ruby:nwc": "ruby -Ipackages/ruby/openreceive/lib tools/live-nwc-test/ruby-smoke.rb",

@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 1677
+      "bytes": 1722
     },
     {
       "path": "/guides/quickstart-node",
@@ -43,7 +43,17 @@
       "slug": "quickstart-btcpay",
       "title": "BTCPay Server Quickstart",
       "category": "quickstart",
-      "bytes": 12758
+      "bytes": 13602
+    },
+    {
+      "path": "/guides/btcpay-reference",
+      "markdown_path": "/guides/btcpay-reference.md",
+      "source": "docs/guides/btcpay-reference.md",
+      "kind": "guide",
+      "slug": "btcpay-reference",
+      "title": "BTCPay Plugin Reference",
+      "category": "reference",
+      "bytes": 16226
     },
     {
       "path": "/guides/node-orms",
@@ -263,7 +273,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 19164
+      "bytes": 20038
     },
     {
       "path": "/api_docs",
@@ -312,7 +322,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 19164,
+      "bytes": 20038,
       "copy_button": true,
       "self_contained": true
     }
@@ -363,7 +373,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 3479
+        "bytes": 3559
       },
       {
         "path": "/openapi.yaml",
