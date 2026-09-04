@@ -2,3 +2,4 @@
 	path = packages/dotnet/submodules/btcpayserver
 	url = https://github.com/btcpayserver/btcpayserver.git
 	shallow = true
+	ignore = dirty
