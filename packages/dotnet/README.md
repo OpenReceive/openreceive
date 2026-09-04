@@ -76,8 +76,9 @@ opens a customer → merchant channel. BTCPay listens on
 `http://127.0.0.1:14180`; the testkit's control API is on `127.0.0.1:17790`
 (`/uri` hands out the NWC code), the spend-capable one on `17791`, the fake
 provider on `https://127.0.0.1:17788` (`/__testkit/lsc-uri`). `TESTKIT_NWC_EXTRA_ARGS`
-passes flags such as `--encryption nip04` or `--drop-offset` to the wallet
-service. `docker/.state/` holds the built plugin and the e2e's store id; it is
+passes flags such as `--encryption nip04`, `--no-notifications` (forces the
+poll listener) or `--drop-offset` to the wallet service; `docker/pay.sh <bolt11>`
+pays an invoice from `customer_lnd`. `docker/.state/` holds the built plugin and the e2e's store id; it is
 ignored by git.
 
 `e2e.sh` covers: first-user registration, an API key, a store, the wallet

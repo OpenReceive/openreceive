@@ -9,6 +9,7 @@ public sealed record CommandLine
     public List<string> Grants { get; } = [];
     public IReadOnlyList<string> EncryptionSchemes { get; init; } = TestkitWalletOptions.DefaultEncryptionSchemes;
     public bool DropOffset { get; init; }
+    public bool NoNotifications { get; init; }
     public string? Lud16 { get; init; }
     public string? OutFile { get; init; }
     public int ControlPort { get; init; } = 7790;
@@ -25,6 +26,7 @@ public sealed record CommandLine
           --grant pay_invoice         advertise a method that always answers NOT_IMPLEMENTED (repeatable)
           --encryption nip44_v2,nip04 advertised schemes; "nip04" forces the fallback; "none" omits the tag
           --drop-offset               simulate a wallet that ignores list_transactions offset
+          --no-notifications          advertise no payment_received notifications (forces the poll path)
           --lud16 user@host           lightning address in the NWC URI
           --out /path/nwc-uri.txt     write the full NWC URI here (stdout only shows it redacted)
           --control-port 7790         HTTP control API port
@@ -56,6 +58,7 @@ public sealed record CommandLine
                     };
                     break;
                 case "--drop-offset": result = result with { DropOffset = true }; break;
+                case "--no-notifications": result = result with { NoNotifications = true }; break;
                 case "--lud16": result = result with { Lud16 = Next() }; break;
                 case "--out": result = result with { OutFile = Next() }; break;
                 case "--control-port": result = result with { ControlPort = int.Parse(Next()) }; break;
@@ -72,6 +75,7 @@ public sealed record CommandLine
         ExtraGrantedMethods = Grants,
         EncryptionSchemes = EncryptionSchemes,
         DropOffset = DropOffset,
+        Notifications = !NoNotifications,
         Lud16 = Lud16,
     };
 }
