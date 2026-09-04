@@ -96,7 +96,7 @@ Only then start the quickstart.
 
 ## Verifying
 
-Store → OpenReceive → **Doctor** runs every probe now: connection, preflight,
+Store → OpenReceive → **Run a health check** (the doctor page) runs every probe now: connection, preflight,
 notifications, last scan, provider reachability, invoice expiration, swaps
 needing attention. On a regtest machine, `packages/dotnet/docker/up.sh` then
 `e2e.sh` in the OpenReceive repository proves the whole path end to end, and

@@ -215,7 +215,9 @@ only answers its questions.
 
 ## The doctor
 
-`/plugins/{storeId}/openreceive/doctor`, store-owner only, read-only.
+`/plugins/{storeId}/openreceive/doctor`, store-owner only, read-only. The
+setup page's "Run a health check" button renders the same probes in place;
+the page is titled "OpenReceive health check".
 
 | Probe | Green when |
 | --- | --- |

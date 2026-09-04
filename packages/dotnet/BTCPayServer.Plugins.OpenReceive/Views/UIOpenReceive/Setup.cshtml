@@ -8,7 +8,7 @@
 <div class="sticky-header d-sm-flex align-items-center justify-content-between">
     <h2 class="mb-0">OpenReceive</h2>
     <div class="d-flex gap-3 mt-3 mt-sm-0">
-        <a asp-action="Doctor" asp-route-storeId="@Model.StoreId" class="btn btn-secondary">Doctor</a>
+        <a asp-action="Doctor" asp-route-storeId="@Model.StoreId" class="btn btn-secondary">Health check</a>
     </div>
 </div>
 <partial name="_StatusMessage" />
@@ -18,25 +18,53 @@
     <div class="row">
         <div class="col-xl-8 col-xxl-constrain">
             <h3 class="mt-3">1. Wallet</h3>
-            <p class="text-muted small">Current Lightning node: <strong>@(Model.LightningNode ?? "none")</strong>@(Model.HasWallet ? " — an OpenReceive connection." : "")</p>
-            <div class="form-group">
-                <label asp-for="NwcUri" class="form-label">Receive-only NWC code</label>
-                <textarea asp-for="NwcUri" class="form-control font-monospace" rows="3" placeholder="@(Model.SavedRedactedNwc ?? "nostr+walletconnect://…?relay=wss://…&secret=…")"></textarea>
-                <span asp-validation-for="NwcUri" class="text-danger" style="white-space: pre-line"></span>
-                <div class="form-text">
-                    @if (Model.SavedRedactedNwc is not null) { <span>Saved: <code>@Model.SavedRedactedNwc</code>. Leave empty to keep it. </span> }
-                    Get one: <a href="https://openreceive.org/get_a_nwc_code_to_receive_payments" target="_blank" rel="noreferrer noopener">openreceive.org/get_a_nwc_code_to_receive_payments</a>
+            @if (Model.HasWallet)
+            {
+                <p class="small">✅ Current Lightning node: <code class="text-break">@Model.LightningNode</code> — an OpenReceive connection. Invoices are minted in this wallet.@if (Model.LastPreflight is { } lastTest) { <span class="text-muted"> Last test: @(lastTest.Ok ? "ok" : $"refused ({lastTest.Code})") at @lastTest.CheckedAt.ToString("u").</span> }</p>
+            }
+            else
+            {
+                <p class="text-muted small">Current Lightning node: <strong>@(Model.LightningNode ?? "none")</strong></p>
+            }
+            @if (Model.HasWallet)
+            {
+                @* Connected: nothing to paste. The health check (wallet preflight, notifications, provider, expiration) runs in place; replacing is tucked away. *@
+                <div class="d-flex gap-2 mb-3">
+                    <button name="command" type="submit" value="health-check" class="btn btn-primary">Run a health check</button>
                 </div>
-            </div>
-            <div class="form-group form-check">
-                <input asp-for="AllowSpendCapableWallet" type="checkbox" class="form-check-input" />
-                <label asp-for="AllowSpendCapableWallet" class="form-check-label">This wallet cannot mint a receive-only code and I accept the risk</label>
-                <div class="form-text">Default off. OpenReceive still never sends: BTCPay payouts and pull-payment refunds over Lightning stay unavailable with this backend.</div>
-            </div>
-            <div class="d-flex gap-2 mb-4">
-                <button name="command" type="submit" value="test-wallet" class="btn btn-secondary">Test connection</button>
-                <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Use as this store's Lightning node</button>
-            </div>
+                @if (Model.HealthCheck is { } health)
+                {
+                    <partial name="_HealthProbes" model="health" />
+                }
+                <details class="mb-4" open="@Model.ChangeWalletOpen">
+                    <summary class="text-muted" style="cursor:pointer">Change NWC receive code</summary>
+                    <div class="form-group mt-3">
+                        <label asp-for="NwcUri" class="form-label">New receive-only NWC code</label>
+                        <textarea asp-for="NwcUri" class="form-control font-monospace" rows="3" placeholder="nostr+walletconnect://…?relay=wss://…&secret=…"></textarea>
+                        <span asp-validation-for="NwcUri" class="text-danger" style="white-space: pre-line"></span>
+                        <div class="form-text">The saved code is never shown again. Get one: <a href="https://openreceive.org/get_a_nwc_code_to_receive_payments" target="_blank" rel="noreferrer noopener">openreceive.org/get_a_nwc_code_to_receive_payments</a></div>
+                    </div>
+                    <partial name="_SpendOverride" model="Model" />
+                    <div class="d-flex gap-2">
+                        <button name="command" type="submit" value="test-wallet" class="btn btn-secondary">Test this code</button>
+                        <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Switch to this wallet</button>
+                    </div>
+                </details>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label asp-for="NwcUri" class="form-label">Receive-only NWC code</label>
+                    <textarea asp-for="NwcUri" class="form-control font-monospace" rows="3" placeholder="nostr+walletconnect://…?relay=wss://…&secret=…"></textarea>
+                    <span asp-validation-for="NwcUri" class="text-danger" style="white-space: pre-line"></span>
+                    <div class="form-text">Get one: <a href="https://openreceive.org/get_a_nwc_code_to_receive_payments" target="_blank" rel="noreferrer noopener">openreceive.org/get_a_nwc_code_to_receive_payments</a></div>
+                </div>
+                <partial name="_SpendOverride" model="Model" />
+                <div class="d-flex gap-2 mb-4">
+                    <button name="command" type="submit" value="test-wallet" class="btn btn-secondary">Test connection</button>
+                    <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Use as this store's Lightning node</button>
+                </div>
+            }
 
             @if (preflight is not null)
             {
@@ -60,7 +88,7 @@
                     </div>
                 </div>
             }
-            else if (Model.LastPreflight is { } last)
+            else if (!Model.HasWallet && Model.LastPreflight is { } last)
             {
                 <p class="small text-muted">Last test: @(last.Ok ? "ok" : $"refused ({last.Code})") at @last.CheckedAt.ToString("u").</p>
             }
@@ -74,6 +102,7 @@
                 <label asp-for="LscPrimary" class="form-label">Lightning Swap Connect code (primary)</label>
                 <input asp-for="LscPrimary" class="form-control font-monospace" placeholder="@(Model.SavedRedactedLscPrimary ?? "lightning+swapconnect://provider.example/?key=…&secret=…")" />
                 <span asp-validation-for="LscPrimary" class="text-danger"></span>
+                <div class="form-text">Get one: <a href="https://openreceive.org/set_up_swap_provider" target="_blank" rel="noreferrer noopener">openreceive.org/set_up_swap_provider</a></div>
                 @if (Model.SavedRedactedLscPrimary is not null)
                 {
                     <div class="form-text">Saved: <code>@Model.SavedRedactedLscPrimary</code>. Leave empty to keep it, paste a code to replace it.</div>

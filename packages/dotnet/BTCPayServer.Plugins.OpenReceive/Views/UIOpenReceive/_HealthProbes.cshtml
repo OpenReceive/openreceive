@@ -1,0 +1,18 @@
+@using BTCPayServer.Plugins.OpenReceive.Controllers
+@model DoctorViewModel
+<div class="list-group mb-4">
+    @foreach (var probe in Model.Probes)
+    {
+        <div class="list-group-item d-flex align-items-start gap-3">
+            <span class="fs-5">@(probe.Ok ? "✅" : "⚠️")</span>
+            <div class="flex-grow-1">
+                <div class="fw-semibold">@probe.Name</div>
+                <div class="small text-muted" style="white-space: pre-line">@probe.Detail</div>
+            </div>
+            @if (!probe.Ok && probe.FixUrl is not null)
+            {
+                <a href="@probe.FixUrl" class="btn btn-sm btn-outline-secondary">Fix</a>
+            }
+        </div>
+    }
+</div>

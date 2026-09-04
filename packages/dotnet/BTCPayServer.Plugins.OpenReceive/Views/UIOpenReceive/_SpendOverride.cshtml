@@ -1,0 +1,11 @@
+@using BTCPayServer.Plugins.OpenReceive.Controllers
+@model SetupViewModel
+@* The risk checkbox exists only once it is relevant: a test found a spend method, or the override is already on. *@
+@if (Model.ShowSpendOverride)
+{
+    <div class="form-group form-check">
+        <input asp-for="AllowSpendCapableWallet" type="checkbox" class="form-check-input" />
+        <label asp-for="AllowSpendCapableWallet" class="form-check-label">This wallet cannot mint a receive-only code and I accept the risk</label>
+        <div class="form-text">Shown because this code advertises a spend method. Default off. OpenReceive still never sends: BTCPay payouts and pull-payment refunds over Lightning stay unavailable with this backend.</div>
+    </div>
+}

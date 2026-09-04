@@ -98,7 +98,7 @@ Only then start the quickstart.
 
 ## Verifying
 
-Store → OpenReceive → **Doctor** runs every probe now: connection, preflight,
+Store → OpenReceive → **Run a health check** (the doctor page) runs every probe now: connection, preflight,
 notifications, last scan, provider reachability, invoice expiration, swaps
 needing attention. On a regtest machine, `packages/dotnet/docker/up.sh` then
 `e2e.sh` in the OpenReceive repository proves the whole path end to end, and
@@ -199,15 +199,21 @@ connected).
 3. Click **Use as this store's Lightning node**. The plugin writes the
    connection string `type=openreceive;nwc=<NWC URI>` into the store's
    BTC-Lightning payment method through BTCPay's own validation path, and
-   enables LNURL-pay the way BTCPay's Lightning settings page does.
+   enables LNURL-pay the way BTCPay's Lightning settings page does. From
+   then on the page shows the connection redacted with a **Run a health
+   check** button that shows the probes in place (the wallet preflight among
+   them); a collapsed **Change NWC receive code** disclosure holds the box
+   for a new code and its **Switch to this wallet** button.
 
 The setup page is the whole install. You never open BTCPay's Lightning node
 screen, and the plugin never reads the internal node.
 
 Saving fails closed if the wallet advertises a spend method such as
 `pay_invoice`. Mint a receive-only code instead. If the wallet cannot, tick
-**This wallet cannot mint a receive-only code and I accept the risk**; the
-string then carries `;allow-spend=true`, and the plugin logs a loud warning.
+**This wallet cannot mint a receive-only code and I accept the risk**, which
+appears under the code field once a test has found a spend method; the
+string then carries `;allow-spend=true`, and the plugin logs a warning on
+every preflight.
 The plugin still never sends: it calls no NIP-47 `pay_*` method whatever the
 wallet grants.
 
@@ -248,7 +254,9 @@ see.
 
 ### 5. The doctor
 
-**OpenReceive → Doctor** runs read-only probes now: the Lightning node is an
+**Run a health check** on the setup page (or **Health check** top right for
+the same probes on their own page) runs read-only probes now: the Lightning
+node is an
 OpenReceive connection, the wallet passes preflight, the wallet pushes
 `payment_received` notifications, when the last wallet scan ran, the swap
 provider is reachable and which assets it offers, the invoice expiration

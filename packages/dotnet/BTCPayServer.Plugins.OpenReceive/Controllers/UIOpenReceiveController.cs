@@ -61,10 +61,14 @@ public sealed class UIOpenReceiveController : Controller
             case "test-wallet":
                 await TestWalletAsync(vm, store, cancellationToken);
                 break;
+            case "health-check":
+                vm.HealthCheck = await BuildDoctorAsync(store, cancellationToken);
+                vm.Preflight = vm.HealthCheck.Preflight;
+                break;
             case "use-wallet":
                 if (await UseWalletAsync(vm, store))
                 {
-                    TempData[WellKnownTempData.SuccessMessage] = "This store now receives Lightning payments into your NWC wallet.";
+                    TempData[WellKnownTempData.SuccessMessage] = "This store now receives Lightning payments into your NWC wallet. Invoices are minted there; the saved code is never shown again.";
                     return RedirectToAction(nameof(Setup), new { storeId });
                 }
                 break;
@@ -87,13 +91,19 @@ public sealed class UIOpenReceiveController : Controller
     {
         var store = CurrentStore ?? await _stores.FindStore(storeId);
         if (store is null) return NotFound();
+        return View(await BuildDoctorAsync(store, cancellationToken));
+    }
+
+    /// <summary>The read-only probes, run now: the setup page shows them in place, the doctor page on its own.</summary>
+    private async Task<DoctorViewModel> BuildDoctorAsync(StoreData store, CancellationToken cancellationToken)
+    {
         var vm = new DoctorViewModel { StoreId = store.Id };
         var settings = await _settings.GetAsync(store.Id);
         var connection = _settings.GetConnection(store);
         vm.LightningNode = _settings.DescribeLightningNode(store);
         vm.Probes.Add(Probe("Lightning node is an OpenReceive connection", connection is not null,
             connection is null ? "The store's Lightning node is not a receive-only NWC connection." : "BTCPay mints invoices in your NWC wallet.",
-            connection is null ? Url.Action(nameof(Setup), new { storeId }) : null));
+            connection is null ? Url.Action(nameof(Setup), new { storeId = store.Id }) : null));
         if (connection is not null)
         {
             var client = _settings.CreateClient(store);
@@ -113,7 +123,7 @@ public sealed class UIOpenReceiveController : Controller
                     : "No scan yet in this process — the first invoice triggers one.", null));
             if (connection.AllowSpendCapableWallet)
             {
-                vm.Probes.Add(Probe("Spend-capable override is ON", false, "This connection may be able to spend. Replace it with a receive-only code when you can.", Url.Action(nameof(Setup), new { storeId })));
+                vm.Probes.Add(Probe("Spend-capable override is ON", false, "This connection may be able to spend. Replace it with a receive-only code when you can.", Url.Action(nameof(Setup), new { storeId = store.Id })));
             }
         }
         var blob = store.GetStoreBlob();
@@ -121,7 +131,7 @@ public sealed class UIOpenReceiveController : Controller
         if (settings.SwapsEnabled)
         {
             var providers = await _providers.ProvidersAsync(store.Id, cancellationToken);
-            vm.Probes.Add(Probe("Swap provider configured", providers.Count > 0, providers.Count > 0 ? string.Join(", ", providers.Select(p => p.Name)) : "No LSC URI saved.", Url.Action(nameof(Setup), new { storeId })));
+            vm.Probes.Add(Probe("Swap provider configured", providers.Count > 0, providers.Count > 0 ? string.Join(", ", providers.Select(p => p.Name)) : "No LSC URI saved.", Url.Action(nameof(Setup), new { storeId = store.Id })));
             foreach (var provider in providers)
             {
                 try
@@ -137,14 +147,14 @@ public sealed class UIOpenReceiveController : Controller
             }
             vm.Probes.Add(Probe("Invoice expiration covers the provider window", blob.InvoiceExpiration >= SwapService.MinimumInvoiceExpiration,
                 $"Store → Checkout → Invoice expiration is {blob.InvoiceExpiration.TotalMinutes:0} minutes; swaps need at least {SwapService.MinimumInvoiceExpiration.TotalMinutes:0} (60 recommended).",
-                Url.Action(nameof(Setup), new { storeId })));
+                Url.Action(nameof(Setup), new { storeId = store.Id })));
             var attention = await _swaps.CountAttentionAsync(store.Id, cancellationToken);
             vm.Probes.Add(Probe("Swaps needing attention", attention == 0, attention == 0 ? "None." : $"{attention} swap(s) need a human: open the invoice pages to review them.", null));
         }
         vm.Probes.Add(Probe("Invoice expiration within the scan window", blob.InvoiceExpiration <= TimeSpan.FromHours(24),
             $"Invoice expiration is {blob.InvoiceExpiration.TotalHours:0.#} h; the wallet scan covers 24 h.", null));
         vm.RecentSwaps = (await _swaps.ForStoreAsync(store.Id, 20, cancellationToken)).ToList();
-        return View(vm);
+        return vm;
     }
 
     private static DoctorProbe Probe(string name, bool ok, string detail, string? fixUrl) => new(name, ok, detail, fixUrl);
@@ -306,6 +316,12 @@ public sealed class SetupViewModel
     public string? NwcUri { get; set; }
     public bool AllowSpendCapableWallet { get; set; }
     public WalletPreflightReport? Preflight { get; set; }
+    /// <summary>The probes, when "Run a health check" was clicked on this page.</summary>
+    public DoctorViewModel? HealthCheck { get; set; }
+    /// <summary>The risk checkbox only exists once it is relevant: a test found a spend method, or the override is already on.</summary>
+    public bool ShowSpendOverride => AllowSpendCapableWallet || Preflight?.Code == "spend_capability_advertised";
+    /// <summary>The "Change wallet" disclosure stays open while a new code is being worked on (typed, tested, or refused).</summary>
+    public bool ChangeWalletOpen => !string.IsNullOrWhiteSpace(NwcUri) || Preflight is not null;
     public OpenReceiveStoreSettings.PreflightSnapshot? LastPreflight { get; set; }
     public string? LscPrimary { get; set; }
     public string? LscBackup { get; set; }
