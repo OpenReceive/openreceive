@@ -450,9 +450,31 @@ end
 settlement transaction, only for the first settled attempt for a reference.
 → [OpenReceive.configure](https://openreceive.org/guides/api-reference.md#openreceiveconfigure)
 
-The engine inherits your application's `protect_from_forgery`. Keep
+The engine's controllers inherit from `config.parent_controller` — the
+generated initializer sets it to `"ApplicationController"`. That is how the
+engine picks up your application's `protect_from_forgery`. Keep
 `csrf_meta_tags` in the layout that renders the checkout; the checkout client
 sends `X-CSRF-Token` from it automatically.
+
+The same inheritance brings every global `before_action` your
+`ApplicationController` declares. A filter that redirects signed-out users to
+a login page will redirect the engine's JSON routes too, and a guest checkout
+then never gets an invoice. The engine reads nothing from the parent except
+that forgery protection — `config.authorize` receives the request and your
+policy reads its own session from it — so if your `ApplicationController`
+carries such filters, either point `config.parent_controller` at a slimmer
+controller that still calls `protect_from_forgery`, or skip the filter for
+the engine only:
+
+```ruby
+# config/initializers/openreceive.rb (after OpenReceive.configure)
+Rails.application.config.to_prepare do
+  OpenReceive::ApplicationController.skip_before_action :require_login
+end
+```
+
+Filters your authorize policy depends on (a tenant resolver, `Current`
+attributes) should stay: they run before `config.authorize`.
 
 The generated initializer ships
 `config.on_paid = OpenReceive::LOGGING_ON_PAID` — a placeholder that only logs

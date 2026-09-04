@@ -33,7 +33,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 14991
+      "bytes": 16078
     },
     {
       "path": "/guides/node-orms",
@@ -243,7 +243,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 31262
+      "bytes": 32349
     },
     {
       "path": "/api_docs",
@@ -282,7 +282,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 31262,
+      "bytes": 32349,
       "copy_button": true,
       "self_contained": true
     }

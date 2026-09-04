@@ -2,8 +2,20 @@
 
 module OpenReceive
   # Base controller for the engine. It inherits DYNAMICALLY from the configured
-  # `config.parent_controller` (default "ActionController::Base"; a host sets "ApplicationController")
-  # so the engine automatically gets the host's authentication and current_user.
+  # `config.parent_controller` (default "ActionController::Base"; the generated
+  # initializer sets "ApplicationController"). What that inheritance is FOR is the
+  # host's forgery protection: apps that never adopted `load_defaults 5.2` have
+  # `protect_from_forgery` only on their own ApplicationController, so pointing the
+  # engine at the bare base class would silently drop CSRF on cookie-authenticated
+  # checkout routes. The engine reads nothing else from the parent — no
+  # `current_user`, no helpers; `config.authorize` receives the raw request and
+  # the host's policy reads its own session from it.
+  #
+  # Everything else the parent declares is inherited too, including every global
+  # `before_action`. A filter that redirects to a login page will redirect these
+  # JSON routes as well. Hosts with such filters point `config.parent_controller`
+  # at a slimmer controller, or `skip_before_action` on this class in a
+  # `config.to_prepare` block. The Rails quickstart documents both.
   #
   # Set `parent_controller` in a normal initializer — not `after_initialize`. Production
   # eager-loads this class before after_initialize runs, so a late parent_controller change

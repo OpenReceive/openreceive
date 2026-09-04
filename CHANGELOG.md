@@ -39,6 +39,19 @@ Four attention reasons that no engine has emitted since 0.1.1 —
 and the `SwapAttentionReason` type. `provider_completed_without_wallet_settlement`
 stays as a reserved reason. No engine's wire output changes.
 
+### The Rails engine's parent controller is documented
+
+The Rails quickstart (and the generated agent directions and skill mirrors)
+now say what `config.parent_controller` inheritance is for — the host's
+`protect_from_forgery` — and what it also brings: every global
+`before_action` on the host's `ApplicationController`, including
+redirect-to-login filters that would redirect the engine's JSON routes. It
+documents the two remedies (a slimmer parent controller, or
+`skip_before_action` on `OpenReceive::ApplicationController` in a
+`to_prepare` block). The engine controller's header comment, which claimed
+the engine relied on the parent's `current_user`, is corrected: the engine
+reads nothing from the parent but forgery protection.
+
 ### Vector coverage is checked per engine
 
 `spec/test-vectors/coverage.json` names each engine's test roots and its
