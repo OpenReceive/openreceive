@@ -19,6 +19,7 @@ swaps / settlement beyond the integrator happy path.
 14. [Release Process](release-process.md) - the release runbook: prepare, gate, tag, approve the gem publish, npm publish, GitHub release.
 15. [Forbidden Without Approval](forbidden-without-approval.md) - changes that need explicit approval.
 16. [BTCPay Plugin Manual E2E Checklist](btcpay-e2e.md) - what only a real wallet, a real provider and the Nostr plugin can prove, per release.
+17. [BTCPay Plugin Setup Details](btcpay-setup-details.md) - the long form of the BTCPay quickstart: every setup-page control, swap setup, the doctor, the payer's swap flow, Greenfield refusal codes.
 
 The custom-route escape hatch moved to the developer guides:
 [Writing your own checkout route](../guides/custom-checkout-route.md).

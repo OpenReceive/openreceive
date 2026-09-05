@@ -59,6 +59,7 @@ it through the provider.
   notifications, the provider and the invoice expiration, with a fix link on
   every failing probe.
 
-Full guide, including installation and the Greenfield API:
-https://openreceive.org/guides/quickstart-btcpay. MIT licensed; source at
+Installing the plugin: https://openreceive.org/guides/quickstart-btcpay.
+Every setting, Greenfield route, swap state and health probe:
+https://openreceive.org/guides/btcpay-reference. MIT licensed; source at
 https://github.com/OpenReceive/openreceive (`packages/dotnet`).

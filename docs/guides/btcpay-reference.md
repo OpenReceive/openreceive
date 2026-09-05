@@ -235,6 +235,28 @@ the page is titled "OpenReceive health check".
 | Swaps needing attention | no row in `attention` |
 | Invoice expiration within the scan window | 24 hours or less |
 
+## Troubleshooting
+
+- **"Could not reach the wallet through its relay"** — the relay in the
+  NWC code is down or unreachable from the BTCPay host. Check outbound
+  `wss://` access and the relay URL; test again.
+- **"No NIP-47 info event was found"** — the wallet service is offline, or
+  the code names a relay the wallet does not publish to.
+- **"advertises spend methods"** — the code can spend. Mint a receive-only
+  code, or tick the override and accept the risk.
+- **"The wallet is on mainnet but this BTCPay Server runs on regtest"** —
+  networks must match. Connect a wallet on BTCPay's network.
+- **Swaps are not offered on an invoice** — the store's Lightning node is
+  not the OpenReceive connection, swaps are off, no LSC code is saved, the
+  invoice has less than the provider window left, it received a partial
+  payment, or it is a top-up invoice. The doctor names which.
+- **Invoice expiration** — a swap-enabled store needs at least 45 minutes
+  (60 recommended). An expiration above 24 hours is outside the wallet scan
+  window and the doctor flags it.
+- **Payments settle slowly** — the wallet pushes no `payment_received`
+  notifications, so settlement waits for the periodic scan (2–12 s). The
+  doctor shows the notification probe and the last scan time.
+
 ## Log events
 
 All `Information` unless noted, under the `BTCPayServer.Plugins.OpenReceive.*`

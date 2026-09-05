@@ -330,6 +330,14 @@
       "public": false
     },
     {
+      "slug": "btcpay-setup-details",
+      "title": "BTCPay Plugin Setup Details",
+      "source_path": "docs/internal/btcpay-setup-details.md",
+      "category": "process",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "forbidden-without-approval",
       "title": "Forbidden Without Approval",
       "source_path": "docs/internal/forbidden-without-approval.md",

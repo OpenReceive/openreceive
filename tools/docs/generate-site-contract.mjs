@@ -53,6 +53,65 @@ const AGENT_PAGES = [
   },
 ];
 
+// The BTCPay Server home (contract v4): the plugin README, rendered as a page
+// and twinned like a guide. A BTCPay merchant lands here, so it is sourced
+// from the README the plugin ships with rather than a second copy under docs/;
+// the screenshots it embeds become the contract's `assets[]`.
+const PLUGIN_PAGES = [
+  {
+    path: "/btcpay",
+    source: "packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md",
+    kind: "plugin-readme",
+    slug: "btcpay",
+    title: "OpenReceive for BTCPay Server",
+    category: "btcpay",
+  },
+];
+
+// Images a published source embeds. Served verbatim at /assets/<path under
+// docs/assets/>, so the renderer maps an <img src> (relative to the source
+// file) to that URL. Collected from the source rather than listed by hand, so
+// a screenshot added to the README cannot ship without its file — and a file
+// outside docs/assets/ fails the build, because the site serves only that tree.
+const ASSETS_ROOT = "docs/assets/";
+const ASSET_TYPES = {
+  ".webp": "image/webp",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+};
+function embeddedAssets(page) {
+  const markdown = readFileSync(path.join(root, page.source), "utf8");
+  const refs = [
+    ...[...markdown.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]),
+    ...[...markdown.matchAll(/!\[[^\]]*\]\(([^)\s]+)/g)].map((m) => m[1]),
+  ];
+  const assets = new Map();
+  for (const ref of refs) {
+    if (/^(https?:)?\/\//.test(ref)) continue;
+    const file = path.normalize(path.join(path.dirname(page.source), ref));
+    if (!file.startsWith(ASSETS_ROOT)) {
+      throw new Error(
+        `${TARGET}: ${page.source} embeds ${ref}, which resolves outside ${ASSETS_ROOT}; the site serves only that tree.`,
+      );
+    }
+    const content_type = ASSET_TYPES[path.extname(file).toLowerCase()];
+    if (!content_type) throw new Error(`${TARGET}: ${page.source} embeds ${ref}, an unknown asset type.`);
+    const urlPath = `/assets/${file.slice(ASSETS_ROOT.length)}`;
+    if (!assets.has(urlPath)) {
+      assets.set(urlPath, {
+        path: urlPath,
+        source: file,
+        content_type,
+        bytes: statSync(path.join(root, file)).size,
+        referenced_by: [page.path],
+      });
+    }
+  }
+  return [...assets.values()];
+}
+
 // Verbatim artifacts for machine discovery: serve `source`'s bytes at `path`
 // with `content_type`, unrendered. /llms.txt is generated from the manifest by
 // tools/docs/generate-llms-txt.mjs; /openapi.yaml is the normative HTTP
@@ -124,6 +183,23 @@ for (const page of AGENT_PAGES) {
   });
 }
 
+const assets = [];
+for (const page of PLUGIN_PAGES) {
+  publish.push({
+    path: page.path,
+    markdown_path: markdownTwin(page.path),
+    source: page.source,
+    kind: page.kind,
+    slug: page.slug,
+    title: page.title,
+    category: page.category,
+    bytes: statSync(path.join(root, page.source)).size,
+    // Where the page's relative image references resolve: see `assets[]`.
+    assets_base: "/assets/",
+  });
+  assets.push(...embeddedAssets(page));
+}
+
 // The copy-button payloads are served as raw markdown as well as copied, so an
 // agent that CAN fetch has one URL to fetch and everyone else pastes the same
 // bytes.
@@ -146,8 +222,12 @@ const contract = {
   // head links. A version bump rather than an additive field both times,
   // because the skills and directions generated alongside the contract link
   // these URLs: a site that ignored the section would 404 links already
-  // running in other people's editors.
-  contract_version: 3,
+  // running in other people's editors. v4 adds the /btcpay page (the plugin
+  // README rendered as the BTCPay Server home) and `assets[]`, the images a
+  // published source embeds, served verbatim under /assets/. A bump again:
+  // the README links nothing the site does not already serve, but a site that
+  // ignored `assets[]` would render the BTCPay home with eight broken images.
+  contract_version: 4,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.
@@ -156,6 +236,10 @@ const contract = {
   generated_by: "tools/docs/generate-site-contract.mjs",
   how_to_update: "docs/internal/site-build.md",
   publish: [...publish, ...copyButton],
+  // Images embedded by a publish[] entry (contract v4). Serve `source`'s bytes
+  // at `path` with `content_type`; the renderer maps the source's relative
+  // <img src> to `path`, in the page and in the markdown twin alike.
+  assets,
   // Pages openreceive.org authors and owns. The agent directions link to these,
   // so removing or renaming one breaks a payload that is already pasted into
   // other people's editors and cannot be recalled.
@@ -212,5 +296,5 @@ if (!check && current !== serialized) writeFileSync(absolute, serialized);
 
 console.log(
   `${check ? "Checked" : "Wrote"} ${TARGET}: ${publish.length} routes, ` +
-    `${copyButton.length} copy payloads, ${contract.never_publish.length} never-publish.`,
+    `${copyButton.length} copy payloads, ${assets.length} assets, ${contract.never_publish.length} never-publish.`,
 );

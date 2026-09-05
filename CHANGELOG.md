@@ -68,8 +68,8 @@ Docs: `docs/guides/quickstart-btcpay.md`, agent directions for the BTCPay
 stack (`docs/agents/btcpay.md`, mirrored into the skills), the plugin and
 workspace READMEs, `docs/internal/btcpay-e2e.md`, and the conformance,
 scope-lock, package-ownership and test-command-map records. The plugin is
-not yet listed in the BTCPay plugin directory; install it by hand or through
-the Plugin Builder.
+installed from the BTCPay plugin directory; the .NET workspace README covers
+building it from source.
 
 Verified in Docker: the regtest stack in `packages/dotnet/docker` (BTCPay
 2.4.2 image, two LND nodes, a TLS relay, the testkit wallet, the fake

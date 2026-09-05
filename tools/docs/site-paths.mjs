@@ -18,6 +18,9 @@ export const SITE_OWNED_PATHS = [
   "/llms.txt",
   "/openapi.yaml",
   "/agents",
+  // The BTCPay Server home (contract v4): the plugin README rendered as a page,
+  // with its screenshots served from the contract's `assets[]`.
+  "/btcpay",
 ];
 
 // Paths the site serves as permanent redirects, not pages. Empty today:
@@ -43,7 +46,7 @@ export const markdownTwin = (urlPath) => `${urlPath}${MARKDOWN_SUFFIX}`;
 // they have a markdown twin. The rest of SITE_OWNED_PATHS is hand-authored
 // HTML on the site with no markdown behind it (/llms.txt and /openapi.yaml
 // need no twin — they are already the raw artifact).
-export const MARKDOWN_TWINNED_SITE_PAGES = ["/api_docs", "/guides", "/agents"];
+export const MARKDOWN_TWINNED_SITE_PAGES = ["/api_docs", "/guides", "/agents", "/btcpay"];
 
 // The copy-button payload URLs. generate-site-contract.mjs owns their sources;
 // this list only makes them servable to the link check below.

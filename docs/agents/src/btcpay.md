@@ -34,9 +34,9 @@ refund path on the same checkout screen.
    About, or `GET /api/v1/server/info`). The plugin declares that minimum and
    BTCPay refuses to load it below.
 2. Check whether the plugin is installed (Server Settings → Plugins, or the
-   store navigation shows an "OpenReceive" entry). If not, install it per the
-   quickstart. It is not yet listed in the BTCPay plugin directory; do not
-   invent an installer command.
+   store navigation shows an "OpenReceive" entry). If not, install it from the
+   BTCPay plugin directory (Server Settings → Plugins, search "OpenReceive"),
+   as the quickstart says; do not invent an installer command.
 3. Check whether the store already has an OpenReceive connection:
    `GET /api/v1/stores/{storeId}/openreceive/settings` returns
    `lightningNodeIsOpenReceive`. If true, the wallet step is done — go to

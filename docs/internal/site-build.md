@@ -32,7 +32,7 @@ directions link the former.
 
 ## `contract_version`
 
-The contract is at **v3**. A site that reads it should refuse to publish a
+The contract is at **v4**. A site that reads it should refuse to publish a
 version it does not understand rather than publish part of it — a half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -48,6 +48,13 @@ contract is how a payload ends up linking a page nobody serves.
   contract link `/llms.txt`, `/openapi.yaml`, and `/agents.md`, so a site that
   ignored the section would 404 links already running in other people's
   editors.
+- **v4** — adds the `/btcpay` page (`kind: plugin-readme`) and `assets[]`. The
+  BTCPay Server home on the site is the plugin's own README, rendered from
+  `packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md` and twinned at
+  `/btcpay.md` like a guide, so the page a merchant reads and the README the
+  plugin ships are the same bytes. Its screenshots are listed in `assets[]`
+  and served verbatim under `/assets/`. A version bump because a site that
+  ignored `assets[]` would render the home page with every image broken.
 
 `release_version` moves with every library release and says nothing about the
 shape of this file; `contract_version` moves only when the site has to do
@@ -82,9 +89,17 @@ something new.
    `<link rel="alternate" type="text/markdown" href="…">` — the llms.txt v2
    discovery convention, so a browsing agent finds the markdown without
    guessing.
-8. Publish nothing in `never_publish[]`. Those are contributor docs — release
+8. Serve every `assets[]` entry **verbatim**: the named `source` file's bytes
+   at `path` with the given `content_type`. The `publish[]` entry that embeds
+   them (`referenced_by`) references them relative to its own source file —
+   `../../../docs/assets/btcpayserver/1-click-OR-icon.webp` from the plugin
+   README — so the renderer resolves each `<img src>` against the source path
+   and maps anything under `docs/assets/` to `/assets/<rest>`, in the page and
+   in the markdown twin alike. The generator refuses an image outside
+   `docs/assets/`, so that rule is complete.
+9. Publish nothing in `never_publish[]`. Those are contributor docs — release
    keys, unreleased internals, forbidden-change lists.
-9. Confirm every path in `site_owned[]` still resolves. Most are yours; the
+10. Confirm every path in `site_owned[]` still resolves. Most are yours; the
    agent-discovery trio (`/llms.txt`, `/openapi.yaml`, `/agents`) is listed
    there as must-exist but sourced from this repo as described above.
 
@@ -97,6 +112,8 @@ something new.
 | `agent-directions` | `/guides/agent-directions-node`, `…-rails` | The payload as a normal page, for people reading it. |
 | `agent-directions-payload` | `/agent-directions/node.md`, `/rails.md` | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
 | `agents-page` | `/agents` | The coding-agents entrypoint (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
+| `plugin-readme` | `/btcpay` | The BTCPay Server home: the plugin README (`packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md`) rendered and twinned like a guide, its screenshots from `assets[]`. Link it from the site navigation as the BTCPay entrypoint; the guides (`/guides/quickstart-btcpay`, `/guides/btcpay-reference`, and the swap guides) are the full documentation behind it. |
+| `asset` | `/assets/<path>` | `assets[]` — verbatim bytes of a file under `docs/assets/`, embedded by a `publish[]` entry. |
 | `llms-index` | `/llms.txt` | `agent_discovery.artifacts[]` — verbatim bytes of `docs/site/llms.txt`. |
 | `openapi` | `/openapi.yaml` | `agent_discovery.artifacts[]` — verbatim bytes of the normative OpenAPI file. |
 
@@ -162,6 +179,10 @@ somewhere:
   so it is the one most likely to be quietly missing and the one whose absence
   is hardest to notice from a browser
 - the `/api_docs` alias
+- the `/btcpay` page and its `/btcpay.md` twin, and any `/assets/` path the
+  README embeds (the README is also read on GitHub, so the site is not its
+  only reader — but the page is what BTCPay's plugin directory links as the
+  plugin's documentation)
 - any path in `site_owned[]` — today `/contact`,
   `/get_a_nwc_code_to_receive_payments`, `/set_up_swap_provider`, `/guides`,
   `/`, and the agent-discovery trio `/llms.txt`, `/openapi.yaml`, `/agents`

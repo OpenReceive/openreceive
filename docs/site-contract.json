@@ -1,5 +1,5 @@
 {
-  "contract_version": 3,
+  "contract_version": 4,
   "release_version": "0.4.3",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -43,7 +43,7 @@
       "slug": "quickstart-btcpay",
       "title": "BTCPay Server Quickstart",
       "category": "quickstart",
-      "bytes": 15339
+      "bytes": 3588
     },
     {
       "path": "/guides/btcpay-reference",
@@ -53,7 +53,7 @@
       "slug": "btcpay-reference",
       "title": "BTCPay Plugin Reference",
       "category": "reference",
-      "bytes": 19474
+      "bytes": 20768
     },
     {
       "path": "/guides/node-orms",
@@ -273,7 +273,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 21805
+      "bytes": 10084
     },
     {
       "path": "/api_docs",
@@ -295,6 +295,17 @@
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
       "bytes": 2318
+    },
+    {
+      "path": "/btcpay",
+      "markdown_path": "/btcpay.md",
+      "source": "packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md",
+      "kind": "plugin-readme",
+      "slug": "btcpay",
+      "title": "OpenReceive for BTCPay Server",
+      "category": "btcpay",
+      "bytes": 3066,
+      "assets_base": "/assets/"
     },
     {
       "path": "/agent-directions/node.md",
@@ -322,9 +333,83 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 21805,
+      "bytes": 10084,
       "copy_button": true,
       "self_contained": true
+    }
+  ],
+  "assets": [
+    {
+      "path": "/assets/btcpayserver/1-click-OR-icon.webp",
+      "source": "docs/assets/btcpayserver/1-click-OR-icon.webp",
+      "content_type": "image/webp",
+      "bytes": 16282,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/2-enter-nwc-code-and-save.webp",
+      "source": "docs/assets/btcpayserver/2-enter-nwc-code-and-save.webp",
+      "content_type": "image/webp",
+      "bytes": 39636,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/3-enter-optional-LSC.webp",
+      "source": "docs/assets/btcpayserver/3-enter-optional-LSC.webp",
+      "content_type": "image/webp",
+      "bytes": 22236,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/4-you-should-see-wallet-connected-and-swaps-on.webp",
+      "source": "docs/assets/btcpayserver/4-you-should-see-wallet-connected-and-swaps-on.webp",
+      "content_type": "image/webp",
+      "bytes": 43594,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/5-click-invoices-to-make-test-invoice.webp",
+      "source": "docs/assets/btcpayserver/5-click-invoices-to-make-test-invoice.webp",
+      "content_type": "image/webp",
+      "bytes": 17012,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/6-click-create-invoice.webp",
+      "source": "docs/assets/btcpayserver/6-click-create-invoice.webp",
+      "content_type": "image/webp",
+      "bytes": 6848,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/7-enter-amount-click-create.webp",
+      "source": "docs/assets/btcpayserver/7-enter-amount-click-create.webp",
+      "content_type": "image/webp",
+      "bytes": 15186,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/8-see-example-invoice.webp",
+      "source": "docs/assets/btcpayserver/8-see-example-invoice.webp",
+      "content_type": "image/webp",
+      "bytes": 78970,
+      "referenced_by": [
+        "/btcpay"
+      ]
     }
   ],
   "site_owned": [
@@ -362,6 +447,10 @@
     },
     {
       "path": "/agents",
+      "must_exist": true
+    },
+    {
+      "path": "/btcpay",
       "must_exist": true
     }
   ],
@@ -465,6 +554,10 @@
     {
       "source": "docs/internal/btcpay-e2e.md",
       "slug": "btcpay-e2e"
+    },
+    {
+      "source": "docs/internal/btcpay-setup-details.md",
+      "slug": "btcpay-setup-details"
     },
     {
       "source": "docs/internal/forbidden-without-approval.md",
