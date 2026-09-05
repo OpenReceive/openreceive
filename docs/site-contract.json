@@ -304,8 +304,12 @@
       "slug": "btcpay",
       "title": "OpenReceive for BTCPay Server",
       "category": "btcpay",
-      "bytes": 3380,
-      "assets_base": "/assets/"
+      "bytes": 3544,
+      "assets_base": "/assets/",
+      "video": {
+        "path": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
+        "poster": "/assets/btcpayserver/basic-btcpayserver-demo-poster.webp"
+      }
     },
     {
       "path": "/agent-directions/node.md",

@@ -65,6 +65,13 @@ const PLUGIN_PAGES = [
     slug: "btcpay",
     title: "OpenReceive for BTCPay Server",
     category: "btcpay",
+    // The demo video, played inline at the top of the page. GitHub renders a
+    // README video only from an upload through github.com, so the README
+    // carries that attachment URL and the site plays this copy instead.
+    video: {
+      source: "docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
+      poster: "docs/assets/btcpayserver/basic-btcpayserver-demo-poster.webp",
+    },
   },
 ];
 
@@ -82,6 +89,7 @@ const ASSET_TYPES = {
   ".jpeg": "image/jpeg",
   ".mp4": "video/mp4",
 };
+const assetPath = (file) => `/assets/${file.slice(ASSETS_ROOT.length)}`;
 function embeddedAssets(page) {
   const markdown = readFileSync(path.join(root, page.source), "utf8");
   // Embedded media must live under docs/assets/; a link (an <a href> or a
@@ -111,7 +119,7 @@ function embeddedAssets(page) {
     }
     const content_type = ASSET_TYPES[path.extname(file).toLowerCase()];
     if (!content_type) throw new Error(`${TARGET}: ${page.source} embeds ${ref}, an unknown asset type.`);
-    const urlPath = `/assets/${file.slice(ASSETS_ROOT.length)}`;
+    const urlPath = assetPath(file);
     if (!assets.has(urlPath)) {
       assets.set(urlPath, {
         path: urlPath,
@@ -209,8 +217,26 @@ for (const page of PLUGIN_PAGES) {
     bytes: statSync(path.join(root, page.source)).size,
     // Where the page's relative image references resolve: see `assets[]`.
     assets_base: "/assets/",
+    ...(page.video && {
+      video: {
+        path: assetPath(page.video.source),
+        poster: assetPath(page.video.poster),
+      },
+    }),
   });
-  assets.push(...embeddedAssets(page));
+  const pageAssets = embeddedAssets(page);
+  for (const source of page.video ? [page.video.source, page.video.poster] : []) {
+    if (!pageAssets.some((asset) => asset.source === source)) {
+      pageAssets.push({
+        path: assetPath(source),
+        source,
+        content_type: ASSET_TYPES[path.extname(source).toLowerCase()],
+        bytes: statSync(path.join(root, source)).size,
+        referenced_by: [page.path],
+      });
+    }
+  }
+  assets.push(...pageAssets);
 }
 
 // The copy-button payloads are served as raw markdown as well as copied, so an
