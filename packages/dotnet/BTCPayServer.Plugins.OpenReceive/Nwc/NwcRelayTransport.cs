@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -194,7 +195,28 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
                 if (args.subscriptionId != subscriptionId) return;
                 foreach (var evt in args.events) events.Writer.TryWrite(evt);
             }
+            // A relay that closes the socket must end this enumeration. NNostr stops reading
+            // and aborts the WebSocket but tells no subscriber, and the next RPC through the
+            // pool silently reconnects the same client WITHOUT re-sending this REQ — so
+            // without this watch the push loop would wait forever on a subscription the
+            // relay no longer holds. Ending it ends the listener session, and BTCPay opens a
+            // fresh one with a fresh REQ. StateChanged lives on the concrete clients, not
+            // INostrClient (the same split NNostr's own SubscribeForEvents makes).
+            void OnState(object? sender, WebSocketState? state)
+            {
+                if (state is WebSocketState.Open) return;
+                _logger.LogWarning("nwc.notification.relay_closed wallet={Wallet} state={State}", _uri.WalletPubkey, state);
+                events.Writer.TryComplete(new NwcTransportException($"The relay connection closed ({state})."));
+            }
+            void OnCompositeState(object? sender, (Uri Relay, WebSocketState? State) change)
+            {
+                if (sender is not CompositeNostrClient composite || composite.States.Values.Any(s => s is WebSocketState.Open)) return;
+                _logger.LogWarning("nwc.notification.relay_closed wallet={Wallet} state={State}", _uri.WalletPubkey, change.State);
+                events.Writer.TryComplete(new NwcTransportException("Every relay connection closed."));
+            }
             client.EventsReceived += OnEvents;
+            if (client is NostrClient single) single.StateChanged += OnState;
+            else if (client is CompositeNostrClient composite) composite.StateChanged += OnCompositeState;
             try
             {
                 await client.CreateSubscription(subscriptionId, new[] { filter }, cancellationToken).ConfigureAwait(false);
@@ -218,6 +240,8 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
             finally
             {
                 client.EventsReceived -= OnEvents;
+                if (client is NostrClient single2) single2.StateChanged -= OnState;
+                else if (client is CompositeNostrClient composite2) composite2.StateChanged -= OnCompositeState;
                 try { await client.CloseSubscription(subscriptionId, CancellationToken.None).ConfigureAwait(false); } catch { /* socket may be gone */ }
             }
         }
