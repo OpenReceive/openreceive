@@ -304,7 +304,7 @@
       "slug": "btcpay",
       "title": "OpenReceive for BTCPay Server",
       "category": "btcpay",
-      "bytes": 3066,
+      "bytes": 3380,
       "assets_base": "/assets/"
     },
     {
@@ -339,6 +339,15 @@
     }
   ],
   "assets": [
+    {
+      "path": "/assets/btcpayserver/basic-btcpayserver-demo-poster.webp",
+      "source": "docs/assets/btcpayserver/basic-btcpayserver-demo-poster.webp",
+      "content_type": "image/webp",
+      "bytes": 20100,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
     {
       "path": "/assets/btcpayserver/1-click-OR-icon.webp",
       "source": "docs/assets/btcpayserver/1-click-OR-icon.webp",
@@ -407,6 +416,15 @@
       "source": "docs/assets/btcpayserver/8-see-example-invoice.webp",
       "content_type": "image/webp",
       "bytes": 78970,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
+      "source": "docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
+      "content_type": "video/mp4",
+      "bytes": 1166018,
       "referenced_by": [
         "/btcpay"
       ]

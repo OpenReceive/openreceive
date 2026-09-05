@@ -80,17 +80,30 @@ const ASSET_TYPES = {
   ".svg": "image/svg+xml",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".mp4": "video/mp4",
 };
 function embeddedAssets(page) {
   const markdown = readFileSync(path.join(root, page.source), "utf8");
-  const refs = [
-    ...[...markdown.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]),
+  // Embedded media must live under docs/assets/; a link (an <a href> or a
+  // markdown link) is an asset only when it points there — GitHub plays a
+  // linked .mp4 in place, which is how the README shows its demo video.
+  const embedded = [
+    ...[...markdown.matchAll(/<(?:img|video|source)\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]),
     ...[...markdown.matchAll(/!\[[^\]]*\]\(([^)\s]+)/g)].map((m) => m[1]),
+  ];
+  const linked = [
+    ...[...markdown.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)].map((m) => m[1]),
+    ...[...markdown.matchAll(/(?<!!)\[[^\]]*\]\(([^)\s]+)/g)].map((m) => m[1]),
+  ];
+  const resolve = (ref) => path.normalize(path.join(path.dirname(page.source), ref));
+  const isRemote = (ref) => /^(https?:)?\/\//.test(ref) || ref.startsWith("#");
+  const refs = [
+    ...embedded.filter((ref) => !isRemote(ref)),
+    ...linked.filter((ref) => !isRemote(ref) && resolve(ref).startsWith(ASSETS_ROOT)),
   ];
   const assets = new Map();
   for (const ref of refs) {
-    if (/^(https?:)?\/\//.test(ref)) continue;
-    const file = path.normalize(path.join(path.dirname(page.source), ref));
+    const file = resolve(ref);
     if (!file.startsWith(ASSETS_ROOT)) {
       throw new Error(
         `${TARGET}: ${page.source} embeds ${ref}, which resolves outside ${ASSETS_ROOT}; the site serves only that tree.`,
