@@ -338,7 +338,9 @@ test("checkout: switching back from a swap pill to Lightning keeps BTCPay's own 
   // Native rail: the QR encodes a solana: URI with the amount, and the warning is the quiet one.
   await expect(panel.getByText("Send exactly this amount")).toBeVisible();
   // With swap pills on the row, BTCPay's own Lightning pill carries the ₿ mark the plugin adds from <head> (the rule survives Vue's mount).
-  const lightningPill = page.locator(".btcpay-pills a.payment-method:not(.openreceive-pill)").first();
+  const lightningPill = page
+    .locator(".btcpay-pills a.payment-method:not(.openreceive-pill)")
+    .first();
   expect(
     await lightningPill.evaluate((el) => getComputedStyle(el, "::before").backgroundImage),
   ).toContain("btc.svg");
