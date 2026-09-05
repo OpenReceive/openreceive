@@ -5,12 +5,13 @@ receive-only NWC code. Optionally let payers pay with USDT, USDC, ETH or SOL
 through a Lightning Swap Connect provider; swaps settle into the same wallet.
 Requires BTCPay Server 2.4.2 or later.
 
-<!-- demo video: paste the github.com/user-attachments URL of
-     docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4 on the
-     line below (drag the file into any GitHub comment box or the README web
-     editor to get one); GitHub renders a bare attachment URL as a player. -->
+The whole setup in 30 seconds:
 
-<img alt="The whole setup in 30 seconds: connect a wallet, turn on swaps, create an invoice" width="640" src="../../../docs/assets/btcpayserver/basic-btcpayserver-demo-poster.webp">
+https://github.com/user-attachments/assets/9aee9edb-e62c-4935-b885-a2e2c4380834
+
+<!-- That is GitHub's upload of docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4;
+     a bare attachment URL is the only form GitHub renders as a video player.
+     openreceive.org plays the repo copy instead (site-contract.json, /btcpay → video). -->
 
 ## Setup
 
