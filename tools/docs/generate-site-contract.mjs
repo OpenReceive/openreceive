@@ -118,7 +118,8 @@ function embeddedAssets(page) {
       );
     }
     const content_type = ASSET_TYPES[path.extname(file).toLowerCase()];
-    if (!content_type) throw new Error(`${TARGET}: ${page.source} embeds ${ref}, an unknown asset type.`);
+    if (!content_type)
+      throw new Error(`${TARGET}: ${page.source} embeds ${ref}, an unknown asset type.`);
     const urlPath = assetPath(file);
     if (!assets.has(urlPath)) {
       assets.set(urlPath, {
