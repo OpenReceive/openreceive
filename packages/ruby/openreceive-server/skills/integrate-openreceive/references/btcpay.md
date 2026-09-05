@@ -196,7 +196,7 @@ connected).
    says why: a missing receive method, unsupported encryption, a spend
    method advertised, a network mismatch, an unreachable relay, or no
    NIP-47 info event.
-3. Click **Use as this store's Lightning node**. The plugin writes the
+3. Click **Save NWC Code**. The plugin writes the
    connection string `type=openreceive;nwc=<NWC URI>` into the store's
    BTC-Lightning payment method through BTCPay's own validation path, and
    enables LNURL-pay the way BTCPay's Lightning settings page does. From
@@ -204,7 +204,7 @@ connected).
    in wallet 3869…0c76 via relay.example") with a **Run a health check**
    button that shows the probes in place (the wallet preflight among them);
    a collapsed **Change NWC receive code** disclosure holds the box for a
-   new code and its **Switch to this wallet** button.
+   new code and its **Save NWC Code** button.
 
 The setup page is the whole install. You never open BTCPay's Lightning node
 screen, and the plugin never reads the internal node.
@@ -225,18 +225,20 @@ is what bounds the damage of a leak.
 ### 4. Optional: turn on swaps
 
 Swaps need step 3 first: they settle into the OpenReceive wallet, and a store
-on any other Lightning backend sees no swap options.
+on any other Lightning backend sees no swap options. The **Swaps** section
+only appears once a wallet is connected.
 
-1. Paste the LSC code into **Lightning Swap Connect code (primary)**. A
-   backup code is used only while the primary is down.
+1. Paste the LSC code into **Lightning Swap Connect code (primary)**.
 2. Click **Test provider** to fetch the provider's catalog and see which
    assets it offers right now, with their limits.
-3. Choose the assets to offer and click **Save swap settings**. A saved
-   primary code is what turns swaps on; removing it turns them off. There is
-   no separate switch (the Greenfield `swapsEnabled` field can still pause
-   swaps while keeping the code). Once saved, the section is one line
-   ("Swaps on. Provider ff.io. Assets: …") and the form sits behind
-   **Change swap provider or assets**.
+3. Click **Save swap settings**. A saved primary code is what turns swaps
+   on; removing it turns them off. There is no separate switch (the
+   Greenfield `swapsEnabled` field can still pause swaps while keeping the
+   code). Every asset the provider supports is offered; there is no per-store
+   asset list. Once saved, the section is one line ("Swaps on. Provider
+   ff.io.") and the form sits behind **Change swap provider**, where a
+   collapsed **Backup provider** disclosure takes a second code used only
+   while the primary is down.
 
 Saving a code raises **Store → Checkout → Invoice expiration** to 60
 minutes when it is shorter. A swap needs at least 45 minutes of invoice life:
@@ -325,7 +327,7 @@ Every route takes a Greenfield API key with the store permission shown.
 | Route | Permission | What it does |
 | --- | --- | --- |
 | `GET /api/v1/stores/{storeId}/openreceive/settings` | view store settings | Lightning node status, swap settings, invoice expiration, last preflight |
-| `PUT /api/v1/stores/{storeId}/openreceive/settings` | modify store settings | `nwcUri`, `allowSpendCapableWallet`, `lscPrimary`, `lscBackup`, `swapsEnabled`, `enabledPayInAssets`; setting `nwcUri` runs the preflight and makes it the Lightning node |
+| `PUT /api/v1/stores/{storeId}/openreceive/settings` | modify store settings | `nwcUri`, `allowSpendCapableWallet`, `lscPrimary`, `lscBackup`, `swapsEnabled`; setting `nwcUri` runs the preflight and makes it the Lightning node |
 | `POST /api/v1/stores/{storeId}/openreceive/wallet/test` | modify store settings | Runs the preflight for `nwcUri` (or the saved code) and returns the report |
 | `GET /api/v1/stores/{storeId}/openreceive/swaps?limit=50` | view store settings | Recent swap rows for the store |
 | `GET /api/v1/stores/{storeId}/openreceive/invoices/{invoiceId}/swaps` | view store settings | Swap rows for one invoice |

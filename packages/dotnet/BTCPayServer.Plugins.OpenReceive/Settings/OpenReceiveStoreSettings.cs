@@ -17,9 +17,8 @@ public sealed class OpenReceiveStoreSettings
     public string? LscPrimary { get; set; }
     /// <summary>Backup LSC URI, used only while the primary is down.</summary>
     public string? LscBackup { get; set; }
+    /// <summary>Every pay-in asset the provider supports is offered: there is no per-store asset list.</summary>
     public bool SwapsEnabled { get; set; }
-    /// <summary>Pay-in assets the merchant offers; empty means every asset the provider supports.</summary>
-    public List<string> EnabledPayInAssets { get; set; } = new();
     /// <summary>Non-secret snapshot of the last wallet preflight, for the doctor page.</summary>
     public PreflightSnapshot? LastPreflight { get; set; }
 

@@ -1,0 +1,57 @@
+@using BTCPayServer.Plugins.OpenReceive.Controllers
+@model SetupViewModel
+@* The swap provider form: shown directly until a code is saved, then behind "Change swap provider". *@
+<div class="form-group">
+    <label asp-for="LscPrimary" class="form-label">Lightning Swap Connect code (primary)</label>
+    <input asp-for="LscPrimary" class="form-control font-monospace" placeholder="@(Model.SavedRedactedLscPrimary ?? "lightning+swapconnect://provider.example/?key=…&secret=…")" />
+    <span asp-validation-for="LscPrimary" class="text-danger"></span>
+    <div class="form-text">
+        @if (Model.SavedRedactedLscPrimary is not null) { <span>Leave empty to keep the saved code, paste a code to replace it. </span> }
+        Get one: <a href="https://openreceive.org/set_up_swap_provider" target="_blank" rel="noreferrer noopener">openreceive.org/set_up_swap_provider</a>
+    </div>
+    @if (Model.SavedRedactedLscPrimary is not null)
+    {
+        <div class="form-check">
+            <input asp-for="RemoveLscPrimary" type="checkbox" class="form-check-input" />
+            <label asp-for="RemoveLscPrimary" class="form-check-label">Remove the saved primary code (turns swaps off)</label>
+        </div>
+    }
+</div>
+@if (Model.SavedRedactedLscPrimary is not null)
+{
+    @* A backup only makes sense once there is a primary; it stays folded away unless one is saved or being worked on. *@
+    <details class="mb-3" open="@Model.BackupOpen">
+        <summary class="text-muted" style="cursor:pointer">Backup provider <small>(used only while the primary is down)</small></summary>
+        <div class="form-group mt-3">
+            <label asp-for="LscBackup" class="form-label">Backup Lightning Swap Connect code</label>
+            <input asp-for="LscBackup" class="form-control font-monospace" placeholder="@Model.SavedRedactedLscBackup" />
+            <span asp-validation-for="LscBackup" class="text-danger"></span>
+            @if (Model.SavedRedactedLscBackup is not null)
+            {
+                <div class="form-text">Leave empty to keep the saved code, paste a code to replace it.</div>
+                <div class="form-check">
+                    <input asp-for="RemoveLscBackup" type="checkbox" class="form-check-input" />
+                    <label asp-for="RemoveLscBackup" class="form-check-label">Remove the saved backup code</label>
+                </div>
+            }
+        </div>
+    </details>
+}
+<div class="d-flex gap-2 mb-3">
+    <button name="command" type="submit" value="test-provider" class="btn btn-secondary">Test provider</button>
+</div>
+@if (Model.ProviderTest is { } test)
+{
+    <div class="card mb-3"><div class="card-body">
+        <h6>Provider @Model.ProviderTestName</h6>
+        <ul class="mb-0 small">
+            @foreach (var a in test)
+            {
+                <li>@a.Label — @(a.Available ? $"available (min {a.Minimum}, max {a.Maximum})" : $"unavailable: {a.Message}")</li>
+            }
+        </ul>
+    </div></div>
+}
+<div class="d-flex gap-2 mb-3">
+    <button name="command" type="submit" value="save-swaps" class="btn btn-primary">Save swap settings</button>
+</div>

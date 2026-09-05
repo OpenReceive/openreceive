@@ -47,7 +47,6 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
         public bool SwapsEnabled { get; set; }
         public bool LscPrimaryConfigured { get; set; }
         public bool LscBackupConfigured { get; set; }
-        public List<string> EnabledPayInAssets { get; set; } = new();
         public int InvoiceExpirationMinutes { get; set; }
         public OpenReceiveStoreSettings.PreflightSnapshot? LastPreflight { get; set; }
     }
@@ -62,7 +61,6 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
         public string? LscBackup { get; set; }
         /// <summary>Optional: when omitted, swaps follow the primary code (a saved code means on, none means off).</summary>
         public bool? SwapsEnabled { get; set; }
-        public List<string>? EnabledPayInAssets { get; set; }
     }
 
     [HttpGet("settings")]
@@ -93,14 +91,6 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
                 return UnprocessableEntity(new { code = "endpoint_not_allowed", message = localError });
             apply(Trimmed(uri));
         }
-        List<string>? assets = null;
-        if (request.EnabledPayInAssets is not null)
-        {
-            var unknown = request.EnabledPayInAssets.Where(asset => !OpenReceiveTables.SwapPayInAssets.Contains(asset)).ToList();
-            if (unknown.Count > 0)
-                return UnprocessableEntity(new { code = "invalid_pay_in_asset", message = $"Unknown pay-in asset(s): {string.Join(", ", unknown)}. Known: {string.Join(", ", OpenReceiveTables.SwapPayInAssets)}. An empty list offers every asset." });
-            assets = request.EnabledPayInAssets.Distinct(StringComparer.Ordinal).ToList();
-        }
         var current = _settings.GetConnection(store);
         var nwc = string.IsNullOrWhiteSpace(request.NwcUri)
             ? request.AllowSpendCapableWallet is null ? null : current?.NwcUri
@@ -124,7 +114,6 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
         }
         settings.LscPrimary = lscPrimary;
         settings.LscBackup = lscBackup;
-        if (assets is not null) settings.EnabledPayInAssets = assets;
         await _settings.SetAsync(store.Id, settings);
         if (settings.SwapsEnabled) await _settings.EnsureInvoiceExpirationAsync(store, SwapService.RecommendedInvoiceExpiration);
         return Ok(await BuildAsync(await _stores.FindStore(storeId) ?? store));
@@ -215,7 +204,6 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
             SwapsEnabled = settings.SwapsEnabled,
             LscPrimaryConfigured = !string.IsNullOrEmpty(settings.LscPrimary),
             LscBackupConfigured = !string.IsNullOrEmpty(settings.LscBackup),
-            EnabledPayInAssets = settings.EnabledPayInAssets,
             InvoiceExpirationMinutes = (int)store.GetStoreBlob().InvoiceExpiration.TotalMinutes,
             LastPreflight = settings.LastPreflight,
         };

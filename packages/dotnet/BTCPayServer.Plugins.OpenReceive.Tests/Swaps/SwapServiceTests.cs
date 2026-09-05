@@ -123,18 +123,6 @@ public sealed class SwapServiceTests
     }
 
     [Fact]
-    public async Task Availability_honours_the_merchants_enabled_asset_list()
-    {
-        var h = new Harness();
-        h.Settings.Settings.EnabledPayInAssets.AddRange(["USDT_TRON", "SOL_SOL"]);
-
-        var availability = await h.Availability();
-
-        Assert.True(availability.Offered);
-        Assert.Equal(["SOL_SOL", "USDT_TRON"], availability.Assets.Select(a => a.PayInAsset));
-    }
-
-    [Fact]
     public async Task An_invoice_below_the_provider_minimum_says_the_minimum_in_the_invoices_currency()
     {
         var h = new Harness();
@@ -277,11 +265,6 @@ public sealed class SwapServiceTests
         var unknownInvoice = await Assert.ThrowsAsync<SwapRequestException>(() => h.Service.CreateAsync("nope", "USDT_TRON", CancellationToken.None));
         Assert.Equal(404, unknownInvoice.Status);
         Assert.Equal("invoice_not_found", unknownInvoice.Code);
-
-        h.Settings.Settings.EnabledPayInAssets.Add("SOL_SOL");
-        var notOffered = await Assert.ThrowsAsync<SwapRequestException>(() => h.Create("USDT_TRON"));
-        Assert.Equal(409, notOffered.Status);
-        Assert.Equal("asset_not_offered", notOffered.Code);
         Assert.Empty(h.Core.Orders);
     }
 

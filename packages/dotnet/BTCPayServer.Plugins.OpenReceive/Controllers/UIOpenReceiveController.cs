@@ -277,7 +277,6 @@ public sealed class UIOpenReceiveController : Controller
         settings.LscPrimary = primary;
         settings.LscBackup = backup;
         settings.SwapsEnabled = primary is not null;
-        settings.EnabledPayInAssets = (vm.EnabledPayInAssets ?? new List<string>()).Where(OpenReceiveTables.SwapPayInAssets.Contains).ToList();
         await _settings.SetAsync(store.Id, settings);
         if (settings.SwapsEnabled && await _settings.EnsureInvoiceExpirationAsync(store, SwapService.RecommendedInvoiceExpiration))
         {
@@ -298,7 +297,6 @@ public sealed class UIOpenReceiveController : Controller
         var connection = _settings.GetConnection(store);
         vm.StoreId = store.Id;
         vm.HasWallet = connection is not null;
-        vm.LightningNode = _settings.DescribeLightningNode(store);
         vm.SavedRedactedNwc = connection is null ? null : NwcUri.Redact(connection.NwcUri);
         if (connection is not null && !Request.HasFormContentType) vm.AllowSpendCapableWallet = connection.AllowSpendCapableWallet;
         if (connection is not null && NwcUri.TryParse(connection.NwcUri, out var uri, out _) && uri is not null)
@@ -315,17 +313,8 @@ public sealed class UIOpenReceiveController : Controller
         vm.SwapsConfigured = settings.LscPrimary is not null && settings.SwapsEnabled;
         vm.SwapPrimaryHost = settings.LscPrimary is not null && LscUri.TryParse(settings.LscPrimary, out var primary, out _) && primary is not null ? primary.Host : null;
         vm.SwapBackupHost = settings.LscBackup is not null && LscUri.TryParse(settings.LscBackup, out var backup, out _) && backup is not null ? backup.Host : null;
-        vm.AssetsSummary = settings.EnabledPayInAssets.Count == 0 || settings.EnabledPayInAssets.Count == OpenReceiveTables.SwapPayInAssets.Count
-            ? "all the provider supports"
-            : string.Join(", ", settings.EnabledPayInAssets.Select(a => OpenReceiveTables.SwapAssetInfo.TryGetValue(a, out var info) ? info.Label + " · " + info.NetworkLabel : a));
         vm.ChangeSwapsOpen = vm.ProviderTest is not null || !string.IsNullOrWhiteSpace(vm.LscPrimary) || !string.IsNullOrWhiteSpace(vm.LscBackup) || !ModelState.IsValid;
-        if (!Request.HasFormContentType)
-        {
-            vm.EnabledPayInAssets = settings.EnabledPayInAssets.Count == 0 ? OpenReceiveTables.SwapPayInAssets.ToList() : settings.EnabledPayInAssets;
-        }
-        vm.InvoiceExpirationMinutes = (int)store.GetStoreBlob().InvoiceExpiration.TotalMinutes;
-        vm.Assets = OpenReceiveTables.SwapPayInAssets.Select(a => OpenReceiveTables.SwapAssetInfo[a]).ToList();
-        vm.MinimumSwapInvoiceMinutes = (int)SwapService.MinimumInvoiceExpiration.TotalMinutes;
+        vm.BackupOpen = vm.SavedRedactedLscBackup is not null || !string.IsNullOrWhiteSpace(vm.LscBackup) || ModelState[nameof(vm.LscBackup)]?.Errors.Count > 0;
         return vm;
     }
 }
@@ -334,7 +323,6 @@ public sealed class SetupViewModel
 {
     public string StoreId { get; set; } = string.Empty;
     public bool HasWallet { get; set; }
-    public string? LightningNode { get; set; }
     public string? SavedRedactedNwc { get; set; }
     public string? NwcUri { get; set; }
     public bool AllowSpendCapableWallet { get; set; }
@@ -356,17 +344,14 @@ public sealed class SetupViewModel
     public bool SwapsConfigured { get; set; }
     public string? SwapPrimaryHost { get; set; }
     public string? SwapBackupHost { get; set; }
-    public string AssetsSummary { get; set; } = string.Empty;
-    /// <summary>The "Change swap provider or assets" disclosure stays open while the form is being worked on.</summary>
+    /// <summary>The "Change swap provider" disclosure stays open while the form is being worked on.</summary>
     public bool ChangeSwapsOpen { get; set; }
+    /// <summary>The backup-provider disclosure opens only when a backup is saved, typed, or refused.</summary>
+    public bool BackupOpen { get; set; }
     public bool RemoveLscPrimary { get; set; }
     public bool RemoveLscBackup { get; set; }
-    public List<string>? EnabledPayInAssets { get; set; }
-    public List<OpenReceiveSwapAssetInfo> Assets { get; set; } = new();
     public List<ProviderAssetStatus>? ProviderTest { get; set; }
     public string? ProviderTestName { get; set; }
-    public int InvoiceExpirationMinutes { get; set; }
-    public int MinimumSwapInvoiceMinutes { get; set; }
 }
 
 public sealed record ProviderAssetStatus(string PayInAsset, string Label, bool Available, string? Message, string? Minimum, string? Maximum);

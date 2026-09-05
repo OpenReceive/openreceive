@@ -81,6 +81,15 @@ through to "Invoice Paid" with no reload, the refund form and the pill switch
 in Chromium. Merchant guide: `docs/guides/quickstart-btcpay.md`; reference:
 `docs/guides/btcpay-reference.md`.
 
+The setup page offers every asset the provider supports. The per-store asset
+list is gone: `EnabledPayInAssets` in the store settings, `enabledPayInAssets`
+on the Greenfield settings routes and the checkboxes on the setup page, and
+with them the `invalid_pay_in_asset` refusal on `PUT …/openreceive/settings`
+and the `asset_not_offered` swap-create refusal. The wallet section is titled
+"Lightning Inbound Payments" and its button "Save NWC Code"; the Swaps
+section appears once a wallet is connected, and the backup provider field
+sits behind a disclosure that exists once a primary code is saved.
+
 ### One copy of every shared vocabulary
 
 The tables both engines had typed by hand — the seven pay-in assets, the

@@ -78,7 +78,9 @@ test("setup page: paste a receive-only NWC code, test it, make it the store's Li
   await login(page);
   await page.goto(`/plugins/${storeId}/openreceive`);
   await expect(page.getByRole("heading", { name: "OpenReceive" })).toBeVisible();
-  await expect(page.getByText("Current Lightning node")).toContainText("none");
+  await expect(page.getByRole("heading", { name: "1. Lightning Inbound Payments" })).toBeVisible();
+  // Swaps settle into the wallet: the section does not exist until one is connected.
+  await expect(page.getByRole("heading", { name: /2\. Swaps/ })).toHaveCount(0);
 
   await page.getByLabel("Receive-only NWC code").fill(nwc);
   await page.getByRole("button", { name: "Test connection" }).click();
@@ -92,7 +94,7 @@ test("setup page: paste a receive-only NWC code, test it, make it the store's Li
   expect(await report.innerHTML()).not.toContain(secretOf(nwc));
 
   await page.getByLabel("Receive-only NWC code").fill(nwc);
-  await page.getByRole("button", { name: "Use as this store's Lightning node" }).click();
+  await page.getByRole("button", { name: "Save NWC Code" }).click();
   await expect(
     page.getByText("This store now receives Lightning payments into your NWC wallet."),
   ).toBeVisible();
@@ -101,8 +103,9 @@ test("setup page: paste a receive-only NWC code, test it, make it the store's Li
   await expect(page.getByText("Invoices are minted in wallet")).toContainText("relay-tls");
   expect(await page.content()).not.toContain(secretOf(nwc));
   expect(await page.content()).not.toContain(nwc.slice(0, 60)); // not even the pubkey-bearing prefix; the placeholder is generic
-  // The store nav now carries the plugin entry.
+  // The store nav now carries the plugin entry, and the swaps section now exists.
   await expect(page.locator("#Nav-OpenReceive")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /2\. Swaps/ })).toBeVisible();
 });
 
 test("setup page: a spend-capable code is refused with the reason, and admitted only with the override", async ({
@@ -117,7 +120,7 @@ test("setup page: a spend-capable code is refused with the reason, and admitted 
   await expect(page.getByLabel("This wallet cannot mint a receive-only code")).toHaveCount(0);
   await page.getByText("Change NWC receive code").click();
   await page.getByLabel("New receive-only NWC code").fill(spend);
-  await page.getByRole("button", { name: "Switch to this wallet" }).click();
+  await page.getByRole("button", { name: "Save NWC Code" }).click();
   await expect(page.getByText("Wallet refused")).toBeVisible();
   await expect(page.locator(".card", { hasText: "Wallet refused" })).toContainText("pay_invoice");
   await expect(page.locator(".card", { hasText: "Wallet refused" })).toContainText(
@@ -128,7 +131,7 @@ test("setup page: a spend-capable code is refused with the reason, and admitted 
   await page
     .getByLabel("This wallet cannot mint a receive-only code and I accept the risk")
     .check();
-  await page.getByRole("button", { name: "Switch to this wallet" }).click();
+  await page.getByRole("button", { name: "Save NWC Code" }).click();
   await expect(
     page.getByText("This store now receives Lightning payments into your NWC wallet."),
   ).toBeVisible();
@@ -141,7 +144,7 @@ test("setup page: a spend-capable code is refused with the reason, and admitted 
   await page
     .getByLabel("This wallet cannot mint a receive-only code and I accept the risk")
     .uncheck();
-  await page.getByRole("button", { name: "Switch to this wallet" }).click();
+  await page.getByRole("button", { name: "Save NWC Code" }).click();
   await expect(page.getByText("Wallet connected.")).toBeVisible();
   await expect(page.getByText("Spend-capable override on.")).toHaveCount(0);
 });
@@ -174,6 +177,8 @@ test("setup page: connect the swap provider, enable swaps, and the doctor is all
   const lsc = await fakeLscUri(request);
   await login(page);
   await page.goto(`/plugins/${storeId}/openreceive`);
+  // No backup field until a primary code is saved.
+  await expect(page.getByLabel("Backup Lightning Swap Connect code")).toHaveCount(0);
   await page.getByLabel("Lightning Swap Connect code (primary)").fill(lsc);
   await page.getByRole("button", { name: "Test provider" }).click();
   await expect(page.getByText("Provider fake-lsc-7788")).toBeVisible();
@@ -190,6 +195,11 @@ test("setup page: connect the swap provider, enable swaps, and the doctor is all
   // The form is folded away once a code is saved; the key and secret are not in the HTML.
   await expect(page.getByLabel("Lightning Swap Connect code (primary)")).toBeHidden();
   expect(await page.content()).not.toContain("test-secret");
+  // The backup provider now exists, folded away behind its own disclosure.
+  await page.getByText("Change swap provider").click();
+  await expect(page.getByLabel("Backup Lightning Swap Connect code")).toBeHidden();
+  await page.getByText("Backup provider").click();
+  await expect(page.getByLabel("Backup Lightning Swap Connect code")).toBeVisible();
 
   // The probes render in place on the setup page (the same list as the /doctor page).
   await page.getByRole("button", { name: "Run a health check" }).click();

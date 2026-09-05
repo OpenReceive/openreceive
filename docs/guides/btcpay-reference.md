@@ -71,7 +71,6 @@ connection string.
 | `LscPrimary` | The Lightning Swap Connect URI (`lightning+swapconnect://host/path?key=…&secret=…`). Server-only; the setup page shows it redacted and never sends it back to the browser. |
 | `LscBackup` | A second LSC URI, used only while the primary has failed within the last 60 seconds. |
 | `SwapsEnabled` | Whether the checkout offers swap pills. The setup page derives it from `LscPrimary` (saved code = on); Greenfield follows the same rule unless `swapsEnabled` is sent explicitly. Requires the store's Lightning node to be an OpenReceive connection. |
-| `EnabledPayInAssets` | Subset of `SOL_SOL`, `USDT_TRON`, `USDT_SOL`, `USDC_SOL`, `ETH_ETH`, `USDT_ETH`, `USDC_ETH`. Empty means every asset the provider supports. |
 | `LastPreflight` | Non-secret snapshot of the last wallet test: when, ok or the code, methods, encryption, notifications, network, relay round trip. |
 
 Enabling swaps raises the store's invoice expiration to 60 minutes when it is
@@ -83,8 +82,8 @@ shorter. The plugin never lowers it.
 
 | Route | Permission | Body / result |
 | --- | --- | --- |
-| `GET /api/v1/stores/{storeId}/openreceive/settings` | view store settings | `lightningNodeIsOpenReceive`, `lightningNode` (redacted), `allowSpendCapableWallet`, `swapsEnabled`, `lscPrimaryConfigured`, `lscBackupConfigured`, `enabledPayInAssets`, `invoiceExpirationMinutes`, `lastPreflight` |
-| `PUT /api/v1/stores/{storeId}/openreceive/settings` | modify store settings | any of `nwcUri`, `allowSpendCapableWallet`, `lscPrimary`, `lscBackup`, `swapsEnabled`, `enabledPayInAssets`; `nwcUri` runs the preflight and makes the wallet the Lightning node; `allowSpendCapableWallet` alone re-saves the current code with that override. Every field is checked before anything is written. 422 with `wallet_refused`, `wallet_required`, `lsc_required`, `invalid_lsc_uri`, `invalid_pay_in_asset` or `endpoint_not_allowed` when refused. |
+| `GET /api/v1/stores/{storeId}/openreceive/settings` | view store settings | `lightningNodeIsOpenReceive`, `lightningNode` (redacted), `allowSpendCapableWallet`, `swapsEnabled`, `lscPrimaryConfigured`, `lscBackupConfigured`, `invoiceExpirationMinutes`, `lastPreflight` |
+| `PUT /api/v1/stores/{storeId}/openreceive/settings` | modify store settings | any of `nwcUri`, `allowSpendCapableWallet`, `lscPrimary`, `lscBackup`, `swapsEnabled`; `nwcUri` runs the preflight and makes the wallet the Lightning node; `allowSpendCapableWallet` alone re-saves the current code with that override. Every field is checked before anything is written. 422 with `wallet_refused`, `wallet_required`, `lsc_required`, `invalid_lsc_uri` or `endpoint_not_allowed` when refused. |
 | `POST /api/v1/stores/{storeId}/openreceive/wallet/test` | modify store settings | `{ nwcUri?, allowSpendCapableWallet? }` → the preflight snapshot (also stored as `lastPreflight`); an omitted override means the saved one |
 | `GET /api/v1/stores/{storeId}/openreceive/swaps?limit=50` | view store settings | recent swap rows |
 | `GET /api/v1/stores/{storeId}/openreceive/invoices/{invoiceId}/swaps` | view store settings | the invoice's swap rows |

@@ -20,7 +20,7 @@
 <form method="post" asp-action="Setup" asp-route-storeId="@Model.StoreId" autocomplete="off">
     <div class="row">
         <div class="col-xl-8 col-xxl-constrain">
-            <h3 class="mt-3">1. Wallet</h3>
+            <h3 class="mt-3">1. Lightning Inbound Payments</h3>
             @if (Model.HasWallet)
             {
                 @* Connected: one calm line; everything else lives behind the disclosure. *@
@@ -39,7 +39,7 @@
                     </div>
                     <partial name="_SpendOverride" model="Model" />
                     <div class="d-flex gap-2">
-                        <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Switch to this wallet</button>
+                        <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Save NWC Code</button>
                     </div>
                 </details>
                 <div class="d-flex gap-2 mb-3">
@@ -56,7 +56,6 @@
             }
             else
             {
-                <p class="text-muted small">Current Lightning node: <strong>@(Model.LightningNode ?? "none")</strong></p>
                 <div class="form-group">
                     <label asp-for="NwcUri" class="form-label">Receive-only NWC code</label>
                     <textarea asp-for="NwcUri" class="form-control font-monospace" rows="3" placeholder="nostr+walletconnect://…?relay=wss://…&secret=…"></textarea>
@@ -66,7 +65,7 @@
                 <partial name="_SpendOverride" model="Model" />
                 <div class="d-flex gap-2 mb-4">
                     <button name="command" type="submit" value="test-wallet" class="btn btn-secondary">Test connection</button>
-                    <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Use as this store's Lightning node</button>
+                    <button name="command" type="submit" value="use-wallet" class="btn btn-primary">Save NWC Code</button>
                 </div>
             }
 
@@ -97,24 +96,24 @@
                 <p class="small text-muted">Last test: @(last.Ok ? "ok" : $"refused ({last.Code})") at @last.CheckedAt.ToString("u").</p>
             }
 
-            <h3 class="mt-4">2. Swaps <small class="text-muted fs-6">(optional)</small></h3>
-            @if (Model.SwapsConfigured)
+            @* Swaps settle into the OpenReceive wallet: the section only exists once one is connected. *@
+            @if (Model.HasWallet)
             {
-                <p class="mb-1">✅ <strong>Swaps on.</strong> Provider @Model.SwapPrimaryHost@(Model.SwapBackupHost is null ? "" : $", backup {Model.SwapBackupHost}"). Assets: @Model.AssetsSummary. Invoices live @Model.InvoiceExpirationMinutes minutes.</p>
-                <details class="mb-5" open="@Model.ChangeSwapsOpen">
-                    <summary class="text-muted" style="cursor:pointer">Change swap provider or assets</summary>
-                    <div class="mt-3">
-                        <partial name="_SwapsForm" model="Model" />
-                    </div>
-                </details>
-            }
-            else
-            {
-                @if (!Model.HasWallet)
+                <h3 class="mt-4">2. Swaps <small class="text-muted fs-6">(optional)</small></h3>
+                @if (Model.SwapsConfigured)
                 {
-                    <div class="alert alert-info">Swaps settle into your OpenReceive wallet. Connect a receive-only NWC code first.</div>
+                    <p class="mb-1">✅ <strong>Swaps on.</strong> Provider @Model.SwapPrimaryHost@(Model.SwapBackupHost is null ? "" : $", backup {Model.SwapBackupHost}"). Payers can pay with every asset the provider supports.</p>
+                    <details class="mb-5" open="@Model.ChangeSwapsOpen">
+                        <summary class="text-muted" style="cursor:pointer">Change swap provider</summary>
+                        <div class="mt-3">
+                            <partial name="_SwapsForm" model="Model" />
+                        </div>
+                    </details>
                 }
-                <partial name="_SwapsForm" model="Model" />
+                else
+                {
+                    <partial name="_SwapsForm" model="Model" />
+                }
             }
         </div>
     </div>

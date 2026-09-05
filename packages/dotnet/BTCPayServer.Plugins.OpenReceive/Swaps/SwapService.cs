@@ -87,9 +87,7 @@ public sealed class SwapService
             return new SwapAvailability(false, "invoice_expires_too_soon", Array.Empty<SwapAssetOffer>(), bolt11, paymentHash, amountMsats, minimumSeconds);
         }
 
-        var enabled = settings.EnabledPayInAssets.Count == 0
-            ? OpenReceiveTables.SwapPayInAssets
-            : OpenReceiveTables.SwapPayInAssets.Where(settings.EnabledPayInAssets.Contains).ToArray();
+        var enabled = OpenReceiveTables.SwapPayInAssets;
         IReadOnlyList<SwapProviderAsset> catalog;
         try
         {
@@ -184,8 +182,8 @@ public sealed class SwapService
                 _ => "Swaps are not available for this invoice.",
             });
         }
-        var offer = availability.Assets.FirstOrDefault(a => a.PayInAsset == payInAsset)
-                    ?? throw new SwapRequestException(409, "asset_not_offered", "This asset is not offered for this invoice.");
+        // Every known asset is in the offer list (unavailable ones too); the unknown ones were refused above.
+        var offer = availability.Assets.First(a => a.PayInAsset == payInAsset);
         if (!offer.Available)
         {
             throw new SwapRequestException(409, offer.Reason ?? "asset_unavailable", offer.Message ?? "This asset is temporarily unavailable.");

@@ -21,7 +21,7 @@ payer.
 - [ ] The BTCPay log carries the `nwc.preflight.ok … encryption=nip44_v2`
       line and no line contains the secret (grep for `secret=` and the
       64-hex value).
-- [ ] **Use as this store's Lightning node** succeeds; Store → Lightning
+- [ ] **Save NWC Code** succeeds; Store → Lightning
       shows `type=openreceive;nwc=…` (redacted on the OpenReceive page).
 - [ ] Create an invoice; pay it from the second hub. The invoice turns
       `Settled` on the `nwc.notification.received` line, not on a scan
