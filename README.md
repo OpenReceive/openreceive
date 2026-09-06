@@ -4,6 +4,12 @@ Freedom technology for inbound payments.
 
 Accept Bitcoin payments on your website, app, or point of sale, straight into a wallet you control.
 
+See it in action:
+
+https://github.com/user-attachments/assets/bbc253cc-f80c-42a4-9c54-ba9b11cc1284
+
+<!-- A GitHub upload; a bare attachment URL is the only form GitHub renders as a video player. -->
+
 <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="56">
 
 **Bitcoin by default.** Use the internet's neutral settlement currency. Your server issues a QR code. The payer pays the QR code, and your server approves delivery of the purchase.
