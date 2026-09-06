@@ -6,7 +6,7 @@
 // open SKILL.md format). Three things are generated from it rather than
 // maintained by hand:
 //
-//   1. skills/integrate-openreceive/references/{node,rails,btcpay}.md are byte copies
+//   1. skills/integrate-openreceive/references/{node,fastify,next,rails,btcpay}.md are byte copies
 //      of the agent-directions payloads (docs/agents/*.md) — already
 //      version-stamped, size-budgeted, and link-checked by
 //      generate-agent-directions.mjs, so the skill's per-stack detail cannot
@@ -33,6 +33,11 @@ const CANONICAL = "skills";
 
 const GENERATED_REFERENCES = [
   { source: "docs/agents/node.md", target: "skills/integrate-openreceive/references/node.md" },
+  {
+    source: "docs/agents/fastify.md",
+    target: "skills/integrate-openreceive/references/fastify.md",
+  },
+  { source: "docs/agents/next.md", target: "skills/integrate-openreceive/references/next.md" },
   { source: "docs/agents/rails.md", target: "skills/integrate-openreceive/references/rails.md" },
   { source: "docs/agents/btcpay.md", target: "skills/integrate-openreceive/references/btcpay.md" },
 ];

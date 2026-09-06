@@ -1,6 +1,10 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 /** The four checkout frameworks node-express hosts as tabs. */
+// Only node-express has the tab strip; the fastify stack mounts React alone.
+// The full spec matrix belongs to node-express (the default stack), and the
+// helpers below tolerate a host without the strip so the smoke spec can run
+// against either.
 export const CHECKOUT_FRAMEWORKS = ["react", "vue", "svelte", "angular"] as const;
 export type CheckoutFramework = (typeof CHECKOUT_FRAMEWORKS)[number];
 
@@ -93,7 +97,15 @@ export async function startCheckout(page: Page): Promise<void> {
  */
 export async function selectFrameworkTab(page: Page, framework: CheckoutFramework): Promise<void> {
   const label = FRAMEWORK_TAB_LABELS[framework];
-  await page.locator(".or-shop-stage label", { hasText: label }).first().click();
+  const tab = page.locator(".or-shop-stage label", { hasText: label }).first();
+  // A host with ONE packaged checkout and no strip (the fastify stack) is the
+  // React tab by construction; only a request for another framework is an
+  // error there.
+  if ((await tab.count()) === 0) {
+    if (framework === "react") return;
+    throw new Error(`this host has no  tab: run the framework matrix against node-express`);
+  }
+  await tab.click();
   await expect(page.getByRole("radio", { name: label, exact: true })).toBeChecked();
 }
 

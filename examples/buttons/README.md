@@ -39,7 +39,7 @@ This is the sentence that says whether it works, and it is run by hand:
 If it does not do that, the persistence is not real regardless of what the
 schema looks like.
 
-## Four stacks, one shop
+## Five stacks, one shop
 
 From the repository root:
 
@@ -50,6 +50,7 @@ npm run demo node            # Express + SQLite                  :3000
 npm run demo static          # static HTML, no framework         :3001
 npm run demo nextjs          # Next.js app router + SQLite       :3002
 npm run demo buttons         # Rails + Postgres                  :3003
+npm run demo fastify         # Fastify + SQLite, React only      :3004
 ```
 
 For an edit-reload loop, run the stack's own `npm run dev` (or `bin/dev` for
@@ -78,6 +79,7 @@ examples/buttons/
     node-express/        Express + Vite, four framework tabs
     static-html-small-api/  Express + Vite, hand-written DOM
     nextjs-fullstack/    Next.js app router
+    fastify/             Fastify + Vite, the minimal host: React only
     rails/               Rails 8.1 + Postgres + Shakapacker
 ```
 
@@ -109,6 +111,7 @@ the seam; everything above and below it is shared.
 | --- | --- |
 | rails, nextjs | the mobx-keystone `CheckoutStage`, driving `@openreceive/browser/headless` directly |
 | node-express | the packaged `<Checkout>`, behind React / Vue / Svelte / Angular tabs |
+| fastify | the packaged React `<Checkout>` alone — the minimal host |
 | static-html | the packaged `<openreceive-checkout>` custom element |
 
 node-express is the one stack whose payment screen differs from the others,
@@ -197,7 +200,7 @@ real payment.
 
 ### On Rails it is pushed; on Node it polls
 
-**Only the Rails stack pushes.** The three Node stacks keep the checkout's own
+**Only the Rails stack pushes.** The four Node stacks keep the checkout's own
 poll loop and refresh the feed every thirty seconds. Both paths land in the
 same idempotent store methods, so the difference is latency and never
 correctness — which is exactly why the shared stores expose

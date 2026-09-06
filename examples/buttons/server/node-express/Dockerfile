@@ -20,6 +20,7 @@ COPY packages/js/react/package.json ./packages/js/react/package.json
 COPY packages/js/svelte/package.json ./packages/js/svelte/package.json
 COPY packages/js/testkit/package.json ./packages/js/testkit/package.json
 COPY packages/js/vue/package.json ./packages/js/vue/package.json
+COPY examples/buttons/server/fastify/package.json ./examples/buttons/server/fastify/package.json
 COPY examples/buttons/server/nextjs-fullstack/package.json ./examples/buttons/server/nextjs-fullstack/package.json
 COPY examples/buttons/server/node-express/package.json ./examples/buttons/server/node-express/package.json
 COPY examples/buttons/server/static-html-small-api/package.json ./examples/buttons/server/static-html-small-api/package.json

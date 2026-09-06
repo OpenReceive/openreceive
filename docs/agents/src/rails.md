@@ -12,6 +12,13 @@ models (`ShopOrder`, `ShopUser`, a signed-cookie visitor) over tables that
 already exist. Find this application's order, product, and user models — whatever
 they are actually named — and map the three hooks onto those.
 
+Keep this application's view layer, its Devise/session authentication and its
+database. Pick the frontend package that matches what already renders here
+(`@openreceive/elements` for ERB/Hotwire; `/react`, `/vue`, `/svelte` or
+`/angular` for an existing SPA) — do not add React to a Hotwire app. Reuse the
+app's existing session or `current_user` in `config.authorize`; the engine's
+migration adds only its own two tables to the app's database.
+
 ## What OpenReceive is
 
 A payment library that runs inside YOUR server. It mounts HTTP routes in the

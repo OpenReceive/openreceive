@@ -210,7 +210,7 @@ flow the routes do not offer:
 
 ## Run a demo
 
-One shop, four stacks. You add buttons to a cart, check out to create an order,
+One shop, five stacks. You add buttons to a cart, check out to create an order,
 and pay that order with a real Lightning invoice from your own wallet or a
 stablecoin swap; the download unlocks only after `onPaid` marks the order paid.
 
@@ -219,19 +219,21 @@ npm run demo node      # Buy a Button — Express + React/Vue/Svelte/Angular  ht
 npm run demo static    # Buy a Button — static HTML, no framework           http://localhost:3001
 npm run demo nextjs    # Buy a Button — Next.js app router                  http://localhost:3002
 npm run demo buttons   # Buy a Button — Rails + host Postgres               http://localhost:3003
+npm run demo fastify   # Buy a Button — Fastify + React, the minimal host   http://localhost:3004
 ```
 
 [Buy a Button](examples/buttons) is the persistence story: a products table, a
 visitor remembered by a signed cookie, an orders table, and a public feed of
 every paid order on the site, with three lambdas as the entire bridge to
-OpenReceive. The four stacks share one shop — the UI, the wire types and the
+OpenReceive. The five stacks share one shop — the UI, the wire types and the
 Node server live once in `examples/buttons/shared/` and each stack under
 `server/` is a thin host with its own routing, database idiom and build.
 
 They differ in exactly two interesting ways, and both are on purpose: Rails
 pushes settlement over ActionCable while the Node stacks poll, and node-express
 plugs the packaged `<Checkout>` into the shared shop behind React / Vue /
-Svelte / Angular tabs while the others render the keystone-driven checkout.
+Svelte / Angular tabs while fastify mounts the React one alone and the others
+render the keystone-driven checkout.
 
 Every demo needs a receive-only `NWC_URI` in the root `.env`. The
 [Buy a Button README](examples/buttons/README.md) explains what each command

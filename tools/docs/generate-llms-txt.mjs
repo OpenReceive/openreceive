@@ -28,9 +28,13 @@ const release = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")
 // guides index is named in the section prose.
 const LISTED_ELSEWHERE = new Set([
   "quickstart-node",
+  "quickstart-fastify",
+  "quickstart-next",
   "quickstart-rails",
   "quickstart-btcpay",
   "agent-directions-node",
+  "agent-directions-fastify",
+  "agent-directions-next",
   "agent-directions-rails",
   "agent-directions-btcpay",
   "guides",
@@ -54,10 +58,14 @@ markdown.
 
 ## Start here
 
-- [Node quickstart](${SITE}/guides/quickstart-node${MARKDOWN_SUFFIX}): Express, Fastify, or Next.js server with any frontend
+- [Express quickstart (Node)](${SITE}/guides/quickstart-node${MARKDOWN_SUFFIX}): Express server with any frontend
+- [Fastify quickstart](${SITE}/guides/quickstart-fastify${MARKDOWN_SUFFIX})
+- [Next.js quickstart](${SITE}/guides/quickstart-next${MARKDOWN_SUFFIX}): the App Router catch-all route and a client-component checkout
 - [Rails quickstart](${SITE}/guides/quickstart-rails${MARKDOWN_SUFFIX})
 - [BTCPay Server quickstart](${SITE}/guides/quickstart-btcpay${MARKDOWN_SUFFIX}): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
-- [Agent directions, Node](${SITE}/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
+- [Agent directions, Node (Express)](${SITE}/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
+- [Agent directions, Fastify](${SITE}/agent-directions/fastify.md)
+- [Agent directions, Next.js](${SITE}/agent-directions/next.md)
 - [Agent directions, Rails](${SITE}/agent-directions/rails.md)
 - [Agent directions, BTCPay Server](${SITE}/agent-directions/btcpay.md)
 

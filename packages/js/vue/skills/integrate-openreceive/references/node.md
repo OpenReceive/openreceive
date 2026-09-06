@@ -13,6 +13,12 @@ models (`ShopOrder`, a signed-cookie visitor, an in-memory catalog) over tables
 that already exist. Find this application's order, product, and user models —
 whatever they are actually named — and map the three hooks onto those.
 
+Keep this application's frontend framework, authentication and database. Pick
+the UI package that matches the frontend that is already here
+(`@openreceive/react`, `/vue`, `/svelte`, `/angular`, or `/elements` for
+plain HTML) — do not add React to a Vue app. Reuse the app's existing
+session/auth in `authorize` and its existing database handle in `storage.db`.
+
 ## What OpenReceive is
 
 A payment library that runs inside YOUR server. It mounts HTTP routes in the
@@ -252,7 +258,7 @@ https://openreceive.org/contact
 Inlined verbatim so this file needs no network access — follow it once Step 0
 passes. The page it comes from is https://openreceive.org/guides/quickstart-node.
 
-## Node quickstart
+## Node quickstart (Express)
 
 Express + React. Requires Node ≥ 22.
 
@@ -272,6 +278,9 @@ identical.
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
+
+Fastify: [quickstart-fastify.md](https://openreceive.org/guides/quickstart-fastify.md) · Next.js:
+[quickstart-next.md](https://openreceive.org/guides/quickstart-next.md). This page is the Express one.
 
 On a fresh project, also install what this guide assumes is already there: the
 framework and an env loader (`npm install express dotenv`), plus your ORM

@@ -14,6 +14,13 @@ models (`ShopOrder`, `ShopUser`, a signed-cookie visitor) over tables that
 already exist. Find this application's order, product, and user models — whatever
 they are actually named — and map the three hooks onto those.
 
+Keep this application's view layer, its Devise/session authentication and its
+database. Pick the frontend package that matches what already renders here
+(`@openreceive/elements` for ERB/Hotwire; `/react`, `/vue`, `/svelte` or
+`/angular` for an existing SPA) — do not add React to a Hotwire app. Reuse the
+app's existing session or `current_user` in `config.authorize`; the engine's
+migration adds only its own two tables to the app's database.
+
 ## What OpenReceive is
 
 A payment library that runs inside YOUR server. It mounts HTTP routes in the
@@ -261,7 +268,7 @@ passes. The page it comes from is https://openreceive.org/guides/quickstart-rail
 
 ## Rails quickstart
 
-Requires Ruby ≥ 3.2.
+Requires Ruby ≥ 3.2 and Rails ≥ 8.0.
 
 Add the Rails engine gem to your `Gemfile`:
 
@@ -355,6 +362,13 @@ config.on_paid = lambda do |settlement|
   order.update!(state: "paid", paid_at: Time.at(settlement.paid_at).utc)  # callbacks fire
 end
 ```
+
+**Unlocking a download works the same way.** If what the payer bought is a
+file, do not unlock it in the browser: gate the download route on the paid
+order row — `Order.find_by(id: params[:id], user: current_user, state: "paid")`
+or a 404 — and serve the file only then. The `state: "paid"` written above is
+the unlock; the client never decides an order was fulfilled, it re-reads the
+row. Buy a Button's `ShopController#download` is this in twenty lines.
 
 Both shapes are idempotent, and both are correct. They differ only in whether
 your model layer gets to run: `update_all` skips it and is the right default;

@@ -1,6 +1,6 @@
 # Rails quickstart
 
-Requires Ruby ≥ 3.2.
+Requires Ruby ≥ 3.2 and Rails ≥ 8.0.
 
 Add the Rails engine gem to your `Gemfile`:
 
@@ -94,6 +94,13 @@ config.on_paid = lambda do |settlement|
   order.update!(state: "paid", paid_at: Time.at(settlement.paid_at).utc)  # callbacks fire
 end
 ```
+
+**Unlocking a download works the same way.** If what the payer bought is a
+file, do not unlock it in the browser: gate the download route on the paid
+order row — `Order.find_by(id: params[:id], user: current_user, state: "paid")`
+or a 404 — and serve the file only then. The `state: "paid"` written above is
+the unlock; the client never decides an order was fulfilled, it re-reads the
+row. Buy a Button's `ShopController#download` is this in twenty lines.
 
 Both shapes are idempotent, and both are correct. They differ only in whether
 your model layer gets to run: `update_all` skips it and is the right default;

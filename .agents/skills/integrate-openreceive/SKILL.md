@@ -24,7 +24,9 @@ code** (`NWC_URI`).
 1. Identify the server stack of the application you are in.
 2. Open the matching reference — it is complete (quickstart inlined) and needs
    no network access:
-   - Node (Express / Fastify / Next.js): [references/node.md](references/node.md)
+   - Node, Express: [references/node.md](references/node.md)
+   - Node, Fastify: [references/fastify.md](references/fastify.md)
+   - Node, Next.js App Router: [references/next.md](references/next.md)
    - Rails: [references/rails.md](references/rails.md)
    - BTCPay Server: [references/btcpay.md](references/btcpay.md) — a plugin,
      configured in BTCPay's store UI or Greenfield API; no application code,
@@ -33,9 +35,11 @@ code** (`NWC_URI`).
    environment before writing code. Never print the value; never invent a
    placeholder.
 
-Install (Node): `npm install @openreceive/express @openreceive/react` — swap
-the adapter (`fastify`, `next`) and UI package (`vue`, `svelte`, `angular`,
-`elements`) for the stack. Install (Rails): `bundle add openreceive-rails`.
+Install, per adapter — Express: `npm install @openreceive/express @openreceive/react`;
+Fastify: `npm install @openreceive/fastify @openreceive/react`; Next.js:
+`npm install @openreceive/next @openreceive/react`. Swap the UI package (`vue`,
+`svelte`, `angular`, `elements`) for the frontend the app already has. Install
+(Rails): `bundle add openreceive-rails`.
 
 ## The three server objects
 

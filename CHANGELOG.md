@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Fastify demo, Fastify and Next.js quickstarts, contract v5
+
+Everything the site's framework landing pages point at now ships in the
+library, so the site only renders.
+
+- **A fifth Buy a Button host: Fastify** (`examples/buttons/server/fastify`,
+  `npm run demo fastify`, port 3004). The minimal host: the packaged React
+  `<Checkout>` alone against `openReceiveFastify` registered with a prefix,
+  `Fastify({ trustProxy: true })`, and no body parser. The shared Node server
+  gained a Fastify twin of the Express app (`fastify-app.ts`), a Fastify
+  testkit mount and a Fastify production mount; the Playwright harness takes
+  `OPENRECEIVE_E2E_STACK=fastify` and CI runs the smoke spec against both
+  Vite-hosted stacks.
+- **Quickstarts per framework.** `quickstart-node.md` is retitled as the
+  Express one (slug unchanged, so pasted links keep working);
+  `quickstart-fastify.md` and `quickstart-next.md` are new siblings. The
+  prose they share is fenced with `<!-- shared:begin … -->` markers and
+  `tools/docs/check-quickstart-parity.mjs` (in `check:docs`) fails the build
+  when a copy drifts.
+- **Agent directions for Fastify and Next.js** (`/agent-directions/fastify.md`,
+  `/agent-directions/next.md`), generated like the others and shipped as
+  skill references. All four application payloads gained the "preserve the
+  host" rule: keep the app's frontend framework, auth and database; pick the
+  UI package that matches what is already there.
+- **Site contract v5** adds `frameworks[]`: one gated row per landing page
+  (`express`, `fastify`, `nextjs`, `rails`, `btcpay-server`) with the
+  heading, quickstart, payload, install line, version floor, example URL,
+  demo port and video slot. `docs/internal/site-build.md` describes it.
+- Version floors are now written down where the landing FAQ links: Rails ≥ 8.0
+  beside Ruby ≥ 3.2 in the Rails quickstart, a requirements section in the
+  deploying guide, and the exact swap pay-in assets in the automated-swaps
+  guide.
+- `tools/validate/scan-naming.mjs` (in `npm run check`) fails on the
+  two-word spelling of the product name anywhere in the repository.
+
 ### A BTCPay Server plugin: the third engine
 
 `packages/dotnet/BTCPayServer.Plugins.OpenReceive` is a BTCPay Server plugin

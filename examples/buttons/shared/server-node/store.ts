@@ -1,6 +1,6 @@
 /**
  * The shop's own persistence, on `node:sqlite`. One implementation serves all
- * three Node stacks, exactly as the Rails models serve that one.
+ * four Node stacks, exactly as the Rails models serve that one.
  *
  * THE DATABASE SURVIVES A RESTART. Hello Fruit wiped its file on every boot,
  * which is honest for a disposable checkout surface and wrong for a demo whose

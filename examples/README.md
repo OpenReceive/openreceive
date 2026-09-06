@@ -1,6 +1,6 @@
 # OpenReceive examples
 
-One app lives here, built four times.
+One app lives here, built five times.
 
 [`buttons/`](buttons) — **Buy a Button**, a shop for six virtual OR pin badges,
 built on real persistence: a products table, a signed-cookie visitor table, an
@@ -8,8 +8,8 @@ orders table, and a public feed of every paid order on the site. Read it to see
 where the line falls between YOUR data and OpenReceive's — three lambdas are the
 entire bridge.
 
-It runs on **Rails + Postgres**, **Express + SQLite**, the **Next.js app
-router**, and **static HTML with no framework at all**. The shop itself — the
+It runs on **Rails + Postgres**, **Express + SQLite**, **Fastify + SQLite**, the
+**Next.js app router**, and **static HTML with no framework at all**. The shop itself — the
 UI, the stores, the wire types and the Node server — lives ONCE in
 `buttons/shared/`; each stack under `buttons/server/` is a thin host with its
 own routing, database idiom and build. The stacks deliberately exercise
@@ -17,7 +17,9 @@ different integration forms so every surface stays covered — for the minimal
 happy path, follow the quickstarts below instead.
 
 For the smallest possible integration, follow the
-[Node quickstart](../docs/guides/quickstart-node.md) or the
+[Express quickstart](../docs/guides/quickstart-node.md), the
+[Fastify quickstart](../docs/guides/quickstart-fastify.md), the
+[Next.js quickstart](../docs/guides/quickstart-next.md) or the
 [Rails quickstart](../docs/guides/quickstart-rails.md) — the Rails guide walks
 `bin/rails generate openreceive:install`, whose output is exercised by the
 engine gem's generator tests and by the Rails demo here.
@@ -32,6 +34,7 @@ npm run demo node            # Buy a Button — Express + React/Vue/Svelte/Angul
 npm run demo static          # Buy a Button — static HTML, no framework           :3001
 npm run demo nextjs          # Buy a Button — Next.js app router                  :3002
 npm run demo buttons         # Buy a Button — Rails + Postgres                    :3003
+npm run demo fastify         # Buy a Button — Fastify + React, the minimal host   :3004
 ```
 
 `npm run demo` builds the image and runs the production server inside it. The
@@ -41,7 +44,7 @@ nothing else. For an edit-reload loop, run the variant's own `npm run dev`
 
 ## Running the demo against fakes (no wallet)
 
-All four stacks boot against in-process fakes when `DEMO_WALLET=testkit` is
+All five stacks boot against in-process fakes when `DEMO_WALLET=testkit` is
 set — no `NWC_URI`, no LSC keys, no network, full checkout:
 
 ```sh
@@ -52,7 +55,7 @@ cd buttons/server/rails
 DEMO_WALLET=testkit bin/dev          # Postgres is still Postgres
 ```
 
-The three Node stacks share `@openreceive/testkit`; Rails has a port of it in
+The four Node stacks share `@openreceive/testkit`; Rails has a port of it in
 `buttons/server/rails/lib/button_shop/testkit/`, with the same fixtures, so one
 Playwright suite can drive any of them. What is faked is the wallet, the swap
 provider and the price feed — never the engine, the hooks or the database.
@@ -93,7 +96,7 @@ integration this way.
   packages keep a demo too.
 - **Product data has one source.** `buttons/shared/shop-catalog.json` is the
   seed every stack's data migration reads, and `buttons/images/` holds the one
-  copy of the artwork that all four stacks serve. Nothing re-declares a sku, a
+  copy of the artwork that all five stacks serve. Nothing re-declares a sku, a
   price or an artwork path.
 - **The shop UI lives once.** `buttons/shared/` holds the stores, the
   components and the wire types; each stack under `buttons/server/` is a thin

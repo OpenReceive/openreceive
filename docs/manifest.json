@@ -11,8 +11,24 @@
     },
     {
       "slug": "quickstart-node",
-      "title": "Node Framework Quickstart",
+      "title": "Express Quickstart (Node)",
       "source_path": "docs/guides/quickstart-node.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "quickstart-fastify",
+      "title": "Fastify Quickstart",
+      "source_path": "docs/guides/quickstart-fastify.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "quickstart-next",
+      "title": "Next.js Quickstart",
+      "source_path": "docs/guides/quickstart-next.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true
@@ -349,6 +365,22 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "source_path": "docs/agents/node.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-fastify",
+      "title": "Agent Directions: Fastify",
+      "source_path": "docs/agents/fastify.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-next",
+      "title": "Agent Directions: Next.js",
+      "source_path": "docs/agents/next.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true

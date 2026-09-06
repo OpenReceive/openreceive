@@ -1,4 +1,4 @@
-// The single catalog of dockerized demos. Four stacks, one shop.
+// The single catalog of dockerized demos. Five stacks, one shop.
 // Both the launcher
 // (tools/run-demo.mjs) and the container validator
 // (tools/validate/check-demo-containers.mjs) read this list, so a demo added
@@ -31,6 +31,15 @@ export const OPENRECEIVE_DEMOS = [
     service: "buttons-nextjs-fullstack",
     port: "3002",
     label: "Buy a Button — Next.js fullstack",
+  },
+  {
+    kind: "node",
+    keys: ["fastify", "buttons-fastify"],
+    dir: "examples/buttons/server/fastify",
+    packageName: "@openreceive/example-buttons-fastify",
+    service: "buttons-fastify",
+    port: "3004",
+    label: "Buy a Button — Fastify + React",
   },
   {
     kind: "rails",

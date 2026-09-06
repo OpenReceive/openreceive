@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
 /**
- * E2E harness for the Buy a Button node-express demo in testkit wallet mode.
+ * E2E harness for the Buy a Button Vite-hosted demos in testkit wallet mode.
+ *
+ * OPENRECEIVE_E2E_STACK picks the demo directory under
+ * examples/buttons/server/: `node-express` (the default, and the only stack
+ * with the four framework tabs the full matrix drives) or `fastify` (the
+ * minimal React host; the framework helpers tolerate its missing tab strip).
+ * Both boot the same way — Vite is the front door in development, and the
+ * host's API rides inside it — so one webServer command covers them.
  *
  * The webServer boots the demo's Vite dev entry directly (not through
  * `tools/run-with-root-env.mjs`, which hard-requires NWC_URI): with
@@ -20,8 +27,19 @@ import { defineConfig } from "@playwright/test";
  * reading the suite's leftovers.
  */
 
+const E2E_STACKS = ["node-express", "fastify"] as const;
+type E2eStack = (typeof E2E_STACKS)[number];
+
+const stack = (process.env.OPENRECEIVE_E2E_STACK ?? "node-express") as E2eStack;
+if (!E2E_STACKS.includes(stack)) {
+  throw new Error(
+    `OPENRECEIVE_E2E_STACK=${stack} is not one of ${E2E_STACKS.join(", ")}: the Next.js and ` +
+      `Rails stacks are not Vite-hosted and have their own harnesses.`,
+  );
+}
+
 const e2eDir = path.dirname(fileURLToPath(import.meta.url));
-const demoDir = path.resolve(e2eDir, "../../examples/buttons/server/node-express");
+const demoDir = path.resolve(e2eDir, `../../examples/buttons/server/${stack}`);
 
 const databaseDir = mkdtempSync(path.join(tmpdir(), "openreceive-e2e-db-"));
 

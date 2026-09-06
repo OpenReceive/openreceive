@@ -1153,12 +1153,17 @@ await fastify.register(openReceiveFastify, options)
 ```
 
 Fastify plugin; registers a catch-all under `prefix`. The untouched Fastify
-request is passed as `native`.
+request is passed as `native`. Options are the shared all-in-one or composed
+set above plus `trustProxyIpHeader`; pass `prefix` **at `register()`** so
+Fastify scopes the route to it (a `prefix` that disagrees with the register
+scope fails registration). Fastify parses JSON itself — there is no body
+parser to add — and `Fastify({ trustProxy: true })` is what makes `request.ip`
+the payer behind a reverse proxy, the same rule as Express's `trust proxy`.
 
 **Where it fits:** Register it once during app setup, after whatever plugin
 gives you sessions or auth decorations, since `authorize` sees the same request
 object. Shutdown is handled for you: the plugin closes the wallet client with
-the app.
+the app. Full walkthrough: [Fastify quickstart](quickstart-fastify.md).
 
 ### openReceiveNextHandlers
 
@@ -1167,8 +1172,12 @@ export const { GET, POST } = openReceiveNextHandlers(options)
 ```
 
 Next.js App Router handlers; mount as a catch-all route
-(`app/openreceive/[...openreceive]/route.ts`). The incoming `NextRequest` is
-passed as `native`.
+(`app/openreceive/[...openreceive]/route.ts`) that exports
+`runtime = "nodejs"` and `dynamic = "force-dynamic"`. The incoming `NextRequest`
+is passed as `native`. Options are the shared all-in-one or composed set above
+plus `trustProxyIpHeader` — required alongside `rateLimiting` here, because a
+web `Request` has no socket IP ([Rate limiting](rate-limiting.md)). Full
+walkthrough: [Next.js quickstart](quickstart-next.md).
 
 **Where it fits:** Create one catch-all route file, export what this returns,
 and the whole route set is live. Keep it on the Node runtime, not the Edge

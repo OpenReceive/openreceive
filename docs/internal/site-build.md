@@ -9,7 +9,10 @@ is there.
 ## Why there is a contract at all
 
 The agent directions ([`docs/agents/node.md`](../agents/node.md),
-[`docs/agents/rails.md`](../agents/rails.md)) are the payload behind the site's
+[`docs/agents/fastify.md`](../agents/fastify.md),
+[`docs/agents/next.md`](../agents/next.md),
+[`docs/agents/rails.md`](../agents/rails.md),
+[`docs/agents/btcpay.md`](../agents/btcpay.md)) are the payload behind the site's
 **Copy agent directions** button. Someone pastes them into Cursor, Claude or
 Codex, and from that moment the URLs inside them are running in other people's
 editors and cannot be recalled. A link the site stops serving does not degrade
@@ -32,7 +35,7 @@ directions link the former.
 
 ## `contract_version`
 
-The contract is at **v4**. A site that reads it should refuse to publish a
+The contract is at **v5**. A site that reads it should refuse to publish a
 version it does not understand rather than publish part of it — a half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -55,6 +58,20 @@ contract is how a payload ends up linking a page nobody serves.
   plugin ships are the same bytes. Its screenshots are listed in `assets[]`
   and served verbatim under `/assets/`. A version bump because a site that
   ignored `assets[]` would render the home page with every image broken.
+- **v5** — adds `frameworks[]`: one row per framework landing page
+  (`/integrations/<id>` — `express`, `fastify`, `nextjs`, `rails`,
+  `btcpay-server`), carrying everything the page renders: the heading, the
+  quickstart page and title, the copy-button payload path, the install line,
+  the version floor, the finished-example URL, the demo port, a `video` slot
+  and `shared_checkout_demo`. The table is generated and gated here — every
+  quickstart is a public doc, every agent stack a payload, every example a
+  directory, every video null, an absolute URL or an `assets[]` entry — so a
+  demo or guide that goes missing fails this repo's build rather than the
+  site's. Alongside it: two new payloads (`/agent-directions/fastify.md`,
+  `/agent-directions/next.md`) and their guides. A version bump because the
+  landing template reads the table instead of a hand-kept list: a site on v4
+  has no framework pages, and one that half-read v5 could render a page for a
+  framework whose payload it does not serve.
 
 `release_version` moves with every library release and says nothing about the
 shape of this file; `contract_version` moves only when the site has to do
@@ -75,7 +92,7 @@ something new.
    `text/markdown; charset=utf-8`, no chrome. This is not optional and not a
    nicety: it is what the directions link, so a site that publishes only `path`
    ships a reading list that resolves to blank pages.
-5. Serve the two `agent-directions-payload` entries as **raw markdown**, and use
+5. Serve the five `agent-directions-payload` entries as **raw markdown**, and use
    the same bytes behind the copy button.
 6. Serve every `agent_discovery.artifacts[]` entry **verbatim**: the named
    `source` file's exact bytes at `path`, with the given `content_type`, no
@@ -99,7 +116,14 @@ something new.
    `docs/assets/`, so that rule is complete.
 9. Publish nothing in `never_publish[]`. Those are contributor docs — release
    keys, unreleased internals, forbidden-change lists.
-10. Confirm every path in `site_owned[]` still resolves. Most are yours; the
+10. Render one landing page per `frameworks[]` row at `/integrations/<id>`:
+   the hero from `heading`, the copy button on `agent_payload_path`, the
+   guide link on `quickstart_path`, the install line and `requires`, the
+   example link on `example_url`. Hide the video slot while `video` is null;
+   play an absolute URL or serve an `/assets/` path from `assets[]`. When
+   `shared_checkout_demo` is false (BTCPay), show the video and screenshots
+   instead of the shared checkout panel.
+11. Confirm every path in `site_owned[]` still resolves. Most are yours; the
    agent-discovery trio (`/llms.txt`, `/openapi.yaml`, `/agents`) is listed
    there as must-exist but sourced from this repo as described above.
 
@@ -109,8 +133,9 @@ something new.
 | --- | --- | --- |
 | `guide` | `/guides/<slug>` | Every public doc. `/guides` itself is the index (`docs/guides/README.md`). |
 | `api-docs` | `/api_docs` | Alias of `/guides/api-reference`, kept because the directions and the site have always linked it. |
-| `agent-directions` | `/guides/agent-directions-node`, `…-rails` | The payload as a normal page, for people reading it. |
-| `agent-directions-payload` | `/agent-directions/node.md`, `/rails.md` | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
+| `agent-directions` | `/guides/agent-directions-node`, `…-fastify`, `…-next`, `…-rails`, `…-btcpay` | The payload as a normal page, for people reading it. |
+| `agent-directions-payload` | `/agent-directions/node.md`, `/fastify.md`, `/next.md`, `/rails.md`, `/btcpay.md` | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
+| framework page | `/integrations/<id>` | `frameworks[]` (contract v5) — not a `publish[]` entry, because the page is the site's own template rendered from the row; the row names which `publish[]` pages it links. |
 | `agents-page` | `/agents` | The coding-agents entrypoint (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
 | `plugin-readme` | `/btcpay` | Carries a `video` field: play `video.path` inline at the top of the page with `video.poster` as its poster (both are `assets[]` entries), in place of the README's GitHub-only attachment URL. The BTCPay Server home: the plugin README (`packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md`) rendered and twinned like a guide, its screenshots from `assets[]`. Link it from the site navigation as the BTCPay entrypoint; the guides (`/guides/quickstart-btcpay`, `/guides/btcpay-reference`, and the swap guides) are the full documentation behind it. |
 | `asset` | `/assets/<path>` | `assets[]` — verbatim bytes of a file under `docs/assets/`, embedded or linked by a `publish[]` entry: the README's screenshots, its demo video (`video/mp4`) and the poster frame that links to it. Rewrite the link the same way as an image `src`. |
@@ -152,8 +177,9 @@ absolute, and already points at a `.md`, which is the point of them.
   absorbed in one prompt alongside the user's own code. `bytes` in the contract
   is what the button will copy. If a payload ever exceeds the budget, CI here
   fails before it reaches you.
-- Put the button on the matching quickstart page, and say what it is: directions
-  for a coding agent, including the quickstart itself.
+- Put the button on the matching quickstart page and on the framework landing
+  page (`frameworks[].agent_payload_path`), and say what it is: directions for
+  a coding agent, including the quickstart itself.
 
 ## `/llms.txt`, and the recommended `/llms-full.txt`
 
@@ -175,6 +201,8 @@ Renaming or dropping any of these strands a payload that is already pasted
 somewhere:
 
 - a `/guides/<slug>` path in `publish[]`
+- a `frameworks[].id` — the site's `/integrations/<id>` URL is what the
+  quickstart pages and the homepage grid link
 - **any `markdown_path`** — this is where the directions actually send an agent,
   so it is the one most likely to be quietly missing and the one whose absence
   is hardest to notice from a browser

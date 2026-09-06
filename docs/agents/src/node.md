@@ -11,6 +11,12 @@ models (`ShopOrder`, a signed-cookie visitor, an in-memory catalog) over tables
 that already exist. Find this application's order, product, and user models —
 whatever they are actually named — and map the three hooks onto those.
 
+Keep this application's frontend framework, authentication and database. Pick
+the UI package that matches the frontend that is already here
+(`@openreceive/react`, `/vue`, `/svelte`, `/angular`, or `/elements` for
+plain HTML) — do not add React to a Vue app. Reuse the app's existing
+session/auth in `authorize` and its existing database handle in `storage.db`.
+
 ## What OpenReceive is
 
 A payment library that runs inside YOUR server. It mounts HTTP routes in the

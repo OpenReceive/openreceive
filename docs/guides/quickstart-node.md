@@ -1,4 +1,4 @@
-# Node quickstart
+# Node quickstart (Express)
 
 Express + React. Requires Node ≥ 22.
 
@@ -19,15 +19,21 @@ identical.
 | Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
+Fastify: [quickstart-fastify.md](quickstart-fastify.md) · Next.js:
+[quickstart-next.md](quickstart-next.md). This page is the Express one.
+
 On a fresh project, also install what this guide assumes is already there: the
 framework and an env loader (`npm install express dotenv`), plus your ORM
 before step 2 (`npm install prisma @prisma/client` on the Prisma path) —
 `openreceive scaffold` emits files for the ORM you name but never installs it.
 
+<!-- shared:begin install-notes -->
 npm environments that run with `ignore-scripts` (some editor sandboxes) skip
 Prisma's engine download and esbuild's binary postinstall, so a typecheck or
 build that fails only there is environmental, not a code problem.
+<!-- shared:end install-notes -->
 
+<!-- shared:begin migrate -->
 ## 2. Migrate the payment tables
 
 ```sh
@@ -47,11 +53,13 @@ No ORM? A bare driver handle (`pg`, `node:sqlite`, `better-sqlite3`) is a
 supported `db` in step 4, and there is no scaffold flavor for it — execute the
 same DDL once yourself with `paymentsSchemaSql(dialect)` from
 `@openreceive/http` instead of scaffolding.
+<!-- shared:end migrate -->
 
 ## 3. Add wallet credentials
 
 Create a server-only `.env`:
 
+<!-- shared:begin credentials -->
 ```dotenv
 NWC_URI=
 LSC_URI_PRIMARY=
@@ -67,6 +75,7 @@ LSC_URI_BACKUP=
 Never put these values in browser code. Your application refuses to start if
 the NWC code also advertises spend methods such as `pay_invoice`; mint a
 receive-only code ([Security](security.md)).
+<!-- shared:end credentials -->
 
 OpenReceive reads `process.env`; creating a `.env` file is not enough on its
 own. How that file (or production secrets) get into the process —
@@ -159,6 +168,7 @@ supported when you need a shared wallet client or a custom repository.
 → [createOpenReceive](api-reference.md#createopenreceive) ·
 [createHost](api-reference.md#createhost)
 
+<!-- shared:begin reference -->
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns the order id the page will pass as
 the `reference`. OpenReceive never prices from payer input.
@@ -173,7 +183,9 @@ paid twice.
 Naming boundary: TypeScript APIs use camelCase fields (`paymentHash`,
 `amountMsats`); everything on the wire — the mounted HTTP routes and the
 browser snapshots — is snake_case (`payment_hash`, `amount_msats`).
+<!-- shared:end reference -->
 
+<!-- shared:begin render -->
 ## 5. Render checkout
 
 ```tsx
@@ -188,7 +200,9 @@ sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
 plain `<link rel="stylesheet">` works with no build step — and scoped: every
 rule applies only inside what OpenReceive renders, so the sheet is safe next
 to any CSS framework (Mantine, Bootstrap, your own reset) in any import order.
+<!-- shared:end render -->
 
+<!-- shared:begin render-notes -->
 `<Checkout>` is complete as rendered: it already shows the `description` from
 `amountFor` and the collapsed transaction-details panel. Do not build a custom
 UI to satisfy those rules — they only become your job if you replace the
@@ -211,6 +225,7 @@ the base as `assetBaseUrl="/openreceive-assets"`
 
 That is the whole loop: your server owns the price and the order, the payer gets
 an invoice, and `onPaid` runs once inside the settlement transaction.
+<!-- shared:end render-notes -->
 
 A runnable illustration of this boundary — not a template to copy models from —
 is Buy a Button
@@ -218,6 +233,7 @@ is Buy a Button
 It has products, visitors, and orders, with the three hooks as the only bridge.
 Map that shape onto the models in THIS app.
 
+<!-- shared:begin verify -->
 ## 6. Verify
 
 ```sh
@@ -230,7 +246,9 @@ and probes the wallet relay to confirm the code is receive-only. Add
 `--url http://localhost:3000` to confirm the routes are mounted; every failing
 line states its own fix.
 → [openreceive doctor](api-reference.md#openreceive-doctor)
+<!-- shared:end verify -->
 
+<!-- shared:begin next -->
 ## Next
 
 - [Authorization](authorization.md) — your policy boundary
@@ -243,3 +261,4 @@ line states its own fix.
 More on wiring, storage, and routes:
 [Authorization](authorization.md), [Payment storage](storage.md),
 [API reference](api-reference.md).
+<!-- shared:end next -->

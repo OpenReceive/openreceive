@@ -7,7 +7,7 @@
  * wiring) is identical, which is the property that makes the E2E harness worth
  * trusting.
  *
- * Shared by all three Node stacks so that "testkit mode" means exactly one
+ * Shared by all four Node stacks so that "testkit mode" means exactly one
  * thing. The Hello Fruit demo this replaces had the branch in its Express app
  * only, and its Next.js stack quietly handed the testkit sentinel to a real
  * wallet client.

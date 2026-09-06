@@ -62,6 +62,16 @@ const STACKS = [
     quickstart: "docs/guides/quickstart-node.md",
   },
   {
+    stack: "fastify",
+    source: "docs/agents/src/fastify.md",
+    quickstart: "docs/guides/quickstart-fastify.md",
+  },
+  {
+    stack: "next",
+    source: "docs/agents/src/next.md",
+    quickstart: "docs/guides/quickstart-next.md",
+  },
+  {
     stack: "rails",
     source: "docs/agents/src/rails.md",
     quickstart: "docs/guides/quickstart-rails.md",
@@ -89,10 +99,14 @@ const STACKS = [
  */
 const UNLISTED_GUIDES = {
   "agent-directions-node": "this payload's own page",
+  "agent-directions-fastify": "this payload's own page",
+  "agent-directions-next": "this payload's own page",
   "agent-directions-rails": "this payload's own page",
   "agent-directions-btcpay": "this payload's own page",
   guides: "linked as the index at the end of the reading list, not as an entry",
   "quickstart-node": "inlined in full below, or another stack's",
+  "quickstart-fastify": "inlined in full below, or another stack's",
+  "quickstart-next": "inlined in full below, or another stack's",
   "quickstart-rails": "inlined in full below, or another stack's",
   "quickstart-btcpay": "inlined in full below, or another stack's",
   "btcpay-reference":
@@ -158,7 +172,12 @@ export function inlineGuide(markdown, publicSlugs) {
   // A guide's trailing "Next" section is a list of links to its siblings. The
   // payload already carries its own reading list, so the copy costs budget to
   // say the same thing twice.
-  const lines = markdown.replace(/\n## Next\n[\s\S]*$/, "\n").split("\n");
+  // The shared-section fences (tools/docs/check-quickstart-parity.mjs) are a
+  // build-time gate, not prose; a pasted payload has no use for them.
+  const lines = markdown
+    .replace(/\n## Next\n[\s\S]*$/, "\n")
+    .split("\n")
+    .filter((line) => !/^<!-- shared:(begin|end) [a-z0-9-]+ -->$/.test(line));
   const out = [];
   let inFence = false;
   for (const line of lines) {

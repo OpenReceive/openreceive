@@ -3,19 +3,21 @@
 | Command | Purpose | Requires Secrets |
 | --- | --- | --- |
 | `npm test` | Run the Node test suite (`test:js`). `pretest:js` first builds the Angular dist chain — the one `@openreceive/*` import under `tests/` with no tsconfig `paths` entry. | No |
-| `npm run check` | Run the fast local gate: `validate` (JSON/schema/vector/provider validation plus generated-doc-table freshness) then `scan:secrets`. | No |
+| `npm run check` | Run the fast local gate: `validate` (JSON/schema/vector/provider validation plus generated-doc-table freshness), then `scan:secrets`, then `scan:naming`. | No |
 | `npm run test:ci` | Run the full repository gate: `test:ci:core` then `test:ci:release`. | No |
 | `npm run test:ci:core` | Deterministic source gate, and exactly what `ci.yml` runs per push: `check`, lint, format check, workflow check, generated-model freshness, public-API surface check, typecheck, Vue and Svelte checks, dead-export check, JS tests, package smoke. | No |
 | `npm run test:ci:release` | Release-shaped gate: build packages, Ruby tests, demo container and release checks, the Rails example's currency-drift check, demo builds (Node demos plus the Rails Shakapacker bundle), client-bundle scan, docs build, the .NET plugin suite. | No |
 | `npm run test:live` | Live NWC smoke against a real wallet (Node + Ruby). Never part of the deterministic gate. | Yes |
 | `npm run test:e2e` | Playwright end-to-end suite: boots the node-express Buy a Button demo in `DEMO_WALLET=testkit` mode and drives real Chromium through all four framework tabs (lightning, swap + refund, remint, persistence). Run `npm run build:packages` first: the demo's vite server resolves `@openreceive/*` to the built dists, and a stale dist fails the boot with a missing-export error (CI builds before every run for the same reason). Server stdout is piped (demo boot / `on_paid`, OpenReceive INFO). `LOG_LEVEL=DEBUG` for more OpenReceive detail; `--headed` / `--ui` to watch the browser. Weekly full run in `demos.yml`. | No |
-| `npm run test:e2e:smoke` | The lightning spec's React tab only — the per-push `e2e-smoke` job in `ci.yml`. | No |
+| `npm run test:e2e:smoke` | The lightning spec's React tab only, against node-express — the per-push `e2e-smoke` job in `ci.yml`. | No |
+| `npm run test:e2e:smoke:fastify` | The same smoke spec against the fastify demo (`OPENRECEIVE_E2E_STACK=fastify`); the second step of the `e2e-smoke` job. | No |
 | `npm run test:orms` | Real-ORM adapter lane: knex, typeorm, and prisma each drive the payments repository through their `@openreceive/http` factory on sqlite (generates the Prisma client first). The per-push unit tests pin the factories against fakes; this proves them against the actual ORMs. Weekly `orm-adapters` job in `demos.yml`. | No |
 | `npm run check:public-api` | Diff every publishable package's export surface against the committed snapshot (`tools/validate/public-api.snapshot.json`) — the gate behind the curated adapter/wrapper surfaces. Regenerate a reviewed change with `--update`. | No |
 | `npm run check:vue` | Type-check the Vue wrapper with `vue-tsc`. | No |
 | `npm run check:svelte` | Type-check the Svelte wrapper with `svelte-check`. | No |
 | `npm run validate` | Contract/vector validation plus generated doc-table freshness (spec route/error tables, headless symbol inventory), the kernel-table cross-checks (OpenAPI and JSON Schema enums against `spec/data/kernel-tables.json`), and vector coverage per engine (`spec/test-vectors/coverage.json`). Vector validation runs here — there is no separate `test:vectors` command. | No |
 | `npm run scan:secrets` | Scan public repo files for likely committed receive-only NWC codes and reject tracked env files. | No |
+| `npm run scan:naming` | Fail on the two-word spelling of the product name in any tracked file; the name is `OpenReceive`, one word, everywhere. | No |
 | `npm run scan:client-bundles` | Scan generated demo `dist` bundles for browser-side NWC markers after `build:demo`. | No |
 | `npm run generate:models` | Regenerate the generated contract constants and kernel tables from OpenAPI, AsyncAPI, and `spec/data/kernel-tables.json` — into TypeScript (`core`, `http`, `node`), Ruby (`openreceive/generated/tables.rb`), and C# (`packages/dotnet/.../Generated/OpenReceiveTables.cs`). | No |
 | `npm run typecheck` | Typecheck all JS/TS packages and the Buy a Button server/demo TypeScript. | No |

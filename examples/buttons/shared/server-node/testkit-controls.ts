@@ -7,9 +7,9 @@
  * production surface.
  *
  * FRAMEWORK-FREE, the same way shop-routes.ts is: `testkitControl` is the whole
- * behaviour, and the Express and Next.js adapters below and in the app router
- * only translate. That is what lets the harness point at any of the three Node
- * stacks rather than only the one whose glue happened to be written.
+ * behaviour, and the Express and Fastify adapters below and the Next.js app
+ * router only translate. That is what lets the harness point at any of the
+ * four Node stacks rather than only the one whose glue happened to be written.
  *
  * Payload notes — keyed by what the fakes actually expose:
  * - Invoices are selected by `payment_hash` (or `invoice`), matching
@@ -22,6 +22,7 @@
 import type { SwapAttentionReason, SwapProviderState } from "@openreceive/node";
 import type { TestkitReceiveClient, TestkitSwapProvider } from "@openreceive/testkit";
 import express, { type Express, type Request, type Response } from "express";
+import type { FastifyInstance } from "fastify";
 
 export const SHOP_TESTKIT_PREFIX = "/__testkit";
 
@@ -189,4 +190,26 @@ function errorBody(status: number, message: string) {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The Fastify adapter. Pass `fixtures` only in testkit mode.
+ *
+ * Fastify parses the JSON body itself, so unlike the Express mount there is
+ * no parser to add; `request.body` is already the payload (or undefined on a
+ * bodiless GET).
+ */
+export function mountShopTestkitControlsFastify(
+  app: FastifyInstance,
+  fixtures: ShopTestkitFixtures | undefined,
+): void {
+  app.all(`${SHOP_TESTKIT_PREFIX}/*`, (request, reply) => {
+    const action = (request.params as { "*": string })["*"].replace(/^\/+/, "");
+    const result = testkitControl(action, request.body, fixtures);
+    return reply.code(result.status).send(result.json);
+  });
+  app.all(SHOP_TESTKIT_PREFIX, (_request, reply) => {
+    const result = testkitControl("", undefined, fixtures);
+    return reply.code(result.status).send(result.json);
+  });
 }

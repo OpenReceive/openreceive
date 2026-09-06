@@ -1,5 +1,5 @@
 {
-  "contract_version": 4,
+  "contract_version": 5,
   "release_version": "0.4.3",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 1722
+      "bytes": 1959
     },
     {
       "path": "/guides/quickstart-node",
@@ -21,9 +21,29 @@
       "source": "docs/guides/quickstart-node.md",
       "kind": "guide",
       "slug": "quickstart-node",
-      "title": "Node Framework Quickstart",
+      "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 11328
+      "bytes": 11967
+    },
+    {
+      "path": "/guides/quickstart-fastify",
+      "markdown_path": "/guides/quickstart-fastify.md",
+      "source": "docs/guides/quickstart-fastify.md",
+      "kind": "guide",
+      "slug": "quickstart-fastify",
+      "title": "Fastify Quickstart",
+      "category": "quickstart",
+      "bytes": 12974
+    },
+    {
+      "path": "/guides/quickstart-next",
+      "markdown_path": "/guides/quickstart-next.md",
+      "source": "docs/guides/quickstart-next.md",
+      "kind": "guide",
+      "slug": "quickstart-next",
+      "title": "Next.js Quickstart",
+      "category": "quickstart",
+      "bytes": 14852
     },
     {
       "path": "/guides/quickstart-rails",
@@ -33,7 +53,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 16078
+      "bytes": 16557
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -123,7 +143,7 @@
       "slug": "automated-swaps",
       "title": "Automated Swaps",
       "category": "guide",
-      "bytes": 3528
+      "bytes": 3920
     },
     {
       "path": "/guides/swap-refunds",
@@ -173,7 +193,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 4631
+      "bytes": 5312
     },
     {
       "path": "/guides/host-testing",
@@ -193,7 +213,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 99652
+      "bytes": 100473
     },
     {
       "path": "/guides/security",
@@ -253,7 +273,27 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 26404
+      "bytes": 26981
+    },
+    {
+      "path": "/guides/agent-directions-fastify",
+      "markdown_path": "/guides/agent-directions-fastify.md",
+      "source": "docs/agents/fastify.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-fastify",
+      "title": "Agent Directions: Fastify",
+      "category": "quickstart",
+      "bytes": 28475
+    },
+    {
+      "path": "/guides/agent-directions-next",
+      "markdown_path": "/guides/agent-directions-next.md",
+      "source": "docs/agents/next.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-next",
+      "title": "Agent Directions: Next.js",
+      "category": "quickstart",
+      "bytes": 30870
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -263,7 +303,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 32349
+      "bytes": 33275
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -283,7 +323,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 99652,
+      "bytes": 100473,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -294,7 +334,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 2318
+      "bytes": 2461
     },
     {
       "path": "/btcpay",
@@ -317,7 +357,27 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 26404,
+      "bytes": 26981,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/fastify.md",
+      "source": "docs/agents/fastify.md",
+      "kind": "agent-directions-payload",
+      "stack": "fastify",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 28475,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/next.md",
+      "source": "docs/agents/next.md",
+      "kind": "agent-directions-payload",
+      "stack": "next",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 30870,
       "copy_button": true,
       "self_contained": true
     },
@@ -327,7 +387,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 32349,
+      "bytes": 33275,
       "copy_button": true,
       "self_contained": true
     },
@@ -340,6 +400,103 @@
       "bytes": 10084,
       "copy_button": true,
       "self_contained": true
+    }
+  ],
+  "frameworks": [
+    {
+      "id": "express",
+      "label": "Express",
+      "family": "node",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Express",
+      "quickstart_slug": "quickstart-node",
+      "quickstart_path": "/guides/quickstart-node",
+      "quickstart_title": "Express Quickstart (Node)",
+      "agent_stack": "node",
+      "agent_payload_path": "/agent-directions/node.md",
+      "adapter_package": "@openreceive/express",
+      "install": "npm install @openreceive/express @openreceive/react",
+      "requires": "Node ≥ 22",
+      "example_path": "examples/buttons/server/node-express",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/node-express",
+      "demo_port": "3000",
+      "video": null,
+      "shared_checkout_demo": true
+    },
+    {
+      "id": "fastify",
+      "label": "Fastify",
+      "family": "node",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Fastify",
+      "quickstart_slug": "quickstart-fastify",
+      "quickstart_path": "/guides/quickstart-fastify",
+      "quickstart_title": "Fastify Quickstart",
+      "agent_stack": "fastify",
+      "agent_payload_path": "/agent-directions/fastify.md",
+      "adapter_package": "@openreceive/fastify",
+      "install": "npm install @openreceive/fastify @openreceive/react",
+      "requires": "Node ≥ 22",
+      "example_path": "examples/buttons/server/fastify",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/fastify",
+      "demo_port": "3004",
+      "video": null,
+      "shared_checkout_demo": true
+    },
+    {
+      "id": "nextjs",
+      "label": "Next.js",
+      "family": "node",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Next.js",
+      "quickstart_slug": "quickstart-next",
+      "quickstart_path": "/guides/quickstart-next",
+      "quickstart_title": "Next.js Quickstart",
+      "agent_stack": "next",
+      "agent_payload_path": "/agent-directions/next.md",
+      "adapter_package": "@openreceive/next",
+      "install": "npm install @openreceive/next @openreceive/react",
+      "requires": "Node ≥ 22, Next.js ≥ 15 (App Router)",
+      "example_path": "examples/buttons/server/nextjs-fullstack",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/nextjs-fullstack",
+      "demo_port": "3002",
+      "video": null,
+      "shared_checkout_demo": true
+    },
+    {
+      "id": "rails",
+      "label": "Rails",
+      "family": "rails",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Rails",
+      "quickstart_slug": "quickstart-rails",
+      "quickstart_path": "/guides/quickstart-rails",
+      "quickstart_title": "Rails Quickstart",
+      "agent_stack": "rails",
+      "agent_payload_path": "/agent-directions/rails.md",
+      "adapter_package": "openreceive-rails",
+      "install": "bundle add openreceive-rails",
+      "requires": "Ruby ≥ 3.2, Rails ≥ 8.0",
+      "example_path": "examples/buttons/server/rails",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/rails",
+      "demo_port": "3003",
+      "video": null,
+      "shared_checkout_demo": true
+    },
+    {
+      "id": "btcpay-server",
+      "label": "BTCPay Server",
+      "family": "btcpay",
+      "heading": "Accept Bitcoin & Stablecoin Payments With BTCPay Server",
+      "quickstart_slug": "quickstart-btcpay",
+      "quickstart_path": "/guides/quickstart-btcpay",
+      "quickstart_title": "BTCPay Server Quickstart",
+      "agent_stack": "btcpay",
+      "agent_payload_path": "/agent-directions/btcpay.md",
+      "adapter_package": "BTCPayServer.Plugins.OpenReceive",
+      "install": "Server Settings → Plugins → OpenReceive → Install",
+      "requires": "BTCPay Server ≥ 2.4.2",
+      "example_path": "packages/dotnet/BTCPayServer.Plugins.OpenReceive",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive",
+      "demo_port": null,
+      "video": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
+      "shared_checkout_demo": false
     }
   ],
   "assets": [
@@ -484,7 +641,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 3559
+        "bytes": 3936
       },
       {
         "path": "/openapi.yaml",

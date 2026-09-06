@@ -4,6 +4,19 @@ Every web instance needs the same receive-only NWC configuration and access
 to your database. Attempt rows, the settlement claim, and the scan gate all
 live there. There is no separate OpenReceive deployment service.
 
+## Requirements
+
+| Stack | Floor |
+| --- | --- |
+| Node (Express, Fastify, Next.js) | Node ≥ 22; the App Router on Next.js ≥ 15 |
+| Rails | Ruby ≥ 3.2, Rails ≥ 8.0; PostgreSQL, SQLite or MySQL (`mysql2`/`trilogy`) |
+| BTCPay Server plugin | BTCPay Server ≥ 2.4.2 |
+
+Every stack needs the same two things at runtime: a receive-only NWC code in
+the server environment, and a database the application already owns — the
+library adds two tables to it and asks for nothing else (no Redis, no queue,
+no OpenReceive service).
+
 ## Multi-instance semantics
 
 Scale web instances freely. Concurrent creates for the same order serialize
@@ -15,7 +28,9 @@ Restarting may cause extra calls, never lost durable truth.
 
 ## The durable scan gate
 
-Settlement runs on the request path by default. Every mounted OpenReceive
+Settlement runs on the request path by default: the mounted OpenReceive
+routes settle pending invoices as payers use them, and the optional
+notifications worker below is the only separate process. Every mounted OpenReceive
 payment route (not `GET /rates`) runs one reconcile pass when attempts are
 pending. Open tabs share that pass: when one payer closes the tab, another
 payer's later request can settle the first invoice.

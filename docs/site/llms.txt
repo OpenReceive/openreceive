@@ -12,10 +12,14 @@ markdown.
 
 ## Start here
 
-- [Node quickstart](https://openreceive.org/guides/quickstart-node.md): Express, Fastify, or Next.js server with any frontend
+- [Express quickstart (Node)](https://openreceive.org/guides/quickstart-node.md): Express server with any frontend
+- [Fastify quickstart](https://openreceive.org/guides/quickstart-fastify.md)
+- [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md): the App Router catch-all route and a client-component checkout
 - [Rails quickstart](https://openreceive.org/guides/quickstart-rails.md)
 - [BTCPay Server quickstart](https://openreceive.org/guides/quickstart-btcpay.md): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
-- [Agent directions, Node](https://openreceive.org/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
+- [Agent directions, Node (Express)](https://openreceive.org/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
+- [Agent directions, Fastify](https://openreceive.org/agent-directions/fastify.md)
+- [Agent directions, Next.js](https://openreceive.org/agent-directions/next.md)
 - [Agent directions, Rails](https://openreceive.org/agent-directions/rails.md)
 - [Agent directions, BTCPay Server](https://openreceive.org/agent-directions/btcpay.md)
 

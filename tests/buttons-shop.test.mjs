@@ -1,5 +1,5 @@
 /**
- * The Buy a Button Node suite — PART 11 of the demo plan, for the three Node
+ * The Buy a Button Node suite — PART 11 of the demo plan, for the four Node
  * stacks.
  *
  * These call the five handlers DIRECTLY, with no HTTP server and no framework.
@@ -21,6 +21,7 @@ import {
   serializeIdentityCookie,
   SHOP_COOKIE,
 } from "../examples/buttons/shared/server-node/cookie.ts";
+import { createShopFastifyApp } from "../examples/buttons/shared/server-node/fastify-app.ts";
 import { createShopAmountFor } from "../examples/buttons/shared/server-node/openreceive-config.ts";
 import {
   bootstrap,
@@ -502,4 +503,58 @@ test("the cookie secret is stable across a restart, or the persistence demo is a
   const dir = mkdtempSync(path.join(tmpdir(), "buttons-secret-"));
   delete process.env.SHOP_COOKIE_SECRET;
   assert.equal(resolveCookieSecret(dir, "x"), resolveCookieSecret(dir, "x"));
+});
+
+// ====================================================== the Fastify adapter
+
+/**
+ * The one stack whose adapter is not Express-shaped. Everything above calls
+ * the handlers directly; this boots the Fastify host in testkit wallet mode
+ * and drives it through `app.inject` — no port, no network — to prove the
+ * translation layer: the cookie reaches the wire with its flags, `secure`
+ * follows the forwarded scheme (trustProxy), the OpenReceive plugin answers
+ * under its register-time prefix, and the testkit controls are live.
+ */
+test("the fastify host carries the identity cookie, honours trustProxy, and registers the plugin", async () => {
+  process.env.OPENRECEIVE_DEMO_DB = mkdtempSync(path.join(tmpdir(), "buttons-fastify-"));
+  process.env.DEMO_WALLET = "testkit";
+  const { app, store } = await createShopFastifyApp({ demoId: "fastify-test", rateLimiting: true });
+  try {
+    const plain = await app.inject({ method: "GET", url: "/shop/bootstrap" });
+    assert.equal(plain.statusCode, 200);
+    const cookie = plain.headers["set-cookie"];
+    assert.match(String(cookie), new RegExp(`^${SHOP_COOKIE}=`));
+    assert.match(String(cookie), /HttpOnly/);
+    assert.match(String(cookie), /SameSite=Lax/);
+    assert.doesNotMatch(String(cookie), /Secure/);
+    assert.equal(plain.json().shop.openreceive_prefix, "/openreceive");
+
+    // Behind a TLS-terminating proxy the cookie is Secure — only because the
+    // instance trusts the forwarded scheme.
+    const forwarded = await app.inject({
+      method: "GET",
+      url: "/shop/bootstrap",
+      headers: { "x-forwarded-proto": "https" },
+    });
+    assert.match(String(forwarded.headers["set-cookie"]), /Secure/);
+
+    // The plugin lives under the prefix passed at register(); outside it the
+    // app's own 404 answers, never an OpenReceive JSON 404.
+    assert.equal((await app.inject({ method: "GET", url: "/openreceive/rates" })).statusCode, 200);
+    assert.equal((await app.inject({ method: "GET", url: "/__testkit/state" })).statusCode, 200);
+
+    // A cart the host route refuses is a 422 with a sentence, and the reply
+    // carries it as JSON — the shape the browser's `response.json()` expects.
+    const empty = await app.inject({
+      method: "POST",
+      url: "/shop/orders",
+      payload: { items: [] },
+    });
+    assert.equal(empty.statusCode, 422);
+    assert.equal(typeof empty.json().error, "string");
+  } finally {
+    await app.close();
+    store.close();
+    delete process.env.DEMO_WALLET;
+  }
 });

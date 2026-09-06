@@ -1,9 +1,16 @@
 # Automated swaps
 
-A swap lets the payer send another asset (USDT, USDC, SOL, ETH, …) and still
+A swap lets the payer send another asset and still
 settle your Lightning invoice. OpenReceive mints a Lightning invoice in your
 wallet, asks the configured provider for deposit instructions, and stores both
 on one payment-attempt row before the payer sees anything.
+
+The pay-in assets OpenReceive knows are the seven in
+`spec/data/kernel-tables.json`, which every engine renders from: **USDT** on
+Tron, Ethereum and Solana; **USDC** on Ethereum and Solana; **ETH** on
+Ethereum; **SOL** on Solana. Bitcoin over Lightning is never a swap. Which of
+the seven a checkout actually offers is the configured provider's catalog on
+the day — a provider that omits one simply does not list it.
 
 Turn swaps on with `LSC_URI_PRIMARY` (and optional `LSC_URI_BACKUP`) —
 [Environment variables](environment-variables.md). While the primary is up,

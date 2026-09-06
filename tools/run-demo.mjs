@@ -6,6 +6,7 @@
 //   npm run demo static    -> Buy a Button, static HTML + small API            (:3001)
 //   npm run demo nextjs    -> Buy a Button, Next.js fullstack                  (:3002)
 //   npm run demo buttons   -> Buy a Button, Rails + Postgres                  (:3003)
+//   npm run demo fastify   -> Buy a Button, Fastify + React                   (:3004)
 //
 // It ensures the repo-root .env exists, validates NWC_URI,
 // and runs the compose stack with the local port-publishing override.

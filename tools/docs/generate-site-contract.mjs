@@ -19,9 +19,15 @@
 //
 // `--check` fails the gate when the committed contract is stale.
 
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { markdownTwin, SITE_OWNED_PATHS, SITE_REDIRECTS } from "./site-paths.mjs";
+import { OPENRECEIVE_DEMOS } from "../shared/demo-catalog.mjs";
+import {
+  AGENT_PAYLOAD_PATHS,
+  markdownTwin,
+  SITE_OWNED_PATHS,
+  SITE_REDIRECTS,
+} from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -34,6 +40,8 @@ const ALIASES = [{ path: "/api_docs", slug: "api-reference", kind: "api-docs" }]
 
 const AGENT_PAYLOADS = [
   { path: "/agent-directions/node.md", source: "docs/agents/node.md", stack: "node" },
+  { path: "/agent-directions/fastify.md", source: "docs/agents/fastify.md", stack: "fastify" },
+  { path: "/agent-directions/next.md", source: "docs/agents/next.md", stack: "next" },
   { path: "/agent-directions/rails.md", source: "docs/agents/rails.md", stack: "rails" },
   { path: "/agent-directions/btcpay.md", source: "docs/agents/btcpay.md", stack: "btcpay" },
 ];
@@ -153,6 +161,86 @@ const AGENT_ARTIFACTS = [
   },
 ];
 
+// The framework table (contract v5): one row per landing page the site
+// renders at /integrations/<id>. Generated here rather than hand-maintained on
+// the site so that a demo, quickstart or payload that goes missing fails THIS
+// build, not the site's. Everything derivable is derived — the demo directory
+// and port from tools/shared/demo-catalog.mjs, the quickstart title from the
+// manifest — and every reference is gated below: the quickstart must be a
+// public doc, the agent stack a payload, the example path a directory on
+// disk, and the video null, an absolute URL, or an assets[] entry.
+const GITHUB_TREE = "https://github.com/OpenReceive/openreceive/tree/master";
+const FRAMEWORKS = [
+  {
+    id: "express",
+    label: "Express",
+    family: "node",
+    quickstart_slug: "quickstart-node",
+    agent_stack: "node",
+    adapter_package: "@openreceive/express",
+    install: "npm install @openreceive/express @openreceive/react",
+    requires: "Node ≥ 22",
+    demo: "node-express",
+    video: null,
+    shared_checkout_demo: true,
+  },
+  {
+    id: "fastify",
+    label: "Fastify",
+    family: "node",
+    quickstart_slug: "quickstart-fastify",
+    agent_stack: "fastify",
+    adapter_package: "@openreceive/fastify",
+    install: "npm install @openreceive/fastify @openreceive/react",
+    requires: "Node ≥ 22",
+    demo: "fastify",
+    video: null,
+    shared_checkout_demo: true,
+  },
+  {
+    id: "nextjs",
+    label: "Next.js",
+    family: "node",
+    quickstart_slug: "quickstart-next",
+    agent_stack: "next",
+    adapter_package: "@openreceive/next",
+    install: "npm install @openreceive/next @openreceive/react",
+    requires: "Node ≥ 22, Next.js ≥ 15 (App Router)",
+    demo: "nextjs",
+    video: null,
+    shared_checkout_demo: true,
+  },
+  {
+    id: "rails",
+    label: "Rails",
+    family: "rails",
+    quickstart_slug: "quickstart-rails",
+    agent_stack: "rails",
+    adapter_package: "openreceive-rails",
+    install: "bundle add openreceive-rails",
+    requires: "Ruby ≥ 3.2, Rails ≥ 8.0",
+    demo: "rails",
+    video: null,
+    shared_checkout_demo: true,
+  },
+  {
+    id: "btcpay-server",
+    label: "BTCPay Server",
+    family: "btcpay",
+    quickstart_slug: "quickstart-btcpay",
+    agent_stack: "btcpay",
+    adapter_package: "BTCPayServer.Plugins.OpenReceive",
+    install: "Server Settings → Plugins → OpenReceive → Install",
+    requires: "BTCPay Server ≥ 2.4.2",
+    // Not a shop demo: the plugin's home is its README, and the landing page
+    // shows the README's video and screenshots instead of the shared checkout.
+    demo: null,
+    example_path: "packages/dotnet/BTCPayServer.Plugins.OpenReceive",
+    video: assetPath("docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4"),
+    shared_checkout_demo: false,
+  },
+];
+
 const manifest = JSON.parse(readFileSync(path.join(root, "docs/manifest.json"), "utf8"));
 const release = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
 const bySlug = new Map(manifest.docs.map((doc) => [doc.slug, doc]));
@@ -240,6 +328,72 @@ for (const page of PLUGIN_PAGES) {
   assets.push(...pageAssets);
 }
 
+const frameworks = FRAMEWORKS.map((framework) => {
+  const { demo: demoKey, ...row } = framework;
+  const demo =
+    demoKey === null ? null : OPENRECEIVE_DEMOS.find((entry) => entry.keys.includes(demoKey));
+  if (demoKey !== null && !demo) {
+    throw new Error(
+      `${TARGET}: framework ${row.id} names demo "${demoKey}", which is not in tools/shared/demo-catalog.mjs`,
+    );
+  }
+  const quickstart = bySlug.get(row.quickstart_slug);
+  if (!quickstart?.public) {
+    throw new Error(
+      `${TARGET}: framework ${row.id} names quickstart ${row.quickstart_slug}, which is not a public doc in docs/manifest.json`,
+    );
+  }
+  if (!AGENT_PAYLOADS.some((payload) => payload.stack === row.agent_stack)) {
+    throw new Error(
+      `${TARGET}: framework ${row.id} names agent stack ${row.agent_stack}, which has no payload in AGENT_PAYLOADS`,
+    );
+  }
+  const payloadPath = `/agent-directions/${row.agent_stack}.md`;
+  if (!AGENT_PAYLOAD_PATHS.includes(payloadPath)) {
+    throw new Error(
+      `${TARGET}: ${payloadPath} is not in AGENT_PAYLOAD_PATHS (tools/docs/site-paths.mjs)`,
+    );
+  }
+  const example_path = demo ? demo.dir : row.example_path;
+  if (
+    !existsSync(path.join(root, example_path)) ||
+    !statSync(path.join(root, example_path)).isDirectory()
+  ) {
+    throw new Error(
+      `${TARGET}: framework ${row.id} names example ${example_path}, which is not a directory in this repo`,
+    );
+  }
+  const video = row.video;
+  const videoOk =
+    video === null ||
+    /^https:\/\//.test(video) ||
+    assets.some((asset) => asset.path === video && asset.content_type === "video/mp4");
+  if (!videoOk) {
+    throw new Error(
+      `${TARGET}: framework ${row.id} video must be null, an absolute https URL, or an assets[] mp4 under docs/assets/ (got ${video})`,
+    );
+  }
+  return {
+    id: row.id,
+    label: row.label,
+    family: row.family,
+    heading: `Accept Bitcoin & Stablecoin Payments With ${row.label}`,
+    quickstart_slug: row.quickstart_slug,
+    quickstart_path: `/guides/${row.quickstart_slug}`,
+    quickstart_title: quickstart.title,
+    agent_stack: row.agent_stack,
+    agent_payload_path: payloadPath,
+    adapter_package: row.adapter_package,
+    install: row.install,
+    requires: row.requires,
+    example_path,
+    example_url: `${GITHUB_TREE}/${example_path}`,
+    demo_port: demo ? demo.port : null,
+    video,
+    shared_checkout_demo: row.shared_checkout_demo,
+  };
+});
+
 // The copy-button payloads are served as raw markdown as well as copied, so an
 // agent that CAN fetch has one URL to fetch and everyone else pastes the same
 // bytes.
@@ -267,7 +421,14 @@ const contract = {
   // published source embeds, served verbatim under /assets/. A bump again:
   // the README links nothing the site does not already serve, but a site that
   // ignored `assets[]` would render the BTCPay home with eight broken images.
-  contract_version: 4,
+  // v5 adds `frameworks[]`: one row per /integrations/<id> landing page, with
+  // the quickstart, payload, install line, example and demo port the page
+  // renders, each gated here against the manifest, the payload list, the
+  // demo catalog and the filesystem. A bump because the site's landing
+  // template reads the table instead of a hand-kept list: a site on v4 has
+  // no framework pages, and one that half-read v5 would render a page for a
+  // framework whose payload it does not serve.
+  contract_version: 5,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.
@@ -276,6 +437,14 @@ const contract = {
   generated_by: "tools/docs/generate-site-contract.mjs",
   how_to_update: "docs/internal/site-build.md",
   publish: [...publish, ...copyButton],
+  // The framework landing pages (contract v5). Render one page per row at
+  // /integrations/<id>; the copy button copies `agent_payload_path`, the
+  // "read the guide" link is `quickstart_path`, the "finished example" link
+  // is `example_url`. `video` is null until a speed-run exists (hide the
+  // slot), an absolute URL, or an `assets[]` path to serve. When
+  // `shared_checkout_demo` is false the page shows the video and screenshots
+  // instead of the shared checkout panel.
+  frameworks,
   // Images embedded by a publish[] entry (contract v4). Serve `source`'s bytes
   // at `path` with `content_type`; the renderer maps the source's relative
   // <img src> to `path`, in the page and in the markdown twin alike.
@@ -336,5 +505,5 @@ if (!check && current !== serialized) writeFileSync(absolute, serialized);
 
 console.log(
   `${check ? "Checked" : "Wrote"} ${TARGET}: ${publish.length} routes, ` +
-    `${copyButton.length} copy payloads, ${assets.length} assets, ${contract.never_publish.length} never-publish.`,
+    `${copyButton.length} copy payloads, ${frameworks.length} frameworks, ${assets.length} assets, ${contract.never_publish.length} never-publish.`,
 );

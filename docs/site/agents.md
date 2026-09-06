@@ -16,7 +16,9 @@ the full quickstart), or paste the one-prompt agent directions:
 - GitHub Copilot discovers the same skills from the repository's
   `.agents/skills/` directory automatically.
 - No installer? Copy the agent directions for your stack and paste them into
-  your agent: [Node](https://openreceive.org/agent-directions/node.md) ·
+  your agent: [Node (Express)](https://openreceive.org/agent-directions/node.md) ·
+  [Fastify](https://openreceive.org/agent-directions/fastify.md) ·
+  [Next.js](https://openreceive.org/agent-directions/next.md) ·
   [Rails](https://openreceive.org/agent-directions/rails.md) ·
   [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md). Each
   is self-contained, quickstart included.

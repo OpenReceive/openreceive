@@ -72,7 +72,8 @@ jobs:
       - run: ./tools/ci/ruby-gem-build.sh
 
   # Browser E2E smoke on every push/PR: boots the node-express Buy a Button
-  # demo against the testkit wallet and drives a real checkout in Chromium.
+  # demo against the testkit wallet and drives a real checkout in Chromium,
+  # then the same smoke spec against the fastify stack (the minimal host).
   # Independent of the core job so the browser lane never blocks the fast
   # checks; the full cross-framework spec matrix runs weekly in demos.yml.
   # Flake policy lives in the Playwright config (retries in CI), never here.
@@ -85,6 +86,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-playwright
       - run: npm run test:e2e:smoke
+      - run: npm run test:e2e:smoke:fastify
 
   # Full Buy a Button Rails example on every push/PR, not only in the weekly
   # demos lane: a schema break in the example once shipped because nothing

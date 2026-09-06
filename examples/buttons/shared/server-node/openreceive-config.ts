@@ -14,7 +14,7 @@ import { visitorIdFrom } from "./shop-routes.ts";
 import { checkoutDescription, claimShopOrderPaid, formatAmount, type ShopStore } from "./store.ts";
 
 /**
- * Non-secret service settings, shared by the three Node stacks.
+ * Non-secret service settings, shared by the four Node stacks.
  *
  * Credentials do not belong here: NWC_URI, LSC_URI_PRIMARY and LSC_URI_BACKUP
  * come from the process environment.

@@ -52,6 +52,8 @@ export const MARKDOWN_TWINNED_SITE_PAGES = ["/api_docs", "/guides", "/agents", "
 // this list only makes them servable to the link check below.
 export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/node.md",
+  "/agent-directions/fastify.md",
+  "/agent-directions/next.md",
   "/agent-directions/rails.md",
   "/agent-directions/btcpay.md",
 ];
