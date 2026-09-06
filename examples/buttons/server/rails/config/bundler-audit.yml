@@ -2,4 +2,10 @@
 # CVEs that are not relevant to the application can be enumerated on the ignore list below.
 
 ignore:
-  - CVE-THAT-DOES-NOT-APPLY
+  # rubyzip < 3.4.0 path traversal on extraction. rubyzip reaches this app only
+  # through nwc-ruby -> rbsecp256k1, whose extconf.rb uses it once, at gem install
+  # time, to unpack the libsecp256k1 v0.2.0 release zip that it has just verified
+  # against a hard-coded SHA-256. Nothing at runtime requires "zip", and no
+  # attacker-supplied archive is ever extracted. rbsecp256k1 6.0.0 (latest) pins
+  # rubyzip ~> 2.3, so an upgrade is not available; drop this entry once it is.
+  - CVE-2026-85396
