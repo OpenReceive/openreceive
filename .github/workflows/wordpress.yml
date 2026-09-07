@@ -1,0 +1,32 @@
+name: WordPress integration
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wordpress-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wordpress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-playwright
+      - name: Start isolated WordPress and MySQL
+        run: docker compose -p openreceive-wp-test -f examples/wordpress/compose.yml -f examples/wordpress/compose.override.yml.example -f examples/wordpress/compose.testkit.yml up --build -d --wait
+      - name: Verify native WooCommerce integration
+        run: npm run test:wordpress
+      - name: Audit the packaged plugin
+        run: |
+          docker exec openreceive-wp-test-wordpress-1 wp --allow-root plugin install plugin-check --activate
+          npm run check:wordpress
+      - run: npm run test:e2e:wordpress
+      - name: Stop disposable demo
+        if: always()
+        run: docker compose -p openreceive-wp-test -f examples/wordpress/compose.yml -f examples/wordpress/compose.testkit.yml down -v

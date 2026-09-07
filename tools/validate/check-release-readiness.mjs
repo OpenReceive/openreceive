@@ -112,9 +112,19 @@ expect(
 );
 const testCi = rootPackage.scripts?.["test:ci"] ?? "";
 const testCiRelease = rootPackage.scripts?.["test:ci:release"] ?? "";
+const parallelLanes = testCiRelease
+  .split(" && ")
+  .filter((command) => command.startsWith("node tools/ci/parallel.mjs "))
+  .flatMap((command) => command.trim().split(/\s+/).slice(2));
+const testCiArtifacts = parallelLanes.includes("test:ci:artifacts")
+  ? (rootPackage.scripts?.["test:ci:artifacts"] ?? "")
+  : "";
 expect(
   testCi.includes("npm run check:release") ||
-    (testCi.includes("test:ci:release") && testCiRelease.includes("npm run check:release")),
+    (testCi.includes("npm run test:ci:release") &&
+      [testCiRelease, testCiArtifacts].some((command) =>
+        command.includes("npm run check:release"),
+      )),
   "package.json: test:ci must include check:release",
 );
 expect(
@@ -279,7 +289,7 @@ for (const gemName of GEM_NAMES) {
     "package.json: missing release:pypi:build script",
   );
   expect(
-    testCiRelease.includes("npm run test:python"),
+    testCiRelease.includes("npm run test:python") || parallelLanes.includes("test:python"),
     "package.json: test:ci:release must run the Python engine suite (test:python)",
   );
 }
@@ -338,7 +348,7 @@ for (const gemName of GEM_NAMES) {
     "package.json: missing release:composer:build script",
   );
   expect(
-    testCiRelease.includes("npm run test:php"),
+    testCiRelease.includes("npm run test:php") || parallelLanes.includes("test:php"),
     "package.json: test:ci:release must run the PHP engine suite (test:php)",
   );
 }

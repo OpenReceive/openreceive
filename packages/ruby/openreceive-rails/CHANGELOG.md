@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.5 - 2026-09-07
+
+Release in lockstep with the Python/PHP publishing workflow fixes and complete
+WooCommerce integration documentation. Shared HTTP golden fixtures now use
+the canonical placeholder definitions. No Ruby public API change.
+
 ## 0.4.4 - 2026-09-07
 
 Version lockstep with the 0.4.4 npm release (every checkout image now ships

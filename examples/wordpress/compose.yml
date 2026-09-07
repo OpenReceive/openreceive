@@ -1,0 +1,44 @@
+services:
+  wordpress:
+    build:
+      context: ../..
+      dockerfile: examples/wordpress/Dockerfile
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress-local
+      WORDPRESS_CONFIG_EXTRA: |
+        define('OPENRECEIVE_NWC_URI', getenv('NWC_URI') ?: '');
+        define('OPENRECEIVE_LSC_URI_PRIMARY', getenv('LSC_URI_PRIMARY') ?: '');
+        define('OPENRECEIVE_LSC_URI_BACKUP', getenv('LSC_URI_BACKUP') ?: '');
+      DEMO_SITE_URL: http://localhost:3009
+    env_file:
+      - ../../.env
+    volumes:
+      - wordpress-data:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/openreceive-demo-ready && curl -fsS http://localhost:3009/wp-login.php >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  db:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress-local
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  wordpress-data:
+  mysql-data:

@@ -1,0 +1,53 @@
+{
+  "name": "openreceive/wordpress",
+  "description": "OpenReceive payment gateway for WooCommerce, backed by the PHP engine.",
+  "type": "wordpress-plugin",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": "^8.2",
+    "ext-sodium": "*",
+    "ext-gmp": "*",
+    "nyholm/psr7": "^1.8",
+    "openreceive/openreceive": "~0.4.5"
+  },
+  "require-dev": {
+    "brianhenryie/strauss": "^0.26",
+    "phpunit/phpunit": "^11.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "OpenReceive\\WP\\": "src/"
+    }
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../openreceive",
+      "options": {
+        "symlink": false,
+        "versions": {
+          "openreceive/openreceive": "0.4.5"
+        }
+      }
+    }
+  ],
+  "extra": {
+    "strauss": {
+      "namespace_prefix": "OpenReceive\\WP\\Vendor\\",
+      "classmap_prefix": "OpenReceive_WP_Vendor_",
+      "constant_prefix": "",
+      "target_directory": "vendor-prefixed",
+      "update_call_sites": ["src"],
+      "include_modified_date": false
+    }
+  },
+  "config": {
+    "platform": {
+      "php": "8.2.0"
+    },
+    "sort-packages": true
+  },
+  "scripts": {
+    "test": "phpunit"
+  }
+}

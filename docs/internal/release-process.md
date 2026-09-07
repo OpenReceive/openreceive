@@ -2,7 +2,7 @@
 
 The release surface, all versioned in lockstep:
 
-- OpenReceive `0.4.4`
+- OpenReceive `0.4.5`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -147,17 +147,19 @@ Run from the repo root on a clean, current `master`.
    npm run check:release
    ```
 
-5. Run the full gate. Everything must be green; a red gate ends the release.
+5. The full gate must pass on the exact release commit, as shown below.
+   Run focused checks while preparing changes, then commit and run the full
+   gate once. If a fix changes the commit, run the gate on the corrected commit
+   before tagging. A red gate stops publication.
 
-   ```sh
-   npm run test:ci
-   ```
-
-6. Date the headings, commit, tag, push:
+6. Date the headings and commit, then run the full gate on that exact commit
+   before creating the new tag and pushing:
 
    ```sh
    npm run release:stamp -- --version <x.y.z>   # must report 4 changelogs
    git add -A && git commit -m "release: v<x.y.z>"
+   npm run test:ci
+   git diff --exit-code && test -z "$(git status --porcelain)"
    git tag -a v<x.y.z> -m "OpenReceive v<x.y.z>"
    git push origin master && git push origin v<x.y.z>
    ```
@@ -372,6 +374,24 @@ The release owner checks, before tagging:
 - Demo build passes.
 - Live wallet smoke passes when a trusted `NWC_URI` is available in the environment.
 
+## Faster local verification
+
+`npm run test:ci` retains every check. After the core gate and the shared
+package build, it runs Ruby, Python, PHP, .NET and the ordered
+artifact/demo lane concurrently, with at most four lanes by default. Each
+lane prints its duration and a separate log path; any failure fails the gate.
+Set `OPENRECEIVE_CI_JOBS=1` for a serial run or raise it to `5` to run all five
+lanes together. The .NET lane uses Docker's assigned CPU and memory budget.
+
+Do not overlap package smoke with package builds: both rewrite `dist/`.
+Python's package hook needs the completed standalone build. The standalone
+parity check runs after Python refreshes its vendored copy. The artifact lane
+keeps demo builds, bundle scans and docs generation in order. JavaScript test
+files already run concurrently through Node's test runner; CI already splits
+language engines into separate jobs. Reuse the successful CI and Release Dry
+Run results on the exact release commit when publishing, as the publisher
+already does, instead of weakening or skipping release coverage.
+
 ## GitHub Workflows
 
 - `.github/workflows/ci.yml` runs the full local gate on every push and PR.
@@ -405,7 +425,7 @@ environment), each with exactly `contents: read` + `id-token: write`.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.4.4`. Per-package tags are
+Tag the prepared release commit once, as `v0.4.5`. Per-package tags are
 deliberately not used while every package and gem releases in lockstep with the
 workspace version. Introduce per-package tags only if versions ever diverge,
 after the contract is stable enough to avoid confusing SDK consumers.
@@ -416,7 +436,7 @@ Release notes should name which examples were rebuilt, which package versions
 they run, and whether the live wallet smoke was skipped or paid manually.
 
 Do not publish npm tarballs from automation: npm publishing stays on the
-maintainer's machine, and the gems are the only registry a workflow writes to.
+maintainer's machine, while RubyGems, PyPI and Composer publishing use their protected workflows.
 Do not expand new SDKs, framework adapters, React default UI, provider-data
 variants, or generated models unless the shared contract and conformance gate
 cover the behavior they expose.

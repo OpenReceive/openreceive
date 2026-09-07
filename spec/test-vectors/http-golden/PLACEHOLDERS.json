@@ -1,0 +1,9 @@
+{
+  "<request_id>": {
+    "type": "string",
+    "pattern": "req_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+  },
+  "<payment_hash>": { "type": "string", "pattern": "[0-9a-f]{64}" },
+  "<bolt11>": { "type": "string", "prefix": "ln" },
+  "<unix_seconds>": { "type": "integer", "minimum": 0 }
+}

@@ -13,7 +13,7 @@
   <PropertyGroup>
     <Product>OpenReceive</Product>
     <Description>Receive Lightning payments into your own wallet with a receive-only NWC code, and accept USDT, USDC, ETH and SOL through a Lightning Swap Connect provider.</Description>
-    <Version>0.4.4</Version>
+    <Version>0.4.5</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 

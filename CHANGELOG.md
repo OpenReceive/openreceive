@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.5 - 2026-09-07
+
+Release workflow fixes for the first Composer publication: isolated deploy keys
+for the PHP engine and Laravel split repositories, an explicit bootstrap mode
+before Packagist registration, and reproducible immutable tags on retries.
+Python and PHP publish from this new tag; existing public tags stay unchanged.
+
+Complete the WooCommerce integration files referenced by the previous commit:
+native classic/block checkout, host-owned orders with durable payment attempts,
+HPOS support, the Docker demo, integration checks, plugin packaging and guides.
+The WordPress.org listing remains unsubmitted; this release does not submit it.
+
+The local release gate runs Ruby, Python, PHP, .NET and ordered artifact checks
+in up to four concurrent lanes after shared builds, with separate logs,
+durations and a failing exit status if any lane fails. All existing checks are
+retained. The .NET runner builds and tests in Docker without a host SDK.
+
+The custom element restores the selected swap asset when recovering an active
+payment attempt, so the existing swap instructions remain visible.
+Shared HTTP golden placeholders keep the JS, Ruby, Python and PHP fixtures in
+sync. All packages are versioned together at 0.4.5; the release gate rebuilds
+the Node/Express, Fastify, Laravel, FastAPI, Django, static HTML, Next.js and
+Rails demo assets against those packages. Live-wallet verification is reported
+separately in the release results; no manual payment is part of this release.
+
 ## 0.4.4 - 2026-09-07
 
 ### Every image ships inside the JavaScript

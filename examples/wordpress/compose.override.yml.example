@@ -1,0 +1,4 @@
+services:
+  wordpress:
+    ports:
+      - "3009:3009"

@@ -1,0 +1,13 @@
+# Isolated fake wallet: use only on a disposable local shop. No real credentials.
+services:
+  wordpress:
+    env_file: !reset []
+    volumes:
+      - testkit-data:/var/lib/openreceive-testkit
+    environment:
+      OPENRECEIVE_TESTKIT_DIR: /var/lib/openreceive-testkit
+      WORDPRESS_CONFIG_EXTRA: |
+        define('OPENRECEIVE_DEMO_WALLET', 'testkit');
+        define('WP_ENVIRONMENT_TYPE', 'local');
+volumes:
+  testkit-data:

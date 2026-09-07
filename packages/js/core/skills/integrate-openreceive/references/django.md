@@ -1,6 +1,6 @@
 # OpenReceive agent directions (Django)
 
-These directions describe OpenReceive 0.4.4.
+These directions describe OpenReceive 0.4.5.
 
 Add OpenReceive to a Django project — the app you are already working in. You
 do not need a copy of the OpenReceive source: the Python package is on PyPI

@@ -18,7 +18,7 @@
     "illuminate/routing": "^11.0 || ^12.0",
     "illuminate/support": "^11.0 || ^12.0",
     "nyholm/psr7": "^1.8",
-    "openreceive/openreceive": "~0.4.4",
+    "openreceive/openreceive": "~0.4.5",
     "symfony/psr-http-message-bridge": "^7.0"
   },
   "require-dev": {
@@ -48,7 +48,7 @@
       "options": {
         "symlink": true,
         "versions": {
-          "openreceive/openreceive": "0.4.4"
+          "openreceive/openreceive": "0.4.5"
         }
       }
     }
