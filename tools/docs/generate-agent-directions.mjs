@@ -92,6 +92,11 @@ const STACKS = [
     quickstart: "docs/guides/quickstart-php.md",
   },
   {
+    stack: "laravel",
+    source: "docs/agents/src/laravel.md",
+    quickstart: "docs/guides/quickstart-laravel.md",
+  },
+  {
     stack: "btcpay",
     source: "docs/agents/src/btcpay.md",
     quickstart: "docs/guides/quickstart-btcpay.md",
@@ -120,6 +125,7 @@ const UNLISTED_GUIDES = {
   "agent-directions-django": "this payload's own page",
   "agent-directions-rails": "this payload's own page",
   "agent-directions-php": "this payload's own page",
+  "agent-directions-laravel": "this payload's own page",
   "agent-directions-btcpay": "this payload's own page",
   guides: "linked as the index at the end of the reading list, not as an entry",
   "quickstart-node": "inlined in full below, or another stack's",
@@ -129,6 +135,7 @@ const UNLISTED_GUIDES = {
   "quickstart-django": "inlined in full below, or another stack's",
   "quickstart-rails": "inlined in full below, or another stack's",
   "quickstart-php": "inlined in full below, or another stack's",
+  "quickstart-laravel": "inlined in full below, or another stack's",
   "quickstart-btcpay": "inlined in full below, or another stack's",
   "btcpay-reference":
     "the BTCPay plugin's reference; linked from the BTCPay payload, another stack's otherwise",

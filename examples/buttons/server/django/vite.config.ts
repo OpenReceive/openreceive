@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
-import { copyProviderAssetsPlugin } from "../../shared/copy-openreceive-provider-assets-plugin.ts";
 
 const demoRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(demoRoot, "../../../..");
@@ -50,7 +49,7 @@ export default defineConfig(({ mode }) => {
         API_PREFIXES.map((prefix) => [prefix, { target: `http://127.0.0.1:${backendPort}` }]),
       ),
     },
-    plugins: [react(), copyProviderAssetsPlugin(repoRoot), djangoPlugin()],
+    plugins: [react(), djangoPlugin()],
   };
 });
 

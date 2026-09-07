@@ -432,14 +432,6 @@ export interface CheckoutElementAttributeOptions {
    * renders no "Decode" link and the invoice is never sent to a third party.
    */
   readonly decodeLinkUrl?: string;
-  /**
-   * Where this app serves the packages' `dist/assets` trees, as one base URL.
-   * The string form of the `resolveAssetUrl` seam: every packaged asset key is a
-   * relative path under one `assets/` root, so the value is joined to it
-   * directly. Emitted as the element's `asset-base-url` attribute, which is how
-   * the Vue/Svelte/Angular wrappers reach a seam a function cannot cross.
-   */
-  readonly assetBaseUrl?: string;
   /** False renders the snapshot without status polling (no POST /payments/check). */
   readonly polling?: boolean;
   /** Status poll cadence in milliseconds; defaults to OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS. */
@@ -867,19 +859,21 @@ export interface WizardRouteAssetDisplay {
   readonly id: string;
   readonly label: string;
   readonly subtitle: string;
-  /** The icon as a URL: the packaged `data:` URI, or the host resolver's answer. */
+  /** The icon as a `data:` URI. */
   readonly icon: string;
   /** The key behind `icon`, into `paymentIconSvgs` for a renderer drawing it inline. */
   readonly iconId: PaymentIconId;
-  /** The packaged path behind `icon`, for a host serving the files itself. */
-  readonly iconPath: string;
   readonly selected: boolean;
 }
 
 export interface WizardProviderTutorialDisplay {
   readonly index: number;
   readonly path: string;
-  readonly image: string;
+  /**
+   * The screenshot as a `data:` URI, or `undefined` until
+   * `loadPayTutorialImages()` has resolved (the caption renders alone until then).
+   */
+  readonly image: string | undefined;
   readonly caption: string;
 }
 
@@ -888,14 +882,8 @@ export interface WizardProviderDisplay {
   readonly name: string;
   readonly kind: string;
   readonly url: string;
+  /** The wallet logo as a `data:` URI. */
   readonly icon: string;
-  /**
-   * The packaged path the icon came from (`assets/provider-icons/strike.png`).
-   * `icon` is only loadable when the host's bundler resolved it; this is the
-   * key a host that serves the files itself maps, without going back to
-   * `providerRegistry` for `icon_path`.
-   */
-  readonly iconPath: string;
   readonly tutorials: readonly WizardProviderTutorialDisplay[];
   readonly copyLabel: string;
   readonly copiedLabel: string;

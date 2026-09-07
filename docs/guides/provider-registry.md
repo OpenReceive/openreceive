@@ -37,9 +37,9 @@ const validation = validateRegistry();
 
 The package exposes immutable objects so route helpers cannot accidentally
 mutate the source. Provider entries include `icon_path` values, and some include
-walkthrough tutorial paths. These are **local files shipped inside the package**
-— browser code is never pointed at remote favicon URLs — which also means your
-host has to be able to serve them. See [Assets](#assets) below.
+walkthrough tutorial paths. Those paths are keys into image tables compiled
+into the package — browser code is never pointed at remote favicon URLs, and
+your host never serves a file. See [Assets](#assets) below.
 
 Node receive servers do not re-host this static catalog. Browser UI packages
 import it directly, and server-side apps can import `@openreceive/provider-data`
@@ -47,46 +47,55 @@ when they need the same read-only suggestions.
 
 ## Assets
 
-Two kinds of image, two rules.
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`.
 
-**Payment-method icons** (Bitcoin, Lightning, USDT, …) need nothing from
-you. They are compiled into `@openreceive/browser`'s JavaScript: the
-drop-in draws them inline inside its shadow root, and `paymentIconUrls` /
-`getPaymentMethodIcon` and friends answer `data:image/svg+xml` URIs for any
-`<img>` of your own. No file to copy, no loader, no base URL, under any
-bundler. The only thing that can get in the way is a Content-Security-Policy
-`img-src` that forbids `data:` — and only if you put those URIs in your own
-`<img>` (the drop-in's inline SVG is not subject to `img-src`). Allow
-`data:` there, or serve files as below.
+Three tables, one rule:
 
-**Provider icons and pay tutorials** (`@openreceive/provider-data`, PNG and
-WebP, about 580 KB) are files your host serves. Vite usually resolves them
-from the import. Most other bundlers do not — the images come out blank, and
-the built bundle may contain `file://` paths (grep for `file://` if images
-are missing; the console also warns once). Pick one:
+- **Payment-method icons** (Bitcoin, Lightning, USDT, …) are inline SVG
+  compiled into `@openreceive/browser` (`paymentIconSvgs`). The custom element
+  draws them inline inside its shadow root; `paymentIconUrls` /
+  `getPaymentMethodIcon` and friends hand the same markup to any `<img>` as
+  `data:image/svg+xml` URIs.
+- **Wallet logos** are `data:image/webp;base64,…` URIs in
+  `@openreceive/provider-data`'s main bundle: `providerIconUrls` is the table,
+  keyed by the registry's `icon_path` (`assets/provider-icons/<id>.webp`), and
+  `providerIconUrl(provider)` the lookup. Thirty-seven logos at ≤ 72 px cost
+  about 35 KB (47 KB as base64) and load with the JavaScript.
+- **Pay tutorials** are the same kind of URI, keyed by each tutorial's `path`,
+  in a separate chunk the bundle imports on demand. `loadPayTutorialImages()`
+  fetches the chunk once (memoised; a rejection means "no image") and
+  `payTutorialImage(path)` answers from it synchronously — `undefined` until it
+  resolved, which is why `WizardProviderTutorialDisplay.image` is
+  `string | undefined`. Twenty screenshots at 800 px tall cost about 201 KB
+  (270 KB as base64) and are never downloaded until a payer opens a tutorial.
+  The shipped renderers call `loadPayTutorialImages` when a tutorial opens and
+  draw the caption alone until it resolves; a custom UI does the same.
 
-1. **Serve the tree and pass one base URL.** Copy
-   `node_modules/@openreceive/provider-data/dist/assets` to somewhere your
-   server serves — say `public/openreceive-assets/assets` — and set
-   `assetBaseUrl="/openreceive-assets"` (React / Vue / Svelte / Angular) or
-   `asset-base-url="/openreceive-assets"` (the custom element). Every packaged
-   path is joined to it: `/openreceive-assets/assets/provider-icons/strike.png`.
-   This is the one that works with plain `<openreceive-checkout>` markup, and
-   the one to reach for.
-2. **Copy the files next to your bundle** so the packaged URLs resolve on
-   their own. The demos do this with
-   `examples/buttons/shared/copy-openreceive-provider-assets-plugin.ts`
-   (Vite) and `copy-webpack-plugin` (the Rails demo).
-3. **Map each path yourself.** Display builders take
-   `resolveAssetUrl: (packagedPath) => url`.
-   `createAssetBaseUrlResolver(base)` from `@openreceive/browser/headless`
-   is option 1 as a function.
+Both provider tables are generated from the checked-in source images by
+`tools/package/generate-provider-images.mjs` (`npm run
+generate:provider-images`; `check:generated` fails when they are stale). It
+accepts only `.webp` and enforces byte budgets so the bundle cannot bloat
+silently: one logo ≤ 4,096 bytes and all logos ≤ 48 KB; one tutorial ≤ 48 KB
+and all tutorials ≤ 240 KB. When a budget fails, the generator prints the
+offender and the `cwebp` command that fixes it.
 
-A base URL or resolver, once set, is honoured for the payment icons too —
-they are then served as files from the same root (`assets/icons/<id>.svg`,
-keyed by `paymentIconPaths`; `@openreceive/browser/dist/assets` still ships
-them). That is the escape hatch for a strict `img-src`; otherwise there is no
-reason to copy them.
+Adding a wallet therefore means adding one ≤ 72 px `.webp` under
+`packages/js/provider-data/src/assets/provider-icons/` and naming it as the
+entry's `icon_path`; tutorials go under `src/assets/pay_tutorials/`. Encode
+them with the recipe the generator documents — downscale only, never upscale:
+
+```sh
+cwebp -q 80 -m 6 -af -sharp_yuv -resize 72 0 in.png -o out.webp    # wallet logo
+cwebp -q 40 -m 6 -af -sharp_yuv -resize 0 800 in.png -o out.webp   # pay tutorial
+```
+
+A test pins that every registry `icon_path` and tutorial `path` has an image
+and every image is referenced, so a typo in either direction fails the suite
+rather than drawing a blank tile.
 
 ## Route Model
 

@@ -7,19 +7,22 @@
 //
 //   openreceive-checkout.js      ONE self-registering ESM file: the elements
 //                                entry with every @openreceive/* dependency,
-//                                the tsup chunk and qrcode inlined, no bare
-//                                specifiers left. It calls defineElements() on
-//                                load and re-exports the @openreceive/elements
-//                                surface. Identifiers are NOT mangled
-//                                (WordPress.org guideline 4 forbids obfuscated
-//                                code); only whitespace is minified, so the
-//                                file is reproducible from this repo with
+//                                the tsup chunks and qrcode inlined, no bare
+//                                specifiers left. Every image the checkout
+//                                draws is inside it too (payment icons as
+//                                inline SVG, wallet logos and pay tutorials as
+//                                data: URIs) — esbuild without code splitting
+//                                inlines provider-data's lazy tutorial chunk,
+//                                which is what a single-file build wants. It
+//                                calls defineElements() on load and re-exports
+//                                the @openreceive/elements surface.
+//                                Identifiers are NOT mangled (WordPress.org
+//                                guideline 4 forbids obfuscated code); only
+//                                whitespace is minified, so the file is
+//                                reproducible from this repo with
 //                                `npm run build:packages`.
 //   openreceive-checkout.js.map  its source map
 //   openreceive-checkout.css     = the elements package's scoped styles.css
-//   assets/                      = @openreceive/provider-data/dist/assets (the
-//                                wallet logos and pay tutorials the element's
-//                                `asset-base-url` attribute points at)
 //   MANIFEST.json                workspace version + bytes + sha256 per file,
 //                                so a copied tree can be checked for staleness
 //
@@ -50,7 +53,6 @@ export const STANDALONE_PACKAGE_NAME = "@openreceive/elements";
 export const STANDALONE_ELEMENT_TAG_NAME = "openreceive-checkout";
 export const STANDALONE_JS_FILE = "openreceive-checkout.js";
 export const STANDALONE_CSS_FILE = "openreceive-checkout.css";
-export const STANDALONE_ASSETS_DIR = "assets";
 export const STANDALONE_MANIFEST_FILE = "MANIFEST.json";
 export const STANDALONE_SOURCE_URL = "https://github.com/openreceive/openreceive";
 export const STANDALONE_BUILD_COMMAND = "npm run build:packages";
@@ -60,7 +62,6 @@ export function standalonePaths(repoRoot = root) {
   return {
     elementsDist,
     outDir: path.join(elementsDist, "standalone"),
-    providerAssets: path.join(repoRoot, "packages/js/provider-data/dist/assets"),
     releaseDir: path.join(repoRoot, "dist"),
   };
 }
@@ -122,13 +123,12 @@ export async function buildStandaloneElements(input = {}) {
   const repoRoot = input.root ?? root;
   const log = input.log ?? console.error;
   const version = readWorkspaceVersion(repoRoot);
-  const { elementsDist, outDir, providerAssets, releaseDir } = standalonePaths(repoRoot);
+  const { elementsDist, outDir, releaseDir } = standalonePaths(repoRoot);
 
   const entryIndex = path.join(elementsDist, "index.js");
   const stylesCss = path.join(elementsDist, "styles.css");
   assertExists(entryIndex, "the @openreceive/elements dist entry");
   assertExists(stylesCss, "the @openreceive/elements dist stylesheet");
-  assertExists(providerAssets, "the @openreceive/provider-data assets tree");
 
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
@@ -194,7 +194,6 @@ export async function buildStandaloneElements(input = {}) {
   }
 
   copyFileSync(stylesCss, path.join(outDir, STANDALONE_CSS_FILE));
-  cpSync(providerAssets, path.join(outDir, STANDALONE_ASSETS_DIR), { recursive: true });
 
   const manifest = {
     package: STANDALONE_PACKAGE_NAME,

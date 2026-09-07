@@ -249,11 +249,11 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(tutorialIntro, /Pay a Lightning invoice with Strike/);
   assert.match(
     tutorialIntro,
-    /part="tutorial-header-logo" alt="" src="[^"]*assets\/provider-icons\/strike\.png"/,
+    /part="tutorial-header-logo" alt="" src="data:image\/webp;base64,[A-Za-z0-9+/=]+"/,
   );
   assert.match(
     tutorialIntro,
-    /part="tutorial-provider-logo" alt="" src="[^"]*assets\/provider-icons\/strike\.png"/,
+    /part="tutorial-provider-logo" alt="" src="data:image\/webp;base64,[A-Za-z0-9+/=]+"/,
   );
   // Apostrophes are HTML-escaped defensively (defense in depth for attribute contexts).
   assert.match(tutorialIntro, /It&#39;s easy to make this payment using Strike\./);
@@ -278,9 +278,10 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(tutorialStep, /Pay a Lightning invoice with Strike/);
   assert.match(
     tutorialStep,
-    /part="tutorial-header-logo" alt="" src="[^"]*assets\/provider-icons\/strike\.png"/,
+    /part="tutorial-header-logo" alt="" src="data:image\/webp;base64,[A-Za-z0-9+/=]+"/,
   );
-  assert.match(tutorialStep, /assets\/pay_tutorials\/strike-2\.webp/);
+  // The screenshot is lazily loaded; tests/inline-images.test.mjs covers both
+  // sides of that load. Here only the caption is pinned.
   assert.match(tutorialStep, /Choose Bitcoin wallet/);
   assert.match(tutorialStep, /Step 3 of 5/);
 

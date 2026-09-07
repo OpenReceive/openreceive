@@ -1389,10 +1389,10 @@ flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onSta
 `paymentWizard`, `theme` (host lock: wins over the stored preference and hides
 the toggle), `themeToggle` (default `true`; `false` hides the control but the
 checkout still stamps `data-theme`), `defaultTheme`, `storageKey`,
-`decodeLinkUrl`, `assetBaseUrl`, `csrfHeader`, `components`, `classNames`, `syncUrl`,
+`decodeLinkUrl`, `csrfHeader`, `components`, `classNames`, `syncUrl`,
 `resumePathPrefix`, `routeReference`, `resumable`, `resumePaymentHash`,
-`metadata`, `createFetch`,
-`resolveAssetUrl`.
+`metadata`, `createFetch`. There is no image prop: everything the checkout
+draws ships inside the JavaScript ([Provider registry](provider-registry.md#assets)).
 
 `csrfHeader` (default `X-CSRF-Token`) is the header name the page's
 `<meta name="csrf-token">` value is sent under on every request. Rails and
@@ -1413,8 +1413,7 @@ except `theme`, plus `checkout` and `reference` — has the same names and
 defaults in the Vue, Svelte and Angular wrappers. `theme` is React-only as a
 prop; the custom element carries the same lock as its `theme` attribute. The
 rest is React-only: `components`, `classNames`,
-`children` and `createFetch` have no wrapper equivalent, `resolveAssetUrl` is a
-function and so cannot cross an HTML attribute (pass `assetBaseUrl` instead), and
+`children` and `createFetch` have no wrapper equivalent, and
 `polling` / `pollIntervalMs` reach the wrappers only through their `options`
 escape hatch. [docs/internal/wrapper-parity.md](../internal/wrapper-parity.md) is
 the full table.
@@ -1454,9 +1453,8 @@ mode: `reference` + `prefix` attributes. Snapshot mode: `invoice`/`invoice-id`/
 `payment-hash`/... attributes. Polling knobs: `polling="false"` renders without status
 polling; `poll-interval-ms` tunes the interval. `csrf-header` names the header the
 `csrf-token` meta value is sent under (default `X-CSRF-Token`; Django `X-CSRFToken`,
-WordPress REST `X-WP-Nonce`). `asset-base-url` points the wizard's
-icons and tutorials at wherever this app serves the packages' `dist/assets` trees —
-the string form of `resolveAssetUrl`, and the only form plain markup can carry. Events (all seven): `openreceive-copy`,
+WordPress REST `X-WP-Nonce`). There is no asset attribute: everything the
+element draws ships inside its JavaScript. Events (all seven): `openreceive-copy`,
 `openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`,
 `openreceive-provider-copy`, `openreceive-start-over`, `openreceive-error`.
 

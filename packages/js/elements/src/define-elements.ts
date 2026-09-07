@@ -1,5 +1,4 @@
 import {
-  type AssetUrlResolver,
   type BrowserLoggerOption,
   buildMethodGridEntries,
   type CheckoutController,
@@ -7,7 +6,6 @@ import {
   type CheckoutSnapshot,
   type CheckoutState,
   copyInvoice,
-  createAssetBaseUrlResolver,
   createCheckoutActionEvent,
   createCheckoutController,
   createCheckoutErrorEvent,
@@ -23,6 +21,7 @@ import {
   deriveStatus,
   enterCheckoutResumePath,
   getSwapRefundFormError,
+  loadPayTutorialImages,
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
@@ -101,9 +100,6 @@ function checkoutSnapshotDisplayKey(snapshot: CheckoutSnapshot): string {
   });
 }
 
-/** One warning per document when both asset seams are wired at once. */
-let warnedAssetSeamConflict = false;
-
 /**
  * Register the OpenReceive custom elements with the browser's element
  * registry. Until this runs, `<openreceive-checkout>` and
@@ -150,6 +146,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     private refundAddressDraftSelectionEnd: number | null = null;
     /** Tutorial provider whose dialog was last focused, so re-renders don't re-steal focus. */
     private focusedTutorialProviderId: string | null = null;
+    private tutorialImagesRequested = false;
     /**
      * Create mode's whole request lifecycle — prepare-once, the deferred
      * Lightning mint, the swap start — plus the guard that keeps attributes the
@@ -223,7 +220,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl,
       ];
     }
 
@@ -250,8 +246,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumable ||
-        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl ||
-        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl;
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl;
       if (displayOnly) {
         this.render();
         this.syncThemeAncestorObserver();
@@ -302,26 +297,19 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     }
 
     /**
-     * The asset seam for this element. `resolveAssetUrl` on `defineElements` is
-     * the explicit, programmatic answer and wins; `asset-base-url` is the string
-     * every host can reach — plain markup and the Vue/Svelte/Angular wrappers
-     * included, since `defineElements` is first-write-wins and all three call it
-     * with no options. Setting both is a host mistake worth naming once.
+     * The tutorial screenshots are the one image set behind a dynamic import.
+     * The first tutorial open fetches them and re-renders; until then (or if
+     * the chunk never arrives) the dialog draws the caption alone.
      */
-    private resolveAssetUrlResolver(): AssetUrlResolver | undefined {
-      const base = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl);
-      if (options.resolveAssetUrl !== undefined) {
-        if (base !== null && !warnedAssetSeamConflict) {
-          warnedAssetSeamConflict = true;
-          globalThis.console?.warn(
-            "[openreceive] Both defineElements({ resolveAssetUrl }) and asset-base-url are set; " +
-              "resolveAssetUrl wins. Drop one.",
-          );
-        }
-        return options.resolveAssetUrl;
-      }
-      if (base === null || base.trim() === "") return undefined;
-      return createAssetBaseUrlResolver(base);
+    private loadTutorialImages(): void {
+      if (this.tutorialImagesRequested) return;
+      this.tutorialImagesRequested = true;
+      loadPayTutorialImages().then(
+        () => {
+          if (this.isConnected) this.render();
+        },
+        () => undefined,
+      );
     }
 
     // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element
@@ -483,7 +471,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         !this.isCreateMode() || this.session.lightningRequested || invoice.length > 0;
       const decodeLinkUrl =
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl) ?? undefined;
-      const assetUrlResolver = this.resolveAssetUrlResolver();
       // The shared session quotes before it starts, so an out-of-range amount
       // arrives here as an unavailable quote — the same pane React shows.
       const selectedQuote =
@@ -541,7 +528,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             : { checkoutId: this.latestCheckoutSnapshot.checkout_id }),
           lightningInvoice: invoice,
           ...(decodeLinkUrl === undefined ? {} : { decodeLinkUrl }),
-          ...(assetUrlResolver === undefined ? {} : { resolveAssetUrl: assetUrlResolver }),
           ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
             ? {}
             : {
@@ -1112,6 +1098,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             }
             this.activeTutorialProviderId = providerId;
             this.activeTutorialIndex = Number.isSafeInteger(index) && index >= 0 ? index : 0;
+            this.loadTutorialImages();
             this.render();
           });
         });

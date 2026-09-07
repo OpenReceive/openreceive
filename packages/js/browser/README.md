@@ -23,23 +23,22 @@ vue/svelte/angular wrappers. It is curated symbol-by-symbol rather than a
 re-export of the package, so a name that is not on it is package-private and
 will move without notice.
 
-## Icon assets
+## Images
 
-The payment-method icons (`btc`, `lightning`, `usdt`, …) are compiled into
-this package's JavaScript — nothing to copy, serve, or configure, under any
-bundler:
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`.
 
-- The custom element (`@openreceive/elements`, and the Vue/Svelte/Angular
-  wrappers over it) draws them inline in its shadow root from
-  `paymentIconSvgs`.
-- Everything that wants a URL — `@openreceive/react`, the display models,
-  `getPaymentMethodIcon` and friends, your own `<img>` — gets the same icons
-  from `paymentIconUrls` as `data:image/svg+xml` URIs. If your
-  Content-Security-Policy `img-src` forbids `data:`, allow it, or pass
-  `assetBaseUrl` / `resolveAssetUrl` and the icons are served as files
-  instead (`dist/assets/icons/*.svg` still ships, keyed by
-  `paymentIconPaths`).
-
-`@openreceive/provider-data`'s wallet logos and pay tutorials are files
-(PNG/WebP) your host serves; see
-[docs/guides/provider-registry.md](../../../docs/guides/provider-registry.md#assets).
+- The payment-method icons (`btc`, `lightning`, `usdt`, …) are compiled into
+  this package: the custom element (`@openreceive/elements`, and the
+  Vue/Svelte/Angular wrappers over it) draws them inline in its shadow root
+  from `paymentIconSvgs`, and everything that wants a URL —
+  `@openreceive/react`, the display models, `getPaymentMethodIcon` and
+  friends, your own `<img>` — gets them from `paymentIconUrls` as
+  `data:image/svg+xml` URIs.
+- The wallet logos and pay tutorials are `data:image/webp` URIs in
+  `@openreceive/provider-data`; `/headless` re-exports
+  `loadPayTutorialImages` / `payTutorialImage` for the lazy tutorial chunk.
+  See [docs/guides/provider-registry.md](../../../docs/guides/provider-registry.md#assets).

@@ -27,8 +27,7 @@
       "types": "./dist/headless.d.ts",
       "import": "./dist/headless.js"
     },
-    "./styles.css": "./dist/styles.css",
-    "./assets/*": "./dist/assets/*"
+    "./styles.css": "./dist/styles.css"
   },
   "dependencies": {
     "@openreceive/core": "0.4.3",
@@ -49,7 +48,7 @@
   "scripts": {
     "build:css": "node ../../../tools/package/build-browser-css.mjs",
     "build:icons": "node ../../../tools/package/generate-payment-icons.mjs",
-    "build": "npm run build:icons && npm run build:css && tsup src/index.ts src/headless.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css assets",
+    "build": "npm run build:icons && npm run build:css && tsup src/index.ts src/headless.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css",
     "prepack": "npm run build"
   },
   "license": "MIT",

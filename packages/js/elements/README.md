@@ -26,11 +26,12 @@ It dispatches plain DOM `CustomEvent`s (`openreceive-settled`,
 handler props over the shared binding at
 `@openreceive/elements/wrapper-shared`.
 
-## Icon assets
+## Images
 
-The checkout loads its payment-method icons by URL at runtime; your app must
-serve them where the resolution lands. See
-[Icon assets in `@openreceive/browser`](https://github.com/openreceive/openreceive/blob/master/packages/js/browser/README.md#icon-assets)
-for the per-bundler recipes.
+Everything the checkout draws — payment-method icons, wallet logos, pay
+tutorials — ships inside the JavaScript; nothing to copy, serve or configure,
+under any bundler. If your Content-Security-Policy has a strict `img-src`,
+allow `data:`. See
+[Images in `@openreceive/browser`](https://github.com/openreceive/openreceive/blob/master/packages/js/browser/README.md#images).
 
 Part of [OpenReceive](https://openreceive.org). Start with the [Node quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md); the full API is in the [API reference](https://github.com/openreceive/openreceive/blob/master/docs/guides/api-reference.md).

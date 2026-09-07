@@ -34,6 +34,9 @@ export const QUICKSTARTS = [
   // also carries the credentials block and the reading list.
   "docs/guides/quickstart-rails.md",
   "docs/guides/quickstart-django.md",
+  // Laravel carries the Node credentials block and reading list, and shares the
+  // eager-preflight and swap-refund paragraphs with Rails.
+  "docs/guides/quickstart-laravel.md",
   // Plain PHP carries the credentials block and the reading list.
   "docs/guides/quickstart-php.md",
 ];

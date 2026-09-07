@@ -270,19 +270,6 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * default), no decode link is rendered and the invoice never leaves the page.
    */
   decodeLinkUrl: "decode-link-url",
-  /**
-   * Where this app serves the packages' `dist/assets` trees, as one base URL —
-   * the string form of the `resolveAssetUrl` seam, so plain markup and the
-   * Vue/Svelte/Angular wrappers can reach it (a function cannot cross an HTML
-   * attribute). Every packaged key is a relative path under one `assets/` root,
-   * so the value is joined to it directly: `asset-base-url="/openreceive-assets"`
-   * makes `assets/provider-icons/strike.png` load from
-   * `/openreceive-assets/assets/provider-icons/strike.png`. Only the provider
-   * images need it; the payment-method icons are compiled in and drawn inline
-   * unless a base URL is set, in which case they are served as files too. A
-   * `resolveAssetUrl` passed to `defineElements` wins over it.
-   */
-  assetBaseUrl: "asset-base-url",
   /** `polling="false"` renders the snapshot without status polling (no POST /payments/check). */
   polling: "polling",
   /** Status poll cadence in milliseconds; defaults to OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS. */

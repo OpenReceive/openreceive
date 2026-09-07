@@ -71,9 +71,11 @@ one banner for every coin.
 as suggestions, not endorsements: any wallet that pays a Lightning invoice
 works.
 
-Serve the wallet logos yourself with `assetBaseUrl` / `asset-base-url`. Under
-most bundlers the packaged URLs become dead `file://` links otherwise. See
-[Provider registry](provider-registry.md#assets).
+The logos are data URIs inside `@openreceive/provider-data` — nothing to
+serve, under any bundler. A tutorial's screenshot arrives after
+`loadPayTutorialImages()` resolves (`WizardProviderTutorialDisplay.image` is
+`undefined` until then); draw the caption alone before that, never an `<img>`
+with an empty `src`. See [Provider registry](provider-registry.md#assets).
 
 On a short panel, pass `providerPreviewLimit` so the list does not push the
 QR off the screen.

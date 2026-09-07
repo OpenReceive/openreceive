@@ -240,8 +240,11 @@ components.
   "switch payment method".
 - No "Open wallet" button on desktop.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only. Host the icons with
-  `assetBaseUrl` / `asset-base-url`.
+  `createWizardRouteDisplays`. Lightning only. Every image ships inside
+  the JavaScript — logos as data URIs, tutorials once `loadPayTutorialImages()`
+  resolves (`image` is `undefined` until then) — so serve nothing and set no
+  asset option. When it works, the logos and payment icons render; a missing
+  image means a CSP `img-src` that blocks `data:`, and the console names it.
 
 ## More documentation
 
@@ -254,10 +257,9 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
 - https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
-- https://openreceive.org/guides/provider-registry.md — where the packaged icons and pay
-  tutorials come from, and how to serve them. The asset rule is the one a custom
-  UI is most likely to get wrong; this is the page that owns it, not the summary
-  in checkout-ux.md
+- https://openreceive.org/guides/provider-registry.md — where the wallet logos and pay
+  tutorials come from: inside the JavaScript, nothing to serve. This is the page
+  that owns the image rule, not the summary in checkout-ux.md
 - https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
 - https://openreceive.org/guides/swap-refunds.md — the refund flow, and the route back to it. Read it before you turn swaps on
 - https://openreceive.org/guides/lightning-swap-connect.md — what an `LSC_URI_*` code actually is

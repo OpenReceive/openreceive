@@ -42,19 +42,6 @@ export interface CheckoutComponentProps {
    * rendered and the invoice is never sent to a third party.
    */
   readonly decodeLinkUrl?: string;
-  /**
-   * Where this app serves the packages' `dist/assets` trees, as one base URL —
-   * the string form of the `resolveAssetUrl` seam. Packaged icon and tutorial
-   * keys are relative paths under one `assets/` root, so the value is joined to
-   * them directly: `assetBaseUrl="/openreceive-assets"` loads
-   * `assets/provider-icons/strike.png` from
-   * `/openreceive-assets/assets/provider-icons/strike.png`. Needed for the
-   * provider images under every bundler that does not rewrite
-   * `import.meta.url`; the payment-method icons are compiled in and need
-   * nothing (a base URL, when set, serves them as files too) — see
-   * docs/guides/provider-registry.md.
-   */
-  readonly assetBaseUrl?: string;
   /** Default true: the checkout owns `data-theme` and renders the package theme toggle. */
   readonly themeToggle?: boolean;
   readonly defaultTheme?: ThemePreference;

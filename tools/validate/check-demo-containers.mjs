@@ -601,9 +601,14 @@ for (const demo of phpDemos) {
   forbidRuntimePersistence(dockerfilePath, dockerfile, { allowHostPostgres: hostPostgres });
   forbidDemoModeSwitch(dockerfilePath, dockerfile);
   forbidTestkitWalletSwitch(dockerfilePath, dockerfile);
-  expect(/^FROM php:8\.[2-9]/m.test(dockerfile), `${dockerfilePath}: must use a php:8.2+ base image`);
   expect(
-    dockerfile.includes("COPY packages/php/openreceive"),
+    /^FROM php:8\.[2-9]/m.test(dockerfile),
+    `${dockerfilePath}: must use a php:8.2+ base image`,
+  );
+  // The engine alone (plain PHP) or the whole packages/php tree (Laravel, which
+  // needs openreceive/laravel and its path dependency on the engine).
+  expect(
+    /^COPY packages\/php(\/openreceive)?\s/m.test(dockerfile),
     `${dockerfilePath}: must install the engine from packages/php/openreceive (a Composer path repository), not Packagist`,
   );
   expect(
@@ -616,7 +621,10 @@ for (const demo of phpDemos) {
     `${dockerfilePath}: must not bake .env or a wallet variable into the image`,
   );
   // The NWC transport's elliptic-curve math needs ext-gmp; php:*-cli images do not ship it.
-  expect(/docker-php-ext-install[^\n]*\bgmp\b/.test(dockerfile), `${dockerfilePath}: must install ext-gmp`);
+  expect(
+    /docker-php-ext-install[^\n]*\bgmp\b/.test(dockerfile),
+    `${dockerfilePath}: must install ext-gmp`,
+  );
   expect(dockerfile.includes(`EXPOSE ${demo.port}`), `${dockerfilePath}: must expose ${demo.port}`);
   const composerPath = `${demo.dir}/composer.json`;
   const composer = parse(composerPath, JSON.parse);
@@ -626,9 +634,12 @@ for (const demo of phpDemos) {
     ),
     `${composerPath}: must declare packages/php/openreceive as a path repository`,
   );
+  // The engine directly (plain PHP) or through the Laravel adapter, whose own
+  // composer.json pins the engine in lockstep.
   expect(
-    composer.require?.["openreceive/openreceive"] !== undefined,
-    `${composerPath}: must require openreceive/openreceive`,
+    composer.require?.["openreceive/openreceive"] !== undefined ||
+      composer.require?.["openreceive/laravel"] !== undefined,
+    `${composerPath}: must require openreceive/openreceive or openreceive/laravel`,
   );
 
   const composePath = `${demo.dir}/compose.yml`;

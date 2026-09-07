@@ -48,6 +48,10 @@ const GENERATED_REFERENCES = [
   },
   { source: "docs/agents/rails.md", target: "skills/integrate-openreceive/references/rails.md" },
   { source: "docs/agents/php.md", target: "skills/integrate-openreceive/references/php.md" },
+  {
+    source: "docs/agents/laravel.md",
+    target: "skills/integrate-openreceive/references/laravel.md",
+  },
   { source: "docs/agents/btcpay.md", target: "skills/integrate-openreceive/references/btcpay.md" },
 ];
 

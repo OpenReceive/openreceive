@@ -1,6 +1,5 @@
 import type * as React from "react";
 import type {
-  AssetUrlResolver,
   CheckoutInvoiceSnapshot,
   CheckoutSnapshot,
   CheckoutState,
@@ -207,8 +206,6 @@ export interface CheckoutProps
    * `useCheckout` model.
    */
   readonly children?: CheckoutChildren;
-  /** Passed through to the payment wizard. See {@link PaymentWizardProps.resolveAssetUrl}. */
-  readonly resolveAssetUrl?: AssetUrlResolver;
   /**
    * Lock the checkout to one theme. Wins over the stored preference and any
    * ancestor ThemeScope, and hides the toggle: a host embedding the checkout in
@@ -290,21 +287,6 @@ export interface PaymentWizardProps {
   readonly qrEncoder?: QrEncoder;
   /** Base URL of an external bolt11 decoder; omitted, no "Decode" link is rendered. */
   readonly decodeLinkUrl?: string;
-  /**
-   * Rewrite a packaged asset path (`assets/provider-icons/strike.png`,
-   * `assets/pay_tutorials/strike-1.webp`) into a URL this host can serve. The
-   * packaged URLs only resolve under Vite/Rollup; every other bundler needs
-   * this, or the provider logos and pay tutorials come out as dead `file://`
-   * links. The payment-method icons are compiled in as `data:` URIs and need
-   * nothing; given a resolver they go through it too (`assets/icons/btc.svg`).
-   * See docs/guides/provider-registry.md.
-   */
-  readonly resolveAssetUrl?: AssetUrlResolver;
-  /**
-   * The string form of the same seam: where this host serves the packages'
-   * `dist/assets` trees. `resolveAssetUrl` wins when both are set.
-   */
-  readonly assetBaseUrl?: string;
   /**
    * The two-step refund, from whoever owns the checkout controller —
    * `<Checkout>` passes its `useCheckout` model. Given one, the wizard stages

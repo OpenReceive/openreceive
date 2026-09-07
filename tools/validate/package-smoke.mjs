@@ -47,7 +47,7 @@ const importChecks = {
   "@openreceive/node":
     "typeof mod.createOpenReceive === 'function' && typeof mod.ServiceError === 'function' && typeof mod.ConfigError === 'function' && typeof mod.createNwcReceiveClient === 'function'",
   "@openreceive/provider-data":
-    "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && typeof mod.providerTutorialUrl === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).includes('assets/provider-icons/strike.png') && mod.providerTutorialUrl(mod.providerRegistry.providers.kraken.tutorials[3]).includes('assets/pay_tutorials/kraken-4.webp')",
+    "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && typeof mod.loadPayTutorialImages === 'function' && typeof mod.payTutorialImage === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).startsWith('data:image/webp;base64,') && mod.providerTutorialUrl === undefined && mod.payTutorialUrls === undefined && mod.createAssetBaseUrlResolver === undefined",
   "@openreceive/react":
     "typeof mod.createCheckoutViewModel === 'function' && typeof mod.ThemeScope === 'function' && typeof mod.ThemeToggle === 'function' && typeof mod.PaymentWizard === 'function' && typeof mod.WaitingState === 'function' && typeof mod.useTheme === 'function' && typeof mod.CheckoutProvider === 'function' && typeof mod.useCheckoutContext === 'function' && mod.OpenReceiveThemeToggle === undefined && mod.OpenReceivePaymentWizard === undefined && mod.OpenReceiveWaitingState === undefined && mod.useOpenReceiveTheme === undefined",
   "@openreceive/svelte":
@@ -170,7 +170,8 @@ assert(
   browserHeadless.paymentIconUrls.lightning.startsWith("data:image/svg+xml,") &&
     browserHeadless.paymentIconUrls.btc.startsWith("data:image/svg+xml,") &&
     browserHeadless.paymentIconSvgs.btc.startsWith("<svg") &&
-    browserHeadless.paymentIconPaths.btc === "assets/icons/btc.svg",
+    browserHeadless.paymentIconPaths === undefined &&
+    browserHeadless.createAssetBaseUrlResolver === undefined,
   "@openreceive/browser/headless: payment icons must be compiled in (data: URIs + inline markup)"
 );
 
@@ -276,37 +277,52 @@ for (const packageName of ["vue", "svelte", "angular"]) {
     \`@openreceive/\${packageName}: styles.css must import the shared browser styles\`
   );
 }
-// Back-compat: the .svg files keep shipping (and the "./assets/*" export keeps
-// resolving) for hosts with an existing copy/serve setup.
-assert(
-  existsSync("node_modules/@openreceive/browser/dist/assets/icons/btc.svg"),
-  "@openreceive/browser: checkout icon assets must be packaged"
-);
-assert(
-  existsSync("node_modules/@openreceive/browser/dist/assets/icons/lightning.svg"),
-  "@openreceive/browser: lightning method icon assets must be packaged"
-);
+// Everything the checkout draws ships inside the JavaScript: no package
+// carries a dist/assets tree, and nothing exports one.
+for (const item of checks) {
+  assert(
+    !existsSync(\`node_modules/\${item.name}/dist/assets\`),
+    \`\${item.name}: must not ship a dist/assets directory\`
+  );
+  assert(
+    !JSON.stringify(JSON.parse(readFileSync(\`node_modules/\${item.name}/package.json\`, "utf8")).exports).includes("./assets/"),
+    \`\${item.name}: must not export an ./assets/ subpath\`
+  );
+}
 assert.equal(
   providerRegistryJson.schema_version,
   "4.0.0",
   "@openreceive/provider-data/registry.json: raw registry JSON must be importable"
 );
 assert(
-  existsSync("node_modules/@openreceive/provider-data/dist/assets/provider-icons/strike.png"),
-  "@openreceive/provider-data: provider icon assets must be packaged"
-);
-assert(
-  existsSync("node_modules/@openreceive/provider-data/dist/assets/pay_tutorials/coinbase-1.webp"),
-  "@openreceive/provider-data: provider tutorial assets must be packaged"
-);
-assert(
-  existsSync("node_modules/@openreceive/provider-data/dist/assets/pay_tutorials/kraken-4.webp"),
-  "@openreceive/provider-data: provider tutorial assets must be packaged"
-);
-assert(
   existsSync("node_modules/@openreceive/provider-data/dist/openreceive-providers.v4.json"),
   "@openreceive/provider-data: raw registry JSON must be packaged"
 );
+// The wallet logos are in provider-data's main bundle; the pay tutorials are a
+// separate lazy chunk that index.js reaches only through a dynamic import().
+{
+  const providerDist = "node_modules/@openreceive/provider-data/dist";
+  const index = readFileSync(\`\${providerDist}/index.js\`, "utf8");
+  assert(
+    index.includes('"assets/provider-icons/strike.webp": "data:image/webp;base64,'),
+    "@openreceive/provider-data: wallet logos must be inlined in dist/index.js"
+  );
+  assert(
+    !index.includes("assets/pay_tutorials/kraken-4.webp") && /import\("\.\/[^"]+\.js"\)/.test(index),
+    "@openreceive/provider-data: dist/index.js must reach the pay tutorials only through a dynamic import()"
+  );
+  const chunk = readdirSync(providerDist).find(
+    (name) => name !== "index.js" && name.endsWith(".js") &&
+      readFileSync(\`\${providerDist}/\${name}\`, "utf8").includes('"assets/pay_tutorials/kraken-4.webp": "data:image/webp;base64,')
+  );
+  assert(chunk !== undefined, "@openreceive/provider-data: the pay tutorials must ship as a separate lazy chunk");
+  const providerData = await import("@openreceive/provider-data");
+  await providerData.loadPayTutorialImages();
+  assert(
+    providerData.payTutorialImage(providerData.providerRegistry.providers.kraken.tutorials[3].path)?.startsWith("data:image/webp;base64,"),
+    "@openreceive/provider-data: payTutorialImage must answer after loadPayTutorialImages"
+  );
+}
 assert(
   existsSync("node_modules/@openreceive/vue/dist/Checkout.vue"),
   "@openreceive/vue: checkout Vue component must be packaged"

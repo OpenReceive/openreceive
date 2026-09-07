@@ -19,6 +19,9 @@ coverage
 
 # Local Shakapacker output. The Rails image client stage always rebuilds these.
 **/public/packs*
+# Local Vite output of the Laravel demo; its client stage rebuilds public/build.
+**/public/build
+**/public/hot
 
 # Rails run-scratch. Every local `rails`/`bin/ci` run rewrites these, and they
 # are copied in ahead of `bundle install`'s layer — so leaving them in the

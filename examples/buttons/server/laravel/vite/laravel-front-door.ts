@@ -24,7 +24,9 @@ const DEV_APP_KEY = "base64:YnV5LWEtYnV0dG9uLWxhcmF2ZWwtZGV2LWtleS0zMiE=";
 const ownedByLaravel = (url: string | undefined): boolean => {
   const pathname = (url ?? "/").split("?")[0] ?? "/";
   if (pathname === "/") return true;
-  return LARAVEL_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return LARAVEL_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 };
 
 const freePort = (): Promise<number> =>
@@ -58,11 +60,7 @@ const waitForHealth = async (port: number, child: ChildProcess): Promise<void> =
 };
 
 /** One request, forwarded verbatim (method, path, headers, body) and streamed back. */
-const forward = (
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  port: number,
-): void => {
+const forward = (req: http.IncomingMessage, res: http.ServerResponse, port: number): void => {
   const upstream = http.request(
     { host: "127.0.0.1", port, method: req.method, path: req.url, headers: req.headers },
     (response) => {
@@ -116,7 +114,8 @@ export function laravelFrontDoor(options: {
       const dataDir = env.OPENRECEIVE_DEMO_DB
         ? path.resolve(env.OPENRECEIVE_DEMO_DB)
         : path.resolve(demoRoot, "../../.data");
-      if (!env.DB_CONNECTION || env.DB_CONNECTION === "sqlite") mkdirSync(dataDir, { recursive: true });
+      if (!env.DB_CONNECTION || env.DB_CONNECTION === "sqlite")
+        mkdirSync(dataDir, { recursive: true });
 
       for (const args of [
         ["artisan", "migrate", "--force", "--no-interaction"],
@@ -133,16 +132,20 @@ export function laravelFrontDoor(options: {
         { cwd: demoRoot, env, stdio: "inherit" },
       );
       child.on("exit", (code) => {
-        if (code !== null && code !== 0) server.config.logger.error(`php artisan serve exited with ${code}`);
+        if (code !== null && code !== 0)
+          server.config.logger.error(`php artisan serve exited with ${code}`);
       });
       await waitForHealth(phpPort, child);
-      server.config.logger.info(`[buttons-laravel] php artisan serve on 127.0.0.1:${phpPort}, fronted by Vite`);
+      server.config.logger.info(
+        `[buttons-laravel] php artisan serve on 127.0.0.1:${phpPort}, fronted by Vite`,
+      );
 
       // The `hot` file: Laravel's @vite directive reads it and points the
       // browser at THIS server for its modules and HMR client.
       server.httpServer?.once("listening", () => {
         const address = server.httpServer?.address();
-        const port = address && typeof address === "object" ? address.port : server.config.server.port;
+        const port =
+          address && typeof address === "object" ? address.port : server.config.server.port;
         writeFileSync(hotFile, `http://127.0.0.1:${port}`);
       });
       server.httpServer?.once("close", cleanup);

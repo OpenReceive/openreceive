@@ -16,12 +16,16 @@ markdown.
 - [Fastify quickstart](https://openreceive.org/guides/quickstart-fastify.md)
 - [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md): the App Router catch-all route and a client-component checkout
 - [Rails quickstart](https://openreceive.org/guides/quickstart-rails.md)
+- [PHP quickstart (plain PHP)](https://openreceive.org/guides/quickstart-php.md): a front controller, a PDO handle, three methods and the standalone checkout tarball
+- [Laravel quickstart](https://openreceive.org/guides/quickstart-laravel.md): composer require openreceive/laravel, php artisan openreceive:install, a Host class and the element through Vite
 - [Django quickstart](https://openreceive.org/guides/quickstart-django.md): the installable app, the ORM-backed payment tables, manage.py openreceive_install
 - [BTCPay Server quickstart](https://openreceive.org/guides/quickstart-btcpay.md): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
 - [Agent directions, Node (Express)](https://openreceive.org/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
 - [Agent directions, Fastify](https://openreceive.org/agent-directions/fastify.md)
 - [Agent directions, Next.js](https://openreceive.org/agent-directions/next.md)
 - [Agent directions, Rails](https://openreceive.org/agent-directions/rails.md)
+- [Agent directions, PHP](https://openreceive.org/agent-directions/php.md)
+- [Agent directions, Laravel](https://openreceive.org/agent-directions/laravel.md)
 - [Agent directions, Django](https://openreceive.org/agent-directions/django.md)
 - [Agent directions, BTCPay Server](https://openreceive.org/agent-directions/btcpay.md)
 
@@ -30,7 +34,6 @@ markdown.
 The index is [/guides.md](https://openreceive.org/guides.md).
 
 - [FastAPI Quickstart](https://openreceive.org/guides/quickstart-fastapi.md)
-- [PHP Quickstart (plain PHP)](https://openreceive.org/guides/quickstart-php.md)
 - [BTCPay Plugin Reference](https://openreceive.org/guides/btcpay-reference.md)
 - [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)
 - [Authorization](https://openreceive.org/guides/authorization.md)
@@ -53,7 +56,6 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Flask Recipe](https://openreceive.org/guides/flask-recipe.md)
 - [Writing Your Own Checkout Route](https://openreceive.org/guides/custom-checkout-route.md)
 - [Agent Directions: FastAPI](https://openreceive.org/guides/agent-directions-fastapi.md)
-- [Agent Directions: PHP](https://openreceive.org/guides/agent-directions-php.md)
 
 ## Machine-readable specifications
 

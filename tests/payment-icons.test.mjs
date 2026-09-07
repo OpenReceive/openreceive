@@ -10,11 +10,9 @@ import { fileURLToPath } from "node:url";
 process.env.LOG_LEVEL ??= "error";
 
 import {
-  createAssetBaseUrlResolver,
   getNetworkIconId,
   getPaymentMethodIconId,
   getSwapOptionIconId,
-  paymentIconPaths,
   paymentIconSvgs,
   paymentIconUrls,
 } from "@openreceive/browser/headless";
@@ -26,12 +24,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const browserRoot = path.join(repoRoot, "packages/js/browser");
 const DATA_URI_PREFIX = "data:image/svg+xml,";
 
-test("every icon id maps to inline markup, a data URI and a packaged path", () => {
+test("every icon id maps to inline markup and a data URI", () => {
   const ids = Object.keys(paymentIconSvgs);
   assert.ok(ids.length >= 11);
   for (const id of ids) {
     assert.match(paymentIconSvgs[id], /^<svg\b[\s\S]*<\/svg>$/, id);
-    assert.equal(paymentIconPaths[id], `assets/icons/${id}.svg`);
     assert.ok(paymentIconUrls[id].startsWith(DATA_URI_PREFIX), id);
   }
   // Every id a getter can answer exists in the table.
@@ -59,10 +56,9 @@ test("each data URI decodes back to the generated markup byte-for-byte", () => {
   }
 });
 
-test("the source .svg files still ship as files, keyed by paymentIconPaths", () => {
-  // Back-compat promise: a host with an existing copy/serve setup keeps
-  // working. The packaged dist is asserted by tools/validate/package-smoke.mjs;
-  // this pins the source tree the build copies from.
+test("the source .svg files are exactly the generator's input", () => {
+  // The .svg files are input only — nothing ships them (package-smoke pins
+  // that no package carries a dist/assets tree). One file per compiled id.
   const files = readdirSync(path.join(browserRoot, "src/assets/icons"))
     .filter((file) => file.endsWith(".svg"))
     .sort();
@@ -112,7 +108,7 @@ test("minification is whitespace-only", () => {
   );
 });
 
-test("the element draws the icon inline unless the host resolves files", () => {
+test("the element draws the icon inline", () => {
   const inline = renderPaymentIconHtml("lightning", { className: "or-x", label: "Lightning" });
   assert.match(inline, /^<svg\b/);
   assert.match(inline, /class="or-x"/);
@@ -126,11 +122,4 @@ test("the element draws the icon inline unless the host resolves files", () => {
     renderPaymentIconHtml("btc", { className: "c", label: 'a"<b>' }),
     /aria-label="a&quot;&lt;b&gt;"/,
   );
-
-  const served = renderPaymentIconHtml("lightning", {
-    className: "or-x",
-    label: "Lightning",
-    resolveAssetUrl: createAssetBaseUrlResolver("/or-assets"),
-  });
-  assert.equal(served, '<img class="or-x" alt="" src="/or-assets/assets/icons/lightning.svg">');
 });

@@ -21,6 +21,7 @@ the full quickstart), or paste the one-prompt agent directions:
   [Next.js](https://openreceive.org/agent-directions/next.md) ·
   [Rails](https://openreceive.org/agent-directions/rails.md) ·
   [PHP](https://openreceive.org/agent-directions/php.md) ·
+  [Laravel](https://openreceive.org/agent-directions/laravel.md) ·
   [Django](https://openreceive.org/agent-directions/django.md) ·
   [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md). Each
   is self-contained, quickstart included.

@@ -29,9 +29,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./registry.json": "./dist/openreceive-providers.v4.json",
-    "./assets/provider-icons/*": "./dist/assets/provider-icons/*",
-    "./assets/pay_tutorials/*": "./dist/assets/pay_tutorials/*"
+    "./registry.json": "./dist/openreceive-providers.v4.json"
   },
   "files": [
     "dist",
@@ -40,7 +38,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup && node ../../../tools/package/copy-static.mjs src dist data/openreceive-providers.v4.json:openreceive-providers.v4.json assets",
+    "build": "node ../../../tools/package/generate-provider-images.mjs && tsup && node ../../../tools/package/copy-static.mjs src dist data/openreceive-providers.v4.json:openreceive-providers.v4.json",
     "prepack": "npm run build"
   },
   "engines": {

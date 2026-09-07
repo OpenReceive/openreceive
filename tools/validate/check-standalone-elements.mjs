@@ -7,7 +7,8 @@
 // files alone, so the same checks can later run against a copy a WordPress zip
 // or a Django wheel carries:
 //
-//   - the directory and its four fixed entries exist;
+//   - the directory and its fixed entries exist (no assets/ tree: every image
+//     the checkout draws is inside the JS);
 //   - the JS is one self-contained module: no import/export-from specifiers,
 //     no CommonJS require(), and it registers <openreceive-checkout>;
 //   - MANIFEST.json names every file on disk (and nothing else), every hash
@@ -23,7 +24,6 @@ import {
   findModuleImportSpecifiers,
   readWorkspaceVersion,
   sha256,
-  STANDALONE_ASSETS_DIR,
   STANDALONE_CSS_FILE,
   STANDALONE_ELEMENT_TAG_NAME,
   STANDALONE_JS_FILE,
@@ -53,19 +53,17 @@ if (!existsSync(outDir) || !statSync(outDir).isDirectory()) {
 
 const jsPath = path.join(outDir, STANDALONE_JS_FILE);
 const cssPath = path.join(outDir, STANDALONE_CSS_FILE);
-const assetsPath = path.join(outDir, STANDALONE_ASSETS_DIR);
 const manifestPath = path.join(outDir, STANDALONE_MANIFEST_FILE);
 
-for (const [filePath, kind] of [
-  [jsPath, "file"],
-  [cssPath, "file"],
-  [assetsPath, "directory"],
-  [manifestPath, "file"],
-]) {
-  const present =
-    existsSync(filePath) &&
-    (kind === "directory" ? statSync(filePath).isDirectory() : statSync(filePath).isFile());
-  if (!present) fail(`${relativeOutDir}/${path.basename(filePath)}: expected ${kind} is missing`);
+for (const filePath of [jsPath, cssPath, manifestPath]) {
+  if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+    fail(`${relativeOutDir}/${path.basename(filePath)}: expected file is missing`);
+  }
+}
+if (existsSync(path.join(outDir, "assets"))) {
+  fail(
+    `${relativeOutDir}/assets: must not exist — every image the checkout draws ships inside ${STANDALONE_JS_FILE}`,
+  );
 }
 
 // --- the module is one self-contained file --------------------------------
@@ -100,6 +98,16 @@ if (existsSync(jsPath)) {
   }
   if (!/^\/\/# sourceMappingURL=/m.test(js) || !existsSync(`${jsPath}.map`)) {
     fail(`${STANDALONE_JS_FILE}: expected a sourceMappingURL comment and a sibling .map file.`);
+  }
+  // Every image the checkout draws is inside the file: the wallet logos and
+  // the pay tutorials (provider-data's lazy chunk, inlined by esbuild).
+  if (
+    !js.includes('"assets/provider-icons/strike.webp":"data:image/webp;base64,') ||
+    !js.includes('"assets/pay_tutorials/kraken-4.webp":"data:image/webp;base64,')
+  ) {
+    fail(
+      `${STANDALONE_JS_FILE}: the wallet logos and pay tutorials must be inlined as data: URIs.`,
+    );
   }
 }
 
@@ -159,11 +167,6 @@ if (existsSync(manifestPath)) {
       if (listed[required] === undefined) {
         fail(`${STANDALONE_MANIFEST_FILE}: ${required} must be listed`);
       }
-    }
-    if (!Object.keys(listed).some((relative) => relative.startsWith(`${STANDALONE_ASSETS_DIR}/`))) {
-      fail(
-        `${STANDALONE_MANIFEST_FILE}: no ${STANDALONE_ASSETS_DIR}/ entries — provider assets missing`,
-      );
     }
   }
 }

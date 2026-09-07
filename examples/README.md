@@ -35,6 +35,7 @@ npm run demo static          # Buy a Button — static HTML, no framework       
 npm run demo nextjs          # Buy a Button — Next.js app router                  :3002
 npm run demo buttons         # Buy a Button — Rails + Postgres                    :3003
 npm run demo fastify         # Buy a Button — Fastify + React, the minimal host   :3004
+npm run demo php             # Buy a Button — plain PHP, no framework          :3008
 ```
 
 `npm run demo` builds the image and runs the production server inside it. The

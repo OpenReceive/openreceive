@@ -244,11 +244,13 @@ For public web shops, opt into the per-IP invoice cap with
 `config.rate_limiting = true`; leave it off (the default) when many payers
 share one IP. → [Rate limiting](rate-limiting.md#rails)
 
+<!-- shared:begin eager-preflight -->
 In production the engine builds the wallet client — and runs its receive-only
 preflight — eagerly when your application boots, so a missing `NWC_URI`, a
 dead relay, or a spend-capable wallet stops the deploy instead of surfacing as
 customer-facing 500s on the first checkout. Outside production (tests,
 consoles) the client is built lazily so no live wallet is needed.
+<!-- shared:end eager-preflight -->
 
 ## Render the checkout
 
@@ -276,27 +278,29 @@ import "@openreceive/elements/styles.css"; // or link the compiled styles.css
 defineElements();
 ```
 
-Bundling with esbuild (jsbundling-rails)? Two things:
+Bundling with esbuild (jsbundling-rails)? Build ESM and load it as a module.
+esbuild's default IIFE output evaluates a dependency's Node fallback in the
+browser and throws `ReferenceError: __filename is not defined`:
 
-1. Build ESM and load it as a module. esbuild's default IIFE output evaluates
-   a dependency's Node fallback in the browser and throws
-   `ReferenceError: __filename is not defined`:
+```sh
+esbuild app/javascript/application.js --bundle --format=esm --outdir=app/assets/builds
+```
 
-   ```sh
-   esbuild app/javascript/application.js --bundle --format=esm --outdir=app/assets/builds
-   ```
+```erb
+<%= javascript_include_tag "application", type: "module" %>
+```
 
-   ```erb
-   <%= javascript_include_tag "application", type: "module" %>
-   ```
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`
+([Provider registry](provider-registry.md#assets)).
 
-2. Serve the provider images. The payment-method icons are compiled into
-   `@openreceive/browser` and need nothing, but the wallet logos and pay
-   tutorials are files shipped in `@openreceive/provider-data`, and only
-   Vite-style bundlers resolve them from the import. Copy that package's
-   `dist/assets` tree to `public/openreceive-assets/assets/` and set
-   `asset-base-url="/openreceive-assets"` on the element
-   ([Provider registry](provider-registry.md#assets)).
+Then open the checkout in a browser and confirm the wallet logos and
+payment-method icons render. Nothing is served from disk, so a missing image
+means a Content-Security-Policy `img-src` that blocks `data:` — the browser
+console names it.
 
 The element creates the checkout for `reference`, then renders and polls
 itself. React/Vue/Svelte/Angular apps use the matching wrapper package
@@ -338,6 +342,7 @@ server-only `swap_data`. The engine filters `swap_data` from Active Record
 inspection and ordinary serialization. Do not explicitly serialize it, log it,
 or return it from your own API; it may contain a provider credential.
 
+<!-- shared:begin swap-refund-commitment -->
 **Setting either connection string commits you to refunds.** A swap deposit can
 arrive short or late, which leaves it `refund_required` at the provider with
 only your UI able to claim it — and the payer claims it on a second visit,
@@ -346,3 +351,4 @@ per-order URL your app serves, a route that restores the order behind it, and
 something that restores the ATTEMPT, since `/checkouts/prepare` returns none.
 [Swap refunds](swap-refunds.md) is the whole of it; read it before you set
 `LSC_URI_PRIMARY`.
+<!-- shared:end swap-refund-commitment -->

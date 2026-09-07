@@ -1,0 +1,66 @@
+# Two processes from one image, plus the host's own Postgres.
+#
+#   buttons-laravel   Apache + PHP, the web process (the image default)
+#   notifications     php artisan openreceive:notifications — the optional
+#                     long-running worker: NWC-02 payment_received listener plus
+#                     the periodic reconcile pass. One per deployment.
+#   db                the HOST's database. OpenReceive's two tables live inside
+#                     it; OpenReceive itself has no database configuration.
+x-laravel-app: &laravel_app
+  build:
+    context: ../../../..
+    dockerfile: examples/buttons/server/laravel/Dockerfile
+  depends_on:
+    db:
+      condition: service_healthy
+  environment: &laravel_env
+    APP_ENV: production
+    APP_DEBUG: "false"
+    # A demo key so `npm run demo laravel` boots with nothing but NWC_URI set.
+    # Any real deployment sets its own APP_KEY like every other Laravel app.
+    APP_KEY: ${APP_KEY:-base64:YnV5LWEtYnV0dG9uLWxhcmF2ZWwtZGVtby1rZXktMzI=}
+    LOG_CHANNEL: stderr
+    DB_CONNECTION: pgsql
+    DATABASE_URL: postgres://openreceive:openreceive@db:5432/buttons_laravel
+  env_file:
+    - ../../../../.env
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: openreceive
+      POSTGRES_PASSWORD: openreceive
+      POSTGRES_DB: buttons_laravel
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openreceive -d buttons_laravel"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      # The shop SURVIVES A RESTART: orders, visitors and the engine's attempt
+      # rows outlive `docker compose up --build`.
+      - buttons-laravel-data:/var/lib/postgresql
+
+  buttons-laravel:
+    <<: *laravel_app
+    environment:
+      <<: *laravel_env
+      PORT: "3005"
+    expose:
+      - "3005"
+
+  notifications:
+    <<: *laravel_app
+    depends_on:
+      db:
+        condition: service_healthy
+      buttons-laravel:
+        condition: service_started
+    environment:
+      <<: *laravel_env
+      SKIP_DB_PREPARE: "1"
+    command: ["php", "artisan", "openreceive:notifications"]
+
+volumes:
+  buttons-laravel-data:

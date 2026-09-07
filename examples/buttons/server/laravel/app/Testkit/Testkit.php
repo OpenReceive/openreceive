@@ -32,21 +32,133 @@ final class Testkit
 
     private static ?FakeWallet $wallet = null;
     private static ?FakeSwapProvider $swapProvider = null;
+    /** @var resource|null */
+    private static $lock = null;
 
     public static function enabled(): bool
     {
         return strtolower(trim((string) env('DEMO_WALLET', ''))) === 'testkit';
     }
 
-    /** The fakes, built once per process: PHP serves one request per process, so this is per request — the E2E harness runs one artisan server. */
     public static function wallet(): FakeWallet
     {
-        return self::$wallet ??= new FakeWallet();
+        self::open();
+        /** @var FakeWallet */
+        return self::$wallet;
     }
 
     public static function swapProvider(): FakeSwapProvider
     {
-        return self::$swapProvider ??= new FakeSwapProvider();
+        self::open();
+        /** @var FakeSwapProvider */
+        return self::$swapProvider;
+    }
+
+    /**
+     * THE ONE THING PHP HAS TO DO THAT THE OTHER STACKS DO NOT: keep the fakes
+     * alive between requests. A Node or Python process holds its fake wallet in
+     * memory for the life of the server; a PHP request starts from nothing, so
+     * an invoice minted by `POST /openreceive/checkouts` would be unknown to the
+     * `POST /__testkit/settle` that follows. The fakes' state is snapshotted to
+     * a file in the data directory after every request (`save()`, from the
+     * application's terminating callback) and restored here before the first
+     * use, under an exclusive lock held for the request. The state is a test
+     * fixture, not a datastore, and serialising it is the honest answer. The
+     * engine's fakes are `final` with private fields, so the snapshot goes
+     * through reflection, leaving the readonly fields and clock closures alone
+     * — the same approach the plain-PHP demo takes.
+     */
+    private static function open(): void
+    {
+        if (self::$wallet !== null && self::$swapProvider !== null) {
+            return;
+        }
+        $file = self::stateFile();
+        $lock = fopen($file.'.lock', 'c');
+        if ($lock === false || !flock($lock, LOCK_EX)) {
+            throw new \RuntimeException("cannot lock {$file}");
+        }
+        self::$lock = $lock;
+        self::$wallet = new FakeWallet();
+        self::$swapProvider = new FakeSwapProvider();
+        if (is_file($file)) {
+            $state = unserialize((string) file_get_contents($file), ['allowed_classes' => true]);
+            if (is_array($state)) {
+                self::restore(self::$wallet, (array) ($state['wallet'] ?? []));
+                self::restore(self::$swapProvider, (array) ($state['swap'] ?? []));
+            }
+        }
+    }
+
+    /** Snapshot the fakes for the next request and release the lock. A request that never touched them writes nothing. */
+    public static function save(): void
+    {
+        if (self::$wallet === null || self::$swapProvider === null || self::$lock === null) {
+            return;
+        }
+        $file = self::stateFile();
+        file_put_contents($file.'.tmp', serialize(['wallet' => self::snapshot(self::$wallet), 'swap' => self::snapshot(self::$swapProvider)]));
+        rename($file.'.tmp', $file);
+        flock(self::$lock, LOCK_UN);
+        fclose(self::$lock);
+        self::$lock = null;
+        self::$wallet = null;
+        self::$swapProvider = null;
+    }
+
+    /** Beside the SQLite file: OPENRECEIVE_DEMO_DB (the E2E harness's temp dir) or examples/buttons/.data. */
+    private static function stateFile(): string
+    {
+        $dir = (string) env('OPENRECEIVE_DEMO_DB', '');
+        if ($dir === '') {
+            $dir = base_path('../../.data');
+        }
+        if (!is_dir($dir)) {
+            mkdir($dir, 0o777, true);
+        }
+        return rtrim($dir, '/').'/buttons-laravel.testkit';
+    }
+
+    /** @return array<string, mixed> every private field that is plain data (no closures, nothing readonly) */
+    private static function snapshot(object $fake): array
+    {
+        $state = [];
+        foreach ((new \ReflectionObject($fake))->getProperties() as $property) {
+            if ($property->isReadOnly() || $property->isStatic() || !$property->isInitialized($fake)) {
+                continue;
+            }
+            $value = $property->getValue($fake);
+            if (!self::containsClosure($value)) {
+                $state[$property->getName()] = $value;
+            }
+        }
+        return $state;
+    }
+
+    /** @param array<string, mixed> $state */
+    private static function restore(object $fake, array $state): void
+    {
+        $reflection = new \ReflectionObject($fake);
+        foreach ($state as $name => $value) {
+            if ($reflection->hasProperty($name) && !$reflection->getProperty($name)->isReadOnly()) {
+                $reflection->getProperty($name)->setValue($fake, $value);
+            }
+        }
+    }
+
+    private static function containsClosure(mixed $value): bool
+    {
+        if ($value instanceof \Closure) {
+            return true;
+        }
+        if (is_array($value)) {
+            foreach ($value as $entry) {
+                if (self::containsClosure($entry)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

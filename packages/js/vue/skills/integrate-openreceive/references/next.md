@@ -231,8 +231,11 @@ components.
   "switch payment method".
 - No "Open wallet" button on desktop.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only. Host the icons with
-  `assetBaseUrl` / `asset-base-url`.
+  `createWizardRouteDisplays`. Lightning only. Every image ships inside
+  the JavaScript — logos as data URIs, tutorials once `loadPayTutorialImages()`
+  resolves (`image` is `undefined` until then) — so serve nothing and set no
+  asset option. When it works, the logos and payment icons render; a missing
+  image means a CSP `img-src` that blocks `data:`, and the console names it.
 
 ## More documentation
 
@@ -246,10 +249,9 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
 - https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
-- https://openreceive.org/guides/provider-registry.md — where the packaged icons and pay
-  tutorials come from, and how to serve them. The asset rule is the one a custom
-  UI is most likely to get wrong; this is the page that owns it, not the summary
-  in checkout-ux.md
+- https://openreceive.org/guides/provider-registry.md — where the wallet logos and pay
+  tutorials come from: inside the JavaScript, nothing to serve. This is the page
+  that owns the image rule, not the summary in checkout-ux.md
 - https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
 - https://openreceive.org/guides/swap-refunds.md — the refund flow, and the route back to it. Read it before you turn swaps on
 - https://openreceive.org/guides/lightning-swap-connect.md — what an `LSC_URI_*` code actually is
@@ -538,12 +540,11 @@ so a white card never lands on a dark page. The checkout is styled by CSS
 variables under `data-theme`; [Frontend checkout](https://openreceive.org/guides/frontend-checkout.md) has
 the knobs.
 
-The payment-method icons are compiled into `@openreceive/browser` and need
-nothing from your bundler. The wallet logos and pay tutorials are files in
-`@openreceive/provider-data`, and outside Vite/Rollup (esbuild, webpack, a
-plain script tag) they cannot resolve their own URLs — the drop-in needs this
-exactly as a custom UI does. Serve that package's `dist/assets` tree and pass
-the base as `assetBaseUrl="/openreceive-assets"`
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`
 ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
 
 That is the whole loop: your server owns the price and the order, the payer gets
@@ -568,3 +569,8 @@ and probes the wallet relay to confirm the code is receive-only. Add
 `--url http://localhost:3000` to confirm the routes are mounted; every failing
 line states its own fix.
 → [openreceive doctor](https://openreceive.org/guides/api-reference.md#openreceive-doctor)
+
+Then open the checkout in a browser and confirm the wallet logos and
+payment-method icons render. Nothing is served from disk, so a missing image
+means a Content-Security-Policy `img-src` that blocks `data:` — the browser
+console names it.

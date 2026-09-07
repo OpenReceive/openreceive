@@ -178,21 +178,23 @@ has room for it. A fixed-height panel should pass `providerPreviewLimit`
 (`OPENRECEIVE_PROVIDER_PREVIEW_LIMIT` is the number the shipped styles are
 drawn against) and build "show all" from `display.providerCount`.
 
-The payment-method icons are compiled into `@openreceive/browser`
-(`paymentIconSvgs`, generated from `src/assets/icons/*.svg`): the custom
-element draws them inline in its shadow root, and `paymentIconUrls` hands the
-same markup to any `<img>` as `data:` URIs. No host serves them. Inline SVG
-is allowed only there, for those build-gated first-party strings.
-
-`@openreceive/provider-data`'s images are files. Their packaged URLs resolve
-against `import.meta.url`, which only works under Vite/Rollup; other bundlers
-yield dead `file://` links that also publish the server's directory layout.
-Serve that package's `dist/assets` tree and point at it with `assetBaseUrl` /
-`asset-base-url`. `resolveAssetUrl` is the function form — it cannot cross an
-HTML attribute, so it is React-and-`defineElements` only. A resolver, when
-set, is also honoured for the payment icons (served as files from the same
-root), which is the escape hatch for an `img-src` without `data:`. Grep the
-built bundle for `file://` before shipping.
+Everything the checkout draws ships inside the JavaScript. The payment-method
+icons are compiled into `@openreceive/browser` (`paymentIconSvgs`, generated
+from `src/assets/icons/*.svg`): the custom element draws them inline in its
+shadow root, and `paymentIconUrls` hands the same markup to any `<img>` as
+`data:` URIs. Inline SVG is allowed only there, for those build-gated
+first-party strings. The wallet logos and pay tutorials are `data:image/webp`
+URIs generated into `@openreceive/provider-data`
+(`tools/package/generate-provider-images.mjs`, byte-budgeted so the bundle
+cannot bloat silently): the logos in the main bundle, the tutorials in a chunk
+`loadPayTutorialImages()` imports on first open, so a payer who never opens
+one never downloads them. No host serves an image, so there is no resolver, no
+base URL and no module-relative URL resolution. Every earlier layer —
+packaged `file://` URLs, a resolver function, a base-URL prop and attribute —
+existed to work around bundlers that cannot resolve a file from an import, and each handed
+the host one more step to get wrong (setting the base URL also switched the
+compiled-in payment icons to files nobody had copied). The one host-facing
+consequence is a Content-Security-Policy `img-src` that must allow `data:`.
 
 ## Headless surface curation
 

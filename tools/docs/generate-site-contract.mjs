@@ -46,6 +46,7 @@ const AGENT_PAYLOADS = [
   { path: "/agent-directions/django.md", source: "docs/agents/django.md", stack: "django" },
   { path: "/agent-directions/rails.md", source: "docs/agents/rails.md", stack: "rails" },
   { path: "/agent-directions/php.md", source: "docs/agents/php.md", stack: "php" },
+  { path: "/agent-directions/laravel.md", source: "docs/agents/laravel.md", stack: "laravel" },
   { path: "/agent-directions/btcpay.md", source: "docs/agents/btcpay.md", stack: "btcpay" },
 ];
 

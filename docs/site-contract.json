@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 2353
+      "bytes": 2465
     },
     {
       "path": "/guides/quickstart-node",
@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 11967
+      "bytes": 12123
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 12974
+      "bytes": 13130
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -43,7 +43,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 12914
+      "bytes": 13070
     },
     {
       "path": "/guides/quickstart-django",
@@ -53,7 +53,7 @@
       "slug": "quickstart-django",
       "title": "Django Quickstart",
       "category": "quickstart",
-      "bytes": 18787
+      "bytes": 19293
     },
     {
       "path": "/guides/quickstart-next",
@@ -63,7 +63,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 14852
+      "bytes": 15008
     },
     {
       "path": "/guides/quickstart-rails",
@@ -73,7 +73,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 16625
+      "bytes": 16914
     },
     {
       "path": "/guides/quickstart-php",
@@ -83,7 +83,17 @@
       "slug": "quickstart-php",
       "title": "PHP Quickstart (plain PHP)",
       "category": "quickstart",
-      "bytes": 14593
+      "bytes": 14988
+    },
+    {
+      "path": "/guides/quickstart-laravel",
+      "markdown_path": "/guides/quickstart-laravel.md",
+      "source": "docs/guides/quickstart-laravel.md",
+      "kind": "guide",
+      "slug": "quickstart-laravel",
+      "title": "Laravel Quickstart",
+      "category": "quickstart",
+      "bytes": 19079
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -143,7 +153,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 10786
+      "bytes": 10917
     },
     {
       "path": "/guides/checkout-ux",
@@ -153,7 +163,7 @@
       "slug": "checkout-ux",
       "title": "Checkout UX",
       "category": "guide",
-      "bytes": 5868
+      "bytes": 6034
     },
     {
       "path": "/guides/headless-checkout",
@@ -163,7 +173,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 17240
+      "bytes": 17521
     },
     {
       "path": "/guides/automated-swaps",
@@ -223,7 +233,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 8772
+      "bytes": 10327
     },
     {
       "path": "/guides/host-testing",
@@ -243,7 +253,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 119260
+      "bytes": 119142
     },
     {
       "path": "/guides/security",
@@ -263,7 +273,7 @@
       "slug": "provider-registry",
       "title": "Provider Registry",
       "category": "reference",
-      "bytes": 4973
+      "bytes": 5514
     },
     {
       "path": "/guides/price-feeds",
@@ -313,7 +323,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 26981
+      "bytes": 27379
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -323,7 +333,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 28475
+      "bytes": 28873
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -333,7 +343,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 29630
+      "bytes": 30028
     },
     {
       "path": "/guides/agent-directions-django",
@@ -343,7 +353,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 36239
+      "bytes": 37037
     },
     {
       "path": "/guides/agent-directions-next",
@@ -353,7 +363,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 30870
+      "bytes": 31268
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -363,7 +373,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 33275
+      "bytes": 33663
     },
     {
       "path": "/guides/agent-directions-php",
@@ -373,7 +383,17 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 31940
+      "bytes": 32547
+    },
+    {
+      "path": "/guides/agent-directions-laravel",
+      "markdown_path": "/guides/agent-directions-laravel.md",
+      "source": "docs/agents/laravel.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-laravel",
+      "title": "Agent Directions: Laravel",
+      "category": "quickstart",
+      "bytes": 35747
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -393,7 +413,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 119260,
+      "bytes": 119142,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -404,7 +424,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 2587
+      "bytes": 2655
     },
     {
       "path": "/btcpay",
@@ -427,7 +447,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 26981,
+      "bytes": 27379,
       "copy_button": true,
       "self_contained": true
     },
@@ -437,7 +457,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 28475,
+      "bytes": 28873,
       "copy_button": true,
       "self_contained": true
     },
@@ -447,7 +467,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 30870,
+      "bytes": 31268,
       "copy_button": true,
       "self_contained": true
     },
@@ -457,7 +477,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 29630,
+      "bytes": 30028,
       "copy_button": true,
       "self_contained": true
     },
@@ -467,7 +487,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36239,
+      "bytes": 37037,
       "copy_button": true,
       "self_contained": true
     },
@@ -477,7 +497,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 33275,
+      "bytes": 33663,
       "copy_button": true,
       "self_contained": true
     },
@@ -487,7 +507,17 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 31940,
+      "bytes": 32547,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/laravel.md",
+      "source": "docs/agents/laravel.md",
+      "kind": "agent-directions-payload",
+      "stack": "laravel",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 35747,
       "copy_button": true,
       "self_contained": true
     },
@@ -779,7 +809,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 4570
+        "bytes": 4922
       },
       {
         "path": "/openapi.yaml",

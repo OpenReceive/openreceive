@@ -1,10 +1,9 @@
 import { getSwapRefundAddressError } from "@openreceive/core/swap-address";
 import {
   type AssetIndexEntry,
-  type AssetUrlResolver,
   getPaymentWizardRoutes,
   listAssets,
-  payTutorialUrls,
+  payTutorialImage,
   providerIconUrls,
   type PaymentWizardRoute,
   type Provider,
@@ -30,27 +29,18 @@ import {
   type PaymentIconId,
   assetIconIds,
   checkoutLabels,
-  paymentIconPaths,
   paymentIconUrls,
   paymentMethodIconIds,
   orClasses,
 } from "./ui.ts";
 
-/**
- * Provider icons and tutorial images are FILES the host has to be able to
- * serve; the packaged URLs only resolve under Vite/Rollup (see
- * `@openreceive/provider-data`'s `assetUrl`), so each display builder takes an
- * optional resolver and hands it the packaged PATH instead. Payment icons are
- * compiled into this package (`paymentIconUrls` are `data:` URIs), so they need
- * nothing from the host — but a resolver, when given, still wins: a host that
- * serves the files has chosen to, and a strict `img-src` without `data:` is
- * one reason to.
- */
-function resolvePaymentIcon(id: PaymentIconId, resolveAssetUrl?: AssetUrlResolver): string {
-  return resolveAssetUrl === undefined
-    ? paymentIconUrls[id]
-    : resolveAssetUrl(paymentIconPaths[id]);
-}
+// Everything the wizard draws ships inside the JavaScript: the payment icons
+// are compiled into this package (`paymentIconUrls` are `data:` URIs), the
+// wallet logos are `data:` URIs in @openreceive/provider-data's main bundle,
+// and the tutorial screenshots are the same behind one dynamic import. Every
+// `icon`/`image` a display model carries is therefore a URL that needs
+// nothing from the host — no file to copy, serve or resolve. The one
+// host-facing consequence is CSP: a strict `img-src` must allow `data:`.
 
 export function getBitcoinAssets(): readonly AssetIndexEntry[] {
   return listAssets().filter((asset) => asset.symbol === "btc" && asset.route !== undefined);
@@ -95,25 +85,22 @@ export function getCheckoutProviderOpenLabel(): string {
   return checkoutLabels.openProvider;
 }
 
-export function getCheckoutProviderIcon(
-  provider: Pick<Provider, "icon_path">,
-  resolveAssetUrl?: AssetUrlResolver,
-): string {
-  if (resolveAssetUrl !== undefined) return resolveAssetUrl(provider.icon_path);
-  return providerIconUrls[provider.icon_path] ?? resolvePaymentIcon("crypto");
+export function getCheckoutProviderIcon(provider: Pick<Provider, "icon_path">): string {
+  return providerIconUrls[provider.icon_path] ?? paymentIconUrls.crypto;
 }
 
+/**
+ * A tutorial's `image` is `undefined` until `loadPayTutorialImages()` has
+ * resolved: renderers call it when a tutorial opens and re-render, drawing the
+ * caption alone in the meantime.
+ */
 export function getCheckoutProviderTutorials(
   provider: Pick<Provider, "tutorials">,
-  resolveAssetUrl?: AssetUrlResolver,
 ): readonly WizardProviderTutorialDisplay[] {
   return (provider.tutorials ?? []).map((tutorial) => ({
     index: tutorial.index,
     path: tutorial.path,
-    image:
-      resolveAssetUrl === undefined
-        ? (payTutorialUrls[tutorial.path] ?? tutorial.path)
-        : resolveAssetUrl(tutorial.path),
+    image: payTutorialImage(tutorial.path),
     caption: tutorial.caption,
   }));
 }
@@ -126,11 +113,7 @@ export function getRouteNetworkLabel(routeId: string): string {
 
 export function createWizardRouteAssetDisplays(
   assets: readonly AssetIndexEntry[],
-  options: {
-    readonly selectedRoute?: string | null;
-    /** Host-side rewrite of the packaged icon path. See {@link AssetUrlResolver}. */
-    readonly resolveAssetUrl?: AssetUrlResolver;
-  } = {},
+  options: { readonly selectedRoute?: string | null } = {},
 ): readonly WizardRouteAssetDisplay[] {
   return assets.map((asset) => {
     const id = asset.route ?? asset.symbol;
@@ -139,9 +122,8 @@ export function createWizardRouteAssetDisplays(
       id,
       label: asset.label,
       subtitle: getRouteNetworkLabel(id),
-      icon: resolvePaymentIcon(iconId, options.resolveAssetUrl),
+      icon: paymentIconUrls[iconId],
       iconId,
-      iconPath: paymentIconPaths[iconId],
       selected: options.selectedRoute === id,
     };
   });
@@ -166,8 +148,6 @@ export function createWizardRouteDisplays(
   options: {
     /** Draw at most this many providers per route. Omitted, every one is drawn. */
     readonly providerPreviewLimit?: number;
-    /** Host-side rewrite of the packaged icon and tutorial paths. See {@link AssetUrlResolver}. */
-    readonly resolveAssetUrl?: AssetUrlResolver;
   } = {},
 ): readonly WizardRouteDisplay[] {
   return routes.map((route) => ({
@@ -177,7 +157,7 @@ export function createWizardRouteDisplays(
     providers: (options.providerPreviewLimit === undefined
       ? route.providers
       : route.providers.slice(0, options.providerPreviewLimit)
-    ).map((entry) => createWizardProviderDisplay(entry, options.resolveAssetUrl)),
+    ).map(createWizardProviderDisplay),
     providerCount: route.providers.length,
   }));
 }
@@ -194,21 +174,14 @@ function getWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
   return route.route.symbol.toUpperCase();
 }
 
-function createWizardProviderDisplay(
-  entry: ResolvedProviderRef,
-  resolveAssetUrl?: AssetUrlResolver,
-): WizardProviderDisplay {
+function createWizardProviderDisplay(entry: ResolvedProviderRef): WizardProviderDisplay {
   return {
     id: entry.provider.id,
     name: entry.provider.name,
     kind: entry.provider.kind,
     url: entry.provider.lightning_docs_url ?? entry.provider.url,
-    // Both the resolved URL and the packaged key: a host that serves these
-    // files itself needs the key, and going back to `providerRegistry` for it
-    // is not something a display-layer caller should have to know to do.
-    icon: getCheckoutProviderIcon(entry.provider, resolveAssetUrl),
-    iconPath: entry.provider.icon_path,
-    tutorials: getCheckoutProviderTutorials(entry.provider, resolveAssetUrl),
+    icon: getCheckoutProviderIcon(entry.provider),
+    tutorials: getCheckoutProviderTutorials(entry.provider),
     copyLabel: checkoutLabels.copyInvoice,
     copiedLabel: checkoutLabels.copied,
     openLabel: getCheckoutProviderOpenLabel(),
@@ -224,11 +197,8 @@ export function getPaymentMethodIconId(method: PaymentMethod): PaymentIconId {
   return paymentMethodIconIds[method];
 }
 
-export function getPaymentMethodIcon(
-  method: PaymentMethod,
-  resolveAssetUrl?: AssetUrlResolver,
-): string {
-  return resolvePaymentIcon(getPaymentMethodIconId(method), resolveAssetUrl);
+export function getPaymentMethodIcon(method: PaymentMethod): string {
+  return paymentIconUrls[getPaymentMethodIconId(method)];
 }
 
 function assetIconId(symbol: string): PaymentIconId {
@@ -244,8 +214,8 @@ export function getNetworkIconId(networkLabel: string): PaymentIconId {
   return "crypto";
 }
 
-export function getNetworkIcon(networkLabel: string, resolveAssetUrl?: AssetUrlResolver): string {
-  return resolvePaymentIcon(getNetworkIconId(networkLabel), resolveAssetUrl);
+export function getNetworkIcon(networkLabel: string): string {
+  return paymentIconUrls[getNetworkIconId(networkLabel)];
 }
 
 /**
@@ -257,11 +227,8 @@ export function getSwapOptionIconId(option: { readonly label: string }): Payment
   return assetIconId(option.label.trim().toLowerCase());
 }
 
-export function getSwapOptionIcon(
-  option: { readonly label: string },
-  resolveAssetUrl?: AssetUrlResolver,
-): string {
-  return resolvePaymentIcon(getSwapOptionIconId(option), resolveAssetUrl);
+export function getSwapOptionIcon(option: { readonly label: string }): string {
+  return paymentIconUrls[getSwapOptionIconId(option)];
 }
 
 export interface SwapMethodGroup<T extends { readonly label: string }> {
@@ -1098,20 +1065,8 @@ export function getSwapRefundFormError(
   return getSwapRefundAddressError(payInAsset, address, networkLabel);
 }
 
-export function getRouteIcon(
-  asset: Pick<AssetIndexEntry, "route" | "symbol">,
-  resolveAssetUrl?: AssetUrlResolver,
-): string {
-  return resolvePaymentIcon(routeIconId(asset), resolveAssetUrl);
-}
-
-/**
- * The PACKAGED key behind {@link getRouteIcon}, for a host serving the files
- * itself. Parity with `WizardProviderDisplay.iconPath`: the display row carries
- * the key so nothing has to go back to the registry for it.
- */
-export function getRouteIconPath(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
-  return paymentIconPaths[routeIconId(asset)];
+export function getRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
+  return paymentIconUrls[routeIconId(asset)];
 }
 
 function routeIconId(asset: Pick<AssetIndexEntry, "route" | "symbol">): PaymentIconId {

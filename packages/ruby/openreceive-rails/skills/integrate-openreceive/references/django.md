@@ -245,8 +245,12 @@ built on `@openreceive/browser/headless`. Read that before writing components.
   "switch payment method".
 - No "Open wallet" button on desktop.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only. Host the icons with
-  `asset-base-url`. The registry answers ~37 wallets: pass
+  `createWizardRouteDisplays`. Lightning only. Every image ships inside
+  the JavaScript — logos as data URIs, tutorials once `loadPayTutorialImages()`
+  resolves (`image` is `undefined` until then) — so serve nothing and set no
+  asset option. When it works, the logos and payment icons render; a missing
+  image means a CSP `img-src` that blocks `data:`, and the console names it.
+  The registry answers ~37 wallets: pass
   `providerPreviewLimit` and build "show all" from `display.providerCount`,
   or they push the QR off the screen.
 
@@ -261,10 +265,9 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
 - https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
-- https://openreceive.org/guides/provider-registry.md — where the packaged icons and pay
-  tutorials come from, and how to serve them. The asset rule is the one a custom
-  UI is most likely to get wrong; this is the page that owns it, not the summary
-  in checkout-ux.md
+- https://openreceive.org/guides/provider-registry.md — where the wallet logos and pay
+  tutorials come from: inside the JavaScript, nothing to serve. This is the page
+  that owns the image rule, not the summary in checkout-ux.md
 - https://openreceive.org/guides/automated-swaps.md — only if `LSC_URI_PRIMARY` is set
 - https://openreceive.org/guides/swap-refunds.md — the refund flow, and the route back to it. Read it before you turn swaps on
 - https://openreceive.org/guides/lightning-swap-connect.md — what an `LSC_URI_*` code actually is
@@ -582,18 +585,28 @@ bundler at all:
 
 <openreceive-checkout
   reference="{{ order.pk }}"
-  csrf-header="X-CSRFToken"
-  asset-base-url="{% static 'openreceive' %}"></openreceive-checkout>
+  csrf-header="X-CSRFToken"></openreceive-checkout>
 ```
 
 `openreceive-checkout.js` registers the `<openreceive-checkout>` tag when it
-loads (one self-contained ES module, un-minified identifiers), the stylesheet
-is scoped to what OpenReceive renders so it sits safely next to any CSS
-framework in any order, and `asset-base-url` points the wallet logos and pay
-tutorials at the same static tree. `collectstatic` ships all of it with the
-rest of your static files; the package's `MANIFEST.json` names every file and
-its hash. The element creates the checkout for `reference`, then renders and
-polls itself (its default `prefix` is already `/openreceive`).
+loads (one self-contained ES module, un-minified identifiers), and the
+stylesheet is scoped to what OpenReceive renders so it sits safely next to any
+CSS framework in any order. `collectstatic` ships both with the rest of your
+static files; the package's `MANIFEST.json` names every file and its hash. The
+element creates the checkout for `reference`, then renders and polls itself
+(its default `prefix` is already `/openreceive`).
+
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`
+([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
+
+Then open the checkout in a browser and confirm the wallet logos and
+payment-method icons render. Nothing is served from disk, so a missing image
+means a Content-Security-Policy `img-src` that blocks `data:` — the browser
+console names it.
 
 Hosts with a JavaScript bundler use the npm packages instead — the same
 element from `@openreceive/elements` (`defineElements()` once per page, then

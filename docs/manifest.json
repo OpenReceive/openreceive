@@ -66,6 +66,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-laravel",
+      "title": "Laravel Quickstart",
+      "source_path": "docs/guides/quickstart-laravel.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-btcpay",
       "title": "BTCPay Server Quickstart",
       "source_path": "docs/guides/quickstart-btcpay.md",
@@ -453,6 +461,14 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "source_path": "docs/agents/php.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-laravel",
+      "title": "Agent Directions: Laravel",
+      "source_path": "docs/agents/laravel.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true

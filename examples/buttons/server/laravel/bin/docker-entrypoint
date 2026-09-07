@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Apache listens on $PORT (3005 in compose); the vhost file ships with 3005.
+PORT="${PORT:-3005}"
+sed -i "s/^Listen .*/Listen ${PORT}/" /etc/apache2/ports.conf
+sed -i "s/<VirtualHost \*:[0-9]*>/<VirtualHost *:${PORT}>/" /etc/apache2/sites-available/000-default.conf
+
+# Host Postgres only — OpenReceive itself has no database URL. The worker
+# container (notifications) sets SKIP_DB_PREPARE=1 and relies on the web
+# container having prepared the schema.
+if [[ -n "${DATABASE_URL:-}" && -z "${SKIP_DB_PREPARE:-}" ]]; then
+  php artisan migrate --force --no-interaction
+  php artisan db:seed --force --no-interaction
+fi
+
+chown -R www-data:www-data storage bootstrap/cache
+
+exec "$@"

@@ -57,7 +57,6 @@ const shell = computed(() => {
     ...(props.csrfHeader === undefined ? {} : { csrfHeader: props.csrfHeader }),
     ...(props.paymentWizard === undefined ? {} : { paymentWizard: props.paymentWizard }),
     ...(props.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: props.decodeLinkUrl }),
-    ...(props.assetBaseUrl === undefined ? {} : { assetBaseUrl: props.assetBaseUrl }),
     ...(props.defaultTheme === undefined ? {} : { defaultTheme: props.defaultTheme }),
     ...(props.storageKey === undefined ? {} : { storageKey: props.storageKey }),
     ...(props.metadata === undefined ? {} : { metadata: props.metadata }),

@@ -3,11 +3,12 @@ import {
   checkoutLabels,
   createWizardRouteDisplays,
   getPaymentWizardRoutes,
+  loadPayTutorialImages,
   type WizardProviderDisplay,
 } from "@openreceive/browser/headless";
 import { observer } from "mobx-react";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ShopCheckout } from "../stores/ShopCheckout.ts";
 import { ControllerCopyButton } from "./CopyRow.tsx";
 
@@ -24,6 +25,11 @@ const PREVIEW_LIMIT = 8;
 // The walkthrough modal below belongs to a LIVE invoice — its own first step is
 // "copy the invoice" — so it lives inside the Lightning panel and goes away with
 // it the moment the payer switches method.
+//
+// The wallet logos are `data:` URIs inside @openreceive/provider-data's main
+// bundle; the tutorial screenshots are a lazy chunk of the same package, which
+// `loadPayTutorialImages()` fetches on the first walkthrough open. Nothing here
+// is a file the host has to serve.
 export const WalletSuggestions: React.FC<{ checkout: ShopCheckout }> = observer(({ checkout }) => {
   const [walkthrough, setWalkthrough] = useState<WizardProviderDisplay | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -100,6 +106,25 @@ const ProviderWalkthrough: React.FC<{
   onClose: () => void;
 }> = observer(({ provider, checkout, onClose }) => {
   const [step, setStep] = useState(0);
+  const [images, setImages] = useState<Readonly<Record<string, string>>>();
+
+  // Load-then-render: a step shows its caption alone until the chunk arrives
+  // (or if it never does), never an <img> with an empty src.
+  useEffect(() => {
+    if (provider === null || images !== undefined) return;
+    let live = true;
+    loadPayTutorialImages().then(
+      (table) => {
+        if (live) setImages(table);
+      },
+      () => {
+        if (live) setImages({});
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [provider, images]);
 
   const steps = provider?.tutorials ?? [];
   const total = steps.length + 1;
@@ -140,7 +165,13 @@ const ProviderWalkthrough: React.FC<{
             </>
           ) : (
             <>
-              <Image src={steps[current - 1].image} alt="" radius="md" />
+              {images?.[steps[current - 1].path] === undefined ? null : (
+                <Image
+                  src={images[steps[current - 1].path]}
+                  alt={steps[current - 1].caption}
+                  radius="md"
+                />
+              )}
               <Text size="sm">{steps[current - 1].caption}</Text>
             </>
           )}

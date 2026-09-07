@@ -23,7 +23,6 @@ element cannot (component slots, class-name slots, render-prop children).
 | `csrfHeader` | `X-CSRF-Token` | yes | yes | both |
 | `paymentWizard` | `true` | yes | yes | both |
 | `decodeLinkUrl` | – (no decode link) | yes | yes | both |
-| `assetBaseUrl` | – (packaged URLs) | yes | yes | both |
 | `themeToggle` | `true` | yes | yes | both |
 | `defaultTheme` | `system` | yes | yes | both |
 | `storageKey` | `openreceive.theme` | yes | yes | both |
@@ -36,7 +35,6 @@ element cannot (component slots, class-name slots, render-prop children).
 | `polling` / `pollIntervalMs` | on / engine default | yes | via `options` | both |
 | `createFetch` | `globalThis.fetch` | yes | element-owned | create |
 | `qrEncoder`, `logger` | – | yes | element-owned | both |
-| `resolveAssetUrl` | – | yes | element-owned (use `assetBaseUrl`) | both |
 | `components`, `classNames`, `children` | – | yes | not representable | both |
 | `theme` (host lock) | – (stored preference applies) | yes (React-only prop) | element `theme` attribute; wrappers don't forward it yet | both |
 | `options` | `{}` | – (props are flat) | yes (escape hatch for the rest of `CheckoutShellOptions`) | both |
@@ -63,12 +61,11 @@ reads `X-CSRFToken`, WordPress REST reads `X-WP-Nonce`. On the element it is
 the `csrf-header` attribute; the wrappers forward the prop onto it. A host
 `headers` entry for the same name still wins.
 
-`assetBaseUrl` is the string half of the asset seam: where this app serves the
-packages' `dist/assets` trees. It exists as a prop AND an `asset-base-url`
-attribute because `resolveAssetUrl` is a function and a function cannot cross an
-HTML attribute — and `defineElements` is first-write-wins, so the Vue, Svelte and
-Angular wrappers (which all call it with no options) have no other way in. React
-takes either and lets `resolveAssetUrl` win.
+There is no image prop in any wrapper. Everything the checkout draws ships
+inside the JavaScript — payment icons, wallet logos, pay tutorials — so the
+base-URL / resolver seam that used to sit in this table is gone rather than
+mirrored
+([Provider registry](../guides/provider-registry.md#assets)).
 
 On the element itself the polling knobs are the `polling` / `poll-interval-ms`
 attributes: `polling="false"` renders the snapshot (countdown included)

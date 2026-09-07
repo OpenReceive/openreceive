@@ -981,52 +981,62 @@ test("a failed start for a second coin does not reopen the first coin's panel", 
   }
 });
 
-// The string half of the asset seam. `defineElements` above was called with no
-// `resolveAssetUrl`, exactly like the Vue/Svelte/Angular wrappers call it — and
-// because registration is first-write-wins, an attribute is the ONLY way those
-// hosts can move the icons off the packaged (under webpack, dead `file://`) URLs.
-test("asset-base-url points the wizard icons at the host's own assets", async () => {
+// The tutorial screenshots are the one image set behind a dynamic import.
+// Opening a tutorial fetches the chunk once and re-renders: the caption is
+// drawn alone first — never an `<img>` with an empty src — and the data-URI
+// `<img>` appears when the chunk resolves.
+test("opening a tutorial loads the screenshots, then draws them as data URIs", async () => {
   globalThis.fetch = createFetchStub({
-    "/checkouts/prepare": () => prepareBody("order-assets", 21_000),
+    "/checkouts/prepare": () => prepareBody("order-tutorial", 21_000),
     "/payments/check": () => ({ status: "pending" }),
   });
-  const element = mount({
-    reference: "order-assets",
-    prefix: "/openreceive",
-    "asset-base-url": "/or-assets/",
-  });
+  const element = mount({ reference: "order-tutorial", prefix: "/openreceive" });
 
   try {
-    await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'), {
-      label: "method grid",
+    const tile = await untilLocal(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "method grid" },
+    );
+    tile.click();
+    const open = await untilLocal(
+      () => element.shadowRoot?.querySelector('[data-or-provider-tutorial="strike"]'),
+      { label: "Strike's tutorial button" },
+    );
+    open.click();
+    const dialog = await untilLocal(() => element.shadowRoot?.querySelector('[part="tutorial"]'), {
+      label: "tutorial dialog",
     });
-    const iconSrc = () =>
-      [...(element.shadowRoot?.querySelectorAll("img") ?? [])].map((img) =>
-        img.getAttribute("src"),
-      );
-    assert.ok(
-      iconSrc().some((src) => src?.startsWith("/or-assets/assets/icons/")),
-      `expected packaged icons under the base URL, got ${JSON.stringify(iconSrc())}`,
-    );
-    assert.ok(!iconSrc().some((src) => src?.startsWith("file:")));
-
-    // Display-only: changing it must re-render without restarting the poll
-    // controller (the bucket that exists so a cosmetic attribute never fires an
-    // extra POST /payments/check).
-    element.setAttribute("asset-base-url", "https://cdn.example.com/or");
+    // Step 2 is the first screenshot step.
+    dialog
+      .querySelector('[data-or-provider-tutorial="strike"][data-or-provider-tutorial-index="1"]')
+      .click();
     await untilLocal(
-      () => iconSrc().some((src) => src?.startsWith("https://cdn.example.com/or/assets/icons/")),
-      { label: "re-rendered icons" },
+      () =>
+        element.shadowRoot?.querySelector('[part="tutorial-caption"]')?.textContent === "Tap Send",
+      { label: "step 2 caption" },
     );
+    const image = await untilLocal(
+      () => element.shadowRoot?.querySelector('[part="tutorial-image"]'),
+      { label: "tutorial image after the chunk resolves" },
+    );
+    assert.ok(image.getAttribute("src")?.startsWith("data:image/webp;base64,"));
+    assert.equal(image.getAttribute("alt"), "Tap Send");
+    for (const img of element.shadowRoot.querySelectorAll("img")) {
+      const src = img.getAttribute("src") ?? "";
+      assert.ok(
+        src.startsWith("data:image/"),
+        `every <img> is a data URI, got "${src.slice(0, 40)}"`,
+      );
+    }
   } finally {
     element.remove();
   }
 });
 
-// Without a base URL there is nothing to serve: the payment icons are compiled
-// into @openreceive/browser and drawn inline in the shadow root — no `<img>`,
-// no request, no `file://`, and labelled for assistive tech from the tile.
-test("without asset-base-url the wizard icons are inline SVG", async () => {
+// The payment icons are compiled into @openreceive/browser and drawn inline in
+// the shadow root — no `<img>`, no request, nothing for the host to serve — and
+// labelled for assistive tech from the tile.
+test("the wizard icons are inline SVG", async () => {
   globalThis.fetch = createFetchStub({
     "/checkouts/prepare": () => prepareBody("order-inline-icons", 21_000),
     "/payments/check": () => ({ status: "pending" }),
@@ -1046,7 +1056,6 @@ test("without asset-base-url the wizard icons are inline SVG", async () => {
       img.getAttribute("src"),
     );
     assert.ok(!imgSources.some((src) => src?.includes("assets/icons/")));
-    assert.ok(!imgSources.some((src) => src?.startsWith("file:")));
   } finally {
     element.remove();
   }

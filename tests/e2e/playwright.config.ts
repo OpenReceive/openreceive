@@ -14,7 +14,8 @@ import { defineConfig } from "@playwright/test";
  * `fastapi` (the same minimal host in Python — its vite.config.ts spawns
  * `uv run uvicorn` and proxies the API paths to it) or `django` (the Rails
  * demo's shape in Python; its vite.config.ts spawns `manage.py runserver` the
- * same way, on SQLite under OPENRECEIVE_DEMO_DB). All four boot the same way —
+ * same way, on SQLite under OPENRECEIVE_DEMO_DB), or `laravel` (the same shape
+ * in PHP; its vite.config.ts spawns `php artisan serve`). They all boot the same way —
  * Vite is the front door in development, and the host's API rides inside it —
  * so one webServer command covers them.
  *
@@ -31,7 +32,14 @@ import { defineConfig } from "@playwright/test";
  * reading the suite's leftovers.
  */
 
-const E2E_STACKS = ["node-express", "fastify", "fastapi", "django", "php-plain"] as const;
+const E2E_STACKS = [
+  "node-express",
+  "fastify",
+  "fastapi",
+  "django",
+  "php-plain",
+  "laravel",
+] as const;
 type E2eStack = (typeof E2E_STACKS)[number];
 
 const stack = (process.env.OPENRECEIVE_E2E_STACK ?? "node-express") as E2eStack;

@@ -85,11 +85,8 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
   const { wizard } = model;
   const routeAssetDisplays = createWizardRouteAssetDisplays(model.routeAssets, {
     selectedRoute: model.selectedRoute,
-    ...(view.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: view.resolveAssetUrl }),
   });
-  const routeDisplays = createWizardRouteDisplays(wizard.routes, {
-    ...(view.resolveAssetUrl === undefined ? {} : { resolveAssetUrl: view.resolveAssetUrl }),
-  });
+  const routeDisplays = createWizardRouteDisplays(wizard.routes);
   const showRoutePicker =
     routeAssetDisplays.length > 0 && (model.selectedRoute === null || routeDisplays.length === 0);
   const breadcrumbs =
@@ -233,7 +230,6 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
                 ${renderPaymentIconHtml(asset.iconId, {
                   className: orClasses.methodIcon,
                   label: asset.label,
-                  resolveAssetUrl: view.resolveAssetUrl,
                 })}
                 <strong class="${orClasses.methodTitle}">${escapeHtml(asset.label)}</strong>
                 <small class="${orClasses.methodDetail}">${escapeHtml(asset.subtitle)}</small>
@@ -402,7 +398,6 @@ function renderElementCompactPaymentSelectorHtml(
               ${renderPaymentIconHtml(getPaymentMethodIconId(method.id), {
                 className: orClasses.methodIcon,
                 label: method.title,
-                resolveAssetUrl: view.resolveAssetUrl,
               })}
             </span>
             <span class="${orClasses.methodTitleWrap}">
@@ -480,7 +475,6 @@ function renderElementNetworkSelectorHtml(
               ${renderPaymentIconHtml(getNetworkIconId(option.network_label), {
                 className: orClasses.methodNetworkIcon,
                 label: option.network_label,
-                resolveAssetUrl: view.resolveAssetUrl,
               })}
             </span>
             <span class="truncate">${escapeHtml(option.network_label)}</span>
@@ -623,7 +617,6 @@ function renderElementSwapMethodGroupHtml(
               : renderPaymentIconHtml(getSwapOptionIconId(displayOption), {
                   className: orClasses.methodIcon,
                   label: group.label,
-                  resolveAssetUrl: view.resolveAssetUrl,
                 })
           }
         </span>

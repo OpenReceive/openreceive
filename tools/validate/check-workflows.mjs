@@ -30,6 +30,9 @@ const requiredWorkflows = {
     // The C# engine (BTCPay plugin): vector conformance + kernel tests, in its
     // own job because compiling BTCPay Server is slow.
     "dotnet test packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests",
+    // The PHP engine (packages/php/openreceive): PHPUnit on 8.2 and 8.4 with
+    // Postgres and MySQL service containers, plus the conformance harness.
+    "tools/ci/php-tests.sh",
   ],
   "conformance.yml": [
     "npm run validate",
@@ -48,6 +51,9 @@ const requiredWorkflows = {
     // Weekly full Playwright matrix (ci.yml runs only the smoke spec).
     "npm run test:e2e",
     "bin/ci",
+    // The plain-PHP demo: its bin/ci HTTP smoke and the browser smoke spec
+    // through the same Vite front door as the Node and Python stacks.
+    "npm run test:e2e:smoke:php-plain",
   ],
   "provider-registry.yml": [
     "npm run validate",
@@ -78,6 +84,14 @@ const requiredWorkflows = {
     "tools/release/pypi-release.mjs build",
     "uv publish",
   ],
+  // The Composer twin: no registry token exists — Packagist reads tags on the
+  // two read-only split repositories, so the workflow builds the splits and
+  // pushes them with a deploy key released by the `packagist` environment.
+  "publish-composer.yml": [
+    "does not match package.json version",
+    "tools/release/composer-release.mjs build",
+    "tools/release/composer-release.mjs publish",
+  ],
 };
 
 // RubyGems.org's three trusted-publisher entries name this file and this
@@ -91,6 +105,11 @@ const gemPublishEnvironment = "rubygems";
 const pypiPublishWorkflow = "publish-pypi.yml";
 const pypiPublishEnvironment = "pypi";
 const pypiPushTexts = ["uv publish", "twine upload"];
+// The split-repository push for Packagist: the deploy key lives in the
+// `packagist` environment and only this workflow may run the publish command.
+const composerPublishWorkflow = "publish-composer.yml";
+const composerPublishEnvironment = "packagist";
+const composerPushText = "composer-release.mjs publish";
 
 const forbiddenText = [
   "pull_request_target",
@@ -113,6 +132,7 @@ const forbiddenText = [
   "npm run release:publish",
   "npm run release:gem:publish",
   "npm run release:pypi:publish",
+  "npm run release:composer:publish",
 ];
 const gemPushText = "gem push";
 
@@ -305,6 +325,30 @@ function checkPypiPublishWorkflow(relativePath, workflow) {
   }
 }
 
+// The Composer split-push contract: every job runs in the gated environment
+// with read-only contents (the deploy key, not GITHUB_TOKEN, is what pushes),
+// and only a v* tag can start it. The key is a secret the environment releases
+// after approval; GITHUB_TOKEN could never reach the split repositories anyway.
+function checkComposerPublishWorkflow(relativePath, workflow) {
+  const tags = workflow.on?.push?.tags;
+  expect(
+    Array.isArray(tags) && tags.length === 1 && tags[0] === "v*",
+    `${relativePath}: push trigger must be exactly the v* tags`,
+  );
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    expect(
+      job.environment === composerPublishEnvironment,
+      `${relativePath}: ${jobName} must run in the ${composerPublishEnvironment} environment`,
+    );
+    const permissions = job.permissions === undefined ? {} : job.permissions;
+    expect(
+      permissions.contents === "read" && Object.keys(permissions).length === 1,
+      `${relativePath}: ${jobName} permissions must be exactly contents: read`,
+    );
+  }
+}
+
 function checkNodeSetup(relativePath, workflow) {
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const [jobName, job] of Object.entries(jobs)) {
@@ -368,6 +412,14 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
     expect(
       !text.includes(gemPushText),
       `${relativePath}: forbidden workflow text ${gemPushText} (only ${gemPublishWorkflow} publishes gems)`,
+    );
+  }
+  if (fileName === composerPublishWorkflow) {
+    checkComposerPublishWorkflow(relativePath, workflow);
+  } else {
+    expect(
+      !text.includes(composerPushText),
+      `${relativePath}: forbidden workflow text ${composerPushText} (only ${composerPublishWorkflow} pushes the Composer splits)`,
     );
   }
   if (fileName === pypiPublishWorkflow) {

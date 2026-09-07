@@ -111,8 +111,10 @@ final class Host implements OpenReceiveHost
      *       if ($order === null || $order->state !== 'awaiting_payment') return;
      *       $order->update(['state' => 'paid', 'paid_at' => …]);              // events fire
      *
-     * Either way: DATABASE WRITES ONLY in here. An email or webhook sent from
-     * this method survives a rollback. Implement OpenReceive\Hosts\AfterPaid
+     * Either way: DATABASE WRITES ONLY in here, and no DB::transaction() of
+     * your own — the engine already holds the transaction on this connection,
+     * and PDO refuses a nested BEGIN. An email or webhook sent from this method
+     * survives a rollback. Implement OpenReceive\Hosts\AfterPaid
      * (`afterPaid(PaymentSettlement $settlement)`) for the after-COMMIT side
      * effects — an event dispatch, a queued mail.
      */

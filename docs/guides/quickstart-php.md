@@ -225,21 +225,24 @@ the element:
 <openreceive-checkout
   reference="<?= htmlspecialchars($order->id) ?>"
   prefix="/openreceive"
-  asset-base-url="/openreceive"
 ></openreceive-checkout>
 ```
 
 The module registers `<openreceive-checkout>` as it loads; the element creates
-the checkout for `reference`, then renders, polls and settles itself.
-`asset-base-url` is the URL the unpacked `assets/` directory sits under
-([Provider registry → Assets](provider-registry.md#assets)); when the tree is
-served intact next to the module it also resolves on its own. The stylesheet
-is scoped to what OpenReceive renders, so it sits safely next to any CSS
-framework. The checkout follows the payer's theme; on a page that is always
-one theme, lock it with `theme="dark"`. React/Vue/Svelte/Angular apps use the
-matching wrapper package instead — same attributes
+the checkout for `reference`, then renders, polls and settles itself. The
+stylesheet is scoped to what OpenReceive renders, so it sits safely next to
+any CSS framework. The checkout follows the payer's theme; on a page that is
+always one theme, lock it with `theme="dark"`. React/Vue/Svelte/Angular apps
+use the matching wrapper package instead — same attributes
 ([Frontend checkout](frontend-checkout.md)); a custom UI builds on
 `@openreceive/browser/headless` ([Headless checkout](headless-checkout.md)).
+
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`
+([Provider registry](provider-registry.md#assets)).
 
 `MANIFEST.json` in the tarball carries the version and a SHA-256 per file, so a
 copied tree can be checked against the release it came from; keep the tarball
@@ -269,6 +272,11 @@ also warns at boot while either is in use), where the handler is mounted, and
 the receive-only wallet preflight. `$engine->doctor()` is the same report for
 an engine you already built. Put it behind a `bin/doctor` script; the demo's
 is twelve lines. → [Doctor](api-reference.md#openreceiveserverdoctor)
+
+Then open the checkout in a browser and confirm the wallet logos and
+payment-method icons render. Nothing is served from disk, so a missing image
+means a Content-Security-Policy `img-src` that blocks `data:` — the browser
+console names it.
 
 ## Reconciliation
 

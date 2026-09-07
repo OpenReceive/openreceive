@@ -1,0 +1,6 @@
+# Local port publishing for `npm run demo laravel`.
+# Ports only: the image's production server (Apache + PHP) is what the demo runs.
+services:
+  buttons-laravel:
+    ports:
+      - "3005:3005"

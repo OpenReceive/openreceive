@@ -22,6 +22,7 @@ import {
   getNetworkIcon,
   getSwapOptionIcon,
   getWizardEmptyMessage,
+  loadPayTutorialImages,
   checkoutLabels,
   paymentMethods,
   buildMethodGridEntries,
@@ -238,10 +239,10 @@ test("browser checkout labels and status text", () => {
   assert.equal(getCheckoutProviderOpenLabel("Boltz"), "How To Pay");
 });
 
-test("browser checkout provider icon and tutorial helpers", () => {
+test("browser checkout provider icon and tutorial helpers", async () => {
   const strike = getProvider("strike");
   assert.ok(strike);
-  assert.match(getCheckoutProviderIcon(strike), /assets\/provider-icons\/strike\.png/);
+  assert.match(getCheckoutProviderIcon(strike), /^data:image\/webp;base64,/);
   assert.deepEqual(
     getCheckoutProviderTutorials(strike).map((tutorial) => tutorial.caption),
     ["Tap Send", "Choose Bitcoin wallet", "Tap Paste", "Confirm the payment"],
@@ -250,14 +251,14 @@ test("browser checkout provider icon and tutorial helpers", () => {
   const kraken = getProvider("kraken");
   assert.ok(coinbase);
   assert.ok(kraken);
-  assert.match(
-    getCheckoutProviderTutorials(coinbase)[0].image,
-    /assets\/pay_tutorials\/coinbase-1\.webp/,
+  // Screenshots are undefined until the lazy chunk has loaded, then data URIs.
+  assert.equal(
+    getCheckoutProviderTutorials(coinbase)[0].path,
+    "assets/pay_tutorials/coinbase-1.webp",
   );
-  assert.match(
-    getCheckoutProviderTutorials(kraken)[3].image,
-    /assets\/pay_tutorials\/kraken-4\.webp/,
-  );
+  await loadPayTutorialImages();
+  assert.match(getCheckoutProviderTutorials(coinbase)[0].image, /^data:image\/webp;base64,/);
+  assert.match(getCheckoutProviderTutorials(kraken)[3].image, /^data:image\/webp;base64,/);
 });
 
 test("browser checkout route, method, and network icon helpers", () => {
@@ -448,7 +449,7 @@ test("browser checkout wizard route displays carry provider entries", () => {
   );
   assert.ok(strikeProvider);
   assert.match(strikeProvider.url, /^https:\/\/docs\.strike\.me/);
-  assert.match(strikeProvider.icon, /assets\/provider-icons\/strike\.png/);
+  assert.match(strikeProvider.icon, /^data:image\/webp;base64,/);
   assert.equal(strikeProvider.tutorials.length, 4);
-  assert.match(strikeProvider.tutorials[0].image, /assets\/pay_tutorials\/strike-1\.webp/);
+  assert.equal(strikeProvider.tutorials[0].path, "assets/pay_tutorials/strike-1.webp");
 });

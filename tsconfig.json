@@ -46,6 +46,9 @@
     "examples/buttons/server/*/vite.config.ts",
     "examples/buttons/server/rails/app/javascript/**/*.ts",
     "examples/buttons/server/rails/app/javascript/**/*.tsx",
+    "examples/buttons/server/laravel/resources/js/**/*.ts",
+    "examples/buttons/server/laravel/resources/js/**/*.tsx",
+    "examples/buttons/server/laravel/vite/**/*.ts",
     "tests/e2e/**/*.ts",
     "tests/e2e-btcpay/**/*.ts"
   ]

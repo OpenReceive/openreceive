@@ -215,12 +215,11 @@ so a white card never lands on a dark page. The checkout is styled by CSS
 variables under `data-theme`; [Frontend checkout](frontend-checkout.md) has
 the knobs.
 
-The payment-method icons are compiled into `@openreceive/browser` and need
-nothing from your bundler. The wallet logos and pay tutorials are files in
-`@openreceive/provider-data`, and outside Vite/Rollup (esbuild, webpack, a
-plain script tag) they cannot resolve their own URLs — the drop-in needs this
-exactly as a custom UI does. Serve that package's `dist/assets` tree and pass
-the base as `assetBaseUrl="/openreceive-assets"`
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`
 ([Provider registry](provider-registry.md#assets)).
 
 That is the whole loop: your server owns the price and the order, the payer gets
@@ -246,6 +245,11 @@ and probes the wallet relay to confirm the code is receive-only. Add
 `--url http://localhost:3000` to confirm the routes are mounted; every failing
 line states its own fix.
 → [openreceive doctor](api-reference.md#openreceive-doctor)
+
+Then open the checkout in a browser and confirm the wallet logos and
+payment-method icons render. Nothing is served from disk, so a missing image
+means a Content-Security-Policy `img-src` that blocks `data:` — the browser
+console names it.
 <!-- shared:end verify -->
 
 <!-- shared:begin next -->

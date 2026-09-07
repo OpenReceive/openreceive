@@ -9,9 +9,9 @@ import {
   getProviderRegistryMetadata,
   listCryptoRouteProviders,
   listProviders,
-  payTutorialUrls,
+  loadPayTutorialImages,
+  payTutorialImage,
   providerIconUrls,
-  providerTutorialUrl,
   providerIconUrl,
   providerRegistry,
   validateRegistry,
@@ -53,32 +53,32 @@ test("provider-data v4 keeps wizard copy and icons local", () => {
     ),
     false,
   );
-  assert.equal(providerRegistry.providers.strike.icon_path, "assets/provider-icons/strike.png");
+  assert.equal(providerRegistry.providers.strike.icon_path, "assets/provider-icons/strike.webp");
   // The fiat/country wing was removed: crypto routes are the only route kind.
   assert.equal("countries" in providerRegistry, false);
   assert.equal("fiat_rails" in providerRegistry, false);
 });
 
-test("provider-data resolves bundled provider icon URLs", () => {
+test("provider-data ships every wallet logo inside the JavaScript", () => {
   const strike = providerRegistry.providers.strike;
 
   assert.equal(providerIconUrls[strike.icon_path], providerIconUrl(strike));
-  assert.equal(providerIconUrl(strike).endsWith("/assets/provider-icons/strike.png"), true);
+  assert.match(providerIconUrl(strike), /^data:image\/webp;base64,[A-Za-z0-9+/=]+$/);
+  assert.equal(Object.isFrozen(providerIconUrls), true);
 });
 
-test("provider-data resolves bundled provider tutorial URLs", () => {
+test("provider-data ships the pay tutorials behind one lazy load", async () => {
   const coinbaseTutorial = providerRegistry.providers.coinbase.tutorials[0];
   const krakenTutorial = providerRegistry.providers.kraken.tutorials[3];
 
-  assert.equal(payTutorialUrls[coinbaseTutorial.path], providerTutorialUrl(coinbaseTutorial));
-  assert.equal(
-    providerTutorialUrl(coinbaseTutorial).endsWith("/assets/pay_tutorials/coinbase-1.webp"),
-    true,
+  const images = await loadPayTutorialImages();
+  assert.equal(Object.isFrozen(images), true);
+  assert.match(
+    payTutorialImage(coinbaseTutorial.path),
+    /^data:image\/webp;base64,[A-Za-z0-9+/=]+$/,
   );
-  assert.equal(
-    providerTutorialUrl(krakenTutorial).endsWith("/assets/pay_tutorials/kraken-4.webp"),
-    true,
-  );
+  assert.equal(payTutorialImage(krakenTutorial.path), images[krakenTutorial.path]);
+  assert.equal(payTutorialImage("assets/pay_tutorials/missing.webp"), undefined);
 });
 
 test("provider-data resolves crypto route providers in registry rank order", () => {
@@ -193,7 +193,8 @@ test("provider-data filters providers conservatively", () => {
   );
 });
 
-test("every provider tutorial is well-formed and resolvable", () => {
+test("every provider tutorial is well-formed and resolvable", async () => {
+  const tutorialImages = await loadPayTutorialImages();
   // Tutorial invariants replace the old caption/path transcriptions: captions
   // and step counts are registry content, but every step must be structurally
   // sound and its image must exist in the bundled asset map.
@@ -212,7 +213,7 @@ test("every provider tutorial is well-formed and resolvable", () => {
         `${label}: path names this provider's bundled webp`,
       );
       assert.ok(
-        payTutorialUrls[tutorial.path] !== undefined,
+        tutorialImages[tutorial.path] !== undefined,
         `${label}: ${tutorial.path} must resolve in the bundled tutorial map`,
       );
     });
@@ -287,56 +288,39 @@ test("provider-data validation rejects duplicate route and provider entries", ()
   );
 });
 
-test("provider-data does not double /assets when inlined into a host /assets/*.js chunk", async () => {
-  const { resolveAssetPath } = await import("../packages/js/provider-data/src/asset-url.ts");
-
-  assert.equal(
-    resolveAssetPath(
-      "./assets/provider-icons/phoenix.png",
-      "https://demo.example/assets/index-abc123.js",
-    ),
-    "./provider-icons/phoenix.png",
-  );
-  assert.equal(
-    resolveAssetPath(
-      "./assets/pay_tutorials/strike-1.webp",
-      "https://demo.example/assets/index-abc123.js",
-    ),
-    "./pay_tutorials/strike-1.webp",
-  );
-  assert.equal(
-    resolveAssetPath(
-      "./assets/provider-icons/phoenix.png",
-      "file:///repo/packages/js/provider-data/dist/asset-url.js",
-    ),
-    "./assets/provider-icons/phoenix.png",
-  );
-});
-
-test("the provider icon map matches the assets directory exactly", async () => {
+// The generated image tables, the registry, and the source directories pin each
+// other: every registry icon_path and tutorial path has an image, every image is
+// referenced (no dead bundle weight), and only .webp sits in either directory.
+test("the generated image tables match the registry and the assets directories exactly", async () => {
   const { readdirSync } = await import("node:fs");
-  const { OPENRECEIVE_PROVIDER_ICON_FILES } = await import(
-    "../packages/js/provider-data/src/provider-icons.ts"
-  );
-  const onDisk = readdirSync("packages/js/provider-data/src/assets/provider-icons")
-    .filter((file) => file.endsWith(".png"))
+  const iconDir = "packages/js/provider-data/src/assets/provider-icons";
+  const tutorialDir = "packages/js/provider-data/src/assets/pay_tutorials";
+  for (const dir of [iconDir, tutorialDir]) {
+    assert.ok(
+      readdirSync(dir).every((file) => file.endsWith(".webp")),
+      `${dir}: only .webp images ship`,
+    );
+  }
+  const providers = Object.values(providerRegistry.providers);
+  const iconPaths = [...new Set(providers.map((provider) => provider.icon_path))].sort();
+  const tutorialPaths = providers
+    .flatMap((provider) => (provider.tutorials ?? []).map((tutorial) => tutorial.path))
     .sort();
-  assert.deepEqual([...OPENRECEIVE_PROVIDER_ICON_FILES].sort(), onDisk);
+  assert.deepEqual(Object.keys(providerIconUrls).sort(), iconPaths);
+  assert.deepEqual(
+    readdirSync(iconDir)
+      .map((file) => `assets/provider-icons/${file}`)
+      .sort(),
+    iconPaths,
+  );
+  const tutorialImages = await loadPayTutorialImages();
+  assert.deepEqual(Object.keys(tutorialImages).sort(), tutorialPaths);
+  assert.deepEqual(
+    readdirSync(tutorialDir)
+      .map((file) => `assets/pay_tutorials/${file}`)
+      .sort(),
+    tutorialPaths,
+  );
   // The fetch manifest is internal tooling data and must not ship in assets.
-  assert.ok(
-    !readdirSync("packages/js/provider-data/src/assets/provider-icons").includes("manifest.json"),
-  );
-});
-
-// Same shape, same pin: the tutorial map is one filename list too, so the same
-// drift check applies.
-test("the pay tutorial map matches the assets directory exactly", async () => {
-  const { readdirSync } = await import("node:fs");
-  const { OPENRECEIVE_PAY_TUTORIAL_FILES } = await import(
-    "../packages/js/provider-data/src/pay-tutorials.ts"
-  );
-  const onDisk = readdirSync("packages/js/provider-data/src/assets/pay_tutorials")
-    .filter((file) => file.endsWith(".webp"))
-    .sort();
-  assert.deepEqual([...OPENRECEIVE_PAY_TUTORIAL_FILES].sort(), onDisk);
+  assert.ok(!readdirSync(iconDir).includes("manifest.json"));
 });

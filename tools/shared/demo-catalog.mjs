@@ -85,6 +85,24 @@ export const OPENRECEIVE_DEMOS = [
     label: "Buy a Button — plain PHP",
   },
   {
+    // Laravel 12 over the PHP engine (packages/php/openreceive + packages/php/laravel
+    // by path repository), the Rails demo's shape: products, visitors, orders
+    // and the three hooks in app/OpenReceive/Host.php. Laravel's own Vite is
+    // the dev front door (it spawns `php artisan serve` and proxies the app's
+    // paths); Apache serves the built public/build in the container.
+    kind: "php",
+    keys: ["laravel", "buttons-laravel"],
+    dir: "examples/buttons/server/laravel",
+    sharedDir: "examples/buttons/shared",
+    imagesDir: "examples/buttons/images",
+    packageName: "@openreceive/example-buttons-laravel",
+    service: "buttons-laravel",
+    notificationsService: "notifications",
+    dbService: "db",
+    port: "3005",
+    label: "Buy a Button — Laravel + Postgres",
+  },
+  {
     kind: "rails",
     keys: ["buttons", "rails", "rails-fullstack"],
     dir: "examples/buttons/server/rails",

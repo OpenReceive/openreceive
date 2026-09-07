@@ -58,6 +58,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/django.md",
   "/agent-directions/rails.md",
   "/agent-directions/php.md",
+  "/agent-directions/laravel.md",
   "/agent-directions/btcpay.md",
 ];
 

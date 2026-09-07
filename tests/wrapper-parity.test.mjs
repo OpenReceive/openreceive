@@ -55,7 +55,6 @@ const SHARED_PROPS = [
   "csrfHeader",
   "paymentWizard",
   "decodeLinkUrl",
-  "assetBaseUrl",
   "themeToggle",
   "defaultTheme",
   "storageKey",

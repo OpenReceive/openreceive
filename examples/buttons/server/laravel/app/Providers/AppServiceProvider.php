@@ -31,6 +31,9 @@ class AppServiceProvider extends ServiceProvider
             $this->app->singleton(ReceiveNwcClient::class, static fn (): ReceiveNwcClient => Testkit::wallet());
             $this->app->singleton(PriceProvider::class, static fn (): PriceProvider => new StaticPriceProvider());
             $this->app->singleton(OpenReceiveServiceProvider::SWAP_PROVIDERS, static fn (): array => [Testkit::swapProvider()]);
+            // PHP starts every request from nothing: the fakes' state is
+            // snapshotted after each response and restored before the next.
+            $this->app->terminating(static fn () => Testkit::save());
         }
     }
 

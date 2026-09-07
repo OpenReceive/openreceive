@@ -54,15 +54,17 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
 - `resumePaymentHash` — reopen that attempt after prepare, instead of the
   method grid. `/checkouts/prepare` returns no attempts. A hash the server
   will not serve is ignored. See [Swap refunds](swap-refunds.md).
-- `assetBaseUrl` — where you serve `@openreceive/provider-data`'s wallet
-  logos and pay tutorials. Required under most bundlers that are not Vite.
-  The payment-method icons are compiled in and need nothing. See
-  [Provider registry](provider-registry.md#assets).
 - `theme`, `themeToggle`, `defaultTheme`, `children`, `components`,
   `classNames` — chrome; see [Theme](#theme) below. `children` and
   `components` / `classNames` are React-only. Vue, Svelte, and Angular wrap
-  the same custom element; they take `assetBaseUrl` instead of
-  `resolveAssetUrl`.
+  the same custom element.
+
+There is no image prop. Everything the checkout draws ships inside the
+JavaScript: the payment-method icons, the wallet logos and the pay tutorials.
+There is no image file to copy or serve and no asset option to set, under any
+bundler or with none. The tutorials load as a lazy chunk on first open. If
+your Content-Security-Policy has a strict `img-src`, allow `data:`
+([Provider registry](provider-registry.md#assets)).
 
 `useCheckout` is the hook behind `<Checkout>` if you want the same engine
 with your own layout. It returns the live snapshot, status labels, and
@@ -79,7 +81,7 @@ A host with no JS build step — a WordPress plugin, a Django template, a plain
 PHP page — uses the standalone build that `@openreceive/elements` ships under
 `dist/standalone/` (also `import "@openreceive/elements/standalone/openreceive-checkout.js"`
 from npm, and attached to every GitHub release as
-`standalone-checkout-<version>.tar.gz`). It is three things plus a manifest:
+`standalone-checkout-<version>.tar.gz`). It is two files plus a manifest:
 
 - `openreceive-checkout.js` — one self-contained ES module. It inlines every
   `@openreceive/*` dependency, registers `<openreceive-checkout>` and
@@ -87,8 +89,6 @@ from npm, and attached to every GitHub release as
   package's named API. Identifiers are not mangled — only whitespace is
   minified — and a source map sits beside it.
 - `openreceive-checkout.css` — the same scoped stylesheet as `styles.css`.
-- `assets/` — the wallet logos and pay tutorials from
-  `@openreceive/provider-data`.
 - `MANIFEST.json` — the workspace version and a SHA-256 per file, so a copied
   tree can be checked against the release it came from.
 
@@ -102,13 +102,15 @@ tags:
 <openreceive-checkout
   reference="ord_123"
   prefix="/openreceive"
-  asset-base-url="/static/openreceive"
 ></openreceive-checkout>
 ```
 
-`asset-base-url` is the URL the copied `assets/` directory sits under; every
-packaged image path is joined to it (`/static/openreceive/assets/provider-icons/strike.png`).
-See [Provider registry → Assets](provider-registry.md#assets).
+That is all there is to serve: everything the checkout draws — the
+payment-method icons, the wallet logos and the pay tutorials — is inside
+`openreceive-checkout.js`, tutorials included (the standalone bundle is one
+file, so they are not a separate chunk here). If your Content-Security-Policy
+has a strict `img-src`, allow `data:`
+([Provider registry → Assets](provider-registry.md#assets)).
 
 The build is reproducible: `npm run build:packages` in the
 [repository](https://github.com/openreceive/openreceive) regenerates the

@@ -22,6 +22,7 @@ import {
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs";
 import { DOTNET_PLUGIN_CSPROJ, updateDotnetPluginVersion } from "./dotnet-plugin.mjs";
 import { GEM_NAMES, gemDir, gemVersionFilePath } from "./gem-release.mjs";
+import { LARAVEL_COMPOSER_JSON, PHP_VERSION_FILE, updatePhpVersions } from "./composer-release.mjs";
 import { PYTHON_VERSION_FILE, updatePythonVersion } from "./pypi-release.mjs";
 
 const PUBLIC_PACKAGE_NAMES = OPENRECEIVE_PUBLIC_PACKAGE_NAMES;
@@ -272,6 +273,7 @@ function updateVersions(root, targetVersion) {
   // boundary: 0.5.0-alpha.1 → 0.5.0a1); uv.lock records no version for the
   // editable project, so nothing else in packages/python moves.
   changed.push(...updatePythonVersion(root, targetVersion));
+  changed.push(...updatePhpVersions(root, targetVersion));
   changed.push(...refreshPathGemLockfiles(root));
   changed.push(...updateTextVersionReferences(root, currentVersion, targetVersion));
   run("npm", ["install", "--package-lock-only", "--ignore-scripts"], root, {
@@ -447,6 +449,8 @@ function dryRunPrepare(root, targetVersion) {
       ...gemFiles,
       DOTNET_PLUGIN_CSPROJ,
       PYTHON_VERSION_FILE,
+      PHP_VERSION_FILE,
+      LARAVEL_COMPOSER_JSON,
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "package-lock.json",

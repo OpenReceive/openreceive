@@ -3,13 +3,11 @@
 // ./swap.ts and the provider tutorial modal in ./provider-tutorial.ts.
 import {
   assetButtonClasses,
-  type AssetUrlResolver,
   buildMethodGridEntries,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   checkoutLabels,
   copyInvoice as copyInvoiceHelper,
-  createAssetBaseUrlResolver,
   createMethodGridDisplay,
   createPaymentWizardController,
   createPaymentWizardModel,
@@ -22,6 +20,7 @@ import {
   getPaymentMethodIcon,
   getSwapOptionIcon,
   getWizardEmptyMessage,
+  loadPayTutorialImages,
   type MethodGridGroupDisplay,
   networkButtonClasses,
   networkCheckClasses,
@@ -211,20 +210,29 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   );
   const model = createPaymentWizardModel(selection);
   const { wizard } = model;
-  // One seam, two ways in: an explicit resolver wins over the base-URL string
-  // (which is what the element attribute and the wrappers can carry).
-  const resolveAssetUrl =
-    props.resolveAssetUrl ??
-    (props.assetBaseUrl === undefined || props.assetBaseUrl.trim() === ""
-      ? undefined
-      : createAssetBaseUrlResolver(props.assetBaseUrl));
+  // The tutorial screenshots are the one image set behind a dynamic import.
+  // Opening a tutorial fetches them once; the state flip re-renders so the
+  // displays below pick the images up. Until then (or if the chunk never
+  // arrives) the modal draws the caption alone.
+  const tutorialOpen = activeTutorial !== null;
+  const [tutorialImagesReady, setTutorialImagesReady] = React.useState(false);
+  React.useEffect(() => {
+    if (!tutorialOpen || tutorialImagesReady) return;
+    let cancelled = false;
+    loadPayTutorialImages().then(
+      () => {
+        if (!cancelled) setTutorialImagesReady(true);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [tutorialOpen, tutorialImagesReady]);
   const routeAssetDisplays = createWizardRouteAssetDisplays(model.routeAssets, {
     selectedRoute: model.selectedRoute,
-    ...(resolveAssetUrl === undefined ? {} : { resolveAssetUrl }),
   });
-  const routeDisplays = createWizardRouteDisplays(wizard.routes, {
-    ...(resolveAssetUrl === undefined ? {} : { resolveAssetUrl }),
-  });
+  const routeDisplays = createWizardRouteDisplays(wizard.routes);
   const showRoutePicker =
     routeAssetDisplays.length > 0 && (model.selectedRoute === null || routeDisplays.length === 0);
   const activeTutorialProvider =
@@ -460,7 +468,6 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
             }
           },
           onContinueSwap: selectSwapAsset,
-          ...(resolveAssetUrl === undefined ? {} : { resolveAssetUrl }),
         })
       : null,
     // On the grid the note is a section of its own, under the tiles: there is no
@@ -670,7 +677,6 @@ function renderCompactPaymentMethodSelector(options: {
   readonly onSelectNetwork: (groupKey: string, payInAsset: string) => void;
   readonly onContinueMethod: (methodId: string) => void;
   readonly onContinueSwap: (payInAsset: string) => void;
-  readonly resolveAssetUrl?: AssetUrlResolver;
 }): React.ReactElement {
   // One model, both renderers: which tile is open, which network each coin is
   // set to, which asset is starting, and every derivation that used to be
@@ -785,7 +791,7 @@ function renderCompactPaymentMethodSelector(options: {
                   React.createElement("img", {
                     alt: "",
                     className: orClasses.methodNetworkIcon,
-                    src: getNetworkIcon(option.network_label, options.resolveAssetUrl),
+                    src: getNetworkIcon(option.network_label),
                   }),
                 ),
                 React.createElement("span", { className: "truncate" }, option.network_label),
@@ -887,7 +893,7 @@ function renderCompactPaymentMethodSelector(options: {
                 React.createElement("img", {
                   alt: "",
                   className: orClasses.methodIcon,
-                  src: getPaymentMethodIcon(method.id, options.resolveAssetUrl),
+                  src: getPaymentMethodIcon(method.id),
                 }),
               ),
               React.createElement(
@@ -961,7 +967,7 @@ function renderCompactPaymentMethodSelector(options: {
                   : React.createElement("img", {
                       alt: "",
                       className: orClasses.methodIcon,
-                      src: getSwapOptionIcon(displayOption, options.resolveAssetUrl),
+                      src: getSwapOptionIcon(displayOption),
                     }),
               ),
               React.createElement(

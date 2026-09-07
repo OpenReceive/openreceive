@@ -198,11 +198,15 @@ export function ProviderTutorialModal(options: {
               {
                 className: orClasses.tutorialFrame,
               },
-              React.createElement("img", {
-                alt: tutorial?.caption ?? "",
-                className: orClasses.tutorialImage,
-                src: tutorial?.image ?? "",
-              }),
+              // No `<img>` until the lazily loaded screenshot is in hand: an
+              // empty src is a request for the page itself.
+              tutorial?.image === undefined
+                ? null
+                : React.createElement("img", {
+                    alt: tutorial.caption,
+                    className: orClasses.tutorialImage,
+                    src: tutorial.image,
+                  }),
             ),
             React.createElement(
               "p",

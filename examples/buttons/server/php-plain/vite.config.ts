@@ -67,10 +67,10 @@ export default defineConfig(({ command, mode }) => {
     resolve: {
       // Development: the shared client's `@openreceive/elements` resolves to the
       // standalone file PHP serves — the same bytes, through Vite's module graph.
-      alias:
-        command === "serve"
-          ? { "@openreceive/elements": path.join(STANDALONE_TARGET, STANDALONE_JS) }
-          : {},
+      // (In a build the import stays external; see rollupOptions below.)
+      ...(command === "serve"
+        ? { alias: { "@openreceive/elements": path.join(STANDALONE_TARGET, STANDALONE_JS) } }
+        : {}),
     },
     build: {
       // The built shop lands beside index.php; php -S serves both from one docroot.
@@ -124,17 +124,13 @@ function phpServerPlugin(): Plugin {
         });
         if (install.status !== 0) throw new Error("composer install failed");
       }
-      child = spawn(
-        "php",
-        ["-S", `127.0.0.1:${backendPort}`, "-t", "public", "public/index.php"],
-        {
-          cwd: demoRoot,
-          stdio: "inherit",
-          // A few workers so the browser's parallel asset fetches do not queue
-          // behind a wallet call; php -S is still a development server.
-          env: { ...process.env, PHP_CLI_SERVER_WORKERS: process.env.PHP_CLI_SERVER_WORKERS ?? "4" },
-        },
-      );
+      child = spawn("php", ["-S", `127.0.0.1:${backendPort}`, "-t", "public", "public/index.php"], {
+        cwd: demoRoot,
+        stdio: "inherit",
+        // A few workers so the browser's parallel asset fetches do not queue
+        // behind a wallet call; php -S is still a development server.
+        env: { ...process.env, PHP_CLI_SERVER_WORKERS: process.env.PHP_CLI_SERVER_WORKERS ?? "4" },
+      });
       child.on("exit", (code, signal) => {
         if (code !== null && code !== 0) {
           server.config.logger.error(`php -S exited with ${code ?? signal}`);

@@ -1,20 +1,11 @@
 import providerRegistryJson from "./data/openreceive-providers.v4.json" with { type: "json" };
-import { payTutorialUrls } from "./pay-tutorials.ts";
+import { loadPayTutorialImages, payTutorialImage } from "./pay-tutorials.ts";
 import { providerIconUrls } from "./provider-icons.ts";
 
-export { payTutorialUrls };
-export { providerIconUrls };
-// The packaged asset URLs above only resolve under Vite/Rollup. `AssetUrlResolver`
-// is the seam for every other host, and `warnOnFileAssetUrl` is the diagnostic
-// that says out loud when the packaged resolution has failed. (These are the
-// only packaged files left that need a host: @openreceive/browser's payment
-// icons are compiled into its JavaScript.)
-export {
-  type AssetUrlResolver,
-  createAssetBaseUrlResolver,
-  lazyAssetUrlTable,
-  warnOnFileAssetUrl,
-} from "./asset-url.ts";
+// Every image this registry names ships inside the JavaScript as a `data:`
+// URI: the wallet logos eagerly, the tutorial screenshots behind one dynamic
+// import. No host copies, serves or resolves an image file.
+export { loadPayTutorialImages, payTutorialImage, providerIconUrls };
 
 export type ProviderId = string;
 export type CryptoRouteId = string;
@@ -167,12 +158,9 @@ export function getProvider(providerId: ProviderId): Provider | undefined {
   return registry.providers[providerId];
 }
 
+/** The wallet logo for a registry provider, as a `data:` URI. */
 export function providerIconUrl(provider: Pick<Provider, "icon_path">): string {
-  return providerIconUrls[provider.icon_path] ?? provider.icon_path;
-}
-
-export function providerTutorialUrl(tutorial: Pick<ProviderTutorial, "path">): string {
-  return payTutorialUrls[tutorial.path] ?? tutorial.path;
+  return providerIconUrls[provider.icon_path];
 }
 
 export function listAssets(): readonly AssetIndexEntry[] {

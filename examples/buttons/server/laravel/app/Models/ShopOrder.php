@@ -47,7 +47,9 @@ class ShopOrder extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(ShopOrderItem::class, 'shop_order_id')->orderBy('created_at')->orderBy('sku');
+        // Catalog order: items are created in the order the cart was normalized
+        // (position, price), and HasUuids mints time-ordered ids.
+        return $this->hasMany(ShopOrderItem::class, 'shop_order_id')->orderBy('created_at')->orderBy('id');
     }
 
     /** The reference arrives as a string the payer's browser sent: Postgres RAISES on a malformed uuid literal, so it is checked first. */

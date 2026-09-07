@@ -13,6 +13,7 @@ live there. There is no separate OpenReceive deployment service.
 | FastAPI | Python ≥ 3.10, FastAPI ≥ 0.115 (Starlette ≥ 0.40), a sync SQLAlchemy 2 `Engine`; PostgreSQL, SQLite or MySQL |
 | Django | Python ≥ 3.10, Django ≥ 5.2; PostgreSQL, SQLite (`transaction_mode: IMMEDIATE`) or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 |
 | PHP (plain) | PHP ≥ 8.2, 64-bit, with `ext-gmp` (required by the NWC transport), `ext-sodium`, `ext-mbstring`, `ext-pdo` + `pdo_pgsql`/`pdo_sqlite`/`pdo_mysql`; PHP-FPM or Apache in front of one front controller — `php -S` is a development server |
+| Laravel | PHP ≥ 8.2, 64-bit, Laravel ≥ 11, with `ext-gmp` (required by the NWC transport), `ext-sodium`, `ext-mbstring`, `ext-pdo` + `pdo_pgsql`/`pdo_mysql`/`pdo_sqlite`; PostgreSQL, MySQL/MariaDB or SQLite; PHP-FPM or Apache, `php artisan serve` is a development server |
 | BTCPay Server plugin | BTCPay Server ≥ 2.4.2 |
 
 Every stack needs the same two things at runtime: a receive-only NWC code in
@@ -52,6 +53,9 @@ No background process is required. Optional additions:
   (`OpenReceive.reconcile!`, `OpenReceive::ReconcileJob`,
   `bin/rails openreceive:reconcile`) remain available; nothing needs
   scheduling.
+- **Laravel** — `php artisan openreceive:notifications`, one process total
+  (compose runs it as a second service from the same image);
+  `php artisan openreceive:reconcile` is the one-shot pass.
 - **Python** — `openreceive notifications --app main:app` (the FastAPI app,
   the router, or an `OpenReceiveApp`), one process total; `openreceive
   reconcile --app …` is the one-shot pass. Django spells the same two as
@@ -130,6 +134,24 @@ source, so slim images need the autotools in the build stage — without them
 ```dockerfile
 RUN apt-get update && apt-get install -y autoconf automake libtool build-essential pkg-config
 ```
+
+## Laravel in production
+
+PHP boots the application afresh on every request, so the engine — and the
+receive-only wallet preflight its `Service` runs at construction — would run
+per request under PHP-FPM or Apache. The package remembers the wallet's info
+event in the app's default cache store for
+`config('openreceive.wallet_info_cache_seconds')` (600 by default), so a
+checkout request costs one relay round trip; the production eager preflight
+Rails has happens here on each web boot that misses that cache, and never in
+`php artisan config:cache`, `migrate` or the other secretless build commands.
+`php artisan config:cache` captures `NWC_URI` / `LSC_URI_*` at cache time —
+rebuild it after rotating a code. Migrate in the entrypoint, not at build
+(`php artisan migrate --force`); the same secret rules as Node apply to the
+image: never `COPY .env`, never an `ENV NWC_URI`. The notifications worker is
+`php artisan openreceive:notifications`, one process total, the same image as
+the web process with a different command; `ext-pcntl` lets it stop cleanly on
+SIGTERM.
 
 ## Python (FastAPI) in production
 

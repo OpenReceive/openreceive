@@ -377,8 +377,6 @@ function CheckoutView(
     components,
     classNames,
     children,
-    resolveAssetUrl,
-    assetBaseUrl,
     className,
     ...sectionProps
   } = props;
@@ -690,8 +688,6 @@ function CheckoutView(
               onCopy,
               onRequestLightning,
               onSwapStarted,
-              resolveAssetUrl,
-              assetBaseUrl,
               // Whether a payer who closes the tab has a URL to come back
               // to. Explicit wins — only the host knows about a per-order
               // route of its own; otherwise infer it from the two props that

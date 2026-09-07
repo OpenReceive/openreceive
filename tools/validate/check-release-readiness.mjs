@@ -8,6 +8,14 @@ import {
   dotnetPluginVersion,
   readDotnetPluginVersion,
 } from "../release/dotnet-plugin.mjs";
+import {
+  composerConstraint,
+  LARAVEL_COMPOSER_JSON,
+  PHP_ENGINE_DIR,
+  PHP_VERSION_FILE,
+  readLaravelConstraint,
+  readPhpVersion,
+} from "../release/composer-release.mjs";
 import { GEM_NAMES, gemDir, readGemVersion } from "../release/gem-release.mjs";
 import {
   PYTHON_PACKAGE_DIR,
@@ -273,6 +281,51 @@ for (const gemName of GEM_NAMES) {
   expect(
     testCiRelease.includes("npm run test:python"),
     "package.json: test:ci:release must run the Python engine suite (test:python)",
+  );
+}
+
+// The Composer packages release in lockstep too: OpenReceive\Version::VERSION is
+// the engine's version (composer.json carries none; Packagist tags), and the
+// Laravel adapter pins the engine to the `~X.Y.Z` lockstep constraint. Both are
+// written by release:prepare.
+{
+  const phpVersion = readPhpVersion(root);
+  expect(phpVersion !== undefined, `${PHP_VERSION_FILE}: missing Version::VERSION`);
+  expect(
+    phpVersion === releaseVersion,
+    `${PHP_VERSION_FILE}: VERSION ${phpVersion} must match ${releaseVersion} (run npm run release:prepare)`,
+  );
+  const engineManifest = readJson(path.join(PHP_ENGINE_DIR, "composer.json"));
+  expect(
+    engineManifest.name === "openreceive/openreceive",
+    `${PHP_ENGINE_DIR}/composer.json: name must be openreceive/openreceive`,
+  );
+  expect(
+    engineManifest.version === undefined,
+    `${PHP_ENGINE_DIR}/composer.json: must not carry a version field (Packagist versions from tags)`,
+  );
+  for (const requiredFile of ["composer.json", "README.md", "LICENSE"]) {
+    expect(
+      existsSync(path.join(root, PHP_ENGINE_DIR, requiredFile)),
+      `${PHP_ENGINE_DIR}: missing ${requiredFile}`,
+    );
+  }
+  // The Laravel adapter is checked only once it exists in the tree.
+  if (existsSync(path.join(root, LARAVEL_COMPOSER_JSON))) {
+    const constraint = readLaravelConstraint(root);
+    expect(
+      constraint === composerConstraint(releaseVersion),
+      `${LARAVEL_COMPOSER_JSON}: openreceive/openreceive must be ${composerConstraint(releaseVersion)}, got ${constraint} (run npm run release:prepare)`,
+    );
+  }
+  expect(
+    rootPackage.scripts?.["release:composer:build"] ===
+      "node tools/release/composer-release.mjs build",
+    "package.json: missing release:composer:build script",
+  );
+  expect(
+    testCiRelease.includes("npm run test:php"),
+    "package.json: test:ci:release must run the PHP engine suite (test:php)",
   );
 }
 

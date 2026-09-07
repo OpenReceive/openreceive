@@ -24,37 +24,118 @@ export const BUTTON_PRICE = "$1.00";
 export const BUTTON_SATS = "2,000 sats";
 
 /**
- * Watch the page for the two ways a payment icon used to break: a request for
- * a packaged icon FILE (they are compiled into @openreceive/browser now, so
- * none may happen) and any 404 at all. Install before navigating.
+ * Everything the checkout draws ships inside the OpenReceive JavaScript:
+ * payment-method icons as inline SVG / `data:` URIs, wallet logos as `data:`
+ * WebP in the provider-data bundle, tutorial screenshots as `data:` WebP in a
+ * lazy chunk of it. A `data:` URI never becomes a network request, so a
+ * checkout page that asks the server for ANY image is the regression. The shop's
+ * own product artwork (`/images/…`) is the host's, not the checkout's.
+ *
+ * Install before navigating; hand the result to {@link expectInlineImages}.
  */
-export function watchIconRequests(page: Page): {
-  readonly iconFileRequests: string[];
-  readonly notFound: string[];
-} {
-  const iconFileRequests: string[] = [];
+export function watchImageRequests(page: Page): ImageRequestLog {
+  const images: string[] = [];
   const notFound: string[] = [];
   page.on("request", (request) => {
-    if (/\/assets\/icons\/[a-z]+\.svg/.test(request.url())) iconFileRequests.push(request.url());
+    if (request.resourceType() !== "image") return;
+    if (new URL(request.url()).pathname.startsWith("/images/")) return;
+    images.push(request.url());
   });
   page.on("response", (response) => {
     if (response.status() === 404) notFound.push(response.url());
   });
-  return { iconFileRequests, notFound };
+  return { images, notFound };
+}
+
+export interface ImageRequestLog {
+  /** Image requests that were not the shop's own artwork. */
+  readonly images: string[];
+  readonly notFound: string[];
 }
 
 /**
- * The payment-method icons of the wizard, however the framework draws them:
- * React puts the `data:` URI in an `<img>`; the custom element (Vue, Svelte,
- * Angular wrap it) inlines the SVG inside its shadow root, which Playwright
- * pierces.
+ * The inline-image gate, run on the invoice screen (where the wallet logos
+ * are): no image request left the page (and nothing 404ed); every `<img>` in
+ * the checkout — light DOM and the packaged element's shadow root alike — is a
+ * `data:` URI that decoded (`naturalWidth > 0`), with at least one WebP wallet
+ * logo among them; and one wallet's pay tutorial shows its screenshot as a
+ * decoded `data:image/webp` — which proves the lazy tutorial chunk loads under
+ * this stack's bundler.
  */
-export async function expectInlinePaymentIcons(page: Page): Promise<void> {
-  const tile = bitcoinTile(page);
-  const icon = tile.locator('img[src^="data:image/svg+xml,"], svg[role="img"]').first();
-  await expect(icon).toBeVisible();
-  const box = await icon.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThan(8);
+export async function expectInlineImages(page: Page, log: ImageRequestLog): Promise<void> {
+  expect(log.images).toEqual([]);
+  expect(log.notFound).toEqual([]);
+
+  const column = paymentColumn(page);
+  await expect
+    .poll(async () => (await column.evaluate(collectImages)).every((image) => image.complete), {
+      message: "checkout images decoded",
+    })
+    .toBe(true);
+  const images = await column.evaluate(collectImages);
+  for (const image of images) {
+    expect(image.src, "an image in the checkout is not a data: URI").toMatch(/^data:/);
+    expect(image.naturalWidth, `${image.src.slice(0, 40)}… did not decode`).toBeGreaterThan(0);
+  }
+  expect(
+    images.filter((image) => image.src.startsWith("data:image/webp;base64,")).length,
+  ).toBeGreaterThan(0);
+
+  await expectInlineTutorialImage(page);
+}
+
+interface CheckoutImage {
+  readonly src: string;
+  readonly complete: boolean;
+  readonly naturalWidth: number;
+}
+
+/** Runs in the page: every `<img>` under `root`, following shadow roots. */
+function collectImages(root: Element): CheckoutImage[] {
+  const found: CheckoutImage[] = [];
+  const visit = (node: Element | ShadowRoot): void => {
+    for (const image of node.querySelectorAll("img")) {
+      found.push({ src: image.src, complete: image.complete, naturalWidth: image.naturalWidth });
+    }
+    for (const element of node.querySelectorAll("*")) {
+      if (element.shadowRoot !== null) visit(element.shadowRoot);
+    }
+  };
+  if (root.shadowRoot !== null) visit(root.shadowRoot);
+  visit(root);
+  return found;
+}
+
+/**
+ * Open Strike's tutorial (four screenshots, and it sits in every wallet list
+ * the demos draw) and step to the first screenshot.
+ *
+ * Two renderers: the shop's own wallet grid on the React hosts (the wallet's
+ * name is the button, the walkthrough is a Mantine modal in a portal) and the
+ * packaged element behind the Vue/Svelte/Angular tabs (a card with a "How To
+ * Pay" button, the dialog inside the shadow root). Both dialogs answer to the
+ * same accessible name and label the screenshot with its caption; the logos
+ * beside it carry an empty alt.
+ */
+async function expectInlineTutorialImage(page: Page): Promise<void> {
+  const column = paymentColumn(page);
+  await column
+    .locator('button.or-shop-wallet:has-text("Strike"), article:has-text("Strike") button')
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog", { name: /Pay a Lightning invoice with Strike/ });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Next" }).click();
+
+  const screenshot = dialog.locator('img:not([alt=""])').first();
+  await expect(screenshot).toBeVisible();
+  await expect(screenshot).toHaveAttribute("src", /^data:image\/webp;base64,/);
+  await expect
+    .poll(() => screenshot.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(0);
+
+  await dialog.press("Escape");
+  await expect(dialog).toBeHidden();
 }
 
 /** Open the shop and wait for the catalog to be interactive. */

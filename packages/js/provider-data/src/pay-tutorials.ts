@@ -1,34 +1,32 @@
-import { assetUrl, lazyAssetUrlTable } from "./asset-url.ts";
+// The pay-tutorial screenshots ship inside the JavaScript too, but they are
+// the one image set a checkout does not draw on first paint (~270 KB of
+// base64 nobody sees until a tutorial opens), so they live behind a dynamic
+// import(): bundlers keep the generated module a separate chunk, and the first
+// tutorial open is what fetches it.
 
-// One filename list drives the whole map, mirroring provider-icons.ts — two
-// patterns for one concept in one package was the drift risk. The list matches
-// the registry's tutorial `path` references exactly (a test pins every
-// referenced tutorial to an entry here).
-export const OPENRECEIVE_PAY_TUTORIAL_FILES: readonly string[] = [
-  "boltz-1.webp",
-  "boltz-2.webp",
-  "cashapp-1.webp",
-  "cashapp-2.webp",
-  "cashapp-3.webp",
-  "cashapp-4.webp",
-  "cashapp-5.webp",
-  "cashapp-6.webp",
-  "coinbase-1.webp",
-  "coinbase-2.webp",
-  "fixedfloat-1.webp",
-  "fixedfloat-2.webp",
-  "kraken-1.webp",
-  "kraken-2.webp",
-  "kraken-3.webp",
-  "kraken-4.webp",
-  "strike-1.webp",
-  "strike-2.webp",
-  "strike-3.webp",
-  "strike-4.webp",
-];
+type PayTutorialImages = Readonly<Record<string, string>>;
 
-// Lazy, for the reason provider-icons.ts is: see lazyAssetUrlTable.
-export const payTutorialUrls: Readonly<Record<string, string>> = lazyAssetUrlTable(
-  OPENRECEIVE_PAY_TUTORIAL_FILES.map((file) => `assets/pay_tutorials/${file}`),
-  (key) => assetUrl(`./${key}`),
-);
+let cached: PayTutorialImages | undefined;
+let loading: Promise<PayTutorialImages> | undefined;
+
+/**
+ * Load the tutorial images. Memoised: the chunk is fetched once per page and
+ * every later call answers the same promise. A rejection propagates — callers
+ * treat it as "no image" and render the caption alone.
+ */
+export function loadPayTutorialImages(): Promise<PayTutorialImages> {
+  loading ??= import("./generated/pay-tutorial-images.ts").then((module) => {
+    cached = module.payTutorialImages;
+    return cached;
+  });
+  return loading;
+}
+
+/**
+ * The `data:` URI for one tutorial `path`, synchronously, from the cache
+ * {@link loadPayTutorialImages} fills. `undefined` until that promise has
+ * resolved — a renderer draws the caption without an `<img>` in the meantime.
+ */
+export function payTutorialImage(path: string): string | undefined {
+  return cached?.[path];
+}

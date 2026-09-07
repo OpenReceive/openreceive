@@ -24,12 +24,8 @@ type MethodGroup = MethodGridGroupDisplay<CheckoutPaymentMethod>;
 // which cannot represent that mistake; this component only draws what the
 // display model already decided.
 //
-// The icon getters take an OPTIONAL asset resolver and are called here without
-// one: the payment icons are compiled into @openreceive/browser and come back
-// as `data:` URIs, so no bundler has to find a file for them. (The provider
-// logos and pay tutorials elsewhere in the checkout are still files; the Rails
-// demo's webpack config copies those next to the chunk — see
-// config/webpack/openreceive-import-meta-url-loader.js.)
+// The icon getters answer `data:` URIs: everything the checkout draws ships
+// inside the OpenReceive JavaScript, so no bundler has to find a file for it.
 export const MethodGrid: React.FC<{ checkout: ShopCheckout }> = observer(({ checkout }) => {
   const grid = checkout.methodGrid;
 

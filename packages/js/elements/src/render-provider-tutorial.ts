@@ -72,7 +72,13 @@ export function renderTutorialModalHtml(
       `
       : `
         <div part="tutorial-frame" class="${orClasses.tutorialFrame}">
-          <img part="tutorial-image" class="${orClasses.tutorialImage}" alt="${escapeHtml(tutorial?.caption ?? "")}" src="${escapeHtml(tutorial?.image ?? "")}">
+          ${
+            // No `<img>` until the lazily loaded screenshot is in hand: an
+            // empty src is a request for the page itself.
+            tutorial?.image === undefined
+              ? ""
+              : `<img part="tutorial-image" class="${orClasses.tutorialImage}" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}">`
+          }
         </div>
         <p part="tutorial-caption" class="${orClasses.tutorialCaption}">${escapeHtml(tutorial?.caption ?? "")}</p>
       `;

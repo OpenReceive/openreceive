@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# The per-push job for the Laravel Buy a Button example (ci.yml's
+# laravel-example, demos.yml's buttons-laravel). Twin of the Rails demo's
+# bin/ci: install, migrate against the service database, the stubbed-wallet
+# feature tests (on that same database), the drift checks, the boundary
+# check, the dependency audit.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+export APP_ENV="${APP_ENV:-local}"
+export APP_KEY="${APP_KEY:-base64:YnV5LWEtYnV0dG9uLWxhcmF2ZWwtZGVtby1rZXktMzI=}"
+export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
+export DB_CONNECTION=pgsql
+# The service database the workflow provides (host Postgres, never OpenReceive's own).
+export DATABASE_URL="${DATABASE_URL:-postgres://openreceive:openreceive@127.0.0.1:5432/buttons_laravel}"
+
+step() {
+  printf '\n== %s\n' "$1"
+}
+
+step "Setup"
+composer install --no-interaction --no-progress --prefer-dist
+
+step "Migrate + seed against the service database"
+php artisan migrate --force --no-interaction
+php artisan db:seed --force --no-interaction
+
+step "Tests (stubbed wallet, on the service database)"
+vendor/bin/phpunit
+
+step "Drift: OpenReceive migration snapshot"
+php script/check-migration-drift.php
+
+step "Drift: catalog vs artwork"
+node ../rails/script/check-catalog-artwork.mjs
+
+step "Boundary: no server-node imports"
+php script/check-shared-boundary.php
+
+step "Security: composer audit"
+composer audit --no-interaction

@@ -8,24 +8,25 @@
 6. [FastAPI quickstart](quickstart-fastapi.md)
 7. [Django quickstart](quickstart-django.md)
 8. [PHP quickstart (plain PHP)](quickstart-php.md)
-9. [BTCPay Server quickstart](quickstart-btcpay.md) — and its [reference](btcpay-reference.md)
-10. [Authorization and the host](authorization.md)
-11. [Rate limiting](rate-limiting.md)
-12. [Frontend checkout](frontend-checkout.md)
-13. [Checkout UX](checkout-ux.md)
-14. [Headless checkout](headless-checkout.md)
-15. [Writing your own checkout route](custom-checkout-route.md)
-16. [Automated swaps](automated-swaps.md)
-17. [Swap refunds, and the way back to them](swap-refunds.md)
-18. [Lightning Swap Connect (LSC) URI](lightning-swap-connect.md)
-19. [Environment variables](environment-variables.md)
-20. [Payment storage](storage.md)
-21. [Deploying OpenReceive](deploying.md)
-22. [Testing your OpenReceive integration](host-testing.md)
-23. [API reference](api-reference.md)
-24. [Security](security.md)
-25. [Price feeds](price-feeds.md)
-26. [Provider registry](provider-registry.md)
+9. [Laravel quickstart](quickstart-laravel.md)
+10. [BTCPay Server quickstart](quickstart-btcpay.md) — and its [reference](btcpay-reference.md)
+11. [Authorization and the host](authorization.md)
+12. [Rate limiting](rate-limiting.md)
+13. [Frontend checkout](frontend-checkout.md)
+14. [Checkout UX](checkout-ux.md)
+15. [Headless checkout](headless-checkout.md)
+16. [Writing your own checkout route](custom-checkout-route.md)
+17. [Automated swaps](automated-swaps.md)
+18. [Swap refunds, and the way back to them](swap-refunds.md)
+19. [Lightning Swap Connect (LSC) URI](lightning-swap-connect.md)
+20. [Environment variables](environment-variables.md)
+21. [Payment storage](storage.md)
+22. [Deploying OpenReceive](deploying.md)
+23. [Testing your OpenReceive integration](host-testing.md)
+24. [API reference](api-reference.md)
+25. [Security](security.md)
+26. [Price feeds](price-feeds.md)
+27. [Provider registry](provider-registry.md)
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
 [Flask](../recipes/flask.md) (the Python engine as a Blueprint)
@@ -38,7 +39,8 @@ payloads instead of a reading list:
 [FastAPI](https://openreceive.org/agent-directions/fastapi.md),
 [Django](https://openreceive.org/agent-directions/django.md),
 [Rails](https://openreceive.org/agent-directions/rails.md),
-[PHP](https://openreceive.org/agent-directions/php.md) or
+[PHP](https://openreceive.org/agent-directions/php.md),
+[Laravel](https://openreceive.org/agent-directions/laravel.md) or
 [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md) — the
 byte-exact files behind the site's copy button (in this repo: `docs/agents/`).
 Each is Step 0, the rules no API call can state for itself, and the matching

@@ -148,3 +148,65 @@ jobs:
           cache-dependency-glob: examples/buttons/server/django/uv.lock
       - run: bin/ci
         working-directory: examples/buttons/server/django
+
+  # The Buy a Button plain-PHP demo (SQLite, no framework, the standalone
+  # checkout build): bin/ci runs composer validate, php -l, the catalog drift
+  # and shared-boundary checks and an HTTP order → settle → download smoke over
+  # the engine's fakes; then the browser smoke spec drives the same stack
+  # through its Vite front door (vite.config.ts spawns `php -S`).
+  buttons-php-plain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2.36.0
+        with:
+          php-version: "8.2"
+          extensions: gmp, sodium, mbstring, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+      - uses: ./.github/actions/setup-playwright
+      - run: composer install --no-interaction --no-progress --prefer-dist
+        working-directory: examples/buttons/server/php-plain
+      - run: bin/ci
+        working-directory: examples/buttons/server/php-plain
+      - run: npm run test:e2e:smoke:php-plain
+
+  # Full Buy a Button Laravel demo (host-owned Postgres, like its compose
+  # stack): bin/ci as in ci.yml's laravel-example, then the browser smoke
+  # against the stack — Vite fronting `php artisan serve` against the
+  # engine's fakes under DEMO_WALLET=testkit, the same spec every stack runs.
+  buttons-laravel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NWC_URI: ""
+      DATABASE_URL: postgres://openreceive:openreceive@127.0.0.1:5432/buttons_laravel
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: openreceive
+          POSTGRES_PASSWORD: openreceive
+          POSTGRES_DB: buttons_laravel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2.36.0
+        with:
+          php-version: "8.2"
+          extensions: gmp, sodium, mbstring, pdo_sqlite, pdo_pgsql
+          coverage: none
+          tools: composer:v2
+      - uses: ./.github/actions/setup-playwright
+      - run: bin/ci
+        working-directory: examples/buttons/server/laravel
+      - run: npm run test:e2e:smoke:laravel

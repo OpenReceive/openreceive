@@ -7,8 +7,8 @@
 // with the id list and each icon's minified markup as a JS string. The
 // checkout renderer draws those strings inline in its shadow root and the
 // `paymentIconUrls` table derives `data:` URIs from them, so a host bundler
-// never has to find, copy or serve an icon file. The .svg files still ship in
-// dist/assets/icons for hosts that serve them and pass `assetBaseUrl`.
+// never has to find, copy or serve an icon file. The .svg files are the
+// generator's input only; nothing ships them.
 //
 // Inline SVG is not <img>: markup injected into a document can carry script,
 // event handlers, foreign content and external references. These strings are
@@ -18,11 +18,11 @@
 // `--check` fails when the committed module is stale (CI runs it with the
 // other generators).
 
-import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { root } from "../shared/root.mjs";
+import { formatWithBiome } from "./format-generated.mjs";
 
 const browserRoot = path.join(root, "packages/js/browser");
 const iconsDir = path.join(browserRoot, "src/assets/icons");
@@ -108,26 +108,8 @@ ${entries}
 `;
 }
 
-function formatWithBiome(source) {
-  const formatted = spawnSync(
-    path.join(root, "node_modules/.bin/biome"),
-    ["format", `--stdin-file-path=${generatedTs}`],
-    { input: source, encoding: "utf8", cwd: root },
-  );
-  if (formatted.error !== undefined || formatted.status !== 0) {
-    process.stderr.write(formatted.stdout ?? "");
-    process.stderr.write(formatted.stderr ?? "");
-    throw new Error(
-      `generate-payment-icons: biome format failed for ${path.relative(root, generatedTs)}${
-        formatted.error === undefined ? "" : ` (${formatted.error.message})`
-      }`,
-    );
-  }
-  return formatted.stdout;
-}
-
 export function generatePaymentIconsModule() {
-  return formatWithBiome(renderModule(readIcons()));
+  return formatWithBiome(renderModule(readIcons()), generatedTs, "generate-payment-icons");
 }
 
 function main() {

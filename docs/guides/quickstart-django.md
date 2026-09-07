@@ -296,18 +296,28 @@ bundler at all:
 
 <openreceive-checkout
   reference="{{ order.pk }}"
-  csrf-header="X-CSRFToken"
-  asset-base-url="{% static 'openreceive' %}"></openreceive-checkout>
+  csrf-header="X-CSRFToken"></openreceive-checkout>
 ```
 
 `openreceive-checkout.js` registers the `<openreceive-checkout>` tag when it
-loads (one self-contained ES module, un-minified identifiers), the stylesheet
-is scoped to what OpenReceive renders so it sits safely next to any CSS
-framework in any order, and `asset-base-url` points the wallet logos and pay
-tutorials at the same static tree. `collectstatic` ships all of it with the
-rest of your static files; the package's `MANIFEST.json` names every file and
-its hash. The element creates the checkout for `reference`, then renders and
-polls itself (its default `prefix` is already `/openreceive`).
+loads (one self-contained ES module, un-minified identifiers), and the
+stylesheet is scoped to what OpenReceive renders so it sits safely next to any
+CSS framework in any order. `collectstatic` ships both with the rest of your
+static files; the package's `MANIFEST.json` names every file and its hash. The
+element creates the checkout for `reference`, then renders and polls itself
+(its default `prefix` is already `/openreceive`).
+
+Everything the checkout draws ships inside the JavaScript: the payment-method
+icons, the wallet logos and the pay tutorials. There is no image file to copy
+or serve and no asset option to set, under any bundler or with none. The
+tutorials load as a lazy chunk on first open. If your Content-Security-Policy
+has a strict `img-src`, allow `data:`
+([Provider registry](provider-registry.md#assets)).
+
+Then open the checkout in a browser and confirm the wallet logos and
+payment-method icons render. Nothing is served from disk, so a missing image
+means a Content-Security-Policy `img-src` that blocks `data:` — the browser
+console names it.
 
 Hosts with a JavaScript bundler use the npm packages instead — the same
 element from `@openreceive/elements` (`defineElements()` once per page, then

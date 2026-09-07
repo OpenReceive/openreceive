@@ -80,10 +80,6 @@ function sharedElementAttributes(
   if (options.decodeLinkUrl !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl] = options.decodeLinkUrl;
   }
-  // Shared, not create-mode: the wizard and its icons render in every mode.
-  if (isSet(options.assetBaseUrl)) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.assetBaseUrl] = options.assetBaseUrl;
-  }
   // Shared for the same reason: a swap refund screen — the one thing this
   // governs — shows in snapshot mode too.
   if (options.resumable !== undefined) {

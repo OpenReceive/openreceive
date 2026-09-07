@@ -2,7 +2,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
-import { copyProviderAssetsPlugin } from "../../shared/copy-openreceive-provider-assets-plugin.ts";
 import { laravelFrontDoor } from "./vite/laravel-front-door.ts";
 
 const demoRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +32,8 @@ export default defineConfig(({ mode, command }) => {
     // dev server is the origin itself.
     base: command === "build" ? "/build/" : "/",
     appType: "custom",
+    // public/ is Laravel's document root, not a static tree to copy into the build.
+    publicDir: false,
     build: {
       manifest: "manifest.json",
       outDir: "public/build",
@@ -52,6 +53,6 @@ export default defineConfig(({ mode, command }) => {
       // mid-checkout.
       watch: { ignored: ["**/.data/**", "**/vendor/**", "**/storage/**"] },
     },
-    plugins: [react(), copyProviderAssetsPlugin(repoRoot), laravelFrontDoor({ demoRoot, rootEnv })],
+    plugins: [react(), laravelFrontDoor({ demoRoot, rootEnv })],
   };
 });
