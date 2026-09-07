@@ -130,10 +130,15 @@ export function updatePhpVersions(root, targetVersion) {
           versions["openreceive/openreceive"] = targetVersion;
         }
       }
-      // Two-space JSON: biome formats this file with the rest of the repo.
+      // biome formats this file with the rest of the repo (short arrays stay
+      // on one line), so write it and let biome settle the layout.
       const updated = `${JSON.stringify(manifest, null, 2)}\n`;
       if (updated !== source) {
         writeFileSync(laravelFile, updated);
+        execFileSync("npx", ["biome", "format", "--write", LARAVEL_COMPOSER_JSON], {
+          cwd: root,
+          stdio: "ignore",
+        });
         changed.push(LARAVEL_COMPOSER_JSON);
         // The lock records the resolved engine version; refresh only that
         // entry so the rest of the lock stays byte-identical.
@@ -154,14 +159,24 @@ export function updatePhpVersions(root, targetVersion) {
     const manifest = JSON.parse(readFileSync(path.join(wordpressDir, "composer.json"), "utf8"));
     manifest.require["openreceive/openreceive"] = composerConstraint(targetVersion);
     manifest.repositories[0].options.versions["openreceive/openreceive"] = targetVersion;
-    writeFileSync(path.join(wordpressDir, "composer.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    writeFileSync(
+      path.join(wordpressDir, "composer.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
     changed.push("packages/php/wordpress/composer.json");
     for (const name of ["openreceive.php", "readme.txt"]) {
       const file = path.join(wordpressDir, name);
       const before = readFileSync(file, "utf8");
-      const after = before.replace(/(^ \* Version: |^Stable tag: ).+$/m, `$1${targetVersion}`)
-        .replace(/define\('OPENRECEIVE_PLUGIN_VERSION', '[^']+'\)/, `define('OPENRECEIVE_PLUGIN_VERSION', '${targetVersion}')`);
-      if (before !== after) { writeFileSync(file, after); changed.push(`packages/php/wordpress/${name}`); }
+      const after = before
+        .replace(/(^ \* Version: |^Stable tag: ).+$/m, `$1${targetVersion}`)
+        .replace(
+          /define\('OPENRECEIVE_PLUGIN_VERSION', '[^']+'\)/,
+          `define('OPENRECEIVE_PLUGIN_VERSION', '${targetVersion}')`,
+        );
+      if (before !== after) {
+        writeFileSync(file, after);
+        changed.push(`packages/php/wordpress/${name}`);
+      }
     }
   }
   return changed;

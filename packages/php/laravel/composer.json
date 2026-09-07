@@ -8,15 +8,7 @@
     "issues": "https://github.com/OpenReceive/openreceive/issues",
     "source": "https://github.com/OpenReceive/openreceive"
   },
-  "keywords": [
-    "laravel",
-    "lightning",
-    "nwc",
-    "nostr",
-    "payments",
-    "bitcoin",
-    "checkout"
-  ],
+  "keywords": ["laravel", "lightning", "nwc", "nostr", "payments", "bitcoin", "checkout"],
   "require": {
     "php": "^8.2",
     "illuminate/console": "^11.0 || ^12.0",
@@ -46,9 +38,7 @@
   },
   "extra": {
     "laravel": {
-      "providers": [
-        "OpenReceive\\Laravel\\OpenReceiveServiceProvider"
-      ]
+      "providers": ["OpenReceive\\Laravel\\OpenReceiveServiceProvider"]
     }
   },
   "repositories": [
