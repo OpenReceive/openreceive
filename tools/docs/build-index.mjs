@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -151,6 +153,8 @@ assert(
   "docs/site-contract.json must not contain generated_at; it is stamped at build time",
 );
 contract.generated_at = manifest.generated_at;
+const archive = path.join(root, `dist/openreceive-docs-${contract.release_version}.tar.gz`);
+rmSync(archive, { force: true });
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
@@ -162,6 +166,107 @@ writeJson("dist/docs/search-index.json", {
   docs: indexDocs,
 });
 
+// The legacy index includes contributor docs. A site imports only this public
+// index, which also covers the agents page and both plugin README pages.
+const publicPages = contract.publish.filter((entry) => !entry.copy_button && !entry.alias_of);
+writeJson("dist/docs/public-search-index.json", {
+  version: manifest.version,
+  release_version: contract.release_version,
+  generated_at: manifest.generated_at,
+  docs: publicPages.map((entry) => {
+    const markdown = readFileSync(path.join(root, entry.source), "utf8");
+    const text = searchText(markdown);
+    return {
+      slug: entry.slug,
+      title: entry.title,
+      path: entry.path,
+      markdown_path: entry.markdown_path,
+      source_path: entry.source,
+      category: entry.category,
+      audience: "developer",
+      public: true,
+      heading: firstHeading(markdown),
+      text,
+      word_count: text === "" ? 0 : text.split(" ").length,
+    };
+  }),
+});
+
+// Preserve repo-relative paths under sources/, so every contract source can
+// be imported without a checkout. Never copy internal docs into the archive.
+const sources = new Set([
+  ...contract.publish.map((entry) => entry.source),
+  ...contract.assets.map((entry) => entry.source),
+  ...contract.agent_discovery.artifacts.map((entry) => entry.source),
+]);
+const forbidden = new Set(contract.never_publish.map((entry) => entry.source));
+const files = [];
+function inventory(relative, bytes) {
+  files.push({
+    path: relative,
+    bytes: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+  });
+}
+for (const source of [...sources].sort()) {
+  assert(
+    !forbidden.has(source) && !source.startsWith("docs/internal/"),
+    `${source}: internal document cannot enter the public bundle`,
+  );
+  assert(
+    !path.isAbsolute(source) && !source.split("/").includes(".."),
+    `${source}: invalid bundle source`,
+  );
+  const bytes = readFileSync(path.join(root, source));
+  const relative = `sources/${source}`;
+  const target = path.join(outDir, relative);
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, bytes);
+  inventory(relative, bytes);
+}
+for (const relative of ["site-contract.json", "public-search-index.json"]) {
+  inventory(relative, readFileSync(path.join(outDir, relative)));
+}
+let sourceRevision = null;
+let sourceDirty = null;
+try {
+  sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+  sourceDirty =
+    execFileSync("git", ["status", "--porcelain"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim() !== "";
+} catch {
+  // A source archive can build too, but cannot claim a verified Git revision.
+}
+writeJson("dist/docs/bundle.json", {
+  bundle_version: 1,
+  release_version: contract.release_version,
+  generated_at: manifest.generated_at,
+  source_revision: sourceRevision,
+  source_dirty: sourceDirty,
+  source_root: "sources",
+  files,
+});
+execFileSync("tar", [
+  "-czf",
+  archive,
+  "-C",
+  outDir,
+  "bundle.json",
+  "site-contract.json",
+  "public-search-index.json",
+  "sources",
+]);
+
 console.log(
   `Built docs index for ${indexDocs.length} documents and a site contract of ${contract.publish.length} routes.`,
+);
+console.log(
+  `Built ${path.relative(root, archive)}: ${sources.size} public source files, ${publicPages.length} searchable pages.`,
 );

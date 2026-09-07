@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 2605
+      "bytes": 2608
     },
     {
       "path": "/guides/quickstart-node",
@@ -413,7 +413,7 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 3580
+      "bytes": 4467
     },
     {
       "path": "/guides/agent-directions-woocommerce",
@@ -423,7 +423,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 8621
+      "bytes": 9509
     },
     {
       "path": "/api_docs",
@@ -444,7 +444,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 2655
+      "bytes": 2811
     },
     {
       "path": "/wordpress",
@@ -478,7 +478,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 8621,
+      "bytes": 9509,
       "copy_button": true,
       "self_contained": true
     },
@@ -920,7 +920,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5130
+        "bytes": 5114
       },
       {
         "path": "/openapi.yaml",

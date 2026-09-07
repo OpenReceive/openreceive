@@ -23,6 +23,8 @@ the full quickstart), or paste the one-prompt agent directions:
   [PHP](https://openreceive.org/agent-directions/php.md) ·
   [Laravel](https://openreceive.org/agent-directions/laravel.md) ·
   [Django](https://openreceive.org/agent-directions/django.md) ·
+  [FastAPI](https://openreceive.org/agent-directions/fastapi.md) ·
+  [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce.md) ·
   [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md). Each
   is self-contained, quickstart included.
 

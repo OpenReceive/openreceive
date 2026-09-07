@@ -12,28 +12,31 @@ markdown.
 
 ## Start here
 
-- [Express quickstart (Node)](https://openreceive.org/guides/quickstart-node.md): Express server with any frontend
-- [Fastify quickstart](https://openreceive.org/guides/quickstart-fastify.md)
-- [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md): the App Router catch-all route and a client-component checkout
-- [Rails quickstart](https://openreceive.org/guides/quickstart-rails.md)
-- [PHP quickstart (plain PHP)](https://openreceive.org/guides/quickstart-php.md): a front controller, a PDO handle, three methods and the standalone checkout tarball
-- [Laravel quickstart](https://openreceive.org/guides/quickstart-laravel.md): composer require openreceive/laravel, php artisan openreceive:install, a Host class and the element through Vite
-- [Django quickstart](https://openreceive.org/guides/quickstart-django.md): the installable app, the ORM-backed payment tables, manage.py openreceive_install
-- [BTCPay Server quickstart](https://openreceive.org/guides/quickstart-btcpay.md): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
-- [Agent directions, Node (Express)](https://openreceive.org/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
-- [Agent directions, Fastify](https://openreceive.org/agent-directions/fastify.md)
-- [Agent directions, Next.js](https://openreceive.org/agent-directions/next.md)
-- [Agent directions, Rails](https://openreceive.org/agent-directions/rails.md)
-- [Agent directions, PHP](https://openreceive.org/agent-directions/php.md)
-- [Agent directions, Laravel](https://openreceive.org/agent-directions/laravel.md)
-- [Agent directions, Django](https://openreceive.org/agent-directions/django.md)
-- [Agent directions, BTCPay Server](https://openreceive.org/agent-directions/btcpay.md)
+- [Express Quickstart (Node)](https://openreceive.org/guides/quickstart-node.md)
+- [Fastify Quickstart](https://openreceive.org/guides/quickstart-fastify.md)
+- [FastAPI Quickstart](https://openreceive.org/guides/quickstart-fastapi.md)
+- [Django Quickstart](https://openreceive.org/guides/quickstart-django.md)
+- [Next.js Quickstart](https://openreceive.org/guides/quickstart-next.md)
+- [Rails Quickstart](https://openreceive.org/guides/quickstart-rails.md)
+- [PHP Quickstart (plain PHP)](https://openreceive.org/guides/quickstart-php.md)
+- [Laravel Quickstart](https://openreceive.org/guides/quickstart-laravel.md)
+- [BTCPay Server Quickstart](https://openreceive.org/guides/quickstart-btcpay.md)
+- [WordPress + WooCommerce Quickstart](https://openreceive.org/guides/quickstart-woocommerce.md)
+- [Agent Directions: Node.js](https://openreceive.org/agent-directions/node.md): self-contained agent directions, quickstart included
+- [Agent Directions: Fastify](https://openreceive.org/agent-directions/fastify.md): self-contained agent directions, quickstart included
+- [Agent Directions: Next.js](https://openreceive.org/agent-directions/next.md): self-contained agent directions, quickstart included
+- [Agent Directions: FastAPI](https://openreceive.org/agent-directions/fastapi.md): self-contained agent directions, quickstart included
+- [Agent Directions: Django](https://openreceive.org/agent-directions/django.md): self-contained agent directions, quickstart included
+- [Agent Directions: Rails](https://openreceive.org/agent-directions/rails.md): self-contained agent directions, quickstart included
+- [Agent Directions: PHP](https://openreceive.org/agent-directions/php.md): self-contained agent directions, quickstart included
+- [Agent Directions: Laravel](https://openreceive.org/agent-directions/laravel.md): self-contained agent directions, quickstart included
+- [Agent Directions: BTCPay Server](https://openreceive.org/agent-directions/btcpay.md): self-contained agent directions, quickstart included
+- [Agent directions (WordPress + WooCommerce)](https://openreceive.org/agent-directions/woocommerce.md): self-contained agent directions, quickstart included
 
 ## Guides
 
 The index is [/guides.md](https://openreceive.org/guides.md).
 
-- [FastAPI Quickstart](https://openreceive.org/guides/quickstart-fastapi.md)
 - [BTCPay Plugin Reference](https://openreceive.org/guides/btcpay-reference.md)
 - [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)
 - [Authorization](https://openreceive.org/guides/authorization.md)
@@ -55,9 +58,6 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [React Material UI Recipe](https://openreceive.org/guides/react-material-ui-recipe.md)
 - [Flask Recipe](https://openreceive.org/guides/flask-recipe.md)
 - [Writing Your Own Checkout Route](https://openreceive.org/guides/custom-checkout-route.md)
-- [Agent Directions: FastAPI](https://openreceive.org/guides/agent-directions-fastapi.md)
-- [WordPress + WooCommerce Quickstart](https://openreceive.org/guides/quickstart-woocommerce.md)
-- [Agent directions (WordPress + WooCommerce)](https://openreceive.org/guides/agent-directions-woocommerce.md)
 
 ## Machine-readable specifications
 

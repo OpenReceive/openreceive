@@ -13,7 +13,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { isServablePath, MARKDOWN_SUFFIX } from "./site-paths.mjs";
+import { AGENT_PAYLOAD_PATHS, isServablePath, MARKDOWN_SUFFIX } from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -26,25 +26,27 @@ const release = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")
 // Slugs the generated guide list skips: the quickstarts are already in Start
 // here, the payload pages are linked as their fetchable .md artifacts, and the
 // guides index is named in the section prose.
+const quickstarts = manifest.docs.filter((doc) => doc.public && doc.slug.startsWith("quickstart-"));
+const payloads = AGENT_PAYLOAD_PATHS.map((urlPath) => {
+  const stack = path.basename(urlPath, ".md");
+  const doc = manifest.docs.find(
+    (entry) => entry.public && entry.source_path === `docs/agents/${stack}.md`,
+  );
+  if (!doc) throw new Error(`Missing public agent directions for ${stack}`);
+  return { ...doc, urlPath };
+});
 const LISTED_ELSEWHERE = new Set([
-  "quickstart-node",
-  "quickstart-fastify",
-  "quickstart-next",
-  "quickstart-rails",
-  "quickstart-php",
-  "quickstart-laravel",
-  "quickstart-django",
-  "quickstart-btcpay",
-  "agent-directions-node",
-  "agent-directions-fastify",
-  "agent-directions-next",
-  "agent-directions-rails",
-  "agent-directions-php",
-  "agent-directions-laravel",
-  "agent-directions-django",
-  "agent-directions-btcpay",
   "guides",
+  ...quickstarts.map((doc) => doc.slug),
+  ...payloads.map((doc) => doc.slug),
 ]);
+const startLines = [
+  ...quickstarts.map((doc) => `- [${doc.title}](${SITE}/guides/${doc.slug}${MARKDOWN_SUFFIX})`),
+  ...payloads.map(
+    (doc) =>
+      `- [${doc.title}](${SITE}${doc.urlPath}): self-contained agent directions, quickstart included`,
+  ),
+];
 
 const guideLines = manifest.docs
   .filter((doc) => doc.public && !LISTED_ELSEWHERE.has(doc.slug))
@@ -64,22 +66,7 @@ markdown.
 
 ## Start here
 
-- [Express quickstart (Node)](${SITE}/guides/quickstart-node${MARKDOWN_SUFFIX}): Express server with any frontend
-- [Fastify quickstart](${SITE}/guides/quickstart-fastify${MARKDOWN_SUFFIX})
-- [Next.js quickstart](${SITE}/guides/quickstart-next${MARKDOWN_SUFFIX}): the App Router catch-all route and a client-component checkout
-- [Rails quickstart](${SITE}/guides/quickstart-rails${MARKDOWN_SUFFIX})
-- [PHP quickstart (plain PHP)](${SITE}/guides/quickstart-php${MARKDOWN_SUFFIX}): a front controller, a PDO handle, three methods and the standalone checkout tarball
-- [Laravel quickstart](${SITE}/guides/quickstart-laravel${MARKDOWN_SUFFIX}): composer require openreceive/laravel, php artisan openreceive:install, a Host class and the element through Vite
-- [Django quickstart](${SITE}/guides/quickstart-django${MARKDOWN_SUFFIX}): the installable app, the ORM-backed payment tables, manage.py openreceive_install
-- [BTCPay Server quickstart](${SITE}/guides/quickstart-btcpay${MARKDOWN_SUFFIX}): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
-- [Agent directions, Node (Express)](${SITE}/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
-- [Agent directions, Fastify](${SITE}/agent-directions/fastify.md)
-- [Agent directions, Next.js](${SITE}/agent-directions/next.md)
-- [Agent directions, Rails](${SITE}/agent-directions/rails.md)
-- [Agent directions, PHP](${SITE}/agent-directions/php.md)
-- [Agent directions, Laravel](${SITE}/agent-directions/laravel.md)
-- [Agent directions, Django](${SITE}/agent-directions/django.md)
-- [Agent directions, BTCPay Server](${SITE}/agent-directions/btcpay.md)
+${startLines.join("\n")}
 
 ## Guides
 

@@ -329,6 +329,12 @@ const FRAMEWORKS = [
 const manifest = JSON.parse(readFileSync(path.join(root, "docs/manifest.json"), "utf8"));
 const release = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
 const bySlug = new Map(manifest.docs.map((doc) => [doc.slug, doc]));
+const agentsPage = readFileSync(path.join(root, "docs/site/agents.md"), "utf8");
+for (const payloadPath of AGENT_PAYLOAD_PATHS) {
+  if (!agentsPage.includes(`https://openreceive.org${payloadPath}`)) {
+    throw new Error(`docs/site/agents.md must link every agent payload: missing ${payloadPath}`);
+  }
+}
 
 const publish = [];
 for (const doc of manifest.docs) {

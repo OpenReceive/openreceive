@@ -90,6 +90,29 @@ Requirements: WordPress 6.6+, WooCommerce 9+, 64-bit PHP 8.2+ with GMP and sodiu
 and MySQL 8 or MariaDB 10.5+. Activation creates payment-attempt tables in the
 existing WordPress database. No separate database or application is required.
 
+### Get the installable archive
+
+Use `openreceive-wordpress-<version>.zip` from the selected
+[OpenReceive GitHub release](https://github.com/OpenReceive/openreceive/releases)
+when that asset is listed. A GitHub source-code zip is not the plugin archive.
+If the release does not yet provide a built zip, build it on a development
+machine with Node 22+, PHP 8.2+, Composer and WP-CLI:
+
+```sh
+git clone https://github.com/OpenReceive/openreceive.git
+cd openreceive
+git checkout <release-tag>
+npm ci
+npm run build:packages
+composer install --working-dir=packages/php/wordpress
+npm run release:wordpress:build
+```
+
+Upload the resulting `dist/openreceive-wordpress-<version>.zip`. WP-CLI must be
+on `PATH`, or set `OPENRECEIVE_WP_CLI` to the absolute path of its phar. The
+WordPress server needs neither Node nor Composer: dependencies and checkout
+assets are bundled inside the built plugin.
+
 ### Configure the wallet
 
 Open **WooCommerce → Settings → Payments → OpenReceive**. Enter a receive-only

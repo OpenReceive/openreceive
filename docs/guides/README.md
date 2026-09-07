@@ -47,5 +47,5 @@ payloads instead of a reading list:
 byte-exact files behind the site's copy button (in this repo: `docs/agents/`).
 Each is Step 0, the rules no API call can state for itself, and the matching
 quickstart inlined in full, so it works pasted into an editor with no network
-access. All eight are generated — edit `docs/agents/src/<stack>.md` and run
+access. All payloads are generated — edit `docs/agents/src/<stack>.md` and run
 `npm run build:docs`.

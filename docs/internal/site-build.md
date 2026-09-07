@@ -8,11 +8,9 @@ is there.
 
 ## Why there is a contract at all
 
-The agent directions ([`docs/agents/node.md`](../agents/node.md),
-[`docs/agents/fastify.md`](../agents/fastify.md),
-[`docs/agents/next.md`](../agents/next.md),
-[`docs/agents/rails.md`](../agents/rails.md),
-[`docs/agents/btcpay.md`](../agents/btcpay.md)) are the payload behind the site's
+The agent directions in [`docs/agents/`](../agents/) cover Express, Fastify,
+Next.js, Rails, FastAPI, Django, plain PHP, Laravel, BTCPay Server, and WordPress
+with WooCommerce. They are the payloads behind the site's
 **Copy agent directions** button. Someone pastes them into Cursor, Claude or
 Codex, and from that moment the URLs inside them are running in other people's
 editors and cannot be recalled. A link the site stops serving does not degrade
@@ -81,6 +79,11 @@ contract is how a payload ends up linking a page nobody serves.
   install`, `adapter_package` names a Composer package or a PyPI extra, and
   `requires` states a PHP or Python floor. A site on v5 would render those rows
   with an npm install line that installs nothing, so the version moves.
+  WordPress + WooCommerce also uses the `php` family, with a plugin-upload
+  instruction instead of a Composer command. Render `install` verbatim; never
+  infer an installer from `family` or `adapter_package`. Its plugin overview
+  is `/wordpress` (raw twin `/wordpress.md`), with its screenshot in `assets[]`.
+  This adds rows using the existing v6 shape, not a new contract version.
 
 `release_version` moves with every library release and says nothing about the
 shape of this file; `contract_version` moves only when the site has to do
@@ -88,12 +91,19 @@ something new.
 
 ## On every OpenReceive release
 
-1. Check out this repo at the release tag.
+1. Select the docs revision for the release. Normally this is the release tag.
+   A later docs-only commit may document the same `release_version`; select that
+   explicit commit when applying a docs correction, and record it alongside the
+   library version. Never move a public release tag to update the site.
 2. Read [`docs/site-contract.json`](../site-contract.json). It is committed, so
    nothing has to be built to read it. Running `npm ci && npm run build:docs`
-   additionally produces `dist/docs/` with the same contract plus
-   `manifest.json` and `search-index.json` (a prebuilt full-text index, stamped
-   with `generated_at`), if the site wants search.
+   additionally produces `dist/openreceive-docs-<release_version>.tar.gz`, a
+   complete import bundle. It contains the contract, `public-search-index.json`,
+   `bundle.json` and every public source under `sources/<source>`, including
+   markdown, the OpenAPI file, screenshots and video. See the bundle layout
+   below. The old `dist/docs/manifest.json` and `search-index.json` include
+   contributor documents and are local tooling inputs; do not serve them or use
+   them for public search.
 3. Publish every entry in `publish[]`: render `source` (a markdown path in this
    repo) at `path`. `release_version` tells you which library release the set
    belongs to.
@@ -101,7 +111,7 @@ something new.
    `text/markdown; charset=utf-8`, no chrome. This is not optional and not a
    nicety: it is what the directions link, so a site that publishes only `path`
    ships a reading list that resolves to blank pages.
-5. Serve the five `agent-directions-payload` entries as **raw markdown**, and use
+5. Serve every `agent-directions-payload` entry as **raw markdown**, and use
    the same bytes behind the copy button.
 6. Serve every `agent_discovery.artifacts[]` entry **verbatim**: the named
    `source` file's exact bytes at `path`, with the given `content_type`, no
@@ -130,11 +140,72 @@ something new.
    guide link on `quickstart_path`, the install line and `requires`, the
    example link on `example_url`. Hide the video slot while `video` is null;
    play an absolute URL or serve an `/assets/` path from `assets[]`. When
-   `shared_checkout_demo` is false (BTCPay), show the video and screenshots
-   instead of the shared checkout panel.
+   `shared_checkout_demo` is false (BTCPay or WordPress), show the video and screenshots
+   instead of the shared checkout panel when available. A null video stays
+   hidden. WordPress uses the `/wordpress` overview and screenshot; BTCPay uses
+   `/btcpay` and its video. Keep every framework row, including FastAPI,
+   Django, PHP, Laravel and WooCommerce; do not maintain a smaller site-side list.
 11. Confirm every path in `site_owned[]` still resolves. Most are yours; the
    agent-discovery trio (`/llms.txt`, `/openapi.yaml`, `/agents`) is listed
    there as must-exist but sourced from this repo as described above.
+
+## Import bundle and publication checks
+
+Build from a clean checkout of the selected docs revision:
+
+```sh
+npm ci
+npm run build:docs
+npm run check:docs
+```
+
+The archive is an **import input**, not a static website to extract over the
+web root. Its layout is:
+
+```text
+bundle.json                  # bundle_version 1, release, revision, dirty flag, SHA-256 inventory
+site-contract.json           # the v6 routes and publishing obligations
+public-search-index.json     # public pages, including agents and plugin overviews
+sources/docs/...             # exact public guide/payload/discovery/media bytes
+sources/packages/...         # the published plugin READMEs
+sources/spec/openapi/...     # exact normative OpenAPI bytes
+```
+
+Every contract `source` resolves to `sources/<source>`. `bundle.json.files[]`
+records each file's relative `path`, byte count and SHA-256. Verify these before
+importing, require the expected `release_version`, and record `source_revision`.
+Release builds from Git must have `source_dirty: false`. An exported source tree
+has null Git provenance; use it only when its revision is verified separately.
+Do not mix indexes, contract files or images from different bundles.
+
+In the private site repository, point `bin/rails docs:sync` at this selected
+checkout or teach its importer the bundle layout, then build the site's JS and
+deploy through that repository's normal process. The importer interface and
+hosting configuration belong to the private site; this repository specifies
+its inputs and obligations without prescribing undocumented command flags.
+
+Before making the new site version live, verify the staged site against the
+contract:
+
+- Every rendered `publish[].path` and every `markdown_path` returns successfully;
+  raw markdown has `text/markdown` and no application shell or login redirect.
+- Every copy-button payload matches its bundled source byte for byte and fits
+  its recorded `bytes`; copy buttons exist on all matching quickstart and
+  `/integrations/<id>` pages.
+- Discovery artifacts and media match their source bytes and `content_type`.
+  Each rendered page has the specified discovery and markdown alternate links.
+- Public search includes every page in `public-search-index.json` and no
+  contributor documents. Preserve `path` and `markdown_path` from the index.
+- Framework pages use every `frameworks[]` row and the supplied install text,
+  requirements, example link and payload. Null videos render no empty player.
+- Intra-doc links and plugin images resolve after source-path rewriting;
+  `site_owned[]` paths and `site_redirects[]` remain available.
+- The site footer/docs version matches `release_version`. Required package
+  versions and downloadable artifacts exist before presenting install flows
+  as available: npm, RubyGems, PyPI, Packagist, the standalone checkout tarball,
+  and a built WordPress zip when that installation path is offered. A Composer
+  bootstrap alone is not registry discovery, and WordPress.org listing approval
+  is separate from distributing a verified plugin archive.
 
 ## The routes
 
@@ -142,11 +213,11 @@ something new.
 | --- | --- | --- |
 | `guide` | `/guides/<slug>` | Every public doc. `/guides` itself is the index (`docs/guides/README.md`). |
 | `api-docs` | `/api_docs` | Alias of `/guides/api-reference`, kept because the directions and the site have always linked it. |
-| `agent-directions` | `/guides/agent-directions-node`, `…-fastify`, `…-next`, `…-rails`, `…-btcpay` | The payload as a normal page, for people reading it. |
-| `agent-directions-payload` | `/agent-directions/node.md`, `/fastify.md`, `/next.md`, `/rails.md`, `/btcpay.md` | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
+| `agent-directions` | `/guides/agent-directions-<stack>` for every payload stack | The payload as a normal page, for people reading it. |
+| `agent-directions-payload` | `/agent-directions/<stack>.md` for every payload stack | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
 | framework page | `/integrations/<id>` | `frameworks[]` (contract v5; `php` and `python` families since v6) — not a `publish[]` entry, because the page is the site's own template rendered from the row; the row names which `publish[]` pages it links. |
 | `agents-page` | `/agents` | The coding-agents entrypoint (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
-| `plugin-readme` | `/btcpay` | Carries a `video` field: play `video.path` inline at the top of the page with `video.poster` as its poster (both are `assets[]` entries), in place of the README's GitHub-only attachment URL. The BTCPay Server home: the plugin README (`packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md`) rendered and twinned like a guide, its screenshots from `assets[]`. Link it from the site navigation as the BTCPay entrypoint; the guides (`/guides/quickstart-btcpay`, `/guides/btcpay-reference`, and the swap guides) are the full documentation behind it. |
+| `plugin-readme` | `/wordpress`, `/btcpay` | Render the plugin README and its markdown twin. WordPress has a screenshot and no video; BTCPay carries a `video` field: play `video.path` inline at the top of the page with `video.poster` as its poster (both are `assets[]` entries), in place of the README's GitHub-only attachment URL. The BTCPay Server home: the plugin README (`packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md`) rendered and twinned like a guide, its screenshots from `assets[]`. Link it from the site navigation as the BTCPay entrypoint; the guides (`/guides/quickstart-btcpay`, `/guides/btcpay-reference`, and the swap guides) are the full documentation behind it. |
 | `asset` | `/assets/<path>` | `assets[]` — verbatim bytes of a file under `docs/assets/`, embedded or linked by a `publish[]` entry: the README's screenshots, its demo video (`video/mp4`) and the poster frame that links to it. Rewrite the link the same way as an image `src`. |
 | `llms-index` | `/llms.txt` | `agent_discovery.artifacts[]` — verbatim bytes of `docs/site/llms.txt`. |
 | `openapi` | `/openapi.yaml` | `agent_discovery.artifacts[]` — verbatim bytes of the normative OpenAPI file. |
@@ -171,6 +242,14 @@ because they are also read in the repository. Map `<slug>.md[#anchor]` to
 `/guides/<slug>[#anchor]` for the page. In the markdown twin, map it to
 `/guides/<slug>.md[#anchor]` instead: whatever followed one link will want to
 follow the next one, and it still has no browser.
+
+Resolve links by `source` path, not only by filename: a recipe under
+`docs/recipes/` and a plugin README under `packages/` have different bases.
+Look up the resolved repo path in `publish[]` and `assets[]`; preserve anchors.
+For existing repository files without a public site route (examples, package
+source or contributor material), link to GitHub at the selected docs revision.
+Never invent a `/guides/` route for them or publish `never_publish[]` content.
+Use the same rules for ordinary links and images; preserve external URLs.
 
 The agent payloads need no such treatment: every link in them is already
 absolute, and already points at a `.md`, which is the point of them.
