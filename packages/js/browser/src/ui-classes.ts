@@ -247,7 +247,9 @@ export const orClasses = {
   tutorialFrame:
     "flex items-center justify-center min-h-0 overflow-hidden rounded-box border border-base-content/20 bg-base-200",
   tutorialImage: "block w-auto max-w-full h-auto max-h-[min(66vh,720px)] object-contain",
-  tutorialCaption: "m-0 text-base font-bold text-center",
+  /** The step directive ("Tap Withdraw"): a callout in the Bitcoin accent so it reads as the instruction, not a label. */
+  tutorialCaption:
+    "m-0 rounded-box border border-warning/40 bg-warning/10 px-4 py-2.5 text-lg font-bold text-center",
   tutorialIntro: "grid gap-3 p-4 text-center",
   tutorialProviderLogo: "justify-self-center size-[52px] rounded",
   tutorialCopy: "btn btn-outline justify-self-center min-w-[min(240px,100%)]",

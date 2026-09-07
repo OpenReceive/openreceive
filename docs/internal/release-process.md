@@ -45,8 +45,11 @@ Five registries, five publishers:
 
 ## One-time setup
 
-Everything below is already in place for the OpenReceive account and is listed
-so it can be recreated or audited.
+The npm and RubyGems entries are in place for the OpenReceive account and are
+listed so they can be recreated or audited. The PyPI and Packagist entries
+describe what must exist before those two workflows can succeed; until they do,
+every `v*` tag leaves `Publish PyPI` and `Publish Composer` red, and the npm
+and gem releases are unaffected.
 
 - `.env.release` at the repo root (gitignored) exports the npm userconfig, the
   `gh` config directory and `GH_REPO` for the OpenReceive identity, and a

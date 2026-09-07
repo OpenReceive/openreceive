@@ -159,10 +159,9 @@ function outDirFor(root, version, args) {
 /**
  * What the wheel MUST carry. Hatchling needs an explicit include for package
  * data, and a broken include ships silently — the same reason the Ruby gem
- * build script exists. The Django static/migrations entries are asserted only
- * once those trees exist in the source (the Django track adds them).
+ * build script exists.
  */
-export function requiredWheelEntries(root) {
+export function requiredWheelEntries() {
   const entries = [
     "openreceive/__init__.py",
     "openreceive/_version.py",
@@ -172,15 +171,16 @@ export function requiredWheelEntries(root) {
     "openreceive/storage/sql/ddl.py",
     "openreceive/testing/fake_wallet.py",
   ];
-  const source = path.join(root, PYTHON_PACKAGE_DIR, "src", "openreceive", "django");
-  if (existsSync(path.join(source, "migrations", "0001_initial.py"))) {
-    entries.push("openreceive/django/migrations/0001_initial.py");
-  }
-  if (existsSync(path.join(source, "static", "openreceive", "MANIFEST.json"))) {
-    entries.push("openreceive/django/static/openreceive/MANIFEST.json");
-    entries.push("openreceive/django/static/openreceive/openreceive-checkout.js");
-  }
-  return entries;
+  // The Django migrations and the standalone checkout build are required, not
+  // optional: the static tree is copied in by hatch_build.py from the JS build
+  // output, so a checkout that never ran `npm run build:packages` would
+  // otherwise produce a wheel whose Django templates load nothing.
+  return [
+    ...entries,
+    "openreceive/django/migrations/0001_initial.py",
+    "openreceive/django/static/openreceive/MANIFEST.json",
+    "openreceive/django/static/openreceive/openreceive-checkout.js",
+  ];
 }
 
 function buildDistribution(root, args) {
@@ -207,7 +207,7 @@ function buildDistribution(root, args) {
 
   // Wheel contents: `unzip -l` lists every member; each required entry must be there.
   const listing = run("unzip", ["-l", path.join(outDir, wheel)], root);
-  const missing = requiredWheelEntries(root).filter((entry) => !listing.includes(entry));
+  const missing = requiredWheelEntries().filter((entry) => !listing.includes(entry));
   assert(
     missing.length === 0,
     `${wheel} is missing ${missing.join(", ")} — check [tool.hatch.build.targets.wheel] include in pyproject.toml`,
@@ -277,7 +277,7 @@ function printPlan(root, args) {
   );
   console.log(`- ${PYTHON_DISTRIBUTION}@${actual ?? "missing"} [${ready ? "ok" : "DRIFT"}]`);
   console.log(`artifacts: ${path.relative(root, outDirFor(root, workspaceVersion, args))}`);
-  console.log(`wheel must carry: ${requiredWheelEntries(root).join(", ")}`);
+  console.log(`wheel must carry: ${requiredWheelEntries().join(", ")}`);
   console.log("");
   console.log("Next commands:");
   if (!ready) console.log("- npm run release:prepare -- --version <x.y.z>  (fix version drift)");

@@ -121,11 +121,47 @@ export function updatePhpVersions(root, targetVersion) {
     const manifest = JSON.parse(source);
     if (manifest.require?.["openreceive/openreceive"] !== undefined) {
       manifest.require["openreceive/openreceive"] = composerConstraint(targetVersion);
-      const updated = `${JSON.stringify(manifest, null, 4)}\n`;
+      // The monorepo path repository declares the engine's version explicitly
+      // (a path package has no tag to read it from); it must move with the
+      // constraint or `composer validate` rejects the lock.
+      for (const repo of manifest.repositories ?? []) {
+        const versions = repo?.options?.versions;
+        if (versions?.["openreceive/openreceive"] !== undefined) {
+          versions["openreceive/openreceive"] = targetVersion;
+        }
+      }
+      // Two-space JSON: biome formats this file with the rest of the repo.
+      const updated = `${JSON.stringify(manifest, null, 2)}\n`;
       if (updated !== source) {
         writeFileSync(laravelFile, updated);
         changed.push(LARAVEL_COMPOSER_JSON);
+        // The lock records the resolved engine version; refresh only that
+        // entry so the rest of the lock stays byte-identical.
+        const lockFile = path.join(root, LARAVEL_DIR, "composer.lock");
+        if (existsSync(lockFile)) {
+          execFileSync(
+            "composer",
+            ["update", "openreceive/openreceive", "--no-install", "--no-interaction"],
+            { cwd: path.join(root, LARAVEL_DIR), stdio: "inherit" },
+          );
+          changed.push(path.join(LARAVEL_DIR, "composer.lock"));
+        }
       }
+    }
+  }
+  const wordpressDir = path.join(root, "packages/php/wordpress");
+  if (existsSync(path.join(wordpressDir, "composer.json"))) {
+    const manifest = JSON.parse(readFileSync(path.join(wordpressDir, "composer.json"), "utf8"));
+    manifest.require["openreceive/openreceive"] = composerConstraint(targetVersion);
+    manifest.repositories[0].options.versions["openreceive/openreceive"] = targetVersion;
+    writeFileSync(path.join(wordpressDir, "composer.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    changed.push("packages/php/wordpress/composer.json");
+    for (const name of ["openreceive.php", "readme.txt"]) {
+      const file = path.join(wordpressDir, name);
+      const before = readFileSync(file, "utf8");
+      const after = before.replace(/(^ \* Version: |^Stable tag: ).+$/m, `$1${targetVersion}`)
+        .replace(/define\('OPENRECEIVE_PLUGIN_VERSION', '[^']+'\)/, `define('OPENRECEIVE_PLUGIN_VERSION', '${targetVersion}')`);
+      if (before !== after) { writeFileSync(file, after); changed.push(`packages/php/wordpress/${name}`); }
     }
   }
   return changed;

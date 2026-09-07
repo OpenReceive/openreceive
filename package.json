@@ -82,7 +82,7 @@
     "check": "npm run validate && npm run scan:secrets && npm run scan:naming",
     "test": "npm run test:js",
     "test:ci:core": "npm run check && npm run lint && npm run format:check && npm run check:workflows && npm run check:generated && npm run check:docs && npm run check:public-api && npm run typecheck && npm run check:vue && npm run check:svelte && npm run check:dead-exports && npm test && npm run test:package-smoke",
-    "test:ci:release": "npm run build:packages && npm run test:ruby && npm run test:python && npm run test:php && npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run check:standalone && npm run build:docs && npm run test:dotnet",
+    "test:ci:release": "npm run build:packages && npm run check:standalone && npm run test:ruby && npm run test:python && npm run test:php && npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:dotnet",
     "test:ci": "npm run test:ci:core && npm run test:ci:release",
     "test:live": "npm run test:live:nwc && npm run test:live:ruby:nwc && npm run test:live:python:nwc && npm run test:live:php:nwc",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs"

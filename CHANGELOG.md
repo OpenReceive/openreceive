@@ -87,6 +87,17 @@ A root `ruff.toml` extends the Python engine's lint config to the Django and
 FastAPI examples and the Python tools, so `ruff check` from the repo root
 (what CI runs) applies the same rules as inside the package.
 
+The pay-tutorial step caption ("Tap Withdraw", "Tap the QR scanner") is a
+callout — bold, larger, on a tinted panel in the Bitcoin accent — instead of
+a plain line under the screenshot, in both the custom element and React.
+
+Release tooling: `release:prepare` now also moves the Laravel package's
+path-repository version pin and refreshes its `composer.lock` entry, and
+writes that `composer.json` in the repo's two-space style; the PyPI workflow
+builds the JS packages before the wheel so the Django static checkout is
+never missing, and the wheel-contents check requires it unconditionally; the
+Release Dry Run checks the standalone build right after building it.
+
 ### Groundwork for the PHP and Python engines
 
 The shared work that every further engine and framework adapter depends on,

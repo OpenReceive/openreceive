@@ -37,6 +37,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
       # A v* tag that does not match the prepared workspace version is a
       # mis-tag; fail before anything is built.
       - name: Assert tag matches package.json version
@@ -50,6 +54,14 @@ jobs:
       # The same build the maintainer runs locally (uv build + twine check +
       # the wheel-contents check), so what ships is what release:pypi:build
       # proved. PEP 440 normalization lives in tools/release/pypi-release.mjs.
+      # The wheel carries the standalone checkout build (Django loads it from
+      # package static files), and that build is JS output, not Python source:
+      # build it first or the wheel ships without it.
+      - name: Build the standalone checkout
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:packages
       - name: Build sdist and wheel
         run: |
           set -euo pipefail

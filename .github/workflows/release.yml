@@ -44,6 +44,9 @@ jobs:
       # `npm test` (pretest:js), so it passes there and fails here on a fresh
       # checkout. Build first rather than depend on a neighbouring step.
       - run: npm run build:packages
+      # Right after build:packages: test:package-smoke rebuilds every package
+      # with a clean dist/, which removes the standalone build this checks.
+      - run: npm run check:standalone
       - run: npm run test:package-smoke
       # With ci.yml (test:ci:core, the Ruby lanes, the Rails example) these make
       # the two per-push workflows cover every step of `npm run test:ci`, which
@@ -53,6 +56,5 @@ jobs:
       - run: npm run test -w @openreceive/example-buttons-rails
       - run: npm run build:demo
       - run: npm run scan:client-bundles
-      - run: npm run check:standalone
       - run: npm run build:docs
       - run: echo "Release dry run complete. Publishing requires explicit maintainer approval."
