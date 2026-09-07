@@ -5,6 +5,12 @@
  */
 
 import { recordOrEmpty } from "@openreceive/core";
+import {
+  type GeneratedSwapStatusRow,
+  OPENRECEIVE_SWAP_EMERGENCY_STATUS_ALIASES,
+  OPENRECEIVE_SWAP_REFUND_REASON_ROWS,
+  OPENRECEIVE_SWAP_STATUS_ROWS,
+} from "../generated/swap-state-table.ts";
 import type { SwapPayInAsset } from "./assets.ts";
 import {
   optionalNestedString,
@@ -168,7 +174,9 @@ function extractFixedFloatOrderFields(
 
 /**
  * FixedFloat status + emergency block + refund-tx presence → OpenReceive state and
- * reasons. Pinned across engines by spec/test-vectors/swap-state.json.
+ * reasons: an interpreter of spec/data/swap-state-table.json (rendered into
+ * ../generated/swap-state-table.ts), first-match-wins. Pinned across engines by
+ * spec/test-vectors/swap-state.json; how to read the rows lives in the JSON.
  */
 export function normalizeFixedFloatStatus(
   status: string,
@@ -181,71 +189,42 @@ export function normalizeFixedFloatStatus(
   readonly refund_reason?: SwapRefundReason;
 } {
   const normalized = status.toUpperCase();
-  if (refundTxId !== undefined && (normalized === "DONE" || normalized === "FINISHED")) {
-    return { state: "refunded" };
-  }
-  if (normalized === "NEW") return { state: "awaiting_deposit" };
-  if (normalized === "PENDING") return { state: "confirming" };
-  if (normalized === "EXCHANGE") return { state: "exchanging" };
-  if (normalized === "WITHDRAW") return { state: "paying_invoice" };
-  if (normalized === "DONE") return { state: "completed" };
-  if (normalized === "EXPIRED") return { state: "expired" };
-  if (normalized === "EMERGENCY") {
-    const choice = optionalStringField(emergency, "choice")?.toUpperCase();
-    const emergencyStatuses = optionalStringArrayField(emergency, "status").map((item) =>
-      item.toUpperCase(),
-    );
-    const refundReason = refundReasonFromEmergencyStatuses(emergencyStatuses);
-    if (choice === "REFUND" && refundTxId !== undefined) {
-      return {
-        state: "refunded",
-        ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
-      };
-    }
-    if (choice === "REFUND") {
-      return {
-        state: "refund_pending",
-        ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
-      };
-    }
-    if (choice === "EXCHANGE") {
-      return {
-        state: "attention",
-        attention: true,
-        attention_reason: "provider_reported_emergency",
-      };
-    }
-    // An overpay (MORE) takes the same self-serve full-refund path as LESS and
-    // EXPIRED — it is what the provider itself does with it. There is no
-    // partial refund of the surplus: the payout invoice is a fixed amount, so
-    // an emergency deposit is returned whole or not at all.
-    return {
-      state: "refund_required",
-      ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
-    };
-  }
-  if (normalized.includes("FAIL")) return { state: "failed" };
-  // An unrecognized status is NOT a provider-reported emergency: label it as
-  // unknown so operators land on the right runbook section.
-  return { state: "attention", attention: true, attention_reason: "provider_status_unrecognized" };
+  const refundTxPresent = refundTxId !== undefined;
+  const choice = optionalStringField(emergency, "choice")?.toUpperCase();
+  // The validator asserts the table ends in a catch-all row, so a match always exists.
+  const row = OPENRECEIVE_SWAP_STATUS_ROWS.find(
+    (candidate) =>
+      (candidate.status === "*"
+        ? candidate.status_contains === undefined || normalized.includes(candidate.status_contains)
+        : candidate.status === normalized) &&
+      (candidate.refund_tx_present === "any" || candidate.refund_tx_present === refundTxPresent) &&
+      (candidate.choice === "any" ||
+        (choice === undefined ? candidate.choice === "absent" : candidate.choice === choice)),
+  ) as GeneratedSwapStatusRow;
+  const refundReason = row.refund_reason_from_emergency
+    ? refundReasonFromEmergencyStatuses(optionalStringArrayField(emergency, "status"))
+    : undefined;
+  return {
+    state: row.state,
+    ...(row.attention_reason === undefined
+      ? {}
+      : { attention: true, attention_reason: row.attention_reason }),
+    ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
+  };
 }
 
 function refundReasonFromEmergencyStatuses(
   statuses: readonly string[],
 ): SwapRefundReason | undefined {
-  const less = statuses.includes("LESS");
-  const more =
-    statuses.includes("MORE") || statuses.includes("OVER") || statuses.includes("OVERPAID");
-  const expired = statuses.includes("EXPIRED");
-  // LIMIT rides along with LESS/MORE when the deposit fell outside the pair's
-  // limits. It says nothing the payer can act on beyond the amount itself, so
-  // it names no reason of its own.
-  if (less && expired) return "underpaid_and_late";
-  if (more && expired) return "overpaid_and_late";
-  if (less) return "underpaid";
-  if (more) return "overpaid";
-  if (expired) return "late_deposit";
-  return undefined;
+  const present = new Set(
+    statuses.map((item) => {
+      const upper = item.toUpperCase();
+      return OPENRECEIVE_SWAP_EMERGENCY_STATUS_ALIASES[upper] ?? upper;
+    }),
+  );
+  return OPENRECEIVE_SWAP_REFUND_REASON_ROWS.find((row) =>
+    row.all_of.every((item) => present.has(item)),
+  )?.refund_reason;
 }
 
 function isRefundPathState(state: SwapProviderState): boolean {

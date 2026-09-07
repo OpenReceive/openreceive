@@ -15,7 +15,8 @@
   ],
   "type": "module",
   "sideEffects": [
-    "**/*.css"
+    "**/*.css",
+    "./dist/standalone/*.js"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,6 +29,7 @@
       "import": "./dist/index.js"
     },
     "./styles.css": "./dist/styles.css",
+    "./standalone/*": "./dist/standalone/*",
     "./wrapper-shared": {
       "types": "./dist/wrapper-shared.d.ts",
       "import": "./dist/wrapper-shared.js"

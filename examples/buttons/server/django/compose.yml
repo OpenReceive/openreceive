@@ -1,0 +1,68 @@
+x-django-app: &django_app
+  build:
+    context: ../../../..
+    dockerfile: examples/buttons/server/django/Dockerfile
+  depends_on:
+    db:
+      condition: service_healthy
+  environment: &django_env
+    # Host app database. Not an OpenReceive runtime persistence setting — the
+    # engine's two tables live in this same database.
+    DATABASE_URL: postgres://openreceive:openreceive@db:5432/buttons_django
+    # Fixed, not generated: it signs the shop_user_id cookie, and a new value on
+    # every boot would log every visitor out and orphan their orders.
+    SECRET_KEY: ${SECRET_KEY:-buy-a-button-django-demo-secret-key-change-me}
+  env_file:
+    - ../../../../.env
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: openreceive
+      POSTGRES_PASSWORD: openreceive
+      POSTGRES_DB: buttons_django
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openreceive -d buttons_django"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    # Persistence is the SUBJECT of this demo, so the database is a named volume
+    # rather than a tmpfs: orders, visitors and the recent-orders feed survive
+    # `docker compose restart`. Wipe with `docker compose down -v`.
+    volumes:
+      - buttons-django-data:/var/lib/postgresql
+
+  buttons-django:
+    <<: *django_app
+    environment:
+      <<: *django_env
+      PORT: "3006"
+    expose:
+      - "3006"
+
+  # THE LONG-RUNNING WORKER. Its own container, its own process, the same
+  # database. `manage.py openreceive_notifications` is the one long-lived
+  # command the engine ships, and it is two jobs in one process: it listens for
+  # NWC-02 `payment_received` notifications from the wallet, AND runs a
+  # periodic reconcile pass (OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS,
+  # default 15s) as the safety net for notifications missed while it was down.
+  #
+  # It is OPTIONAL. Without it, settlement of an abandoned checkout still
+  # happens — every engine request runs the durably gated opportunistic
+  # reconcile — it just waits for the next OpenReceive call instead of landing
+  # the moment the wallet reports the payment.
+  notifications:
+    <<: *django_app
+    depends_on:
+      db:
+        condition: service_healthy
+      buttons-django:
+        condition: service_started
+    environment:
+      <<: *django_env
+      SKIP_DB_PREPARE: "1"
+    command: ["uv", "run", "--no-sync", "python", "manage.py", "openreceive_notifications"]
+
+volumes:
+  buttons-django-data:

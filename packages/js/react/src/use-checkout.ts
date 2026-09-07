@@ -95,6 +95,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
           }
         : {}),
       ...(prefix === undefined ? {} : { prefix }),
+      ...(options.csrfHeader === undefined ? {} : { csrfHeader: options.csrfHeader }),
       pollIntervalMs: options.pollIntervalMs,
       // Omit logger when unset so @openreceive/browser attaches its default console sink.
       // Pass `false` through to disable; wrap custom sinks so inline host callbacks stay stable.
@@ -129,7 +130,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       controller.stop();
       if (controllerRef.current === controller) controllerRef.current = null;
     };
-  }, [checkoutIdentity, polls, prefix, options.pollIntervalMs]);
+  }, [checkoutIdentity, polls, prefix, options.csrfHeader, options.pollIntervalMs]);
   const publicStatus = deriveStatus(state);
   const richStatus = createCheckoutStatusModel(state);
 

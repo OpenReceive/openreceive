@@ -609,72 +609,46 @@ module OpenReceive
             { "currency" => "USD", "pay_in_fiat" => pay_in_fiat, "payout_fiat" => payout_fiat }
           end
 
+          # FixedFloat status + emergency block + refund-tx presence → state and
+          # reasons: an interpreter of spec/data/swap-state-table.json (rendered
+          # into OpenReceive::Generated), first-match-wins. Pinned across engines
+          # by spec/test-vectors/swap-state.json; how to read the rows lives in
+          # the JSON. The validator asserts the table ends in a catch-all row.
           def normalize_status(status, emergency, refund_tx_id)
             normalized = status.to_s.upcase
-            if !refund_tx_id.nil? && %w[DONE FINISHED].include?(normalized)
-              return { "state" => "refunded" }
+            refund_tx_present = !refund_tx_id.nil?
+            choice = read_string(emergency["choice"])&.upcase
+            row = OpenReceive::Generated::SWAP_STATUS_ROWS.find do |candidate|
+              status_matches =
+                if candidate["status"] == "*"
+                  candidate["status_contains"].nil? || normalized.include?(candidate["status_contains"])
+                else
+                  candidate["status"] == normalized
+                end
+              status_matches &&
+                (candidate["refund_tx_present"] == "any" || candidate["refund_tx_present"] == refund_tx_present) &&
+                (candidate["choice"] == "any" ||
+                  (choice.nil? ? candidate["choice"] == "absent" : candidate["choice"] == choice))
             end
-            case normalized
-            when "NEW" then return { "state" => "awaiting_deposit" }
-            when "PENDING" then return { "state" => "confirming" }
-            when "EXCHANGE" then return { "state" => "exchanging" }
-            when "WITHDRAW" then return { "state" => "paying_invoice" }
-            when "DONE" then return { "state" => "completed" }
-            when "EXPIRED" then return { "state" => "expired" }
+            result = { "state" => row.fetch("state") }
+            if row["attention_reason"]
+              result["attention"] = true
+              result["attention_reason"] = row["attention_reason"]
             end
-            if normalized == "EMERGENCY"
-              choice = read_string(emergency["choice"])&.upcase
-              statuses = read_string_array(emergency["status"]).map(&:upcase)
-              refund_reason = refund_reason_from_emergency_statuses(statuses)
-              if choice == "REFUND" && !refund_tx_id.nil?
-                result = { "state" => "refunded" }
-                result["refund_reason"] = refund_reason unless refund_reason.nil?
-                return result
-              end
-              if choice == "REFUND"
-                result = { "state" => "refund_pending" }
-                result["refund_reason"] = refund_reason unless refund_reason.nil?
-                return result
-              end
-              if choice == "EXCHANGE"
-                return {
-                  "state" => "attention", "attention" => true,
-                  "attention_reason" => "provider_reported_emergency"
-                }
-              end
-              # An overpay (MORE) takes the same self-serve full-refund path as
-              # LESS and EXPIRED — it is what the provider itself does with it.
-              # There is no partial refund of the surplus: the payout invoice is
-              # a fixed amount, so an emergency deposit is returned whole or not
-              # at all.
-              result = { "state" => "refund_required" }
+            if row["refund_reason_from_emergency"]
+              refund_reason = refund_reason_from_emergency_statuses(read_string_array(emergency["status"]))
               result["refund_reason"] = refund_reason unless refund_reason.nil?
-              return result
             end
-            return { "state" => "failed" } if normalized.include?("FAIL")
-
-            # An unrecognized status is NOT a provider-reported emergency:
-            # label it as unknown so operators land on the right runbook section.
-            {
-              "state" => "attention", "attention" => true,
-              "attention_reason" => "provider_status_unrecognized"
-            }
+            result
           end
 
-          # LIMIT rides along with LESS/MORE when the deposit fell outside the
-          # pair's limits. It says nothing the payer can act on beyond the
-          # amount itself, so it names no reason of its own.
           def refund_reason_from_emergency_statuses(statuses)
-            less = statuses.include?("LESS")
-            more = (statuses & %w[MORE OVER OVERPAID]).any?
-            expired = statuses.include?("EXPIRED")
-            return "underpaid_and_late" if less && expired
-            return "overpaid_and_late" if more && expired
-            return "underpaid" if less
-            return "overpaid" if more
-            return "late_deposit" if expired
-
-            nil
+            aliases = OpenReceive::Generated::SWAP_EMERGENCY_STATUS_ALIASES
+            present = statuses.map { |item| aliases.fetch(item.upcase, item.upcase) }
+            row = OpenReceive::Generated::SWAP_REFUND_REASON_ROWS.find do |candidate|
+              (candidate["all_of"] - present).empty?
+            end
+            row && row["refund_reason"]
           end
 
           def refund_path_state?(state)

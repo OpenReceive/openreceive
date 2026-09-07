@@ -72,9 +72,24 @@ const STACKS = [
     quickstart: "docs/guides/quickstart-next.md",
   },
   {
+    stack: "fastapi",
+    source: "docs/agents/src/fastapi.md",
+    quickstart: "docs/guides/quickstart-fastapi.md",
+  },
+  {
+    stack: "django",
+    source: "docs/agents/src/django.md",
+    quickstart: "docs/guides/quickstart-django.md",
+  },
+  {
     stack: "rails",
     source: "docs/agents/src/rails.md",
     quickstart: "docs/guides/quickstart-rails.md",
+  },
+  {
+    stack: "php",
+    source: "docs/agents/src/php.md",
+    quickstart: "docs/guides/quickstart-php.md",
   },
   {
     stack: "btcpay",
@@ -101,17 +116,25 @@ const UNLISTED_GUIDES = {
   "agent-directions-node": "this payload's own page",
   "agent-directions-fastify": "this payload's own page",
   "agent-directions-next": "this payload's own page",
+  "agent-directions-fastapi": "this payload's own page",
+  "agent-directions-django": "this payload's own page",
   "agent-directions-rails": "this payload's own page",
+  "agent-directions-php": "this payload's own page",
   "agent-directions-btcpay": "this payload's own page",
   guides: "linked as the index at the end of the reading list, not as an entry",
   "quickstart-node": "inlined in full below, or another stack's",
   "quickstart-fastify": "inlined in full below, or another stack's",
   "quickstart-next": "inlined in full below, or another stack's",
+  "quickstart-fastapi": "inlined in full below, or another stack's",
+  "quickstart-django": "inlined in full below, or another stack's",
   "quickstart-rails": "inlined in full below, or another stack's",
+  "quickstart-php": "inlined in full below, or another stack's",
   "quickstart-btcpay": "inlined in full below, or another stack's",
   "btcpay-reference":
     "the BTCPay plugin's reference; linked from the BTCPay payload, another stack's otherwise",
   "node-orms": "Node only; the Rails engine owns its tables",
+  "flask-recipe":
+    "Flask only; the FastAPI payload links it as the Python sibling, the other stacks have no use for it",
 };
 
 /**

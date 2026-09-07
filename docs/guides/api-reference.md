@@ -1,7 +1,8 @@
 # API reference
 
 Per-function reference for the wallet client, the host, the
-framework adapters, persistence, the CLI, and the Rails engine. `amount` is
+framework adapters, persistence, the CLI, the Rails engine, the Python
+engine (FastAPI, the `openreceive` console script) and the PHP engine. `amount` is
 exactly `{ sats }` or `{ currency, value }`; public results use `amount_msats`
 and exact integer/decimal math — never binary floats. The mounted HTTP routes
 are defined normatively in
@@ -1388,10 +1389,15 @@ flow working. Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onSta
 `paymentWizard`, `theme` (host lock: wins over the stored preference and hides
 the toggle), `themeToggle` (default `true`; `false` hides the control but the
 checkout still stamps `data-theme`), `defaultTheme`, `storageKey`,
-`decodeLinkUrl`, `assetBaseUrl`, `components`, `classNames`, `syncUrl`,
+`decodeLinkUrl`, `assetBaseUrl`, `csrfHeader`, `components`, `classNames`, `syncUrl`,
 `resumePathPrefix`, `routeReference`, `resumable`, `resumePaymentHash`,
 `metadata`, `createFetch`,
 `resolveAssetUrl`.
+
+`csrfHeader` (default `X-CSRF-Token`) is the header name the page's
+`<meta name="csrf-token">` value is sent under on every request. Rails and
+Laravel read the default; Django reads `X-CSRFToken`, WordPress REST reads
+`X-WP-Nonce`. The meta tag name is fixed.
 
 `resumePaymentHash` (create mode) names a swap attempt this order already has in
 flight, so the checkout reopens it after prepare instead of showing the method
@@ -1402,7 +1408,7 @@ your own router owns a per-order route. It picks which return warning the swap
 refund screen shows (`SwapDisplayModel.refundReturnLabel`) — see
 [Checkout UX → The refund screens](checkout-ux.md#the-refund-screens).
 
-The shared prop surface — everything up to and including `assetBaseUrl` above
+The shared prop surface — everything up to and including `csrfHeader` above
 except `theme`, plus `checkout` and `reference` — has the same names and
 defaults in the Vue, Svelte and Angular wrappers. `theme` is React-only as a
 prop; the custom element carries the same lock as its `theme` attribute. The
@@ -1446,7 +1452,9 @@ From `@openreceive/react`. The method picker + swap deposit flow rendered inside
 From `@openreceive/elements`. The custom element behind the non-React wrappers. Create
 mode: `reference` + `prefix` attributes. Snapshot mode: `invoice`/`invoice-id`/
 `payment-hash`/... attributes. Polling knobs: `polling="false"` renders without status
-polling; `poll-interval-ms` tunes the interval. `asset-base-url` points the wizard's
+polling; `poll-interval-ms` tunes the interval. `csrf-header` names the header the
+`csrf-token` meta value is sent under (default `X-CSRF-Token`; Django `X-CSRFToken`,
+WordPress REST `X-WP-Nonce`). `asset-base-url` points the wizard's
 icons and tutorials at wherever this app serves the packages' `dist/assets` trees —
 the string form of `resolveAssetUrl`, and the only form plain markup can carry. Events (all seven): `openreceive-copy`,
 `openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`,
@@ -1827,3 +1835,320 @@ custom `config.nwc_client` opts in by supplying
 (`notification_type` plus the transaction-shaped `notification`); the engine
 filters `payment_received` itself, so the client forwards every type the
 wallet publishes.
+
+## Python
+
+The Python engine (`pip install openreceive`) is the same contract in
+snake_case: the host is a `Host` dataclass, the storage-aware entry point an
+`OpenReceiveApp`, and the FastAPI binding two functions over it. Django hosts
+use `openreceive.django` (its own quickstart); Flask hosts the
+[recipe](../recipes/flask.md). Python APIs and the wire share one spelling
+(`payment_hash`, `amount_msats`); money is `int` msats or decimal strings.
+
+### Host (Python)
+
+```python
+from openreceive.server import Host
+host = Host(amount_for=..., authorize=..., on_paid=..., after_paid=None)
+```
+
+**Fields**
+
+| Name | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `amount_for` | `(reference: str) -> dict \| None` | yes | `{"currency": "USD", "value": "12.00", "description"?: str}` or `{"sats": 1200}` from YOUR data; `None` → `404 Unknown reference.`. Called only where a price is minted or quoted (prepare, quote, create), never on status polls. |
+| `authorize` | `(context: HookContext) -> bool` | yes | `context.action` (`checkout.prepare`, `checkout.create`, `payment.check`, `swap.quote`, `swap.create`, `swap.read`, `swap.refund`), `context.request` (the FRAMEWORK request — the Starlette `Request` on FastAPI, the `HttpRequest` framework-free), `context.resource` (`{"reference", "payment_hash"?}` — a claim the payer sent). `False` → `403`. |
+| `on_paid` | `(settlement: PaymentSettlement) -> None` | yes | INSIDE the settlement transaction, for the reference's first settled attempt only. `settlement.reference`, `.payment_hash`, `.paid_at`, `.details`, and `.connection` — the SQLAlchemy `Connection` of that transaction (`None` under the Django ORM, whose transaction is ambient). Database writes only. |
+| `after_paid` | `(settlement) -> None` | no | After COMMIT: emails, jobs, pushes. |
+
+`LOGGING_ON_PAID` and `ALLOW_ALL_AUTHORIZE` are the two named placeholders;
+the engine warns at boot while either is wired, and `openreceive doctor`
+names them.
+
+### openreceive_router
+
+```python
+from openreceive.fastapi import openreceive_router
+app.include_router(openreceive_router(host, engine=engine, rate_limiting=True), prefix="/openreceive")
+```
+
+An `APIRouter` serving every route in the OpenAPI contract through the
+framework-free engine. The endpoint is a sync `def` run in Starlette's
+threadpool; the engine's 404/405, JSON gate, `Sec-Fetch-Site: cross-site`
+refusal, declared-fields check and 64 KB body cap are unchanged. The mount
+prefix is whatever `include_router` was given.
+
+**Parameters**
+
+| Name | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `host` | `Host` | yes | The three hooks. |
+| `engine` | `sqlalchemy.Engine` | one of | OpenReceive's own sync Engine for its two tables (same database as the host; a dedicated Engine on SQLite, which the repository configures for serialized writers). |
+| `repository` | `PaymentRepository` | one of | A custom repository instead of `engine` ([Storage: the escape hatch](storage.md#escape-hatch)); without `claim_reconcile_gate` it must set `opportunistic_reconcile=False`. |
+| `rate_limiting` | `bool \| {"limit_per_hour", "limit_per_day"}` | no | The built-in per-IP invoice cap (default off; `True` = 60/hour), keyed on `request.client.host` — run uvicorn with `--proxy-headers` behind a proxy. Mutually exclusive with `rate_limit`. |
+| `rate_limit` | `(HookContext) -> bool` | no | Your own limiter; `False` → `429`. |
+| `client_ip` | `(Request) -> str \| None` | no | Another attribution than `request.client.host`. |
+| `opportunistic_reconcile` | `bool \| {"min_interval_seconds"}` | no | The request-path settlement pass through the durable `openreceive_meta` gate; on by default. |
+| `nwc_client`, `price_provider`, `swap_providers`, `price_currencies`, `env`, `allow_spend_capable_wallet` | | no | The `Service` seams: by default the wallet client comes from `NWC_URI`, the providers from `LSC_URI_*`, the price feed is the cached live feed. Tests pass the `openreceive.testing` fakes here ([Host testing](host-testing.md)). |
+| `table_name`, `meta_table_name` | `str` | no | Table names, when the scaffold ran with overrides. |
+| `report_unexpected_error` | `(error, request_id) -> None` | no | Where an exception that became an opaque 500 goes (Sentry, `logger.exception`). |
+
+The returned router carries `.openreceive`, the binding behind it; the CLI's
+`--app` accepts the router, the FastAPI app or an `OpenReceiveApp`.
+
+### openreceive_lifespan
+
+```python
+app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine, lazy=False))
+```
+
+Runs the receive-only wallet preflight when the server starts — the same
+`host` + `engine=` as the router resolve to the same binding (or pass the
+router itself) — and raises `ConfigurationError` so uvicorn exits: a missing
+`NWC_URI`, an unreachable relay or a spend-capable code stops the deploy.
+`lazy=True` defers the check to the first request, which answers
+`503 WALLET_UNAVAILABLE` until it passes. Startup also sets
+`app.state.openreceive`; shutdown closes the wallet client the binding built.
+
+### OpenReceiveApp (Python)
+
+```python
+from openreceive.server import OpenReceiveApp, Service
+app = OpenReceiveApp(service=service, host=host, repository=repository, prefix="/openreceive", rate_limiting=False, opportunistic_reconcile=True)
+status, body, headers = app.handle(HttpRequest(method=..., path=..., headers=..., body=...))
+checks = app.reconcile(overlap_seconds=60)      # one bounded pass; the `openreceive reconcile` verb
+app.maybe_reconcile()                           # the gated request-path pass: {"reason": "ran" | "disabled" | "no_pending" | "gate_busy" | "scan_failed"}
+```
+
+The framework-free, storage-aware engine the FastAPI router, the Django views
+and the Flask recipe mount. `Service(nwc_client, price_provider=…,
+swap_providers=…, price_currencies=…, env=…)` is the wallet + rates + swaps
+half; its constructor IS the fail-closed preflight. `repository` is
+`openreceive.storage.sql.SqlPaymentRepository(engine)` or the Django ORM
+repository. `app.reconciler` (`settle`, `handle_notification`,
+`attempt_status`) is what the notifications worker drives.
+
+### payments_schema_sql (Python)
+
+```python
+from openreceive.storage.sql import payments_schema_sql, payments_ddl_statements
+payments_schema_sql("postgres" | "sqlite" | "mysql", table_name="openreceive_payments", meta_table_name="openreceive_meta") -> str
+```
+
+The canonical DDL for both tables plus the `schema_version` seed, as one
+script (`payments_ddl_statements` returns the statements separately — what the
+Alembic revision executes). The FastAPI demo runs it at boot behind a
+has-table guard; production hosts apply it once through their own migration
+workflow.
+
+### openreceive scaffold payments (Python)
+
+```sh
+openreceive scaffold payments --sql --dialect postgres|sqlite|mysql [--table-name …] [--meta-table-name …]
+openreceive scaffold payments --alembic --dialect postgres [--out-dir alembic/versions] [--revision <12 hex>] [--down-revision <id>] [--force]
+```
+
+`--sql` prints the DDL (with the exactly-once fulfillment note as comments) to
+stdout. `--alembic` writes `<revision>_openreceive_payments.py` with the DDL
+frozen in `op.execute` calls and a `downgrade()` that drops both tables; set
+`--down-revision` to your current head (`alembic heads`) or edit it in — a
+revision with `down_revision = None` is a second base. It never opens a
+database connection.
+
+### openreceive doctor (Python)
+
+```sh
+openreceive doctor [--app module:attr] [--offline] [--db <sqlalchemy-url>] [--url http://localhost:8000] [--prefix /openreceive]
+openreceive debug-report [...]     # the same lines, always exit 0
+```
+
+Python version, `NWC_URI` presence and parseability (never the value),
+`LSC_URI_*` connections, the receive-only relay probe (`--offline` skips it),
+and with `--app` — the FastAPI app, the router from `openreceive_router`, an
+`OpenReceiveApp`, or a zero-argument callable returning one; without it,
+`DJANGO_SETTINGS_MODULE` selects the Django app — whether both tables exist
+(`assert_supported_schema`) and which hooks are still placeholders. `--db`
+checks the tables in any SQLAlchemy URL instead; `--url` proves the routes
+answer under the prefix (the engine's own JSON 404 on an unknown path). Exit
+code 1 on any failing line; every failing line states its fix.
+
+### openreceive reconcile / openreceive notifications
+
+```sh
+openreceive reconcile --app main:app [--overlap-seconds 60]
+openreceive notifications --app main:app [--interval-seconds 15]
+```
+
+`reconcile` runs one bounded pass over the pending attempts and prints the
+per-status counts — the `rake openreceive:reconcile` twin, for a runbook or a
+cron-minded operator; the request-path pass covers day-to-day settlement.
+`notifications` is the one documented worker: a long-lived NWC-02
+`payment_received` listener with retry/backoff plus the periodic pass
+(`OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS`, default 15) as the
+safety net for notifications missed while it was down. Run one, as its own
+process; without it every order still settles on the payer's next poll.
+Django spells both as `manage.py openreceive_reconcile` /
+`openreceive_notifications`.
+
+## PHP
+
+The Composer package `openreceive/openreceive` (namespace `OpenReceive\`), for a
+plain-PHP host; the Laravel adapter (`openreceive/laravel`) wraps the same
+classes. PHP ≥ 8.2, 64-bit, `ext-gmp` required. Public arrays carry the wire's
+snake_case keys; methods are camelCase. Money is integer msats or decimal
+strings — never a float, and the package's own static analysis forbids one in
+the money path.
+
+### OpenReceive\Host
+
+```php
+interface Host {
+    public function authorize(AuthorizeContext $context): bool;
+    public function amountFor(string $reference): ?array;   // ['currency' => 'USD', 'value' => '12.00', 'description' => ?] or ['sats' => 1200]; null = 404
+    public function onPaid(PaymentSettlement $settlement): void;
+}
+```
+
+The host contract: one object, three methods, the only bridge between the
+engine and your data. **Where it fits:** it is what `Engine` takes first, and
+the whole quickstart. `authorize` runs on every mounted route; `amountFor`
+only where a price is minted or quoted (payer input never carries an amount);
+`onPaid` inside the settlement transaction for the first settled attempt of a
+reference. Implement `OpenReceive\Hosts\AfterPaid` too when something must run
+after COMMIT (an email, a webhook) — best-effort, never retried.
+
+Two placeholder traits exist for scaffolding: `Hosts\AllowAllAuthorize`
+(allows everything) and `Hosts\LoggingOnPaid` (logs and fulfills nothing).
+`Engine` warns through its logger at construction while a host uses either,
+and `Doctor` names them; replace both before anything real.
+
+**Fields of** `PaymentSettlement` (readonly): `reference`, `paymentHash`,
+`paidAt` (Unix seconds), `details` (the wallet-observed transaction snapshot,
+`observed_at`, `paid_at_source`; or null), `connection` — the
+`DatabaseConnection` of the settlement transaction (`execute()` / `query()`
+with positional `?` placeholders), null in `afterPaid`.
+
+### The authorize context (PHP)
+
+`OpenReceive\Server\AuthorizeContext`, readonly: `action` (`checkout.prepare`,
+`checkout.create`, `payment.check`, `swap.quote`, `swap.create`, `swap.read`,
+`swap.refund`), `request` (the PSR-7 `ServerRequestInterface` on the plain
+mount — Laravel passes its own request object), `resource`
+(`['reference' => …, 'payment_hash' => ?]`, copied from the payer's JSON body
+before any lookup: a claim, not proof); helpers `reference()` and
+`paymentHash()` (null except on `payment.check`, `swap.read`, `swap.refund`).
+The same object reaches a custom `rateLimit` hook.
+
+### OpenReceive\Server\Service
+
+```php
+$service = Service::fromEnvironment();   // NWC_URI, LSC_URI_PRIMARY/BACKUP, OPENRECEIVE_* from getenv() + $_ENV
+$service = new Service($nwcClient, $priceProvider, $swapProviders, ['USD'], $clock, $allowSpendCapableWallet, $env, $logger, $http);
+```
+
+The storage-agnostic checkout service: prepare/create, the bounded wallet
+reconcile pass, swap quote/create/get/refund, rates, and the boot-time
+receive-only preflight — which runs in the constructor and **fails closed** on
+a missing or invalid `NWC_URI`, a wallet without `make_invoice` +
+`list_transactions`, no shared encryption mode, or an advertised spend method
+(`OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` or `$allowSpendCapableWallet`
+relaxes only the last). `fromEnvironment(?array $env, array $priceCurrencies,
+PriceProvider|false|null $priceProvider, ?array $swapProviders, bool
+$allowSpendCapableWallet, ?LoggerInterface $logger, ?HttpTransport $http)`:
+pass `$env` explicitly when the framework caches configuration; `false` for
+no rates; `[]` for no swaps. The direct API — `prepareCheckout()`,
+`createCheckout()`, `reconcilePayments()`, `quoteSwap()`, `createSwap()`,
+`getSwap()`, `refundSwap()`, `listRates()`, `listSwapOptions()`,
+`subscribeNotifications()` — takes and returns snake_case arrays; errors are
+`OpenReceive\Server\Errors\*` extending `HttpError` (`status`, `errorCode`,
+`retryable`, `details`, `retryAfterSeconds`).
+
+### OpenReceive\Server\Engine
+
+```php
+$engine = new Engine(
+    $host, $repository, $service,
+    opportunisticReconcile: true,          // false when a worker owns scanning; ['min_interval_seconds' => n]
+    rateLimiting: false,                   // true = 60/hour per IP; ['limit_per_hour' => , 'limit_per_day' => ]
+    rateLimit: null,                       // custom fn (AuthorizeContext): bool — exclusive with rateLimiting
+    clientIp: null,                        // fn (mixed $request): ?string; default REMOTE_ADDR of the PSR-7 request
+    logger: null,                          // any PSR-3 logger
+    prefix: '/openreceive',
+    responseFactory: null,                 // a PSR-17 ResponseFactoryInterface; nyholm/psr7 is auto-discovered
+);
+```
+
+The quickstart composition (the Rails `Configuration` twin): a `Host`, a
+`PaymentRepository` and a `Service` become the request handler, the PSR-15
+mount with request-path opportunistic reconcile, the settlement hook, the
+reconciler, the notifications worker and the doctor. Build one per request in
+plain PHP (a request is a process); bind one in a container under a framework.
+
+| Method | Returns |
+| --- | --- |
+| `psr15Handler()` | `Psr\Http\Server\RequestHandlerInterface`: the mount. Every payment route first runs the gated reconcile pass; `payments/check` is served from that pass or the host row. |
+| `requestHandler()` | the framework-free `RequestHandler` (request → `[status, headers, body]` triples) for a host that cannot use PSR-15 |
+| `reconcile()` | one bounded reconciliation pass; `list` of per-attempt results (the `openreceive:reconcile` one-shot) |
+| `maybeReconcile()` | the gated pass, for host-only routes: `['reason' => 'ran'\|…, 'checks' => ?]` |
+| `notificationsWorker(?array $env)` | `Notifications`; `->run(?callable $shouldContinue)` blocks: NWC-02 listener plus the periodic pass (`OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS`, default 15) |
+| `doctor(?array $env, ?callable $walletCheck, ?string $mountedAt)` | the Step 0 report lines (below) |
+| `settle(array $event)` | the settlement hook (write-once → `onPaid` inside the transaction → `afterPaid` after commit); `true` when this call fulfilled |
+
+Behind a reverse proxy pass `clientIp: fn ($request) => $request->getHeaderLine('x-forwarded-for')`
+(or your framework's trusted-proxy answer) so the per-IP cap counts the payer.
+
+### Engine notificationsWorker
+
+```php
+$engine->notificationsWorker()->run();   // blocks; ->stop() ends it
+```
+
+The one documented worker: a long-lived NWC-02 `payment_received` listener with
+retry/backoff plus a periodic reconcile pass as its own safety net. PHP has no
+threads, so the periodic pass runs on the blocking subscription's idle tick
+(once a second). Run it as its own process; without it every order still
+settles on the payer's next poll. A `payment_received` payload satisfying the
+settlement rule settles the matching pending attempt directly; anything less
+falls back to one bounded reconcile pass.
+
+### OpenReceive\Storage
+
+```php
+$db = new PdoConnection($pdo);                       // dialect from PDO::ATTR_DRIVER_NAME: pgsql | mysql | sqlite
+$repository = new SqlPaymentRepository($db);         // (?callable $clock, string $table, string $metaTable)
+PaymentsSchema::statements($dialect);                // list<string> DDL: openreceive_payments + openreceive_meta
+PaymentsSchema::dropStatements();                    // the down()
+PaymentsSchema::migrate($db);                        // both, in one call
+```
+
+`PdoConnection` wraps the PDO your app already opens (sets
+`ERRMODE_EXCEPTION`; the SQLite busy timeout through `PDO::ATTR_TIMEOUT`).
+`DatabaseConnection` — `dialect()`, `query()`, `execute()`, `transaction()`,
+`lastInsertId()`, positional `?` placeholders — is the seam a host with no PDO
+implements instead (the WordPress plugin does). `SqlPaymentRepository` owns the
+per-reference commit lock per dialect, write-once settlement, the
+reconciliation transitions and the `openreceive_meta` CAS gate; it never
+selects `swap_data` into a public array. Implementing `PaymentRepository`
+yourself is the escape hatch, and then `opportunisticReconcile: false` unless
+you also implement `claimReconcileGate`.
+
+### OpenReceive\Server\Doctor
+
+```php
+Doctor::report(array $env, ?Host $host, ?callable $walletCheck, ?string $mountedAt): array   // list<string>
+Doctor::placeholderWarnings(Host $host): array
+```
+
+Step 0 of the agent directions as report lines: each credential as set/unset
+(never a value), the host class and whether `authorize`/`onPaid` are still the
+placeholder traits, where the handler is mounted, and the wallet preflight
+(`$walletCheck` is a closure that builds the `Service`; a throw is reported,
+never raised). `$engine->doctor()` is the same for a built engine. Safe to
+paste into an issue.
+
+### OpenReceive\Testing
+
+`FakeWallet` (a `ReceiveNwcClient`) and `FakeSwapProvider` (a `SwapProvider`)
+on the [testkit contract](../internal/testkit-contract.md), plus
+`Rates\StaticPriceProvider`; see [Testing your integration](host-testing.md#inject-a-fake-wallet-client-php).
+

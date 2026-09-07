@@ -4,6 +4,8 @@
 node_modules
 **/node_modules
 **/vendor/bundle
+# Composer output (the PHP engine and the PHP demos); the Dockerfiles run composer install.
+**/vendor
 **/.bundle
 dist
 **/dist

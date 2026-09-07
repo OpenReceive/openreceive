@@ -9,6 +9,12 @@ import {
   readDotnetPluginVersion,
 } from "../release/dotnet-plugin.mjs";
 import { GEM_NAMES, gemDir, readGemVersion } from "../release/gem-release.mjs";
+import {
+  PYTHON_PACKAGE_DIR,
+  PYTHON_VERSION_FILE,
+  pep440Version,
+  readPythonVersion,
+} from "../release/pypi-release.mjs";
 
 const root = process.cwd();
 const packageRoot = path.join(root, "packages/js");
@@ -246,6 +252,30 @@ for (const gemName of GEM_NAMES) {
   }
 }
 
+// The PyPI distribution releases in lockstep too, spelled PEP 440.
+{
+  const pythonVersion = readPythonVersion(root);
+  expect(pythonVersion !== undefined, `${PYTHON_VERSION_FILE}: missing __version__`);
+  expect(
+    pythonVersion === pep440Version(releaseVersion),
+    `${PYTHON_VERSION_FILE}: __version__ ${pythonVersion} must be ${pep440Version(releaseVersion)} (run npm run release:prepare)`,
+  );
+  for (const requiredFile of ["pyproject.toml", "uv.lock", "README.md", "LICENSE"]) {
+    expect(
+      existsSync(path.join(root, PYTHON_PACKAGE_DIR, requiredFile)),
+      `${PYTHON_PACKAGE_DIR}: missing ${requiredFile}`,
+    );
+  }
+  expect(
+    rootPackage.scripts?.["release:pypi:build"] === "node tools/release/pypi-release.mjs build",
+    "package.json: missing release:pypi:build script",
+  );
+  expect(
+    testCiRelease.includes("npm run test:python"),
+    "package.json: test:ci:release must run the Python engine suite (test:python)",
+  );
+}
+
 expect(/^# Changelog/m.test(changelog), "CHANGELOG.md: missing top-level heading");
 // The section stays "- Unreleased" until `npm run release:stamp` dates it at
 // release time; both forms are release-ready.
@@ -276,6 +306,7 @@ for (const phrase of [
   "Package artifact dry run passes through `npm run build:packages`.",
   ".github/workflows/release.yml",
   ".github/workflows/publish-gems.yml",
+  ".github/workflows/publish-pypi.yml",
   "Live wallet smoke passes when a trusted `NWC_URI` is available in the environment.",
   "Do not publish",
 ]) {

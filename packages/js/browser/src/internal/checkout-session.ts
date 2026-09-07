@@ -79,6 +79,12 @@ export interface CheckoutSwapOptions {
   /** Read at call time so a host that swaps `globalThis.fetch` is honoured. */
   fetch(): typeof globalThis.fetch | undefined;
   /**
+   * Header name the page's `<meta name="csrf-token">` is sent under on the
+   * quote and start calls. Read at call time like the two above; `undefined`
+   * means the default, `X-CSRF-Token`.
+   */
+  csrfHeader?(): string | undefined;
+  /**
    * Publish a freshly started swap attempt. The two hosts fold it into their
    * snapshot differently (the element re-keys its poll controller onto the
    * merged snapshot; React hands the attempt to whichever component owns the
@@ -239,6 +245,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     const selection = swap.selection;
     const prefix = swap.prefix();
     const fetcher = swap.fetch();
+    const csrfHeader = swap.csrfHeader?.();
     const reference = options.reference();
     // A start that cannot be made is a WIRING mistake, and silence about it is
     // what this used to be: the payer clicked Continue, nothing was requested,
@@ -278,11 +285,12 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       // Quote FIRST. An amount outside the provider's range is a normal answer,
       // not a failure: it becomes an unavailable entry in `swapQuotes` and the
       // host shows its accepted range, rather than a generic start error.
-      const quote = await quoteSwapAsset(payInAsset, prefix, fetcher, reference);
+      const quote = await quoteSwapAsset(payInAsset, prefix, fetcher, reference, csrfHeader);
       if (quote !== undefined && quote.available === false) return;
       const started = await startSwapRequest({
         fetch: fetcher,
         prefix,
+        ...(csrfHeader === undefined ? {} : { csrfHeader }),
         reference,
         payInAsset,
         ...(options.logger === undefined ? {} : { logger: options.logger }),
@@ -335,10 +343,12 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     prefix: string,
     fetcher: typeof globalThis.fetch,
     reference: string,
+    csrfHeader: string | undefined,
   ): Promise<CheckoutPaymentMethod | undefined> {
     const body = await postJson({
       fetch: fetcher,
       prefix,
+      ...(csrfHeader === undefined ? {} : { csrfHeader }),
       ...(options.logger === undefined ? {} : { logger: options.logger }),
       body: { reference, action: "swap_quote", pay_in_asset: payInAsset },
     });

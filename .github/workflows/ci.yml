@@ -71,11 +71,74 @@ jobs:
       # because nothing ever ran `gem build`).
       - run: ./tools/ci/ruby-gem-build.sh
 
+  # The fifth settlement engine: the Python package (packages/python/openreceive)
+  # on the oldest supported interpreter and the current one, through
+  # tools/ci/python-tests.sh (uv sync --frozen, pytest, the cross-language
+  # conformance harness). The repository suite runs on SQLite always and, with
+  # the two service containers below exporting OPENRECEIVE_TEST_*_URL, on
+  # Postgres and MySQL too — the per-dialect lock paths. Django's own tests
+  # (tests/django, pytest-django) run in the same pytest invocation once they
+  # exist; a Django 5.2 / 6.0 axis is a follow-up for the Django track.
+  python-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.13"
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: openreceive
+          POSTGRES_PASSWORD: openreceive
+          POSTGRES_DB: openreceive_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: openreceive
+          MYSQL_DATABASE: openreceive_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -popenreceive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NWC_URI: ""
+      # uv honours UV_PYTHON over the package's .python-version, so one script
+      # covers both axes.
+      UV_PYTHON: ${{ matrix.python-version }}
+      OPENRECEIVE_TEST_PGSQL_URL: postgresql+psycopg://openreceive:openreceive@127.0.0.1:5432/openreceive_test
+      OPENRECEIVE_TEST_MYSQL_URL: mysql+pymysql://root:openreceive@127.0.0.1:3306/openreceive_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: packages/python/openreceive/uv.lock
+      - run: ./tools/ci/python-tests.sh
+      # Lint and strict typing are part of the engine's definition of green.
+      - run: uv run --project packages/python/openreceive --frozen ruff check
+      - run: uv run --project packages/python/openreceive --frozen ruff format --check
+      - run: uv run --project packages/python/openreceive --frozen mypy
+
   # Browser E2E smoke on every push/PR: boots the node-express Buy a Button
   # demo against the testkit wallet and drives a real checkout in Chromium,
   # then the same smoke spec against the fastify stack (the minimal host).
   # Independent of the core job so the browser lane never blocks the fast
   # checks; the full cross-framework spec matrix runs weekly in demos.yml.
+  # The FastAPI stack (the same minimal host in Python) runs the smoke last.
   # Flake policy lives in the Playwright config (retries in CI), never here.
   e2e-smoke:
     runs-on: ubuntu-latest
@@ -87,6 +150,13 @@ jobs:
       - uses: ./.github/actions/setup-playwright
       - run: npm run test:e2e:smoke
       - run: npm run test:e2e:smoke:fastify
+      # The FastAPI stack: Vite spawns `uv run uvicorn` behind the same proxy
+      # trick, so the runner needs uv as well as the browser.
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/buttons/server/fastapi/uv.lock
+      - run: npm run test:e2e:smoke:fastapi
 
   # Full Buy a Button Rails example on every push/PR, not only in the weekly
   # demos lane: a schema break in the example once shipped because nothing
@@ -117,6 +187,61 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/rails-ci
+
+  # The Buy a Button FastAPI example on every push/PR (the rails-example twin):
+  # bin/ci runs uv sync, the stubbed-wallet tests over openreceive.testing, the
+  # catalog/artwork drift check, the shared-boundary check and pip-audit.
+  fastapi-example:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/buttons/server/fastapi/uv.lock
+      - run: bin/ci
+        working-directory: examples/buttons/server/fastapi
+
+  # The Buy a Button Django example on every push/PR (the rails-example twin in
+  # Python, host-owned Postgres like its compose stack): bin/ci runs uv sync,
+  # `manage.py check`, the stubbed-wallet tests over openreceive.testing against
+  # the service database, the migration drift check (`makemigrations --check`
+  # for the shop AND the openreceive app), the shared-boundary check and
+  # pip-audit.
+  django-example:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NWC_URI: ""
+      DATABASE_URL: postgres://openreceive:openreceive@127.0.0.1:5432/buttons_django
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: openreceive
+          POSTGRES_PASSWORD: openreceive
+          POSTGRES_DB: buttons_django
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/buttons/server/django/uv.lock
+      - run: bin/ci
+        working-directory: examples/buttons/server/django
 
   # The third settlement engine: the BTCPay Server plugin's vector conformance and
   # kernel tests (packages/dotnet). Its own job because compiling BTCPay Server

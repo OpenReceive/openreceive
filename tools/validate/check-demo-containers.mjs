@@ -8,6 +8,8 @@ import { root } from "../shared/root.mjs";
 
 const nodeDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "node");
 const railsDemo = OPENRECEIVE_DEMOS.find((demo) => demo.kind === "rails");
+const pythonDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "python");
+const phpDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "php");
 
 const findings = [];
 const fail = (message) => findings.push(message);
@@ -449,6 +451,277 @@ for (const demo of nodeDemos) {
   );
 }
 
+// The Python demos (FastAPI on SQLite, Django on host Postgres) get the generic
+// rules the Rails demo gets — no secrets, no OpenReceive runtime persistence,
+// no DEMO_WALLET, no bind mounts, one `<name>-data` volume at most, a
+// ports-only override, a README with the boundary — plus two of their own:
+// the Dockerfile installs the engine FROM THE MONOREPO PATH (this demo runs
+// the code in the checkout, never a PyPI release) and never bakes `.env`.
+for (const demo of pythonDemos) {
+  const hostPostgres = demo.dbService !== undefined;
+  const dockerfilePath = `${demo.dir}/Dockerfile`;
+  const dockerfile = read(dockerfilePath);
+  forbidSecrets(dockerfilePath, dockerfile);
+  forbidRuntimePersistence(dockerfilePath, dockerfile, { allowHostPostgres: hostPostgres });
+  forbidDemoModeSwitch(dockerfilePath, dockerfile);
+  forbidTestkitWalletSwitch(dockerfilePath, dockerfile);
+  expect(
+    /^FROM python:3\.1[3-9]/m.test(dockerfile),
+    `${dockerfilePath}: must use a python:3.13+ base image`,
+  );
+  expect(
+    /^FROM node:22/m.test(dockerfile),
+    `${dockerfilePath}: must build the Vite client with Node 22`,
+  );
+  expect(
+    dockerfile.includes(`npm run build -w ${demo.packageName}`),
+    `${dockerfilePath}: must build the client`,
+  );
+  expect(
+    dockerfile.includes("COPY packages/python/openreceive"),
+    `${dockerfilePath}: must install the engine from packages/python/openreceive, not PyPI`,
+  );
+  expect(
+    !/pip install[^\n]*\bopenreceive\b/.test(dockerfile),
+    `${dockerfilePath}: must not pip install openreceive from an index`,
+  );
+  expect(
+    !/^(COPY|ADD)[^\n]*\.env\b/m.test(dockerfile) && !/^ENV\s+(NWC_URI|LSC_URI_)/m.test(dockerfile),
+    `${dockerfilePath}: must not bake .env or a wallet variable into the image`,
+  );
+  expect(dockerfile.includes("uv sync --frozen"), `${dockerfilePath}: must install from uv.lock`);
+  expect(dockerfile.includes(`EXPOSE ${demo.port}`), `${dockerfilePath}: must expose ${demo.port}`);
+  expect(existsSync(path.join(root, demo.dir, "uv.lock")), `${demo.dir}/uv.lock: missing lockfile`);
+
+  const composePath = `${demo.dir}/compose.yml`;
+  const composeText = read(composePath);
+  const compose = parse(composePath, parseCompose);
+  const service = compose.services?.[demo.service] ?? {};
+  forbidSecrets(composePath, composeText);
+  forbidRuntimePersistence(composePath, composeText, { allowHostPostgres: hostPostgres });
+  forbidDemoModeSwitch(composePath, composeText);
+  forbidTestkitWalletSwitch(composePath, composeText);
+  expect(
+    Object.keys(service).length > 0,
+    `${composePath}: must define the ${demo.service} service`,
+  );
+  expect(
+    service.build?.context === "../../../..",
+    `${composePath}: build context must be the repo root`,
+  );
+  expect(
+    service.command === undefined,
+    `${composePath}: the app service must run the image's default production command`,
+  );
+  expectHostDataVolumesOnly(composePath, compose, service);
+  expect(service.env_file?.length === 1, `${composePath}: must load one environment file`);
+  expect(
+    service.env_file?.[0] === "../../../../.env",
+    `${composePath}: must load the repo-root .env`,
+  );
+  expect(service.environment?.PORT === demo.port, `${composePath}: wrong PORT`);
+  if (hostPostgres) {
+    const db = compose.services?.[demo.dbService] ?? {};
+    expect(db.image?.includes("postgres"), `${composePath}: must define a host Postgres service`);
+    expect(
+      service.depends_on?.[demo.dbService] !== undefined,
+      `${composePath}: app must depend on host Postgres`,
+    );
+    expect(
+      /DATABASE_URL/.test(composeText),
+      `${composePath}: must set host DATABASE_URL (not OpenReceive persistence)`,
+    );
+  } else {
+    expect(service.depends_on === undefined, `${composePath}: must not depend on a database`);
+  }
+  if (demo.notificationsService !== undefined) {
+    // The NWC-02 listener plus periodic pass is its own process; no web process runs a timer.
+    const notifications = compose.services?.[demo.notificationsService] ?? {};
+    expect(
+      /openreceive[_ ]notifications/.test((notifications.command ?? []).join(" ")),
+      `${composePath}: notifications worker must run the openreceive notifications command`,
+    );
+  }
+  const expectedServices = 1 + (hostPostgres ? 1 : 0) + (demo.notificationsService ? 1 : 0);
+  expect(
+    Object.keys(compose.services ?? {}).length === expectedServices,
+    `${composePath}: must define exactly ${expectedServices} service(s)`,
+  );
+
+  const overridePath = `${demo.dir}/compose.override.yml.example`;
+  const overrideText = read(overridePath);
+  const override = parse(overridePath, parseCompose);
+  forbidSecrets(overridePath, overrideText);
+  forbidRuntimePersistence(overridePath, overrideText, { allowHostPostgres: hostPostgres });
+  forbidDemoModeSwitch(overridePath, overrideText);
+  forbidTestkitWalletSwitch(overridePath, overrideText);
+  expectPortsOnlyOverride(overridePath, override, demo.service, demo.port);
+
+  const makefilePath = `${demo.dir}/Makefile`;
+  if (existsSync(path.join(root, makefilePath)))
+    forbidDemoModeSwitch(makefilePath, read(makefilePath));
+
+  const readmePath = `${demo.dir}/README.md`;
+  const readme = read(readmePath);
+  forbidSecrets(readmePath, readme);
+  forbidDemoModeSwitch(readmePath, readme);
+  expect(
+    !/OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE|OPENRECEIVE_DATABASE/i.test(readme),
+    `${readmePath}: must not document OpenReceive runtime persistence`,
+  );
+  expect(
+    readme.includes("The browser never receives your NWC code."),
+    `${readmePath}: missing NWC boundary`,
+  );
+  expect(
+    /host-owned|Host-owned|host owns|host SQLite|local SQLite/i.test(readme),
+    `${readmePath}: must describe host-owned persistence`,
+  );
+  if (hostPostgres)
+    expect(/Postgres|postgres/i.test(readme), `${readmePath}: must describe host Postgres`);
+  expect(
+    existsSync(path.join(root, demo.dir, "bin/ci")),
+    `${demo.dir}/bin/ci: missing CI entrypoint`,
+  );
+}
+
+// The PHP demos (plain PHP on SQLite; Laravel on Postgres with a notifications
+// worker) get the generic rules — a Dockerfile with no secrets and no
+// OpenReceive persistence (host Postgres allowed only when `dbService` is set),
+// the compose service, no DEMO_WALLET, no bind mounts, one `<name>-data` volume
+// at most, a ports-only override, a README with the boundary — plus two of
+// their own: the Dockerfile installs the engine FROM THE MONOREPO PATH
+// (packages/php/openreceive, a Composer path repository — this demo runs the
+// code in the checkout, never a Packagist release) and never bakes `.env`.
+for (const demo of phpDemos) {
+  const hostPostgres = demo.dbService !== undefined;
+  const dockerfilePath = `${demo.dir}/Dockerfile`;
+  const dockerfile = read(dockerfilePath);
+  forbidSecrets(dockerfilePath, dockerfile);
+  forbidRuntimePersistence(dockerfilePath, dockerfile, { allowHostPostgres: hostPostgres });
+  forbidDemoModeSwitch(dockerfilePath, dockerfile);
+  forbidTestkitWalletSwitch(dockerfilePath, dockerfile);
+  expect(/^FROM php:8\.[2-9]/m.test(dockerfile), `${dockerfilePath}: must use a php:8.2+ base image`);
+  expect(
+    dockerfile.includes("COPY packages/php/openreceive"),
+    `${dockerfilePath}: must install the engine from packages/php/openreceive (a Composer path repository), not Packagist`,
+  );
+  expect(
+    !/composer\s+(require|global)\b/.test(dockerfile),
+    `${dockerfilePath}: must not composer require the engine from a registry`,
+  );
+  expect(/composer install/.test(dockerfile), `${dockerfilePath}: must run composer install`);
+  expect(
+    !/^(COPY|ADD)[^\n]*\.env\b/m.test(dockerfile) && !/^ENV\s+(NWC_URI|LSC_URI_)/m.test(dockerfile),
+    `${dockerfilePath}: must not bake .env or a wallet variable into the image`,
+  );
+  // The NWC transport's elliptic-curve math needs ext-gmp; php:*-cli images do not ship it.
+  expect(/docker-php-ext-install[^\n]*\bgmp\b/.test(dockerfile), `${dockerfilePath}: must install ext-gmp`);
+  expect(dockerfile.includes(`EXPOSE ${demo.port}`), `${dockerfilePath}: must expose ${demo.port}`);
+  const composerPath = `${demo.dir}/composer.json`;
+  const composer = parse(composerPath, JSON.parse);
+  expect(
+    (composer.repositories ?? []).some(
+      (repo) => repo.type === "path" && /packages\/php\/openreceive$/.test(repo.url ?? ""),
+    ),
+    `${composerPath}: must declare packages/php/openreceive as a path repository`,
+  );
+  expect(
+    composer.require?.["openreceive/openreceive"] !== undefined,
+    `${composerPath}: must require openreceive/openreceive`,
+  );
+
+  const composePath = `${demo.dir}/compose.yml`;
+  const composeText = read(composePath);
+  const compose = parse(composePath, parseCompose);
+  const service = compose.services?.[demo.service] ?? {};
+  forbidSecrets(composePath, composeText);
+  forbidRuntimePersistence(composePath, composeText, { allowHostPostgres: hostPostgres });
+  forbidDemoModeSwitch(composePath, composeText);
+  forbidTestkitWalletSwitch(composePath, composeText);
+  expect(
+    Object.keys(service).length > 0,
+    `${composePath}: must define the ${demo.service} service`,
+  );
+  expect(
+    service.build?.context === "../../../..",
+    `${composePath}: build context must be the repo root`,
+  );
+  expect(
+    service.command === undefined,
+    `${composePath}: the app service must run the image's default production command`,
+  );
+  expectHostDataVolumesOnly(composePath, compose, service);
+  expect(service.env_file?.length === 1, `${composePath}: must load one environment file`);
+  expect(
+    service.env_file?.[0] === "../../../../.env",
+    `${composePath}: must load the repo-root .env`,
+  );
+  expect(service.environment?.PORT === demo.port, `${composePath}: wrong PORT`);
+  if (hostPostgres) {
+    const db = compose.services?.[demo.dbService] ?? {};
+    expect(db.image?.includes("postgres"), `${composePath}: must define a host Postgres service`);
+    expect(
+      service.depends_on?.[demo.dbService] !== undefined,
+      `${composePath}: app must depend on host Postgres`,
+    );
+    expect(
+      /DATABASE_URL|DB_HOST/.test(composeText),
+      `${composePath}: must set the host database connection (not OpenReceive persistence)`,
+    );
+  } else {
+    expect(service.depends_on === undefined, `${composePath}: must not depend on a database`);
+  }
+  if (demo.notificationsService !== undefined) {
+    // The NWC-02 listener plus periodic pass is its own process; no web process runs a timer.
+    const notifications = compose.services?.[demo.notificationsService] ?? {};
+    const command = Array.isArray(notifications.command)
+      ? notifications.command.join(" ")
+      : String(notifications.command ?? "");
+    expect(
+      /openreceive[:_ -]notifications/.test(command),
+      `${composePath}: notifications worker must run the openreceive notifications command`,
+    );
+  }
+  const expectedServices = 1 + (hostPostgres ? 1 : 0) + (demo.notificationsService ? 1 : 0);
+  expect(
+    Object.keys(compose.services ?? {}).length === expectedServices,
+    `${composePath}: must define exactly ${expectedServices} service(s)`,
+  );
+
+  const overridePath = `${demo.dir}/compose.override.yml.example`;
+  const overrideText = read(overridePath);
+  const override = parse(overridePath, parseCompose);
+  forbidSecrets(overridePath, overrideText);
+  forbidRuntimePersistence(overridePath, overrideText, { allowHostPostgres: hostPostgres });
+  forbidDemoModeSwitch(overridePath, overrideText);
+  forbidTestkitWalletSwitch(overridePath, overrideText);
+  expectPortsOnlyOverride(overridePath, override, demo.service, demo.port);
+
+  const makefilePath = `${demo.dir}/Makefile`;
+  if (existsSync(path.join(root, makefilePath)))
+    forbidDemoModeSwitch(makefilePath, read(makefilePath));
+
+  const readmePath = `${demo.dir}/README.md`;
+  const readme = read(readmePath);
+  forbidSecrets(readmePath, readme);
+  forbidDemoModeSwitch(readmePath, readme);
+  expect(
+    !/OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE|OPENRECEIVE_DATABASE/i.test(readme),
+    `${readmePath}: must not document OpenReceive runtime persistence`,
+  );
+  expect(
+    readme.includes("The browser never receives your NWC code."),
+    `${readmePath}: missing NWC boundary`,
+  );
+  expect(
+    /host-owned|Host-owned|host owns|host SQLite|local SQLite/i.test(readme),
+    `${readmePath}: must describe host-owned persistence`,
+  );
+  if (hostPostgres)
+    expect(/Postgres|postgres/i.test(readme), `${readmePath}: must describe host Postgres`);
+}
+
 const envExamplePath = ".env.example";
 const envExample = read(envExamplePath);
 const envNames = [...envExample.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((match) => match[1]);
@@ -473,5 +746,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Demo container validation passed for ${nodeDemos.length} Node demo(s) + Rails demo without OpenReceive runtime persistence.`,
+  `Demo container validation passed for ${nodeDemos.length} Node demo(s) + Rails demo + ${pythonDemos.length} Python demo(s) + ${phpDemos.length} PHP demo(s) without OpenReceive runtime persistence.`,
 );

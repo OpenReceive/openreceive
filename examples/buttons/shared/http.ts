@@ -23,14 +23,24 @@
 export const csrfToken = (): string =>
   document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? "";
 
+/**
+ * The header the host's CSRF middleware reads. Rails and Laravel read the
+ * default `X-CSRF-Token`; Django reads `X-CSRFToken`, and its host says so
+ * with `<meta name="csrf-header" content="X-CSRFToken">` — the same knob the
+ * packaged checkout exposes as `csrf-header` / `csrfHeader`.
+ */
+export const csrfHeaderName = (): string =>
+  document.querySelector<HTMLMetaElement>('meta[name="csrf-header"]')?.content || "X-CSRF-Token";
+
 export const csrfFetch: typeof globalThis.fetch = (input, init) => {
   const method = (init?.method ?? "GET").toUpperCase();
   if (method === "GET" || method === "HEAD") return window.fetch(input, init);
 
   const headers = new Headers(init?.headers);
-  if (!headers.has("X-CSRF-Token")) {
+  const headerName = csrfHeaderName();
+  if (!headers.has(headerName)) {
     const token = csrfToken();
-    if (token) headers.set("X-CSRF-Token", token);
+    if (token) headers.set(headerName, token);
   }
 
   return window.fetch(input, { ...init, headers, credentials: "same-origin" });

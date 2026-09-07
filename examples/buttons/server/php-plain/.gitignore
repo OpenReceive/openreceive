@@ -1,0 +1,12 @@
+# Composer output (the engine is a path repository; vendor/ is rebuilt from composer.lock).
+/vendor/
+/composer.lock
+
+# The built shop (vite build writes into public/) and the standalone checkout
+# copied from packages/js/elements/dist/standalone by vite.config.ts.
+/public/index.html
+/public/assets/
+/public/openreceive/
+
+# Local SQLite database, cookie secret and testkit state when OPENRECEIVE_DEMO_DB is unset.
+/.data/

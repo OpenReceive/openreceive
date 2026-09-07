@@ -1119,3 +1119,64 @@ test("the order description survives the Lightning mint in the element", async (
     element.remove();
   }
 });
+
+// `csrf-header` (A6): the header NAME the page's `<meta name="csrf-token">`
+// value is sent under. The default, X-CSRF-Token, is what Rails and Laravel
+// read; Django reads X-CSRFToken and WordPress REST reads X-WP-Nonce, and a
+// host on those stacks has no other way to make the packaged checkout pass
+// its forgery check. Every request the element makes must carry it: prepare,
+// the mint, and the status poll — and the poll must pick up a changed value,
+// since the controller's status fetcher captured the name when it was built.
+test("csrf-header renames the CSRF header on every request the element makes", async () => {
+  const meta = document.createElement("meta");
+  meta.setAttribute("name", "csrf-token");
+  meta.setAttribute("content", "tok-django");
+  document.head.appendChild(meta);
+  const requests = [];
+  const paymentHash = "e".repeat(64);
+  const routes = {
+    "/checkouts/prepare": () => prepareBody("order-csrf", 21_000),
+    "/checkouts": () => checkoutBody("order-csrf", 21_000, paymentHash),
+    "/payments/check": () => ({ status: "pending" }),
+  };
+  globalThis.fetch = async (input, init) => {
+    const path = new URL(String(input), "http://elements.local").pathname;
+    requests.push({ path, headers: init?.headers ?? {} });
+    const handler = Object.entries(routes).find(([suffix]) => path.endsWith(suffix))?.[1];
+    if (handler === undefined) throw new Error(`Unexpected request to ${path}`);
+    return jsonResponse(await handler());
+  };
+  const element = mount({
+    reference: "order-csrf",
+    prefix: "/openreceive",
+    "csrf-header": "X-CSRFToken",
+  });
+  const on = (suffix) => requests.filter((request) => request.path.endsWith(suffix));
+
+  try {
+    const bitcoin = await untilLocal(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "Bitcoin method tile" },
+    );
+    assert.equal(on("/checkouts/prepare")[0].headers["X-CSRFToken"], "tok-django");
+    assert.equal(on("/checkouts/prepare")[0].headers["X-CSRF-Token"], undefined);
+
+    bitcoin.click();
+    await untilLocal(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
+    assert.equal(on("/checkouts")[0].headers["X-CSRFToken"], "tok-django");
+    await untilLocal(() => on("/payments/check").length > 0, { label: "first status poll" });
+    assert.equal(on("/payments/check")[0].headers["X-CSRFToken"], "tok-django");
+
+    // Observed: a changed name restarts the controller, and the next poll
+    // carries the new header rather than the one captured at build time.
+    const before = on("/payments/check").length;
+    element.setAttribute("csrf-header", "X-WP-Nonce");
+    await untilLocal(() => on("/payments/check").length > before, { label: "poll after rename" });
+    const latest = on("/payments/check").at(-1);
+    assert.equal(latest.headers["X-WP-Nonce"], "tok-django");
+    assert.equal(latest.headers["X-CSRFToken"], undefined);
+  } finally {
+    element.remove();
+    meta.remove();
+  }
+});

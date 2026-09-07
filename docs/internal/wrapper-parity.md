@@ -20,6 +20,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | `checkout` | – | yes | yes | snapshot |
 | `reference` | – | yes | yes | create |
 | `prefix` | `/openreceive` | yes | yes | both |
+| `csrfHeader` | `X-CSRF-Token` | yes | yes | both |
 | `paymentWizard` | `true` | yes | yes | both |
 | `decodeLinkUrl` | – (no decode link) | yes | yes | both |
 | `assetBaseUrl` | – (packaged URLs) | yes | yes | both |
@@ -52,6 +53,15 @@ removed syntax from before the `order_id` → `reference` rename, so they are
 deliberately NOT renamed here.) To turn polling off, pass `polling={false}`
 (React) or `polling="false"` (the element); to drop swaps, pass
 `paymentWizard={false}`.
+
+`csrfHeader` is the header NAME the page's `<meta name="csrf-token">` value is
+sent under on every request the checkout makes (create, prepare, the status
+poll, and the swap routes). The meta tag name is fixed — the host renders the
+token into it — only the header name varies by framework: the default
+`X-CSRF-Token` is what Rails and Laravel read, Django's CsrfViewMiddleware
+reads `X-CSRFToken`, WordPress REST reads `X-WP-Nonce`. On the element it is
+the `csrf-header` attribute; the wrappers forward the prop onto it. A host
+`headers` entry for the same name still wins.
 
 `assetBaseUrl` is the string half of the asset seam: where this app serves the
 packages' `dist/assets` trees. It exists as a prop AND an `asset-base-url`
@@ -217,5 +227,5 @@ the server too, since that is the documented way to server-render a chosen theme
 
 `useCheckout` drives a concrete snapshot and takes no create options: create mode
 belongs to `<Checkout>`. It accepts `checkout`, `clipboard`, `open`, `logger`,
-`refreshStatus`, `prefix`, `polling`, `pollIntervalMs`, and the `onCopy`,
+`refreshStatus`, `prefix`, `csrfHeader`, `polling`, `pollIntervalMs`, and the `onCopy`,
 `onOpenWallet`, `onState`, `onSettled`, `onError` handlers.

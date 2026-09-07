@@ -299,6 +299,141 @@ test("the client sends X-CSRF-Token from the page's csrf-token meta tag", async 
   assert.equal(captured[2].get("x-csrf-token"), null);
 });
 
+// The meta tag NAME is fixed (hosts render the token into it); the header NAME
+// it is sent under is the framework's: Rails/Laravel read X-CSRF-Token, Django
+// X-CSRFToken, WordPress REST X-WP-Nonce. `csrfHeader` renames it on every
+// request path — create, prepare, the status poll, and the swap routes — and a
+// host `headers` entry for the chosen name still wins.
+test("csrfHeader renames the header the csrf-token meta value is sent under", async () => {
+  const captured = [];
+  const paymentHash = "b".repeat(64);
+  const fetcher = async (url, init) => {
+    const path = new URL(String(url), "http://csrf.local").pathname;
+    captured.push({ path, headers: new Headers(init.headers) });
+    const body = path.endsWith("/checkouts")
+      ? {
+          checkout: {
+            reference: "order-1",
+            payment_hash: paymentHash,
+            bolt11: `lnbc-${paymentHash}`,
+            amount_msats: 1000,
+            expires_at: Math.floor(Date.now() / 1000) + 900,
+          },
+        }
+      : path.endsWith("/checkouts/prepare")
+        ? { reference: "order-1", amount_msats: 1000, payment_methods: [] }
+        : { status: "pending" };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  const last = () => captured[captured.length - 1];
+  const hadDocument = "document" in globalThis;
+  const previous = globalThis.document;
+  try {
+    globalThis.document = {
+      querySelector: (selector) =>
+        selector === 'meta[name="csrf-token"]' ? { getAttribute: () => "tok-456" } : null,
+    };
+    const prefix = "/openreceive";
+
+    // Default: unchanged from the test above.
+    await prepareCheckout({ prefix, reference: "order-1", fetch: fetcher });
+    assert.equal(last().headers.get("x-csrf-token"), "tok-456");
+
+    // Django, through the two create calls.
+    await prepareCheckout({
+      prefix,
+      reference: "order-1",
+      fetch: fetcher,
+      csrfHeader: "X-CSRFToken",
+    });
+    assert.equal(last().path, "/openreceive/checkouts/prepare");
+    assert.equal(last().headers.get("x-csrftoken"), "tok-456");
+    assert.equal(last().headers.get("x-csrf-token"), null, "only the chosen name is sent");
+    await requestCheckout({
+      prefix,
+      reference: "order-1",
+      fetch: fetcher,
+      csrfHeader: "X-CSRFToken",
+    });
+    assert.equal(last().path, "/openreceive/checkouts");
+    assert.equal(last().headers.get("x-csrftoken"), "tok-456");
+
+    // WordPress, through the status poll and the swap routes.
+    const snapshot = {
+      checkout_id: "or_chk_csrf",
+      reference: "order-1",
+      status: "open",
+      amount_msats: 1000,
+      invoices: [],
+      active: {
+        invoice_id: "inv-csrf",
+        rail: "lightning",
+        payment_hash: paymentHash,
+        invoice: `lnbc-${paymentHash}`,
+        amount_msats: 1000,
+        expires_at: Math.floor(Date.now() / 1000) + 900,
+        transaction_state: "pending",
+      },
+    };
+    await createStatusFetcher({ prefix, snapshot, fetch: fetcher, csrfHeader: "X-WP-Nonce" })(
+      "order-1",
+    );
+    assert.equal(last().path, "/openreceive/payments/check");
+    assert.equal(last().headers.get("x-wp-nonce"), "tok-456");
+    assert.equal(last().headers.get("x-csrf-token"), null);
+    await postJson({
+      fetch: fetcher,
+      prefix,
+      csrfHeader: "X-WP-Nonce",
+      body: { reference: "order-1", action: "swap_quote", pay_in_asset: "USDT_TRON" },
+    });
+    assert.equal(last().path, "/openreceive/swaps/quote");
+    assert.equal(last().headers.get("x-wp-nonce"), "tok-456");
+    await postJson({
+      fetch: fetcher,
+      prefix,
+      csrfHeader: "X-WP-Nonce",
+      body: {
+        reference: "order-1",
+        action: "refund_swap",
+        payment_hash: paymentHash,
+        refund_address: "TRefund1",
+        confirm: false,
+      },
+    });
+    assert.equal(last().path, "/openreceive/swaps/status");
+    assert.equal(last().headers.get("x-wp-nonce"), "tok-456");
+
+    // A host header for the chosen name still wins over the meta value.
+    await prepareCheckout({
+      prefix,
+      reference: "order-1",
+      fetch: fetcher,
+      csrfHeader: "X-CSRFToken",
+      headers: { "X-CSRFToken": "host-wins" },
+    });
+    assert.equal(last().headers.get("x-csrftoken"), "host-wins");
+
+    // No meta tag: the renamed header is not added either.
+    globalThis.document = { querySelector: () => null };
+    await prepareCheckout({
+      prefix,
+      reference: "order-1",
+      fetch: fetcher,
+      csrfHeader: "X-CSRFToken",
+    });
+    assert.equal(last().headers.get("x-csrftoken"), null);
+    assert.equal(last().headers.get("x-csrf-token"), null);
+    assert.equal(last().headers.get("content-type"), "application/json");
+  } finally {
+    if (hadDocument) globalThis.document = previous;
+    else delete globalThis.document;
+  }
+});
+
 // `prepareCheckout` returns the warmed payment_methods catalog; `POST
 // /checkouts` answers with the minted bolt11 and nothing else. Building the
 // post-mint snapshot from that response alone ERASED the method list a headless

@@ -1,0 +1,35 @@
+{
+    "name": "openreceive/example-buttons-php-plain",
+    "description": "Buy a Button on plain PHP: the vanilla shop as static files plus one front controller over the OpenReceive PHP engine.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "ext-gmp": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-pdo": "*",
+        "ext-pdo_sqlite": "*",
+        "ext-sodium": "*",
+        "nyholm/psr7": "^1.8",
+        "nyholm/psr7-server": "^1.1",
+        "openreceive/openreceive": "@dev"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../../../packages/php/openreceive"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "ButtonShop\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "platform-check": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -20,6 +20,8 @@ the full quickstart), or paste the one-prompt agent directions:
   [Fastify](https://openreceive.org/agent-directions/fastify.md) ·
   [Next.js](https://openreceive.org/agent-directions/next.md) ·
   [Rails](https://openreceive.org/agent-directions/rails.md) ·
+  [PHP](https://openreceive.org/agent-directions/php.md) ·
+  [Django](https://openreceive.org/agent-directions/django.md) ·
   [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md). Each
   is self-contained, quickstart included.
 

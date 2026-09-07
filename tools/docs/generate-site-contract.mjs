@@ -42,7 +42,10 @@ const AGENT_PAYLOADS = [
   { path: "/agent-directions/node.md", source: "docs/agents/node.md", stack: "node" },
   { path: "/agent-directions/fastify.md", source: "docs/agents/fastify.md", stack: "fastify" },
   { path: "/agent-directions/next.md", source: "docs/agents/next.md", stack: "next" },
+  { path: "/agent-directions/fastapi.md", source: "docs/agents/fastapi.md", stack: "fastapi" },
+  { path: "/agent-directions/django.md", source: "docs/agents/django.md", stack: "django" },
   { path: "/agent-directions/rails.md", source: "docs/agents/rails.md", stack: "rails" },
+  { path: "/agent-directions/php.md", source: "docs/agents/php.md", stack: "php" },
   { path: "/agent-directions/btcpay.md", source: "docs/agents/btcpay.md", stack: "btcpay" },
 ];
 
@@ -239,6 +242,34 @@ const FRAMEWORKS = [
     video: assetPath("docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4"),
     shared_checkout_demo: false,
   },
+  // The `python` family (contract v6): the install line is `pip install`, the
+  // adapter is an extra of the one `openreceive` distribution.
+  {
+    id: "django",
+    label: "Django",
+    family: "python",
+    quickstart_slug: "quickstart-django",
+    agent_stack: "django",
+    adapter_package: "openreceive[django]",
+    install: 'pip install "openreceive[django]"',
+    requires: "Python ≥ 3.10, Django ≥ 5.2",
+    demo: "django",
+    video: null,
+    shared_checkout_demo: true,
+  },
+  {
+    id: "fastapi",
+    label: "FastAPI",
+    family: "python",
+    quickstart_slug: "quickstart-fastapi",
+    agent_stack: "fastapi",
+    adapter_package: "openreceive[fastapi]",
+    install: 'pip install "openreceive[fastapi]"',
+    requires: "Python ≥ 3.10, FastAPI ≥ 0.115",
+    demo: "fastapi",
+    video: null,
+    shared_checkout_demo: true,
+  },
 ];
 
 const manifest = JSON.parse(readFileSync(path.join(root, "docs/manifest.json"), "utf8"));
@@ -428,7 +459,7 @@ const contract = {
   // template reads the table instead of a hand-kept list: a site on v4 has
   // no framework pages, and one that half-read v5 would render a page for a
   // framework whose payload it does not serve.
-  contract_version: 5,
+  contract_version: 6,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.

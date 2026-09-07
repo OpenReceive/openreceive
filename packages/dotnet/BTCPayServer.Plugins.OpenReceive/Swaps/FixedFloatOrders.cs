@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using BTCPayServer.Plugins.OpenReceive.Generated;
 
 namespace BTCPayServer.Plugins.OpenReceive.Swaps;
 
@@ -84,72 +85,40 @@ public static class FixedFloatOrders
 
     /// <summary>
     /// FixedFloat status + emergency block + refund-tx presence → OpenReceive state and
-    /// reasons. Pinned across engines by spec/test-vectors/swap-state.json.
+    /// reasons: an interpreter of spec/data/swap-state-table.json (rendered into
+    /// <see cref="OpenReceiveTables.SwapStatusRows"/>), first-match-wins. Pinned across
+    /// engines by spec/test-vectors/swap-state.json; how to read the rows lives in the
+    /// JSON. The validator asserts the table ends in a catch-all row.
     /// </summary>
     public static FixedFloatStatus NormalizeStatus(string status, JsonObject? emergency, string? refundTxId)
     {
         var normalized = status.ToUpperInvariant();
-        if (refundTxId is not null && normalized is "DONE" or "FINISHED")
-        {
-            return Plain("refunded");
-        }
-        switch (normalized)
-        {
-            case "NEW": return Plain("awaiting_deposit");
-            case "PENDING": return Plain("confirming");
-            case "EXCHANGE": return Plain("exchanging");
-            case "WITHDRAW": return Plain("paying_invoice");
-            case "DONE": return Plain("completed");
-            case "EXPIRED": return Plain("expired");
-        }
-        if (normalized == "EMERGENCY")
-        {
-            var choice = FixedFloatFields.OptionalStringField(emergency, "choice")?.ToUpperInvariant();
-            var emergencyStatuses = FixedFloatFields.OptionalStringArrayField(emergency, "status")
-                .Select(item => item.ToUpperInvariant())
-                .ToList();
-            var refundReason = RefundReasonFromEmergencyStatuses(emergencyStatuses);
-            if (choice == "REFUND" && refundTxId is not null)
-            {
-                return new FixedFloatStatus("refunded", null, null, refundReason);
-            }
-            if (choice == "REFUND")
-            {
-                return new FixedFloatStatus("refund_pending", null, null, refundReason);
-            }
-            if (choice == "EXCHANGE")
-            {
-                return new FixedFloatStatus("attention", true, "provider_reported_emergency", null);
-            }
-            // An overpay (MORE) takes the same self-serve full-refund path as LESS and
-            // EXPIRED: the payout invoice is a fixed amount, so an emergency deposit is
-            // returned whole or not at all.
-            return new FixedFloatStatus("refund_required", null, null, refundReason);
-        }
-        if (normalized.Contains("FAIL", StringComparison.Ordinal)) return Plain("failed");
-        // An unrecognized status is NOT a provider-reported emergency: label it as
-        // unknown so operators land on the right runbook section.
-        return new FixedFloatStatus("attention", true, "provider_status_unrecognized", null);
+        var refundTxPresent = refundTxId is not null;
+        var choice = FixedFloatFields.OptionalStringField(emergency, "choice")?.ToUpperInvariant();
+        var row = OpenReceiveTables.SwapStatusRows.First(candidate =>
+            (candidate.Status == "*"
+                ? candidate.StatusContains is null || normalized.Contains(candidate.StatusContains, StringComparison.Ordinal)
+                : candidate.Status == normalized)
+            && (candidate.RefundTxPresent is null || candidate.RefundTxPresent == refundTxPresent)
+            && (candidate.Choice == "any" || (choice is null ? candidate.Choice == "absent" : candidate.Choice == choice)));
+        var refundReason = row.RefundReasonFromEmergency
+            ? RefundReasonFromEmergencyStatuses(FixedFloatFields.OptionalStringArrayField(emergency, "status"))
+            : null;
+        return new FixedFloatStatus(row.State, row.AttentionReason is null ? null : true, row.AttentionReason, refundReason);
     }
-
-    private static FixedFloatStatus Plain(string state) => new(state, null, null, null);
 
     private static string RequiredOrderField(JsonObject record, string field, string? fallback, string label) =>
         FixedFloatFields.OptionalStringField(record, field) ?? fallback ?? FixedFloatFields.RequiredString(record[field], label);
 
     private static string? RefundReasonFromEmergencyStatuses(IReadOnlyList<string> statuses)
     {
-        var less = statuses.Contains("LESS");
-        var more = statuses.Contains("MORE") || statuses.Contains("OVER") || statuses.Contains("OVERPAID");
-        var expired = statuses.Contains("EXPIRED");
-        // LIMIT rides along with LESS/MORE when the deposit fell outside the pair's
-        // limits. It names no reason of its own.
-        if (less && expired) return "underpaid_and_late";
-        if (more && expired) return "overpaid_and_late";
-        if (less) return "underpaid";
-        if (more) return "overpaid";
-        if (expired) return "late_deposit";
-        return null;
+        var present = statuses
+            .Select(item => item.ToUpperInvariant())
+            .Select(item => OpenReceiveTables.SwapEmergencyStatusAliases.TryGetValue(item, out var canonical) ? canonical : item)
+            .ToHashSet(StringComparer.Ordinal);
+        return OpenReceiveTables.SwapRefundReasonRows
+            .FirstOrDefault(row => row.AllOf.All(present.Contains))
+            ?.RefundReason;
     }
 
     private static bool IsRefundPathState(string state) =>

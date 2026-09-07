@@ -1,0 +1,9 @@
+/dist
+/node_modules
+/.venv
+__pycache__/
+*.pyc
+/.pytest_cache
+# Local port publishing. compose.override.yml.example is the committed template;
+# `npm run demo django` copies it.
+/compose.override.yml

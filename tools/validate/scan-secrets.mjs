@@ -17,6 +17,13 @@ const ignoredDirs = new Set([
   ".openreceive",
   "logs",
   "tmp",
+  // Composer and uv output for the PHP and Python engines; rebuilt from lockfiles.
+  "vendor",
+  ".venv",
+  "__pycache__",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
 ]);
 const ignoredFiles = new Set([".env", ".DS_Store"]);
 // Published example secrets quoted verbatim from specs/vectors. The allowlist

@@ -10,6 +10,9 @@ live there. There is no separate OpenReceive deployment service.
 | --- | --- |
 | Node (Express, Fastify, Next.js) | Node ≥ 22; the App Router on Next.js ≥ 15 |
 | Rails | Ruby ≥ 3.2, Rails ≥ 8.0; PostgreSQL, SQLite or MySQL (`mysql2`/`trilogy`) |
+| FastAPI | Python ≥ 3.10, FastAPI ≥ 0.115 (Starlette ≥ 0.40), a sync SQLAlchemy 2 `Engine`; PostgreSQL, SQLite or MySQL |
+| Django | Python ≥ 3.10, Django ≥ 5.2; PostgreSQL, SQLite (`transaction_mode: IMMEDIATE`) or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 |
+| PHP (plain) | PHP ≥ 8.2, 64-bit, with `ext-gmp` (required by the NWC transport), `ext-sodium`, `ext-mbstring`, `ext-pdo` + `pdo_pgsql`/`pdo_sqlite`/`pdo_mysql`; PHP-FPM or Apache in front of one front controller — `php -S` is a development server |
 | BTCPay Server plugin | BTCPay Server ≥ 2.4.2 |
 
 Every stack needs the same two things at runtime: a receive-only NWC code in
@@ -49,6 +52,10 @@ No background process is required. Optional additions:
   (`OpenReceive.reconcile!`, `OpenReceive::ReconcileJob`,
   `bin/rails openreceive:reconcile`) remain available; nothing needs
   scheduling.
+- **Python** — `openreceive notifications --app main:app` (the FastAPI app,
+  the router, or an `OpenReceiveApp`), one process total; `openreceive
+  reconcile --app …` is the one-shot pass. Django spells the same two as
+  `manage.py openreceive_notifications` / `openreceive_reconcile`.
 
 Both workers use the same gate and the same write-once settlement path as
 the request-path pass.
@@ -66,6 +73,22 @@ bad `NWC_URI` stops the deploy instead of becoming a customer-facing 500.
 Asset precompilation skips that check (secrets are not mounted yet). For
 any other secretless boot, `config.eager_preflight = false` turns off the
 boot check only — the wallet is still checked on the first request.
+
+On FastAPI the check is the lifespan: `FastAPI(lifespan=openreceive_lifespan(host,
+engine=engine))` runs the receive-only preflight when uvicorn starts and stops
+the process on failure — the deploy fails, not the first payer. `lazy=True`
+defers it to the first request (tests, secretless build steps), which then
+answers `503 WALLET_UNAVAILABLE` until the wallet passes.
+
+On Django the wallet client is built lazily on the first request and NEVER in
+`AppConfig.ready()` — that method runs for `migrate`, `collectstatic` and
+shells, where a relay probe would break a secretless step. Rails' "eager in
+production" is achieved by putting the preflight in the deploy pipeline
+instead: `OPENRECEIVE_PREFLIGHT=1 manage.py check --deploy` runs it as the
+system check `openreceive.E002` and fails the deploy on a missing, dead or
+spend-capable code; `manage.py openreceive_doctor` is the same probe for a
+person. Until the first request passes, the mounted routes answer
+`503 WALLET_UNAVAILABLE`.
 
 ### Where boot failures go
 
@@ -107,6 +130,35 @@ source, so slim images need the autotools in the build stage — without them
 ```dockerfile
 RUN apt-get update && apt-get install -y autoconf automake libtool build-essential pkg-config
 ```
+
+## Python (FastAPI) in production
+
+The engine is synchronous by design (one wallet RPC is one blocking call, and
+a second async engine would be a second settlement implementation), so the
+router's endpoint runs in Starlette's threadpool — the same pool `def`
+endpoints use, about 40 threads by default. A slow relay holds a thread for
+the service's wallet deadline (10 s) at most; that deadline is the bound, and
+there is no OpenReceive knob for the pool. If a busy shop needs more headroom,
+raise the pool at startup with anyio (`anyio.to_thread.current_default_thread_limiter().total_tokens = 80`
+inside the lifespan) or run more uvicorn workers. Behind a reverse proxy run
+uvicorn with `--proxy-headers` so `request.client` — what `rate_limiting`
+counts — is the payer, not the proxy.
+
+The same secret rules as Node apply to the image: never `COPY .env`, never an
+`ENV NWC_URI`; inject at runtime. Install the engine with `uv` or `pip` on
+Python ≥ 3.10 (`pip install "openreceive[fastapi]"`); migrate with the Alembic
+revision `openreceive scaffold payments --alembic` emits, in the entrypoint,
+not at build.
+
+## Python (Django) in production
+
+`manage.py migrate` applies the engine's shipped migration with your own — in
+the entrypoint, not at build. The packaged static checkout
+(`{% static "openreceive/openreceive-checkout.js" %}`) ships through
+`collectstatic` like any other static file; the notifications worker is
+`manage.py openreceive_notifications`, one process total, the same image as
+the web process with a different command. The same secret rules as Node apply:
+never `COPY .env`, never an `ENV NWC_URI`; inject at runtime.
 
 ## Operational monitoring
 

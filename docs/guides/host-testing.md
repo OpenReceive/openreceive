@@ -112,6 +112,98 @@ Both objects are DUCK-TYPED, so there is no base class to inherit:
 A worked pair is
 [`examples/buttons/server/rails/lib/button_shop/testkit/`](../../examples/buttons/server/rails/lib/button_shop/testkit).
 
+## Inject a fake wallet client (Python)
+
+The Python engine ships its fakes: `openreceive.testing` holds `FakeWallet`
+and `FakeSwapProvider` on the shared testkit contract (the same fixtures the
+Node testkit and the Rails demo use — a payment hash is the mint counter in 64
+hex characters, invoices are `lnbcopenreceive000001`) plus
+`StaticPriceProvider` (BTC/USD `50000.00`). The FastAPI router takes them
+through the same keyword arguments production wiring never sets:
+
+```python
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from openreceive.fastapi import openreceive_lifespan, openreceive_router
+from openreceive.storage.sql import SqlPaymentRepository
+from openreceive.testing import FakeSwapProvider, FakeWallet, StaticPriceProvider
+
+wallet = FakeWallet()
+engine = create_engine("sqlite:///test.sqlite3")
+SqlPaymentRepository(engine).create_tables()          # the two tables, test-only shortcut
+router = openreceive_router(
+    host,                                             # your amount_for / authorize / on_paid, unchanged
+    engine=engine,
+    nwc_client=wallet,
+    price_provider=StaticPriceProvider(),
+    swap_providers=[FakeSwapProvider()],
+)
+app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine))
+app.include_router(router, prefix="/openreceive")
+
+with TestClient(app) as client:
+    created = client.post("/openreceive/checkouts", json={"reference": order.id})
+    payment_hash = created.json()["checkout"]["payment_hash"]
+    wallet.settle_invoice(payment_hash)               # or expire_invoice / fail_invoice
+    # The next poll past the 2-second gate floor runs the reconcile pass and
+    # your on_paid — through the production settlement rules.
+    client.post("/openreceive/payments/check", json={"reference": order.id, "payment_hash": payment_hash})
+```
+
+`wallet.settle_invoice(hash, notify=True)` also emits the NWC-02
+`payment_received` notification for a test of the notifications worker;
+`FakeSwapProvider.script(selector, states)`, `force_refund_required` and
+`force_attention` drive the swap states. Django hosts inject the same objects
+through `OPENRECEIVE["SERVICE"]` (a callable returning a `Service` built on
+them); the [testkit contract](../internal/testkit-contract.md) pins every
+fixture value.
+
+## Inject a fake wallet client (PHP)
+
+The PHP engine ships its fakes in `OpenReceive\Testing`: `FakeWallet` and
+`FakeSwapProvider` on the shared testkit contract (the same fixtures as the
+Node testkit, the Rails demo and the Python fakes — a payment hash is the mint
+counter in 64 hex characters, invoices are `lnbcopenreceive000001`, one Tron
+deposit address, `testkit-swap-N`) plus `OpenReceive\Rates\StaticPriceProvider`
+(BTC/USD `50000.00`). `Service` takes them through its constructor — the
+production path is `Service::fromEnvironment()`, and everything after the
+`Service` is identical:
+
+```php
+use OpenReceive\Rates\StaticPriceProvider;
+use OpenReceive\Server\Engine;
+use OpenReceive\Server\Service;
+use OpenReceive\Storage\{PaymentsSchema, PdoConnection, SqlPaymentRepository};
+use OpenReceive\Testing\{FakeSwapProvider, FakeWallet};
+
+$wallet = new FakeWallet();
+$db = new PdoConnection(new PDO('sqlite::memory:'));
+PaymentsSchema::migrate($db);                       // the two tables, test-only shortcut
+$service = new Service($wallet, new StaticPriceProvider(), [new FakeSwapProvider()]);
+$engine = new Engine($host, new SqlPaymentRepository($db), $service);   // your Host, unchanged
+$handler = $engine->psr15Handler();
+
+$created = $handler->handle($request('POST', '/openreceive/checkouts', ['reference' => $order->id]));
+$hash = json_decode((string) $created->getBody(), true)['checkout']['payment_hash'];
+$wallet->settleInvoice($hash);                      // or expireInvoice / failInvoice
+// The next poll past the 2-second gate floor runs the reconcile pass and your
+// onPaid — through the production settlement rules.
+$handler->handle($request('POST', '/openreceive/payments/check', ['reference' => $order->id, 'payment_hash' => $hash]));
+```
+
+`$wallet->settleInvoice($hash, notify: true)` also emits the NWC-02
+`payment_received` notification for a test of `Notifications`;
+`FakeSwapProvider::script($selector, $states)`, `forceRefundRequired()` and
+`forceAttention()` drive the swap states; `scriptTransactionSequence()` makes
+the wallet's history reads misbehave on purpose. Inject a clock into either
+fake when a test needs to cross the expiry-plus-grace boundary. One PHP-specific
+note: the fakes live in process memory, and a PHP request IS a process — a
+demo that drives them over several HTTP requests has to persist their state
+between requests (`examples/buttons/server/php-plain/src/Testkit.php` does it
+with a serialised snapshot under a lock); in a PHPUnit test, where one process
+runs the whole scenario, nothing of the kind is needed.
+
 ## Click through a full checkout with no wallet
 
 Every stack of the Buy a Button demo boots against in-process fakes when
@@ -120,6 +212,8 @@ Every stack of the Buy a Button demo boots against in-process fakes when
 ```sh
 DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/node-express
 DEMO_WALLET=testkit bin/dev       # in examples/buttons/server/rails
+DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/fastapi (Vite + uvicorn)
+DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/php-plain (Vite + php -S)
 ```
 
 The shop, the checkout wizard (all four framework tabs), Lightning invoices,

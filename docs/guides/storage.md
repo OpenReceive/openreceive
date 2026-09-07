@@ -82,3 +82,26 @@ This is the advanced path, not the quickstart. See
 Rails applications get the migration from
 `bin/rails generate openreceive:install`. The `OpenReceivePayment` model is
 engine-owned. See the [Rails quickstart](quickstart-rails.md).
+
+Python hosts get the same two tables in the same shape (datetime columns,
+JSON, snake_case — the Rails schema, not the JS one, so one engine per table
+still holds). Django ships them as a migration inside the `openreceive.django`
+app (`manage.py migrate`), with the ORM-backed repository and the same
+per-reference lock per backend: `pg_advisory_xact_lock(hashtextextended(reference, 8210223))`
+on PostgreSQL, `GET_LOCK` around the transaction on MySQL, the transaction
+boundary on SQLite — give a SQLite database `OPTIONS = {"transaction_mode": "IMMEDIATE"}`
+so concurrent commits queue rather than fail. FastAPI, Flask and plain WSGI
+hosts render the same DDL with `openreceive scaffold payments --alembic`
+or `--sql`. See the [Django quickstart](quickstart-django.md) and the
+[FastAPI quickstart](quickstart-fastapi.md).
+
+PHP hosts render the same two tables (the Rails shape again) with
+`OpenReceive\Storage\PaymentsSchema::statements($dialect)` — `pgsql`, `mysql`
+or `sqlite` — and run the statements through their own migration tool
+(`PaymentsSchema::dropStatements()` is the `down()`); `PaymentsSchema::migrate($db)`
+is the one-call form for a script. The repository is `SqlPaymentRepository`
+over `PdoConnection`, with the same lock per dialect (`pg_advisory_xact_lock`,
+`GET_LOCK` released in `finally`, `BEGIN IMMEDIATE` plus `PDO::ATTR_TIMEOUT`
+on SQLite), and it never selects `swap_data` into a public array. The engine
+refuses to serve a database whose `openreceive_meta` names a NEWER schema
+version than the installed package. See the [PHP quickstart](quickstart-php.md).

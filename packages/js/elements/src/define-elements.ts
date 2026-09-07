@@ -203,6 +203,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       return [
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.csrfHeader,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail,
@@ -259,10 +260,13 @@ export function defineElements(options: DefineElementsOptions = {}): void {
 
       // Polling attributes change WHAT the controller does, in both modes: a
       // create-mode element that returned before startCheckoutController here
-      // ignored polling="false" until the next snapshot re-key.
+      // ignored polling="false" until the next snapshot re-key. `csrf-header`
+      // is in the same bucket: the session reads it at call time, but the
+      // controller's status fetcher captured it when it was built.
       const pollingChanged =
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling ||
-        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs;
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.csrfHeader;
       if (pollingChanged) {
         this.render();
         this.syncThemeAncestorObserver();
@@ -674,10 +678,12 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs),
         { label: "poll-interval-ms" },
       );
+      const csrfHeader = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.csrfHeader);
       this.stopCheckoutController();
       this.controller = createCheckoutController({
         snapshot,
         ...(prefix === undefined ? {} : { prefix }),
+        ...(csrfHeader === null || csrfHeader.length === 0 ? {} : { csrfHeader }),
         polling,
         ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
         logger: options.logger,

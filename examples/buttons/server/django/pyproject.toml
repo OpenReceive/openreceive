@@ -1,0 +1,31 @@
+[project]
+name = "buttons-django"
+version = "0.4.3"
+description = "Buy a Button — the OpenReceive demo shop on Django + Postgres."
+requires-python = ">=3.10"
+dependencies = [
+  # The engine plus its Django adapter, from this monorepo (tool.uv.sources).
+  "openreceive[django]",
+  "Django>=5.2",
+  "whitenoise>=6.6",
+  "psycopg[binary]>=3.2",
+  "gunicorn>=23",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "pytest-django>=4.9",
+  "pip-audit>=2.7",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+openreceive = { path = "../../../../packages/python/openreceive", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+DJANGO_SETTINGS_MODULE = "buttonshop.settings"

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+# The Buy a Button FastAPI example's CI, the `bin/ci` twin of the Rails one:
+# setup, the stubbed-wallet tests, the drift and boundary checks, the
+# dependency audit. Run from anywhere; needs `uv` (and `node` for the shared
+# catalog check).
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+step() {
+  echo
+  echo "== $1"
+  shift
+  "$@"
+}
+
+step "Setup" uv sync --frozen
+
+# The whole bridge over openreceive.testing: order → invoice → settle → download.
+step "Tests" uv run --frozen pytest -q
+
+# Every row in shared/shop-catalog.json names an artwork file that exists in
+# examples/buttons/images — the same script the Rails example runs.
+step "Drift: catalog vs artwork" node ../rails/script/check-catalog-artwork.mjs
+
+# The shared boundary: this stack may import shared/shop-types.ts, the shared
+# helpers and shared/client/**, and must never reach into shared/server-node/**
+# (the Node stacks' SQLite store) or shared/client-vanilla/**.
+boundary() {
+  if grep -rn "shared/server-node/\|shared/client-vanilla/" src vite.config.ts; then
+    echo "The FastAPI demo may not import shared/server-node or shared/client-vanilla." >&2
+    exit 1
+  fi
+  echo "Shared-boundary check passed."
+}
+step "Boundary: no server-node imports" boundary
+
+# Known vulnerabilities in the locked environment. The engine itself is a path
+# dependency (audited by its own lane), so it is left out of the export.
+audit() {
+  local requirements
+  requirements="$(mktemp)"
+  uv export --frozen --no-hashes --no-emit-project --no-emit-package openreceive -o "$requirements" >/dev/null
+  uvx pip-audit --requirement "$requirements" --no-deps --disable-pip --strict
+}
+step "Security: pip-audit" audit
+
+echo
+echo "bin/ci passed."

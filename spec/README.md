@@ -12,7 +12,26 @@ on. Four version numbers live here, each meaning one thing.
 
 `test-vectors/` holds the shared behavior both engines must reproduce, and
 `test-vectors/coverage.json` says which engine consumes which family (or why it is
-exempt). `data/` holds canonical provider data and `data/kernel-tables.json`, the one
-hand-edited copy of the vocabularies and numbers every engine shares — `npm run
-generate:models` renders it into the JS, Ruby, and C# engines. Route or schema changes update their vectors in
-the same change (AGENTS.md), and `npm run check` validates all of it.
+exempt). `data/` holds canonical provider data, `data/kernel-tables.json` (the one
+hand-edited copy of the vocabularies and numbers every engine shares) and
+`data/swap-state-table.json` (the FixedFloat status → state/reason decision table every
+engine interprets) — `npm run generate:models` renders both into the JS, Ruby, C#, PHP and
+Python engines. Route or schema changes update their vectors in the same change (AGENTS.md),
+and `npm run check` validates all of it.
+
+## Upstream specifications
+
+The wallet side of every engine is written against these documents. NIP-47 was reduced
+to a core (`pay_invoice`, `make_invoice`, `lookup_invoice`, `get_balance`, `get_info`) in
+2026; the pieces OpenReceive depends on most now live as numbered extensions in the
+`nostr-wallet-connect/nwc` repository. Cite the extension, not "NIP-47", when a vector
+pins one of them.
+
+| Document | What OpenReceive takes from it | Vectors |
+| --- | --- | --- |
+| [NIP-47 (core)](https://github.com/nostr-protocol/nips/blob/master/47.md) | connection URI, info event (kind 13194) and its `encryption` tag negotiation, request/response kinds 23194/23195, `make_invoice`, `lookup_invoice`, `get_info`, the transaction object and its `state` values (`pending`, `settled`, `accepted`, `expired`, `failed`), error codes | `nwc-uri-parse`, `nwc-info`, `nwc-request-response`, `make-invoice-validation`, `error-normalization`, `settlement-detection` |
+| [NWC-02 Notifications](https://github.com/nostr-wallet-connect/nwc/blob/main/02.md) | `payment_received` payload, kinds 23196 (NIP-04) / 23197 (NIP-44), the rule that a wallet publishing only NIP-44 publishes only 23197 | the notification path in `settlement-detection` and the engines' listener tests |
+| [NWC-05 Transaction History](https://github.com/nostr-wallet-connect/nwc/blob/main/05.md) | `list_transactions` params (`from`, `until`, `limit`, `offset`, `unpaid`, `type`), descending creation order, optional `total_count`, and the guidance that clients page at most 20 rows and relays allow 64 KB payloads — the source of `transaction_page_limit` in `kernel-tables.json` | `nwc-request-response`, `wallet-scan-truncation` |
+| [NWC-06 Metadata Conventions](https://github.com/nostr-wallet-connect/nwc/blob/main/06.md) | the `metadata` object on invoices and its size limits — the source of `metadata_max_bytes` | `make-invoice-validation` |
+| [NWC index](https://github.com/nostr-wallet-connect/nwc/blob/main/README.md) | the list of extensions (03 hold invoices, 04 keysend, 07 deep links, 321 BIP-321 are not used) | — |
+

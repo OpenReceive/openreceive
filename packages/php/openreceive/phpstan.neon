@@ -1,0 +1,26 @@
+# Static analysis for the engine. Level 8 over src/, plus the float ban for the
+# money paths (tests/PhpStan/NoFloatsInMoneyRule.php): no float casts,
+# float-producing builtins or `/` inside src/Money and src/Rates.
+parameters:
+    level: 8
+    paths:
+        - src
+    tmpDir: .phpunit.cache/phpstan
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # Array shapes are documented where they are contractual (wire records,
+        # DDL rows); the remaining `array` iterables are JSON payloads whose
+        # shape the kernel deliberately treats as untyped input.
+        - identifier: missingType.iterableValue
+        # The placeholder traits are for HOST classes; nothing in src/ uses them by design.
+        - identifier: trait.unused
+        # $http_response_header exists only after an HTTP-wrapper read; the ?? guards the non-HTTP failure.
+        -
+            identifier: nullCoalesce.variable
+            path: src/Http/StreamTransport.php
+        # The decision table is data: a `choice: absent` row may appear in a future table edit.
+        -
+            identifier: identical.alwaysFalse
+            path: src/Swap/StateTable.php
+rules:
+    - OpenReceive\Tests\PhpStan\NoFloatsInMoneyRule

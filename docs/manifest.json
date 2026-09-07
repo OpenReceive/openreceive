@@ -26,6 +26,22 @@
       "public": true
     },
     {
+      "slug": "quickstart-fastapi",
+      "title": "FastAPI Quickstart",
+      "source_path": "docs/guides/quickstart-fastapi.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "quickstart-django",
+      "title": "Django Quickstart",
+      "source_path": "docs/guides/quickstart-django.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "source_path": "docs/guides/quickstart-next.md",
@@ -37,6 +53,14 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "source_path": "docs/guides/quickstart-rails.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "quickstart-php",
+      "title": "PHP Quickstart (plain PHP)",
+      "source_path": "docs/guides/quickstart-php.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true
@@ -202,6 +226,14 @@
       "public": true
     },
     {
+      "slug": "flask-recipe",
+      "title": "Flask Recipe",
+      "source_path": "docs/recipes/flask.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "internal",
       "title": "OpenReceive Internal Docs",
       "source_path": "docs/internal/README.md",
@@ -354,6 +386,14 @@
       "public": false
     },
     {
+      "slug": "testkit-contract",
+      "title": "Testkit Contract",
+      "source_path": "docs/internal/testkit-contract.md",
+      "category": "reference",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "forbidden-without-approval",
       "title": "Forbidden Without Approval",
       "source_path": "docs/internal/forbidden-without-approval.md",
@@ -378,6 +418,22 @@
       "public": true
     },
     {
+      "slug": "agent-directions-fastapi",
+      "title": "Agent Directions: FastAPI",
+      "source_path": "docs/agents/fastapi.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-django",
+      "title": "Agent Directions: Django",
+      "source_path": "docs/agents/django.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "source_path": "docs/agents/next.md",
@@ -389,6 +445,14 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "source_path": "docs/agents/rails.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-php",
+      "title": "Agent Directions: PHP",
+      "source_path": "docs/agents/php.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true

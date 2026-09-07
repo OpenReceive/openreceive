@@ -20,6 +20,10 @@ const requiredWorkflows = {
     "npm run test:e2e:smoke",
     "tools/ci/ruby-tests.sh",
     "tools/ci/ruby-gem-build.sh",
+    // The Python engine (packages/python/openreceive): pytest on 3.10 and 3.13
+    // against SQLite plus the Postgres and MySQL service containers, then the
+    // cross-language conformance harness.
+    "tools/ci/python-tests.sh",
     // The Rails example must run per-push, not only in the weekly demos lane
     // (a schema break in it once shipped unexecuted).
     "bin/ci",
@@ -38,6 +42,9 @@ const requiredWorkflows = {
     "npm run build:packages",
     "npm run build:demo",
     "npm run scan:client-bundles",
+    // The standalone checkout build (build:packages' last step) stays
+    // self-contained and its MANIFEST matches the workspace version.
+    "npm run check:standalone",
     // Weekly full Playwright matrix (ci.yml runs only the smoke spec).
     "npm run test:e2e",
     "bin/ci",
@@ -56,6 +63,7 @@ const requiredWorkflows = {
     "npm run test -w @openreceive/example-buttons-rails",
     "npm run build:demo",
     "npm run scan:client-bundles",
+    "npm run check:standalone",
     "does not match package.json version",
     "Release dry run complete",
   ],
@@ -63,6 +71,13 @@ const requiredWorkflows = {
   // `rubygems` environment) as the gems' trusted publisher, so its checks
   // below are part of the trust boundary.
   "publish-gems.yml": ["does not match package.json version", "gem build", "gem push"],
+  // The PyPI twin: trusted publishing through the `pypi` environment, the
+  // same build the maintainer runs locally, one `uv publish`.
+  "publish-pypi.yml": [
+    "does not match package.json version",
+    "tools/release/pypi-release.mjs build",
+    "uv publish",
+  ],
 };
 
 // RubyGems.org's three trusted-publisher entries name this file and this
@@ -71,6 +86,11 @@ const requiredWorkflows = {
 // publisher, so the string is allowed here and nowhere else.
 const gemPublishWorkflow = "publish-gems.yml";
 const gemPublishEnvironment = "rubygems";
+// PyPI's trusted-publisher entry names this file and this environment the same
+// way; `uv publish` (and `twine upload`) are allowed here and nowhere else.
+const pypiPublishWorkflow = "publish-pypi.yml";
+const pypiPublishEnvironment = "pypi";
+const pypiPushTexts = ["uv publish", "twine upload"];
 
 const forbiddenText = [
   "pull_request_target",
@@ -92,6 +112,7 @@ const forbiddenText = [
   // `gem push` in publish-gems.yml (see gemPublishWorkflow).
   "npm run release:publish",
   "npm run release:gem:publish",
+  "npm run release:pypi:publish",
 ];
 const gemPushText = "gem push";
 
@@ -247,6 +268,43 @@ function checkGemPublishWorkflow(relativePath, workflow) {
   }
 }
 
+// The PyPI trusted-publisher contract: every job runs in the gated
+// environment, requests the OIDC token and nothing more, and only a v* tag can
+// start it. No container requirement — uv ships as a static binary and the
+// build is `uv build`, so the runner host is the toolchain.
+function checkPypiPublishWorkflow(relativePath, workflow) {
+  const tags = workflow.on?.push?.tags;
+  expect(
+    Array.isArray(tags) && tags.length === 1 && tags[0] === "v*",
+    `${relativePath}: push trigger must be exactly the v* tags`,
+  );
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    expect(
+      job.environment === pypiPublishEnvironment,
+      `${relativePath}: ${jobName} must run in the ${pypiPublishEnvironment} environment`,
+    );
+    const permissions = job.permissions === undefined ? {} : job.permissions;
+    expect(
+      permissions.contents === "read" &&
+        permissions["id-token"] === "write" &&
+        Object.keys(permissions).length === 2,
+      `${relativePath}: ${jobName} permissions must be exactly contents: read + id-token: write`,
+    );
+    const publishes = (job.steps ?? []).some(
+      (step) => typeof step.run === "string" && step.run.includes("uv publish"),
+    );
+    expect(
+      !publishes ||
+        (job.steps ?? []).some(
+          (step) =>
+            typeof step.run === "string" && step.run.includes("--trusted-publishing always"),
+        ),
+      `${relativePath}: ${jobName} must publish with --trusted-publishing always (never a stored token)`,
+    );
+  }
+}
+
 function checkNodeSetup(relativePath, workflow) {
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const [jobName, job] of Object.entries(jobs)) {
@@ -311,6 +369,16 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
       !text.includes(gemPushText),
       `${relativePath}: forbidden workflow text ${gemPushText} (only ${gemPublishWorkflow} publishes gems)`,
     );
+  }
+  if (fileName === pypiPublishWorkflow) {
+    checkPypiPublishWorkflow(relativePath, workflow);
+  } else {
+    for (const pushText of pypiPushTexts) {
+      expect(
+        !text.includes(pushText),
+        `${relativePath}: forbidden workflow text ${pushText} (only ${pypiPublishWorkflow} publishes to PyPI)`,
+      );
+    }
   }
 
   checkActionPins(relativePath, workflow, text);

@@ -54,6 +54,7 @@ const shell = computed(() => {
     deferThemeResolution: !mounted.value,
     ...(props.reference === undefined ? {} : { reference: props.reference }),
     ...(props.prefix === undefined ? {} : { prefix: props.prefix }),
+    ...(props.csrfHeader === undefined ? {} : { csrfHeader: props.csrfHeader }),
     ...(props.paymentWizard === undefined ? {} : { paymentWizard: props.paymentWizard }),
     ...(props.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: props.decodeLinkUrl }),
     ...(props.assetBaseUrl === undefined ? {} : { assetBaseUrl: props.assetBaseUrl }),

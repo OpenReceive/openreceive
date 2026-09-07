@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#
+# The Django demo's CI lane (the Rails bin/ci twin): setup, the stubbed-wallet
+# tests, the schema drift check, the shared-boundary check, the dependency
+# audit. Runs against DATABASE_URL when set (CI's Postgres service), SQLite
+# otherwise. Run from anywhere: `examples/buttons/server/django/bin/ci`.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "bin/ci: uv is required (https://docs.astral.sh/uv/)" >&2
+  exit 1
+fi
+
+step() {
+  local name=$1
+  shift
+  printf '\n\033[1m== %s\033[0m\n' "$name"
+  "$@"
+}
+
+step "Setup" uv sync --frozen --quiet
+step "Check" uv run --frozen python manage.py check
+# The production wiring over the engine's fakes (DEMO_WALLET=testkit inside
+# tests/conftest.py): the three hooks, the mounted routes, CSRF, the download gate.
+step "Tests" uv run --frozen pytest
+# The committed migrations (the shop's AND openreceive's) match the models.
+step "Drift: models vs migrations" uv run --frozen python manage.py makemigrations --check --dry-run
+# This stack may import shared/shop-types.ts and shared/client/**, never shared/server-node/**.
+step "Boundary: no server-node imports" uv run --frozen python script/check_shared_boundary.py
+# Known vulnerabilities in the resolved Python environment.
+step "Security: pip-audit" uv run --frozen pip-audit --progress-spinner off

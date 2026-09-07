@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Migrate on boot, not at build: the database is not reachable while the image
+# builds. The notifications worker sets SKIP_DB_PREPARE (the web container
+# already migrated the shared database).
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+if [ -z "${SKIP_DB_PREPARE:-}" ]; then
+  uv run --no-sync python manage.py migrate --noinput
+fi
+exec "$@"

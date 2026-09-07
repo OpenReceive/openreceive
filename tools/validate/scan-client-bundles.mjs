@@ -2,6 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { root } from "../shared/root.mjs";
 import { walkFiles } from "../shared/walk-files.mjs";
 
@@ -15,7 +16,10 @@ const ignoredDirs = new Set([".git", "node_modules"]);
 // browser libraries that legitimately name these variables (@openreceive/core
 // carries NWC_URI_PROTOCOL and the "Set NWC_URI to …" help string), so markers
 // are not scanned there.
-const forbiddenPatterns = [
+//
+// Exported so tools/validate/check-standalone-elements.mjs runs the same list
+// against the standalone checkout build instead of keeping a second copy.
+export const forbiddenPatterns = [
   {
     name: "NWC_URI marker",
     kind: "marker",
@@ -91,38 +95,44 @@ function collectClientBundleDirs(dir) {
   return dirs;
 }
 
-const findings = [];
-const bundleDirs = collectClientBundleDirs(examplesRoot);
+function main() {
+  const findings = [];
+  const bundleDirs = collectClientBundleDirs(examplesRoot);
 
-for (const bundleDir of bundleDirs) {
-  for (const file of walkFiles(bundleDir)) {
-    let text;
-    try {
-      text = readFileSync(file, "utf8");
-    } catch {
-      continue;
-    }
+  for (const bundleDir of bundleDirs) {
+    for (const file of walkFiles(bundleDir)) {
+      let text;
+      try {
+        text = readFileSync(file, "utf8");
+      } catch {
+        continue;
+      }
 
-    const isSourceMap = file.endsWith(".map");
-    for (const check of forbiddenPatterns) {
-      if (isSourceMap && check.kind === "marker") continue;
-      if (check.pattern.test(text)) {
-        findings.push(`${path.relative(root, file)}: ${check.name}`);
+      const isSourceMap = file.endsWith(".map");
+      for (const check of forbiddenPatterns) {
+        if (isSourceMap && check.kind === "marker") continue;
+        if (check.pattern.test(text)) {
+          findings.push(`${path.relative(root, file)}: ${check.name}`);
+        }
       }
     }
   }
+
+  if (findings.length > 0) {
+    console.error("Potential client bundle secret leaks found:");
+    for (const finding of findings) console.error(`- ${finding}`);
+    process.exit(1);
+  }
+
+  if (bundleDirs.length === 0) {
+    console.log("No client bundles found; skipping client bundle secret scan.");
+  } else {
+    console.log(
+      `Client bundle secret scan passed for ${bundleDirs.length} generated client bundle director${bundleDirs.length === 1 ? "y" : "ies"}.`,
+    );
+  }
 }
 
-if (findings.length > 0) {
-  console.error("Potential client bundle secret leaks found:");
-  for (const finding of findings) console.error(`- ${finding}`);
-  process.exit(1);
-}
-
-if (bundleDirs.length === 0) {
-  console.log("No client bundles found; skipping client bundle secret scan.");
-} else {
-  console.log(
-    `Client bundle secret scan passed for ${bundleDirs.length} generated client bundle director${bundleDirs.length === 1 ? "y" : "ies"}.`,
-  );
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
 }

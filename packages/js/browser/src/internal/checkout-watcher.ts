@@ -421,6 +421,7 @@ export class BrowserCheckoutController implements CheckoutController {
       prefix,
       ...(snapshot.reference === "" ? {} : { reference: snapshot.reference }),
       ...(this.options.statusHeaders === undefined ? {} : { headers: this.options.statusHeaders }),
+      ...(this.options.csrfHeader === undefined ? {} : { csrfHeader: this.options.csrfHeader }),
       ...(this.options.logger === undefined ? {} : { logger: this.options.logger }),
       paymentHash,
       refundAddress: options.refundAddress,
@@ -457,6 +458,7 @@ export class BrowserCheckoutController implements CheckoutController {
                 snapshot: options.snapshot,
                 fetch: options.fetch,
                 headers: options.statusHeaders,
+                csrfHeader: options.csrfHeader,
               })));
 
     return new CheckoutWatcher({

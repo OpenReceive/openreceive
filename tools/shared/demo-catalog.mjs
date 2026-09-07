@@ -42,6 +42,49 @@ export const OPENRECEIVE_DEMOS = [
     label: "Buy a Button — Fastify + React",
   },
   {
+    // The minimal Python host: FastAPI + SQLite, React only — the Fastify
+    // twin. Vite is the dev front door (it spawns `uv run uvicorn` and
+    // proxies the API paths); the container serves the built dist itself.
+    kind: "python",
+    keys: ["fastapi", "buttons-fastapi"],
+    dir: "examples/buttons/server/fastapi",
+    packageName: "@openreceive/example-buttons-fastapi",
+    service: "buttons-fastapi",
+    port: "3007",
+    label: "Buy a Button — FastAPI + React",
+  },
+  {
+    // Django + Postgres: the Rails demo's shape in Python — products, visitors
+    // and orders on the ORM, the three hooks in buttonshop/openreceive_host.py,
+    // the notifications worker as a second container. Vite is the dev front
+    // door (it spawns `manage.py runserver` and proxies the API paths);
+    // WhiteNoise serves the built dist in the container.
+    kind: "python",
+    keys: ["django", "buttons-django"],
+    dir: "examples/buttons/server/django",
+    sharedDir: "examples/buttons/shared",
+    imagesDir: "examples/buttons/images",
+    packageName: "@openreceive/example-buttons-django",
+    service: "buttons-django",
+    notificationsService: "notifications",
+    dbService: "db",
+    port: "3006",
+    label: "Buy a Button — Django + Postgres",
+  },
+  {
+    // Plain PHP: the vanilla shop as static files plus one front controller
+    // over the PHP engine (packages/php/openreceive by path repository). Vite
+    // is the dev front door (it spawns `php -S` and proxies the API paths);
+    // the container runs `php -S` over the built public/ itself.
+    kind: "php",
+    keys: ["php-plain", "php", "buttons-php"],
+    dir: "examples/buttons/server/php-plain",
+    packageName: "@openreceive/example-buttons-php-plain",
+    service: "buttons-php-plain",
+    port: "3008",
+    label: "Buy a Button — plain PHP",
+  },
+  {
     kind: "rails",
     keys: ["buttons", "rails", "rails-fullstack"],
     dir: "examples/buttons/server/rails",

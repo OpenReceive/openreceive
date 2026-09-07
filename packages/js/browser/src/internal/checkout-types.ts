@@ -391,6 +391,13 @@ export interface CheckoutElementAttributeOptions {
    */
   readonly prefix?: string;
   /**
+   * Header name the page's `<meta name="csrf-token">` value is sent under on
+   * every request the element makes. Emitted as the element's `csrf-header`
+   * attribute. Default `X-CSRF-Token` (Rails, Laravel); Django reads
+   * `X-CSRFToken`, WordPress REST reads `X-WP-Nonce`.
+   */
+  readonly csrfHeader?: string;
+  /**
    * Optional create-time metadata (parity with the React `<Checkout metadata>`
    * prop): JSON-encoded onto the element's `metadata` attribute and sent with
    * the Lightning mint request.
@@ -596,7 +603,7 @@ export interface RequestCheckoutOptions extends RequestCheckoutBaseOptions {
  */
 export type PrepareCheckoutOptions = Pick<
   RequestCheckoutBaseOptions,
-  "prefix" | "reference" | "fetch" | "headers"
+  "prefix" | "reference" | "fetch" | "headers" | "csrfHeader"
 >;
 
 export interface RequestCheckoutBaseOptions {
@@ -609,6 +616,12 @@ export interface RequestCheckoutBaseOptions {
   readonly reference: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * Header name the page's `<meta name="csrf-token">` value is sent under.
+   * Default `X-CSRF-Token` (Rails, Laravel); Django reads `X-CSRFToken`,
+   * WordPress REST reads `X-WP-Nonce`. The meta tag name itself is fixed.
+   */
+  readonly csrfHeader?: string;
   readonly memo?: string;
   readonly metadata?: Record<string, unknown>;
 }
@@ -623,6 +636,8 @@ export interface CreateOpenReceiveStatusFetcherOptions {
   readonly snapshot: CheckoutSnapshot;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
+  /** Header name the page's `<meta name="csrf-token">` is sent under; default `X-CSRF-Token`. */
+  readonly csrfHeader?: string;
 }
 
 export interface CheckoutWatcherOptions {
@@ -655,6 +670,11 @@ export interface CheckoutControllerOptions extends Omit<CheckoutWatcherOptions, 
   readonly polling?: boolean;
   readonly fetch?: typeof globalThis.fetch;
   readonly statusHeaders?: Readonly<Record<string, string>>;
+  /**
+   * Header name the page's `<meta name="csrf-token">` is sent under, on the
+   * status poll and the swap refund calls alike. Default `X-CSRF-Token`.
+   */
+  readonly csrfHeader?: string;
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
 }

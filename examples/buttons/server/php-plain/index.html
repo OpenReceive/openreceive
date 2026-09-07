@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Buy a Button — OpenReceive on plain PHP</title>
+    <!-- The standalone checkout stylesheet, served by PHP from public/openreceive/
+         (the release's standalone-checkout-<version>.tar.gz, copied there by
+         vite.config.ts). `vite-ignore` keeps Vite from trying to bundle it: it is
+         a file the SERVER serves, in development (through the proxy) and in
+         production alike. -->
+    <link rel="stylesheet" href="/openreceive/openreceive-checkout.css" vite-ignore />
+  </head>
+  <!-- `or-vanilla` scopes the handful of rules in shop-vanilla.css that touch
+       shared class names, so that sheet never reaches into a component it does
+       not own. -->
+  <body class="or-vanilla">
+    <main class="or-page">
+      <div class="or-page-inner">
+        <!-- The panel shell is static markup; the shared vanilla client fills
+             #or-shop-body and nothing else. -->
+        <section class="or-shop">
+          <div class="or-shop-head">
+            <div>
+              <p class="or-eyebrow">Official OpenReceive Demo</p>
+              <p class="or-shop-title">Buy an OR button</p>
+            </div>
+          </div>
+
+          <div class="or-shop-tabs">
+            <div class="or-vanilla-tabs" role="tablist" aria-label="Shop or recent orders">
+              <button type="button" role="tab" data-tab="shop" aria-selected="true">
+                Buy a button
+              </button>
+              <button type="button" role="tab" data-tab="orders" aria-selected="false">
+                Recent orders
+              </button>
+            </div>
+          </div>
+
+          <div class="or-shop-body" id="or-shop-body"></div>
+        </section>
+
+        <p class="or-page-note">Static HTML + a small PHP API. No framework at all.</p>
+      </div>
+    </main>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>

@@ -111,6 +111,15 @@ export function createElementCheckoutSession(
     );
   }
 
+  /**
+   * The header name the `csrf-token` meta value rides under, or undefined for
+   * the engine default (`X-CSRF-Token`). Read at call time, like the prefix.
+   */
+  function currentCsrfHeader(): string | undefined {
+    const name = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.csrfHeader);
+    return name === null || name.length === 0 ? undefined : name;
+  }
+
   /** The order the element would act on right now, or undefined. */
   function currentReference(): string | undefined {
     const reference = host.element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference);
@@ -163,10 +172,12 @@ export function createElementCheckoutSession(
     reference: currentReference,
     requestCheckout: (reference) => {
       const metadata = host.createMetadata();
+      const csrfHeader = currentCsrfHeader();
       return requestCheckout({
         prefix: currentPrefix(),
         reference,
         ...(metadata === undefined ? {} : { metadata }),
+        ...(csrfHeader === undefined ? {} : { csrfHeader }),
         fetch: globalThis.fetch,
       });
     },
@@ -175,6 +186,7 @@ export function createElementCheckoutSession(
       selection: host.swapSelection,
       prefix: () => host.resolvePollPrefix(currentReference()),
       fetch: () => globalThis.fetch,
+      csrfHeader: currentCsrfHeader,
       // A swap attempt is NOT written back as attributes: a bolt11 attribute
       // would take the element out of create mode. It re-keys the poll
       // controller onto the merged snapshot and nothing else.
@@ -195,6 +207,7 @@ export function createElementCheckoutSession(
     const reference = currentReference();
     if (reference === undefined) return;
     const prefix = currentPrefix();
+    const csrfHeader = currentCsrfHeader();
     const key = `${prefix}::${reference}`;
     if (creating) return;
     if (createdKey === key) {
@@ -217,6 +230,7 @@ export function createElementCheckoutSession(
       const prepared = await prepareCheckout({
         prefix,
         reference,
+        ...(csrfHeader === undefined ? {} : { csrfHeader }),
         fetch: globalThis.fetch,
       });
       // Prepare returns NO attempts, so a checkout rebuilt from a reference
@@ -230,6 +244,7 @@ export function createElementCheckoutSession(
           : await resumeSwapAttempt({
               fetch: globalThis.fetch,
               prefix,
+              ...(csrfHeader === undefined ? {} : { csrfHeader }),
               reference,
               paymentHash: resumeHash,
               snapshot: prepared,

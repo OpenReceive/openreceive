@@ -52,6 +52,7 @@ const SHARED_PROPS = [
   "checkout",
   "reference",
   "prefix",
+  "csrfHeader",
   "paymentWizard",
   "decodeLinkUrl",
   "assetBaseUrl",
@@ -321,6 +322,45 @@ test("snapshot-mode polling defaults and knobs match the parity table", () => {
     /\bpollIntervalMs\?:/,
     "React must expose pollIntervalMs as a prop",
   );
+});
+
+test("csrfHeader rides the shared shell binding onto the csrf-header attribute", () => {
+  // A6: the header NAME the `csrf-token` meta value is sent under. One name and
+  // one default in all four wrappers (the parity table pins `X-CSRF-Token`);
+  // the element wrappers reach it through the same attribute plain markup uses.
+  const doc = read(PARITY_DOC);
+  assert.match(doc, /`csrfHeader` \| `X-CSRF-Token`/, "the parity table must pin the default");
+  assert.equal(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.csrfHeader, "csrf-header");
+
+  const snapshot = {
+    checkout_id: "or_chk_csrf",
+    reference: "order-csrf",
+    status: "open",
+    amount_msats: 1000,
+    invoices: [],
+  };
+  // Shared, not create-only: the status poll and swap calls carry the token in
+  // snapshot mode too.
+  const create = createWrapperCheckoutShellBinding(null, {
+    reference: "order-csrf",
+    csrfHeader: "X-CSRFToken",
+  });
+  assert.equal(create.checkout.attributes["csrf-header"], "X-CSRFToken");
+  const shell = createWrapperCheckoutShellBinding(snapshot, { csrfHeader: "X-WP-Nonce" });
+  assert.equal(shell.checkout.attributes["csrf-header"], "X-WP-Nonce");
+  // Unset (undefined from React, null from the element wrappers) leaves the
+  // attribute off so the engine default applies.
+  assert.equal(
+    createWrapperCheckoutShellBinding(snapshot, {}).checkout.attributes["csrf-header"],
+    undefined,
+  );
+  assert.equal(
+    createWrapperCheckoutShellBinding(snapshot, { csrfHeader: null }).checkout.attributes[
+      "csrf-header"
+    ],
+    undefined,
+  );
+  assert.match(read(SOURCES.react), /\bcsrfHeader\?:/, "useCheckout must expose csrfHeader");
 });
 
 test("the theme is resolved from the default until the wrapper mounts", () => {

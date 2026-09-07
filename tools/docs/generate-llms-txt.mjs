@@ -31,11 +31,13 @@ const LISTED_ELSEWHERE = new Set([
   "quickstart-fastify",
   "quickstart-next",
   "quickstart-rails",
+  "quickstart-django",
   "quickstart-btcpay",
   "agent-directions-node",
   "agent-directions-fastify",
   "agent-directions-next",
   "agent-directions-rails",
+  "agent-directions-django",
   "agent-directions-btcpay",
   "guides",
 ]);
@@ -62,11 +64,13 @@ markdown.
 - [Fastify quickstart](${SITE}/guides/quickstart-fastify${MARKDOWN_SUFFIX})
 - [Next.js quickstart](${SITE}/guides/quickstart-next${MARKDOWN_SUFFIX}): the App Router catch-all route and a client-component checkout
 - [Rails quickstart](${SITE}/guides/quickstart-rails${MARKDOWN_SUFFIX})
+- [Django quickstart](${SITE}/guides/quickstart-django${MARKDOWN_SUFFIX}): the installable app, the ORM-backed payment tables, manage.py openreceive_install
 - [BTCPay Server quickstart](${SITE}/guides/quickstart-btcpay${MARKDOWN_SUFFIX}): the OpenReceive plugin, a receive-only NWC wallet as a store's Lightning node
 - [Agent directions, Node (Express)](${SITE}/agent-directions/node.md): a self-contained integration prompt for a coding agent, quickstart inlined
 - [Agent directions, Fastify](${SITE}/agent-directions/fastify.md)
 - [Agent directions, Next.js](${SITE}/agent-directions/next.md)
 - [Agent directions, Rails](${SITE}/agent-directions/rails.md)
+- [Agent directions, Django](${SITE}/agent-directions/django.md)
 - [Agent directions, BTCPay Server](${SITE}/agent-directions/btcpay.md)
 
 ## Guides

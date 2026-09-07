@@ -218,6 +218,13 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * attribute — see `checkoutRoutes` in ../internal/routes.ts.
    */
   prefix: "prefix",
+  /**
+   * Header name the page's `<meta name="csrf-token">` value is sent under on
+   * every request the element makes. Default `X-CSRF-Token` (Rails, Laravel);
+   * Django reads `X-CSRFToken`, WordPress REST reads `X-WP-Nonce`. The meta
+   * tag name is fixed; only the header name is the host's to choose.
+   */
+  csrfHeader: "csrf-header",
   /** JSON-encoded create-time metadata forwarded to the create request. */
   metadata: "metadata",
   invoiceId: "invoice-id",

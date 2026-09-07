@@ -59,6 +59,11 @@ Checkout lifecycle:
 - `prepareCheckout` / `requestCheckout` — both take `{ reference, prefix }`.
   Pass the prepared snapshot back as `requestCheckout({ previous })` to keep
   sibling attempts.
+- `csrfHeader` — on every call above, the controller, and the swap calls: the
+  header name the page's `<meta name="csrf-token">` value is sent under.
+  Default `X-CSRF-Token` (Rails, Laravel); Django reads `X-CSRFToken`,
+  WordPress REST reads `X-WP-Nonce`. A host `headers` entry for the same name
+  wins; without the meta tag nothing is added.
 - `createCheckoutState`, `CheckoutState`, `CheckoutSnapshot`,
   `CheckoutInvoiceSnapshot`.
 - `selectCheckoutDisplayInvoice`, `isReusableLightningInvoice`.

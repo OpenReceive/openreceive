@@ -10,6 +10,7 @@ require Rails.root.join("lib/button_shop/testkit")
 # the same strings — the Tron deposit address, `testkit-swap-N`, a payment hash
 # that is the mint counter in 64 hex characters. Drift here does not fail
 # loudly; it fails as a Rails-only E2E mystery. So the values are pinned.
+# The contract is written down in docs/internal/testkit-contract.md.
 class TestkitFixturesTest < ActiveSupport::TestCase
   test "the wallet mints the JS testkit's invoice and payment-hash fixtures" do
     wallet = ButtonShop::Testkit::Wallet.new

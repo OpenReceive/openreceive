@@ -1,0 +1,109 @@
+{
+  "schema_version": "0.1.0",
+  "provider": "fixedfloat",
+  "description": "The FixedFloat-compatible status mapping as data: a FixedFloat order's status, its emergency block and whether a refund transaction is present map to exactly one OpenReceive swap state plus optional attention/refund reasons. This file is the ONLY hand-edited copy: npm run generate:models renders it into every engine next to the kernel tables (packages/js/node/src/generated/swap-state-table.ts, packages/ruby/openreceive/lib/openreceive/generated/tables.rb, packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs, packages/php/openreceive/src/Generated/Tables.php, packages/python/openreceive/src/openreceive/_generated/tables.py), and each engine's production normalizer is a short interpreter of the rendering. spec/test-vectors/swap-state.json pins the results; npm run validate runs this table through a reference interpreter against those vectors, so a table edit that breaks a case fails before any engine runs. A provider behavior change is one row here plus one vector case.",
+  "how_to_read": [
+    "status_rows is ordered and matched first-match-wins. A row matches when all three of its predicates hold; the last row is a catch-all that always matches, so an interpreter never falls off the end.",
+    "status: the provider's order status, upper-cased before matching. An exact value, or \"*\" for any status. status_contains (only with \"*\") narrows \"*\" to statuses containing the substring — the FAIL rule.",
+    "refund_tx_present: true or false to require that the body (or the persisted order) does or does not carry a refund transaction id (back.tx.id / refund.tx.id), or \"any\".",
+    "choice: the emergency block's choice, upper-cased. An exact value (REFUND, EXCHANGE, NONE), \"absent\" for a body whose emergency block carries no choice, or \"any\".",
+    "Each row produces state. attention_reason, when present, means the result also carries attention: true. refund_reason_from_emergency: true means the result's refund_reason is derived from the emergency block's status list through refund_reason_rows below (absent when no row there matches). Keys a row does not produce must be absent from the result, not null.",
+    "refund_reason_rows is ordered and matched first-match-wins on the emergency status list: every status is upper-cased, mapped through emergency_status_aliases (OVER and OVERPAID are spellings of MORE), and a row matches when all of its all_of statuses are present. No match means no refund_reason. A bare string status is a one-item list.",
+    "An overpay (MORE) takes the same self-serve full-refund path as LESS and EXPIRED — it is what the provider itself does with it. There is no partial refund of the surplus: the payout invoice is a fixed amount, so an emergency deposit is returned whole or not at all.",
+    "LIMIT rides along with LESS/MORE when the deposit fell outside the pair's limits. It says nothing the payer can act on beyond the amount itself, so it names no reason of its own.",
+    "An unrecognized status is NOT a provider-reported emergency: the catch-all labels it provider_status_unrecognized so operators land on the right runbook section, and no engine may guess a state for it.",
+    "states must be in spec/data/kernel-tables.json swap.states, attention reasons in swap.attention_reasons and refund reasons in swap.refund_reasons; npm run validate enforces all three."
+  ],
+  "status_rows": [
+    {
+      "status": "DONE",
+      "refund_tx_present": true,
+      "choice": "any",
+      "state": "refunded",
+      "note": "A completed order that carries a refund transaction was refunded, whatever the emergency block says. Checked before the plain DONE row."
+    },
+    {
+      "status": "FINISHED",
+      "refund_tx_present": true,
+      "choice": "any",
+      "state": "refunded",
+      "note": "FINISHED is only meaningful together with a refund transaction; without one it is not a known status and falls to the catch-all."
+    },
+    { "status": "NEW", "refund_tx_present": "any", "choice": "any", "state": "awaiting_deposit" },
+    { "status": "PENDING", "refund_tx_present": "any", "choice": "any", "state": "confirming" },
+    { "status": "EXCHANGE", "refund_tx_present": "any", "choice": "any", "state": "exchanging" },
+    {
+      "status": "WITHDRAW",
+      "refund_tx_present": "any",
+      "choice": "any",
+      "state": "paying_invoice"
+    },
+    {
+      "status": "DONE",
+      "refund_tx_present": "any",
+      "choice": "any",
+      "state": "completed",
+      "note": "Provider completion is not wallet settlement: completed is deliberately non-terminal in kernel-tables."
+    },
+    { "status": "EXPIRED", "refund_tx_present": "any", "choice": "any", "state": "expired" },
+    {
+      "status": "EMERGENCY",
+      "refund_tx_present": true,
+      "choice": "REFUND",
+      "state": "refunded",
+      "refund_reason_from_emergency": true,
+      "note": "Refund chosen and paid out."
+    },
+    {
+      "status": "EMERGENCY",
+      "refund_tx_present": "any",
+      "choice": "REFUND",
+      "state": "refund_pending",
+      "refund_reason_from_emergency": true,
+      "note": "Refund chosen, not yet paid out."
+    },
+    {
+      "status": "EMERGENCY",
+      "refund_tx_present": "any",
+      "choice": "EXCHANGE",
+      "state": "attention",
+      "attention_reason": "provider_reported_emergency",
+      "note": "The provider chose to exchange anyway; funds may be in limbo and an operator must look, even when a refund transaction is also present."
+    },
+    {
+      "status": "EMERGENCY",
+      "refund_tx_present": "any",
+      "choice": "any",
+      "state": "refund_required",
+      "refund_reason_from_emergency": true,
+      "note": "No choice yet, or the provider's own NONE: the payer must supply a refund address. Covers underpaid, overpaid (full refund, see how_to_read) and late deposits alike."
+    },
+    {
+      "status": "*",
+      "status_contains": "FAIL",
+      "refund_tx_present": "any",
+      "choice": "any",
+      "state": "failed",
+      "note": "FAILED and any provider spelling containing FAIL (e.g. PAYOUT_FAILED)."
+    },
+    {
+      "status": "*",
+      "refund_tx_present": "any",
+      "choice": "any",
+      "state": "attention",
+      "attention_reason": "provider_status_unrecognized",
+      "note": "Catch-all. Unrecognized is not an emergency; see how_to_read."
+    }
+  ],
+  "emergency_status_aliases": {
+    "OVER": "MORE",
+    "OVERPAID": "MORE"
+  },
+  "refund_reason_rows": [
+    { "all_of": ["LESS", "EXPIRED"], "refund_reason": "underpaid_and_late" },
+    { "all_of": ["MORE", "EXPIRED"], "refund_reason": "overpaid_and_late" },
+    { "all_of": ["LESS"], "refund_reason": "underpaid" },
+    { "all_of": ["MORE"], "refund_reason": "overpaid" },
+    { "all_of": ["EXPIRED"], "refund_reason": "late_deposit" }
+  ]
+}

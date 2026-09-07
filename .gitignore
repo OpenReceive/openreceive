@@ -31,6 +31,20 @@ dist/
 .cache/
 .release/
 *.tsbuildinfo
+
+# PHP and Python engine toolchain output (packages/php, packages/python, the
+# Laravel/Django/FastAPI demos). Composer's vendor/ and uv's .venv/ are
+# rebuilt from composer.lock / uv.lock; never committed.
+vendor/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.phpunit.cache/
+.phpunit.result.cache
 tmp/*
 
 /logs/
@@ -63,3 +77,6 @@ packages/dotnet/**/obj-docker/
 packages/dotnet/**/TestResults/
 packages/dotnet/docker/.state/
 tests/e2e-btcpay/test-results/
+
+# The standalone checkout build copied in by hatch_build.py at wheel/sdist build time.
+packages/python/openreceive/src/openreceive/django/static/

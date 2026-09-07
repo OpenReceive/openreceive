@@ -1,0 +1,11 @@
+/vendor/
+/node_modules/
+/public/build/
+/public/hot
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+!/storage/**/.gitkeep
+/.phpunit.cache/
+/database/*.sqlite*

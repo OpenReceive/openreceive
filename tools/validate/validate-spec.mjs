@@ -433,6 +433,162 @@ function validateKernelTables() {
   }
 }
 
+// spec/data/swap-state-table.json is the one hand-edited copy of the FixedFloat
+// status → state/reason mapping; every engine's normalizer interprets its
+// rendering. Checked here: row shape, vocabularies ⊆ kernel-tables, a
+// catch-all last row, and — through a reference interpreter of the DATA — that
+// the table still reproduces every swap-state vector case. The engines'
+// production interpreters are what the vector tests exercise; this one only
+// stops a table edit from reaching them broken.
+function validateSwapStateTable() {
+  const table = readJson("spec/data/swap-state-table.json");
+  const kernel = readJson("spec/data/kernel-tables.json");
+  const states = kernel.swap.states.map((state) => state.state);
+  const attentionReasons = kernel.swap.attention_reasons.map((row) => row.reason);
+  const refundReasons = kernel.swap.refund_reasons;
+  const upper = (value) => typeof value === "string" && value === value.toUpperCase();
+  assert(table.provider === "fixedfloat", "swap-state-table provider drifted");
+  assert(Array.isArray(table.how_to_read) && table.how_to_read.length > 0, "how_to_read required");
+
+  const rows = table.status_rows;
+  assert(Array.isArray(rows) && rows.length > 0, "status_rows required");
+  const ROW_KEYS = new Set([
+    "status",
+    "status_contains",
+    "refund_tx_present",
+    "choice",
+    "state",
+    "attention_reason",
+    "refund_reason_from_emergency",
+    "note",
+  ]);
+  rows.forEach((row, index) => {
+    const label = `status_rows[${index}]`;
+    for (const key of Object.keys(row)) assert(ROW_KEYS.has(key), `${label}: unknown key ${key}`);
+    assert(upper(row.status), `${label}: status must be an upper-cased string or "*"`);
+    if (row.status_contains !== undefined) {
+      assert(row.status === "*", `${label}: status_contains requires status "*"`);
+      assert(upper(row.status_contains), `${label}: status_contains must be upper-cased`);
+    }
+    assert(
+      [true, false, "any"].includes(row.refund_tx_present),
+      `${label}: refund_tx_present must be true, false or "any"`,
+    );
+    assert(
+      ["REFUND", "EXCHANGE", "NONE", "absent", "any"].includes(row.choice),
+      `${label}: choice must be REFUND, EXCHANGE, NONE, "absent" or "any"`,
+    );
+    assert(states.includes(row.state), `${label}: unknown state ${row.state}`);
+    if (row.attention_reason !== undefined) {
+      assert(row.state === "attention", `${label}: attention_reason on a non-attention state`);
+      assert(
+        attentionReasons.includes(row.attention_reason),
+        `${label}: attention_reason ${row.attention_reason} is not in kernel-tables`,
+      );
+    } else {
+      assert(row.state !== "attention", `${label}: attention state needs an attention_reason`);
+    }
+    if (row.refund_reason_from_emergency !== undefined) {
+      assert(
+        row.refund_reason_from_emergency === true,
+        `${label}: refund_reason_from_emergency is true or absent`,
+      );
+      assert(row.status === "EMERGENCY", `${label}: only EMERGENCY rows derive a refund reason`);
+    }
+  });
+  const last = rows[rows.length - 1];
+  assert(
+    last.status === "*" &&
+      last.status_contains === undefined &&
+      last.refund_tx_present === "any" &&
+      last.choice === "any",
+    'the last status row must be a catch-all (status "*", refund_tx_present any, choice any)',
+  );
+
+  const aliases = table.emergency_status_aliases;
+  assert(aliases !== null && typeof aliases === "object", "emergency_status_aliases required");
+  for (const [from, to] of Object.entries(aliases)) {
+    assert(upper(from) && upper(to), `alias ${from} → ${to} must be upper-cased`);
+    assert(!(to in aliases), `alias target ${to} must be canonical, not itself an alias`);
+  }
+  const reasonRows = table.refund_reason_rows;
+  assert(Array.isArray(reasonRows) && reasonRows.length > 0, "refund_reason_rows required");
+  reasonRows.forEach((row, index) => {
+    const label = `refund_reason_rows[${index}]`;
+    assert(
+      Array.isArray(row.all_of) && row.all_of.length > 0 && row.all_of.every(upper),
+      `${label}: all_of must be a non-empty list of upper-cased statuses`,
+    );
+    for (const status of row.all_of) {
+      assert(!(status in aliases), `${label}: ${status} is an alias; name its canonical form`);
+    }
+    assert(
+      refundReasons.includes(row.refund_reason),
+      `${label}: refund_reason ${row.refund_reason} is not in kernel-tables`,
+    );
+  });
+  for (const reason of refundReasons) {
+    assert(
+      reasonRows.some((row) => row.refund_reason === reason),
+      `refund reason ${reason} has no refund_reason_rows entry producing it`,
+    );
+  }
+
+  // Reference interpreter over the data, run against the shared vector.
+  const refundReasonFor = (statuses) => {
+    const present = new Set(statuses.map((s) => s.toUpperCase()).map((s) => aliases[s] ?? s));
+    return reasonRows.find((row) => row.all_of.every((s) => present.has(s)))?.refund_reason;
+  };
+  const matchIndex = (status, emergency, refundTxPresent) => {
+    const normalized = status.toUpperCase();
+    const choice =
+      typeof emergency?.choice === "string" ? emergency.choice.toUpperCase() : undefined;
+    return rows.findIndex(
+      (candidate) =>
+        (candidate.status === "*"
+          ? candidate.status_contains === undefined ||
+            normalized.includes(candidate.status_contains)
+          : candidate.status === normalized) &&
+        (candidate.refund_tx_present === "any" ||
+          candidate.refund_tx_present === refundTxPresent) &&
+        (candidate.choice === "any" ||
+          (choice === undefined ? candidate.choice === "absent" : candidate.choice === choice)),
+    );
+  };
+  const interpret = (row, emergency) => {
+    const result = { state: row.state };
+    if (row.attention_reason !== undefined) {
+      result.attention = true;
+      result.attention_reason = row.attention_reason;
+    }
+    if (row.refund_reason_from_emergency === true) {
+      const raw = emergency?.status;
+      const reason = refundReasonFor(Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]);
+      if (reason !== undefined) result.refund_reason = reason;
+    }
+    return result;
+  };
+  const vector = readJson("spec/test-vectors/swap-state.json");
+  const hit = new Set();
+  for (const item of vector.cases) {
+    const index = matchIndex(item.status, item.emergency, item.refund_tx_present);
+    hit.add(index);
+    const actual = interpret(rows[index], item.emergency);
+    assert(
+      JSON.stringify(actual) === JSON.stringify(item.expected),
+      `swap-state-table does not reproduce vector case "${item.name}": ` +
+        `expected ${JSON.stringify(item.expected)}, table gives ${JSON.stringify(actual)}`,
+    );
+  }
+  // Every row must be reachable: a row no vector case hits is either dead or unpinned.
+  rows.forEach((row, index) => {
+    assert(
+      hit.has(index),
+      `status_rows[${index}] (${row.status} → ${row.state}) is hit by no swap-state vector case; add one or delete the row`,
+    );
+  });
+}
+
 // Every vector family must have a consumer in every engine, or a written
 // exclusion (spec/test-vectors/coverage.json).
 function validateVectorCoverage() {
@@ -515,6 +671,7 @@ validateMoneyVectors();
 validateSettlementVectors();
 validateContracts();
 validateKernelTables();
+validateSwapStateTable();
 validateVectorCoverage();
 validateStorageFreeTree();
 validateGeneratedDocTables();

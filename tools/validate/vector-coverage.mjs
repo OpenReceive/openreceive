@@ -62,12 +62,14 @@ export function checkVectorCoverage() {
         failures.push(`${COVERAGE_PATH}: ${name} excludes unknown vector family ${excluded}`);
       }
     }
-    const present = engine.roots.some((relativeRoot) => existsSync(path.join(root, relativeRoot)));
-    if (!present) {
-      report.push(`${name}: absent (no test root exists yet) — coverage not enforced`);
+    // An engine is present once a single test source in its extensions exists
+    // under any root: a shared root like tools/conformance existing for another
+    // engine does not make a planned engine present.
+    const sources = engineSources(engine).map((file) => readFileSync(file, "utf8"));
+    if (sources.length === 0) {
+      report.push(`${name}: absent (no test source under its roots yet) — coverage not enforced`);
       continue;
     }
-    const sources = engineSources(engine).map((file) => readFileSync(file, "utf8"));
     const missing = [];
     for (const family of families) {
       if (family in exclusions) continue;

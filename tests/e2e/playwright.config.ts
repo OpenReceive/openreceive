@@ -9,10 +9,14 @@ import { defineConfig } from "@playwright/test";
  *
  * OPENRECEIVE_E2E_STACK picks the demo directory under
  * examples/buttons/server/: `node-express` (the default, and the only stack
- * with the four framework tabs the full matrix drives) or `fastify` (the
- * minimal React host; the framework helpers tolerate its missing tab strip).
- * Both boot the same way — Vite is the front door in development, and the
- * host's API rides inside it — so one webServer command covers them.
+ * with the four framework tabs the full matrix drives), `fastify` (the
+ * minimal React host; the framework helpers tolerate its missing tab strip)
+ * `fastapi` (the same minimal host in Python — its vite.config.ts spawns
+ * `uv run uvicorn` and proxies the API paths to it) or `django` (the Rails
+ * demo's shape in Python; its vite.config.ts spawns `manage.py runserver` the
+ * same way, on SQLite under OPENRECEIVE_DEMO_DB). All four boot the same way —
+ * Vite is the front door in development, and the host's API rides inside it —
+ * so one webServer command covers them.
  *
  * The webServer boots the demo's Vite dev entry directly (not through
  * `tools/run-with-root-env.mjs`, which hard-requires NWC_URI): with
@@ -27,14 +31,14 @@ import { defineConfig } from "@playwright/test";
  * reading the suite's leftovers.
  */
 
-const E2E_STACKS = ["node-express", "fastify"] as const;
+const E2E_STACKS = ["node-express", "fastify", "fastapi", "django", "php-plain"] as const;
 type E2eStack = (typeof E2E_STACKS)[number];
 
 const stack = (process.env.OPENRECEIVE_E2E_STACK ?? "node-express") as E2eStack;
 if (!E2E_STACKS.includes(stack)) {
   throw new Error(
-    `OPENRECEIVE_E2E_STACK=${stack} is not one of ${E2E_STACKS.join(", ")}: the Next.js and ` +
-      `Rails stacks are not Vite-hosted and have their own harnesses.`,
+    `OPENRECEIVE_E2E_STACK=${stack} is not one of ${E2E_STACKS.join(", ")}: the Next.js ` +
+      `and Rails stacks are not Vite-hosted and have their own harnesses.`,
   );
 }
 

@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# The Buy a Button plain-PHP example's CI, the `bin/ci` twin of the Rails and
+# FastAPI ones — sized for a host with no test framework: manifest validation,
+# a lint of every PHP file, then the stack booted in testkit mode and driven
+# over HTTP through a whole order → invoice → settle → download loop with curl.
+# Needs php, composer and node (for the shared catalog check).
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+step() {
+  echo
+  echo "== $1"
+  shift
+  "$@"
+}
+
+step "Setup" composer validate --no-check-publish --no-interaction
+if [ ! -f vendor/autoload.php ]; then
+  step "Setup: composer install" composer install --no-interaction --no-progress --prefer-dist
+fi
+
+lint() {
+  for file in public/index.php src/*.php bin/doctor; do
+    php -l "$file" >/dev/null || exit 1
+  done
+  echo "php -l passed."
+}
+step "Lint" lint
+
+# Every row in shared/shop-catalog.json names an artwork file that exists in
+# examples/buttons/images — the same script the Rails example runs.
+step "Drift: catalog vs artwork" node ../rails/script/check-catalog-artwork.mjs
+
+# The shared boundary: this stack may import shared/shop.css, the vanilla
+# client and the wire types, and must never reach into shared/server-node/**
+# (the Node stacks' SQLite store) or shared/client/** (React).
+boundary() {
+  if grep -rnE "(from|import|require) *[(\"'][^\"']*shared/(server-node|client)/" src/client vite.config.ts index.html; then
+    echo "The plain-PHP demo may not import shared/server-node or shared/client." >&2
+    exit 1
+  fi
+  echo "Shared-boundary check passed."
+}
+step "Boundary: no server-node or React imports" boundary
+
+# The whole bridge over the engine's Testing fakes, through the real front
+# controller: bootstrap → order → invoice → /__testkit/settle → the next
+# payments/check runs the gated reconcile and onPaid → the download unlocks.
+SERVER_PID=""
+trap '[ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true' EXIT
+
+smoke() {
+  local port="${OPENRECEIVE_PHP_PORT:-3108}"
+  local data jar body reference hash state
+  data="$(mktemp -d)"
+  jar="$data/cookies"
+  mkdir -p public/openreceive
+  DEMO_WALLET=testkit OPENRECEIVE_DEMO_DB="$data" php -S "127.0.0.1:$port" -t public public/index.php >"$data/server.log" 2>&1 &
+  SERVER_PID=$!
+  for _ in $(seq 1 50); do
+    curl -fsS "http://127.0.0.1:$port/openreceive/rates" >/dev/null 2>&1 && break
+    sleep 0.2
+  done
+  curl -fsS "http://127.0.0.1:$port/openreceive/rates" | grep -q '"usd":"50000.00"'
+  curl -fsS -c "$jar" "http://127.0.0.1:$port/shop/bootstrap" | grep -q '"openreceive_prefix":"/openreceive"'
+  body="$(curl -fsS -b "$jar" -c "$jar" -H 'Content-Type: application/json' -d '{"items":[{"sku":"safety-orange","quantity":1}]}' "http://127.0.0.1:$port/shop/orders")"
+  reference="$(printf '%s' "$body" | php -r 'echo json_decode(stream_get_contents(STDIN), true)["reference"];')"
+  body="$(curl -fsS -b "$jar" -c "$jar" -H 'Content-Type: application/json' -d "{\"reference\":\"$reference\"}" "http://127.0.0.1:$port/openreceive/checkouts")"
+  hash="$(printf '%s' "$body" | php -r 'echo json_decode(stream_get_contents(STDIN), true)["checkout"]["payment_hash"];')"
+  [ "$hash" = "$(printf '%064d' 1)" ] || { echo "unexpected first payment hash $hash" >&2; exit 1; }
+  # A cross-site POST is refused by the engine's own check — the protection a host without a CSRF layer relies on.
+  [ "$(curl -s -o /dev/null -w '%{http_code}' -b "$jar" -H 'Content-Type: application/json' -H 'Sec-Fetch-Site: cross-site' -d "{\"reference\":\"$reference\"}" "http://127.0.0.1:$port/openreceive/checkouts/prepare")" = "403" ]
+  curl -fsS -H 'Content-Type: application/json' -d "{\"payment_hash\":\"$hash\"}" "http://127.0.0.1:$port/__testkit/settle" | grep -q '"ok":true'
+  # The gate floor is 2 seconds between real wallet scans; the second check lands after it.
+  sleep 2.2
+  curl -fsS -b "$jar" -c "$jar" -H 'Content-Type: application/json' -d "{\"reference\":\"$reference\",\"payment_hash\":\"$hash\"}" "http://127.0.0.1:$port/openreceive/payments/check" | grep -q '"settled"'
+  state="$(curl -fsS -b "$jar" -c "$jar" "http://127.0.0.1:$port/shop/orders/$reference" | php -r 'echo json_decode(stream_get_contents(STDIN), true)["state"];')"
+  [ "$state" = "paid" ] || { echo "order is $state, expected paid" >&2; cat "$data/server.log" >&2; exit 1; }
+  curl -fsS -b "$jar" -o "$data/download.webp" "http://127.0.0.1:$port/shop/orders/$reference/downloads/safety-orange"
+  [ -s "$data/download.webp" ]
+  echo "HTTP smoke passed: order $reference settled through onPaid and its download unlocked."
+}
+step "Smoke: order → invoice → settle → download" smoke
+
+echo
+echo "bin/ci passed."

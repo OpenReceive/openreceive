@@ -51,6 +51,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() checkout?: CheckoutSnapshot | null;
   @Input() reference?: string;
   @Input() prefix?: string;
+  @Input() csrfHeader?: string;
   @Input() paymentWizard?: boolean;
   @Input() decodeLinkUrl?: string;
   @Input() assetBaseUrl?: string;
@@ -140,6 +141,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       deferThemeResolution: !this.elementsReady,
       ...(this.reference === undefined ? {} : { reference: this.reference }),
       ...(this.prefix === undefined ? {} : { prefix: this.prefix }),
+      ...(this.csrfHeader === undefined ? {} : { csrfHeader: this.csrfHeader }),
       ...(this.paymentWizard === undefined ? {} : { paymentWizard: this.paymentWizard }),
       ...(this.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: this.decodeLinkUrl }),
       ...(this.assetBaseUrl === undefined ? {} : { assetBaseUrl: this.assetBaseUrl }),

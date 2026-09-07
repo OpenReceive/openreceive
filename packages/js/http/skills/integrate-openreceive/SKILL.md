@@ -28,6 +28,7 @@ code** (`NWC_URI`).
    - Node, Fastify: [references/fastify.md](references/fastify.md)
    - Node, Next.js App Router: [references/next.md](references/next.md)
    - Rails: [references/rails.md](references/rails.md)
+   - Django: [references/django.md](references/django.md)
    - BTCPay Server: [references/btcpay.md](references/btcpay.md) — a plugin,
      configured in BTCPay's store UI or Greenfield API; no application code,
      no npm packages, no gem. The rest of this file is about the library.

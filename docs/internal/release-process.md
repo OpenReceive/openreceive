@@ -18,6 +18,8 @@ The release surface, all versioned in lockstep:
 - `@openreceive/svelte`
 - `@openreceive/angular`
 - RubyGems: `openreceive`, `openreceive-server`, `openreceive-rails`
+- PyPI: `openreceive` (`packages/python/openreceive`; `_version.py` carries the
+  PEP 440 form of the workspace version, `0.5.0-alpha.1` → `0.5.0a1`)
 
 Public package manifests are public while testkit stays private. The public
 surface includes the unscoped `openreceive` CLI package (a bin that forwards to
@@ -27,12 +29,13 @@ surface includes the unscoped `openreceive` CLI package (a bin that forwards to
 checkout helpers, provider-data assets, elements, and frontend adapters. The
 root workspace and `@openreceive/testkit` stay private.
 
-Three registries, three publishers:
+Four registries, four publishers:
 
 | Registry | Who publishes | Credential |
 | --- | --- | --- |
 | npm (14 packages) | the maintainer's machine, `npm run release:publish` | granular token with "Bypass 2FA", loaded from `.env.release` |
 | RubyGems (3 gems) | GitHub Actions, `.github/workflows/publish-gems.yml` | none stored: OIDC Trusted Publishing, approved per run in the `rubygems` environment |
+| PyPI (1 distribution) | GitHub Actions, `.github/workflows/publish-pypi.yml` | none stored: OIDC Trusted Publishing, approved per run in the `pypi` environment |
 | GitHub release | the maintainer's machine, `gh release create` | `gh` login for the OpenReceive account (`GH_CONFIG_DIR` from `.env.release`) |
 
 ## One-time setup
@@ -56,6 +59,12 @@ so it can be recreated or audited.
 - Every gemspec sets `rubygems_mfa_required`, and the RubyGems account keeps MFA
   at "UI and API". A trusted-publisher key satisfies both, so nothing there
   changes for CI.
+- On pypi.org the `openreceive` project has one "Trusted publisher": owner
+  `OpenReceive`, repository `openreceive`, workflow `publish-pypi.yml`,
+  environment `pypi`. On GitHub the `pypi` environment mirrors `rubygems`: a
+  required reviewer, no administrator bypass, `v*` tags only. Until the first
+  upload exists the entry is a "pending publisher" created on PyPI under the
+  same four values; the first approved run claims the name.
 
 ## Cutting a release
 
@@ -80,6 +89,7 @@ Run from the repo root on a clean, current `master`.
 
    `release:prepare` rewrites, in lockstep: every workspace `package.json`
    version and internal `@openreceive/*` pin, the Ruby gem `VERSION` constants,
+   the Python `_version.py` (PEP 440),
    the root and per-gem changelog headings (`## <x.y.z> - Unreleased`), the
    path-gem `Gemfile.lock` of the Rails example, the version references in this
    document, and the package lock. Nothing else is hand-edited for a bump.
@@ -116,9 +126,19 @@ Run from the repo root on a clean, current `master`.
    git push origin master && git push origin v<x.y.z>
    ```
 
-   The push starts three workflows: `CI` on master, and `Release Dry Run` plus
-   `Publish Gems` on the tag. `Release Dry Run` fails first if the tag does not
-   match `package.json`.
+   The push starts four workflows: `CI` on master, and `Release Dry Run`,
+   `Publish Gems` and `Publish PyPI` on the tag. `Release Dry Run` fails first
+   if the tag does not match `package.json`.
+
+   **Hand over the approval URLs right now**, before anything else: both
+   publish workflows stop at their environment until a human approves them,
+   and the release is stalled until that click. Print both and give them to
+   the maintainer as a release step, not a footnote:
+
+   ```sh
+   gh run list --workflow publish-gems.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
+   gh run list --workflow publish-pypi.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
+   ```
 
 7. Approve the gem publish. `Publish Gems` stops at the `rubygems` environment
    until a required reviewer approves it in the browser (the approval cannot
@@ -142,6 +162,18 @@ Run from the repo root on a clean, current `master`.
    ```sh
    gh run watch   # or: gh run list --workflow publish-gems.yml -L 1
    ```
+
+7b. Approve the PyPI publish the same way. `Publish PyPI` waits at the `pypi`
+   environment; on its run page "Review deployments" → tick `pypi` → "Approve
+   and deploy". The job runs `node tools/release/pypi-release.mjs build` (the
+   same `uv build` + wheel-contents check + `twine check` as
+   `npm run release:pypi:build` locally) and then `uv publish
+   --trusted-publishing always`; a re-run after a partial upload skips the
+   file PyPI already holds (`--check-url`). Verify with
+   `pip index versions openreceive` or https://pypi.org/project/openreceive/.
+   If the workflow cannot run, `UV_PUBLISH_TOKEN=<api token> npm run
+   release:pypi:publish` is the manual fallback (clean tree, runs
+   `test:python` first).
 
 8. Publish to npm once `CI` and `Release Dry Run` are green on the release
    commit, rehearsal first:
@@ -169,8 +201,15 @@ Run from the repo root on a clean, current `master`.
      for g in openreceive openreceive-server openreceive-rails; do gem fetch "$g" -v <x.y.z>; done)
    gh release create v<x.y.z> --title "OpenReceive v<x.y.z>" \
      --notes-file <(awk '/^## <x.y.z> - /{f=1;next}/^## /{f=0}f' CHANGELOG.md) \
-     .release/npm/<x.y.z>/tarballs/*.tgz .release/gems/<x.y.z>/published/*.gem
+     .release/npm/<x.y.z>/tarballs/*.tgz .release/gems/<x.y.z>/published/*.gem \
+     dist/standalone-checkout-<x.y.z>.tar.gz
    ```
+
+   `dist/standalone-checkout-<x.y.z>.tar.gz` is the bundler-less checkout
+   build (`@openreceive/elements/dist/standalone`, written by
+   `npm run build:packages`, gated by `npm run check:standalone`). It is the
+   download the WordPress, Django and plain PHP hosts are pointed at, so a
+   release without it is incomplete.
 
    `gem fetch` can lag the push by a minute while the index catches up; retry
    rather than fall back to a local build.
@@ -181,7 +220,8 @@ Run from the repo root on a clean, current `master`.
     cd "$(mktemp -d)"
     npm view @openreceive/core version
     gem list -r -e openreceive -e openreceive-server -e openreceive-rails
-    gh release view v<x.y.z>     # 17 assets: 14 tarballs + 3 gems
+    pip index versions openreceive
+    gh release view v<x.y.z>     # 18 assets: 14 tarballs + 3 gems + the standalone checkout
     ```
 
 11. Redeploy openreceive.org with this release's docs bundle (`bin/rails
@@ -213,6 +253,21 @@ to re-run after a half-finished push.
 Publish the npm packages and the gems from the same prepared commit so both
 registries carry identical versions.
 
+## PyPI Track
+
+`npm run release:pypi:plan` is read-only and reports `_version.py` drift
+against the workspace version (in PEP 440: a prerelease `0.5.0-alpha.1` is
+`0.5.0a1` on PyPI, in the wheel filename and in `pip install
+openreceive==0.5.0a1`; unknown prerelease labels are refused rather than
+guessed). `npm run release:pypi:build` builds the sdist and wheel under
+`.release/pypi/<version>` with `uv build`, asserts the wheel carries the CLI,
+the FastAPI binding, the Django migrations and the standalone checkout assets
+(`unzip -l` — hatchling needs an explicit include for package data, and a
+broken include ships silently), and runs `twine check --strict`. CI runs the
+same script inside `publish-pypi.yml`, so the uploaded files are what the
+build check saw. The wheel is pure Python; `coincurve` and `cryptography`
+bring their own binary wheels.
+
 ## Release checklist
 
 The release owner checks, before tagging:
@@ -227,6 +282,7 @@ The release owner checks, before tagging:
 - Public package manifests are public while testkit stays private.
 - Package versions match the intended tag.
 - Ruby gem versions match the workspace version and `npm run release:gem:build` passes.
+- The Python `_version.py` matches the workspace version (PEP 440) and `npm run release:pypi:build` passes.
 - JSON schemas and test vectors pass.
 - OpenAPI and AsyncAPI validation passes through `npm run validate`.
 - Secret scan passes.
@@ -252,11 +308,16 @@ The release owner checks, before tagging:
 - `.github/workflows/publish-gems.yml` publishes the gems on a `v*` tag through
   RubyGems Trusted Publishing, gated by the `rubygems` environment's required
   approval. It is the only workflow allowed to run `gem push`.
+- `.github/workflows/publish-pypi.yml` publishes the Python distribution on a
+  `v*` tag through PyPI Trusted Publishing (`uv publish --trusted-publishing
+  always`), gated by the `pypi` environment's required approval. It is the
+  only workflow allowed to run `uv publish`.
 
 `npm run check:workflows` requires read-only workflow permissions, expected
 commands, SHA-pinned actions, concurrency groups, and that `gem push` appears
-only in the gem publish workflow, whose jobs must run in the `rubygems`
-environment with exactly `contents: read` + `id-token: write`.
+only in the gem publish workflow (jobs in the `rubygems` environment) and
+`uv publish` only in the PyPI publish workflow (jobs in the `pypi`
+environment), each with exactly `contents: read` + `id-token: write`.
 
 ## Tagging
 

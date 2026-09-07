@@ -40,6 +40,24 @@ the JS and Ruby engines do not make. The asymmetry is recorded here rather than 
 if either other engine gains the transition, the reason loses its reserved flag and gains a
 decision-table vector.
 
+The PHP engine (`packages/php`: Composer `openreceive/openreceive` + `openreceive/laravel`) is a
+deliberate fourth settlement engine, decided 2026-09-06 and built 2026-09-07. It ports every
+kernel row against the shared vectors, owns its own `openreceive_payments` /
+`openreceive_meta` tables in the host's database (the Rails shape, snake_case `swap_data`;
+one engine per table still holds) through a five-method `DatabaseConnection` seam so the
+WordPress plugin can drive it over `$wpdb`, and depends on `dsbaars/nostr-php-nwc` for
+NIP-47 with an in-repo NWC-02 listener. Every kernel change is now four implementations plus
+a vector update.
+
+The Python engine (`packages/python`: one PyPI distribution `openreceive` with `[django]` and
+`[fastapi]` extras) is a deliberate fifth settlement engine, decided 2026-09-06 and built
+2026-09-07. It is synchronous by design (Django ORM, Flask, and one blocking wallet RPC;
+FastAPI mounts the sync handler in threadpool endpoints), carries its own NWC transport
+(`openreceive.nwc.transport`, NIP-01/NIP-44/NIP-04 over a synchronous websocket) instead of
+a binding dependency, and keeps two repository backends — SQLAlchemy Core and the Django ORM —
+behind one `PaymentRepository` protocol. Every kernel change is now five implementations plus
+a vector update, and that cost is accepted knowingly.
+
 ## Schema internals
 
 The canonical DDL lives in `@openreceive/core` — `paymentsDdlStatements` in

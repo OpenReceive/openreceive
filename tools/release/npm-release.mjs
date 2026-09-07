@@ -22,6 +22,7 @@ import {
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs";
 import { DOTNET_PLUGIN_CSPROJ, updateDotnetPluginVersion } from "./dotnet-plugin.mjs";
 import { GEM_NAMES, gemDir, gemVersionFilePath } from "./gem-release.mjs";
+import { PYTHON_VERSION_FILE, updatePythonVersion } from "./pypi-release.mjs";
 
 const PUBLIC_PACKAGE_NAMES = OPENRECEIVE_PUBLIC_PACKAGE_NAMES;
 const PUBLIC_PACKAGE_SET = new Set(PUBLIC_PACKAGE_NAMES);
@@ -267,6 +268,10 @@ function updateVersions(root, targetVersion) {
 
   changed.push(...updateRubyGemVersions(root, currentVersion, targetVersion));
   changed.push(...updateDotnetPluginVersion(root, targetVersion));
+  // The PyPI distribution reads its version from _version.py (PEP 440 at the
+  // boundary: 0.5.0-alpha.1 → 0.5.0a1); uv.lock records no version for the
+  // editable project, so nothing else in packages/python moves.
+  changed.push(...updatePythonVersion(root, targetVersion));
   changed.push(...refreshPathGemLockfiles(root));
   changed.push(...updateTextVersionReferences(root, currentVersion, targetVersion));
   run("npm", ["install", "--package-lock-only", "--ignore-scripts"], root, {
@@ -441,6 +446,7 @@ function dryRunPrepare(root, targetVersion) {
       ...files,
       ...gemFiles,
       DOTNET_PLUGIN_CSPROJ,
+      PYTHON_VERSION_FILE,
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "package-lock.json",

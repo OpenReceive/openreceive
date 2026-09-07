@@ -1,0 +1,26 @@
+[project]
+name = "buttons-fastapi"
+version = "0.0.0"
+description = "Buy a Button on FastAPI — the minimal OpenReceive host (demo, never published)"
+requires-python = ">=3.10"
+dependencies = [
+  "openreceive[fastapi]",
+  "uvicorn>=0.30",
+  "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+# The engine comes from the monorepo checkout, not PyPI: this demo exists to
+# run the code in packages/python/openreceive.
+[tool.uv.sources]
+openreceive = { path = "../../../../packages/python/openreceive", editable = true }
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q -p no:cacheprovider"

@@ -51,9 +51,11 @@ reference may have many historical attempts); `payment_hash` is globally unique.
 
 ### Fulfill exactly once
 
+<!-- shared:begin fulfill-once -->
 Within OpenReceive's own settlement paths, `on_paid` runs at most once per
 reference: a second payment to a second invoice is recorded with
 `status_reason = "duplicate_settlement"` and never fulfills again.
+<!-- shared:end fulfill-once -->
 
 The one thing you own: **if anything other than OpenReceive can also fulfill
 an order** — an admin action, a second payment processor, a replayed job —

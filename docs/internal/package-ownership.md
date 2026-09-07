@@ -27,11 +27,15 @@ parallel work. Shared contract files still need lead coordination.
 | BTCPay regtest stack | `packages/dotnet/docker/**` | Implemented | Conformance lane |
 | BTCPay source pin | `packages/dotnet/submodules/btcpayserver` (submodule, v2.4.2) | Pinned per release | Lead |
 | Buy a Button examples | `examples/buttons/**` | Implemented | Example lane |
-| Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem lanes |
+| PHP engine (`openreceive/openreceive`) | `packages/php/openreceive` | Implemented (vector-backed, fourth engine): kernel + PSR-15 server + PDO repository + FixedFloat + `Testing\` fakes | Ecosystem lane |
+| Laravel adapter (`openreceive/laravel`) | `packages/php/laravel` | Implemented: service provider, artisan commands, migration + Host stubs | Ecosystem lane |
+| WooCommerce plugin | `packages/php/wordpress` | Planned (consumes `openreceive/openreceive` through the `DatabaseConnection` seam) | Ecosystem lane |
+| Python engine (`openreceive` with `[django]` / `[fastapi]` extras) | `packages/python/openreceive` | Implemented (vector-backed, fifth engine): kernel + framework-free handler + SQLAlchemy and Django ORM repositories + in-repo NWC transport + `openreceive.testing` fakes; `openreceive.django`, `openreceive.fastapi`, the `openreceive` CLI | Ecosystem lane |
 
-`packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs` is
-generated from `spec/data/kernel-tables.json` and follows the lead-owned contract files, not
-the plugin lane.
+`packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs`,
+`packages/php/openreceive/src/Generated/Tables.php` and
+`packages/python/openreceive/src/openreceive/_generated/tables.py` are generated from
+`spec/data/kernel-tables.json` and follow the lead-owned contract files, not the engine lanes.
 
 Why this many packages: each framework adapter (`express`, `fastify`, `next`;
 `react`, `vue`, `svelte`, `angular`) carries its own framework peer

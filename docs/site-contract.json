@@ -1,5 +1,5 @@
 {
-  "contract_version": 5,
+  "contract_version": 6,
   "release_version": "0.4.3",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 1959
+      "bytes": 2353
     },
     {
       "path": "/guides/quickstart-node",
@@ -36,6 +36,26 @@
       "bytes": 12974
     },
     {
+      "path": "/guides/quickstart-fastapi",
+      "markdown_path": "/guides/quickstart-fastapi.md",
+      "source": "docs/guides/quickstart-fastapi.md",
+      "kind": "guide",
+      "slug": "quickstart-fastapi",
+      "title": "FastAPI Quickstart",
+      "category": "quickstart",
+      "bytes": 12914
+    },
+    {
+      "path": "/guides/quickstart-django",
+      "markdown_path": "/guides/quickstart-django.md",
+      "source": "docs/guides/quickstart-django.md",
+      "kind": "guide",
+      "slug": "quickstart-django",
+      "title": "Django Quickstart",
+      "category": "quickstart",
+      "bytes": 18787
+    },
+    {
       "path": "/guides/quickstart-next",
       "markdown_path": "/guides/quickstart-next.md",
       "source": "docs/guides/quickstart-next.md",
@@ -53,7 +73,17 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 16557
+      "bytes": 16625
+    },
+    {
+      "path": "/guides/quickstart-php",
+      "markdown_path": "/guides/quickstart-php.md",
+      "source": "docs/guides/quickstart-php.md",
+      "kind": "guide",
+      "slug": "quickstart-php",
+      "title": "PHP Quickstart (plain PHP)",
+      "category": "quickstart",
+      "bytes": 14593
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -113,7 +143,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 8441
+      "bytes": 10786
     },
     {
       "path": "/guides/checkout-ux",
@@ -133,7 +163,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 16891
+      "bytes": 17240
     },
     {
       "path": "/guides/automated-swaps",
@@ -183,7 +213,7 @@
       "slug": "storage",
       "title": "Payment Storage",
       "category": "operations",
-      "bytes": 3368
+      "bytes": 4965
     },
     {
       "path": "/guides/deploying",
@@ -193,7 +223,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 5312
+      "bytes": 8772
     },
     {
       "path": "/guides/host-testing",
@@ -203,7 +233,7 @@
       "slug": "host-testing",
       "title": "Testing Your OpenReceive Integration",
       "category": "guide",
-      "bytes": 5925
+      "bytes": 10999
     },
     {
       "path": "/guides/api-reference",
@@ -213,7 +243,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 100473
+      "bytes": 119260
     },
     {
       "path": "/guides/security",
@@ -256,6 +286,16 @@
       "bytes": 4143
     },
     {
+      "path": "/guides/flask-recipe",
+      "markdown_path": "/guides/flask-recipe.md",
+      "source": "docs/recipes/flask.md",
+      "kind": "guide",
+      "slug": "flask-recipe",
+      "title": "Flask Recipe",
+      "category": "recipe",
+      "bytes": 6527
+    },
+    {
       "path": "/guides/custom-checkout-route",
       "markdown_path": "/guides/custom-checkout-route.md",
       "source": "docs/guides/custom-checkout-route.md",
@@ -286,6 +326,26 @@
       "bytes": 28475
     },
     {
+      "path": "/guides/agent-directions-fastapi",
+      "markdown_path": "/guides/agent-directions-fastapi.md",
+      "source": "docs/agents/fastapi.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-fastapi",
+      "title": "Agent Directions: FastAPI",
+      "category": "quickstart",
+      "bytes": 29630
+    },
+    {
+      "path": "/guides/agent-directions-django",
+      "markdown_path": "/guides/agent-directions-django.md",
+      "source": "docs/agents/django.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-django",
+      "title": "Agent Directions: Django",
+      "category": "quickstart",
+      "bytes": 36239
+    },
+    {
       "path": "/guides/agent-directions-next",
       "markdown_path": "/guides/agent-directions-next.md",
       "source": "docs/agents/next.md",
@@ -306,6 +366,16 @@
       "bytes": 33275
     },
     {
+      "path": "/guides/agent-directions-php",
+      "markdown_path": "/guides/agent-directions-php.md",
+      "source": "docs/agents/php.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-php",
+      "title": "Agent Directions: PHP",
+      "category": "quickstart",
+      "bytes": 31940
+    },
+    {
       "path": "/guides/agent-directions-btcpay",
       "markdown_path": "/guides/agent-directions-btcpay.md",
       "source": "docs/agents/btcpay.md",
@@ -323,7 +393,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 100473,
+      "bytes": 119260,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -334,7 +404,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 2461
+      "bytes": 2587
     },
     {
       "path": "/btcpay",
@@ -382,12 +452,42 @@
       "self_contained": true
     },
     {
+      "path": "/agent-directions/fastapi.md",
+      "source": "docs/agents/fastapi.md",
+      "kind": "agent-directions-payload",
+      "stack": "fastapi",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 29630,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/django.md",
+      "source": "docs/agents/django.md",
+      "kind": "agent-directions-payload",
+      "stack": "django",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 36239,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
       "path": "/agent-directions/rails.md",
       "source": "docs/agents/rails.md",
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 33275,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/php.md",
+      "source": "docs/agents/php.md",
+      "kind": "agent-directions-payload",
+      "stack": "php",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 31940,
       "copy_button": true,
       "self_contained": true
     },
@@ -497,6 +597,44 @@
       "demo_port": null,
       "video": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
       "shared_checkout_demo": false
+    },
+    {
+      "id": "django",
+      "label": "Django",
+      "family": "python",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Django",
+      "quickstart_slug": "quickstart-django",
+      "quickstart_path": "/guides/quickstart-django",
+      "quickstart_title": "Django Quickstart",
+      "agent_stack": "django",
+      "agent_payload_path": "/agent-directions/django.md",
+      "adapter_package": "openreceive[django]",
+      "install": "pip install \"openreceive[django]\"",
+      "requires": "Python ≥ 3.10, Django ≥ 5.2",
+      "example_path": "examples/buttons/server/django",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/django",
+      "demo_port": "3006",
+      "video": null,
+      "shared_checkout_demo": true
+    },
+    {
+      "id": "fastapi",
+      "label": "FastAPI",
+      "family": "python",
+      "heading": "Accept Bitcoin & Stablecoin Payments With FastAPI",
+      "quickstart_slug": "quickstart-fastapi",
+      "quickstart_path": "/guides/quickstart-fastapi",
+      "quickstart_title": "FastAPI Quickstart",
+      "agent_stack": "fastapi",
+      "agent_payload_path": "/agent-directions/fastapi.md",
+      "adapter_package": "openreceive[fastapi]",
+      "install": "pip install \"openreceive[fastapi]\"",
+      "requires": "Python ≥ 3.10, FastAPI ≥ 0.115",
+      "example_path": "examples/buttons/server/fastapi",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/fastapi",
+      "demo_port": "3007",
+      "video": null,
+      "shared_checkout_demo": true
     }
   ],
   "assets": [
@@ -641,7 +779,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 3936
+        "bytes": 4570
       },
       {
         "path": "/openapi.yaml",
@@ -737,6 +875,10 @@
     {
       "source": "docs/internal/btcpay-setup-details.md",
       "slug": "btcpay-setup-details"
+    },
+    {
+      "source": "docs/internal/testkit-contract.md",
+      "slug": "testkit-contract"
     },
     {
       "source": "docs/internal/forbidden-without-approval.md",

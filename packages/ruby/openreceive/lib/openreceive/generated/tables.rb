@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
 # GENERATED FILE — DO NOT EDIT.
-# Source: spec/data/kernel-tables.json, spec/schemas/error.schema.json and the
-# OpenAPI document (npm run generate:models).
-# JS twins: packages/js/core/src/generated/contracts.ts and
-#           packages/js/node/src/generated/swap-tables.ts
+# Source: spec/data/kernel-tables.json, spec/data/swap-state-table.json,
+# spec/schemas/error.schema.json and the OpenAPI document (npm run generate:models).
+# JS twins: packages/js/core/src/generated/contracts.ts,
+#           packages/js/node/src/generated/swap-tables.ts and
+#           packages/js/node/src/generated/swap-state-table.ts
 # C# twin:  packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs
 # Every engine reads the same vocabularies from its rendering, so none can drift.
 
@@ -160,6 +161,130 @@ module OpenReceive
       "region_unsupported",
       "provider_rate_limited",
       "provider_unreachable",
+    ].freeze
+
+    # spec/data/swap-state-table.json: the FixedFloat status → state/reason decision
+    # table. Ordered, first-match-wins; the last row is a catch-all. "status"
+    # is the upper-cased provider status or "*" (narrowed by "status_contains");
+    # "refund_tx_present" is true, false or "any"; "choice" is the upper-cased
+    # emergency choice, "absent" or "any". How to read it lives once, in the
+    # JSON's how_to_read. Pinned by spec/test-vectors/swap-state.json.
+    SWAP_STATUS_ROWS = [
+      {
+        "status" => "DONE",
+        "refund_tx_present" => true,
+        "choice" => "any",
+        "state" => "refunded",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "FINISHED",
+        "refund_tx_present" => true,
+        "choice" => "any",
+        "state" => "refunded",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "NEW",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "awaiting_deposit",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "PENDING",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "confirming",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "EXCHANGE",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "exchanging",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "WITHDRAW",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "paying_invoice",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "DONE",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "completed",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "EXPIRED",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "expired",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "EMERGENCY",
+        "refund_tx_present" => true,
+        "choice" => "REFUND",
+        "state" => "refunded",
+        "refund_reason_from_emergency" => true
+      }.freeze,
+      {
+        "status" => "EMERGENCY",
+        "refund_tx_present" => "any",
+        "choice" => "REFUND",
+        "state" => "refund_pending",
+        "refund_reason_from_emergency" => true
+      }.freeze,
+      {
+        "status" => "EMERGENCY",
+        "refund_tx_present" => "any",
+        "choice" => "EXCHANGE",
+        "state" => "attention",
+        "attention_reason" => "provider_reported_emergency",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "EMERGENCY",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "refund_required",
+        "refund_reason_from_emergency" => true
+      }.freeze,
+      {
+        "status" => "*",
+        "status_contains" => "FAIL",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "failed",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+      {
+        "status" => "*",
+        "refund_tx_present" => "any",
+        "choice" => "any",
+        "state" => "attention",
+        "attention_reason" => "provider_status_unrecognized",
+        "refund_reason_from_emergency" => false
+      }.freeze,
+    ].freeze
+    # Emergency status spellings folded onto their canonical name before matching.
+    SWAP_EMERGENCY_STATUS_ALIASES = {
+      "OVER" => "MORE",
+      "OVERPAID" => "MORE",
+    }.freeze
+    # Ordered; a row matches when every "all_of" status is present. No match,
+    # no refund_reason.
+    SWAP_REFUND_REASON_ROWS = [
+      { "all_of" => ["LESS", "EXPIRED"].freeze, "refund_reason" => "underpaid_and_late" }.freeze,
+      { "all_of" => ["MORE", "EXPIRED"].freeze, "refund_reason" => "overpaid_and_late" }.freeze,
+      { "all_of" => ["LESS"].freeze, "refund_reason" => "underpaid" }.freeze,
+      { "all_of" => ["MORE"].freeze, "refund_reason" => "overpaid" }.freeze,
+      { "all_of" => ["EXPIRED"].freeze, "refund_reason" => "late_deposit" }.freeze,
     ].freeze
   end
 end

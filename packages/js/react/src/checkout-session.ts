@@ -52,6 +52,7 @@ export function useCheckoutSession(options: UseOpenReceiveCheckoutSessionOptions
         },
         prefix: () => optionsRef.current.swap?.prefix(),
         fetch: () => optionsRef.current.swap?.fetch(),
+        csrfHeader: () => optionsRef.current.swap?.csrfHeader?.(),
         onStarted: (invoice) => optionsRef.current.swap?.onStarted?.(invoice),
       },
       get logger() {

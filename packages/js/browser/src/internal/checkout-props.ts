@@ -28,6 +28,14 @@ export interface CheckoutComponentProps {
    * derived from it (see `checkoutRoutes` in ./routes.ts).
    */
   readonly prefix?: string;
+  /**
+   * Header name the page's `<meta name="csrf-token">` value is sent under on
+   * every request. Default `X-CSRF-Token`, which Rails and Laravel read;
+   * Django's CsrfViewMiddleware reads `X-CSRFToken`, WordPress REST reads
+   * `X-WP-Nonce`. The meta tag name is fixed — the host renders the token into
+   * it — only the header name varies by framework.
+   */
+  readonly csrfHeader?: string;
   readonly paymentWizard?: boolean;
   /**
    * Base URL of an external bolt11 decoder. Omitted (the default), no "Decode" link is

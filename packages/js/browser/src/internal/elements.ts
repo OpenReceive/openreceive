@@ -64,6 +64,11 @@ function sharedElementAttributes(
   if (isSet(options.prefix)) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix] = options.prefix;
   }
+  // Shared, not create-mode: the status poll and the swap calls carry the
+  // token in every mode.
+  if (isSet(options.csrfHeader)) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.csrfHeader] = options.csrfHeader;
+  }
   if (isSet(options.theme)) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;
   }

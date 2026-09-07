@@ -66,6 +66,8 @@ export interface UseCheckoutOptions
    * polling — there is nowhere to poll.
    */
   readonly prefix?: string;
+  /** Header name the page's `<meta name="csrf-token">` is sent under; default `X-CSRF-Token`. */
+  readonly csrfHeader?: string;
   readonly polling?: boolean;
   readonly pollIntervalMs?: number;
 }
@@ -282,6 +284,8 @@ export interface PaymentWizardProps {
    */
   readonly prefix?: string;
   readonly fetch?: typeof globalThis.fetch;
+  /** Header name the page's `<meta name="csrf-token">` is sent under; default `X-CSRF-Token`. */
+  readonly csrfHeader?: string;
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly qrEncoder?: QrEncoder;
   /** Base URL of an external bolt11 decoder; omitted, no "Decode" link is rendered. */

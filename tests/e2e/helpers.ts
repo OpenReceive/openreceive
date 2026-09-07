@@ -133,7 +133,11 @@ export async function expectWizardCurrencies(page: Page): Promise<void> {
  * reads the same on all four framework tabs.
  */
 export function paymentColumn(page: Page): Locator {
-  return page.locator(".or-checkout-pay");
+  // The no-framework shop (the static and plain-PHP stacks) has no summary
+  // column: the packaged element IS the payment column, so the locator falls
+  // through to it. `.first()` keeps the React hosts on the column itself — it
+  // is the ancestor and comes first in document order.
+  return page.locator(".or-checkout-pay, openreceive-checkout").first();
 }
 
 export function bitcoinTile(page: Page): Locator {

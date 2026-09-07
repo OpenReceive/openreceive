@@ -115,6 +115,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // reference presence is guaranteed by the Checkout dispatcher's create-mode branch.
   const reference = props.reference as string;
   const resolvedPrefix = props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX;
+  const csrfHeader = props.csrfHeader;
   const {
     onError,
     metadata,
@@ -167,6 +168,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       requestCheckout({
         prefix: resolvedPrefix,
         reference: id,
+        ...(csrfHeader === undefined ? {} : { csrfHeader }),
         ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
         ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
       }),
@@ -194,6 +196,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     prepareCheckout({
       prefix: resolvedPrefix,
       reference,
+      ...(csrfHeader === undefined ? {} : { csrfHeader }),
       ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
     })
       // A host that remembered this order's swap attempt gets it back on the
@@ -206,6 +209,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
           : resumeSwapAttempt({
               fetch: createFetchRef.current ?? globalThis.fetch,
               prefix: resolvedPrefix,
+              ...(csrfHeader === undefined ? {} : { csrfHeader }),
               reference,
               paymentHash: resumePaymentHash,
               snapshot: checkout,
@@ -227,7 +231,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [reference, resolvedPrefix, resumePaymentHash, attempt]);
+  }, [reference, resolvedPrefix, csrfHeader, resumePaymentHash, attempt]);
 
   const onSwapStarted = React.useCallback(
     (invoice: CheckoutInvoiceSnapshot) => {
@@ -336,6 +340,7 @@ function CheckoutView(
     // The dispatcher and CheckoutCreate both resolve this before rendering the
     // view, so the default below only guards a direct CheckoutView call.
     prefix = OPENRECEIVE_DEFAULT_PREFIX,
+    csrfHeader,
     metadata: _metadata,
     createFetch: _createFetch,
     // Not `_`-prefixed like its neighbours: the view reads it, to infer
@@ -385,6 +390,7 @@ function CheckoutView(
     onError,
     refreshStatus,
     prefix,
+    csrfHeader,
     onState,
     onSettled,
     polling,
@@ -672,6 +678,7 @@ function CheckoutView(
               onError,
               onSwapFocusChange: setSwapFocused,
               prefix,
+              csrfHeader,
               qrEncoder,
               decodeLinkUrl,
               logContext: getCheckoutLogContext({

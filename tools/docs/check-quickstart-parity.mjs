@@ -3,7 +3,9 @@
 // The three Node quickstarts (Express, Fastify, Next.js) share most of their
 // prose: the migration step, the credentials block, the reference/onPaid
 // paragraphs, the render notes, the verify step and the reading list. Only
-// install, wiring and (for Next) render differ. That prose is copied three
+// install, wiring and (for Next) render differ. The FastAPI quickstart shares
+// the blocks whose prose is engine-independent (credentials, render, the
+// reading list) and carries its own install, migration and verify steps. That prose is copied three
 // times rather than templated, because each page has to read as one document
 // on the site and inline whole into its agent-directions payload.
 //
@@ -27,6 +29,13 @@ export const QUICKSTARTS = [
   "docs/guides/quickstart-node.md",
   "docs/guides/quickstart-fastify.md",
   "docs/guides/quickstart-next.md",
+  "docs/guides/quickstart-fastapi.md",
+  // Rails and Django share the exactly-once paragraph (`fulfill-once`); Django
+  // also carries the credentials block and the reading list.
+  "docs/guides/quickstart-rails.md",
+  "docs/guides/quickstart-django.md",
+  // Plain PHP carries the credentials block and the reading list.
+  "docs/guides/quickstart-php.md",
 ];
 
 const FENCE = /^<!-- shared:(begin|end) ([a-z0-9-]+) -->$/;

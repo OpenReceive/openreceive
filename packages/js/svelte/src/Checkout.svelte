@@ -23,6 +23,7 @@ import {
 export let checkout: CheckoutSnapshot | undefined = undefined;
 export let reference: string | undefined = undefined;
 export let prefix: string | undefined = undefined;
+export let csrfHeader: string | undefined = undefined;
 export let paymentWizard: boolean | undefined = undefined;
 export let decodeLinkUrl: string | undefined = undefined;
 export let assetBaseUrl: string | undefined = undefined;
@@ -71,6 +72,7 @@ $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   deferThemeResolution: !mounted,
   ...(reference === undefined ? {} : { reference }),
   ...(prefix === undefined ? {} : { prefix }),
+  ...(csrfHeader === undefined ? {} : { csrfHeader }),
   ...(paymentWizard === undefined ? {} : { paymentWizard }),
   ...(decodeLinkUrl === undefined ? {} : { decodeLinkUrl }),
   ...(assetBaseUrl === undefined ? {} : { assetBaseUrl }),

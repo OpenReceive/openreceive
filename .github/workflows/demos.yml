@@ -30,6 +30,7 @@ jobs:
       - run: npm run build:packages
       - run: npm run build:demo
       - run: npm run scan:client-bundles
+      - run: npm run check:standalone
 
   # Full browser E2E matrix: every Playwright spec (all four framework tabs,
   # settlement, refund/attention paths) against the node-express demo. The
@@ -91,3 +92,59 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/rails-ci
+
+  # The Buy a Button FastAPI demo (SQLite, the minimal Python host): bin/ci runs
+  # uv sync, the stubbed-wallet tests, the catalog drift and shared-boundary
+  # checks and pip-audit. Its browser client is the Vite bundle the demos job
+  # above builds (build:demo) and scans (scan:client-bundles).
+  buttons-fastapi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/buttons/server/fastapi/uv.lock
+      - run: bin/ci
+        working-directory: examples/buttons/server/fastapi
+
+  # The Buy a Button Django demo (host-owned Postgres, like its compose stack):
+  # bin/ci runs uv sync, `manage.py check`, the stubbed-wallet tests against
+  # the service database, the migration drift check, the shared-boundary check
+  # and pip-audit. Its browser client is the Vite bundle the demos job above
+  # builds (build:demo) and scans (scan:client-bundles). Mirrors ci.yml's
+  # per-push django-example job.
+  buttons-django:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NWC_URI: ""
+      DATABASE_URL: postgres://openreceive:openreceive@127.0.0.1:5432/buttons_django
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: openreceive
+          POSTGRES_PASSWORD: openreceive
+          POSTGRES_DB: buttons_django
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/buttons/server/django/uv.lock
+      - run: bin/ci
+        working-directory: examples/buttons/server/django

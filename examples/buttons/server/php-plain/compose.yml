@@ -1,0 +1,21 @@
+services:
+  buttons-php-plain:
+    build:
+      context: ../../../..
+      dockerfile: examples/buttons/server/php-plain/Dockerfile
+    environment:
+      PORT: "3008"
+      # The shop SURVIVES A RESTART, so its database is a volume rather than a
+      # layer in the image. Without this the acceptance demo — close the
+      # browser, reopen it, the download still works — would pass until the
+      # first `docker compose up --build` and then quietly stop passing.
+      OPENRECEIVE_DEMO_DB: /data
+    env_file:
+      - ../../../../.env
+    volumes:
+      - buttons-php-plain-data:/data
+    expose:
+      - "3008"
+
+volumes:
+  buttons-php-plain-data:

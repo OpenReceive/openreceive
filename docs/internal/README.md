@@ -20,6 +20,7 @@ swaps / settlement beyond the integrator happy path.
 15. [Forbidden Without Approval](forbidden-without-approval.md) - changes that need explicit approval.
 16. [BTCPay Plugin Manual E2E Checklist](btcpay-e2e.md) - what only a real wallet, a real provider and the Nostr plugin can prove, per release.
 17. [BTCPay Plugin Setup Details](btcpay-setup-details.md) - the long form of the BTCPay quickstart: every setup-page control, swap setup, the doctor, the payer's swap flow, Greenfield refusal codes.
+18. [Testkit Contract](testkit-contract.md) - the fake wallet, fake swap provider, static price and `__testkit` control routes every engine's port must reproduce for the shared E2E suite.
 
 The custom-route escape hatch moved to the developer guides:
 [Writing your own checkout route](../guides/custom-checkout-route.md).

@@ -99,6 +99,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       },
       prefix: () => props.prefix,
       fetch: () => fetcher,
+      csrfHeader: () => props.csrfHeader,
       onStarted: (invoice) => props.onSwapStarted?.(invoice),
     },
     ...(props.logger === undefined ? {} : { logger: props.logger }),
@@ -174,6 +175,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
             : await requestSwapRefund({
                 fetch: fetcher,
                 prefix,
+                ...(props.csrfHeader === undefined ? {} : { csrfHeader: props.csrfHeader }),
                 reference,
                 paymentHash: resolveAttemptPaymentHash(
                   [startedSwapInvoice, ...(checkout?.invoices ?? [])],
@@ -191,6 +193,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     },
     [
       props.prefix,
+      props.csrfHeader,
       reference,
       fetcher,
       props.onError,

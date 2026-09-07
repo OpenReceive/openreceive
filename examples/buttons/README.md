@@ -51,6 +51,7 @@ npm run demo static          # static HTML, no framework         :3001
 npm run demo nextjs          # Next.js app router + SQLite       :3002
 npm run demo buttons         # Rails + Postgres                  :3003
 npm run demo fastify         # Fastify + SQLite, React only      :3004
+npm run demo django          # Django + Postgres, React only     :3006
 ```
 
 For an edit-reload loop, run the stack's own `npm run dev` (or `bin/dev` for

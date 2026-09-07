@@ -24,6 +24,7 @@ COPY examples/buttons/server/nextjs-fullstack/package.json ./examples/buttons/se
 COPY examples/buttons/server/node-express/package.json ./examples/buttons/server/node-express/package.json
 COPY examples/buttons/server/static-html-small-api/package.json ./examples/buttons/server/static-html-small-api/package.json
 COPY examples/buttons/server/rails/package.json ./examples/buttons/server/rails/package.json
+COPY examples/buttons/server/django/package.json ./examples/buttons/server/django/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 
 COPY packages/js ./packages/js

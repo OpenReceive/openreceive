@@ -2,6 +2,120 @@
 
 ## Unreleased
 
+### Groundwork for the PHP and Python engines
+
+The shared work that every further engine and framework adapter depends on,
+done before either engine exists.
+
+- **The FixedFloat status mapping is data.** `spec/data/swap-state-table.json`
+  is the one hand-edited decision table for status + emergency block +
+  refund-tx presence → swap state and attention/refund reasons. `npm run
+  generate:models` renders it beside the kernel tables into JS, Ruby and C#,
+  and each engine's production normalizer is now a short interpreter of the
+  rendering instead of a hand-written copy. `npm run validate` checks the
+  table against the kernel vocabularies and replays every `swap-state` vector
+  case through it, so a table edit that breaks a case fails `npm run check`
+  before any engine runs.
+- **Kernel tables render to PHP and Python.** The generator writes
+  `packages/php/openreceive/src/Generated/Tables.php` and
+  `packages/python/openreceive/src/openreceive/_generated/tables.py` (plus the
+  fulfillment note for both); `check:generated` guards them.
+  `spec/test-vectors/coverage.json` gained `php` and `python` engine entries,
+  reported absent until their first test source exists (presence is now "a
+  test source under the engine's roots", not "a root directory exists").
+- **`csrfHeader` / `csrf-header`** (default `X-CSRF-Token`) on
+  `<openreceive-checkout>`, the React/Vue/Svelte/Angular wrappers and the
+  headless calls and controller: the header the `<meta name="csrf-token">`
+  value is sent under. Rails and Laravel need nothing; Django sets
+  `X-CSRFToken`, WordPress REST sets `X-WP-Nonce`. Host `headers` still win
+  on a clash.
+- **A standalone checkout build for hosts without a bundler.**
+  `@openreceive/elements` ships `dist/standalone/` (exported as
+  `./standalone/*`): one un-mangled ESM file that registers the element on
+  load, its stylesheet, the provider asset tree and a `MANIFEST.json` of
+  hashes. `npm run build:packages` writes it and
+  `dist/standalone-checkout-<version>.tar.gz`; `npm run check:standalone`
+  (in `test:ci:release`) verifies the manifest, the single-file property and
+  the receive-only secret markers; releases attach the tarball.
+- **The testkit contract is written down.** `docs/internal/testkit-contract.md`
+  pins the fake wallet, fake swap provider, static price and `__testkit`
+  control routes every engine's port must reproduce for the shared E2E suite.
+- **The PHP engine (`packages/php/openreceive`, Composer `openreceive/openreceive`).**
+  Engine #4: every kernel row (NWC URI/info/requests/errors, exact money on
+  `brick/math`, settlement, the truncation-safe wallet walk, the closure
+  decision, LSC URI, address checksums with an in-repo Keccak-256, the
+  FixedFloat decision-table interpreter) plus the host glue — a PDO
+  `openreceive_payments`/`openreceive_meta` repository in the Rails shape with
+  the shared per-reference lock recipe per dialect, the CAS reconcile gate, the
+  framework-free `RequestHandler` and a PSR-15 mount that passes all 17
+  `http-golden` vectors, `Service`, `Engine` (Host + repository + Service),
+  reconciler, notifications worker, doctor, and the `Testing\FakeWallet` /
+  `Testing\FakeSwapProvider` testkit port. NWC transport is
+  `dsbaars/nostr-php-nwc` for requests with an in-repo NWC-02 listener
+  (the library's decrypts NIP-04 only and never ends on a dead socket).
+  `npm run test:php` runs the suites and `tools/conformance/php-crosslang.php`;
+  `npm run test:live:php:nwc` is the opt-in live smoke.
+- **The Python engine (`packages/python/openreceive`, PyPI `openreceive`).** Engine #5, built
+  from the Ruby engine module for module: the kernel rows (money, settlement, NIP-47 URI/info/
+  requests/errors, the truncation-safe wallet walk, the closure decision, LSC URIs, swap address
+  checksums with an in-repo Keccak, the FixedFloat provider as an interpreter of the generated
+  decision table, the cached price feed), the `PaymentRepository` protocol with a SQLAlchemy Core
+  repository (`payments_schema_sql(dialect)` for postgres/sqlite/mysql, per-reference locks per
+  dialect, the `openreceive_meta` CAS gate, the schema-version guard), the framework-free
+  `RequestHandler` (request → status/body/headers, pinned by the `http-golden` files) and
+  `OpenReceiveApp` (handler + repository + the gated opportunistic reconcile), the notifications
+  worker, the doctor report, `openreceive.testing` fakes on the testkit contract, and the
+  receive-only NWC transport (`openreceive.nwc.transport`: websockets + coincurve + NIP-44/NIP-04).
+  Every `python` coverage family has a consumer; `npm run test:python` runs pytest and
+  `tools/conformance/python-crosslang.py` through `uv`. The Django app, FastAPI router, CLI verbs
+  and demos follow in later changes.
+- **FastAPI binding, the `openreceive` CLI, the FastAPI demo, PyPI release tooling.**
+  `openreceive.fastapi` — `openreceive_router(host, engine=…)` (an `APIRouter` serving every route
+  through the framework-free engine in Starlette's threadpool; `authorize` receives the Starlette
+  `Request`; the engine's cross-site, content-type, declared-fields and 64 KB checks run unchanged)
+  and `openreceive_lifespan(host, engine=…, lazy=False)` (the fail-closed wallet preflight at
+  startup). The console script grew its verbs: `doctor` / `debug-report` (with `--app module:attr`,
+  `--db`, `--url`, `--offline`), `reconcile`, `notifications`, and `scaffold payments --sql
+  --dialect postgres|sqlite|mysql` / `--alembic` (a frozen Alembic revision). Buy a Button on
+  FastAPI (`examples/buttons/server/fastapi`, :3007): the minimal Python host — SQLite, the
+  packaged React `<Checkout>`, `/__testkit` on `openreceive.testing`, Vite as the dev front door
+  spawning `uv run uvicorn`; `OPENRECEIVE_E2E_STACK=fastapi` runs the shared Playwright suite
+  against it, `check-demo-containers` validates `kind: "python"` demos. Docs: the FastAPI
+  quickstart and agent directions, the Flask recipe (a Blueprint over the same handler; no
+  `openreceive.flask` until the promotion rule is met), Python sections in the API reference,
+  deploying and host-testing guides. Release: `release:pypi:plan|build|publish`
+  (`tools/release/pypi-release.mjs`, PEP 440 at the boundary, `uv build` + wheel-contents check +
+  `twine check`), `publish-pypi.yml` with PyPI Trusted Publishing behind the `pypi` environment,
+  `release:prepare` stamping `_version.py`, `check:release` comparing it. CI: the `python-engine`
+  job (3.10 / 3.13, Postgres + MySQL service containers, ruff + mypy), `fastapi-example`
+  (`bin/ci`), the FastAPI smoke in `e2e-smoke`, `buttons-fastapi` in `demos.yml`; `test:python`
+  joined `test:ci:release`.
+
+- **Django adapter (`openreceive.django`), the Buy a Button Django demo, `quickstart-django`.**
+  An installable app — `INSTALLED_APPS += ["openreceive.django"]`, `OPENRECEIVE = {"HOST": …}`,
+  `include("openreceive.django.urls")` — with the two engine tables as ORM models and ONE shipped
+  migration (`manage.py migrate`; indexes, CHECK constraints, the `schema_version` seed), an
+  ORM-backed `PaymentRepository` that reuses the storage module's decisions and takes the same
+  per-reference lock per backend (`pg_advisory_xact_lock`, `GET_LOCK`, the SQLite transaction
+  boundary), thin views over the framework-free handler (the host's `CsrfViewMiddleware` check
+  runs in-view and answers the shared 403 error contract; `authorize` receives the Django
+  request), a `SERVICE` settings seam for a custom client, system checks (`openreceive.E001`
+  HOST, `W001`/`W002` placeholders, `E002` wallet preflight only under `OPENRECEIVE_PREFLIGHT=1`
+  — never in `AppConfig.ready()`), and four management commands: `openreceive_install` (writes
+  `<app>/openreceive_host.py` with the placeholders and the fulfillment note, prints the settings
+  lines, edits no settings.py), `openreceive_doctor`, `openreceive_reconcile`,
+  `openreceive_notifications`. A hatchling build hook copies the standalone checkout build into
+  `django/static/openreceive/` so the wheel carries it (`{% static "openreceive/openreceive-checkout.js" %}`);
+  the copy is gitignored and `check:standalone` verifies it against MANIFEST.json when present.
+  The repository contract tests from `tests/storage` re-run against the ORM backend
+  (SQLite always, Postgres under `OPENRECEIVE_TEST_PGSQL_URL`). The demo
+  (`examples/buttons/server/django`, :3006, `npm run demo django`) is the Rails shop's shape in
+  Python — products, visitors, orders, the three hooks as the only bridge, Postgres + a
+  `notifications` container in compose, Vite as the dev front door spawning `manage.py runserver`,
+  WhiteNoise for the built dist, `csrf-header="X-CSRFToken"` on the packaged `<Checkout>` — and is
+  E2E stack `django` (`npm run test:e2e:smoke:django`). Docs: `quickstart-django`
+  (`fulfill-once` shared with Rails, `credentials`/`next` with the Node and FastAPI pages), the
+  Django agent-directions payload, deploying/storage notes; CI `django-example` + demos `buttons-django`.
 ### Fastify demo, Fastify and Next.js quickstarts, contract v5
 
 Everything the site's framework landing pages point at now ships in the

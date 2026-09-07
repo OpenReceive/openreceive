@@ -35,7 +35,7 @@ directions link the former.
 
 ## `contract_version`
 
-The contract is at **v5**. A site that reads it should refuse to publish a
+The contract is at **v6**. A site that reads it should refuse to publish a
 version it does not understand rather than publish part of it — a half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -72,6 +72,15 @@ contract is how a payload ends up linking a page nobody serves.
   landing template reads the table instead of a hand-kept list: a site on v4
   has no framework pages, and one that half-read v5 could render a page for a
   framework whose payload it does not serve.
+- **v6** — `frameworks[]` gains rows outside the Node and Ruby ecosystems:
+  the `php` family (`laravel`, `php`) and the `python` family (`django`,
+  `fastapi`), with `/agent-directions/{laravel,php,django,fastapi}.md` payloads
+  and their quickstarts. The row shape is unchanged, but the `family` value is
+  new vocabulary the landing template must render: the install snippet is a
+  `composer require …` or `pip install "openreceive[…]"` line instead of `npm
+  install`, `adapter_package` names a Composer package or a PyPI extra, and
+  `requires` states a PHP or Python floor. A site on v5 would render those rows
+  with an npm install line that installs nothing, so the version moves.
 
 `release_version` moves with every library release and says nothing about the
 shape of this file; `contract_version` moves only when the site has to do
@@ -135,7 +144,7 @@ something new.
 | `api-docs` | `/api_docs` | Alias of `/guides/api-reference`, kept because the directions and the site have always linked it. |
 | `agent-directions` | `/guides/agent-directions-node`, `…-fastify`, `…-next`, `…-rails`, `…-btcpay` | The payload as a normal page, for people reading it. |
 | `agent-directions-payload` | `/agent-directions/node.md`, `/fastify.md`, `/next.md`, `/rails.md`, `/btcpay.md` | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
-| framework page | `/integrations/<id>` | `frameworks[]` (contract v5) — not a `publish[]` entry, because the page is the site's own template rendered from the row; the row names which `publish[]` pages it links. |
+| framework page | `/integrations/<id>` | `frameworks[]` (contract v5; `php` and `python` families since v6) — not a `publish[]` entry, because the page is the site's own template rendered from the row; the row names which `publish[]` pages it links. |
 | `agents-page` | `/agents` | The coding-agents entrypoint (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
 | `plugin-readme` | `/btcpay` | Carries a `video` field: play `video.path` inline at the top of the page with `video.poster` as its poster (both are `assets[]` entries), in place of the README's GitHub-only attachment URL. The BTCPay Server home: the plugin README (`packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md`) rendered and twinned like a guide, its screenshots from `assets[]`. Link it from the site navigation as the BTCPay entrypoint; the guides (`/guides/quickstart-btcpay`, `/guides/btcpay-reference`, and the swap guides) are the full documentation behind it. |
 | `asset` | `/assets/<path>` | `assets[]` — verbatim bytes of a file under `docs/assets/`, embedded or linked by a `publish[]` entry: the README's screenshots, its demo video (`video/mp4`) and the poster frame that links to it. Rewrite the link the same way as an image `src`. |

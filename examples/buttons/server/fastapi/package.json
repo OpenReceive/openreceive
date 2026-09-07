@@ -1,0 +1,30 @@
+{
+  "name": "@openreceive/example-buttons-fastapi",
+  "version": "0.4.3",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../../../tools/run-with-root-env.mjs vite --host 127.0.0.1 --port 3007 --configLoader runner",
+    "build": "vite build --configLoader runner",
+    "preview": "node ../../../../tools/run-with-root-env.mjs vite preview --host 127.0.0.1 --port 3007 --configLoader runner",
+    "start": "node ../../../../tools/run-with-root-env.mjs uv run --frozen uvicorn server.asgi:app --host 0.0.0.0 --port 3007 --proxy-headers"
+  },
+  "dependencies": {
+    "@mantine/core": "^9.5.2",
+    "@mantine/hooks": "^9.5.2",
+    "@openreceive/browser": "0.4.3",
+    "@openreceive/provider-data": "0.4.3",
+    "@openreceive/react": "0.4.3",
+    "@tabler/icons-react": "^3.46.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "mobx": "^6.15.0",
+    "mobx-keystone": "^1.21.0",
+    "mobx-react": "^9.2.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "vite": "^6.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

@@ -19,9 +19,11 @@ Formats in use (one per file family):
   `(client_ip, inserted_at)` index and window-membership cases).
 - **`provider` + `cases`** — `swap-state`: the FixedFloat status, emergency block,
   and refund-tx presence → OpenReceive swap state plus attention/refund reasons,
-  run through each engine's production status normalizer. Emitted attention
-  reasons must be a subset of `spec/data/kernel-tables.json`, and every
-  non-reserved reason there must appear in at least one case.
+  run through each engine's production status normalizer — an interpreter of
+  `spec/data/swap-state-table.json`, which `npm run validate` also replays
+  against these cases directly. Emitted attention reasons must be a subset of
+  `spec/data/kernel-tables.json`, and every non-reserved reason there must
+  appear in at least one case.
 - **`version` + `valid`/`invalid`** — `lsc-uri`: parse expectations for valid
   `lightning+swapconnect://` URIs and a list of URIs that must be refused.
 - **`expiry_grace_seconds` + `vectors`** — `attempt-reconciliation`: the
@@ -65,6 +67,7 @@ routes and are consumed by the provider-data tests.
 
 `coverage.json` lists each engine's test roots and its per-family exclusions with a
 reason. `npm run validate` fails when a family has neither a consumer nor an exclusion in
-an engine whose roots exist; an engine with no roots yet is reported as absent. Adding a
+an engine with test sources; an engine with no test source under its roots yet is reported
+as absent. Adding a
 vector means adding its consumer to every engine (or an exclusion); adding an engine means
 adding its entry here first.

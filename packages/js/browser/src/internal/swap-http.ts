@@ -22,6 +22,8 @@ export interface SwapRequestOptions {
   readonly prefix: string;
   readonly logger?: BrowserLoggerOption;
   readonly headers?: Readonly<Record<string, string>>;
+  /** Header name the page's `<meta name="csrf-token">` is sent under — see {@link requestHeaders}. */
+  readonly csrfHeader?: string;
 }
 
 /**
@@ -220,6 +222,7 @@ export async function requestSwapRefund(
     prefix: options.prefix,
     ...(options.logger === undefined ? {} : { logger: options.logger }),
     ...(options.headers === undefined ? {} : { headers: options.headers }),
+    ...(options.csrfHeader === undefined ? {} : { csrfHeader: options.csrfHeader }),
     body: {
       ...(options.reference === undefined ? {} : { reference: options.reference }),
       payment_hash: options.paymentHash,
@@ -281,7 +284,7 @@ async function requestJson(
   const fetcher = options.fetch;
   const response = await fetcher(url, {
     method: "POST",
-    headers: requestHeaders(options.headers),
+    headers: requestHeaders(options.headers, options.csrfHeader),
     body: JSON.stringify(body),
   });
   return readJsonResponse(response, "OpenReceive request failed.");

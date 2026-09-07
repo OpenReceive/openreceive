@@ -1,0 +1,59 @@
+"""GENERATED FILE — DO NOT EDIT.
+
+Source: spec/data/fulfillment-note.txt (npm run generate:models).
+Twins: packages/js/core/src/generated/fulfillment-note-text.ts, packages/ruby/openreceive-rails/lib/openreceive/generated/fulfillment_note.rb,
+packages/php/openreceive/src/Generated/FulfillmentNote.php; all render the same text, so no host scaffold can
+give different advice.
+"""
+
+from typing import Final
+
+# The note's lines, with "{{table}}" awaiting the caller's table name.
+FULFILLMENT_NOTE_TEMPLATE: Final = (
+    "Fulfilling exactly once",
+    "",
+    "WHAT OPENRECEIVE GUARANTEES",
+    "",
+    "Across every settlement path OpenReceive itself owns (wallet notifications,",
+    "the opportunistic reconcile pass, an explicit reconcile job), the settlement",
+    "hook runs AT MOST ONCE per reference. The library serializes on its own",
+    "`{{table}}` rows, decides the winner there, and runs your hook",
+    "inside that same transaction. A second payment to a second invoice for the",
+    "same order is still recorded - with `status_reason = 'duplicate_settlement'`",
+    "- but never fulfills a second time. You do not need to add a lock for this.",
+    "",
+    "That makes the reference the unit of fulfillment: give every payable order",
+    "its own reference, created before checkout, kept across retries, and never",
+    "reused. A new checkout under a reference that has already settled is refused",
+    "with a 409 rather than fulfilled again; a fresh reference per page load",
+    "leaves one order payable twice.",
+    "",
+    "WHAT YOU MUST GUARANTEE",
+    "",
+    "OpenReceive cannot see fulfillment that happens outside it. If ANY other",
+    "path can also mark this order fulfilled - an admin action, a second payment",
+    "processor, a support tool, a replayed webhook, a retried background job -",
+    "then those paths race each other, not OpenReceive, and you must make",
+    "fulfillment idempotent yourself.",
+    "",
+    "The usual way is to make the transition itself the lock: guard it with a",
+    "conditional write that only one transaction can win.",
+    "",
+    "  -- Idempotent by construction: the WHERE clause is the guard. Whoever",
+    "  -- flips 'awaiting_payment' -> 'paid' first is the only one who fulfills;",
+    "  -- every later attempt updates 0 rows and must do nothing.",
+    "  UPDATE orders",
+    "     SET state = 'paid', paid_at = :paid_at",
+    "   WHERE id = :reference",
+    "     AND state = 'awaiting_payment';",
+    "  -- then: if 0 rows were affected, return without shipping anything.",
+    "",
+    "If your fulfillment is a read-modify-write that cannot be expressed as one",
+    "conditional UPDATE, take a row lock for the duration instead:",
+    "",
+    "  SELECT * FROM orders WHERE id = :reference FOR UPDATE;  -- postgres/mysql",
+    "  -- ...check state, ship, write the new state, all before COMMIT.",
+    "",
+    "Run either one inside the transaction OpenReceive hands your settlement",
+    "hook, so the order transition and the payment record commit together.",
+)

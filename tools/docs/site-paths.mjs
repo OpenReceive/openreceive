@@ -54,7 +54,10 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/node.md",
   "/agent-directions/fastify.md",
   "/agent-directions/next.md",
+  "/agent-directions/fastapi.md",
+  "/agent-directions/django.md",
   "/agent-directions/rails.md",
+  "/agent-directions/php.md",
   "/agent-directions/btcpay.md",
 ];
 

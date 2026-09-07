@@ -1,0 +1,65 @@
+name: Publish PyPI
+
+# Uploads the `openreceive` distribution (packages/python/openreceive) to PyPI
+# with Trusted Publishing: the job proves its identity with a GitHub OIDC token
+# and PyPI mints a short-lived upload token. No stored credential. PyPI trusts
+# exactly this repository + this filename + the `pypi` environment, and the
+# environment admits only v* tags after a human approval. Treat edits to this
+# file like edits to a signing key.
+#
+# Fallback when this cannot run: tools/release/pypi-release.mjs publish with
+# UV_PUBLISH_TOKEN set (the manual, token-based path; see release-process.md).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-pypi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PACKAGE: packages/python/openreceive
+      DIST: .release/pypi/ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+      # A v* tag that does not match the prepared workspace version is a
+      # mis-tag; fail before anything is built.
+      - name: Assert tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version v${version}." >&2
+            exit 1
+          fi
+      # The same build the maintainer runs locally (uv build + twine check +
+      # the wheel-contents check), so what ships is what release:pypi:build
+      # proved. PEP 440 normalization lives in tools/release/pypi-release.mjs.
+      - name: Build sdist and wheel
+        run: |
+          set -euo pipefail
+          node tools/release/pypi-release.mjs build --out "$DIST"
+          ls -l "$DIST"
+      # `uv publish` exchanges the job's OIDC token for a PyPI upload token
+      # (trusted publishing). --check-url makes a re-run after a partial upload
+      # skip the file PyPI already holds instead of failing on it.
+      - name: Publish to PyPI
+        run: |
+          set -euo pipefail
+          uv publish --trusted-publishing always --check-url https://pypi.org/simple/openreceive/ "$DIST"/*
+          echo "published https://pypi.org/project/openreceive/"

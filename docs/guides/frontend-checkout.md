@@ -38,6 +38,12 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
 - `reference` — create mode (the usual path). Or pass `checkout` for a
   snapshot you already loaded.
 - `prefix` — the mount path, as the browser sees it.
+- `csrfHeader` — the header name the page's `<meta name="csrf-token">` value
+  is sent under, on every request. The meta tag name is fixed; only the
+  header varies by framework. Rails and Laravel read the default
+  `X-CSRF-Token` and need nothing. Django reads `X-CSRFToken`; WordPress REST
+  reads `X-WP-Nonce`. Same prop in all four wrappers; `csrf-header` on the
+  custom element.
 - `onSettled`, `onError`, `onState` — settlement, failures, and every
   attempt the checkout watches. Store a swap `payment_hash` from `onState`
   if you want the payer to return to a refund later.
@@ -66,6 +72,49 @@ only. Use `checkoutLabels` for any string you put on the screen.
 Importing `@openreceive/react` plus its `styles.css` adds roughly 530 kB
 minified (~150 kB gzipped) to a production chunk. If that matters on the rest
 of your site, lazy-load the checkout route so only payers download it.
+
+## Without a bundler
+
+A host with no JS build step — a WordPress plugin, a Django template, a plain
+PHP page — uses the standalone build that `@openreceive/elements` ships under
+`dist/standalone/` (also `import "@openreceive/elements/standalone/openreceive-checkout.js"`
+from npm, and attached to every GitHub release as
+`standalone-checkout-<version>.tar.gz`). It is three things plus a manifest:
+
+- `openreceive-checkout.js` — one self-contained ES module. It inlines every
+  `@openreceive/*` dependency, registers `<openreceive-checkout>` and
+  `<openreceive-theme-toggle>` as soon as it loads, and still exports the
+  package's named API. Identifiers are not mangled — only whitespace is
+  minified — and a source map sits beside it.
+- `openreceive-checkout.css` — the same scoped stylesheet as `styles.css`.
+- `assets/` — the wallet logos and pay tutorials from
+  `@openreceive/provider-data`.
+- `MANIFEST.json` — the workspace version and a SHA-256 per file, so a copied
+  tree can be checked against the release it came from.
+
+Copy the directory somewhere your server serves as static files and add two
+tags:
+
+```html
+<link rel="stylesheet" href="/static/openreceive/openreceive-checkout.css" />
+<script type="module" src="/static/openreceive/openreceive-checkout.js"></script>
+
+<openreceive-checkout
+  reference="ord_123"
+  prefix="/openreceive"
+  asset-base-url="/static/openreceive"
+></openreceive-checkout>
+```
+
+`asset-base-url` is the URL the copied `assets/` directory sits under; every
+packaged image path is joined to it (`/static/openreceive/assets/provider-icons/strike.png`).
+See [Provider registry → Assets](provider-registry.md#assets).
+
+The build is reproducible: `npm run build:packages` in the
+[repository](https://github.com/openreceive/openreceive) regenerates the
+directory from the same commit
+(`tools/package/build-standalone-elements.mjs`), and `npm run check:standalone`
+verifies a copy against its manifest.
 
 ## Theme
 
