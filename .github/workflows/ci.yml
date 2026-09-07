@@ -148,7 +148,10 @@ jobs:
       # Lint and strict typing are part of the engine's definition of green.
       - run: uv run --project packages/python/openreceive --frozen ruff check
       - run: uv run --project packages/python/openreceive --frozen ruff format --check
-      - run: uv run --project packages/python/openreceive --frozen mypy
+      # mypy reads its config from the working directory, so run it inside
+      # the package (the same command a developer runs there).
+      - run: uv run --frozen mypy
+        working-directory: packages/python/openreceive
 
   # Browser E2E smoke on every push/PR: boots the node-express Buy a Button
   # demo against the testkit wallet and drives a real checkout in Chromium,
