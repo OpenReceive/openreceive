@@ -308,7 +308,7 @@ assert(
     "@openreceive/provider-data: wallet logos must be inlined in dist/index.js"
   );
   assert(
-    !index.includes("assets/pay_tutorials/kraken-4.webp") && /import\("\.\/[^"]+\.js"\)/.test(index),
+    !index.includes("assets/pay_tutorials/kraken-4.webp") && /import\\("\\.\\/[^"]+\\.js"\\)/.test(index),
     "@openreceive/provider-data: dist/index.js must reach the pay tutorials only through a dynamic import()"
   );
   const chunk = readdirSync(providerDist).find(

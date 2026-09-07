@@ -271,6 +271,32 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
   },
+  {
+    id: "laravel",
+    label: "Laravel",
+    family: "php",
+    quickstart_slug: "quickstart-laravel",
+    agent_stack: "laravel",
+    adapter_package: "openreceive/laravel",
+    install: "composer require openreceive/laravel",
+    requires: "PHP ≥ 8.2 (64-bit), Laravel 11 or 12, ext-gmp",
+    demo: "laravel",
+    video: null,
+    shared_checkout_demo: true,
+  },
+  {
+    id: "php",
+    label: "PHP",
+    family: "php",
+    quickstart_slug: "quickstart-php",
+    agent_stack: "php",
+    adapter_package: "openreceive/openreceive",
+    install: "composer require openreceive/openreceive nyholm/psr7 nyholm/psr7-server",
+    requires: "PHP ≥ 8.2 (64-bit), ext-gmp",
+    demo: "php-plain",
+    video: null,
+    shared_checkout_demo: true,
+  },
 ];
 
 const manifest = JSON.parse(readFileSync(path.join(root, "docs/manifest.json"), "utf8"));

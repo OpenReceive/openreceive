@@ -28,7 +28,7 @@ php artisan migrate --force --no-interaction
 php artisan db:seed --force --no-interaction
 
 step "Tests (stubbed wallet, on the service database)"
-vendor/bin/phpunit
+APP_ENV=testing vendor/bin/phpunit
 
 step "Drift: OpenReceive migration snapshot"
 php script/check-migration-drift.php

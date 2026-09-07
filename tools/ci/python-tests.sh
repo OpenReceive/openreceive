@@ -38,7 +38,9 @@ assert_nonempty "$package_test_count" "$PACKAGE/tests"
 
 # One environment for the whole run: the dev group carries pytest, sqlalchemy,
 # ruff and mypy; `--frozen` refuses to drift from the committed uv.lock.
-uv sync --project "$PACKAGE" --frozen --quiet
+# Rebuild the editable package so its hook refreshes Django's standalone
+# checkout copy after build:packages, even when Python sources did not change.
+uv sync --project "$PACKAGE" --frozen --reinstall-package openreceive --quiet
 
 uv run --project "$PACKAGE" --frozen pytest "$PACKAGE/tests" -q
 

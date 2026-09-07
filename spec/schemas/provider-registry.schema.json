@@ -95,7 +95,7 @@
           },
           "icon_path": {
             "type": "string",
-            "pattern": "^assets/provider-icons/[a-z0-9-]+\\.png$"
+            "pattern": "^assets/provider-icons/[a-z0-9-]+\\.(png|webp)$"
           },
           "tutorials": {
             "type": "array",

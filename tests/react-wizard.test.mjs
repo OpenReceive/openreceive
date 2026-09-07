@@ -264,7 +264,7 @@ test("browser checkout provider icon and tutorial helpers", async () => {
 test("browser checkout route, method, and network icon helpers", () => {
   assert.equal(getRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getRouteNetworkLabel("usdt-tron"), "usdt-tron");
-  // Without a resolver every getter answers the packaged data: URI of its icon.
+  // Every getter answers the compiled-in data: URI of its icon.
   assert.equal(getPaymentMethodIcon("bitcoin"), paymentIconUrls.btc);
   assert.equal(getRouteIcon({ symbol: "btc", route: "btc-lightning" }), paymentIconUrls.lightning);
   assert.equal(getRouteIcon({ symbol: "usdt", route: "usdt-tron" }), paymentIconUrls.usdt);
@@ -273,10 +273,6 @@ test("browser checkout route, method, and network icon helpers", () => {
   assert.equal(getNetworkIcon("Tron"), paymentIconUrls.trx);
   assert.equal(getNetworkIcon("Solana"), paymentIconUrls.sol);
   assert.equal(getNetworkIcon("Ethereum"), paymentIconUrls.eth);
-  // With one, the packaged path goes through it — the host serves the file.
-  const resolve = (packagedPath) => `/served/${packagedPath}`;
-  assert.equal(getPaymentMethodIcon("bitcoin", resolve), "/served/assets/icons/btc.svg");
-  assert.equal(getNetworkIcon("Tron", resolve), "/served/assets/icons/trx.svg");
 });
 
 test("browser checkout theme resolution builds a full theme model", () => {

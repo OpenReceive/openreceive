@@ -323,7 +323,9 @@ export async function stepTestkitSwap(
  * download here means the whole bridge ran.
  */
 export async function expectPaidReceipt(page: Page): Promise<void> {
-  await expect(page.getByText("Payment received")).toBeVisible();
+  await expect(
+    page.locator(".or-shop-status-title").filter({ hasText: /^Payment received$/ }),
+  ).toBeVisible();
   await expect(page.getByText(`OpenReceive button: ${BUTTON_NAME}`)).toBeVisible();
   await expect(downloadLink(page)).toBeVisible();
 }

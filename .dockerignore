@@ -21,6 +21,7 @@ coverage
 **/public/packs*
 # Local Vite output of the Laravel demo; its client stage rebuilds public/build.
 **/public/build
+**/public/openreceive
 **/public/hot
 
 # Rails run-scratch. Every local `rails`/`bin/ci` run rewrites these, and they

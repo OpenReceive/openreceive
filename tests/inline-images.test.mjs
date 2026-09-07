@@ -87,16 +87,19 @@ test("the React tutorial renders no <img> before the screenshots load, then a da
   document.body.appendChild(container);
   const root = createRoot(container);
   root.render(React.createElement(PaymentWizard, { invoice: "lnbc1test" }));
+  const buttons = () => [...container.querySelectorAll("button")];
   try {
+    (
+      await until(() => buttons().find((b) => b.textContent.startsWith("Bitcoin")), {
+        label: "grid",
+      })
+    ).click();
     const open = await until(
       () =>
-        [...container.querySelectorAll("button")].find((button) =>
-          button.closest("[data-or-provider='strike']"),
-        ) ??
-        [...container.querySelectorAll("button")].find(
+        buttons().find(
           (button) =>
             button.textContent === "How To Pay" &&
-            button.parentElement?.textContent?.includes("Strike"),
+            button.closest("article")?.querySelector("h4")?.textContent === "Strike",
         ),
       { label: "Strike's tutorial button" },
     );
