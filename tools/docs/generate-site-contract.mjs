@@ -39,6 +39,11 @@ const TARGET = "docs/site-contract.json";
 const ALIASES = [{ path: "/api_docs", slug: "api-reference", kind: "api-docs" }];
 
 const AGENT_PAYLOADS = [
+  {
+    path: "/agent-directions/woocommerce.md",
+    source: "docs/agents/woocommerce.md",
+    stack: "woocommerce",
+  },
   { path: "/agent-directions/node.md", source: "docs/agents/node.md", stack: "node" },
   { path: "/agent-directions/fastify.md", source: "docs/agents/fastify.md", stack: "fastify" },
   { path: "/agent-directions/next.md", source: "docs/agents/next.md", stack: "next" },
@@ -70,6 +75,15 @@ const AGENT_PAGES = [
 // from the README the plugin ships with rather than a second copy under docs/;
 // the screenshots it embeds become the contract's `assets[]`.
 const PLUGIN_PAGES = [
+  {
+    path: "/wordpress",
+    source: "packages/php/wordpress/README.md",
+    kind: "plugin-readme",
+    slug: "wordpress",
+    title: "OpenReceive for WordPress + WooCommerce",
+    category: "woocommerce",
+    video: null,
+  },
   {
     path: "/btcpay",
     source: "packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md",
@@ -175,6 +189,19 @@ const AGENT_ARTIFACTS = [
 // disk, and the video null, an absolute URL, or an assets[] entry.
 const GITHUB_TREE = "https://github.com/OpenReceive/openreceive/tree/master";
 const FRAMEWORKS = [
+  {
+    id: "woocommerce",
+    label: "WordPress + WooCommerce",
+    family: "php",
+    quickstart_slug: "quickstart-woocommerce",
+    agent_stack: "woocommerce",
+    adapter_package: "openreceive/wordpress",
+    install: "Plugins → Add New → Upload Plugin",
+    requires: "WordPress ≥ 6.6, WooCommerce ≥ 9, PHP ≥ 8.2, GMP and sodium",
+    demo: "wordpress",
+    video: null,
+    shared_checkout_demo: false,
+  },
   {
     id: "express",
     label: "Express",

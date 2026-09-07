@@ -24,38 +24,18 @@ final class HttpGoldenTest extends TestCase
 {
     use VectorSupport;
 
-    /** @var array<string, callable(mixed): bool> */
-    private const GOLDEN_PLACEHOLDERS = [
-        '<request_id>' => [self::class, 'isRequestId'],
-        '<payment_hash>' => [self::class, 'isPaymentHash'],
-        '<bolt11>' => [self::class, 'isBolt11'],
-        '<unix_seconds>' => [self::class, 'isUnixSeconds'],
-    ];
-
-    public static function isRequestId(mixed $value): bool
+    private static function matchesPlaceholder(mixed $value, array $rule): bool
     {
-        return is_string($value) && preg_match('/\Areq_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/', $value) === 1;
-    }
-
-    public static function isPaymentHash(mixed $value): bool
-    {
-        return is_string($value) && preg_match('/\A[0-9a-f]{64}\z/', $value) === 1;
-    }
-
-    public static function isBolt11(mixed $value): bool
-    {
-        return is_string($value) && str_starts_with($value, 'ln');
-    }
-
-    public static function isUnixSeconds(mixed $value): bool
-    {
-        return is_int($value) && $value >= 0;
+        if ($rule['type'] === 'integer') { return is_int($value) && $value >= $rule['minimum']; }
+        return is_string($value) && (isset($rule['prefix']) ? str_starts_with($value, $rule['prefix'])
+            : preg_match('/\\A(?:' . $rule['pattern'] . ')\\z/', $value) === 1);
     }
 
     private static function assertGoldenValue(mixed $actual, mixed $expected, string $context): void
     {
-        if (is_string($expected) && isset(self::GOLDEN_PLACEHOLDERS[$expected])) {
-            self::assertTrue(self::GOLDEN_PLACEHOLDERS[$expected]($actual), "{$context}: " . json_encode($actual) . " does not satisfy {$expected}");
+        $rules = self::readJson(self::vectorsDir() . '/http-golden/PLACEHOLDERS.json');
+        if (is_string($expected) && isset($rules[$expected])) {
+            self::assertTrue(self::matchesPlaceholder($actual, $rules[$expected]), "{$context}: " . json_encode($actual) . " does not satisfy {$expected}");
             return;
         }
         if (is_array($expected) && array_is_list($expected) && $expected !== []) {
@@ -150,7 +130,7 @@ final class HttpGoldenTest extends TestCase
             'described' => self::app($service, static fn (): array => ['amount' => ['sats' => 1], 'description' => '2 kg Ataulfo mangoes']),
         ];
         $factory = new Psr17Factory();
-        $paths = glob(self::vectorsDir() . '/http-golden/*.json') ?: [];
+        $paths = array_values(array_filter(glob(self::vectorsDir() . '/http-golden/*.json') ?: [], static fn (string $file): bool => basename($file) !== 'PLACEHOLDERS.json'));
         sort($paths);
         self::assertNotEmpty($paths);
         foreach ($paths as $path) {

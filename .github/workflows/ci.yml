@@ -15,6 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  wordpress:
+    uses: ./.github/workflows/wordpress.yml
   package-assets:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -94,17 +96,21 @@ jobs:
   # conformance harness). The repository suite runs on SQLite always and, with
   # the two service containers below exporting OPENRECEIVE_TEST_*_URL, on
   # Postgres and MySQL too — the per-dialect lock paths. Django's own tests
-  # (tests/django, pytest-django) run in the same pytest invocation once they
-  # exist; a Django 5.2 / 6.0 axis is a follow-up for the Django track.
+  # (tests/django, pytest-django) run on both supported Django lines. Django 6
+  # requires Python 3.12+, so it does not join the Python 3.10 floor.
   python-engine:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.10"
-          - "3.13"
+        include:
+          - python-version: "3.10"
+            django-version: "5.2.*"
+          - python-version: "3.13"
+            django-version: "5.2.*"
+          - python-version: "3.13"
+            django-version: "6.0.*"
     services:
       postgres:
         image: postgres:18-alpine
@@ -136,6 +142,7 @@ jobs:
       # uv honours UV_PYTHON over the package's .python-version, so one script
       # covers both axes.
       UV_PYTHON: ${{ matrix.python-version }}
+      OPENRECEIVE_TEST_DJANGO: ${{ matrix.django-version }}
       OPENRECEIVE_TEST_PGSQL_URL: postgresql+psycopg://openreceive:openreceive@127.0.0.1:5432/openreceive_test
       OPENRECEIVE_TEST_MYSQL_URL: mysql+pymysql://root:openreceive@127.0.0.1:3306/openreceive_test
     steps:
@@ -326,17 +333,16 @@ jobs:
         with:
           submodules: true
           fetch-depth: 1
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 10.0.x
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('packages/dotnet/**/*.csproj', 'packages/dotnet/submodules/btcpayserver/**/*.csproj') }}
+          key: nuget-docker-${{ runner.os }}-${{ hashFiles('packages/dotnet/global.json', 'packages/dotnet/**/*.csproj', 'packages/dotnet/submodules/btcpayserver/**/*.csproj') }}
           restore-keys: |
-            nuget-${{ runner.os }}-
-      - run: dotnet build packages/dotnet/BTCPayServer.Plugins.OpenReceive.slnx -nologo -v q
-      - run: dotnet test packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests -nologo -v q --no-build
+            nuget-docker-${{ runner.os }}-
+      - name: Build and test .NET in Docker
+        run: |
+          mkdir -p "$HOME/.nuget"
+          NUGET_VOLUME="$HOME/.nuget" bash packages/dotnet/docker/test-unit.sh
 
   # The fourth settlement engine: the PHP package (packages/php/openreceive) on
   # the oldest supported interpreter and a current one, through

@@ -1189,3 +1189,28 @@ test("csrf-header renames the CSRF header on every request the element makes", a
     meta.remove();
   }
 });
+
+test("a remembered swap opens its refund panel without another create", async () => {
+  const hash = "f".repeat(64);
+  const status = { ...swapStartBody("SOL_SOL", hash).swap, provider_state: "refund_required" };
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBodyWithSwapAsset("order-return", "SOL_SOL"),
+    "/swaps/status": () => status,
+    "/payments/check": () => ({ payment_hash: hash, status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({
+    reference: "order-return",
+    prefix: "/openreceive",
+    "resume-payment-hash": hash,
+  });
+  try {
+    await untilLocal(() => element.shadowRoot?.textContent.includes("Refund needed"), {
+      label: "restored refund panel",
+    });
+    assert.equal(fetchStub.pathCount("/swaps"), 0);
+    assert.equal(fetchStub.pathCount("/checkouts"), 0);
+  } finally {
+    element.remove();
+  }
+});

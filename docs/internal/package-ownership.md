@@ -29,7 +29,7 @@ parallel work. Shared contract files still need lead coordination.
 | Buy a Button examples | `examples/buttons/**` | Implemented | Example lane |
 | PHP engine (`openreceive/openreceive`) | `packages/php/openreceive` | Implemented (vector-backed, fourth engine): kernel + PSR-15 server + PDO repository + FixedFloat + `Testing\` fakes | Ecosystem lane |
 | Laravel adapter (`openreceive/laravel`) | `packages/php/laravel` | Implemented: service provider, artisan commands, migration + Host stubs | Ecosystem lane |
-| WooCommerce plugin | `packages/php/wordpress` | Planned (consumes `openreceive/openreceive` through the `DatabaseConnection` seam) | Ecosystem lane |
+| WooCommerce plugin | `packages/php/wordpress` | WooCommerce gateway, REST mount, encrypted settings, Action Scheduler and `$wpdb` adapter; consumes the shared PHP engine | Ecosystem lane |
 | Python engine (`openreceive` with `[django]` / `[fastapi]` extras) | `packages/python/openreceive` | Implemented (vector-backed, fifth engine): kernel + framework-free handler + SQLAlchemy and Django ORM repositories + in-repo NWC transport + `openreceive.testing` fakes; `openreceive.django`, `openreceive.fastapi`, the `openreceive` CLI | Ecosystem lane |
 
 `packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs`,

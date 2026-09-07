@@ -85,7 +85,12 @@
     "test:ci:release": "npm run build:packages && npm run check:standalone && npm run test:ruby && npm run test:python && npm run test:php && npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:dotnet",
     "test:ci": "npm run test:ci:core && npm run test:ci:release",
     "test:live": "npm run test:live:nwc && npm run test:live:ruby:nwc && npm run test:live:python:nwc && npm run test:live:php:nwc",
-    "test:live:nwc": "node tools/live-nwc-test/index.mjs"
+    "test:live:nwc": "node tools/live-nwc-test/index.mjs",
+    "release:wordpress:plan": "node tools/release/wordpress-plugin.mjs plan",
+    "release:wordpress:build": "node tools/release/wordpress-plugin.mjs build",
+    "test:e2e:wordpress": "playwright test --config tests/e2e-wordpress/playwright.config.ts",
+    "test:wordpress": "bash tools/ci/wordpress-tests.sh",
+    "check:wordpress": "node tools/validate/check-wordpress-plugin.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 2465
+      "bytes": 2605
     },
     {
       "path": "/guides/quickstart-node",
@@ -233,7 +233,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 10327
+      "bytes": 10831
     },
     {
       "path": "/guides/host-testing",
@@ -406,6 +406,26 @@
       "bytes": 10084
     },
     {
+      "path": "/guides/quickstart-woocommerce",
+      "markdown_path": "/guides/quickstart-woocommerce.md",
+      "source": "docs/guides/quickstart-woocommerce.md",
+      "kind": "guide",
+      "slug": "quickstart-woocommerce",
+      "title": "WordPress + WooCommerce Quickstart",
+      "category": "quickstart",
+      "bytes": 3580
+    },
+    {
+      "path": "/guides/agent-directions-woocommerce",
+      "markdown_path": "/guides/agent-directions-woocommerce.md",
+      "source": "docs/agents/woocommerce.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-woocommerce",
+      "title": "Agent directions (WordPress + WooCommerce)",
+      "category": "agents",
+      "bytes": 8621
+    },
+    {
       "path": "/api_docs",
       "markdown_path": "/api_docs.md",
       "source": "docs/guides/api-reference.md",
@@ -427,6 +447,17 @@
       "bytes": 2655
     },
     {
+      "path": "/wordpress",
+      "markdown_path": "/wordpress.md",
+      "source": "packages/php/wordpress/README.md",
+      "kind": "plugin-readme",
+      "slug": "wordpress",
+      "title": "OpenReceive for WordPress + WooCommerce",
+      "category": "woocommerce",
+      "bytes": 2652,
+      "assets_base": "/assets/"
+    },
+    {
       "path": "/btcpay",
       "markdown_path": "/btcpay.md",
       "source": "packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md",
@@ -440,6 +471,16 @@
         "path": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
         "poster": "/assets/btcpayserver/basic-btcpayserver-demo-poster.webp"
       }
+    },
+    {
+      "path": "/agent-directions/woocommerce.md",
+      "source": "docs/agents/woocommerce.md",
+      "kind": "agent-directions-payload",
+      "stack": "woocommerce",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 8621,
+      "copy_button": true,
+      "self_contained": true
     },
     {
       "path": "/agent-directions/node.md",
@@ -533,6 +574,25 @@
     }
   ],
   "frameworks": [
+    {
+      "id": "woocommerce",
+      "label": "WordPress + WooCommerce",
+      "family": "php",
+      "heading": "Accept Bitcoin & Stablecoin Payments With WordPress + WooCommerce",
+      "quickstart_slug": "quickstart-woocommerce",
+      "quickstart_path": "/guides/quickstart-woocommerce",
+      "quickstart_title": "WordPress + WooCommerce Quickstart",
+      "agent_stack": "woocommerce",
+      "agent_payload_path": "/agent-directions/woocommerce.md",
+      "adapter_package": "openreceive/wordpress",
+      "install": "Plugins → Add New → Upload Plugin",
+      "requires": "WordPress ≥ 6.6, WooCommerce ≥ 9, PHP ≥ 8.2, GMP and sodium",
+      "example_path": "examples/wordpress",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/wordpress",
+      "demo_port": "3009",
+      "video": null,
+      "shared_checkout_demo": false
+    },
     {
       "id": "express",
       "label": "Express",
@@ -707,6 +767,15 @@
   ],
   "assets": [
     {
+      "path": "/assets/wordpress/checkout.png",
+      "source": "docs/assets/wordpress/checkout.png",
+      "content_type": "image/png",
+      "bytes": 232579,
+      "referenced_by": [
+        "/wordpress"
+      ]
+    },
+    {
       "path": "/assets/btcpayserver/1-click-OR-icon.webp",
       "source": "docs/assets/btcpayserver/1-click-OR-icon.webp",
       "content_type": "image/webp",
@@ -837,6 +906,10 @@
     {
       "path": "/btcpay",
       "must_exist": true
+    },
+    {
+      "path": "/wordpress",
+      "must_exist": true
     }
   ],
   "site_redirects": [],
@@ -847,7 +920,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 4922
+        "bytes": 5130
       },
       {
         "path": "/openapi.yaml",

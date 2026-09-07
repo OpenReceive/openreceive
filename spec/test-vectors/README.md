@@ -71,3 +71,7 @@ an engine with test sources; an engine with no test source under its roots yet i
 as absent. Adding a
 vector means adding its consumer to every engine (or an exclusion); adding an engine means
 adding its entry here first.
+
+`http-golden/PLACEHOLDERS.json` contains the shared full-string patterns, string
+prefixes and integer minima used by the JS, Ruby, PHP and Python golden matchers.
+It is matcher metadata, not a request/response vector.

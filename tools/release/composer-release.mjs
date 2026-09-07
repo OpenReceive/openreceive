@@ -6,7 +6,7 @@
 // versions from its tags, so the monorepo cannot be registered directly. Each
 // Composer package therefore has a read-only SPLIT repository on GitHub
 // (`OpenReceive/openreceive-php` for `openreceive/openreceive`,
-// `OpenReceive/laravel` for `openreceive/laravel`) that Packagist watches, and
+// `OpenReceive/openreceive-laravel` for `openreceive/laravel`) that Packagist watches, and
 // this script fills them:
 //
 //   plan     read-only: versions, constraints, remotes, what build would do
@@ -62,7 +62,7 @@ export const COMPOSER_PACKAGES = [
     name: "openreceive/laravel",
     short: "laravel",
     dir: LARAVEL_DIR,
-    splitRepo: "OpenReceive/laravel",
+    splitRepo: "OpenReceive/openreceive-laravel",
     remote: "composer-laravel",
     lockstep: ["openreceive/openreceive"],
   },
@@ -156,14 +156,25 @@ export function updatePhpVersions(root, targetVersion) {
   }
   const wordpressDir = path.join(root, "packages/php/wordpress");
   if (existsSync(path.join(wordpressDir, "composer.json"))) {
-    const manifest = JSON.parse(readFileSync(path.join(wordpressDir, "composer.json"), "utf8"));
+    const file = path.join(wordpressDir, "composer.json");
+    const source = readFileSync(file, "utf8");
+    const manifest = JSON.parse(source);
+    const previousVersion = manifest.require["openreceive/openreceive"];
     manifest.require["openreceive/openreceive"] = composerConstraint(targetVersion);
     manifest.repositories[0].options.versions["openreceive/openreceive"] = targetVersion;
-    writeFileSync(
-      path.join(wordpressDir, "composer.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-    );
-    changed.push("packages/php/wordpress/composer.json");
+    if (previousVersion !== manifest.require["openreceive/openreceive"]) {
+      writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+      execFileSync("npx", ["biome", "format", "--write", file], { cwd: root, stdio: "ignore" });
+      changed.push("packages/php/wordpress/composer.json");
+      if (existsSync(path.join(wordpressDir, "composer.lock"))) {
+        execFileSync(
+          "composer",
+          ["update", "openreceive/openreceive", "--no-install", "--no-interaction"],
+          { cwd: wordpressDir, stdio: "inherit" },
+        );
+        changed.push("packages/php/wordpress/composer.lock");
+      }
+    }
     for (const name of ["openreceive.php", "readme.txt"]) {
       const file = path.join(wordpressDir, name);
       const before = readFileSync(file, "utf8");
@@ -251,7 +262,7 @@ function usage() {
     "  --out <dir>                Metadata dir (default: .release/composer/<version>).",
     "  --remote-openreceive <x>   Push target for openreceive/openreceive: a URL or a git remote name",
     "                             (default: the `composer-openreceive` remote, else git@github.com:OpenReceive/openreceive-php.git).",
-    "  --remote-laravel <x>       Same for openreceive/laravel (default `composer-laravel`, else OpenReceive/laravel).",
+    "  --remote-laravel <x>       Same for openreceive/laravel (default `composer-laravel`, else OpenReceive/openreceive-laravel).",
     "  --branch <name>            Split repository branch to push (default: main).",
     "  --dry-run                  Print the git pushes and the Packagist poll without doing them.",
     "  --allow-dirty              Allow publish from a dirty worktree.",
@@ -392,14 +403,30 @@ function packagistCommit(root, pkg, version, commit) {
   }).trim();
   git(root, ["update-index", "--add", "--cacheinfo", `100644,${blob},composer.json`], { env });
   const tree = git(root, ["write-tree"], { env });
-  return git(root, [
-    "commit-tree",
-    tree,
-    "-p",
-    commit,
-    "-m",
-    `release: composer.json for Packagist ${version}\n\nThe monorepo's path repository is stripped and lockstep siblings are pinned to ${composerConstraint(version)}.`,
-  ]);
+  // A retry must reproduce the same immutable version tag, regardless of the
+  // runner's identity or wall clock. The split commit supplies the timestamp.
+  const date = git(root, ["show", "-s", "--format=%cI", commit]);
+  return git(
+    root,
+    [
+      "commit-tree",
+      tree,
+      "-p",
+      commit,
+      "-m",
+      `release: composer.json for Packagist ${version}\n\nThe monorepo's path repository is stripped and lockstep siblings are pinned to ${composerConstraint(version)}.`,
+    ],
+    {
+      env: {
+        GIT_AUTHOR_NAME: "OpenReceive",
+        GIT_AUTHOR_EMAIL: "info@openreceive.org",
+        GIT_COMMITTER_NAME: "OpenReceive",
+        GIT_COMMITTER_EMAIL: "info@openreceive.org",
+        GIT_AUTHOR_DATE: date,
+        GIT_COMMITTER_DATE: date,
+      },
+    },
+  );
 }
 
 function verifySplit(root, pkg, version, commit) {

@@ -11,7 +11,15 @@ const workflowDirectory = ".github/workflows";
 // and fails on files it has no expectations for, so a new workflow cannot
 // land unvalidated.
 const requiredWorkflows = {
+  "wordpress.yml": [
+    "compose.testkit.yml up --build -d --wait",
+    "npm run test:wordpress",
+    "npm run check:wordpress",
+    "npm run test:e2e:wordpress",
+    "down -v",
+  ],
   "ci.yml": [
+    "bash packages/dotnet/docker/test-unit.sh",
     // The per-push gate is package.json's test:ci:core, asserted by name so
     // its step list lives in exactly one place.
     "npm run test:ci:core",
@@ -30,7 +38,6 @@ const requiredWorkflows = {
     "bin/ci",
     // The C# engine (BTCPay plugin): vector conformance + kernel tests, in its
     // own job because compiling BTCPay Server is slow.
-    "dotnet test packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests",
     // The PHP engine (packages/php/openreceive): PHPUnit on 8.2 and 8.4 with
     // Postgres and MySQL service containers, plus the conformance harness.
     "tools/ci/php-tests.sh",
@@ -87,7 +94,7 @@ const requiredWorkflows = {
   ],
   // The Composer twin: no registry token exists — Packagist reads tags on the
   // two read-only split repositories, so the workflow builds the splits and
-  // pushes them with a deploy key released by the `packagist` environment.
+  // pushes them with deploy keys released by the `packagist` environment.
   "publish-composer.yml": [
     "does not match package.json version",
     "tools/release/composer-release.mjs build",
@@ -106,7 +113,7 @@ const gemPublishEnvironment = "rubygems";
 const pypiPublishWorkflow = "publish-pypi.yml";
 const pypiPublishEnvironment = "pypi";
 const pypiPushTexts = ["uv publish", "twine upload"];
-// The split-repository push for Packagist: the deploy key lives in the
+// The split-repository push for Packagist: the deploy keys live in the
 // `packagist` environment and only this workflow may run the publish command.
 const composerPublishWorkflow = "publish-composer.yml";
 const composerPublishEnvironment = "packagist";
@@ -334,8 +341,8 @@ function checkPypiPublishWorkflow(relativePath, workflow) {
 }
 
 // The Composer split-push contract: every job runs in the gated environment
-// with read-only contents (the deploy key, not GITHUB_TOKEN, is what pushes),
-// and only a v* tag can start it. The key is a secret the environment releases
+// with read-only contents (the deploy keys, not GITHUB_TOKEN, are what push),
+// and only a v* tag can start it. The keys are secrets the environment releases
 // after approval; GITHUB_TOKEN could never reach the split repositories anyway.
 function checkComposerPublishWorkflow(relativePath, workflow) {
   const tags = workflow.on?.push?.tags;
@@ -343,8 +350,17 @@ function checkComposerPublishWorkflow(relativePath, workflow) {
     Array.isArray(tags) && tags.length === 1 && tags[0] === "v*",
     `${relativePath}: push trigger must be exactly the v* tags`,
   );
+  const bootstrap = workflow.on?.workflow_dispatch?.inputs?.bootstrap;
+  expect(
+    bootstrap?.type === "boolean" && bootstrap.default === false,
+    `${relativePath}: bootstrap must be an opt-in boolean`,
+  );
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const [jobName, job] of Object.entries(jobs)) {
+    expect(
+      job.if === "startsWith(github.ref, 'refs/tags/v')",
+      `${relativePath}: ${jobName} must restrict manual dispatch to v* tags too`,
+    );
     expect(
       job.environment === composerPublishEnvironment,
       `${relativePath}: ${jobName} must run in the ${composerPublishEnvironment} environment`,
@@ -353,6 +369,21 @@ function checkComposerPublishWorkflow(relativePath, workflow) {
     expect(
       permissions.contents === "read" && Object.keys(permissions).length === 1,
       `${relativePath}: ${jobName} permissions must be exactly contents: read`,
+    );
+    const publisher = job.steps?.find((step) =>
+      step.run?.includes("tools/release/composer-release.mjs publish"),
+    );
+    for (const secret of ["COMPOSER_OPENRECEIVE_SSH_KEY", "COMPOSER_LARAVEL_SSH_KEY"]) {
+      expect(
+        publisher?.env?.[secret] === `\${{ secrets.${secret} }}`,
+        `${relativePath}: ${jobName} must wire the ${secret} environment secret`,
+      );
+    }
+    expect(
+      publisher?.env?.COMPOSER_BOOTSTRAP ===
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Literal GitHub Actions expression.
+        "${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap || false }}",
+      `${relativePath}: only explicit manual bootstrap may skip Packagist verification`,
     );
   }
 }

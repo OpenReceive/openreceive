@@ -1120,15 +1120,15 @@ class StorageFreeServerTest < Minitest::Test
   # for values that legitimately differ per run; everything else — key set AND
   # values — must match exactly in both engines. Mirrored in
   # tests/http-boundaries.test.mjs; change both together.
-  GOLDEN_PLACEHOLDERS = {
-    "<request_id>" => lambda { |value|
-      value.is_a?(String) &&
-        value.match?(/\Areq_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
-    },
-    "<payment_hash>" => ->(value) { value.is_a?(String) && value.match?(/\A[0-9a-f]{64}\z/) },
-    "<bolt11>" => ->(value) { value.is_a?(String) && value.start_with?("ln") },
-    "<unix_seconds>" => ->(value) { value.is_a?(Integer) && value >= 0 }
-  }.freeze
+  GOLDEN_PLACEHOLDERS = JSON.parse(File.read(File.join(SPEC_DIR, "test-vectors/http-golden/PLACEHOLDERS.json"))).transform_values do |rule|
+    lambda do |value|
+      if rule.fetch("type") == "integer"
+        value.is_a?(Integer) && value >= rule.fetch("minimum")
+      else
+        value.is_a?(String) && (rule.key?("prefix") ? value.start_with?(rule.fetch("prefix")) : Regexp.new("\\A(?:#{rule.fetch('pattern')})\\z").match?(value))
+      end
+    end
+  end.freeze
 
   def assert_golden_value(actual, expected, context)
     if expected.is_a?(String) && GOLDEN_PLACEHOLDERS.key?(expected)
@@ -1241,7 +1241,7 @@ class StorageFreeServerTest < Minitest::Test
       "live_attempt_conflict" => live_conflict_app,
       "described" => described_app
     }
-    golden_paths = Dir[File.join(SPEC_DIR, "test-vectors/http-golden/*.json")].sort
+    golden_paths = Dir[File.join(SPEC_DIR, "test-vectors/http-golden/*.json")].reject { |file| File.basename(file) == "PLACEHOLDERS.json" }.sort
     refute_empty golden_paths
     golden_paths.each do |path|
       vector = JSON.parse(File.read(path))

@@ -29,6 +29,7 @@
       "!examples/*/server/*/public/*.html",
       "!tests/e2e/test-results",
       "!tests/e2e-btcpay/test-results",
+      "!tests/e2e-wordpress/test-results",
       "!tests/orms/generated",
       "!**/tmp",
       "!**/log",

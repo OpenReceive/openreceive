@@ -634,14 +634,21 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
 // for values that legitimately differ per run; everything else — key set AND
 // values — must match exactly in both engines. Mirrored in
 // packages/ruby/openreceive-server/test/server_test.rb; change both together.
-const GOLDEN_PLACEHOLDERS = {
-  "<request_id>": (value) =>
-    typeof value === "string" &&
-    /^req_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value),
-  "<payment_hash>": (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value),
-  "<bolt11>": (value) => typeof value === "string" && value.startsWith("ln"),
-  "<unix_seconds>": (value) => Number.isInteger(value) && value >= 0,
-};
+// Shared predicates, interpreted with each language's exact string/integer types.
+const GOLDEN_PLACEHOLDERS = Object.fromEntries(
+  Object.entries(
+    JSON.parse(readFileSync("spec/test-vectors/http-golden/PLACEHOLDERS.json", "utf8")),
+  ).map(([name, rule]) => [
+    name,
+    (value) =>
+      rule.type === "integer"
+        ? Number.isInteger(value) && value >= rule.minimum
+        : typeof value === "string" &&
+          (rule.prefix !== undefined
+            ? value.startsWith(rule.prefix)
+            : new RegExp(`^(?:${rule.pattern})$`).exec(value)?.[0] === value),
+  ]),
+);
 
 function assertGoldenValue(actual, expected, context) {
   if (typeof expected === "string" && expected in GOLDEN_PLACEHOLDERS) {
@@ -793,7 +800,9 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       },
     }),
   });
-  for (const filename of readdirSync("spec/test-vectors/http-golden").sort()) {
+  for (const filename of readdirSync("spec/test-vectors/http-golden")
+    .filter((name) => name !== "PLACEHOLDERS.json")
+    .sort()) {
     const vector = JSON.parse(readFileSync(`spec/test-vectors/http-golden/${filename}`, "utf8"));
     assert.equal(vector.schema_version, 2, `${filename}: schema_version`);
     const handlerName = vector.handler ?? "default";

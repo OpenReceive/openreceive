@@ -1,10 +1,8 @@
 """Every spec/test-vectors/http-golden/*.json file against the framework-free
 handler: status, the headers the vector names, and the FULL body (key set AND
 values). Placeholder strings assert "present and matching this pattern" for
-values that legitimately differ per run; the matcher table is copied verbatim
-from tests/http-boundaries.test.mjs (and the Ruby server_test.rb) — change
-all of them together. Follow-up: promote the table to
-spec/test-vectors/http-golden/PLACEHOLDERS.json so every engine reads one file."""
+values that legitimately differ per run. Shared predicates live in
+spec/test-vectors/http-golden/PLACEHOLDERS.json."""
 
 from __future__ import annotations
 
@@ -23,25 +21,22 @@ from tests.conftest import VECTORS_DIR
 
 GOLDEN_DIR = VECTORS_DIR / "http-golden"
 
-GOLDEN_PLACEHOLDERS = {
-    "<request_id>": lambda value: (
-        isinstance(value, str)
-        and re.fullmatch(r"req_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", value)
-        is not None
-    ),
-    "<payment_hash>": lambda value: (
-        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
-    ),
-    "<bolt11>": lambda value: isinstance(value, str) and value.startswith("ln"),
-    "<unix_seconds>": lambda value: (
-        isinstance(value, int) and not isinstance(value, bool) and value >= 0
-    ),
-}
+GOLDEN_RULES = json.loads((GOLDEN_DIR / "PLACEHOLDERS.json").read_text())
+
+
+def matches_placeholder(value: Any, rule: dict[str, Any]) -> bool:
+    if rule["type"] == "integer":
+        return isinstance(value, int) and not isinstance(value, bool) and value >= rule["minimum"]
+    return isinstance(value, str) and (
+        value.startswith(rule["prefix"])
+        if "prefix" in rule
+        else re.fullmatch(rule["pattern"], value) is not None
+    )
 
 
 def assert_golden_value(actual: Any, expected: Any, context: str) -> None:
-    if isinstance(expected, str) and expected in GOLDEN_PLACEHOLDERS:
-        assert GOLDEN_PLACEHOLDERS[expected](actual), (
+    if isinstance(expected, str) and expected in GOLDEN_RULES:
+        assert matches_placeholder(actual, GOLDEN_RULES[expected]), (
             f"{context}: {actual!r} does not satisfy {expected}"
         )
     elif isinstance(expected, list):
@@ -142,7 +137,9 @@ def handlers() -> dict[str, RequestHandler]:
     }
 
 
-GOLDEN_PATHS = sorted(GOLDEN_DIR.glob("*.json"))
+GOLDEN_PATHS = sorted(
+    path for path in GOLDEN_DIR.glob("*.json") if path.name != "PLACEHOLDERS.json"
+)
 
 
 def golden_request(request: dict[str, Any]) -> HttpRequest:

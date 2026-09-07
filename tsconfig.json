@@ -50,6 +50,7 @@
     "examples/buttons/server/laravel/resources/js/**/*.tsx",
     "examples/buttons/server/laravel/vite/**/*.ts",
     "tests/e2e/**/*.ts",
-    "tests/e2e-btcpay/**/*.ts"
+    "tests/e2e-btcpay/**/*.ts",
+    "tests/e2e-wordpress/**/*.ts"
   ]
 }

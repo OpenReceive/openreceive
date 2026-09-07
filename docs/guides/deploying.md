@@ -197,3 +197,12 @@ Check each in the wallet. If it actually settled, the next reconcile pass
 records it. If it is stuck, resolve it wallet-side.
 
 See [Payment storage](storage.md) and [Rate limiting](rate-limiting.md).
+
+## WordPress + WooCommerce
+
+Build and upload the plugin zip from `npm run release:wordpress:build`; the
+archive includes its PHP dependencies and browser assets. Configure the wallet
+in WooCommerce payment settings or server-only constants. The existing
+WordPress MySQL/MariaDB database holds attempts. Configure a system cron to
+execute Action Scheduler on quiet shops, or run `wp openreceive notifications`
+as an optional separate process. See the [WooCommerce quickstart](quickstart-woocommerce.md).

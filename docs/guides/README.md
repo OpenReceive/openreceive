@@ -27,6 +27,7 @@
 25. [Security](security.md)
 26. [Price feeds](price-feeds.md)
 27. [Provider registry](provider-registry.md)
+28. [WordPress + WooCommerce quickstart](quickstart-woocommerce.md)
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
 [Flask](../recipes/flask.md) (the Python engine as a Blueprint)
@@ -40,7 +41,8 @@ payloads instead of a reading list:
 [Django](https://openreceive.org/agent-directions/django.md),
 [Rails](https://openreceive.org/agent-directions/rails.md),
 [PHP](https://openreceive.org/agent-directions/php.md),
-[Laravel](https://openreceive.org/agent-directions/laravel.md) or
+[Laravel](https://openreceive.org/agent-directions/laravel.md),
+[WooCommerce](https://openreceive.org/agent-directions/woocommerce.md) or
 [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md) — the
 byte-exact files behind the site's copy button (in this repo: `docs/agents/`).
 Each is Step 0, the rules no API call can state for itself, and the matching

@@ -39,3 +39,7 @@ coverage
 private
 building
 private_private_infra_details.txt
+
+# Local-only framework planning files and browser artifacts.
+zz-*
+tests/e2e-wordpress/test-results

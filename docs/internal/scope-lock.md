@@ -131,3 +131,10 @@ pending attempts. Vectors:
 
 The integrator-facing schema and status table are in
 [Payment storage](../guides/storage.md).
+
+The WooCommerce plugin in `packages/php/wordpress` is host integration over the
+PHP engine, shared with Laravel. It does not add another settlement engine.
+WooCommerce owns order state, prices, stock and email; the plugin commits only
+payment metadata and uses a durable completion marker to repair interrupted
+post-commit `payment_complete` calls. Its Docker example lives in
+`examples/wordpress`.

@@ -77,6 +77,7 @@ packages/dotnet/**/obj-docker/
 packages/dotnet/**/TestResults/
 packages/dotnet/docker/.state/
 tests/e2e-btcpay/test-results/
+tests/e2e-wordpress/test-results/
 
 # The standalone checkout build copied in by hatch_build.py at wheel/sdist build time.
 packages/python/openreceive/src/openreceive/django/static/

@@ -1,16 +1,15 @@
 name: Publish Composer
 
 # Pushes the two Composer packages to their read-only split repositories —
-# OpenReceive/openreceive-php (openreceive/openreceive) and OpenReceive/laravel
+# OpenReceive/openreceive-php (openreceive/openreceive) and OpenReceive/openreceive-laravel
 # (openreceive/laravel) — which Packagist watches: a `v*` tag there IS the
 # release. Packagist cannot read a monorepo, so tools/release/composer-release.mjs
 # builds each split (`git subtree split` of the package directory plus, for the
 # Laravel adapter, one commit that strips the monorepo's path repository) and
-# force-pushes it with the tag. No registry token exists for this path: the one
-# credential is a deploy key with write access to the two split repositories,
-# stored as COMPOSER_SPLIT_SSH_KEY and released only after a human approves the
-# `packagist` environment, which admits v* tags only. Treat edits to this file
-# like edits to a signing key.
+# force-pushes main and creates an immutable tag. Each repository has its own
+# write-enabled deploy key, stored in the `packagist` environment. Configure
+# that environment with a required reviewer, no admin bypass, and v* tags only
+# before adding the secrets. Treat edits to this file like edits to a signing key.
 #
 # Fallback when this cannot run: the composer-release.mjs publish command from
 # a maintainer machine whose git remotes can push to the split repositories
@@ -21,6 +20,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: "First publication: push both repos without waiting for Packagist"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ concurrency:
 
 jobs:
   publish-composer:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: packagist
@@ -42,6 +48,7 @@ jobs:
           # `git subtree split` rewrites the package directory's whole history
           # into the split repository, so the checkout needs all of it.
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
@@ -65,25 +72,60 @@ jobs:
           git config user.email "info@openreceive.org"
           node tools/release/composer-release.mjs build
           cat .release/composer/*/*.json
-      # The deploy key is written to the runner's ssh config for this step's
-      # lifetime only. GitHub's host key is pinned rather than trusted on first
-      # use.
+      # Isolated SSH aliases select exactly one key per split repository.
+      # Pin from https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
       - name: Push the splits and tags, then wait for packagist.org
         env:
-          COMPOSER_SPLIT_SSH_KEY: ${{ secrets.COMPOSER_SPLIT_SSH_KEY }}
+          COMPOSER_OPENRECEIVE_SSH_KEY: ${{ secrets.COMPOSER_OPENRECEIVE_SSH_KEY }}
+          COMPOSER_LARAVEL_SSH_KEY: ${{ secrets.COMPOSER_LARAVEL_SSH_KEY }}
+          COMPOSER_BOOTSTRAP: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap || false }}
         run: |
           set -euo pipefail
-          if [ -z "${COMPOSER_SPLIT_SSH_KEY}" ]; then
-            echo "COMPOSER_SPLIT_SSH_KEY is not set in the packagist environment." >&2
-            exit 1
+          for secret in COMPOSER_OPENRECEIVE_SSH_KEY COMPOSER_LARAVEL_SSH_KEY; do
+            if [ -z "${!secret:-}" ]; then
+              echo "${secret} is not set in the packagist environment." >&2
+              exit 1
+            fi
+          done
+          umask 077
+          composer_ssh_dir="$(mktemp -d "${RUNNER_TEMP}/composer-ssh.XXXXXX")"
+          trap 'rm -rf -- "$composer_ssh_dir"' EXIT
+          printf '%s\n' "${COMPOSER_OPENRECEIVE_SSH_KEY}" > "$composer_ssh_dir/openreceive"
+          printf '%s\n' "${COMPOSER_LARAVEL_SSH_KEY}" > "$composer_ssh_dir/laravel"
+          unset COMPOSER_OPENRECEIVE_SSH_KEY COMPOSER_LARAVEL_SSH_KEY
+          cat > "$composer_ssh_dir/known_hosts" <<'HOSTS'
+          github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+          HOSTS
+          cat > "$composer_ssh_dir/config" <<CONFIG
+          Host composer-openreceive
+            IdentityFile "$composer_ssh_dir/openreceive"
+          Host composer-laravel
+            IdentityFile "$composer_ssh_dir/laravel"
+          Host *
+            HostName github.com
+            HostKeyAlias github.com
+            User git
+            IdentitiesOnly yes
+            IdentityAgent none
+            BatchMode yes
+            StrictHostKeyChecking yes
+            HostKeyAlgorithms ssh-ed25519
+            UserKnownHostsFile "$composer_ssh_dir/known_hosts"
+            GlobalKnownHostsFile /dev/null
+          CONFIG
+          printf -v GIT_SSH_COMMAND 'ssh -F %q' "$composer_ssh_dir/config"
+          export GIT_SSH_COMMAND
+          publish_args=(
+            --remote-openreceive git@composer-openreceive:OpenReceive/openreceive-php.git
+            --remote-laravel git@composer-laravel:OpenReceive/openreceive-laravel.git
+          )
+          if [ "${COMPOSER_BOOTSTRAP}" = "true" ]; then
+            publish_args+=(--skip-packagist)
           fi
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "${COMPOSER_SPLIT_SSH_KEY}" > ~/.ssh/id_composer_split
-          chmod 600 ~/.ssh/id_composer_split
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_composer_split -o IdentitiesOnly=yes"
           node tools/release/composer-release.mjs publish \
-            --remote-openreceive git@github.com:OpenReceive/openreceive-php.git \
-            --remote-laravel git@github.com:OpenReceive/laravel.git
-          rm -f ~/.ssh/id_composer_split
-          echo "published https://packagist.org/packages/openreceive/openreceive and https://packagist.org/packages/openreceive/laravel"
+            "${publish_args[@]}"
+          if [ "${COMPOSER_BOOTSTRAP}" = "true" ]; then
+            echo "Both split repositories pushed. Submit them at https://packagist.org/packages/submit next."
+          else
+            echo "Published https://packagist.org/packages/openreceive/openreceive and https://packagist.org/packages/openreceive/laravel"
+          fi

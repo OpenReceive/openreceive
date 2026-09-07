@@ -4,11 +4,6 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs";
 import {
-  DOTNET_PLUGIN_CSPROJ,
-  dotnetPluginVersion,
-  readDotnetPluginVersion,
-} from "../release/dotnet-plugin.mjs";
-import {
   composerConstraint,
   LARAVEL_COMPOSER_JSON,
   PHP_ENGINE_DIR,
@@ -16,6 +11,11 @@ import {
   readLaravelConstraint,
   readPhpVersion,
 } from "../release/composer-release.mjs";
+import {
+  DOTNET_PLUGIN_CSPROJ,
+  dotnetPluginVersion,
+  readDotnetPluginVersion,
+} from "../release/dotnet-plugin.mjs";
 import { GEM_NAMES, gemDir, readGemVersion } from "../release/gem-release.mjs";
 import {
   PYTHON_PACKAGE_DIR,
@@ -296,6 +296,20 @@ for (const gemName of GEM_NAMES) {
     `${PHP_VERSION_FILE}: VERSION ${phpVersion} must match ${releaseVersion} (run npm run release:prepare)`,
   );
   const engineManifest = readJson(path.join(PHP_ENGINE_DIR, "composer.json"));
+  const wordpressManifest = readJson("packages/php/wordpress/composer.json");
+  expect(
+    wordpressManifest.require["openreceive/openreceive"] === composerConstraint(releaseVersion),
+    "WordPress engine constraint must match the workspace release",
+  );
+  const wordpressHeader = readFileSync(
+    path.join(root, "packages/php/wordpress/openreceive.php"),
+    "utf8",
+  );
+  expect(
+    wordpressHeader.includes(`Version: ${releaseVersion}\n`) &&
+      wordpressHeader.includes(`'OPENRECEIVE_PLUGIN_VERSION', '${releaseVersion}'`),
+    "WordPress plugin version must match the workspace release",
+  );
   expect(
     engineManifest.name === "openreceive/openreceive",
     `${PHP_ENGINE_DIR}/composer.json: name must be openreceive/openreceive`,

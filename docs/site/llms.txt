@@ -56,6 +56,8 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Flask Recipe](https://openreceive.org/guides/flask-recipe.md)
 - [Writing Your Own Checkout Route](https://openreceive.org/guides/custom-checkout-route.md)
 - [Agent Directions: FastAPI](https://openreceive.org/guides/agent-directions-fastapi.md)
+- [WordPress + WooCommerce Quickstart](https://openreceive.org/guides/quickstart-woocommerce.md)
+- [Agent directions (WordPress + WooCommerce)](https://openreceive.org/guides/agent-directions-woocommerce.md)
 
 ## Machine-readable specifications
 

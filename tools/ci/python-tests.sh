@@ -42,7 +42,10 @@ assert_nonempty "$package_test_count" "$PACKAGE/tests"
 # checkout copy after build:packages, even when Python sources did not change.
 uv sync --project "$PACKAGE" --frozen --reinstall-package openreceive --quiet
 
-uv run --project "$PACKAGE" --frozen pytest "$PACKAGE/tests" -q
+if [ -n "${OPENRECEIVE_TEST_DJANGO:-}" ]; then
+  uv pip install --python "$PACKAGE/.venv/bin/python" "Django==${OPENRECEIVE_TEST_DJANGO}"
+fi
+uv run --project "$PACKAGE" --frozen --no-sync pytest "$PACKAGE/tests" -q
 
 # The cross-language conformance harness always runs last.
-uv run --project "$PACKAGE" --frozen python tools/conformance/python-crosslang.py
+uv run --project "$PACKAGE" --frozen --no-sync python tools/conformance/python-crosslang.py

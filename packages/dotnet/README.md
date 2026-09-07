@@ -11,24 +11,22 @@ against BTCPay Server 2.4.2. The merchant-facing guide is
 | Path | What it is |
 | --- | --- |
 | `BTCPayServer.Plugins.OpenReceive/` | The plugin. `Nwc/` is the receive-only NWC Lightning backend (`ReceiveOnlyNwcClient`, `ScanMemo`, listeners, preflight, URI parsing). `Swaps/` is the swap rail (LSC URI, FixedFloat-compatible provider, `SwapService`, `SwapPoller`). `Data/` is the EF DbContext and the hand-written migration for `openreceive_swaps`. `Settings/` is the per-store settings service. `Controllers/` and `Views/` are the setup page, the doctor, the checkout extensions and the two APIs. `Resources/js/` is the Vue 2 checkout component. `Generated/OpenReceiveTables.cs` is rendered from `spec/data/kernel-tables.json` by `npm run generate:models` — never edit it by hand. |
-| `BTCPayServer.Plugins.OpenReceive.Tests/` | xunit v3. `Vectors/` has one class per vector family (each names its `<family>.json`, which is how `spec/test-vectors/coverage.json` counts it). `Nwc/`, `Swaps/` and `Fakes/` are kernel tests against the in-process testkit and fake provider. Runs in seconds, no Docker. |
+| `BTCPayServer.Plugins.OpenReceive.Tests/` | xunit v3. `Vectors/` has one class per vector family (each names its `<family>.json`, which is how `spec/test-vectors/coverage.json` counts it). `Nwc/`, `Swaps/` and `Fakes/` are kernel tests against the in-process testkit and fake provider. Runs in the SDK container without the regtest stack. |
 | `OpenReceive.TestkitNwc/` | A NIP-47 wallet service for end-to-end tests (its own request loop over NNostr's client: NIP-44 v2 and NIP-04 per request, notifications in both kinds). In-memory invoices by default, or backed by an LND node through `BTCPayServer.Lightning`. Publishes the info event, mints one receive-only connection, pushes `payment_received`, and exposes an HTTP control API (`/health`, `/uri`, `/settle/{hash}` on the memory backend, `/invoices`). |
 | `OpenReceive.FakeLsc/` | A fake FixedFloat-compatible swap provider: `/api/v2/ccies`, `/price`, `/create`, `/order`, `/emergency` with HMAC verification, plus `/__testkit/` control endpoints to script order lifecycles, force `refund_required` or attention, fail creates and burst 429s. On `completed` it pays the order's BOLT11 from a configured Lightning node. |
 | `docker/` | The regtest end-to-end stack (below). |
-| `submodules/btcpayserver/` | BTCPay Server source, pinned to `v2.4.2`, shallow. Only needed to compile the plugin; JS and Ruby contributors never initialize it. |
+| `submodules/btcpayserver/` | BTCPay Server source, pinned to `v2.4.2`, shallow. Required for .NET builds/tests and the full `npm run test:ci` gate; focused JS and Ruby suites do not need it. |
 | `Directory.Build.props`, `global.json`, `*.slnx` | Shared build settings (`BtcPayServerRoot`), the .NET 10 SDK pin, and the solution. |
 
 ## Build
 
 ```sh
 git submodule update --init --depth 1 packages/dotnet/submodules/btcpayserver
-cd packages/dotnet
-dotnet build BTCPayServer.Plugins.OpenReceive.slnx      # first build compiles BTCPay Server: minutes, then incremental
+bash packages/dotnet/docker/build-plugin.sh
 ```
 
-Needs the .NET 10 SDK (`global.json` pins 10.0.400, rolling forward within the
-feature band). Set `BTCPAY_SERVER_ROOT` to an existing BTCPay checkout to skip
-the submodule; `Directory.Build.props` reads it. The plugin references
+Start Docker Desktop first; a native .NET SDK is optional. The container SDK
+must satisfy `global.json` (10.0.400 or a later .NET 10 feature band). The plugin references
 `BTCPayServer.csproj` with `Private=false`, so the host's DLLs never land in
 the output; `NNostr.Client` 0.0.55 does (NIP-44 v2 negotiation).
 
@@ -40,15 +38,27 @@ shares intermediates with a host build.
 ## Test
 
 ```sh
-npm run test:dotnet                                      # from the repo root: the unit suite
+npm run test:dotnet                                      # Docker: solution build + unit suite
 npm run test:dotnet -- --filter "FullyQualifiedName~Vectors"
-dotnet test packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests
+bash packages/dotnet/docker/test-unit.sh                 # same runner, no Node needed
 ```
 
-`tools/dotnet/test.mjs` prints a clear `SKIPPED` line, never a silent pass,
-when there is no .NET 10 SDK on `PATH` or the submodule is not initialized.
-CI runs the same suite in its own `dotnet-plugin` job so the JS gate stays
-fast. `npm run validate` checks that every vector family has a consumer or a
+The runner builds the entire solution, then runs the kernel/vector unit suite
+inside the .NET SDK container. It requires Docker and the BTCPay submodule;
+missing prerequisites and failed builds/tests exit unsuccessfully. It does not
+inspect the Mac's SDK or start BTCPay, wallets, databases, or the regtest stack.
+Set `BTCPAY_SERVER_ROOT` to use another local BTCPay checkout; the test runner
+mounts it at the expected path inside the container. `SDK_IMAGE` and
+`NUGET_VOLUME` share the defaults in `docker/lib.sh` with the existing build/E2E
+scripts. Downloads persist in the `btcpay-plugin-nuget` Docker volume; separate
+`obj-docker/` and `bin-docker/` directories preserve incremental builds without
+mixing host and container output. The first build can take several minutes.
+
+CI uses this same Docker runner in its own `dotnet-plugin` job and caches the
+NuGet directory between runs. Native development remains possible with a
+compatible SDK: run `dotnet build BTCPayServer.Plugins.OpenReceive.slnx` and
+`dotnet test BTCPayServer.Plugins.OpenReceive.Tests` from `packages/dotnet`.
+`npm run validate` checks that every vector family has a consumer or a
 written exclusion in the `dotnet` entry of `spec/test-vectors/coverage.json`.
 
 ## The regtest stack

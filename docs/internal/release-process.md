@@ -40,16 +40,14 @@ Five registries, five publishers:
 | npm (14 packages) | the maintainer's machine, `npm run release:publish` | granular token with "Bypass 2FA", loaded from `.env.release` |
 | RubyGems (3 gems) | GitHub Actions, `.github/workflows/publish-gems.yml` | none stored: OIDC Trusted Publishing, approved per run in the `rubygems` environment |
 | PyPI (1 distribution) | GitHub Actions, `.github/workflows/publish-pypi.yml` | none stored: OIDC Trusted Publishing, approved per run in the `pypi` environment |
-| Packagist (2 packages) | GitHub Actions, `.github/workflows/publish-composer.yml` — pushes the split repositories Packagist watches | a deploy key with write access to `OpenReceive/openreceive-php` and `OpenReceive/laravel` (`COMPOSER_SPLIT_SSH_KEY`), released per run by the `packagist` environment |
+| Packagist (2 packages) | GitHub Actions, `.github/workflows/publish-composer.yml` — pushes the split repositories Packagist watches | separate write-enabled deploy keys: `COMPOSER_OPENRECEIVE_SSH_KEY` for `OpenReceive/openreceive-php`, `COMPOSER_LARAVEL_SSH_KEY` for `OpenReceive/openreceive-laravel`, both in the protected `packagist` environment |
 | GitHub release | the maintainer's machine, `gh release create` | `gh` login for the OpenReceive account (`GH_CONFIG_DIR` from `.env.release`) |
 
 ## One-time setup
 
-The npm and RubyGems entries are in place for the OpenReceive account and are
-listed so they can be recreated or audited. The PyPI and Packagist entries
-describe what must exist before those two workflows can succeed; until they do,
-every `v*` tag leaves `Publish PyPI` and `Publish Composer` red, and the npm
-and gem releases are unaffected.
+These entries describe the account and environment configuration each release
+path requires. Check the registry and GitHub settings before the first release;
+workflow files cannot create accounts or enforce environment reviewer settings.
 
 - `.env.release` at the repo root (gitignored) exports the npm userconfig, the
   `gh` config directory and `GH_REPO` for the OpenReceive identity, and a
@@ -75,15 +73,33 @@ and gem releases are unaffected.
   same four values; the first approved run claims the name.
 - Packagist has no upload API and cannot read a monorepo, so each Composer
   package lives in a read-only split repository — `OpenReceive/openreceive-php`
-  for `openreceive/openreceive`, `OpenReceive/laravel` for `openreceive/laravel`
+  for `openreceive/openreceive`, `OpenReceive/openreceive-laravel` for `openreceive/laravel`
   — registered on packagist.org with the Packagist GitHub App (or its webhook)
-  so a pushed `v*` tag becomes a version within a minute. One ed25519 deploy
-  key with write access is added to BOTH split repositories and stored as
-  `COMPOSER_SPLIT_SSH_KEY` in the `packagist` GitHub environment, which
-  mirrors `rubygems`: a required reviewer, no administrator bypass, `v*` tags
-  only. The monorepo's own `GITHUB_TOKEN` never reaches the split
-  repositories. Nobody commits to a split repository by hand; every release
-  force-pushes a fresh `git subtree split`.
+  so pushed tags become versions. First create a [Packagist account](https://packagist.org/register/)
+  and the two empty public repositories. Protect the `packagist` GitHub
+  environment with a required reviewer, no administrator bypass, and `v*` tags
+  only before adding credentials. Generate **two different** ed25519 key pairs
+  without passphrases for unattended publishing. Add each public key as a deploy
+  key with **Allow write access** on its corresponding split repository. Store
+  the engine private key as `COMPOSER_OPENRECEIVE_SSH_KEY` and the Laravel private
+  key as `COMPOSER_LARAVEL_SSH_KEY` in that environment. [GitHub deploy keys cannot
+  be reused across repositories](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys).
+  The workflow selects each key through a separate SSH alias, pins GitHub's
+  public host key, and removes temporary key files when the publish step exits.
+  Nobody commits to a split repository by hand; every release force-pushes
+  `main` from a fresh `git subtree split`, while version tags are immutable.
+
+  For the first publication, commit the workflow changes and prepare a new
+  release tag. Cancel that tag's automatic **Publish Composer** run before
+  dispatching it manually at the same tag with **bootstrap** checked; the
+  concurrency gate otherwise queues the manual run behind the automatic one.
+  Approve the protected environment. Bootstrap pushes **both** repositories and
+  tags with `--skip-packagist`, because neither package is registered yet.
+  [Submit both populated repositories to Packagist](https://packagist.org/packages/submit)
+  and enable automatic updates. Then dispatch the same tag with **bootstrap
+  unchecked** and approve it to verify registry discovery. Later tag-triggered
+  releases always poll Packagist. A bootstrap success only confirms the split
+  pushes; it does not confirm a public Packagist release.
 
 ## Cutting a release
 
@@ -321,6 +337,8 @@ per package (`release/composer/<pkg>/<version>`, metadata under
 `.release/composer/<version>/`) with `git subtree split`; the Laravel branch
 gains one commit that strips the monorepo's `path` repository and pins the
 engine to `~X.Y.Z`, so what Packagist sees never points into this checkout.
+That fix-up uses a fixed release identity and the split commit's timestamp, so
+rebuilding the same release reproduces the same commit and immutable tag.
 `--snapshot` builds the same tree from the working tree for a dry run before
 the packages are committed. Both `build` and `publish` assert the split root
 carries `composer.json` for the right package with no `path` repository and no

@@ -6,6 +6,15 @@
 
 export const OPENRECEIVE_DEMOS = [
   {
+    kind: "wordpress",
+    keys: ["wordpress", "woocommerce", "wp"],
+    dir: "examples/wordpress",
+    service: "wordpress",
+    dbService: "db",
+    port: "3009",
+    label: "Buy a Button — WordPress + WooCommerce",
+  },
+  {
     kind: "node",
     keys: ["node", "node-express", "express", "buttons-express"],
     dir: "examples/buttons/server/node-express",

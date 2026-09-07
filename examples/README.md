@@ -1,6 +1,10 @@
 # OpenReceive examples
 
-One app lives here, built five times.
+The same button catalog is available across the framework examples.
+
+[`wordpress/`](wordpress) runs a real WordPress + WooCommerce shop, with the
+OpenReceive payment gateway, checkout blocks, MySQL and the shared product
+catalog. Start it with `npm run demo wordpress` (port 3009).
 
 [`buttons/`](buttons) — **Buy a Button**, a shop for six virtual OR pin badges,
 built on real persistence: a products table, a signed-cookie visitor table, an
@@ -36,24 +40,29 @@ npm run demo nextjs          # Buy a Button — Next.js app router              
 npm run demo buttons         # Buy a Button — Rails + Postgres                    :3003
 npm run demo fastify         # Buy a Button — Fastify + React, the minimal host   :3004
 npm run demo php             # Buy a Button — plain PHP, no framework          :3008
+npm run demo laravel         # Buy a Button — Laravel + Postgres               :3005
+npm run demo django          # Buy a Button — Django + Postgres                :3006
+npm run demo fastapi         # Buy a Button — FastAPI                          :3007
+npm run demo wordpress       # Buy a Button — WordPress + WooCommerce          :3009
 ```
 
 `npm run demo` builds the image and runs the production server inside it. The
 `compose.override.yml.example` each variant ships publishes the port and does
-nothing else. For an edit-reload loop, run the variant's own `npm run dev`
-(or `bin/dev` for the Rails demo) outside Docker.
+nothing else. Run demo applications and their backing services in Docker;
+builds, tests and browser automation may run on the host.
 
 ## Running the demo against fakes (no wallet)
 
-All five stacks boot against in-process fakes when `DEMO_WALLET=testkit` is
-set — no `NWC_URI`, no LSC keys, no network, full checkout:
+The demos provide explicit testkit modes that fake the wallet, swap provider
+and price feed while exercising the actual engine and database. Follow each
+example's Docker instructions. For WordPress:
 
 ```sh
-cd buttons/server/node-express
-DEMO_WALLET=testkit npm run dev
-
-cd buttons/server/rails
-DEMO_WALLET=testkit bin/dev          # Postgres is still Postgres
+docker compose -p openreceive-wp-test -f examples/wordpress/compose.yml \
+  -f examples/wordpress/compose.override.yml.example \
+  -f examples/wordpress/compose.testkit.yml up --build -d --wait
+npm run test:wordpress
+npm run test:e2e:wordpress
 ```
 
 The four Node stacks share `@openreceive/testkit`; Rails has a port of it in
@@ -72,7 +81,7 @@ other mode):
   fake's force helpers)
 - `GET /__testkit/state` — current fixtures
 
-Guardrails keep the mode out of production: no compose file may set
+Guardrails keep the mode out of production: production compose files may not set
 `DEMO_WALLET` (checked by `check:demo-containers`), and the client-bundle
 scanner rejects any testkit marker in shipped demo bundles. The Playwright
 suite (`npm run test:e2e` from the repo root) runs against exactly this mode;
@@ -97,7 +106,7 @@ integration this way.
   packages keep a demo too.
 - **Product data has one source.** `buttons/shared/shop-catalog.json` is the
   seed every stack's data migration reads, and `buttons/images/` holds the one
-  copy of the artwork that all five stacks serve. Nothing re-declares a sku, a
+  copy of the artwork that the demos serve. Nothing re-declares a sku, a
   price or an artwork path.
 - **The shop UI lives once.** `buttons/shared/` holds the stores, the
   components and the wire types; each stack under `buttons/server/` is a thin

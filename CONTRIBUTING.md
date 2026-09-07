@@ -9,6 +9,9 @@ Thanks for helping build OpenReceive. The short version:
   Ruby engine + cross-language conformance harness.
 - `npm run check` runs the contract validators and secret scan; `npm run lint`
   and `npm run typecheck` must both be clean.
+- `npm run test:dotnet` builds and tests in Docker; no local .NET SDK is needed.
+  Start Docker and initialize the BTCPay submodule as described below. The full
+  `npm run test:ci` gate includes this suite and requires those prerequisites.
 
 ## Repository layout
 

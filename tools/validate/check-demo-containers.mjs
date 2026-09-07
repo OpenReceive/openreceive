@@ -10,6 +10,7 @@ const nodeDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "node");
 const railsDemo = OPENRECEIVE_DEMOS.find((demo) => demo.kind === "rails");
 const pythonDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "python");
 const phpDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "php");
+const wordpressDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "wordpress");
 
 const findings = [];
 const fail = (message) => findings.push(message);
@@ -134,6 +135,40 @@ const expectPortsOnlyOverride = (relativePath, override, service, port) => {
     `${relativePath}: must override exactly one service`,
   );
 };
+
+for (const demo of wordpressDemos) {
+  const composePath = `${demo.dir}/compose.yml`;
+  const compose = parse(composePath, parseCompose);
+  const service = compose.services?.[demo.service] ?? {};
+  const dockerfilePath = `${demo.dir}/Dockerfile`;
+  const dockerfile = read(dockerfilePath);
+  forbidSecrets(dockerfilePath, dockerfile);
+  forbidSecrets(composePath, read(composePath));
+  forbidTestkitWalletSwitch(composePath, read(composePath));
+  expect(
+    service.env_file?.includes("../../.env"),
+    `${composePath}: must load the root server environment`,
+  );
+  expect(
+    compose.services?.[demo.dbService]?.image === "mysql:8",
+    `${composePath}: WordPress owns the MySQL database`,
+  );
+  expect(
+    dockerfile.includes("tools/release/wordpress-plugin.mjs build"),
+    `${dockerfilePath}: must build the isolated plugin archive`,
+  );
+  expect(
+    dockerfile.includes("examples/buttons/shared/shop-catalog.json"),
+    `${dockerfilePath}: must use the shared product catalog`,
+  );
+  expectHostDataVolumesOnly(composePath, compose, service);
+  expectPortsOnlyOverride(
+    `${demo.dir}/compose.override.yml.example`,
+    parse(`${demo.dir}/compose.override.yml.example`, parseCompose),
+    demo.service,
+    demo.port,
+  );
+}
 
 for (const demo of nodeDemos) {
   const packagePath = `${demo.dir}/package.json`;
@@ -757,5 +792,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Demo container validation passed for ${nodeDemos.length} Node demo(s) + Rails demo + ${pythonDemos.length} Python demo(s) + ${phpDemos.length} PHP demo(s) without OpenReceive runtime persistence.`,
+  `Demo container validation passed for ${nodeDemos.length} Node demo(s) + Rails demo + ${pythonDemos.length} Python demo(s) + ${phpDemos.length} PHP demo(s) + ${wordpressDemos.length} WordPress demo(s) without OpenReceive runtime persistence.`,
 );

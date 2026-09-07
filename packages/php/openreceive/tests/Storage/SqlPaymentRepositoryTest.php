@@ -106,6 +106,9 @@ final class SqlPaymentRepositoryTest extends DatabaseCase
         self::assertNull($repo->selectedFor('order-3', 'swap.create', null, 'USDT_TRON'), 'the swap rail is empty');
         self::assertNull($repo->selectedFor('order-3', 'swap.read'), 'no swap attempt exists');
         self::assertSame($ln, $repo->selectedFor('order-3', 'payment.check', $ln)?->paymentHash);
+        foreach (['payment.check', 'swap.read', 'swap.refund', 'checkout.create'] as $action) {
+            self::assertNull($repo->selectedFor('another-order', $action, $ln), 'a requested hash must belong to the authorized reference');
+        }
         self::assertNull($repo->selectedFor('order-3', 'payment.check', self::hash('missing')));
         $swap = self::hash('s-swap');
         $repo->commitAttempt('order-3', $swap, self::checkout('order-3', $swap, 1_001), self::swapData('USDT_TRON'));

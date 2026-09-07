@@ -13,6 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  wordpress:
+    uses: ./.github/workflows/wordpress.yml
   demos:
     runs-on: ubuntu-latest
     timeout-minutes: 20

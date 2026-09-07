@@ -30,6 +30,7 @@ code** (`NWC_URI`).
    - Rails: [references/rails.md](references/rails.md)
    - Django: [references/django.md](references/django.md)
    - Laravel: [references/laravel.md](references/laravel.md)
+   - WordPress + WooCommerce: [references/woocommerce.md](references/woocommerce.md) — the packaged gateway and merchant settings.
    - BTCPay Server: [references/btcpay.md](references/btcpay.md) — a plugin,
      configured in BTCPay's store UI or Greenfield API; no application code,
      no npm packages, no gem. The rest of this file is about the library.

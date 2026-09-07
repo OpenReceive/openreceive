@@ -253,6 +253,10 @@ export function createElementCheckoutSession(
       // applying an older order's attributes here would silently show, and poll,
       // the wrong order. The finally block re-runs for whatever is current.
       if (currentCreateKey() !== key) return;
+      if (checkout.active?.swap !== undefined) {
+        host.swapSelection.setSelectedAsset(checkout.active.swap.pay_in_asset);
+        host.swapSelection.setDismissedInvoiceId(null);
+      }
       host.handleControllerSnapshot(checkout);
       // Apply routing attrs only (no invoice) so render stays in deferred wizard mode.
       // Preserve the host theme attribute so shadow data-theme cannot fall through.

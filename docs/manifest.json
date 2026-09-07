@@ -480,6 +480,22 @@
       "category": "quickstart",
       "audience": "developer",
       "public": true
+    },
+    {
+      "slug": "quickstart-woocommerce",
+      "title": "WordPress + WooCommerce Quickstart",
+      "source_path": "docs/guides/quickstart-woocommerce.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-woocommerce",
+      "title": "Agent directions (WordPress + WooCommerce)",
+      "source_path": "docs/agents/woocommerce.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
     }
   ]
 }

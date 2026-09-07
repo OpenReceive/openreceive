@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "openreceive"
 dynamic = ["version"]
-description = "Receive-only Lightning checkout for Python hosts: NWC wallet kernel, settlement engine, framework-free HTTP handler, Django and FastAPI adapters."
-readme = "README.md"
+description = "Bitcoin Lightning checkout for Django, FastAPI and Python apps, with receive-only wallet access and optional USDT, USDC, ETH and SOL swaps."
+readme = { file = "README.md", content-type = "text/markdown" }
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "OpenReceive", email = "info@openreceive.org" }]
-keywords = ["lightning", "bitcoin", "nwc", "nostr", "payments", "django", "fastapi"]
+keywords = ["lightning", "bitcoin", "nwc", "nostr", "payments", "django", "fastapi", "usdt", "usdc", "stablecoin"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -40,6 +40,12 @@ sqlalchemy = ["sqlalchemy>=2"]
 [project.urls]
 Homepage = "https://openreceive.org"
 Documentation = "https://openreceive.org/guides"
+"Django quickstart" = "https://openreceive.org/guides/quickstart-django"
+"FastAPI quickstart" = "https://openreceive.org/guides/quickstart-fastapi"
+"Wallet setup" = "https://openreceive.org/get_a_nwc_code_to_receive_payments"
+"Swap provider setup" = "https://openreceive.org/set_up_swap_provider"
+Security = "https://openreceive.org/guides/security"
+Issues = "https://github.com/OpenReceive/openreceive/issues"
 Source = "https://github.com/OpenReceive/openreceive"
 Changelog = "https://github.com/OpenReceive/openreceive/blob/master/CHANGELOG.md"
 

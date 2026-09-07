@@ -57,6 +57,11 @@ const BUDGET_BYTES = 52_000;
 
 const STACKS = [
   {
+    stack: "woocommerce",
+    source: "docs/agents/src/woocommerce.md",
+    quickstart: "docs/guides/quickstart-woocommerce.md",
+  },
+  {
     stack: "node",
     source: "docs/agents/src/node.md",
     quickstart: "docs/guides/quickstart-node.md",
@@ -118,6 +123,8 @@ const STACKS = [
  * wrote down rather than an omission nobody noticed.
  */
 const UNLISTED_GUIDES = {
+  "agent-directions-woocommerce": "this payload’s own page",
+  "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "agent-directions-node": "this payload's own page",
   "agent-directions-fastify": "this payload's own page",
   "agent-directions-next": "this payload's own page",

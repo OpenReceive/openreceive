@@ -652,6 +652,7 @@ function validateSchemaInstances() {
   // Golden HTTP bodies: the error envelope every non-2xx response must match.
   const errorSchema = compile("spec/schemas/error.schema.json");
   for (const file of walk("spec/test-vectors/http-golden", ".json")) {
+    if (path.basename(file) === "PLACEHOLDERS.json") continue;
     const vector = readJson(file);
     const status = vector.expected?.status;
     const body = vector.expected?.body;
