@@ -1,0 +1,10 @@
+# Python outside packages/python/openreceive (the Django and FastAPI examples,
+# tools/conformance, tools/live-nwc-test) lints under the engine's own rules,
+# so `ruff check` from the repo root (what CI runs) agrees with `ruff check`
+# inside the package. Ruff resolves the nearest config per file, so this only
+# applies where no closer pyproject.toml exists.
+extend = "packages/python/openreceive/pyproject.toml"
+
+# Ruff 0.16 also formats Python code blocks inside Markdown. The guides and
+# agent directions align trailing comments by hand; leave them alone.
+extend-exclude = ["*.md"]

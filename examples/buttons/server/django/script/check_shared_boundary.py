@@ -30,7 +30,9 @@ for path in SOURCES:
                 violations.append(f"{path.relative_to(ROOT)}:{number} imports shared/{directory}/")
 
 if violations:
-    print("The Django demo may only import shared/shop-types.ts, shared/http.ts and shared/client/**:")
+    print(
+        "The Django demo may only import shared/shop-types.ts, shared/http.ts and shared/client/**:"
+    )
     for violation in violations:
         print(f"- {violation}")
     sys.exit(1)

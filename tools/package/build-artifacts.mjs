@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
 } from "node:fs";
@@ -144,7 +145,7 @@ export function createPackageBuildWorkspace(input = {}) {
   const root = input.root ?? process.cwd();
   const baseDir =
     input.outDir === undefined
-      ? mkdtempSync(path.join(tmpdir(), "openreceive-package-build-"))
+      ? realpathSync(mkdtempSync(path.join(tmpdir(), "openreceive-package-build-")))
       : path.resolve(root, input.outDir);
 
   mkdirSync(baseDir, { recursive: true });

@@ -15,11 +15,10 @@ from typing import Any
 
 from django.http import HttpRequest
 
-from openreceive.server import HookContext
-from openreceive.storage import PaymentSettlement
-
 from buttonshop.shop.identity import visitor_id_from
 from buttonshop.shop.models import ShopOrder
+from openreceive.server import HookContext
+from openreceive.storage import PaymentSettlement
 
 log = logging.getLogger("buttonshop")
 

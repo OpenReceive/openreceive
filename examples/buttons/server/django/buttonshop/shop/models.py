@@ -72,7 +72,9 @@ class ShopProduct(models.Model):
         ordering = ["position", "price_cents"]
         indexes = [models.Index(fields=["active", "position"], name="shop_products_active_pos_idx")]
         constraints = [
-            models.CheckConstraint(condition=Q(price_cents__gt=0), name="shop_products_price_cents_check")
+            models.CheckConstraint(
+                condition=Q(price_cents__gt=0), name="shop_products_price_cents_check"
+            )
         ]
 
     def __str__(self) -> str:
@@ -158,8 +160,12 @@ class ShopOrder(models.Model):
             models.Index(fields=["state", "paid_at"], name="shop_orders_state_paid_idx"),
         ]
         constraints = [
-            models.CheckConstraint(condition=Q(state__in=list(STATES)), name="shop_orders_state_check"),
-            models.CheckConstraint(condition=Q(total_cents__gt=0), name="shop_orders_total_cents_check"),
+            models.CheckConstraint(
+                condition=Q(state__in=list(STATES)), name="shop_orders_state_check"
+            ),
+            models.CheckConstraint(
+                condition=Q(total_cents__gt=0), name="shop_orders_total_cents_check"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -214,7 +220,9 @@ class ShopOrder(models.Model):
         it reads the same after a catalog edit."""
         items = list(self.items.all())
         parts = [
-            f"{item.name or item.sku} ×{item.quantity}" if item.quantity > 1 else (item.name or item.sku)
+            f"{item.name or item.sku} ×{item.quantity}"
+            if item.quantity > 1
+            else (item.name or item.sku)
             for item in items
         ]
         count = sum(item.quantity for item in items)
@@ -248,8 +256,13 @@ class ShopOrder(models.Model):
 
     @classmethod
     def feed_totals(cls) -> dict[str, int]:
-        sold = ShopOrderItem.objects.filter(shop_order__state=PAID).aggregate(n=Sum("quantity"))["n"]
-        return {"paid_orders": cls.objects.filter(state=PAID).count(), "buttons_sold": int(sold or 0)}
+        sold = ShopOrderItem.objects.filter(shop_order__state=PAID).aggregate(n=Sum("quantity"))[
+            "n"
+        ]
+        return {
+            "paid_orders": cls.objects.filter(state=PAID).count(),
+            "buttons_sold": int(sold or 0),
+        }
 
 
 class ShopOrderItem(models.Model):
@@ -276,8 +289,12 @@ class ShopOrderItem(models.Model):
         db_table = "shop_order_items"
         ordering = ["created_at"]
         constraints = [
-            models.UniqueConstraint(fields=["shop_order", "sku"], name="shop_order_items_order_sku_uniq"),
-            models.CheckConstraint(condition=Q(quantity__gt=0), name="shop_order_items_quantity_check"),
+            models.UniqueConstraint(
+                fields=["shop_order", "sku"], name="shop_order_items_order_sku_uniq"
+            ),
+            models.CheckConstraint(
+                condition=Q(quantity__gt=0), name="shop_order_items_quantity_check"
+            ),
             models.CheckConstraint(
                 condition=Q(unit_price_cents__gt=0), name="shop_order_items_unit_price_cents_check"
             ),

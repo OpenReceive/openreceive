@@ -13,15 +13,16 @@ from typing import Any
 
 os.environ.setdefault("DEMO_WALLET", "testkit")
 # Never the checked-in .data directory: a fresh sqlite file per test session.
-os.environ.setdefault("OPENRECEIVE_DEMO_DB", os.path.join(os.environ.get("TMPDIR", "/tmp"), "buttons-django-tests"))
+os.environ.setdefault(
+    "OPENRECEIVE_DEMO_DB", os.path.join(os.environ.get("TMPDIR", "/tmp"), "buttons-django-tests")
+)
 
 import pytest  # noqa: E402
-from django.middleware.csrf import get_token  # noqa: E402
-from django.test import Client, RequestFactory  # noqa: E402
-
 from buttonshop import openreceive_service  # noqa: E402
 from buttonshop.shop import catalog  # noqa: E402
 from buttonshop.shop.models import ShopProduct  # noqa: E402
+from django.middleware.csrf import get_token  # noqa: E402
+from django.test import Client, RequestFactory  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

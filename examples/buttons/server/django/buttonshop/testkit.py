@@ -15,10 +15,9 @@ from typing import Any
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from openreceive._generated.tables import SWAP_PROVIDER_STATES
-
 from buttonshop import openreceive_service
 from buttonshop.openreceive_service import testkit_enabled
+from openreceive._generated.tables import SWAP_PROVIDER_STATES
 
 PREFIX = "/__testkit"
 

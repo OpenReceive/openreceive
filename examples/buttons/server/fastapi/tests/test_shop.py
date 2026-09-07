@@ -10,13 +10,14 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from server.main import create_app
 
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    app = create_app({"DEMO_WALLET": "testkit", "OPENRECEIVE_DEMO_DB": str(tmp_path), "LOG_LEVEL": "WARNING"})
+    app = create_app(
+        {"DEMO_WALLET": "testkit", "OPENRECEIVE_DEMO_DB": str(tmp_path), "LOG_LEVEL": "WARNING"}
+    )
     with TestClient(app) as client:
         yield client
 
@@ -27,7 +28,9 @@ def test_order_pay_download(client: TestClient) -> None:
     shop = bootstrap.json()["shop"]
     assert shop["openreceive_prefix"] == "/openreceive" and len(shop["catalog"]) == 6
     assert shop["catalog"][0] == {
-        "sku": "safety-orange", "name": "Safety Orange", "price_cents": 100,
+        "sku": "safety-orange",
+        "name": "Safety Orange",
+        "price_cents": 100,
         "image_url": "/images/openreceive-safety-orange-button.webp",
     }
     assert client.get(shop["catalog"][0]["image_url"]).status_code == 200
@@ -35,9 +38,14 @@ def test_order_pay_download(client: TestClient) -> None:
     empty = client.post("/shop/orders", json={"items": [{"sku": "nope", "quantity": 1}]})
     assert empty.status_code == 422 and empty.json() == {"error": "Your cart is empty."}
 
-    order = client.post("/shop/orders", json={"items": [{"sku": "safety-orange", "quantity": 1}]}).json()
+    order = client.post(
+        "/shop/orders", json={"items": [{"sku": "safety-orange", "quantity": 1}]}
+    ).json()
     reference = order["reference"]
-    assert order["total_amount"] == "1.00" and order["description"] == "OpenReceive button: Safety Orange"
+    assert (
+        order["total_amount"] == "1.00"
+        and order["description"] == "OpenReceive button: Safety Orange"
+    )
     assert order["items"][0]["download_path"] is None
     assert client.get(f"/shop/orders/{reference}/downloads/safety-orange").status_code == 403
 
@@ -57,11 +65,17 @@ def test_order_pay_download(client: TestClient) -> None:
     status = "pending"
     while status != "settled" and time.monotonic() < deadline:
         time.sleep(0.5)
-        status = client.post("/openreceive/payments/check", json={"reference": reference, "payment_hash": payment_hash}).json()["status"]
+        status = client.post(
+            "/openreceive/payments/check",
+            json={"reference": reference, "payment_hash": payment_hash},
+        ).json()["status"]
     assert status == "settled"
 
     paid = client.get(f"/shop/orders/{reference}").json()
-    assert paid["state"] == "paid" and paid["items"][0]["download_path"] == f"/shop/orders/{reference}/downloads/safety-orange"
+    assert (
+        paid["state"] == "paid"
+        and paid["items"][0]["download_path"] == f"/shop/orders/{reference}/downloads/safety-orange"
+    )
     download = client.get(paid["items"][0]["download_path"])
     assert download.status_code == 200 and download.headers["content-type"] == "image/webp"
 

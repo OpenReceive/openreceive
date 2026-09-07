@@ -3,10 +3,10 @@ the private/public payload split, and the download gate."""
 
 from __future__ import annotations
 
-from tests.conftest import Browser
-
 from buttonshop.shop import catalog
 from buttonshop.shop.models import ShopOrder, ShopProduct
+
+from tests.conftest import Browser
 
 
 def test_bootstrap_sets_the_visitor_cookie_and_the_csrf_cookie(browser: Browser) -> None:
@@ -67,9 +67,13 @@ def test_download_is_gated_on_the_paid_row(browser: Browser) -> None:
     assert browser.get(path).status_code == 403
     from django.utils import timezone
 
-    assert ShopOrder.claim_paid(reference=order["reference"], paid_at=timezone.now(), payment_hash="a" * 64)
+    assert ShopOrder.claim_paid(
+        reference=order["reference"], paid_at=timezone.now(), payment_hash="a" * 64
+    )
     # Idempotent: the second claim updates zero rows.
-    assert not ShopOrder.claim_paid(reference=order["reference"], paid_at=timezone.now(), payment_hash="b" * 64)
+    assert not ShopOrder.claim_paid(
+        reference=order["reference"], paid_at=timezone.now(), payment_hash="b" * 64
+    )
     response = browser.get(path)
     assert response.status_code == 200 and response["Content-Type"] == "image/webp"
     assert "attachment" in response["Content-Disposition"]
@@ -102,8 +106,14 @@ def test_the_public_feed_is_paid_only_and_carries_no_reference(browser: Browser)
     ]
     # Deactivating the product breaks neither the receipt nor the feed row.
     ShopProduct.objects.filter(sku="classic-black").update(active=False)
-    assert browser.get(f"/shop/orders/{paid['reference']}").json()["items"][0]["name"] == "Classic Black"
-    assert Browser().get("/shop/recent_orders").json()["orders"][0]["items"][0]["sku"] == "classic-black"
+    assert (
+        browser.get(f"/shop/orders/{paid['reference']}").json()["items"][0]["name"]
+        == "Classic Black"
+    )
+    assert (
+        Browser().get("/shop/recent_orders").json()["orders"][0]["items"][0]["sku"]
+        == "classic-black"
+    )
 
 
 def test_artwork_route_serves_catalog_images_only(browser: Browser) -> None:

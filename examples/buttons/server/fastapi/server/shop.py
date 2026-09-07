@@ -173,7 +173,8 @@ class Store:
                         "name": entry["name"],
                         "price": entry["price_cents"],
                         "position": entry["position"],
-                        "image": entry.get("image_name") or f"openreceive-{entry['sku']}-button.webp",
+                        "image": entry.get("image_name")
+                        or f"openreceive-{entry['sku']}-button.webp",
                         "now": now,
                     },
                 )
@@ -202,7 +203,11 @@ class Store:
                 ).first()
                 row = dict(found._mapping) if found else None
             if row is None:
-                row = {"id": str(uuid.uuid4()), "public_ref": str(uuid.uuid4()), "last_seen_at": now}
+                row = {
+                    "id": str(uuid.uuid4()),
+                    "public_ref": str(uuid.uuid4()),
+                    "last_seen_at": now,
+                }
                 connection.execute(
                     text(
                         "INSERT INTO shop_users (id, public_ref, first_seen_at, last_seen_at, created_at, updated_at) "
@@ -232,7 +237,11 @@ class Store:
                 continue
             if isinstance(sku, str) and count > 0:
                 wanted[sku] = min(wanted.get(sku, 0) + count, MAX_PER_SKU)
-        lines = [(product, wanted[product["sku"]]) for product in self.catalog() if product["sku"] in wanted]
+        lines = [
+            (product, wanted[product["sku"]])
+            for product in self.catalog()
+            if product["sku"] in wanted
+        ]
         if not lines:
             return None
         now = unix_now()
@@ -302,10 +311,18 @@ class Store:
                 {"limit": FEED_LIMIT},
             ).all()
             orders = [
-                (Order({k: v for k, v in row._mapping.items() if k != "buyer"}, self._items(connection, str(row._mapping["id"]))), row._mapping["buyer"])
+                (
+                    Order(
+                        {k: v for k, v in row._mapping.items() if k != "buyer"},
+                        self._items(connection, str(row._mapping["id"])),
+                    ),
+                    row._mapping["buyer"],
+                )
                 for row in rows
             ]
-            paid = connection.execute(text("SELECT COUNT(*) FROM shop_orders WHERE state = 'paid'")).scalar_one()
+            paid = connection.execute(
+                text("SELECT COUNT(*) FROM shop_orders WHERE state = 'paid'")
+            ).scalar_one()
             sold = connection.execute(
                 text(
                     "SELECT COALESCE(SUM(i.quantity), 0) FROM shop_order_items i JOIN shop_orders o ON o.id = i.shop_order_id WHERE o.state = 'paid'"
@@ -314,7 +331,9 @@ class Store:
         return orders, {"paid_orders": int(paid), "buttons_sold": int(sold)}
 
 
-def claim_order_paid(connection: Connection, reference: str, paid_at: int, payment_hash: str) -> bool:
+def claim_order_paid(
+    connection: Connection, reference: str, paid_at: int, payment_hash: str
+) -> bool:
     """THE GUARDED TRANSITION: the WHERE clause is the lock. Runs on the
     settlement transaction's own connection, so the order flip and the payment
     record commit together — or not at all."""
@@ -354,7 +373,9 @@ def order_payload(order: Order) -> dict[str, Any]:
                 "name": item["name"] or item["sku"],
                 "quantity": item["quantity"],
                 "unit_price_cents": item["unit_price_cents"],
-                "download_path": f"/shop/orders/{reference}/downloads/{item['sku']}" if order.paid else None,
+                "download_path": f"/shop/orders/{reference}/downloads/{item['sku']}"
+                if order.paid
+                else None,
             }
             for item in order.items
         ],
@@ -371,7 +392,12 @@ def feed_payload(order: Order, buyer: str | None) -> dict[str, Any]:
         "currency": order.row["currency"],
         "paid_at": order.row["paid_at"],
         "items": [
-            {"sku": item["sku"], "name": item["name"] or item["sku"], "quantity": item["quantity"], "image_url": image_url(item["image_name"])}
+            {
+                "sku": item["sku"],
+                "name": item["name"] or item["sku"],
+                "quantity": item["quantity"],
+                "image_url": image_url(item["image_name"]),
+            }
             for item in order.items
         ],
     }

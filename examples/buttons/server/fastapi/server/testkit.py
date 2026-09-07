@@ -13,8 +13,18 @@ from fastapi.responses import JSONResponse
 from openreceive.testing import FakeSwapProvider, FakeWallet
 
 SWAP_STATES = (
-    "creating_provider_order", "awaiting_deposit", "confirming", "exchanging", "paying_invoice",
-    "completed", "expired", "refund_required", "refund_pending", "refunded", "attention", "failed",
+    "creating_provider_order",
+    "awaiting_deposit",
+    "confirming",
+    "exchanging",
+    "paying_invoice",
+    "completed",
+    "expired",
+    "refund_required",
+    "refund_pending",
+    "refunded",
+    "attention",
+    "failed",
 )
 
 
@@ -50,7 +60,9 @@ def testkit_router(fixtures: tuple[FakeWallet, FakeSwapProvider] | None) -> APIR
             return JSONResponse({"ok": True, "transaction": transaction})
         if action == "swap-step":
             selector = {
-                key: body[key] for key in ("pay_in_asset", "provider_order_id") if isinstance(body.get(key), str)
+                key: body[key]
+                for key in ("pay_in_asset", "provider_order_id")
+                if isinstance(body.get(key), str)
             }
             state = body.get("state")
             if not selector:
@@ -66,7 +78,9 @@ def testkit_router(fixtures: tuple[FakeWallet, FakeSwapProvider] | None) -> APIR
                 swap.script(selector, [state])
             return JSONResponse({"ok": True, "state": state})
         if action == "state":
-            return JSONResponse({"wallet": {"invoices": wallet.list_invoices()}, "swap": swap.counters()})
+            return JSONResponse(
+                {"wallet": {"invoices": wallet.list_invoices()}, "swap": swap.counters()}
+            )
         return error(404, "Not found.")
 
     return router

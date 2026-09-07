@@ -1,19 +1,19 @@
 """The whole hop-by-hop path over the test client, with the engine's fakes:
 
-  POST /shop/orders                   mint ONE order row, priced from shop_products
-  POST /openreceive/checkouts         -> authorize -> amount_for -> an invoice
-  POST /__testkit/settle              the wallet reports payment
-  POST /openreceive/payments/check    -> settlement -> on_paid -> claim_paid
-  GET  /shop/orders/<id>              re-read the row; downloads have unlocked
+POST /shop/orders                   mint ONE order row, priced from shop_products
+POST /openreceive/checkouts         -> authorize -> amount_for -> an invoice
+POST /__testkit/settle              the wallet reports payment
+POST /openreceive/payments/check    -> settlement -> on_paid -> claim_paid
+GET  /shop/orders/<id>              re-read the row; downloads have unlocked
 """
 
 from __future__ import annotations
 
-from tests.conftest import Browser
-
 from buttonshop import openreceive_service
 from buttonshop.shop.models import ShopOrder
+
 from openreceive.django.models import OpenReceivePayment
+from tests.conftest import Browser
 
 
 def test_authorize_reads_the_signed_cookie_off_the_django_request(browser: Browser) -> None:
@@ -26,13 +26,18 @@ def test_authorize_reads_the_signed_cookie_off_the_django_request(browser: Brows
     assert denied.status_code == 403 and denied.json()["code"] == "FORBIDDEN"
     # The real owner's uuid, unsigned, is still nobody.
     stranger.client.cookies["shop_user_id"] = str(ShopOrder.objects.get().shop_user_id)
-    assert stranger.post("/openreceive/checkouts", {"reference": order["reference"]}).status_code == 403
+    assert (
+        stranger.post("/openreceive/checkouts", {"reference": order["reference"]}).status_code
+        == 403
+    )
     assert OpenReceivePayment.objects.count() == 1
 
 
 def test_csrf_is_enforced_on_the_engine_routes_too(browser: Browser) -> None:
     order = browser.create_order()
-    denied = browser.post("/openreceive/checkouts/prepare", {"reference": order["reference"]}, csrf=False)
+    denied = browser.post(
+        "/openreceive/checkouts/prepare", {"reference": order["reference"]}, csrf=False
+    )
     assert denied.status_code == 403
     assert denied.json()["message"] == "Invalid or missing CSRF token."
 
@@ -73,7 +78,9 @@ def test_checkout_mints_settles_and_unlocks_the_download(browser: Browser) -> No
     assert row.state == "paid" and row.payment_hash == payment_hash and row.paid_at is not None
     receipt = browser.get(f"/shop/orders/{reference}").json()
     assert receipt["state"] == "paid"
-    assert receipt["items"][0]["download_path"] == f"/shop/orders/{reference}/downloads/safety-orange"
+    assert (
+        receipt["items"][0]["download_path"] == f"/shop/orders/{reference}/downloads/safety-orange"
+    )
     assert browser.get(receipt["items"][0]["download_path"]).status_code == 200
 
     # A new checkout under a paid reference is refused, never fulfilled again.

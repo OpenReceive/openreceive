@@ -4,9 +4,10 @@
 
 ### Every image ships inside the JavaScript
 
-npm packages only — no server package changes. **Breaking** for a host that
-passed `assetBaseUrl` / `asset-base-url` / `resolveAssetUrl`: delete the
-option. Nothing else changes.
+The npm packages change, and the Python package re-vendors the standalone
+checkout build it ships for Django; the gems and the PHP packages are version
+lockstep only. **Breaking** for a host that passed `assetBaseUrl` /
+`asset-base-url` / `resolveAssetUrl`: delete the option. Nothing else changes.
 
 Everything the checkout draws is inside the JavaScript now: the payment-method
 icons (inline SVG in `@openreceive/browser`, as before), the 37 wallet logos
@@ -72,6 +73,19 @@ the offender and the `cwebp` command that fixes it, so the bundle cannot
 bloat silently. Adding a wallet means adding one ≤ 72 px `.webp`. A test pins
 that every registry `icon_path` and tutorial `path` has an image and every
 image is referenced.
+
+`npm run test:package-assets` proves the rule against the packed tarballs
+rather than the workspace: it installs them into a fixture with no aliases,
+builds it with esbuild (with and without splitting), Vite and webpack under
+React and the custom element, adds the standalone archive, serves everything
+from a nested path under a strict CSP, and asserts in Chromium that no image
+is fetched over the network, that all 37 logos, 20 tutorials and 11 payment
+icons decode, and that a tutorial chunk that fails to load leaves captions,
+never a broken image. It runs in the Playwright container on every push.
+
+A root `ruff.toml` extends the Python engine's lint config to the Django and
+FastAPI examples and the Python tools, so `ruff check` from the repo root
+(what CI runs) applies the same rules as inside the package.
 
 ### Groundwork for the PHP and Python engines
 
