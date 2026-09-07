@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Release tooling: the Composer publish step now polls Composer's own p2
+  metadata (`repo.packagist.org/p2/<name>.json`) instead of the cached
+  packagist.org page API, which reported an empty version list for a newly
+  registered package long after `composer show -a` already resolved it and
+  made the v0.4.5 verification run fail spuriously.
+
 ## 0.4.5 - 2026-09-07
 
 Release workflow fixes for the first Composer publication: isolated deploy keys

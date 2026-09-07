@@ -515,16 +515,27 @@ function remoteFor(root, pkg, args) {
   }
 }
 
+/** The metadata URL Composer itself installs from — updated within minutes of a crawl. */
+export function packagistMetadataUrl(name) {
+  return `https://repo.packagist.org/p2/${name}.json`;
+}
+
+/**
+ * Polls the p2 metadata Composer resolves against, not the packagist.org
+ * `/packages/<name>.json` page API: that page is cached for hours after a new
+ * package's first crawl and reported an empty version list for
+ * openreceive/laravel long after `composer show -a` already installed 0.4.5.
+ */
 async function packagistHasVersion(name, version) {
-  const response = await fetch(`https://packagist.org/packages/${name}.json`, {
+  const response = await fetch(packagistMetadataUrl(name), {
     headers: { accept: "application/json", "user-agent": "openreceive-release" },
   });
   if (response.status === 404) return false;
   if (!response.ok) throw new Error(`packagist.org answered ${response.status} for ${name}`);
   const body = await response.json();
-  const versions = body?.package?.versions ?? {};
+  const versions = body?.packages?.[name] ?? [];
   const normalized = composerNormalizedVersion(version);
-  return Object.values(versions).some((entry) => entry?.version_normalized === normalized);
+  return versions.some((entry) => entry?.version_normalized === normalized);
 }
 
 async function waitForPackagist(name, version, timeoutSeconds) {
@@ -564,7 +575,7 @@ async function publishSplits(root, args) {
     }
     if (args["skip-packagist"] === true) continue;
     if (dryRun) {
-      console.log(`dry-run: poll https://packagist.org/packages/${pkg.name}.json for ${version}`);
+      console.log(`dry-run: poll ${packagistMetadataUrl(pkg.name)} for ${version}`);
       continue;
     }
     const listed = await waitForPackagist(pkg.name, version, Number(args.timeout ?? 600));
