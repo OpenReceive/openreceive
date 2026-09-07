@@ -4,7 +4,7 @@
 > directly into a wallet the application owner controls, plus a BTCPay Server
 > plugin that does the same for a BTCPay store. OpenReceive never holds funds,
 > has no accounts or API keys, and connects through a receive-only Nostr
-> Wallet Connect (NWC) code. This index describes OpenReceive 0.4.3.
+> Wallet Connect (NWC) code. This index describes OpenReceive 0.4.4.
 
 Every documentation link below is raw markdown — fetch it directly, no browser
 needed. Appending `.md` to any guide page URL returns the same document as

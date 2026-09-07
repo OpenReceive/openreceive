@@ -1,6 +1,6 @@
 # OpenReceive agent directions (PHP)
 
-These directions describe OpenReceive 0.4.3.
+These directions describe OpenReceive 0.4.4.
 
 Add OpenReceive to a PHP application — the app you are already working in. You
 do not need a copy of the OpenReceive source: the engine is on Packagist

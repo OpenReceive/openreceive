@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.4 - 2026-09-07
+
+Version lockstep with the 0.4.4 npm release (every checkout image now ships
+inside the JavaScript; no asset option). Ruby changes in this gem:
+
+- `OpenReceive::Generated` (`lib/openreceive/generated/tables.rb`) is rendered
+  from `spec/data/kernel-tables.json` and now also carries the FixedFloat
+  status decision table (`spec/data/swap-state-table.json`); engine code
+  reads the rendering instead of restating the vocabularies by hand.
+- Four attention reasons no engine has emitted since 0.1.1
+  (`provider_order_creation_stale`, `provider_order_creation_failed`,
+  `provider_order_creation_needs_reconcile`,
+  `provider_order_expires_after_shadow_invoice`) leave the vocabulary;
+  `provider_completed_without_wallet_settlement` stays reserved. Wire output
+  is unchanged.
+- The bundled agent skill gains references for Django, FastAPI, Fastify,
+  Laravel and Next.js beside Node, Rails and BTCPay Server.
+
 ## 0.4.3 - 2026-09-03
 
 Version lockstep with the 0.4.3 npm release (container-query checkout

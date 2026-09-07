@@ -82,7 +82,8 @@ final class SqlPaymentRepository implements PaymentRepository
         $this->meta->assertSupportedSchema();
         $now ??= ($this->clock)();
         if ($paymentHash !== null && trim($paymentHash) !== '') {
-            return $this->findByHash($this->db, strtolower(trim($paymentHash)));
+            $selected = $this->findByHash($this->db, strtolower(trim($paymentHash)));
+            return $selected?->reference === $reference ? $selected : null;
         }
         $attempts = $this->rowsForReference($this->db, $reference);
         if (in_array($action, ['checkout.create', 'swap.create'], true)) {

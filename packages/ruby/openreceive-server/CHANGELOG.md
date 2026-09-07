@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.4 - 2026-09-07
+
+Version lockstep with the 0.4.4 npm release (every checkout image now ships
+inside the JavaScript; no asset option). Ruby changes in this gem:
+
+- The FixedFloat status normalizer (`OpenReceive::Server::Swap::FixedFloat`)
+  is now a short interpreter of the generated swap-state table shared with
+  every engine, pinned by the `swap-state` test vector. Same states and
+  reasons as before for every input.
+- The bundled agent skill gains references for Django, FastAPI, Fastify,
+  Laravel and Next.js beside Node, Rails and BTCPay Server.
+
 ## 0.4.3 - 2026-09-03
 
 Version lockstep with the 0.4.3 npm release (container-query checkout

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.4 - 2026-09-07
+
+Version lockstep with the 0.4.4 npm release (every checkout image now ships
+inside the JavaScript; a Rails host no longer copies `dist/assets` or sets
+`asset-base-url`, and the quickstart no longer says to). Ruby changes in this
+gem:
+
+- `OpenReceive::ApplicationController`'s header comment is corrected: the
+  engine inherits `config.parent_controller` for forgery protection only and
+  reads nothing else from it. The quickstart documents what that inheritance
+  also brings (every global `before_action`, including redirect-to-login
+  filters) and the two remedies.
+- The bundled agent skill gains references for Django, FastAPI, Fastify,
+  Laravel and Next.js beside Node, Rails and BTCPay Server.
+
 ## 0.4.3 - 2026-09-03
 
 Version lockstep with the 0.4.3 npm release (container-query checkout
