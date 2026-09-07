@@ -24,7 +24,7 @@ The **checkout UI is not in the Composer package.** Packagist installs from git
 and cannot run a JS build, so the browser side ships separately as
 `standalone-checkout-<version>.tar.gz` on every
 [GitHub release](https://github.com/openreceive/openreceive/releases) — one
-self-contained ES module, its stylesheet, the provider assets and a
+self-contained ES module, its stylesheet, a source map and a
 `MANIFEST.json`. Unpack it somewhere your web server serves as static files
 (step 5). A host with a JS bundler can `npm install @openreceive/elements`
 instead; the tarball is the same build.
@@ -239,9 +239,11 @@ use the matching wrapper package instead — same attributes
 
 Everything the checkout draws ships inside the JavaScript: the payment-method
 icons, the wallet logos and the pay tutorials. There is no image file to copy
-or serve and no asset option to set, under any bundler or with none. The
-tutorials load as a lazy chunk on first open. If your Content-Security-Policy
-has a strict `img-src`, allow `data:`
+or serve and no asset option to set. Deploy your normal JavaScript and CSS
+build output, including any generated JavaScript chunks. Bundlers with code
+splitting can defer tutorial screenshots until first open; single-file builds
+(including the standalone checkout) include them upfront. If your
+Content-Security-Policy has a strict `img-src`, allow `data:`
 ([Provider registry](provider-registry.md#assets)).
 
 `MANIFEST.json` in the tarball carries the version and a SHA-256 per file, so a
@@ -273,10 +275,12 @@ the receive-only wallet preflight. `$engine->doctor()` is the same report for
 an engine you already built. Put it behind a `bin/doctor` script; the demo's
 is twelve lines. → [Doctor](api-reference.md#openreceiveserverdoctor)
 
-Then open the checkout in a browser and confirm the wallet logos and
-payment-method icons render. Nothing is served from disk, so a missing image
-means a Content-Security-Policy `img-src` that blocks `data:` — the browser
-console names it.
+Then open the checkout in a browser, confirm the payment-method icons and
+wallet logos render, and open a wallet's pay tutorial to check its screenshots.
+If an image is missing, inspect the console for CSP violations and the Network
+panel for failed JavaScript chunks. Allow `data:` in `img-src` and deploy the
+complete build output. Do not add image routes, copy package source images, or
+use registry `icon_path` / tutorial `path` keys as browser URLs.
 
 ## Reconciliation
 

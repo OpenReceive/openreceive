@@ -62,8 +62,10 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
 There is no image prop. Everything the checkout draws ships inside the
 JavaScript: the payment-method icons, the wallet logos and the pay tutorials.
 There is no image file to copy or serve and no asset option to set, under any
-bundler or with none. The tutorials load as a lazy chunk on first open. If
-your Content-Security-Policy has a strict `img-src`, allow `data:`
+bundler or with none. Deploy the complete JavaScript and CSS build output,
+including generated JavaScript chunks. Code-splitting builds can load tutorial
+screenshots on first open; single-file builds include them upfront. If your
+Content-Security-Policy has a strict `img-src`, allow `data:`
 ([Provider registry](provider-registry.md#assets)).
 
 `useCheckout` is the hook behind `<Checkout>` if you want the same engine

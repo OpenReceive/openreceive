@@ -80,6 +80,11 @@ small, honest API and a good developer experience.
 
 ## Testing
 
+Run demo application servers and their backing services in Docker. Builds,
+tests, lint/type checks, browser automation, and release verification may run
+on the host or in Docker. The Docker requirement applies to running the demo
+applications, not to the verification tools or test runners.
+
 Use the smallest relevant test while iterating. `npm test` is the JS suite; the contract and
 secret check is:
 

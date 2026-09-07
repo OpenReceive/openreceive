@@ -129,15 +129,16 @@ Rendering:
   `WizardRouteAssetDisplay.iconId` — the `PaymentIconId` behind the URL, for
   drawing `paymentIconSvgs[id]` inline the way the custom element does.
 - `loadPayTutorialImages` and `payTutorialImage` — the pay-tutorial
-  screenshots are a lazy chunk of `@openreceive/provider-data`. Call
+  screenshots use a dynamic import in `@openreceive/provider-data`. Call
   `loadPayTutorialImages()` when a tutorial opens (memoised; a rejection means
   "no image"), then re-render: `WizardProviderTutorialDisplay.image` is
   `string | undefined`, filled from `payTutorialImage(path)` once the chunk
   is in. Draw the caption alone until then, never an `<img>` with an empty
   `src`. Wallet logos need no call — `WizardProviderDisplay` already carries
   each one as a data URI. Everything the checkout draws ships inside the
-  JavaScript; the only thing a host can get wrong is a CSP `img-src` that
-  blocks `data:` ([Provider registry](provider-registry.md#assets)).
+  JavaScript. Deploy the complete build output (including JavaScript chunks)
+  and allow `data:` in CSP `img-src`. Single-file builds include screenshots
+  upfront ([Provider registry](provider-registry.md#assets)).
 
 Formatting and labels:
 

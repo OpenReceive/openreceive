@@ -35,7 +35,13 @@ def wallet_handler(method: str, params: dict[str, Any]) -> dict[str, Any]:
             "result_type": method,
             "result": {
                 "transactions": [
-                    {"type": "incoming", "payment_hash": HASH, "amount": 1000, "state": "settled", "settled_at": 1200}
+                    {
+                        "type": "incoming",
+                        "payment_hash": HASH,
+                        "amount": 1000,
+                        "state": "settled",
+                        "settled_at": 1200,
+                    }
                 ]
             },
         }
@@ -68,8 +74,13 @@ def test_receive_client_normalizes_requests_replies_and_errors() -> None:
             "created_at": 1000,
             "expires_at": 1600,
         }
-        assert wallet.requests[-1] == ("make_invoice", {"amount": 1000, "expiry": 600, "description": "x"})
-        rows = client.list_transactions({"type": "incoming", "limit": 20, "offset": 0})["transactions"]
+        assert wallet.requests[-1] == (
+            "make_invoice",
+            {"amount": 1000, "expiry": 600, "description": "x"},
+        )
+        rows = client.list_transactions({"type": "incoming", "limit": 20, "offset": 0})[
+            "transactions"
+        ]
         assert rows[0]["transaction_state"] == "settled" and rows[0]["settled_at"] == 1200
         with pytest.raises(WalletError) as raised:
             client._request("pay_invoice", {})
@@ -78,7 +89,12 @@ def test_receive_client_normalizes_requests_replies_and_errors() -> None:
         service = Service(client, price_provider=False, swap_providers=[], clock=lambda: 1000)
         checkout = service.create_checkout({"reference": "ord-1", "amount": {"sats": 1}})
         assert checkout["payment_hash"] == HASH and checkout["bolt11"] == "lnbcfake"
-        assert service.reconcile_payments({"attempts": [{"payment_hash": HASH, "created_at": 1000}]})[0]["status"] == "settled"
+        assert (
+            service.reconcile_payments({"attempts": [{"payment_hash": HASH, "created_at": 1000}]})[
+                0
+            ]["status"]
+            == "settled"
+        )
         client.close()
 
 
@@ -86,7 +102,9 @@ def test_transport_errors_become_canonical_wallet_errors() -> None:
     wallet = FakeWallet(WALLET_SECRET, handler=wallet_handler)
     with FakeRelay(wallet, silent=True) as relay:
         client = client_for(relay, wallet)
-        client._transport = NwcTransport(wallet.keys.pubkey, [relay.url], CLIENT_SECRET, deadline_seconds=0.5, encryption="nip04")
+        client._transport = NwcTransport(
+            wallet.keys.pubkey, [relay.url], CLIENT_SECRET, deadline_seconds=0.5, encryption="nip04"
+        )
         with pytest.raises(WalletError) as raised:
             client.list_transactions({"type": "incoming"})
         assert raised.value.code == "TIMEOUT"
@@ -98,14 +116,20 @@ def test_notifications_reach_the_handler_until_stopped() -> None:
         client = client_for(relay, wallet)
         received: list[dict[str, Any]] = []
         stop = threading.Event()
-        thread = threading.Thread(target=client.subscribe_notifications, args=(received.append,), kwargs={"stop": stop})
+        thread = threading.Thread(
+            target=client.subscribe_notifications, args=(received.append,), kwargs={"stop": stop}
+        )
         thread.start()
         try:
             for _ in range(200):
                 if relay.subscription_count(kind=23197):
                     break
                 threading.Event().wait(0.01)
-            relay.push_notification("payment_received", {"payment_hash": HASH, "state": "settled", "settled_at": 5}, client.transport.pubkey)
+            relay.push_notification(
+                "payment_received",
+                {"payment_hash": HASH, "state": "settled", "settled_at": 5},
+                client.transport.pubkey,
+            )
             for _ in range(200):
                 if received:
                     break

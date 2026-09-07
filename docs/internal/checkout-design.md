@@ -187,14 +187,28 @@ first-party strings. The wallet logos and pay tutorials are `data:image/webp`
 URIs generated into `@openreceive/provider-data`
 (`tools/package/generate-provider-images.mjs`, byte-budgeted so the bundle
 cannot bloat silently): the logos in the main bundle, the tutorials in a chunk
-`loadPayTutorialImages()` imports on first open, so a payer who never opens
-one never downloads them. No host serves an image, so there is no resolver, no
+`loadPayTutorialImages()` imports on first open. Code-splitting hosts defer that
+download; single-file builds include it upfront. Hosts deploy the complete JS/CSS
+output, including generated chunks. No host serves an image, so there is no resolver, no
 base URL and no module-relative URL resolution. Every earlier layer —
 packaged `file://` URLs, a resolver function, a base-URL prop and attribute —
 existed to work around bundlers that cannot resolve a file from an import, and each handed
 the host one more step to get wrong (setting the base URL also switched the
 compiled-in payment icons to files nobody had copied). The one host-facing
 consequence is a Content-Security-Policy `img-src` that must allow `data:`.
+
+This deliberately trades independent image caching for a single versioned
+delivery path. A newly added wallet's logo arrives with the code that renders it;
+there is no separately deployed asset tree or server-package version to match.
+Keep the small, byte-budgeted icons and logos eager. Keep tutorial data behind a
+dynamic import for hosts that split JavaScript, and include it in the standalone
+file for hosts without a bundler. Do not add a second image delivery mode.
+
+`npm run test:package-assets` verifies extracted npm packages in Chromium under
+esbuild (with and without splitting), Vite, and webpack, using React and custom
+elements, plus the standalone release archive. It decodes every image table,
+opens tutorials from a nested URL, forbids image requests, and checks caption
+fallback when a tutorial chunk fails. This runs in Docker on every PR.
 
 ## Headless surface curation
 

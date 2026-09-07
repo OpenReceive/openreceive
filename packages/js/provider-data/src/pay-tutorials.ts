@@ -1,8 +1,8 @@
 // The pay-tutorial screenshots ship inside the JavaScript too, but they are
 // the one image set a checkout does not draw on first paint (~270 KB of
 // base64 nobody sees until a tutorial opens), so they live behind a dynamic
-// import(): bundlers keep the generated module a separate chunk, and the first
-// tutorial open is what fetches it.
+// import(). Code-splitting hosts fetch a separate JavaScript chunk on first
+// tutorial open; single-file builds include the same data in their main bundle.
 
 type PayTutorialImages = Readonly<Record<string, string>>;
 
@@ -10,7 +10,7 @@ let cached: PayTutorialImages | undefined;
 let loading: Promise<PayTutorialImages> | undefined;
 
 /**
- * Load the tutorial images. Memoised: the chunk is fetched once per page and
+ * Load the tutorial images. Memoised: the module is loaded once per page and
  * every later call answers the same promise. A rejection propagates — callers
  * treat it as "no image" and render the caption alone.
  */

@@ -489,9 +489,11 @@ the knobs.
 
 Everything the checkout draws ships inside the JavaScript: the payment-method
 icons, the wallet logos and the pay tutorials. There is no image file to copy
-or serve and no asset option to set, under any bundler or with none. The
-tutorials load as a lazy chunk on first open. If your Content-Security-Policy
-has a strict `img-src`, allow `data:`
+or serve and no asset option to set. Deploy your normal JavaScript and CSS
+build output, including any generated JavaScript chunks. Bundlers with code
+splitting can defer tutorial screenshots until first open; single-file builds
+(including the standalone checkout) include them upfront. If your
+Content-Security-Policy has a strict `img-src`, allow `data:`
 ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
 
 That is the whole loop: your server owns the price and the order, the payer gets
@@ -523,10 +525,12 @@ fails. `openreceive debug-report` prints the same as a redacted support
 report.
 → [openreceive doctor](https://openreceive.org/guides/api-reference.md#openreceive-doctor-python)
 
-Then open the checkout in a browser and confirm the wallet logos and
-payment-method icons render. Nothing is served from disk, so a missing image
-means a Content-Security-Policy `img-src` that blocks `data:` — the browser
-console names it.
+Then open the checkout in a browser, confirm the payment-method icons and
+wallet logos render, and open a wallet's pay tutorial to check its screenshots.
+If an image is missing, inspect the console for CSP violations and the Network
+panel for failed JavaScript chunks. Allow `data:` in `img-src` and deploy the
+complete build output. Do not add image routes, copy package source images, or
+use registry `icon_path` / tutorial `path` keys as browser URLs.
 
 Swap credentials (`LSC_URI_*`) stay server-side too: the provider order id and
 token live in the attempt's server-only `swap_data` column and never reach a

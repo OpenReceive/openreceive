@@ -49,11 +49,17 @@ when they need the same read-only suggestions.
 
 Everything the checkout draws ships inside the JavaScript: the payment-method
 icons, the wallet logos and the pay tutorials. There is no image file to copy
-or serve and no asset option to set, under any bundler or with none. The
-tutorials load as a lazy chunk on first open. If your Content-Security-Policy
-has a strict `img-src`, allow `data:`.
+or serve and no asset option to set. Deploy your normal JavaScript and CSS
+build output, including any generated JavaScript chunks. Bundlers with code
+splitting can defer tutorial screenshots until first open; single-file builds
+(including the standalone checkout) include them upfront. If your
+Content-Security-Policy has a strict `img-src`, allow `data:`.
 
 Three tables, one rule:
+
+Registry `icon_path` and tutorial `path` values are lookup keys, never browser
+URLs. Use the shipped checkout, or the image lookup APIs below for a custom UI.
+Do not copy `src/assets`, configure an asset base URL, or add image-serving routes.
 
 - **Payment-method icons** (Bitcoin, Lightning, USDT, …) are inline SVG
   compiled into `@openreceive/browser` (`paymentIconSvgs`). The custom element
@@ -71,7 +77,8 @@ Three tables, one rule:
   `payTutorialImage(path)` answers from it synchronously — `undefined` until it
   resolved, which is why `WizardProviderTutorialDisplay.image` is
   `string | undefined`. Twenty screenshots at 800 px tall cost about 201 KB
-  (270 KB as base64) and are never downloaded until a payer opens a tutorial.
+  (270 KB as base64). Code-splitting builds defer this download until a payer
+  opens a tutorial; single-file builds include it in the initial JavaScript.
   The shipped renderers call `loadPayTutorialImages` when a tutorial opens and
   draw the caption alone until it resolves; a custom UI does the same.
 

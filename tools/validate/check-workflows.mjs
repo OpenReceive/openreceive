@@ -18,6 +18,7 @@ const requiredWorkflows = {
     // Per-push browser smoke: one real checkout through the node-express
     // demo in Chromium (full spec matrix stays in the weekly demos lane).
     "npm run test:e2e:smoke",
+    "npm run test:package-assets",
     "tools/ci/ruby-tests.sh",
     "tools/ci/ruby-gem-build.sh",
     // The Python engine (packages/python/openreceive): pytest on 3.10 and 3.13
@@ -136,8 +137,7 @@ const forbiddenText = [
 ];
 const gemPushText = "gem push";
 
-// The Ruby engine lanes run only inside ruby:* containers; the entry scripts
-// must never run on the runner host (no gems or toolchains on the host).
+// The Ruby engine lanes run only inside ruby:* containers.
 const containerOnlyCommands = ["tools/ci/ruby-tests.sh", "tools/ci/ruby-gem-build.sh"];
 
 const SHA_PINNED_USES = /^[\w.-]+\/[\w.-]+(?:\/[\w./-]+)?@[0-9a-f]{40}$/;
@@ -239,6 +239,14 @@ function checkActionPins(relativePath, workflow, text) {
 function checkContainerLanes(relativePath, workflow) {
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const [jobName, job] of Object.entries(jobs)) {
+    if ((job.steps ?? []).some((step) => step.run?.includes("npm run test:package-assets"))) {
+      const lock = JSON.parse(readFileSync(path.join(root, "package-lock.json"), "utf8"));
+      const version = lock.packages["node_modules/@playwright/test"].version;
+      expect(
+        containerImage(job) === `mcr.microsoft.com/playwright:v${version}-noble`,
+        `${relativePath}: ${jobName} must use the Docker browser image matching locked Playwright`,
+      );
+    }
     const runsRubyLane = (job.steps ?? []).some(
       (step) =>
         typeof step.run === "string" &&

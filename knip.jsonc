@@ -20,6 +20,7 @@
       "entry": [
         "tests/*.test.mjs",
         "tools/**/*.mjs",
+        "tests/fixtures/package-assets/app.js",
         "tests/e2e/playwright.config.ts",
         "tests/e2e/*.spec.ts",
         "tests/e2e-btcpay/playwright.config.ts",

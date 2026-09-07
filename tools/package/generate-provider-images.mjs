@@ -13,9 +13,9 @@
 //                                           bundle, loaded with the JS
 //   src/generated/pay-tutorial-images.ts    payTutorialImages, keyed by the
 //                                           tutorial `path` — reached only
-//                                           through a dynamic import(), so it is
-//                                           a separate chunk loaded on the first
-//                                           tutorial open
+//                                           through a dynamic import(); hosts
+//                                           with code splitting fetch it on first
+//                                           open, single-file builds inline it
 //
 // No host copies, serves or resolves an image file, under any bundler or with
 // none. Pure Node: base64 only, no image toolchain. The byte budgets below are

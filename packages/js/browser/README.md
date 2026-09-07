@@ -27,9 +27,11 @@ will move without notice.
 
 Everything the checkout draws ships inside the JavaScript: the payment-method
 icons, the wallet logos and the pay tutorials. There is no image file to copy
-or serve and no asset option to set, under any bundler or with none. The
-tutorials load as a lazy chunk on first open. If your Content-Security-Policy
-has a strict `img-src`, allow `data:`.
+or serve and no asset option to set. Deploy your normal JavaScript and CSS
+build output, including any generated JavaScript chunks. Bundlers with code
+splitting can defer tutorial screenshots until first open; single-file builds
+(including the standalone checkout) include them upfront. If your
+Content-Security-Policy has a strict `img-src`, allow `data:`.
 
 - The payment-method icons (`btc`, `lightning`, `usdt`, …) are compiled into
   this package: the custom element (`@openreceive/elements`, and the

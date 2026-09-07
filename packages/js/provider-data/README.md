@@ -65,6 +65,11 @@ imports on demand (20 screenshots at 800 px tall, about 201 KB). Call
 table and is memoised — and `payTutorialImage(path)` afterwards for a
 synchronous lookup (`undefined` until the chunk is in).
 
+Deploy your bundler's complete JavaScript output, including generated chunks.
+Code-splitting builds can defer the screenshot download until first open;
+single-file builds (including the standalone checkout) include it upfront.
+If your Content-Security-Policy restricts `img-src`, allow `data:`.
+
 Source images live under `src/assets/` as pre-compressed WebP;
 `tools/package/generate-provider-images.mjs` renders them into
 `src/generated/` under byte budgets, so adding a wallet means adding one
