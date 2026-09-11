@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/node",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Accept Bitcoin Lightning payments in Node.js with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -17,7 +17,7 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@getalby/sdk": "^8.0.3",
-    "@openreceive/core": "0.4.5"
+    "@openreceive/core": "0.4.6"
   },
   "bin": {
     "openreceive": "./bin/openreceive.mjs"

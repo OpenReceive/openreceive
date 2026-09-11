@@ -1,12 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.4.6 - 2026-09-11
 
-- Release tooling: the Composer publish step now polls Composer's own p2
-  metadata (`repo.packagist.org/p2/<name>.json`) instead of the cached
-  packagist.org page API, which reported an empty version list for a newly
-  registered package long after `composer show -a` already resolved it and
-  made the v0.4.5 verification run fail spuriously.
+- Make the default checkout more compact: payment choices use two columns once
+  the grid has 288px of usable width, with a single-column fallback on narrower
+  screens. Shorten the Bitcoin description to “Pay via Lightning”, reduce
+  padding, and let labels and network controls wrap with enlarged text.
+- Keep the network selector full-width below the payment grid when two columns
+  fit. In the demos, place the order id and return link after the payment
+  controls and wallet list on mobile, while retaining the desktop sidebar.
+- Fix the plain PHP demo's checkout typography, product thumbnails and payment
+  layout, and cover narrow-screen rendering and rate-outage recovery with a
+  Docker-backed browser smoke test.
+- Remove obsolete VEF from live price-feed requests in JavaScript, Ruby,
+  Python and PHP, so a missing VEF quote does not reject the supported rates.
+- Update Angular and js-yaml dependencies to address security advisories.
+- Refresh package descriptions and quickstarts, clarify optional USDT, USDC,
+  SOL and ETH swaps, and complete the public documentation publishing bundle,
+  copy payloads and agent discovery files.
+- Verify Composer publication against Composer's p2 metadata instead of the
+  cached Packagist page API, avoiding false failures after a successful publish.
+
+All packages are versioned together at 0.4.6. The release gate rebuilds the
+packages, standalone checkout and demo assets. The configured live NWC wallet
+passed receive-only preflight; invoice creation and manual payment verification
+were intentionally skipped.
 
 ## 0.4.5 - 2026-09-07
 

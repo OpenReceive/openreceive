@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.6 - 2026-09-11
+
+Refresh installation and quickstart documentation and package metadata.
+Release in lockstep with openreceive 0.4.6, including the live-price request fix
+that removes obsolete VEF. No server adapter API change.
+
 ## 0.4.5 - 2026-09-07
 
 Release in lockstep with the Python/PHP publishing workflow fixes and complete

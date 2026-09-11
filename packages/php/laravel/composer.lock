@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c790e67711763974c73ba1982322c267",
+    "content-hash": "d2262969edc775186d4319cfa28ef6dd",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.5",
+            "version": "0.4.6",
             "dist": {
                 "type": "path",
                 "url": "../openreceive",
-                "reference": "d10f3a44d9cbb90bb19966057aba02ac72b8fab2"
+                "reference": "8a1a4a7b86fb9484f9d43fd049dfbb18847f6c73"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20",
@@ -2780,7 +2780,7 @@
             "license": [
                 "MIT"
             ],
-            "description": "OpenReceive engine for PHP: receive-only Lightning (NWC) checkout, exact money, settlement reconciliation, swaps and a PSR-15 mount over the host's own database.",
+            "description": "Accept Bitcoin Lightning payments in PHP with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
             "homepage": "https://openreceive.org",
             "keywords": [
                 "bitcoin",

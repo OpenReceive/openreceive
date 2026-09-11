@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/browser",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Browser helpers and a headless UI engine for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -30,8 +30,8 @@
     "./styles.css": "./dist/styles.css"
   },
   "dependencies": {
-    "@openreceive/core": "0.4.5",
-    "@openreceive/provider-data": "0.4.5",
+    "@openreceive/core": "0.4.6",
+    "@openreceive/provider-data": "0.4.6",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

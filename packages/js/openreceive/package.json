@@ -1,6 +1,6 @@
 {
   "name": "openreceive",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "CLI setup and diagnostics for OpenReceive Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -18,7 +18,7 @@
     "openreceive": "./bin/openreceive.mjs"
   },
   "dependencies": {
-    "@openreceive/node": "0.4.5"
+    "@openreceive/node": "0.4.6"
   },
   "files": [
     "bin",

@@ -1,6 +1,6 @@
 # OpenReceive agent directions (Rails)
 
-These directions describe OpenReceive 0.4.5.
+These directions describe OpenReceive 0.4.6.
 
 Add OpenReceive to a Rails application — the app you are already working in. You
 do not need a copy of the OpenReceive source: the gem is on RubyGems, the

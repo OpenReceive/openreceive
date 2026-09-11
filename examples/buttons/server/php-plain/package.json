@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-buttons-php-plain",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "private": true,
   "type": "module",
   "description": "Buy a Button on plain PHP. Not an npm workspace: it has no npm dependencies of its own — Vite, the shared vanilla client and the standalone checkout build all come from the repository root.",

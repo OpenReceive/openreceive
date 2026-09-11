@@ -1,6 +1,6 @@
 # OpenReceive agent directions (WordPress + WooCommerce)
 
-These directions describe OpenReceive 0.4.5.
+These directions describe OpenReceive 0.4.6.
 
 Install and configure the OpenReceive gateway in the existing WooCommerce
 store. Preserve its theme, checkout, customer accounts, order model and prices.

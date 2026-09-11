@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/elements",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Bitcoin Lightning checkout for any website using custom elements, with optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -21,7 +21,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.4.5"
+    "@openreceive/browser": "0.4.6"
   },
   "exports": {
     ".": {

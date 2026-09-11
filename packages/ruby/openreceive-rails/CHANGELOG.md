@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.6 - 2026-09-11
+
+Refresh installation and quickstart documentation and package metadata.
+The Rails demo places the order id and return link below payment choices and
+the Lightning wallet list on mobile, while keeping the desktop sidebar.
+Release in lockstep with openreceive 0.4.6 and its live-price request fix;
+no Rails engine API change.
+
 ## 0.4.5 - 2026-09-07
 
 Release in lockstep with the Python/PHP publishing workflow fixes and complete

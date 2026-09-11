@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.6 - 2026-09-11
+
+Remove obsolete VEF from live price-feed requests, matching the JavaScript,
+Python and PHP engines. Refresh installation and quickstart documentation and
+package metadata. Release in lockstep with the compact checkout and publishing
+fixes in 0.4.6; no Ruby public API change.
+
 ## 0.4.5 - 2026-09-07
 
 Release in lockstep with the Python/PHP publishing workflow fixes and complete

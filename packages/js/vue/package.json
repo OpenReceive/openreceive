@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/vue",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Vue component for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -19,8 +19,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.4.5",
-    "@openreceive/elements": "0.4.5"
+    "@openreceive/browser": "0.4.6",
+    "@openreceive/elements": "0.4.6"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0",

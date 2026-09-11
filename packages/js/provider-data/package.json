@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/provider-data",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Wallet listings, logos and payment tutorials for OpenReceive Lightning checkout and optional USDT, USDC, SOL and ETH swap flows.",
   "license": "MIT",
   "author": "OpenReceive <info@openreceive.org>",
