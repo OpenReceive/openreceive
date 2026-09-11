@@ -40,7 +40,7 @@ module OpenReceive
     # The fixed fiat list both live feeds price Bitcoin against. Hard-coded so
     # the primary and fallback URLs always request the same currencies.
     PRICE_FEED_VS_CURRENCIES =
-      "usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar"
+      "usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vnd,zar"
 
     PRICE_FEED_CURRENCIES = PRICE_FEED_VS_CURRENCIES.split(",").freeze
 

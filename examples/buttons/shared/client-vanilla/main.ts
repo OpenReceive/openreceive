@@ -508,7 +508,7 @@ const renderCheckout = (): DocumentFragment => {
   const order = state.order;
   if (order === null) return fragment;
 
-  const stage = el("div", "or-shop-stage");
+  const stage = el("div", "or-shop-stage or-checkout");
 
   const strip = el("div", "or-shop-order-strip");
   const thumbs = el("div", "or-shop-order-thumbs");
@@ -573,7 +573,11 @@ const renderCheckout = (): DocumentFragment => {
     copyRow("Checkout link", checkoutUrlFor(order.reference)),
   );
 
-  stage.append(strip, checkout, keep);
+  const summary = el("div", "or-checkout-summary");
+  summary.append(strip, keep);
+  const pay = el("div", "or-checkout-pay");
+  pay.append(checkout);
+  stage.append(summary, pay);
   fragment.append(stage);
 
   const footer = el("div", "or-shop-footer");

@@ -29,6 +29,26 @@ final class RatesTest extends TestCase
         self::assertSame($byId['fallback']['env_override'], Rates::PRICE_FEED_FALLBACK_URL_ENV);
     }
 
+    public function testDefaultFallbackWorksWhenPrimaryRejectsTheRequest(): void
+    {
+        $requests = [];
+        $http = new CallableTransport(static function (string $method, string $url) use (&$requests): array {
+            $requests[] = $url;
+            if ($url === Rates::PRIMARY_PRICE_FEED_URL) {
+                return ['status' => 403, 'body' => 'Forbidden'];
+            }
+            parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+            // The fallback rejects the whole query if it contains retired VEF.
+            if (in_array('vef', explode(',', $query['vs_currencies'] ?? ''), true)) {
+                return ['status' => 400, 'body' => '{"error":"Unknown currencies: vef"}'];
+            }
+            return ['status' => 200, 'body' => '{"bitcoin":{"usd":"50000.00"}}'];
+        });
+        $feed = Rates::createCachedLivePriceFeed(['USD'], $http);
+        self::assertSame('50000.00', $feed->btcFiatPrice('USD'));
+        self::assertSame([Rates::PRIMARY_PRICE_FEED_URL, Rates::FALLBACK_PRICE_FEED_URL], $requests);
+    }
+
     public function testJsonNumbersBecomePlainDecimalStringsWithoutFloatArithmetic(): void
     {
         self::assertSame('50000', Rates::normalizeBtcFiatRate(50000, 'bitcoin.usd'));

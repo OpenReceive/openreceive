@@ -28,7 +28,7 @@ export const OPENRECEIVE_STATIC_BTC_FIAT_RATES = {
 // The fixed fiat list both live feeds price Bitcoin against. Hard-coded so the
 // primary and fallback URLs always request the same currencies.
 export const OPENRECEIVE_PRICE_FEED_VS_CURRENCIES =
-  "usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar" as const;
+  "usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vnd,zar" as const;
 
 const OPENRECEIVE_SIMPLE_PRICE_BASE_URL = "https://api.coingecko.com/api/v3/simple/price" as const;
 

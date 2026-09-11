@@ -23,7 +23,7 @@ final class Rates
     public const PRICE_FEED_PRIMARY_TIMEOUT_MS = 5000;
     public const STATIC_PRICE_SOURCE_ID = 'static_mock';
     public const STATIC_BTC_FIAT_RATES = ['bitcoin' => ['usd' => '50000.00']];
-    public const PRICE_FEED_VS_CURRENCIES = 'usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar';
+    public const PRICE_FEED_VS_CURRENCIES = 'usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vnd,zar';
     public const SIMPLE_PRICE_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
     public const PRIMARY_PRICE_FEED_URL = self::SIMPLE_PRICE_BASE_URL . '?ids=bitcoin&vs_currencies=' . self::PRICE_FEED_VS_CURRENCIES;
     public const FALLBACK_PRICE_FEED_URL = 'https://openreceive.org/api/v3/simple/price?ids=bitcoin&vs_currencies=' . self::PRICE_FEED_VS_CURRENCIES;

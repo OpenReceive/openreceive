@@ -111,7 +111,14 @@ fakes follow the shared [testkit contract](../../../../docs/internal/testkit-con
 payment hashes are the mint counter in 64 hex characters, `testkit-swap-N`
 orders, the Tron address `T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb`, BTC at a static
 $50,000 so a $1.00 button is 2,000 sats — which is what lets the one Playwright
-suite drive this stack (`OPENRECEIVE_E2E_STACK=php-plain npm run test:e2e:smoke`).
+suite drive this stack. Run `npm run test:e2e:smoke:php-plain` from the repository
+root to build the production Docker image and test checkout through settlement,
+including thumbnail sizing, typography, and mobile overflow. The harness uses
+an isolated testkit wallet and temporary database, cleans up its container, and
+runs on every pull request. It needs Docker and Playwright Chromium
+(`npx playwright install chromium`); it does not load your `.env` or real wallet.
+The PHP rate suite separately covers primary-feed rejection, fallback query
+compatibility, and failure when neither feed can provide a usable quote.
 
 The control surface is the one every stack mounts, and a JSON 404 in any other
 mode:

@@ -26,7 +26,7 @@ STATIC_BTC_FIAT_RATES: dict[str, dict[str, str]] = {"bitcoin": {"usd": "50000.00
 # The fixed fiat list both live feeds price Bitcoin against.
 PRICE_FEED_VS_CURRENCIES = (
     "usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,"
-    "jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar"
+    "jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vnd,zar"
 )
 PRICE_FEED_CURRENCIES = tuple(PRICE_FEED_VS_CURRENCIES.split(","))
 SIMPLE_PRICE_BASE_URL = "https://api.coingecko.com/api/v3/simple/price"

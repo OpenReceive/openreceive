@@ -56,6 +56,8 @@ const demoDir = path.resolve(e2eDir, `../../examples/buttons/server/${stack}`);
 const databaseDir = mkdtempSync(path.join(tmpdir(), "openreceive-e2e-db-"));
 
 const PORT = 4173;
+// An isolated Docker demo can serve the production bundle instead of Vite.
+const externalURL = process.env.OPENRECEIVE_E2E_BASE_URL;
 
 export default defineConfig({
   testDir: e2eDir,
@@ -69,25 +71,27 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: {
-    baseURL: `http://127.0.0.1:${PORT}`,
+    baseURL: externalURL ?? `http://127.0.0.1:${PORT}`,
     trace: "retain-on-failure",
     // The copy-invoice assertions read the clipboard back.
     permissions: ["clipboard-read", "clipboard-write"],
   },
-  webServer: {
-    command: `npx vite --host 127.0.0.1 --port ${PORT} --strictPort --configLoader runner`,
-    cwd: demoDir,
-    // /openreceive/rates only answers once the service booted against the fakes.
-    url: `http://127.0.0.1:${PORT}/openreceive/rates`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    // Play the demo's console (boot, testkit, on_paid) and OpenReceive's INFO
-    // lines next to the list reporter. Playwright swallows stdout by default.
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      DEMO_WALLET: "testkit",
-      OPENRECEIVE_DEMO_DB: databaseDir,
-    },
-  },
+  webServer: externalURL
+    ? undefined
+    : {
+        command: `npx vite --host 127.0.0.1 --port ${PORT} --strictPort --configLoader runner`,
+        cwd: demoDir,
+        // /openreceive/rates only answers once the service booted against the fakes.
+        url: `http://127.0.0.1:${PORT}/openreceive/rates`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        // Play the demo's console (boot, testkit, on_paid) and OpenReceive's INFO
+        // lines next to the list reporter. Playwright swallows stdout by default.
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          DEMO_WALLET: "testkit",
+          OPENRECEIVE_DEMO_DB: databaseDir,
+        },
+      },
 });

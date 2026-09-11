@@ -66,7 +66,7 @@
     "test:e2e:smoke:fastify": "OPENRECEIVE_E2E_STACK=fastify playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
     "test:e2e:smoke:fastapi": "OPENRECEIVE_E2E_STACK=fastapi playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
     "test:e2e:smoke:django": "OPENRECEIVE_E2E_STACK=django playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
-    "test:e2e:smoke:php-plain": "OPENRECEIVE_E2E_STACK=php-plain playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
+    "test:e2e:smoke:php-plain": "bash tools/ci/php-demo-tests.sh",
     "test:e2e:smoke:laravel": "OPENRECEIVE_E2E_STACK=laravel playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
     "test:e2e:btcpay": "playwright test --config tests/e2e-btcpay/playwright.config.ts",
     "test:ruby": "bash tools/ci/ruby-tests.sh",
