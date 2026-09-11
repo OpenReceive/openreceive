@@ -21,11 +21,11 @@ import {
   getPaymentMethodIconId,
   getSwapOptionIconId,
   getWizardEmptyMessage,
+  type MethodGridGroupDisplay,
   networkButtonClasses,
   networkCheckClasses,
   networkMobileRevealClasses,
   networkSummaryIconClasses,
-  type MethodGridGroupDisplay,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   orClasses,
   type PaymentMethod,
@@ -436,7 +436,7 @@ function renderElementCompactPaymentSelectorHtml(
         <h2 id="payment-method-heading" class="${orClasses.wizardHeaderTitle}">${escapeHtml(checkoutLabels.wizardTitle)}</h2>
         <p class="${orClasses.wizardHeaderSubtitle}">${escapeHtml(checkoutLabels.wizardSubtitle)}</p>
       </header>
-      <div class="${orClasses.wizardBody}" aria-labelledby="payment-method-heading">
+      <div class="${orClasses.methodBody}" aria-labelledby="payment-method-heading">
         <div part="method-grid" role="group" aria-label="${escapeHtml(checkoutLabels.paymentMethod)}" class="${orClasses.methodGrid}">
           ${tiles}${loadingTile}
         </div>
@@ -477,7 +477,7 @@ function renderElementNetworkSelectorHtml(
                 label: option.network_label,
               })}
             </span>
-            <span class="truncate">${escapeHtml(option.network_label)}</span>
+            <span class="${orClasses.methodNetworkLabel}">${escapeHtml(option.network_label)}</span>
             ${
               optionSelected
                 ? `<span aria-hidden="true" class="${networkCheckClasses(accent)}">✓</span>`

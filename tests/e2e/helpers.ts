@@ -223,8 +223,8 @@ export function paymentColumn(page: Page): Locator {
 
 export function bitcoinTile(page: Page): Locator {
   // Not `exact`: every tile in the grid names itself and then says what it is —
-  // the Bitcoin tile's accessible name carries "Pay a Lightning invoice from any
-  // Bitcoin wallet." with it. `^Bitcoin` still separates it from the swap coins.
+  // the Bitcoin tile's accessible name includes "Pay via Lightning".
+  // `^Bitcoin` still separates it from the swap coins.
   return page.getByRole("button", { name: /^Bitcoin/ });
 }
 

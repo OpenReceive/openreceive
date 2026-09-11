@@ -29,7 +29,7 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
   // finished with, and switching method is how the payer buys after all.
   const refundOwed = swap?.state === "refund_required";
   // The refund screen carries its own, louder copy of the order id, so the
-  // quiet one in the summary stands down rather than putting the same copy
+  // quiet checkout note stands down rather than putting the same copy
   // button on the page twice.
   const refunding = swap?.state.startsWith("refund") ?? false;
 
@@ -72,11 +72,6 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
               {checkout.errorMessage}
             </Alert>
           ) : null}
-
-          {/* The order id and its URL, on every payment screen and not only the
-              swap one. A payer with no account has nothing else that comes
-              back to this page. */}
-          {refunding ? null : <CheckoutLinkNote checkout={checkout} />}
         </Stack>
 
         <div className="or-checkout-pay">
@@ -135,6 +130,14 @@ export const CheckoutStage: React.FC<{ shop: ShopStore }> = observer(({ shop }) 
             <MethodGrid checkout={checkout} />
           )}
         </div>
+
+        {/* Keep the return link after the payment controls in reading order.
+            On desktop it sits beneath the summary in the left column. */}
+        {refunding ? null : (
+          <div className="or-checkout-return">
+            <CheckoutLinkNote checkout={checkout} />
+          </div>
+        )}
 
         {/* The record of the payment sits under both columns: it is collapsed
             almost always, and on a phone it must not come between the status

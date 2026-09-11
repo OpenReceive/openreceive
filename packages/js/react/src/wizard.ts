@@ -31,8 +31,8 @@ import {
   type PaymentWizardController,
   type PaymentWizardSelection,
   paymentMethods,
-  resolveWizardSelection,
   requestSwapRefund,
+  resolveWizardSelection,
   selectCurrentSwapInvoice,
   swapAssetMatchesRoute,
   swapOptionLimitMessage,
@@ -794,7 +794,11 @@ function renderCompactPaymentMethodSelector(options: {
                     src: getNetworkIcon(option.network_label),
                   }),
                 ),
-                React.createElement("span", { className: "truncate" }, option.network_label),
+                React.createElement(
+                  "span",
+                  { className: orClasses.methodNetworkLabel },
+                  option.network_label,
+                ),
                 optionSelected
                   ? React.createElement(
                       "span",
@@ -860,7 +864,7 @@ function renderCompactPaymentMethodSelector(options: {
     React.createElement(
       "div",
       {
-        className: orClasses.wizardBody,
+        className: orClasses.methodBody,
         "aria-labelledby": "payment-method-heading",
       },
       React.createElement(

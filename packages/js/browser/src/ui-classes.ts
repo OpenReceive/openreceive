@@ -54,18 +54,21 @@ export const orClasses = {
   /** The spinner/notice body of the creating, minting and create-error screens; sits inside `root`, which pads. */
   creating: "grid gap-2 place-items-center",
   wizard: "overflow-hidden rounded-box border border-base-content/20 bg-base-200 grid gap-0",
-  wizardHeader: "grid gap-0.5 px-4 py-4 @sm:px-5",
+  wizardHeader: "grid gap-0.5 p-3 @sm:px-5 @sm:py-4",
   wizardHeaderTitle: "text-lg font-bold m-0 @sm:text-xl",
   wizardHeaderSubtitle: "text-base-content/65 text-sm m-0 mt-0.5",
   wizardBody: "border-t border-base-content/15 grid gap-3 p-4 @sm:p-5",
+  // Measure the space available to the tiles after all host and panel padding.
+  // Keep the grid and its full-width network reveal on the same breakpoint.
+  methodBody: "border-t border-base-content/15 grid gap-3 p-3 @sm:p-5 @container/methods",
   methodGrid:
-    "grid grid-cols-1 items-stretch gap-2 @sm:grid-cols-2 @sm:gap-3 @md:grid-cols-3 @lg:grid-cols-4",
+    "grid grid-cols-1 items-stretch gap-2 @min-[18rem]/methods:grid-cols-2 @sm/openreceive:gap-3 @md/openreceive:grid-cols-3 @lg/openreceive:grid-cols-4",
   methodCardUnavailable:
-    "flex h-full min-h-28 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-3 py-4 text-center text-base-content opacity-50 cursor-not-allowed shadow-sm",
+    "flex h-full min-h-24 min-w-0 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-2.5 py-3 text-center text-base-content opacity-50 cursor-not-allowed shadow-sm",
   methodCurrenciesLoading:
-    "flex min-h-28 w-full flex-col items-center justify-center gap-2 rounded-box border border-dashed border-base-content/25 bg-base-100 px-3 py-4 text-center text-base-content/70 shadow-sm @sm:col-span-2 @md:col-span-3 @lg:col-span-4",
+    "col-span-full flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-box border border-dashed border-base-content/25 bg-base-100 px-2.5 py-3 text-center text-base-content/70 shadow-sm",
   methodCardReady:
-    "flex h-full min-h-28 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-3 py-4 text-center text-base-content shadow-sm transition-colors hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary cursor-pointer",
+    "flex h-full min-h-24 min-w-0 w-full flex-col items-center justify-start gap-1.5 rounded-box border border-base-content/20 bg-base-100 px-2.5 py-3 text-center text-base-content shadow-sm transition-colors hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary cursor-pointer",
   methodCardActiveBitcoin: "border-warning bg-warning/10 ring-1 ring-warning/50",
   methodCardActiveUsdt: "border-success bg-success/10 ring-1 ring-success/50",
   methodCardActiveUsdc: "border-info bg-info/10 ring-1 ring-info/50",
@@ -73,9 +76,9 @@ export const orClasses = {
   methodCardActiveEth: "border-secondary bg-secondary/10 ring-1 ring-secondary/50",
   methodCardActiveDefault: "border-primary bg-primary/10 ring-1 ring-primary/50",
   methodIconWrap:
-    "grid size-9 shrink-0 place-items-center overflow-hidden rounded-full @sm:size-10",
-  methodIcon: "size-9 aspect-square @sm:size-10",
-  methodTitle: "block truncate font-bold text-sm @sm:text-base",
+    "grid size-8 shrink-0 place-items-center overflow-hidden rounded-full @sm/openreceive:size-10",
+  methodIcon: "size-8 aspect-square @sm/openreceive:size-10",
+  methodTitle: "block whitespace-normal break-words font-bold text-sm @sm/openreceive:text-base",
   methodTitleWrap: "min-w-0 w-full text-center",
   methodDetail: "text-base-content/60 text-xs leading-snug",
   /**
@@ -83,28 +86,30 @@ export const orClasses = {
    * coin can arrive on. Visible at EVERY width — a grid of five bare coin names
    * is a grid of five questions, and the answer is one short line long.
    */
-  methodTileDetail: "block text-xs leading-snug text-base-content/60",
+  methodTileDetail: "block whitespace-normal break-words text-xs leading-snug text-base-content/60",
   /** Limit / unavailable hint under a payment tile — visible at all breakpoints. */
   methodLimitHint: "block px-1 text-center text-xs leading-snug text-base-content/55",
   methodNetworkReveal: "rounded-box border border-base-content/20 bg-base-100 p-3",
-  methodNetworkRevealDesktop: "mt-3 hidden @sm:block",
-  methodNetworkRevealMobile: "ml-4 border-l border-base-content/30 pl-3 @sm:hidden",
-  methodNetworkRevealMobileUsdt: "ml-4 border-l border-success/40 pl-3 @sm:hidden",
-  methodNetworkRevealMobileUsdc: "ml-4 border-l border-info/40 pl-3 @sm:hidden",
+  methodNetworkRevealDesktop: "hidden @min-[18rem]/methods:block",
+  methodNetworkRevealMobile: "border-l border-base-content/30 pl-2 @min-[18rem]/methods:hidden",
+  methodNetworkRevealMobileUsdt: "border-l border-success/40 pl-2 @min-[18rem]/methods:hidden",
+  methodNetworkRevealMobileUsdc: "border-l border-info/40 pl-2 @min-[18rem]/methods:hidden",
   methodNetworkRevealAnim:
-    "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none @sm:hidden",
+    "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none @min-[18rem]/methods:hidden",
   methodNetworkRevealAnimOpen: "mt-2 grid-rows-[1fr] opacity-100",
   methodNetworkRevealAnimClosed: "grid-rows-[0fr] opacity-0",
   methodNetworkRevealInner: "min-h-0 overflow-hidden",
   methodNetworkLayout:
-    "grid gap-3 @lg:grid-cols-[9rem_minmax(0,1fr)_minmax(8rem,auto)] @lg:items-start",
-  methodNetworkHeading: "text-sm font-semibold text-base-content m-0",
-  methodNetworkHint: "mt-0.5 text-xs text-base-content/55 m-0",
-  methodNetworkGrid: "grid grid-cols-1 gap-2 @min-[390px]:grid-cols-3 items-start",
+    "grid gap-3 @lg/openreceive:grid-cols-[9rem_minmax(0,1fr)_minmax(8rem,auto)] @lg/openreceive:items-start",
+  methodNetworkHeading: "break-words text-sm font-semibold text-base-content m-0",
+  methodNetworkHint: "break-words mt-0.5 text-xs text-base-content/55 m-0",
+  methodNetworkGrid:
+    "grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2 items-start",
   methodNetworkButton:
-    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border border-base-content/25 bg-base-100 px-3 text-sm text-base-content shadow-sm hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+    "btn h-auto min-h-11 min-w-0 w-full flex-wrap justify-start gap-2 rounded-field border border-base-content/25 bg-base-100 px-3 py-2 text-sm text-base-content shadow-sm hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
   methodNetworkButtonUnavailable:
-    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border border-base-content/20 bg-base-100 px-3 text-sm text-base-content opacity-50 cursor-not-allowed shadow-sm pointer-events-none",
+    "btn h-auto min-h-11 min-w-0 w-full flex-wrap justify-start gap-2 rounded-field border border-base-content/20 bg-base-100 px-3 py-2 text-sm text-base-content opacity-50 cursor-not-allowed shadow-sm pointer-events-none",
+  methodNetworkLabel: "min-w-0 whitespace-normal break-words text-left",
   methodNetworkButtonActiveUsdt: "border-success bg-success/10 ring-1 ring-success/50",
   methodNetworkButtonActiveUsdc: "border-info bg-info/10 ring-1 ring-info/50",
   methodNetworkButtonActiveDefault: "border-primary bg-primary/10 ring-1 ring-primary/50",
@@ -113,12 +118,13 @@ export const orClasses = {
     "ml-auto grid size-5 place-items-center rounded-full bg-success text-[0.65rem] text-success-content",
   methodNetworkCheckUsdc:
     "ml-auto grid size-5 place-items-center rounded-full bg-info text-[0.65rem] text-info-content",
-  methodNetworkSummary: "mt-2 flex items-center gap-1.5 text-xs text-base-content/65 m-0",
+  methodNetworkSummary: "mt-2 flex flex-wrap items-center gap-1.5 text-xs text-base-content/65 m-0",
   methodNetworkSummaryIcon:
     "grid size-4 place-items-center rounded-full bg-success text-[0.65rem] text-success-content",
   methodNetworkSummaryIconUsdc:
     "grid size-4 place-items-center rounded-full bg-info text-[0.65rem] text-info-content",
-  methodConfirmDesktop: "btn btn-primary w-full gap-2",
+  methodConfirmDesktop:
+    "btn btn-primary h-auto min-h-11 min-w-0 w-full whitespace-normal break-words gap-2 px-2 py-2",
   methodTile: "grid h-full min-w-0 content-start gap-0.5",
   breadcrumbs: "breadcrumbs text-sm",
   breadcrumbCurrent: "font-bold",

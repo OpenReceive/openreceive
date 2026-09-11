@@ -210,6 +210,7 @@ body {
    track out without this. */
 .or-checkout-summary,
 .or-checkout-pay,
+.or-checkout-return,
 .or-checkout-record {
   min-width: 0;
 }
@@ -222,6 +223,22 @@ body {
 
   .or-checkout-record {
     grid-column: 1 / -1;
+  }
+
+  /* The return link follows payment controls on mobile and in reading order.
+     A desktop sidebar keeps it directly below the summary. */
+  .or-checkout:has(> .or-checkout-return) {
+    grid-template-rows: min-content 1fr auto;
+  }
+
+  .or-checkout:has(> .or-checkout-return) > .or-checkout-pay {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .or-checkout-return {
+    grid-column: 1;
+    grid-row: 2;
   }
 }
 

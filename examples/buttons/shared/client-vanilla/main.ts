@@ -574,10 +574,12 @@ const renderCheckout = (): DocumentFragment => {
   );
 
   const summary = el("div", "or-checkout-summary");
-  summary.append(strip, keep);
+  summary.append(strip);
   const pay = el("div", "or-checkout-pay");
   pay.append(checkout);
-  stage.append(summary, pay);
+  const returnLink = el("div", "or-checkout-return");
+  returnLink.append(keep);
+  stage.append(summary, pay, returnLink);
   fragment.append(stage);
 
   const footer = el("div", "or-shop-footer");

@@ -173,7 +173,7 @@ export const paymentMethods: readonly PaymentMethodOption[] = [
     // tiles, "send on-chain into a swap" described what those tiles do — one
     // tile away from four tiles that actually do it.
     title: "Bitcoin",
-    detail: "Pay a Lightning invoice from any Bitcoin wallet.",
+    detail: "Pay via Lightning",
   },
 ];
 
