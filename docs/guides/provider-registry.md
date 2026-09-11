@@ -73,10 +73,23 @@ Do not copy `src/assets`, configure an asset base URL, or add image-serving rout
   about 35 KB (47 KB as base64) and load with the JavaScript.
 - **Pay tutorials** are the same kind of URI, keyed by each tutorial's `path`,
   in a separate chunk the bundle imports on demand. `loadPayTutorialImages()`
-  fetches the chunk once (memoised; a rejection means "no image") and
+  fetches the chunk once and returns that table (memoised; a rejection means
+  "no image"). In a custom UI, use:
+
+  ```ts
+  import { loadPayTutorialImages } from "@openreceive/provider-data";
+
+  const images = await loadPayTutorialImages();
+  const src = images[tutorial.path]; // data URI for the selected tutorial
+  ```
+
+  Render `src` as the image source and update your UI after loading.
   `payTutorialImage(path)` answers from it synchronously — `undefined` until it
-  resolved, which is why `WizardProviderTutorialDisplay.image` is
-  `string | undefined`. Twenty screenshots at 800 px tall cost about 201 KB
+  resolves. `WizardProviderTutorialDisplay.image` captures that value when the
+  display is created; existing displays do not update after loading. To use
+  `tutorial.image`, await the loader and recreate the displays with
+  `createWizardRouteDisplays` from `@openreceive/browser/headless` first.
+  Twenty screenshots at 800 px tall cost about 201 KB
   (270 KB as base64). Code-splitting builds defer this download until a payer
   opens a tutorial; single-file builds include it in the initial JavaScript.
   The shipped renderers call `loadPayTutorialImages` when a tutorial opens and

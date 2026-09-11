@@ -225,11 +225,25 @@ components.
   "switch payment method".
 - No "Open wallet" button on desktop.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
-  `createWizardRouteDisplays`. Lightning only. Every image ships inside
-  the JavaScript — logos as data URIs, tutorials once `loadPayTutorialImages()`
-  resolves (`image` is `undefined` until then) — so serve nothing and set no
-  asset option. When it works, the logos and payment icons render; a missing
-  image means a CSP `img-src` that blocks `data:`, and the console names it.
+  `createWizardRouteDisplays`. Lightning only. Logos are data URIs; tutorial
+  images load from a JavaScript chunk. For a custom headless UI, load it when
+  a tutorial opens and look up the returned table by the tutorial's `path`:
+
+  ```js
+  import { loadPayTutorialImages } from "@openreceive/browser/headless";
+
+  const images = await loadPayTutorialImages();
+  const src = images[tutorial.path]; // data URI for the selected tutorial
+  ```
+
+  Render `src` as the image source and update your UI after loading. Existing
+  display objects do not update: their `tutorial.image` stays `undefined` if
+  created before loading. Alternatively, await the loader, recreate the displays
+  with `createWizardRouteDisplays`, and render the new `tutorial.image`.
+  Show the caption while loading or if loading fails; never use an empty image
+  source. Deploy all JavaScript chunks and allow `data:` in CSP `img-src`.
+  For missing images, check CSP errors, failed chunks, and stale displays.
+  Registry paths are lookup keys; there is no asset option or image route.
 
 ## More documentation
 

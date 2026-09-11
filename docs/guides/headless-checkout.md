@@ -131,9 +131,22 @@ Rendering:
 - `loadPayTutorialImages` and `payTutorialImage` — the pay-tutorial
   screenshots use a dynamic import in `@openreceive/provider-data`. Call
   `loadPayTutorialImages()` when a tutorial opens (memoised; a rejection means
-  "no image"), then re-render: `WizardProviderTutorialDisplay.image` is
-  `string | undefined`, filled from `payTutorialImage(path)` once the chunk
-  is in. Draw the caption alone until then, never an `<img>` with an empty
+  "no image"). It returns a table keyed by each tutorial's `path`:
+
+  ```ts
+  import { loadPayTutorialImages } from "@openreceive/browser/headless";
+
+  const images = await loadPayTutorialImages();
+  const src = images[tutorial.path]; // data URI for the selected tutorial
+  ```
+
+  Render `src` as the image source and update your UI after loading.
+  `WizardProviderTutorialDisplay.image` is a snapshot, not a reactive lookup:
+  displays created before loading keep their `undefined` image. Alternatively,
+  await the loader and call `createWizardRouteDisplays` again before reading
+  the new `tutorial.image`; `payTutorialImage(tutorial.path)` also reads the
+  loaded cache synchronously. Draw the caption alone while loading or if
+  loading fails, never an `<img>` with an empty
   `src`. Wallet logos need no call — `WizardProviderDisplay` already carries
   each one as a data URI. Everything the checkout draws ships inside the
   JavaScript. Deploy the complete build output (including JavaScript chunks)
