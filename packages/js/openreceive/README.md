@@ -1,8 +1,15 @@
 # openreceive
 
-The `openreceive` command-line tool. The library itself ships as the
-`@openreceive/*` packages: install the adapter for your server and the UI
-package for your frontend, and the rest comes along as dependencies.
+Set up and inspect your OpenReceive payment integration from the command
+line. Generate payment-table migrations for your ORM and check your
+receive-only wallet connection with `openreceive scaffold` and
+`openreceive doctor`. The payment libraries ship as the `@openreceive/*`
+packages; choose the adapter for your server and the UI for your frontend.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
 
 ```sh
 npm install @openreceive/express @openreceive/react

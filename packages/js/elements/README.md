@@ -1,6 +1,30 @@
 # @openreceive/elements
 
-The OpenReceive checkout custom element (`<openreceive-checkout>`) and theme toggle (`<openreceive-theme-toggle>`).
+Add Bitcoin Lightning checkout to any website with
+`<openreceive-checkout>`. The custom element displays payment choices, QR
+codes, and live payment status, with no frontend framework required. It also
+ships `<openreceive-theme-toggle>` for switching the checkout theme.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+Pair this browser package with an OpenReceive server integration. Your server
+authorizes the order, sets the amount, configures swaps, and verifies
+settlement; wallet and provider credentials stay on the server.
+
+## Install
+
+Use Node.js 22 or later for package tooling.
+
+```sh
+npm install @openreceive/elements
+```
+
+Follow the [frontend checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md)
+to connect the component to your server routes. Use the server-side payment
+hook to fulfill orders; browser callbacks update the interface.
 
 ## Mount
 

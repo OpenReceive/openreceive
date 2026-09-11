@@ -1,11 +1,34 @@
 # @openreceive/next
 
-Next App Router adapter for the OpenReceive payment HTTP handler.
+Add Bitcoin Lightning checkout to your Next.js App Router application and
+receive payments directly into a wallet you control. The route handlers
+connect your existing database to three application hooks: authorization,
+order amounts, and fulfillment. OpenReceive handles payment attempts and
+reconciliation on the server.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+## Install
 
 This package is ESM-only and requires Node >= 22.
 
+```sh
+npm install @openreceive/next
+```
+
+Start with the [integration quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-next.md)
+and the [payment storage guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/storage.md).
+
+## Connect your application
+
 The all-in-one form is the happy path: pass the host hooks and a database
 handle, and the handlers build the service and host themselves.
+
+The example below assumes your app has a database handle (`db`) and an order
+lookup (`orders`). Apply the payment-table migration from the quickstart first.
 
 ```ts
 import { openReceiveNextHandlers } from "@openreceive/next";
@@ -48,6 +71,12 @@ pass them in. `createHost` is the persistence step: it owns the
 `openreceive_payments` rows — per-reference commit locking, write-once settlement,
 and the reconciliation state machine.
 
+Add the packages you import directly when composing the integration:
+
+```sh
+npm install @openreceive/http @openreceive/node
+```
+
 ```ts
 import { createHost } from "@openreceive/http";
 import { openReceiveNextHandlers } from "@openreceive/next";
@@ -73,3 +102,9 @@ types. Host-integration internals — `createHost`, the SQL payment
 repository, the reconcile gate, the rate-limit helpers — live only in
 `@openreceive/http`; import them from there when composing your own host
 (`npm run check:public-api` pins both surfaces).
+
+## Guides
+
+- [Frontend checkout](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md)
+- [Optional swaps](https://github.com/openreceive/openreceive/blob/master/docs/guides/automated-swaps.md)
+- [Host testing](https://github.com/openreceive/openreceive/blob/master/docs/guides/host-testing.md)

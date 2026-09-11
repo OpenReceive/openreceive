@@ -1,5 +1,15 @@
 # OpenReceive guides
 
+Add Bitcoin Lightning checkout to your application, with payments received
+directly in your wallet and payment attempts stored in your existing database.
+Choose a framework quickstart below, then add the checkout UI and connect
+your authorization, pricing, and fulfillment hooks.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
 1. [Express quickstart (Node)](quickstart-node.md)
 2. [Fastify quickstart](quickstart-fastify.md)
 3. [Next.js quickstart](quickstart-next.md)

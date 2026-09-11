@@ -1,6 +1,17 @@
 # Buy a Button — static HTML + a small API
 
-The button shop with **no framework at all**.
+See Bitcoin Lightning checkout on a plain HTML page with a small Express
+API. This example pairs the OpenReceive custom element with SQLite orders
+and vanilla browser code, so no frontend framework is required.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+For your own app, start with the [integration quickstart](../../../../docs/guides/quickstart-node.md).
+Run demo servers and backing services in Docker. Development-process commands
+below are for a Docker environment; builds and test runners may run on the host.
 
 ```sh
 npm run demo buttons-static      # Docker, :3001

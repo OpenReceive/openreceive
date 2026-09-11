@@ -1,6 +1,6 @@
 {
   "name": "openreceive/laravel",
-  "description": "OpenReceive for Laravel: the service provider, routes, install command and artisan workers over the openreceive/openreceive engine — receive-only Lightning (NWC) checkout inside your own Laravel application and database.",
+  "description": "Accept Bitcoin Lightning payments in Laravel with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
   "type": "library",
   "license": "MIT",
   "homepage": "https://openreceive.org",

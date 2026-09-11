@@ -5,20 +5,28 @@ orders, prices, stock and email; the bundled PHP engine owns payment attempts
 in the existing WordPress database. Both classic and block checkout use the
 same OpenReceive checkout on the order-pay page. HPOS is supported.
 
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+## Install
+
 Requires WordPress 6.6+, WooCommerce 9+, PHP 8.2+ (64-bit), GMP, sodium and
 MySQL 8 or MariaDB 10.5+. SQLite WordPress is not supported.
 
 Install a built `openreceive-wordpress-<version>.zip` through **Plugins → Add
 New → Upload Plugin**, then configure **WooCommerce → Settings → Payments →
 OpenReceive**. The source directory is not an installable plugin archive.
-The WordPress.org listing has not been submitted or approved yet.
 
-The [WooCommerce quickstart](../../../docs/guides/quickstart-woocommerce.md)
+The [WooCommerce quickstart](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/quickstart-woocommerce.md)
 covers credentials, guest recovery, scheduled reconciliation and refunds.
-The [Docker demo](../../../examples/wordpress/README.md) runs a real WordPress
+The [Docker demo](https://github.com/OpenReceive/openreceive/blob/master/examples/wordpress/README.md) runs a real WordPress
 shop and WooCommerce checkout using the shared demo product catalog.
 
 ![OpenReceive checkout in the local WooCommerce demo](../../../docs/assets/wordpress/checkout.png)
+
+## Build from source
 
 Build locally (PHP, Composer, Node and WP-CLI are required):
 
@@ -33,6 +41,8 @@ If WP-CLI is a local phar, set `OPENRECEIVE_WP_CLI=/absolute/path/wp-cli.phar`.
 
 The archive includes namespace-isolated PHP dependencies and the complete
 standalone checkout assets; it loads no browser CDN dependencies.
+
+## Operate your store
 
 Run `wp openreceive doctor` for configuration and schema checks, and
 `wp openreceive reconcile` for a gated reconciliation pass. The optional

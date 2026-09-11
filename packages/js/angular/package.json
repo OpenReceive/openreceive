@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/angular",
   "version": "0.4.5",
-  "description": "Angular wrapper for the OpenReceive checkout custom element.",
+  "description": "Angular component for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
     "lightning",

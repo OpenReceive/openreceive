@@ -1,7 +1,12 @@
 # OpenReceive Internal Docs
 
 Start here when you are contributing to OpenReceive itself, or operating
-swaps / settlement beyond the integrator happy path.
+the payment engines and their release workflows. For application setup,
+start with the [public guides](../guides/README.md).
+
+The engines support Lightning checkout and optional USDT, USDC, SOL, and ETH
+swaps through a configured provider, settling as BTC over Lightning in the
+merchant's wallet. Available assets and networks depend on the provider.
 
 1. [Architecture Notes](architecture.md) - settlement authority, host coordination, NWC strategy, and package boundaries.
 2. [Shipped Routes](shipped-routes.md) - OpenAPI route contract and host-hook boundary.

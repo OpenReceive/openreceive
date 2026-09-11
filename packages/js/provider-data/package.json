@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/provider-data",
   "version": "0.4.5",
-  "description": "Curated, validated, zero-dependency registry of Lightning payment providers and pay-the-invoice route guidance.",
+  "description": "Wallet listings, logos and payment tutorials for OpenReceive Lightning checkout and optional USDT, USDC, SOL and ETH swap flows.",
   "license": "MIT",
   "author": "OpenReceive <info@openreceive.org>",
   "repository": {

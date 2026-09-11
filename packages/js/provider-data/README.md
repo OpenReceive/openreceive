@@ -1,6 +1,14 @@
 # @openreceive/provider-data
 
-Curated, validated, zero-dependency registry of Lightning payment providers and pay-the-invoice route guidance.
+Help customers find a way to pay. This package supplies OpenReceive
+checkout with wallet and exchange listings, logos, payment routes, and
+step-by-step tutorials. Use the static registry in your own payment UI
+without making a network request for each provider.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
 
 ## Quick Start
 
@@ -74,4 +82,4 @@ Source images live under `src/assets/` as pre-compressed WebP;
 `tools/package/generate-provider-images.mjs` renders them into
 `src/generated/` under byte budgets, so adding a wallet means adding one
 ≤ 72 px `.webp`
-([Provider registry → Assets](../../../docs/guides/provider-registry.md#assets)).
+([Provider registry → Assets](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/provider-registry.md#assets)).

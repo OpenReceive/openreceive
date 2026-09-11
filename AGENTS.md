@@ -3,6 +3,20 @@
 Optimize for a
 small, honest API and a good developer experience.
 
+## Product overviews
+
+Every README that provides a basic OpenReceive, package, integration, or demo
+overview must mention optional swaps and name USDT, USDC, SOL, and ETH. Explain
+that a configured swap provider converts these payments to BTC over Lightning
+in the merchant's connected wallet, with asset and network availability depending
+on the provider. Keep package descriptions consistent with this positioning;
+describe supporting libraries in the context of the full integration.
+Lead public package READMEs with what the developer can build and the package's
+specific role. Include installation requirements and a working quickstart link
+before detailed internals. Use links that resolve from published packages and
+split repositories. Keep registry descriptions aligned with the README; avoid
+blanket security guarantees or implying that a helper package is a full backend.
+
 ## Non-negotiables
 
 - OpenReceive never owns orders, users, prices, or fulfillment, and never requires a separate

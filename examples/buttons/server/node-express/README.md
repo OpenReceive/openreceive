@@ -1,7 +1,17 @@
 # Buy a Button — Express
 
-The button shop on Express + SQLite, with the packaged checkout in **four
-frameworks**.
+See Bitcoin Lightning checkout in an Express shop with SQLite. Switch
+between React, Vue, Svelte, and Angular checkout components against the same
+server integration and application data.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+For your own app, start with the [integration quickstart](../../../../docs/guides/quickstart-node.md).
+Run demo servers and backing services in Docker. Development-process commands
+below are for a Docker environment; builds and test runners may run on the host.
 
 ```sh
 npm run demo buttons-express     # Docker, :3000

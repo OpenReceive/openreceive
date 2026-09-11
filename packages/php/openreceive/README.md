@@ -1,13 +1,20 @@
 # openreceive/openreceive
 
-The [OpenReceive](https://openreceive.org) engine for PHP: receive-only
-Bitcoin Lightning checkout inside your own application and database. Your
-server creates and verifies BOLT11 invoices through a wallet you control via a
-receive-only Nostr Wallet Connect (NWC / NIP-47) connection; the package owns
-exact money, settlement, the `openreceive_payments` repository over PDO, swaps,
-rates and a PSR-15 handler you dispatch to from any front controller. It never
-owns orders, users, prices or fulfillment — a `Host` with three methods is the
-whole bridge.
+Accept Bitcoin Lightning payments in your PHP application, directly into a
+wallet you control. [OpenReceive](https://openreceive.org) handles invoices,
+payment attempts, and settlement reconciliation in your existing database.
+Keep your orders, users, prices, and fulfillment in your own code.
+
+Use a PDO database handle and a `Host` with three methods: `authorize`,
+`amountFor`, and `onPaid`. Dispatch the PSR-15 handler from any front controller,
+or use the Laravel adapter for framework integration.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+## Install
 
 Requires PHP ≥ 8.2 (64-bit) with `ext-gmp` (the NWC transport signs every
 request with it), `ext-sodium`, `ext-mbstring`, `ext-json`, `ext-pdo` and one

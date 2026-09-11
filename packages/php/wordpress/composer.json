@@ -1,6 +1,6 @@
 {
   "name": "openreceive/wordpress",
-  "description": "OpenReceive payment gateway for WooCommerce, backed by the PHP engine.",
+  "description": "Accept Bitcoin Lightning payments in WooCommerce with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
   "type": "wordpress-plugin",
   "license": "GPL-2.0-or-later",
   "require": {

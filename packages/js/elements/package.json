@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/elements",
   "version": "0.4.5",
-  "description": "The OpenReceive checkout custom element (<openreceive-checkout>) and theme toggle.",
+  "description": "Bitcoin Lightning checkout for any website using custom elements, with optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
     "lightning",

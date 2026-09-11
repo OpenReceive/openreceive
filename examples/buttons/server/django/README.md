@@ -1,10 +1,17 @@
 # Buy a Button — Django + Postgres
 
-Django 5.2+/6, Postgres, Vite + React, pytest, uuid primary keys. The shop UI
-comes from [`../../shared`](../../shared); this directory is the host: its
-routes, its models, its migrations, its build. It is the Rails demo's shape in
-Python — products, visitors and orders on the ORM, the three hooks as the only
-bridge, the notifications worker as a second container.
+See Bitcoin Lightning checkout in a Django shop, from an ORM-backed order
+to a paid receipt and download. The app uses the packaged Python engine,
+Django models, and its existing PostgreSQL database.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+For your own app, start with the [integration quickstart](../../../../docs/guides/quickstart-django.md).
+Run demo servers and backing services in Docker. Development-process commands
+below are for a Docker environment; builds and test runners may run on the host.
 
 See [`../../README.md`](../../README.md) for what the demo is and why the
 boundary falls where it does.

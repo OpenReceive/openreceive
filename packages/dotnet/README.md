@@ -1,10 +1,15 @@
 # OpenReceive .NET workspace
 
 The BTCPay Server plugin and everything needed to build, test and prove it.
-This is OpenReceive's third settlement engine: it ports the kernel modules
+This is the .NET settlement engine: it implements the shared kernel modules
 against the shared vectors in `spec/test-vectors/` and writes its host glue
 against BTCPay Server 2.4.2. The merchant-facing guide is
 [docs/guides/quickstart-btcpay.md](../../docs/guides/quickstart-btcpay.md).
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
 
 ## Layout
 

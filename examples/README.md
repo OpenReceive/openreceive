@@ -1,6 +1,13 @@
 # OpenReceive examples
 
-The same button catalog is available across the framework examples.
+See a complete checkout integration: create an order, collect a payment,
+verify wallet settlement, and unlock fulfillment. These examples connect
+OpenReceive to real application databases and a shared product catalog.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
 
 [`wordpress/`](wordpress) runs a real WordPress + WooCommerce shop, with the
 OpenReceive payment gateway, checkout blocks, MySQL and the shared product
@@ -12,21 +19,25 @@ orders table, and a public feed of every paid order on the site. Read it to see
 where the line falls between YOUR data and OpenReceive's — three lambdas are the
 entire bridge.
 
-It runs on **Rails + Postgres**, **Express + SQLite**, **Fastify + SQLite**, the
-**Next.js app router**, and **static HTML with no framework at all**. The shop itself — the
-UI, the stores, the wire types and the Node server — lives ONCE in
-`buttons/shared/`; each stack under `buttons/server/` is a thin host with its
-own routing, database idiom and build. The stacks deliberately exercise
-different integration forms so every surface stays covered — for the minimal
-happy path, follow the quickstarts below instead.
+The examples cover Node.js, Ruby, Python, and PHP. Pick the framework you
+use and follow its README for the host integration:
 
-For the smallest possible integration, follow the
-[Express quickstart](../docs/guides/quickstart-node.md), the
-[Fastify quickstart](../docs/guides/quickstart-fastify.md), the
-[Next.js quickstart](../docs/guides/quickstart-next.md) or the
-[Rails quickstart](../docs/guides/quickstart-rails.md) — the Rails guide walks
-`bin/rails generate openreceive:install`, whose output is exercised by the
-engine gem's generator tests and by the Rails demo here.
+| Stack | Example | Application quickstart |
+| --- | --- | --- |
+| Express | [Express demo](buttons/server/node-express/README.md) | [Express](../docs/guides/quickstart-node.md) |
+| Fastify | [Fastify demo](buttons/server/fastify/README.md) | [Fastify](../docs/guides/quickstart-fastify.md) |
+| Next.js | [Next.js demo](buttons/server/nextjs-fullstack/README.md) | [Next.js](../docs/guides/quickstart-next.md) |
+| Rails | [Rails demo](buttons/server/rails/README.md) | [Rails](../docs/guides/quickstart-rails.md) |
+| Django | [Django demo](buttons/server/django/README.md) | [Django](../docs/guides/quickstart-django.md) |
+| FastAPI | [FastAPI demo](buttons/server/fastapi/README.md) | [FastAPI](../docs/guides/quickstart-fastapi.md) |
+| Plain PHP | [PHP demo](buttons/server/php-plain/README.md) | [PHP](../docs/guides/quickstart-php.md) |
+| Laravel | [Laravel demo](buttons/server/laravel/README.md) | [Laravel](../docs/guides/quickstart-laravel.md) |
+| Static HTML | [Static demo](buttons/server/static-html-small-api/README.md) | [Frontend checkout](../docs/guides/frontend-checkout.md) |
+| WooCommerce | [WordPress demo](wordpress/README.md) | [WooCommerce](../docs/guides/quickstart-woocommerce.md) |
+
+The framework quickstarts are the shortest path for your own application.
+The demos show a complete shop, including the application code surrounding
+the payment integration.
 
 ## Running a demo
 
@@ -65,9 +76,9 @@ npm run test:wordpress
 npm run test:e2e:wordpress
 ```
 
-The four Node stacks share `@openreceive/testkit`; Rails has a port of it in
-`buttons/server/rails/lib/button_shop/testkit/`, with the same fixtures, so one
-Playwright suite can drive any of them. What is faked is the wallet, the swap
+The Node stacks share `@openreceive/testkit`; Rails has a port of it in
+`buttons/server/rails/lib/button_shop/testkit/`, with the same fixtures. Python and PHP engines ship their own matching fakes.
+The shared Playwright scenarios exercise these integrations. What is faked is the wallet, the swap
 provider and the price feed — never the engine, the hooks or the database.
 
 A test-only control surface is mounted under `/__testkit` (hard-404 in every

@@ -15,13 +15,14 @@ https://github.com/user-attachments/assets/bbc253cc-f80c-42a4-9c54-ba9b11cc1284
 **Bitcoin by default.** Use the internet's neutral settlement currency. Your server issues a QR code. The payer pays the QR code, and your server approves delivery of the purchase.
 
 **Deposit-only by design.** OpenReceive exposes no payment-sending API and
-never holds a key: it connects with only a spec-compliant receive-only [NWC code](https://github.com/nostr-protocol/nips/blob/master/47.md). Choose an existing
+does not need your wallet seed phrase: it connects with a receive-only [NWC code](https://github.com/nostr-protocol/nips/blob/master/47.md). Choose an existing
 [NWC service](https://openreceive.org/get_a_nwc_code_to_receive_payments) to receive payments, or build your own NWC Service.
 
 To run the wallet on your own hardware, use an NWC service you host yourself, like [Alby Hub](https://github.com/getAlby/hub).
 
-**Optionally swap in other currencies.** Not every customer holds Bitcoin.
-Configure any
+**Optionally accept USDT, USDC, SOL, and ETH through swaps.** Customers pay
+with a supported asset; you receive BTC over Lightning in your connected wallet.
+Available assets and networks depend on your configured provider. Configure a
 [swap provider](https://openreceive.org/set_up_swap_provider) to receive altcoins. Use any swap provider that implements the
 [FixedFloat / Lightning-Swap API](https://lightning-swap.com/api_docs), or build your own.
 
@@ -55,27 +56,36 @@ gem "openreceive-rails"
 
 Pick your stack:
 
-| Stack         | Quickstart                                            |
-| ------------- | ----------------------------------------------------- |
-| Node.js       | [Node quickstart](docs/guides/quickstart-node.md)     |
-| Ruby on Rails | [Rails quickstart](docs/guides/quickstart-rails.md)   |
+| Stack | Quickstart |
+| --- | --- |
+| Express / Node.js | [Express quickstart](docs/guides/quickstart-node.md) |
+| Fastify | [Fastify quickstart](docs/guides/quickstart-fastify.md) |
+| Next.js | [Next.js quickstart](docs/guides/quickstart-next.md) |
+| Ruby on Rails | [Rails quickstart](docs/guides/quickstart-rails.md) |
+| Django | [Django quickstart](docs/guides/quickstart-django.md) |
+| FastAPI | [FastAPI quickstart](docs/guides/quickstart-fastapi.md) |
+| Plain PHP | [PHP quickstart](docs/guides/quickstart-php.md) |
+| Laravel | [Laravel quickstart](docs/guides/quickstart-laravel.md) |
+| WordPress + WooCommerce | [WooCommerce quickstart](docs/guides/quickstart-woocommerce.md) |
 | BTCPay Server | [BTCPay quickstart](docs/guides/quickstart-btcpay.md) |
 
-On Node and Rails: your server owns the price and the order, the payer gets
-a QR code to pay, and your [`onPaid`][api-onpaid] hook runs once inside the
-settlement transaction. On BTCPay Server the plugin makes your NWC wallet the
-store's Lightning node, and BTCPay's own invoices and settlement do the rest.
+Your application supplies authorization, the order amount, and the payment
+hook. OpenReceive tracks payment attempts in your existing database and
+verifies receipt in your wallet. WooCommerce and BTCPay integrations connect
+that settlement to the platform's existing order or invoice lifecycle.
 
 ## Security defaults
 
-- OpenReceive does not transmit money or hold customer funds. OpenReceive only helps your
-  backend create payment QR codes and safely verify settlement.
-- OpenReceive cannot spend your funds.
-  1. An attacker who gains control of your server gets no reward:
-     A receive-only NWC code cannot spend.
-  2. Every payment settles as a private, immutable Bitcoin Lightning payment, swapped from other
-     currencies as necessary. Accept ETH, SOL, USDT, and USDC without censorship risks.
-  3. See [Security](docs/guides/security.md) guide.
+- **Receive-only wallet access.** OpenReceive creates invoices and reads
+  payments through NWC. It exposes no send-payment API and rejects
+  spend-capable wallet connections by default.
+- **Credentials stay on your server.** Your browser receives checkout
+  instructions, never your wallet connection or swap-provider credentials.
+- **You choose the wallet and provider.** OpenReceive does not hold your
+  funds. Your wallet determines custody, and an optional swap provider
+  handles the customer's deposit until payout or refund. Receive-only access
+  limits wallet permissions; it does not remove the need to secure your app.
+  See the [security guide](docs/guides/security.md).
 - **Your app owns business state.** Your application owns orders; the library
   owns the `openreceive_payments` rows (they live in your database) — see
   [Payment storage](docs/guides/storage.md). OpenReceive never owns orders,
@@ -85,7 +95,7 @@ store's Lightning node, and BTCPay's own invoices and settlement do the rest.
 
 ## How it fits into your app
 
-OpenReceive is three server objects plus an optional browser package. Each one
+In Node.js, OpenReceive is three server objects plus an optional browser package. Each one
 talks to a different side of your app, and each has an obvious home:
 
 | Piece                        | You build it with                                                                                                               | It talks to                                                            | It lives                                         |
@@ -210,41 +220,32 @@ flow the routes do not offer:
 
 ## Run a demo
 
-One shop, five stacks. You add buttons to a cart, check out to create an order,
-and pay that order with a real Lightning invoice from your own wallet or a
-stablecoin swap; the download unlocks only after `onPaid` marks the order paid.
+Try a working shop: add items to a cart, create an order, and pay with
+Lightning or an optional swap. The download unlocks after wallet settlement.
+Examples cover Node.js, Ruby, Python, PHP, and WordPress, with a shared product
+catalog and each framework's own database integration.
+
+Run a demo in Docker from the repository root:
 
 ```sh
-npm run demo node      # Buy a Button — Express + React/Vue/Svelte/Angular  http://localhost:3000
-npm run demo static    # Buy a Button — static HTML, no framework           http://localhost:3001
-npm run demo nextjs    # Buy a Button — Next.js app router                  http://localhost:3002
-npm run demo buttons   # Buy a Button — Rails + host Postgres               http://localhost:3003
-npm run demo fastify   # Buy a Button — Fastify + React, the minimal host   http://localhost:3004
+cp -n .env.example .env   # configure your receive-only NWC_URI
+npm run demo node         # Express, :3000
+npm run demo django       # Django, :3006
+npm run demo php          # plain PHP, :3008
+npm run demo wordpress    # WooCommerce, :3009
 ```
 
-[Buy a Button](examples/buttons) is the persistence story: a products table, a
-visitor remembered by a signed cookie, an orders table, and a public feed of
-every paid order on the site, with three lambdas as the entire bridge to
-OpenReceive. The five stacks share one shop — the UI, the wire types and the
-Node server live once in `examples/buttons/shared/` and each stack under
-`server/` is a thin host with its own routing, database idiom and build.
-
-They differ in exactly two interesting ways, and both are on purpose: Rails
-pushes settlement over ActionCable while the Node stacks poll, and node-express
-plugs the packaged `<Checkout>` into the shared shop behind React / Vue /
-Svelte / Angular tabs while fastify mounts the React one alone and the others
-render the keystone-driven checkout.
-
-Every demo needs a receive-only `NWC_URI` in the root `.env`. The
-[Buy a Button README](examples/buttons/README.md) explains what each command
-starts and which parts of the code belong to the shop and which to the library.
+The [examples directory](examples/README.md) lists every stack, its launch
+command, and ways to run against fake wallets and swap providers. The
+[Buy a Button README](examples/buttons/README.md) explains the shared shop,
+order persistence, and checkout integration.
 
 ## Development
 
 ```sh
 npm test               # the JS suite
 npm run check          # contracts and secret-safety checks
-npm run test:ci        # the full deterministic gate, including Ruby and demos
+npm run test:ci        # the full gate across engines, packages, docs, and demo builds
 ```
 
 [CONTRIBUTING](CONTRIBUTING.md) has setup, ground rules, and the repository

@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/browser",
   "version": "0.4.5",
-  "description": "Framework-free browser helpers for OpenReceive checkout: prepare/create calls, status polling, QR and wallet helpers.",
+  "description": "Browser helpers and a headless UI engine for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
     "lightning",

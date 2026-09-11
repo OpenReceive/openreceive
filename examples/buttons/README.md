@@ -1,10 +1,14 @@
 # Buy a Button
 
-A shop that sells six virtual OR pin badges, $1 to $10, over Lightning or a
-stablecoin swap — and shows every paid order on the site to every visitor.
+A shop that sells six virtual OR pin badges, $1 to $10, over Lightning or an
+optional crypto swap — and shows every paid order on the site to every visitor.
 
-The buttons are not the point. The point is where the line falls between YOUR
-data and OpenReceive's:
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+Use this shop to see how your application data connects to OpenReceive:
 
 - **Your tables.** `shop_products` (the price authority), `shop_users` (a uuid
   in a signed cookie, and nothing else), `shop_orders` and `shop_order_items`.
@@ -12,9 +16,9 @@ data and OpenReceive's:
   the same database, owned by the library.
 - **The bridge.** Three lambdas. `authorize`, `amount_for`, `on_paid`.
 
-OpenReceive never sees an order, a cart, a price, a product or a download. If a
-change to this demo ever seems to need a fourth hook, that is a signal the
-boundary moved.
+OpenReceive receives an order reference and the amount resolved by your
+server. The shop owns the cart, products, prices, and downloads; the library
+owns the payment attempts and settlement state.
 
 ## What the visitor sees
 
@@ -39,9 +43,9 @@ This is the sentence that says whether it works, and it is run by hand:
 If it does not do that, the persistence is not real regardless of what the
 schema looks like.
 
-## Five stacks, one shop
+## Framework examples
 
-From the repository root:
+From the repository root, in Docker:
 
 ```sh
 cp -n .env.example .env      # set a receive-only NWC_URI
@@ -51,11 +55,15 @@ npm run demo static          # static HTML, no framework         :3001
 npm run demo nextjs          # Next.js app router + SQLite       :3002
 npm run demo buttons         # Rails + Postgres                  :3003
 npm run demo fastify         # Fastify + SQLite, React only      :3004
-npm run demo django          # Django + Postgres, React only     :3006
+npm run demo laravel         # Laravel + Postgres                :3005
+npm run demo django          # Django + Postgres, React only      :3006
+npm run demo fastapi         # FastAPI + SQLite                   :3007
+npm run demo php             # plain PHP + SQLite                 :3008
 ```
 
-For an edit-reload loop, run the stack's own `npm run dev` (or `bin/dev` for
-Rails) outside Docker — see each stack's README.
+Run demo servers and their backing services in Docker, including development
+loops. Builds, tests, and browser automation may run on the host. See the
+[example index](../README.md) for all stacks, including the WooCommerce shop.
 
 ## The layout
 
@@ -82,12 +90,16 @@ examples/buttons/
     nextjs-fullstack/    Next.js app router
     fastify/             Fastify + Vite, the minimal host: React only
     rails/               Rails 8.1 + Postgres + Shakapacker
+    django/              Django + Postgres
+    fastapi/             FastAPI + SQLite
+    php-plain/           PHP front controller + SQLite
+    laravel/             Laravel + Postgres
 ```
 
-The shop UI, the stores, the wire types and the Node server live ONCE, in
-`shared/`. Each stack under `server/` is a thin host: its own routing, its own
-database idiom, its own build. Nothing that renders a button or names a column
-is duplicated per stack.
+The shared clients, product catalog, wire types, and Node host helpers live
+in `shared/`. Each stack under `server/` supplies its own routing, database
+integration, and build; Python, PHP, and Ruby implement their host logic in
+their own languages.
 
 The directory names carry the boundary, so a wrong import is visible in the
 diff rather than discovered at build time:

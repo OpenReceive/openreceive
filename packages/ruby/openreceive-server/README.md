@@ -1,6 +1,41 @@
 # openreceive-server
 
-Storage-free Ruby service and Rack handler. Configure a receive-only NWC client. The host
+**Accept Bitcoin Lightning payments in Ruby and Rack. Your app, your wallet.**
+
+[OpenReceive](https://openreceive.org) brings Lightning checkout to your existing
+Ruby application. Receive payments directly into a wallet you control, while
+keeping your orders, prices, and fulfillment in your own code.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+- Create invoices and check payments through a receive-only Nostr Wallet
+  Connect (NWC) client.
+- Use the payment service directly or mount the framework-agnostic Rack handler.
+- Reconcile pending payments with shared settlement rules and exact money math.
+- Keep your existing persistence stack, with no separate OpenReceive service
+  or database to deploy.
+
+**Building with Rails?** Start with
+[`openreceive-rails`](https://github.com/OpenReceive/openreceive/blob/master/packages/ruby/openreceive-rails/README.md): it adds payment storage,
+reconciliation, and an install generator on top of this gem.
+
+## Install
+
+Requires Ruby 3.2 or later. Add to your Gemfile and run `bundle install`:
+
+```ruby
+gem "openreceive-server"
+```
+
+For a custom integration, provide your NWC client, payment repository, and
+application hooks. The service itself has no persistence dependency.
+
+## Connect your application
+
+Configure a receive-only NWC client. The host
 authorizes requests, resolves order amounts, commits payment hashes before responding, and
 consumes at-least-once verified payment events by hash. The service refuses to start when the
 NWC connection advertises spend methods (`pay_invoice`, `multi_pay_invoice`,
@@ -46,3 +81,12 @@ they store to `service.reconcile_payments({ attempts:, max_pages:, deadline: })`
 and apply the per-hash results through `on_paid` — `RackApp` deliberately has
 no built-in hook, and the durable-gate convenience (`OpenReceive.maybe_reconcile!`)
 ships only with the Rails engine.
+
+## Links
+
+- API reference: [Ruby and Rails APIs](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/api-reference.md)
+- Rails quickstart: [Use the engine with built-in persistence](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/quickstart-rails.md)
+- Source and issues: <https://github.com/openreceive/openreceive>
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+MIT license.

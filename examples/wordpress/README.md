@@ -1,8 +1,14 @@
 # WordPress + WooCommerce demo
 
-A real WordPress shop, WooCommerce checkout blocks, MySQL, and the built
-OpenReceive plugin. Products and prices come from the same catalog as the
-other examples. WooCommerce owns all orders, stock and fulfillment.
+Try Bitcoin Lightning checkout in a real WooCommerce shop. This example runs
+WordPress, MySQL, and the built OpenReceive plugin with WooCommerce checkout
+blocks. Follow an order through payment, wallet settlement, stock updates,
+and fulfillment using WooCommerce's own order lifecycle.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
 
 ```sh
 npm run demo wordpress

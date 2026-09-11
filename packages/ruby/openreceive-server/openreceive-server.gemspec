@@ -5,12 +5,21 @@ require_relative "lib/openreceive/server/version"
 Gem::Specification.new do |spec|
   spec.name = "openreceive-server"
   spec.version = OpenReceive::Server::VERSION
-  spec.summary = "Storage-free OpenReceive receive-only service and HTTP routes for Ruby."
-  spec.description =
-    "Server building blocks for OpenReceive: a storage-free Service that mirrors the Node " \
-    "engine and a framework-agnostic Rack app implementing " \
-    "the shipped HTTP routes while the host owns order and payment persistence. " \
-    "Receive-only: it never exposes a spend path and the NWC secret never leaves the server."
+  spec.summary = "Accept Bitcoin Lightning payments in Ruby and Rack. Your app, your wallet."
+  spec.description = <<~TEXT
+    Accept Bitcoin Lightning payments directly into a wallet you control, from your
+    Ruby or Rack application. OpenReceive provides invoice creation, payment checks,
+    and settlement reconciliation through a receive-only Nostr Wallet Connect
+    (NWC) client. Optional swaps let customers pay with USDT, USDC, SOL, and ETH
+    through a configured provider; you receive BTC over Lightning in your wallet.
+    Available assets and networks depend on the provider.
+
+    Bring your own wallet client, authorization, and payment persistence. The service
+    and Rack handler fit into your existing application, with no separate OpenReceive
+    service or database to deploy. Your app keeps control of orders, prices, and
+    fulfillment; wallet credentials stay on the server. Rails developers can use
+    openreceive-rails for built-in payment storage and reconciliation.
+  TEXT
   spec.authors = ["OpenReceive"]
   spec.email = ["info@openreceive.org"]
   spec.homepage = "https://openreceive.org"
@@ -34,7 +43,7 @@ Gem::Specification.new do |spec|
     "source_code_uri" => "https://github.com/openreceive/openreceive",
     "changelog_uri" => "https://github.com/openreceive/openreceive/blob/master/packages/ruby/openreceive-server/CHANGELOG.md",
     "bug_tracker_uri" => "https://github.com/openreceive/openreceive/issues",
-    "documentation_uri" => "https://rubydoc.info/gems/openreceive-server",
+    "documentation_uri" => "https://github.com/openreceive/openreceive/blob/master/packages/ruby/openreceive-server/README.md",
     "rubygems_mfa_required" => "true"
   }
 end

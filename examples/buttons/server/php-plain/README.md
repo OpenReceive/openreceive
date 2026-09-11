@@ -1,9 +1,17 @@
 # Buy a Button — plain PHP
 
-The button shop with **no framework at all, on PHP**: the vanilla shop from
-[`../static-html-small-api`](../static-html-small-api) served as static files,
-plus one front controller — `public/index.php` — over the OpenReceive PHP
-engine (`packages/php/openreceive`, Composer `openreceive/openreceive`).
+See Bitcoin Lightning checkout in a PHP shop without a web framework.
+A front controller, a PDO database handle, and three host methods connect
+the packaged PHP engine to orders and fulfillment.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+For your own app, start with the [integration quickstart](../../../../docs/guides/quickstart-php.md).
+Run demo servers and backing services in Docker. Development-process commands
+below are for a Docker environment; builds and test runners may run on the host.
 
 ```sh
 npm run demo php               # Docker, :3008

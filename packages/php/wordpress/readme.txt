@@ -9,9 +9,11 @@ Stable tag: 0.4.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Receive Lightning payments directly into your wallet with a receive-only NWC connection. Optional swap payments through your provider.
+Receive Bitcoin Lightning payments into your wallet, with optional USDT, USDC, SOL and ETH swaps through your provider.
 
 == Description ==
+Optional swaps let customers pay with USDT, USDC, SOL, and ETH through your configured provider. You receive BTC over Lightning in your connected wallet. Available assets and networks depend on the provider; Lightning checkout works without swaps.
+
 WooCommerce owns orders, prices, stock and fulfillment. OpenReceive stores payment attempts in the existing WordPress database. It does not require an OpenReceive account, another database or a service daemon.
 
 Supports classic checkout, checkout blocks and HPOS. Requires WooCommerce 9+, 64-bit PHP 8.2+, GMP and sodium, and MySQL 8 / MariaDB 10.5+.

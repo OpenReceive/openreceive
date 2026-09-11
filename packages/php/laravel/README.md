@@ -1,12 +1,23 @@
 # openreceive/laravel
 
-OpenReceive for Laravel: a receive-only Lightning (NWC) checkout mounted inside
-your own application, over your own database. This package is the thin
-Laravel binding of the [`openreceive/openreceive`](../openreceive) engine — the
-service provider, the routes, `php artisan openreceive:install` and the
-`openreceive:doctor` / `openreceive:reconcile` / `openreceive:notifications`
-commands. Requires PHP ≥ 8.2 with `ext-gmp`, `sodium`, `mbstring` and a `pdo_*`
-driver, and Laravel 11 or 12.
+Add Bitcoin Lightning checkout to your Laravel app and receive payments
+directly into a wallet you control. OpenReceive handles payment attempts and
+settlement reconciliation in your existing database, while your app keeps
+its orders, users, prices, and fulfillment.
+
+This adapter connects the `openreceive/openreceive` PHP engine to Laravel's
+routes, service container, migrations, and Artisan commands. Its install
+command creates the configuration and three application hooks.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+## Install
+
+Requires PHP 8.2 or later with `ext-gmp`, `sodium`, `mbstring`, and a PDO
+driver, plus Laravel 11 or 12.
 
 ```sh
 composer require openreceive/laravel
@@ -30,7 +41,7 @@ php artisan migrate
 Set `NWC_URI` in `.env`, fill in `Host.php` against your order model, and
 render `<openreceive-checkout reference="{{ $order->id }}">` with
 `@openreceive/elements` through Vite. The whole walk-through is the
-[Laravel quickstart](../../../docs/guides/quickstart-laravel.md).
+[Laravel quickstart](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/quickstart-laravel.md).
 
 ## What the provider does
 
@@ -87,3 +98,10 @@ OPENRECEIVE_TEST_PGSQL_DSN='pgsql:host=127.0.0.1;port=5432;dbname=x' OPENRECEIVE
 The `path` repository in `composer.json` is for this monorepo; Packagist
 ignores it, and the published constraint on `openreceive/openreceive` is the
 lockstep `~X.Y.Z` of the same release.
+
+## Guides
+
+- [Laravel quickstart](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/quickstart-laravel.md)
+- [Frontend checkout](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/frontend-checkout.md)
+- [Optional swaps](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/automated-swaps.md)
+- [Host testing](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/host-testing.md)

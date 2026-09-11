@@ -1,10 +1,17 @@
 # Buy a Button — FastAPI
 
-The button shop on FastAPI + SQLite, with the packaged React `<Checkout>` and
-nothing else in the payment column. This is the **minimal Python host**: the
-smallest correct integration of a packaged checkout against
-`openreceive_router` — the Fastify stack's twin, with `uv run uvicorn` where
-that one has `node`.
+See Bitcoin Lightning checkout in a FastAPI shop with SQLite and the
+packaged React checkout. This example connects the Python router to real
+order storage and fulfillment through the host hooks.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+For your own app, start with the [integration quickstart](../../../../docs/guides/quickstart-fastapi.md).
+Run demo servers and backing services in Docker. Development-process commands
+below are for a Docker environment; builds and test runners may run on the host.
 
 ```sh
 npm run demo fastapi     # Docker, :3007

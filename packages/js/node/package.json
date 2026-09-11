@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/node",
   "version": "0.4.5",
-  "description": "The OpenReceive Node service: receive-only NWC wallet client, checkout and swap service, pricing, and the openreceive CLI.",
+  "description": "Accept Bitcoin Lightning payments in Node.js with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
     "lightning",

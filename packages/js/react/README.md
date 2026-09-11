@@ -1,6 +1,30 @@
 # @openreceive/react
 
-React checkout components for OpenReceive (`<Checkout>`, `useCheckout`, `PaymentWizard`).
+Add Bitcoin Lightning checkout to your React app with a ready-to-use
+`<Checkout>` component, or build your own payment screen with `useCheckout`
+and `PaymentWizard`. Let customers choose a payment method, scan a QR code,
+and follow payment status without building the checkout flow from scratch.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+Pair this browser package with an OpenReceive server integration. Your server
+authorizes the order, sets the amount, configures swaps, and verifies
+settlement; wallet and provider credentials stay on the server.
+
+## Install
+
+Use Node.js 22 or later for package tooling and React 18 or later.
+
+```sh
+npm install @openreceive/react
+```
+
+Follow the [frontend checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md)
+to connect the component to your server routes. Use the server-side payment
+hook to fulfill orders; browser callbacks update the interface.
 
 ## Mount
 
@@ -20,7 +44,7 @@ export function Pay() {
 Pass `reference` to let the component create the checkout (create mode), or pass
 a `checkout` snapshot to render one your server already created. Prop names,
 defaults, and the full surface are shared across the wrappers — see
-`docs/internal/wrapper-parity.md` in the repository.
+[frontend checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md).
 
 Event handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
 `onProviderCopy`, `onStartOver`, `onError`) are ordinary props. React receives

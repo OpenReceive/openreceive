@@ -1,13 +1,35 @@
 # @openreceive/http
 
-Framework-neutral receive-checkout handler. Its normal form requires `service`,
-`authorize`, and the `host` integration. Create bodies never accept payer
-amounts; the host's `amountFor` hook is the only price authority, and the
-commit hook appends a payment-attempt row before the invoice is returned.
+Add Bitcoin Lightning checkout to your Node.js application while keeping
+your orders, prices, and fulfillment in your own code. This package provides
+the Web Request/Response handler and payment repository used by the Express,
+Fastify, and Next.js adapters, with payment attempts stored in your existing
+database.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+## Install
 
 This package is ESM-only and requires Node >= 22.
 
-`createHost({ db, amountFor, onPaid })` builds that
+```sh
+npm install @openreceive/http
+```
+
+Start with the [integration quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md)
+and the [payment storage guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/storage.md).
+
+## Connect your application
+
+For Express, Fastify, or Next.js, start with the matching adapter; each uses
+this handler and repository. For a custom Node.js host, compose `service`,
+`authorize`, and the `host` integration. Amounts come from your server, and
+a payment attempt is committed before checkout instructions are returned.
+
+`createHost({ db, amountFor, onPaid })` builds the
 host integration on the library-owned payment repository inside the host
 application's existing database (pg, node:sqlite, better-sqlite3, or a custom
 adapter). The library owns attempt selection, per-reference commit locking,
@@ -54,4 +76,5 @@ here (`npm run check:public-api` pins both surfaces):
   `WirePaymentCheck`, `WireError`, …), generated from the
   OpenAPI contract. The adapters re-export these too.
 
-See the root README, the storage guide, and the OpenAPI contract.
+See the [API reference](https://github.com/openreceive/openreceive/blob/master/docs/guides/api-reference.md)
+and [HTTP contract](https://github.com/openreceive/openreceive/blob/master/spec/openapi/openreceive-http.v1.yaml).

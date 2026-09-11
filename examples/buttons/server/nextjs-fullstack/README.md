@@ -1,6 +1,17 @@
 # Buy a Button — Next.js
 
-The button shop on the Next.js App Router + SQLite.
+See Bitcoin Lightning checkout in a Next.js App Router shop. This example
+connects server route handlers to SQLite orders and a shared checkout UI,
+then unlocks downloads after the wallet confirms payment.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+For your own app, start with the [integration quickstart](../../../../docs/guides/quickstart-next.md).
+Run demo servers and backing services in Docker. Development-process commands
+below are for a Docker environment; builds and test runners may run on the host.
 
 ```sh
 npm run demo buttons-nextjs      # Docker, :3002

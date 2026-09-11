@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/fastify",
   "version": "0.4.5",
-  "description": "Fastify plugin for the OpenReceive checkout HTTP handler.",
+  "description": "Accept Bitcoin Lightning payments in Fastify with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
     "lightning",

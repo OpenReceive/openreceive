@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/react",
   "version": "0.4.5",
-  "description": "React checkout components and hooks for OpenReceive (<Checkout>, useCheckout, PaymentWizard).",
+  "description": "React components and hooks for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
     "lightning",

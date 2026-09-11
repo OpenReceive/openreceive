@@ -1,7 +1,12 @@
 # spec/
 
-The normative contract: what every OpenReceive engine (JS and Ruby) must agree
+The normative contract: what every OpenReceive engine (JavaScript, Ruby, Python, PHP, and .NET) must agree
 on. Four version numbers live here, each meaning one thing.
+
+These contracts cover Lightning checkout and optional swaps from USDT, USDC,
+SOL, and ETH. A configured swap provider converts the payer's deposit to BTC
+over Lightning in the merchant's wallet; supported assets and networks depend
+on the provider. The vectors define when wallet settlement is authoritative.
 
 | Number | Where | Meaning |
 | --- | --- | --- |
@@ -10,7 +15,7 @@ on. Four version numbers live here, each meaning one thing.
 | `vN` in a schema `$id` | `schemas/*.schema.json` (`checkout.v2`, `provider-registry.v4`, …) | Each JSON Schema versions independently, in its `$id`, because schemas are reused across documents. Filenames carry no version so references never churn. |
 | `OPENRECEIVE_*_CONTRACT_VERSION` | `packages/js/core/src/generated/contracts.ts` | Generated copies of the two `info.version` values (`npm run generate:models`); `npm run check:generated` fails when they drift. |
 
-`test-vectors/` holds the shared behavior both engines must reproduce, and
+`test-vectors/` holds the shared behavior the engines must reproduce, and
 `test-vectors/coverage.json` says which engine consumes which family (or why it is
 exempt). `data/` holds canonical provider data, `data/kernel-tables.json` (the one
 hand-edited copy of the vocabularies and numbers every engine shares) and

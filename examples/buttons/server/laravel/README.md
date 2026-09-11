@@ -1,11 +1,17 @@
 # Buy a Button — Laravel + Postgres
 
-Laravel 12 over the PHP engine, Postgres, Vite, PHPUnit, uuid primary keys. The
-shop UI comes from [`../../shared`](../../shared); this directory is the host:
-its routes, its Eloquent models, its migrations, its build. The OpenReceive
-binding is [`openreceive/laravel`](../../../../packages/php/laravel) over
-[`openreceive/openreceive`](../../../../packages/php/openreceive), both resolved
-from this monorepo through Composer path repositories.
+See Bitcoin Lightning checkout in a Laravel shop, from an Eloquent order
+to a paid receipt and download. The app connects the PHP engine to Laravel
+routes, PostgreSQL, and its own fulfillment logic.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+For your own app, start with the [integration quickstart](../../../../docs/guides/quickstart-laravel.md).
+Run demo servers and backing services in Docker. Development-process commands
+below are for a Docker environment; builds and test runners may run on the host.
 
 See [`../../README.md`](../../README.md) for what the demo is and why the
 boundary falls where it does.

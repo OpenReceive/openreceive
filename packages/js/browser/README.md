@@ -1,6 +1,30 @@
 # @openreceive/browser
 
-Framework-free browser helpers for OpenReceive checkout: prepare/create calls, status polling, QR and wallet helpers.
+Build a Bitcoin Lightning checkout that fits your own design. OpenReceive
+provides browser helpers for creating checkout sessions, following payment
+status, displaying QR codes, and opening wallets, plus a headless checkout
+engine for custom payment screens.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+Pair this browser package with an OpenReceive server integration. Your server
+authorizes the order, sets the amount, configures swaps, and verifies
+settlement; wallet and provider credentials stay on the server.
+
+## Install
+
+Use Node.js 22 or later for package tooling.
+
+```sh
+npm install @openreceive/browser
+```
+
+Follow the [frontend checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md)
+to connect your UI to your server routes. Use the server-side payment
+hook to fulfill orders; browser callbacks update the interface.
 
 Part of [OpenReceive](https://openreceive.org). Start with the [Node quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md); the full API is in the [API reference](https://github.com/openreceive/openreceive/blob/master/docs/guides/api-reference.md).
 
@@ -43,4 +67,4 @@ Content-Security-Policy has a strict `img-src`, allow `data:`.
 - The wallet logos and pay tutorials are `data:image/webp` URIs in
   `@openreceive/provider-data`; `/headless` re-exports
   `loadPayTutorialImages` / `payTutorialImage` for the lazy tutorial chunk.
-  See [docs/guides/provider-registry.md](../../../docs/guides/provider-registry.md#assets).
+  See [docs/guides/provider-registry.md](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/provider-registry.md#assets).

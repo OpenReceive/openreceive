@@ -1,11 +1,34 @@
 # @openreceive/express
 
-Express adapter for `@openreceive/http`.
+Accept Bitcoin Lightning payments in your Express app, directly into a
+wallet you control. Mount the middleware, pass your database handle, and
+connect three hooks for authorization, order amounts, and fulfillment.
+OpenReceive manages payment attempts and reconciliation in your existing
+database while your app keeps its orders and customers.
+
+OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
+a configured swap provider. The provider converts the payment to **BTC over
+Lightning**, which settles into the merchant's connected wallet. Available
+assets and networks depend on the provider; swaps are optional.
+
+## Install
 
 This package is ESM-only and requires Node >= 22.
 
+```sh
+npm install @openreceive/express
+```
+
+Start with the [integration quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md)
+and the [payment storage guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/storage.md).
+
+## Connect your application
+
 The all-in-one form is the happy path: pass the host hooks and a database
 handle, and the middleware builds the service and host itself.
+
+The example below assumes your app has a database handle (`db`) and an order
+lookup (`orders`). Apply the payment-table migration from the quickstart first.
 
 ```ts
 import { openReceiveExpress } from "@openreceive/express";
@@ -92,3 +115,9 @@ types. Host-integration internals — `createHost`, the SQL payment
 repository, the reconcile gate, the rate-limit helpers — live only in
 `@openreceive/http`; import them from there when composing your own host
 (`npm run check:public-api` pins both surfaces).
+
+## Guides
+
+- [Frontend checkout](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md)
+- [Optional swaps](https://github.com/openreceive/openreceive/blob/master/docs/guides/automated-swaps.md)
+- [Host testing](https://github.com/openreceive/openreceive/blob/master/docs/guides/host-testing.md)

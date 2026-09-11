@@ -1,6 +1,6 @@
 {
   "name": "openreceive/openreceive",
-  "description": "OpenReceive engine for PHP: receive-only Lightning (NWC) checkout, exact money, settlement reconciliation, swaps and a PSR-15 mount over the host's own database.",
+  "description": "Accept Bitcoin Lightning payments in PHP with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
   "type": "library",
   "license": "MIT",
   "homepage": "https://openreceive.org",

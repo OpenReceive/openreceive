@@ -1,9 +1,14 @@
 # Shared test vectors
 
-Cross-language conformance data. Every applicable vector runs in BOTH engines:
-the JS suite (`tests/`) and the Ruby harness
-(`tools/conformance/ruby-crosslang.rb`, wired into `npm run test:ruby` and CI).
-A schema or route change must update its vector in the same change.
+Cross-language conformance data for the JavaScript, Ruby, Python, PHP, and
+.NET engines. Each engine consumes its applicable families; [coverage.json](coverage.json)
+records the test roots and explicit exclusions. A schema or route change
+must update its vectors in the same change.
+
+Coverage includes Lightning checkout and optional swaps from USDT, USDC, SOL,
+and ETH. In production, the configured provider converts the payment to BTC
+over Lightning in the merchant's wallet; asset and network availability is
+provider-dependent. These tests exercise payment and settlement rules.
 
 Formats in use (one per file family):
 
@@ -41,11 +46,11 @@ Formats in use (one per file family):
   verbatim. An optional `handler` selects a preconfigured handler (e.g.
   `rate_limited`). `expected` carries the `status`, the FULL
   response `body`, and any `headers` that must be present (names compared
-  case-insensitively; other response headers may exist). Both harnesses
+  case-insensitively; other response headers may exist). The applicable harnesses
   deep-compare the whole body — key set AND values — so an extra or missing
-  field in either engine fails the run.
+  field in any engine fails the run.
 
-  Dynamic values use placeholder strings, which both harnesses treat as
+  Dynamic values use placeholder strings, which the applicable harnesses treat as
   "present and matching this pattern" (this is the only normalization
   mechanism; there is no volatile-key replacement list):
 
@@ -57,9 +62,8 @@ Formats in use (one per file family):
   | `<unix_seconds>`   | non-negative integer                                |
 
   Placeholders work in `body` values and `headers` values alike. The matcher
-  tables live in `tests/http-boundaries.test.mjs` and
-  `packages/ruby/openreceive-server/test/server_test.rb` and must stay
-  identical — change both together.
+  rules live in `http-golden/PLACEHOLDERS.json`; the applicable JavaScript,
+  Ruby, PHP, and Python matchers must agree with that shared metadata.
 `provider-route.*.json` files (`request` + `expected`) describe provider wizard
 routes and are consumed by the provider-data tests.
 

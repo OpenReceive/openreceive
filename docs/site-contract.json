@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 2608
+      "bytes": 3183
     },
     {
       "path": "/guides/quickstart-node",
@@ -454,7 +454,7 @@
       "slug": "wordpress",
       "title": "OpenReceive for WordPress + WooCommerce",
       "category": "woocommerce",
-      "bytes": 2652,
+      "bytes": 3029,
       "assets_base": "/assets/"
     },
     {
