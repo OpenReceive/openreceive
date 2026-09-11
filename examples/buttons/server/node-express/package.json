@@ -10,7 +10,7 @@
     "start": "node ../../../../tools/run-with-root-env.mjs tsx src/server/production.ts"
   },
   "dependencies": {
-    "@angular/compiler": "^22.0.3",
+    "@angular/compiler": "^22.1.0",
     "@angular/core": "^22.0.3",
     "@angular/platform-browser": "^22.0.3",
     "@mantine/core": "^9.5.2",
