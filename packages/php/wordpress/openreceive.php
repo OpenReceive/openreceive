@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OpenReceive – Bitcoin Lightning payments for WooCommerce
  * Description: Receive Bitcoin Lightning payments into your wallet, with optional USDT, USDC, SOL and ETH swaps through your provider.
- * Version: 0.4.6
+ * Version: 0.4.7
  * Requires at least: 6.6
  * Requires PHP: 8.2
  * Requires Plugins: woocommerce
@@ -16,7 +16,7 @@
 
 defined('ABSPATH') || exit;
 define('OPENRECEIVE_PLUGIN_FILE', __FILE__);
-define('OPENRECEIVE_PLUGIN_VERSION', '0.4.6');
+define('OPENRECEIVE_PLUGIN_VERSION', '0.4.7');
 require_once __DIR__ . '/autoload.php';
 
 register_activation_hook(__FILE__, [OpenReceive\WP\Plugin::class, 'activate']);

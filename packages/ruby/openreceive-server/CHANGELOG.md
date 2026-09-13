@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.7 - 2026-09-13
+
+Version alignment for the BTCPay plugin release; no Ruby behavior changes.
+
 ## 0.4.6 - 2026-09-11
 
 Refresh installation and quickstart documentation and package metadata.

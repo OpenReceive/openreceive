@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.7 - 2026-09-13
+
+- Bump the BTCPay Server plugin to 0.4.7 so it can be published from a new
+  build using the corrected repository URL in Plugin Builder. Use
+  `https://github.com/OpenReceive/openreceive` without the `.git` suffix so
+  the public directory's View Source link resolves to the release's source.
+- Keep workspace package versions aligned with the BTCPay release. Payment
+  behavior is unchanged; other registry publications are separate steps.
+
 ## 0.4.6 - 2026-09-11
 
 - Make the default checkout more compact: payment choices use two columns once

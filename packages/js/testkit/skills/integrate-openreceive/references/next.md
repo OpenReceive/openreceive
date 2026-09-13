@@ -1,6 +1,6 @@
 # OpenReceive agent directions (Next.js)
 
-These directions describe OpenReceive 0.4.6.
+These directions describe OpenReceive 0.4.7.
 
 Add OpenReceive to a Next.js App Router application — the app you are already
 working in. You do not need a copy of the OpenReceive source: the packages are
