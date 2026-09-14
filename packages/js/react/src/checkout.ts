@@ -514,6 +514,8 @@ function CheckoutView(
               {
                 key: "minting-lightning",
                 className: orClasses.creating,
+                role: "status",
+                "aria-live": "polite",
               },
               React.createElement("span", {
                 className: orClasses.spinner,

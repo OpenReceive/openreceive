@@ -41,6 +41,8 @@ export interface CheckoutView {
   readonly inlineStyles?: boolean;
   /** False until the payer selects Bitcoin in create-mode (deferred Lightning mint). */
   readonly lightningRequested?: boolean;
+  /** True while the session is creating the Lightning invoice. */
+  readonly mintingLightning?: boolean;
   readonly wizard?: ElementsWizardView;
   /**
    * Live controller state, when the element has one. Preferred over the

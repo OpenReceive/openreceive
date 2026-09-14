@@ -505,6 +505,15 @@ test("a second Bitcoin selection during the mint does not POST a second checkout
     const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
     bitcoin.click();
     await until(() => mints === 1, { label: "first mint in flight" });
+    const loading = await until(
+      () =>
+        [...handle.container.querySelectorAll('[role="status"]')].find((node) =>
+          node.textContent.includes(checkoutLabels.preparingPayment),
+        ),
+      { label: "invoice loading status" },
+    );
+    assert.equal(loading.getAttribute("aria-live"), "polite");
+    assert.equal(handle.button(checkoutLabels.copyInvoice), undefined);
     // React flushes a click synchronously, so the realistic double-mint is the
     // payer stepping back to the grid and choosing Bitcoin again while the first
     // POST /checkouts is still open. Unguarded, the second one went out and the

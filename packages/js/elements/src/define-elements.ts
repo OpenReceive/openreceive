@@ -504,6 +504,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard),
         ),
         lightningRequested: this.session.mintingLightning ? false : lightningRequested,
+        mintingLightning: this.session.mintingLightning,
         wizard: {
           selectedMethod: this.selection.selectedMethod,
           selectedBitcoinRoute: this.selection.selectedBitcoinRoute,

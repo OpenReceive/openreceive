@@ -135,12 +135,60 @@ test("double-clicking Bitcoin mints exactly one Lightning invoice", async () => 
       1,
       "a second Bitcoin click must not POST a second checkout",
     );
+    const loading = element.shadowRoot.querySelector('[role="status"]');
+    assert.match(loading?.textContent ?? "", /Preparing payment/);
+    assert.ok(loading.querySelector('[part="spinner"]'));
+    assert.equal(loading.getAttribute("aria-live"), "polite");
+    assert.equal(element.shadowRoot.querySelector('[part="payment-layout"]'), null);
 
     mint.resolve(checkoutBody("order-1", 21_000, "a".repeat(64)));
     await untilLocal(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
+    await untilLocal(() => element.shadowRoot.querySelector('[part="copy"]'), {
+      label: "payable invoice",
+    });
+    assert.doesNotMatch(element.shadowRoot.textContent, /Preparing payment/);
+    assert.match(element.shadowRoot.textContent, /Waiting for payment/);
     assert.equal(fetchStub.pathCount("/checkouts"), 1);
     assert.doesNotMatch(element.shadowRoot?.innerHTML ?? "", /Could not create the Lightning/);
   } finally {
+    element.remove();
+  }
+});
+
+test("a failed Lightning mint clears the loading status and lets the payer retry", async () => {
+  const mint = deferred();
+  let failMint = true;
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-retry-ln", 21_000),
+    "/checkouts": async () => {
+      if (failMint) {
+        await mint.promise;
+        throw new Error("Could not create the Lightning invoice. Please try again.");
+      }
+      return checkoutBody("order-retry-ln", 21_000, "b".repeat(64));
+    },
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  const element = mount({ reference: "order-retry-ln", prefix: "/openreceive" });
+  try {
+    (
+      await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'))
+    ).click();
+    assert.match(element.shadowRoot.textContent, /Preparing payment/);
+    mint.resolve();
+    await untilLocal(() => element.shadowRoot.querySelector('[role="alert"]'));
+    assert.doesNotMatch(element.shadowRoot.textContent, /Preparing payment/);
+    assert.match(element.shadowRoot.textContent, /Could not create the Lightning invoice/);
+    assert.equal(element.shadowRoot.querySelector('[part="payment-layout"]'), null);
+
+    failMint = false;
+    element.shadowRoot.querySelector('[data-or-breadcrumb="method"]').click();
+    element.shadowRoot.querySelector('[data-or-method="bitcoin"]').click();
+    await untilLocal(() => element.shadowRoot.querySelector('[part="copy"]'));
+    assert.equal(element.shadowRoot.querySelector('[role="alert"]'), null);
+    assert.doesNotMatch(element.shadowRoot.textContent, /Preparing payment/);
+  } finally {
+    mint.resolve();
     element.remove();
   }
 });

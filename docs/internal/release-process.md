@@ -1,8 +1,8 @@
 # Release Process
 
-The release surface, all versioned in lockstep:
+The general release surface, versioned in lockstep:
 
-- OpenReceive `0.4.7`
+- OpenReceive `0.4.8`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -34,6 +34,12 @@ checkout helpers, provider-data assets, elements, and frontend adapters. The
 root workspace and `@openreceive/testkit` stay private.
 
 Five registries, five publishers:
+
+The BTCPay Server plugin is a separate release. General releases leave its
+source version unchanged and do not submit Plugin Builder builds or publish
+the plugin. A source version bump alone is not a publication request: submit
+or publish a BTCPay build only when the maintainer explicitly asks for a
+BTCPay release.
 
 | Registry | Who publishes | Credential |
 | --- | --- | --- |
@@ -425,8 +431,8 @@ environment), each with exactly `contents: read` + `id-token: write`.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.4.7`. Per-package tags are
-deliberately not used while every package and gem releases in lockstep with the
+Tag the prepared release commit once, as `v0.4.8`. Per-package tags are
+deliberately not used while the general package family releases in lockstep with the
 workspace version. Introduce per-package tags only if versions ever diverge,
 after the contract is stable enough to avoid confusing SDK consumers.
 

@@ -138,6 +138,14 @@ export function renderCheckoutHtml(view: CheckoutView): string {
       <slot name="${OPENRECEIVE_CHECKOUT_ELEMENT_SLOTS.order}"></slot>
       ${orderDescription}
       ${
+        view.mintingLightning
+          ? `<div part="status" role="status" aria-live="polite" class="${orClasses.creating}">
+              <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
+              <p>${escapeHtml(checkoutLabels.preparingPayment)}</p>
+            </div>`
+          : ""
+      }
+      ${
         hideLightning
           ? ""
           : `<div part="payment-layout" class="${paymentLayoutClass}">

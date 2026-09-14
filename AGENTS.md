@@ -92,6 +92,13 @@ blanket security guarantees or implying that a helper package is a full backend.
 - `onCheckoutCreated` runs before a create response. Failure returns 409 and withholds the
   invoice or swap instructions.
 
+## Releases
+
+General package releases do not publish the BTCPay Server plugin. Its source
+version is independent of the npm/gem release version. A source version bump
+does not authorize submitting a Plugin Builder build or publishing the plugin;
+do either only when the user explicitly requests a BTCPay release.
+
 ## Testing
 
 Run demo application servers and their backing services in Docker. Builds,

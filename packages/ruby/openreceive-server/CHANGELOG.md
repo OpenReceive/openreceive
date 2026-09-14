@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.8 - 2026-09-14
+
+Version alignment with the 0.4.8 checkout loading fix; no Ruby server API or
+payment behavior changes.
+
 ## 0.4.7 - 2026-09-13
 
 Version alignment for the BTCPay plugin release; no Ruby behavior changes.

@@ -1,6 +1,6 @@
 # OpenReceive agent directions (FastAPI)
 
-These directions describe OpenReceive 0.4.7.
+These directions describe OpenReceive 0.4.8.
 
 Add OpenReceive to a FastAPI application — the app you are already working in.
 You do not need a copy of the OpenReceive source: the engine is on PyPI

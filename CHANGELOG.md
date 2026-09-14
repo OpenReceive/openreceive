@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.8 - 2026-09-14
+
+- Show the existing spinner and “Preparing payment” status while the custom
+  element creates a Lightning invoice, including Rails integrations. Replace
+  the status with the invoice on success or the existing error on failure.
+- Announce Lightning invoice preparation to screen readers in both the custom
+  element and React checkout. Cover delayed creation, duplicate clicks, and
+  failure followed by retry.
+- Release the general package family together at 0.4.8. Payment APIs, storage and
+  settlement behavior are unchanged. Rails hosts must update their npm
+  checkout dependencies and rebuild JavaScript to receive the UI fix.
+- Keep the BTCPay plugin at 0.4.7. Its version and publication are independent
+  of general releases; submitting or publishing a BTCPay build requires an
+  explicit maintainer request.
+
+The release gate rebuilds the Node/Express, Fastify, Laravel, FastAPI, Django,
+static HTML, Next.js and Rails demo assets and the standalone checkout with
+0.4.8 packages. Live-wallet and manual-payment checks are intentionally skipped
+for this rendering-only fix.
+
 ## 0.4.7 - 2026-09-13
 
 - Bump the BTCPay Server plugin to 0.4.7 so it can be published from a new

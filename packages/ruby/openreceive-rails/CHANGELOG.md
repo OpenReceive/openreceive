@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.8 - 2026-09-14
+
+Release alongside the custom element's Lightning invoice loading indicator.
+Rails hosts must also update their npm checkout dependencies and rebuild
+JavaScript to receive it. No Rails engine API or settlement changes.
+
 ## 0.4.7 - 2026-09-13
 
 Version alignment for the BTCPay plugin release; no Ruby behavior changes.

@@ -11,11 +11,7 @@ import {
   readLaravelConstraint,
   readPhpVersion,
 } from "../release/composer-release.mjs";
-import {
-  DOTNET_PLUGIN_CSPROJ,
-  dotnetPluginVersion,
-  readDotnetPluginVersion,
-} from "../release/dotnet-plugin.mjs";
+import { DOTNET_PLUGIN_CSPROJ, readDotnetPluginVersion } from "../release/dotnet-plugin.mjs";
 import { GEM_NAMES, gemDir, readGemVersion } from "../release/gem-release.mjs";
 import {
   PYTHON_PACKAGE_DIR,
@@ -220,13 +216,13 @@ for (const { relativePath, manifest } of packages) {
   }
 }
 
-// The BTCPay plugin releases in lockstep too (System.Version: no prerelease suffix).
+// BTCPay releases independently; validate its version without requiring workspace alignment.
 {
   const pluginVersion = readDotnetPluginVersion(root);
   expect(pluginVersion !== undefined, `${DOTNET_PLUGIN_CSPROJ}: missing <Version>`);
   expect(
-    pluginVersion === dotnetPluginVersion(releaseVersion),
-    `${DOTNET_PLUGIN_CSPROJ}: plugin version ${pluginVersion} must match ${dotnetPluginVersion(releaseVersion)} (run npm run release:prepare)`,
+    /^\d+\.\d+\.\d+(?:\.\d+)?$/.test(pluginVersion ?? ""),
+    `${DOTNET_PLUGIN_CSPROJ}: plugin version must be a numeric System.Version`,
   );
 }
 

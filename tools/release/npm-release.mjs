@@ -20,7 +20,6 @@ import {
 } from "../package/build-artifacts.mjs";
 
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs";
-import { DOTNET_PLUGIN_CSPROJ, updateDotnetPluginVersion } from "./dotnet-plugin.mjs";
 import { GEM_NAMES, gemDir, gemVersionFilePath } from "./gem-release.mjs";
 import { LARAVEL_COMPOSER_JSON, PHP_VERSION_FILE, updatePhpVersions } from "./composer-release.mjs";
 import { PYTHON_VERSION_FILE, updatePythonVersion } from "./pypi-release.mjs";
@@ -268,7 +267,6 @@ function updateVersions(root, targetVersion) {
   }
 
   changed.push(...updateRubyGemVersions(root, currentVersion, targetVersion));
-  changed.push(...updateDotnetPluginVersion(root, targetVersion));
   // The PyPI distribution reads its version from _version.py (PEP 440 at the
   // boundary: 0.5.0-alpha.1 → 0.5.0a1); uv.lock records no version for the
   // editable project, so nothing else in packages/python moves.
@@ -447,7 +445,6 @@ function dryRunPrepare(root, targetVersion) {
     files: [
       ...files,
       ...gemFiles,
-      DOTNET_PLUGIN_CSPROJ,
       PYTHON_VERSION_FILE,
       PHP_VERSION_FILE,
       LARAVEL_COMPOSER_JSON,
