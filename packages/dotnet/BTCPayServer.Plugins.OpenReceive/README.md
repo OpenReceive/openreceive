@@ -2,7 +2,9 @@
 
 Receive Lightning payments straight into a wallet you control, with a
 receive-only NWC code. Optionally let payers pay with USDT, USDC, ETH or SOL
-through a Lightning Swap Connect provider; swaps settle into the same wallet.
+through a Lightning Swap Connect provider, which converts these payments to
+BTC over Lightning in your connected wallet. Asset and network availability
+depends on the provider.
 Requires BTCPay Server 2.4.2 or later.
 
 The whole setup in 30 seconds:
@@ -12,6 +14,19 @@ https://github.com/user-attachments/assets/9aee9edb-e62c-4935-b885-a2e2c4380834
 <!-- That is GitHub's upload of docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4;
      a bare attachment URL is the only form GitHub renders as a video player.
      openreceive.org plays the repo copy instead (site-contract.json, /btcpay → video). -->
+
+## Install the plugin
+
+Sign in to your BTCPay Server as a **server administrator**. If someone else
+hosts your server, ask them to install the plugin for you.
+
+1. Open the **Plugins** menu in the top-right corner and click **Plugin Directory**.
+2. Search for **OpenReceive**, select it, and click **Install**. Confirm the
+   installation when prompted.
+3. Click **Restart now** when prompted and wait for BTCPay to come back.
+   Then select your store and follow the setup below.
+
+For the full quickstart, see https://openreceive.org/guides/quickstart-btcpay.
 
 ## Setup
 
