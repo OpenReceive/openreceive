@@ -216,6 +216,8 @@ The drop-in (`<openreceive-checkout>`, from the release's standalone tarball or
 of https://openreceive.org/guides/checkout-ux.md, for a UI built on
 `@openreceive/browser/headless`. Read that before writing components.
 
+- Check Bitcoin → Switch payment method → Bitcoin: the grid must hide the
+  Lightning invoice, then restore the same bolt11 without another mint.
 - `createCheckoutController` is the engine. Do not hand-roll a poll loop.
 - `createCheckoutStatusModel` for the status line. Do not draw a
   Cart → Pay → Done stepper. Read the model's `phase`, not the snapshot's.
@@ -513,6 +515,11 @@ and the browser snapshots are snake_case throughout.
 
 ### 5. Render checkout
 
+Serve the compiled `styles.css` without Tailwind processing: import it from
+JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
+Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+allow host styles to override checkout styles; scoping does not prevent that.
+
 Unpack the release's `standalone-checkout-<version>.tar.gz` into a directory
 your web server serves — `public/openreceive/` here — and add two tags plus
 the element:
@@ -529,8 +536,7 @@ the element:
 
 The module registers `<openreceive-checkout>` as it loads; the element creates
 the checkout for `reference`, then renders, polls and settles itself. The
-stylesheet is scoped to what OpenReceive renders, so it sits safely next to
-any CSS framework. The checkout follows the payer's theme; on a page that is
+stylesheet is scoped to what OpenReceive renders. The checkout follows the payer's theme; on a page that is
 always one theme, lock it with `theme="dark"`. React/Vue/Svelte/Angular apps
 use the matching wrapper package instead — same attributes
 ([Frontend checkout](https://openreceive.org/guides/frontend-checkout.md)); a custom UI builds on

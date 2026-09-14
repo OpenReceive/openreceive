@@ -220,9 +220,8 @@ test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting a
     await untilLocal(() => element.getAttribute("invoice") !== null, { label: "minted invoice" });
     assert.equal(fetchStub.pathCount("/checkouts"), 1);
 
-    // Back to the grid. This breadcrumb deliberately does not dismiss anything
-    // (only "back to Lightning" out of a swap panel does), so the bolt11 the
-    // payer is holding is still theirs to pay.
+    await untilLocal(() => element.shadowRoot.querySelector('[part="copy"]'));
+    // Hide the payment pane on the grid, keeping the live invoice for reuse.
     const breadcrumb = await untilLocal(
       () => element.shadowRoot?.querySelector('[data-or-breadcrumb="method"]'),
       { label: "method breadcrumb" },
@@ -232,7 +231,11 @@ test("re-selecting Bitcoin after the mint reuses the bolt11 instead of minting a
       () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
       { label: "method grid again" },
     );
+    assert.ok(!element.shadowRoot.querySelector('[part="payment-layout"]'));
+    assert.ok(!element.shadowRoot.querySelector('[part="copy"]'));
+    assert.doesNotMatch(element.shadowRoot.textContent, /Waiting for payment/);
     again.click();
+    await untilLocal(() => element.shadowRoot.querySelector('[part="copy"]'));
     await flush(4);
     assert.equal(
       fetchStub.pathCount("/checkouts"),
@@ -325,6 +328,7 @@ test("a slow QR encode never paints over a newer invoice", async () => {
   const element = mount({
     reference: "order-4",
     prefix: "/openreceive",
+    "payment-wizard": "false",
     "invoice-id": "c".repeat(64),
     invoice: "lnbc-first",
     "payment-hash": "c".repeat(64),
@@ -764,6 +768,7 @@ test("a missing or non-numeric expires-at costs the countdown, not the element",
   const element = mount({
     reference: "order-no-expiry",
     prefix: "/openreceive",
+    "payment-wizard": "false",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
     "payment-hash": paymentHash,
@@ -831,6 +836,7 @@ test("a legitimate expires-at still drives the countdown", async () => {
   const element = mount({
     reference: "order-good-expiry",
     prefix: "/openreceive",
+    "payment-wizard": "false",
     "invoice-id": paymentHash,
     invoice: `lnbc-${paymentHash}`,
     "payment-hash": paymentHash,
@@ -865,6 +871,7 @@ test("a blank invoice-id renders the payment screen without a status row", async
     element.addEventListener("openreceive-error", (event) => errors.push(event.detail.error));
     for (const [name, value] of Object.entries({
       prefix: "/openreceive",
+      "payment-wizard": "false",
       invoice: `lnbc-${"a".repeat(64)}`,
       "amount-msats": "21000",
       "invoice-id": blank,

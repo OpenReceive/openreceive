@@ -126,6 +126,11 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     onSwapFocusChange?.(selectedSwapAsset !== null);
     return () => onSwapFocusChange?.(false);
   }, [selectedSwapAsset, onSwapFocusChange]);
+  const onLightningFocusChange = props.onLightningFocusChange;
+  React.useEffect(() => {
+    onLightningFocusChange?.(selection.selectedMethod === "bitcoin");
+    return () => onLightningFocusChange?.(false);
+  }, [selection.selectedMethod, onLightningFocusChange]);
   // Payable assets ride on the order object itself (payment_methods), so the
   // wizard lists methods straight from the polled order snapshot — no extra call.
   const swapOptions = React.useMemo<SwapOptionsResult>(() => {

@@ -255,10 +255,13 @@ reference the current session may not see; the page can read the session and
 
 The checkout renders, polls, and settles itself. The compiled `styles.css`
 sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained and
-scoped: every rule applies only inside what OpenReceive renders, so the sheet
-is safe next to any CSS framework (Tailwind, Mantine, your own reset) in any
-import order. No `transpilePackages` entry is needed; the packages ship plain
-ESM.
+scoped: every rule applies only inside what OpenReceive renders. No
+`transpilePackages` entry is needed; the packages ship plain ESM.
+
+Serve the compiled `styles.css` without Tailwind processing: import it from
+JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
+Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+allow host styles to override checkout styles; scoping does not prevent that.
 
 <!-- shared:begin render-notes -->
 `<Checkout>` is complete as rendered: it already shows the `description` from

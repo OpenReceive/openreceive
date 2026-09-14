@@ -178,6 +178,17 @@ stylesheet is wrapped in `:where()` and carries **zero specificity**: a
 host's own selector, however plain, wins on the same property. That is a
 compatibility promise, not an accident.
 
+Serve the compiled `styles.css` without Tailwind processing: import it from
+JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
+Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+allow host styles to override checkout styles; scoping does not prevent that.
+
+For a custom element in a flex or grid layout, give the host a width:
+
+```css
+openreceive-checkout { display: block; width: 100%; }
+```
+
 ## Show the payer what they are buying
 
 Return a `description` beside the price. Both drop-ins print it above the

@@ -214,6 +214,11 @@ and the browser snapshots are snake_case throughout.
 
 ## 5. Render checkout
 
+Serve the compiled `styles.css` without Tailwind processing: import it from
+JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
+Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+allow host styles to override checkout styles; scoping does not prevent that.
+
 Unpack the release's `standalone-checkout-<version>.tar.gz` into a directory
 your web server serves — `public/openreceive/` here — and add two tags plus
 the element:
@@ -230,8 +235,7 @@ the element:
 
 The module registers `<openreceive-checkout>` as it loads; the element creates
 the checkout for `reference`, then renders, polls and settles itself. The
-stylesheet is scoped to what OpenReceive renders, so it sits safely next to
-any CSS framework. The checkout follows the payer's theme; on a page that is
+stylesheet is scoped to what OpenReceive renders. The checkout follows the payer's theme; on a page that is
 always one theme, lock it with `theme="dark"`. React/Vue/Svelte/Angular apps
 use the matching wrapper package instead — same attributes
 ([Frontend checkout](frontend-checkout.md)); a custom UI builds on

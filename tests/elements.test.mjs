@@ -19,6 +19,7 @@ import { renderPaymentWizardHtml } from "../packages/js/elements/src/render-wiza
 
 test("elements render display-safe checkout HTML", () => {
   const html = renderCheckoutHtml({
+    wizard: { selectedMethod: "bitcoin" },
     invoice_id: "or_inv_test",
     invoice: "lnbc-test",
     payment_hash: "a".repeat(64),
@@ -340,13 +341,22 @@ test("elements package exposes shared browser-owned checkout styles", () => {
   assert.doesNotMatch(source, /--or-theme-toggle-bg/);
 });
 
+test("elements show the method grid without an existing Lightning invoice pane", () => {
+  const html = renderCheckoutHtml({ invoice: "lnbc-grid", inlineStyles: false });
+  assert.match(html, /data-or-method="bitcoin"/);
+  assert.match(html, /Pay this invoice/);
+  assert.doesNotMatch(html, /part="payment-layout"/);
+  assert.doesNotMatch(html, /Copy invoice/);
+});
+
 test("the invoice decode link is off until the host names a decoder", () => {
-  const withoutDecoder = renderCheckoutHtml({ invoice: "lnbc-decode-test" });
+  const withoutDecoder = renderCheckoutHtml({ payment_wizard: false, invoice: "lnbc-decode-test" });
   assert.doesNotMatch(withoutDecoder, />Decode</);
   assert.doesNotMatch(withoutDecoder, /rizful/);
   assert.doesNotMatch(withoutDecoder, /lnbc-decode-test/);
 
   const withDecoder = renderCheckoutHtml({
+    payment_wizard: false,
     invoice: "lnbc-decode-test",
     decodeLinkUrl: "https://decoder.example/decode",
   });
@@ -356,6 +366,7 @@ test("the invoice decode link is off until the host names a decoder", () => {
   // An existing query string keeps its parameters.
   assert.match(
     renderCheckoutHtml({
+      payment_wizard: false,
       invoice: "lnbc-decode-test",
       decodeLinkUrl: "https://decoder.example/decode?lang=en",
     }),
@@ -365,6 +376,7 @@ test("the invoice decode link is off until the host names a decoder", () => {
 
 test("elements hide invoice text and reject NWC strings", () => {
   const html = renderCheckoutHtml({
+    payment_wizard: false,
     invoice: "lnbc-test<&",
   });
 

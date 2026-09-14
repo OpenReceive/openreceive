@@ -407,6 +407,7 @@ function CheckoutView(
   const stampsTheme = !theme.fromScope;
   const ownsTheme = themeToggle && !theme.fromScope && lockedTheme === undefined;
   const [swapFocused, setSwapFocused] = React.useState(false);
+  const [lightningFocused, setLightningFocused] = React.useState(false);
   const QRCodeComponent = components?.QRCode ?? QRCode;
   const InvoiceSummaryComponent = components?.InvoiceSummary ?? InvoiceSummary;
   const CopyButton = components?.CopyButton ?? CopyInvoiceButton;
@@ -418,11 +419,12 @@ function CheckoutView(
   // Settled: paying affordances (QR, copy, decode, wizard) drop out; a green "Payment
   // received" status plus the transaction-details panel take their place.
   const settled = checkoutModel.status === "settled";
-  // The QR pane needs a minted bolt11, no focused swap deposit panel, and an
-  // unexpired invoice. Expiry removes the PANE but keeps the LN section, because
+  // The QR pane needs a minted bolt11 and Bitcoin selected (unless the wizard
+  // is disabled), with no focused swap deposit panel and an unexpired invoice. Expiry removes the PANE but keeps the LN section, because
   // that is where the "Start over" button lives — which is what `hideLightning`
   // below (the whole-section switch) spells out.
-  const showLightning = !!checkoutModel.invoice && !swapFocused && !expired;
+  const showLightning =
+    !!checkoutModel.invoice && (!paymentWizard || lightningFocused) && !swapFocused && !expired;
   // Settled and expired keep the payment layout: after a swap deposit settles,
   // swapFocused is still true and would otherwise blank the whole widget.
   const hideLightning = !showLightning && !expired && !settled;
@@ -677,6 +679,7 @@ function CheckoutView(
               logger,
               onError,
               onSwapFocusChange: setSwapFocused,
+              onLightningFocusChange: setLightningFocused,
               prefix,
               csrfHeader,
               qrEncoder,

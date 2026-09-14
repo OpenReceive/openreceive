@@ -273,12 +273,16 @@ costs one relay round trip, not two.
 
 ## Render the checkout
 
+Serve the compiled `styles.css` without Tailwind processing: import it from
+JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
+Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+allow host styles to override checkout styles; scoping does not prevent that.
+
 The engine serves JSON checkout routes only — rendering is your view. Any
 OpenReceive frontend package works against the `/openreceive` mount; the
 smallest is the custom element (its default `prefix` is already
 `/openreceive`, and the package ships a self-contained `styles.css`; it is
-scoped to what OpenReceive renders, so it sits safely next to any CSS
-framework in any order). Laravel ships Vite, so the package installs like any
+scoped to what OpenReceive renders). Laravel ships Vite, so the package installs like any
 other frontend dependency:
 
 ```sh

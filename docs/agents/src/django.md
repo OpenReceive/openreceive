@@ -216,6 +216,8 @@ The engine serves JSON only, so the view is yours — but the drop-ins
 list is the short form of https://openreceive.org/guides/checkout-ux.md, for a UI
 built on `@openreceive/browser/headless`. Read that before writing components.
 
+- Check Bitcoin → Switch payment method → Bitcoin: the grid must hide the
+  Lightning invoice, then restore the same bolt11 without another mint.
 - `createCheckoutController` is the engine. Do not hand-roll a poll loop.
 - `createCheckoutStatusModel` for the status line. Do not draw a
   Cart → Pay → Done stepper. Read the model's `phase`, not the snapshot's.

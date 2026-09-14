@@ -175,6 +175,11 @@ a second attempt. The remaining three decide nothing about requests: `wizardErro
 and `swapStartError` are the payer-facing strings the catch paths set,
 `lightningRequested` is a render flag, and `swapQuotes` is the quote cache above.
 
+Both renderers hide the Lightning pane while the method grid is showing.
+Switching payment method keeps the live bolt11 for reuse; selecting Bitcoin
+again restores the same invoice without another create request. Vue, Svelte,
+and Angular inherit this behavior from the custom element.
+
 Both renderers are held to all four gates, in `tests/element-lifecycle.test.mjs`
 and `tests/react-checkout-behavior.test.mjs`. The in-flight pair: a second Bitcoin
 selection during a mint POSTs `/checkouts` once, and a second swap start POSTs

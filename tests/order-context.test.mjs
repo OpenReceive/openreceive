@@ -51,6 +51,7 @@ test("the description survives the snapshot -> state fold as data, not a label",
 test("both drop-ins render the description above the amount, outside the Lightning pane", () => {
   const html = renderCheckoutHtml({
     ...invoice,
+    wizard: { selectedMethod: "bitcoin" },
     description: "2 kg Ataulfo mangoes",
     theme: "light",
   });

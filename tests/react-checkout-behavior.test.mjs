@@ -207,7 +207,9 @@ test("copy feedback appears on click and resets itself", async (t) => {
   t.after(() => {
     if (!hadClipboard) delete globalThis.navigator.clipboard;
   });
-  const handle = mount(React.createElement(Checkout, { checkout: snapshot, polling: false }));
+  const handle = mount(
+    React.createElement(Checkout, { checkout: snapshot, paymentWizard: false, polling: false }),
+  );
   try {
     const copy = await until(() => handle.button(checkoutLabels.copyInvoice), {
       label: "copy button",
@@ -234,12 +236,15 @@ test("copy feedback appears on click and resets itself", async (t) => {
 
 test("the default checkout ships no wallet button and renders the slot when supplied", () => {
   const snapshot = invoice({ invoice_id: "or_inv_wallet_slot", invoice: "lnbc-wallet-slot" });
-  const withoutSlot = renderToStaticMarkup(React.createElement(Checkout, { checkout: snapshot }));
+  const withoutSlot = renderToStaticMarkup(
+    React.createElement(Checkout, { checkout: snapshot, paymentWizard: false }),
+  );
   assert.doesNotMatch(withoutSlot, /Open Wallet/);
 
   const withSlot = renderToStaticMarkup(
     React.createElement(Checkout, {
       checkout: snapshot,
+      paymentWizard: false,
       components: { OpenWalletButton },
       classNames: { openWalletButton: "host-wallet-button" },
     }),
@@ -661,7 +666,18 @@ test("Bitcoin selected again after the mint reuses the bolt11 instead of minting
     if (url.pathname === "/openreceive/checkouts") mints += 1;
     return stack.fetchStub(input, init);
   };
-  const handle = mount(React.createElement(Checkout, { reference: "order-reuse-mint" }));
+  const renderedInvoices = [];
+  const handle = mount(
+    React.createElement(Checkout, {
+      reference: "order-reuse-mint",
+      components: {
+        QRCode: ({ invoice }) => {
+          renderedInvoices.push(invoice);
+          return React.createElement("div", { "data-test-lightning-qr": invoice });
+        },
+      },
+    }),
+  );
   try {
     const bitcoin = await until(() => handle.button("Bitcoin"), { label: "method grid" });
     bitcoin.click();
@@ -677,6 +693,10 @@ test("Bitcoin selected again after the mint reuses the bolt11 instead of minting
     });
     back.click();
     const again = await until(() => handle.button("Bitcoin"), { label: "method grid again" });
+    await until(() => !handle.button(checkoutLabels.copyInvoice), { label: "invoice hidden" });
+    assert.equal(handle.container.querySelector("[data-test-lightning-qr]"), null);
+    assert.ok(handle.text().includes(checkoutLabels.wizardTitle));
+    assert.ok(!handle.text().includes("Waiting for payment"));
     again.click();
     await flush();
     await flush();
@@ -687,6 +707,9 @@ test("Bitcoin selected again after the mint reuses the bolt11 instead of minting
     );
     // Reuse, not a silent no-op: the invoice is still on screen to pay.
     assert.notEqual(handle.button(checkoutLabels.copyInvoice), undefined);
+    assert.ok(renderedInvoices.length >= 2);
+    assert.ok(renderedInvoices[0]);
+    assert.deepEqual([...new Set(renderedInvoices)], [renderedInvoices[0]]);
   } finally {
     handle.unmount();
     await stack.close();

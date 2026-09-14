@@ -10,9 +10,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Checkout, CheckoutProvider, PaymentState, useCheckoutContext } from "@openreceive/react";
 import { invoice } from "./helpers/react-fixtures.mjs";
 
-test("React checkout default UI server-renders display-safe invoice data", () => {
+test("React invoice-only checkout server-renders display-safe invoice data", () => {
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
+      paymentWizard: false,
       checkout: invoice({
         payment_hash: "b".repeat(64),
         amount_msats: 1000,
@@ -41,7 +42,7 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
   assert.doesNotMatch(html, /nostr\+walletconnect/);
 });
 
-test("React checkout default UI includes countdown, waiting state, and payment wizard", () => {
+test("React checkout default UI shows the method grid without the Lightning pane", () => {
   const now = Math.floor(Date.now() / 1000);
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
@@ -55,8 +56,10 @@ test("React checkout default UI includes countdown, waiting state, and payment w
     }),
   );
 
-  assert.match(html, /Waiting for payment/);
-  assert.match(html, /Invoice expires in/);
+  assert.doesNotMatch(html, /Waiting for payment/);
+  assert.doesNotMatch(html, /Invoice expires in/);
+  assert.doesNotMatch(html, /Copy invoice/);
+  assert.doesNotMatch(html, /data-openreceive-qr/);
   assert.match(html, /Pay this invoice/);
   assert.match(html, /Bitcoin/);
   assert.match(html, /Loading currencies/);
@@ -169,6 +172,7 @@ test("React checkout supports design-system component and class slots", () => {
 
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
+      paymentWizard: false,
       checkout: invoice({
         invoice: "lnbc-slot-test",
         payment_hash: "c".repeat(64),
@@ -194,6 +198,7 @@ test("React checkout supports design-system component and class slots", () => {
   // also swaps the paying affordances (QR / copy) for the transaction-details panel.
   const settledHtml = renderToStaticMarkup(
     React.createElement(Checkout, {
+      paymentWizard: false,
       checkout: invoice({
         invoice: "lnbc-slot-test",
         payment_hash: "c".repeat(64),
@@ -227,6 +232,7 @@ test("React checkout children compose above the shipped payment UI", () => {
     React.createElement(
       Checkout,
       {
+        paymentWizard: false,
         checkout: invoice({
           invoice_id: "or_inv_render_prop",
           invoice: "lnbc-render-prop",
@@ -378,7 +384,11 @@ test("React <Checkout reference theme=dark> themes the creating placeholder", ()
 
 test("React <Checkout checkout> renders a supplied snapshot", () => {
   const html = renderToStaticMarkup(
-    React.createElement(Checkout, { checkout: invoice(), prefix: "/openreceive" }),
+    React.createElement(Checkout, {
+      paymentWizard: false,
+      checkout: invoice(),
+      prefix: "/openreceive",
+    }),
   );
   assert.match(html, /data-openreceive-checkout/);
   assert.match(html, />Copy invoice</);

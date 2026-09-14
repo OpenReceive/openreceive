@@ -310,6 +310,8 @@ export interface PaymentWizardProps {
    * so the swap deposit panel fully replaces it.
    */
   readonly onSwapFocusChange?: (focused: boolean) => void;
+  /** Called when Bitcoin is selected or left, so Checkout can hide the invoice on the grid. */
+  readonly onLightningFocusChange?: (focused: boolean) => void;
   /**
    * Called when the wizard needs a Lightning invoice to be ready — e.g. when the payer
    * selects Bitcoin from the method grid or navigates back from a swap to the Lightning

@@ -16,7 +16,11 @@ Render `createCheckoutStatusModel`. Use its `title`, `detail`, countdown, and
 screen turns over when the clock does.
 
 Use `checkoutLabels.switchPaymentMethod` for the back-link. That is a
-breadcrumb, not a step back.
+breadcrumb, not a step back. The method grid and the Lightning invoice are
+mutually exclusive screens: switching payment method hides the QR, countdown,
+waiting status, and copy action. Keep the live bolt11 in the session for reuse
+when Bitcoin is selected again; do not dismiss it. Only a swap's
+`refund_required` screen forbids leaving.
 
 ## Show what they are buying
 

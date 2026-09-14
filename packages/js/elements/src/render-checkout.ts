@@ -64,8 +64,15 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   // Settled always shows the payment layout: after a swap deposit settles, the
   // selected swap asset would otherwise keep hiding it and blank the whole widget.
   const swapFocused = (view.wizard?.selectedSwapAsset ?? null) !== null;
+  // The method grid owns the screen, even when the session holds a live invoice.
+  // Keep invoice-only embeds (no wizard) and terminal status panels visible.
+  const methodGridShowing =
+    view.payment_wizard !== false && view.wizard?.selectedMethod == null && !swapFocused;
   const hideLightning =
-    !settled && (view.lightningRequested === false || (swapFocused && !expired));
+    !settled &&
+    (view.lightningRequested === false ||
+      (swapFocused && !expired) ||
+      (methodGridShowing && !expired));
   // Expired keeps the wizard when a swap is FOCUSED, matching React
   // (checkout.ts: `!expired || swapFocused`). Dropping it mid-swap kicked a
   // payer who had already sent a deposit back to the Lightning "Start over"

@@ -254,12 +254,16 @@ consoles) the client is built lazily so no live wallet is needed.
 
 ## Render the checkout
 
+Serve the compiled `styles.css` without Tailwind processing: import it from
+JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
+Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+allow host styles to override checkout styles; scoping does not prevent that.
+
 The engine serves JSON checkout routes only — rendering is your view. Any
 OpenReceive frontend package works against the `/openreceive` mount; the
 smallest is the custom element (its default `prefix` is already
 `/openreceive`, and the package ships a self-contained `styles.css` a plain
-stylesheet link can serve; it is scoped to what OpenReceive renders, so it
-sits safely next to any CSS framework in any order):
+stylesheet link can serve; it is scoped to what OpenReceive renders):
 
 ```erb
 <%# app/views/orders/pay.html.erb %>
@@ -267,7 +271,7 @@ sits safely next to any CSS framework in any order):
 ```
 
 ```js
-// In your JS bundle (importmap/esbuild/webpacker):
+// In your JS bundle (esbuild/webpacker with CSS support):
 import { defineElements } from "@openreceive/elements";
 import "@openreceive/elements/styles.css"; // or link the compiled styles.css
 

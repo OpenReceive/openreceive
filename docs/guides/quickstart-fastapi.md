@@ -188,8 +188,12 @@ import "@openreceive/react/styles.css";
 The checkout renders, polls, and settles itself. The compiled `styles.css`
 sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
 plain `<link rel="stylesheet">` works with no build step — and scoped: every
-rule applies only inside what OpenReceive renders, so the sheet is safe next
-to any CSS framework (Mantine, Bootstrap, your own reset) in any import order.
+rule applies only inside what OpenReceive renders.
+
+Serve the compiled `styles.css` without Tailwind processing: import it from
+JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
+Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+allow host styles to override checkout styles; scoping does not prevent that.
 <!-- shared:end render -->
 
 <!-- shared:begin render-notes -->
