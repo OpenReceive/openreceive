@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.9 - 2026-09-14
+
+Release in lockstep with the 0.4.9 checkout method-switch fix and updated
+integration directions. No Ruby server API or payment behavior changes.
+
 ## 0.4.8 - 2026-09-14
 
 Version alignment with the 0.4.8 checkout loading fix; no Ruby server API or

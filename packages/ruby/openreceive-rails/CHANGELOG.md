@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.9 - 2026-09-14
+
+Release alongside the packaged checkout fix that hides the Lightning pane
+on “Switch payment method” and reuses the same invoice when Bitcoin is
+selected again. Update `@openreceive/elements` and rebuild the frontend to
+receive this fix; upgrading the gem alone does not update the checkout UI.
+
+Refresh the bundled Rails integration directions with the method-switch
+regression check and guidance to serve the compiled stylesheet without
+importing it into the host Tailwind entry. No Rails engine API or settlement
+changes.
+
 ## 0.4.8 - 2026-09-14
 
 Release alongside the custom element's Lightning invoice loading indicator.

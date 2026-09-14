@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.9 - 2026-09-14
+
+- Hide the Lightning invoice, QR, countdown, waiting status and copy action
+  when “Switch payment method” returns to the method grid in the packaged
+  custom element and React checkout. Vue, Svelte and Angular inherit the
+  custom-element fix.
+- Keep the live Lightning invoice in the session. Selecting Bitcoin again
+  restores the same bolt11 without another checkout request; regression tests
+  cover both renderers and preserve invoice-only, expiry and settled screens.
+- Document the exclusive method-grid and invoice screens. Clarify that the
+  compiled checkout stylesheet should be served through a JavaScript import
+  or plain link, without importing it into the host Tailwind entry. Regenerate
+  the integration directions and packaged agent skills.
+- Release the general package family together at 0.4.9. Payment APIs, storage
+  and settlement behavior are unchanged. Rails hosts must update
+  `@openreceive/elements` and rebuild their frontend to receive the fix;
+  upgrading the Rails gem alone does not update the checkout UI.
+
+The release gate rebuilds the Node/Express, Fastify, Laravel, FastAPI, Django,
+static HTML, plain PHP, Next.js and Rails demo assets and the standalone
+checkout with 0.4.9 packages. The configured live wallet passed receive-only
+preflight; live invoice creation and manual payment verification are
+intentionally skipped. The BTCPay plugin remains at 0.4.7 and is not published
+by this release.
+
 ## 0.4.8 - 2026-09-14
 
 - Show the existing spinner and “Preparing payment” status while the custom

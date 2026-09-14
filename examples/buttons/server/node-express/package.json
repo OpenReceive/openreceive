@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-buttons-node-express",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,16 +15,16 @@
     "@angular/platform-browser": "^22.1.1",
     "@mantine/core": "^9.5.2",
     "@mantine/hooks": "^9.5.2",
-    "@openreceive/angular": "0.4.8",
-    "@openreceive/browser": "0.4.8",
-    "@openreceive/core": "0.4.8",
-    "@openreceive/express": "0.4.8",
-    "@openreceive/http": "0.4.8",
-    "@openreceive/node": "0.4.8",
-    "@openreceive/provider-data": "0.4.8",
-    "@openreceive/react": "0.4.8",
-    "@openreceive/svelte": "0.4.8",
-    "@openreceive/vue": "0.4.8",
+    "@openreceive/angular": "0.4.9",
+    "@openreceive/browser": "0.4.9",
+    "@openreceive/core": "0.4.9",
+    "@openreceive/express": "0.4.9",
+    "@openreceive/http": "0.4.9",
+    "@openreceive/node": "0.4.9",
+    "@openreceive/provider-data": "0.4.9",
+    "@openreceive/react": "0.4.9",
+    "@openreceive/svelte": "0.4.9",
+    "@openreceive/vue": "0.4.9",
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@tabler/icons-react": "^3.46.0",
     "@vitejs/plugin-react": "^4.7.0",
@@ -40,7 +40,7 @@
     "vue": "^3.5.22"
   },
   "devDependencies": {
-    "@openreceive/testkit": "0.4.8",
+    "@openreceive/testkit": "0.4.9",
     "typescript": "^6.0.3"
   }
 }
