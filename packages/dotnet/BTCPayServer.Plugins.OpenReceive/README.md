@@ -5,7 +5,7 @@ receive-only NWC code. Optionally let payers pay with USDT, USDC, ETH or SOL
 through a Lightning Swap Connect provider, which converts these payments to
 BTC over Lightning in your connected wallet. Asset and network availability
 depends on the provider.
-Requires BTCPay Server 2.4.2 or later.
+Requires BTCPay Server 2.4.4 or later.
 
 The whole setup in 30 seconds:
 

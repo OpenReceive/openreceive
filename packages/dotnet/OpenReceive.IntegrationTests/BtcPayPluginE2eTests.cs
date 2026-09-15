@@ -21,8 +21,8 @@ public sealed class BtcPayPluginE2eTests : IClassFixture<E2eStack>
 
     private async Task ConnectWalletAsync()
     {
-        var settings = await _stack.BtcPay(HttpMethod.Get, $"/api/v1/stores/{_stack.StoreId}/openreceive/settings");
-        if (settings!["lightningNodeIsOpenReceive"]!.GetValue<bool>()) return;
+        // Always exercise saving, including on a reused stack: preflight alone does
+        // not construct BTCPay's PaymentMethodConfigValidationContext.
         var nwc = await _stack.TestkitNwcUri();
         var preflight = await _stack.BtcPay(HttpMethod.Post, $"/api/v1/stores/{_stack.StoreId}/openreceive/wallet/test", new { nwcUri = nwc });
         Assert.True(preflight!["ok"]!.GetValue<bool>(), preflight["message"]?.GetValue<string>());
@@ -33,6 +33,17 @@ public sealed class BtcPayPluginE2eTests : IClassFixture<E2eStack>
         // BTCPay's Greenfield hides the Lightning config body; the plugin's settings endpoint describes it (redacted).
         Assert.StartsWith("type=openreceive;nwc=nostr+walletconnect://", updated["lightningNode"]!.GetValue<string>());
         Assert.Contains("secret=[REDACTED]", updated["lightningNode"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Receive_only_wallet_preflight_and_save_persist_the_store_lightning_backend()
+    {
+        RequireStack();
+        await ConnectWalletAsync();
+        var saved = await _stack.BtcPay(HttpMethod.Get, $"/api/v1/stores/{_stack.StoreId}/openreceive/settings");
+        Assert.True(saved!["lightningNodeIsOpenReceive"]!.GetValue<bool>());
+        Assert.StartsWith("type=openreceive;nwc=nostr+walletconnect://", saved["lightningNode"]!.GetValue<string>());
+        Assert.Contains("secret=[REDACTED]", saved["lightningNode"]!.GetValue<string>());
     }
 
     [Fact]
@@ -95,7 +106,7 @@ public sealed class BtcPayPluginE2eTests : IClassFixture<E2eStack>
         {
             (_, snapshot) = await _stack.Public(HttpMethod.Get, $"/api/plugins/openreceive/swaps/{invoiceId}/{swapId}");
             if (snapshot!["invoice_status"]!.GetValue<string>() == "Settled" && snapshot["wallet_settled"]!.GetValue<bool>()) break;
-            await Task.Delay(1000);
+            await Task.Delay(1000, TestContext.Current.CancellationToken);
         }
         Assert.Equal("Settled", snapshot!["invoice_status"]!.GetValue<string>());
         Assert.True(snapshot["wallet_settled"]!.GetValue<bool>());
@@ -112,7 +123,7 @@ public sealed class BtcPayPluginE2eTests : IClassFixture<E2eStack>
         {
             (_, refundSnapshot) = await _stack.Public(HttpMethod.Get, $"/api/plugins/openreceive/swaps/{refundInvoice}/{refundSwapId}");
             if (refundSnapshot!["state"]!.GetValue<string>() == "refund_required") break;
-            await Task.Delay(1000);
+            await Task.Delay(1000, TestContext.Current.CancellationToken);
         }
         Assert.Equal("refund_required", refundSnapshot!["state"]!.GetValue<string>());
         Assert.Equal("underpaid", refundSnapshot["refund_reason"]!.GetValue<string>());

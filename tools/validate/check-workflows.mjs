@@ -11,6 +11,7 @@ const workflowDirectory = ".github/workflows";
 // and fails on files it has no expectations for, so a new workflow cannot
 // land unvalidated.
 const requiredWorkflows = {
+  "btcpay-compatibility.yml": ["npm ci", "npm run test:btcpay:latest"],
   "wordpress.yml": [
     "compose.testkit.yml up --build -d --wait",
     "npm run test:wordpress",
@@ -20,6 +21,7 @@ const requiredWorkflows = {
   ],
   "ci.yml": [
     "bash packages/dotnet/docker/test-unit.sh",
+    "npm run test:e2e:btcpay:smoke",
     // The per-push gate is package.json's test:ci:core, asserted by name so
     // its step list lives in exactly one place.
     "npm run test:ci:core",
@@ -70,6 +72,7 @@ const requiredWorkflows = {
   "security.yml": ["npm run scan:secrets", "npm run check:workflows"],
   "release.yml": [
     "npm run check:release",
+    "npm run build:standalone",
     "npm run test:package-smoke",
     // Together with ci.yml these cover all of `npm run test:ci`; release:publish
     // relies on that to skip the local suite when both are green on HEAD.
@@ -90,6 +93,7 @@ const requiredWorkflows = {
   "publish-pypi.yml": [
     "does not match package.json version",
     "tools/release/pypi-release.mjs build",
+    "npm run build:standalone",
     "uv publish",
   ],
   // The Composer twin: no registry token exists — Packagist reads tags on the
@@ -417,6 +421,26 @@ for (const entry of presentWorkflows) {
 for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
   const relativePath = `${workflowDirectory}/${fileName}`;
   const { text, workflow } = readWorkflow(relativePath);
+  if (fileName === "release.yml") {
+    expect(
+      workflow.jobs?.["btcpay-compatibility"]?.uses ===
+        "./.github/workflows/btcpay-compatibility.yml",
+      `${relativePath}: releases must run the upstream BTCPay compatibility workflow`,
+    );
+  }
+  if (fileName === "btcpay-compatibility.yml") {
+    expect(
+      Object.hasOwn(workflow.on ?? {}, "workflow_call") &&
+        Object.hasOwn(workflow.on ?? {}, "workflow_dispatch") &&
+        workflow.on?.schedule?.length > 0,
+      `${relativePath}: upstream compatibility must be reusable, manual and scheduled`,
+    );
+    expect(
+      !workflow.jobs?.["latest-stable"]?.["continue-on-error"] &&
+        (workflow.jobs?.["latest-stable"]?.steps ?? []).every((step) => !step["continue-on-error"]),
+      `${relativePath}: compatibility failures must fail the workflow`,
+    );
+  }
   const commands = workflowCommands(workflow);
   const allCommands = commands.join("\n");
 

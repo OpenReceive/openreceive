@@ -33,7 +33,8 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: process.env.OPENRECEIVE_BTCPAY_URL ?? "http://127.0.0.1:14180",
-    trace: "retain-on-failure",
+    // Setup types wallet credentials: do not record them in Playwright traces.
+    trace: "off",
     ignoreHTTPSErrors: true,
     permissions: ["clipboard-read", "clipboard-write"],
   },

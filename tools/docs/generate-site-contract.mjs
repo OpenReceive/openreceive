@@ -262,7 +262,7 @@ const FRAMEWORKS = [
     agent_stack: "btcpay",
     adapter_package: "BTCPayServer.Plugins.OpenReceive",
     install: "Server Settings → Plugins → OpenReceive → Install",
-    requires: "BTCPay Server ≥ 2.4.2",
+    requires: "BTCPay Server ≥ 2.4.4",
     // Not a shop demo: the plugin's home is its README, and the landing page
     // shows the README's video and screenshots instead of the shared checkout.
     demo: null,

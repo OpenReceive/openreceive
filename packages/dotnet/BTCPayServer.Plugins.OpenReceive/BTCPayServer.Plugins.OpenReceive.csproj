@@ -9,7 +9,7 @@
     <AssemblyName>BTCPayServer.Plugins.OpenReceive</AssemblyName>
   </PropertyGroup>
 
-  <!-- Plugin identity. Version is stamped by `npm run release:prepare` in lockstep with the workspace. -->
+  <!-- Plugin identity. Version and publication are independent of the npm/gem releases. -->
   <PropertyGroup>
     <Product>OpenReceive</Product>
     <Description>Receive Lightning payments into your own wallet with a receive-only NWC code, and accept USDT, USDC, ETH and SOL through a Lightning Swap Connect provider.</Description>

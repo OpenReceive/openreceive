@@ -6,7 +6,7 @@
 #   relay + relay-tls                    a real Nostr relay behind TLS (NWC URIs must be wss)
 #   testkit-nwc                          NIP-47 wallet service (plays Alby Hub), backed by merchant_lnd
 #   fake-lsc                             FixedFloat-compatible swap provider, pays bolt11s from customer_lnd
-#   btcpayserver                         the official 2.4.2 image with the plugin bind-mounted in
+#   btcpayserver                         the official 2.4.4 image with the plugin bind-mounted in
 #
 # Driver scripts live beside this file: up.sh, regtest-fund.sh, build-plugin.sh.
 name: openreceive-btcpay
@@ -270,7 +270,7 @@ services:
         condition: service_started
 
   btcpayserver:
-    image: btcpayserver/btcpayserver:2.4.2
+    image: ${BTCPAY_IMAGE:-btcpayserver/btcpayserver:2.4.4}
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/or-entrypoint.sh"]
     environment:

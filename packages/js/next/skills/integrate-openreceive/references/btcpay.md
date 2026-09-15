@@ -32,7 +32,7 @@ refund path on the same checkout screen.
 
 ## Step 0 — check the deployment before you change anything
 
-1. Confirm the BTCPay Server version is 2.4.2 or later (Server Settings →
+1. Confirm the BTCPay Server version is 2.4.4 or later (Server Settings →
    About, or `GET /api/v1/server/info`). The plugin declares that minimum and
    BTCPay refuses to load it below.
 2. Check whether the plugin is installed (Server Settings → Plugins, or the
@@ -128,7 +128,7 @@ passes. The page it comes from is https://openreceive.org/guides/quickstart-btcp
 
 ## BTCPay Server quickstart
 
-Requires BTCPay Server ≥ 2.4.2.
+Requires BTCPay Server ≥ 2.4.4.
 
 The OpenReceive plugin makes a receive-only NWC wallet the Lightning node of a
 BTCPay store. BTCPay mints every Lightning invoice in that wallet and records
@@ -143,7 +143,7 @@ invoices, checkout, webhooks and Greenfield API are the host.
 
 ### 1. Prerequisites
 
-- A BTCPay Server, version 2.4.2 or later, on any network (mainnet, testnet,
+- A BTCPay Server, version 2.4.4 or later, on any network (mainnet, testnet,
   signet, regtest). The wallet must be on the same network.
 - A receive-only NWC code for the wallet you want to receive into
   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments)).

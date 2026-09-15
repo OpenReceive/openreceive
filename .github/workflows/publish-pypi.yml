@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm run build:packages
+          npm run build:standalone
       - name: Build sdist and wheel
         run: |
           set -euo pipefail

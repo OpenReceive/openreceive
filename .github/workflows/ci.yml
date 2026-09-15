@@ -332,8 +332,8 @@ jobs:
 
   # The third settlement engine: the BTCPay Server plugin's vector conformance and
   # kernel tests (packages/dotnet). Its own job because compiling BTCPay Server
-  # takes minutes and must never slow the JS gate. Regtest integration runs on
-  # demand only (packages/dotnet/docker), never per push.
+  # takes minutes and must never slow the JS gate. Browser setup/save smoke runs
+  # on every PR and push; full regtest payment/swap tests remain on demand.
   dotnet-plugin:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -356,6 +356,13 @@ jobs:
         run: |
           mkdir -p "$HOME/.nuget"
           NUGET_VOLUME="$HOME/.nuget" bash packages/dotnet/docker/test-unit.sh
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Browser setup, save, reload and checkout on BTCPay
+        run: NUGET_VOLUME="$HOME/.nuget" npm run test:e2e:btcpay:smoke
 
   # The fourth settlement engine: the PHP package (packages/php/openreceive) on
   # the oldest supported interpreter and a current one, through

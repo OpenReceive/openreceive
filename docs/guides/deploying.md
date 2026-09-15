@@ -14,7 +14,7 @@ live there. There is no separate OpenReceive deployment service.
 | Django | Python ≥ 3.10, Django ≥ 5.2; PostgreSQL, SQLite (`transaction_mode: IMMEDIATE`) or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 |
 | PHP (plain) | PHP ≥ 8.2, 64-bit, with `ext-gmp` (required by the NWC transport), `ext-sodium`, `ext-mbstring`, `ext-pdo` + `pdo_pgsql`/`pdo_sqlite`/`pdo_mysql`; PHP-FPM or Apache in front of one front controller — `php -S` is a development server |
 | Laravel | PHP ≥ 8.2, 64-bit, Laravel ≥ 11, with `ext-gmp` (required by the NWC transport), `ext-sodium`, `ext-mbstring`, `ext-pdo` + `pdo_pgsql`/`pdo_mysql`/`pdo_sqlite`; PostgreSQL, MySQL/MariaDB or SQLite; PHP-FPM or Apache, `php artisan serve` is a development server |
-| BTCPay Server plugin | BTCPay Server ≥ 2.4.2 |
+| BTCPay Server plugin | BTCPay Server ≥ 2.4.4 |
 
 Every stack needs the same two things at runtime: a receive-only NWC code in
 the server environment, and a database the application already owns — the

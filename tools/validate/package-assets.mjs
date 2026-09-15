@@ -15,7 +15,7 @@ import webpack from "webpack";
 import { buildPackageTarballs, localPackageDirectory } from "../package/build-artifacts.mjs";
 
 const root = process.cwd();
-const artifacts = buildPackageTarballs({ root });
+const artifacts = await buildPackageTarballs({ root });
 const fixture = path.join(artifacts.workspace.baseDir, "browser-install");
 const publicDir = path.join(fixture, "public");
 const prefix = "/shop/nested/checkout/";

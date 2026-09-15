@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
+  bootstrapSmokeStack,
   createInvoice,
   createStore,
   fakeLsc,
@@ -21,6 +22,10 @@ import {
 test.describe.configure({ mode: "serial" });
 
 let storeId = "";
+
+test.beforeAll(async ({ request }) => {
+  if (process.env.OPENRECEIVE_BTCPAY_BOOTSTRAP === "1") await bootstrapSmokeStack(request);
+});
 
 /**
  * The pills are Vue-bound (`v-on:click.prevent`); before BTCPay's checkout app mounts,
@@ -69,7 +74,7 @@ function secretOf(nwcUri: string): string {
   return nwcUri.slice(at, at + 64);
 }
 
-test("setup page: paste a receive-only NWC code, test it, make it the store's Lightning node", async ({
+test("@smoke setup page: paste a receive-only NWC code, test it, make it the store's Lightning node", async ({
   page,
   request,
 }) => {
@@ -106,6 +111,26 @@ test("setup page: paste a receive-only NWC code, test it, make it the store's Li
   // The store nav now carries the plugin entry, and the swaps section now exists.
   await expect(page.locator("#Nav-OpenReceive")).toBeVisible();
   await expect(page.getByRole("heading", { name: /2\. Swaps/ })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Wallet connected.")).toBeVisible();
+  const saved = await greenfield<{ lightningNodeIsOpenReceive: boolean }>(
+    request,
+    "GET",
+    `/api/v1/stores/${storeId}/openreceive/settings`,
+  );
+  expect(saved.lightningNodeIsOpenReceive).toBe(true);
+
+  // BTC avoids a dependency on public fiat rates in the CI smoke.
+  const invoice = await createInvoice(request, storeId, "0.00001", "BTC");
+  const checkout = await page.goto(`/i/${invoice.id}`);
+  expect(checkout?.ok(), `Checkout document: HTTP ${checkout?.status()}`).toBe(true);
+  await checkoutReady(page);
+  const qr = page.locator(".qr-container[data-clipboard]").first();
+  await expect(qr).toBeVisible();
+  expect((await qr.getAttribute("data-clipboard"))?.toLowerCase()).toContain(
+    invoice.bolt11.toLowerCase(),
+  );
 });
 
 test("setup page: a spend-capable code is refused with the reason, and admitted only with the override", async ({

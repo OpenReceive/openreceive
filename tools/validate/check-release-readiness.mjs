@@ -127,13 +127,19 @@ expect(
   rootPackage.scripts?.["check:release"] === "node tools/validate/check-release-readiness.mjs",
   "package.json: missing check:release script",
 );
-for (const { relativePath, manifest } of packages) {
-  if (manifest.scripts?.build === undefined) continue;
-  expect(
-    rootPackage.scripts?.["build:packages"]?.includes(`-w ${manifest.name}`),
-    `package.json: build:packages must build ${manifest.name} (${relativePath} has a build script)`,
-  );
-}
+// No package allowlist: the runner discovers every JS workspace and builds
+// its dependency graph before the standalone bundle consumes the output.
+expect(
+  rootPackage.scripts?.["build:packages"] ===
+    "node tools/package/build-workspaces.mjs && node tools/package/build-standalone-elements.mjs",
+  "package.json: build:packages must build all workspaces before the standalone checkout",
+);
+expect(
+  rootPackage.scripts?.["build:standalone"] ===
+    "node tools/package/build-workspaces.mjs @openreceive/elements && node tools/package/build-standalone-elements.mjs",
+  "package.json: build:standalone must build the elements dependency closure",
+);
+
 expect(
   rootPackage.scripts?.["test:package-smoke"],
   "package.json: release gate must keep package smoke script",

@@ -52,5 +52,6 @@
     "tests/e2e/**/*.ts",
     "tests/e2e-btcpay/**/*.ts",
     "tests/e2e-wordpress/**/*.ts"
-  ]
+  ],
+  "exclude": ["**/node_modules/**", "packages/js/*/dist/**"]
 }

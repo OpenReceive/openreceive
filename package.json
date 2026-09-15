@@ -34,7 +34,7 @@
     "check:workflows": "node tools/validate/check-workflows.mjs",
     "check:public-api": "node tools/validate/check-public-api.mjs",
     "check:dead-exports": "knip",
-    "build:packages": "npm run build -w @openreceive/core -w @openreceive/provider-data -w @openreceive/browser -w @openreceive/elements -w @openreceive/node -w @openreceive/http -w @openreceive/express -w @openreceive/fastify -w @openreceive/next -w @openreceive/react -w @openreceive/vue -w @openreceive/svelte -w @openreceive/angular -w @openreceive/testkit && node tools/package/build-standalone-elements.mjs",
+    "build:packages": "node tools/package/build-workspaces.mjs && node tools/package/build-standalone-elements.mjs",
     "release:plan": "node tools/release/npm-release.mjs plan",
     "release:prepare": "node tools/release/npm-release.mjs prepare",
     "release:stamp": "node tools/release/npm-release.mjs stamp",
@@ -69,6 +69,7 @@
     "test:e2e:smoke:php-plain": "bash tools/ci/php-demo-tests.sh",
     "test:e2e:smoke:laravel": "OPENRECEIVE_E2E_STACK=laravel playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
     "test:e2e:btcpay": "playwright test --config tests/e2e-btcpay/playwright.config.ts",
+    "test:e2e:btcpay:smoke": "bash packages/dotnet/docker/browser-smoke.sh",
     "test:ruby": "bash tools/ci/ruby-tests.sh",
     "test:python": "bash tools/ci/python-tests.sh",
     "test:php": "bash tools/ci/php-tests.sh",
@@ -91,7 +92,9 @@
     "test:e2e:wordpress": "playwright test --config tests/e2e-wordpress/playwright.config.ts",
     "test:wordpress": "bash tools/ci/wordpress-tests.sh",
     "check:wordpress": "node tools/validate/check-wordpress-plugin.mjs",
-    "test:ci:artifacts": "npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs"
+    "test:ci:artifacts": "npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs",
+    "build:standalone": "node tools/package/build-workspaces.mjs @openreceive/elements && node tools/package/build-standalone-elements.mjs",
+    "test:btcpay:latest": "node tools/dotnet/test-latest.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildPackageTarballs,
   localPackageDependency,
@@ -57,13 +58,13 @@ const importChecks = {
     "typeof mod.createWrapperCheckoutBinding === 'function' && typeof mod.createWrapperCheckoutShellBinding === 'function' && typeof mod.createWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createThemeModel === 'function' && typeof mod.createStoredThemeModel === 'function' && typeof mod.defineElements === 'function' && typeof mod.validateCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createThemeToggleElement === undefined && mod.createWrapperCheckoutController === undefined && mod.createWrapperCheckoutShell === undefined && mod.createWrapperThemeBinding === undefined && mod.createWrapperStoredThemeBinding === undefined",
 };
 
-function writeInstallProject(installDir, tarballs) {
+function writeInstallProject(installDir, tarballs, repoRoot) {
   const dependencies = Object.fromEntries(
     tarballs.map(({ name, tarball }) => [name, `file:${tarball}`]),
   );
 
   for (const dependency of localSmokeDependencies) {
-    dependencies[dependency] ??= localPackageDependency(root, dependency);
+    dependencies[dependency] ??= localPackageDependency(repoRoot, dependency);
   }
 
   writeFileSync(
@@ -94,21 +95,21 @@ function extractPackageTarball(tarball, destination) {
   });
 }
 
-function linkLocalDependency(installDir, packageName) {
-  const target = localPackageDirectory(root, packageName);
+function linkLocalDependency(installDir, packageName, repoRoot) {
+  const target = localPackageDirectory(repoRoot, packageName);
   const linkPath = packageInstallPath(installDir, packageName);
   rmSync(linkPath, { recursive: true, force: true });
   mkdirSync(path.dirname(linkPath), { recursive: true });
   symlinkSync(target, linkPath, "dir");
 }
 
-function assembleOfflineInstall(installDir, tarballs) {
+function assembleOfflineInstall(installDir, tarballs, repoRoot) {
   mkdirSync(path.join(installDir, "node_modules"), { recursive: true });
   for (const { name, tarball } of tarballs) {
     extractPackageTarball(tarball, packageInstallPath(installDir, name));
   }
   for (const dependency of localSmokeDependencies) {
-    linkLocalDependency(installDir, dependency);
+    linkLocalDependency(installDir, dependency, repoRoot);
   }
 }
 
@@ -411,26 +412,25 @@ function runImportSmoke(installDir) {
   });
 }
 
-function main() {
+export function smokePackageTarballs(result, repoRoot = root) {
+  const installDir = path.join(result.workspace.baseDir, "install");
+  rmSync(installDir, { recursive: true, force: true });
+  mkdirSync(installDir, { recursive: true });
+  writeInstallProject(installDir, result.tarballs, repoRoot);
+  console.error("assembling offline package smoke project");
+  assembleOfflineInstall(installDir, result.tarballs, repoRoot);
+  writeImportSmoke(installDir, result.packages);
+  console.error("running package import smoke");
+  process.stdout.write(runImportSmoke(installDir));
+  console.log(`Package smoke passed for ${result.packages.length} package(s).`);
+}
+
+async function main() {
   let workspace;
-
   try {
-    const result = buildPackageTarballs({
-      root,
-      npmTimeoutMs,
-    });
+    const result = await buildPackageTarballs({ root, npmTimeoutMs });
     workspace = result.workspace;
-    const installDir = path.join(workspace.baseDir, "install");
-    mkdirSync(installDir, { recursive: true });
-
-    writeInstallProject(installDir, result.tarballs);
-    console.error("assembling offline package smoke project");
-    assembleOfflineInstall(installDir, result.tarballs);
-    writeImportSmoke(installDir, result.packages);
-    console.error("running package import smoke");
-    const output = runImportSmoke(installDir);
-    process.stdout.write(output);
-    console.log(`Package smoke passed for ${result.packages.length} package(s).`);
+    smokePackageTarballs(result);
   } finally {
     if (workspace?.temporary && process.env.OPENRECEIVE_KEEP_PACKAGE_SMOKE !== "1") {
       rmSync(workspace.baseDir, { recursive: true, force: true });
@@ -440,9 +440,9 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error.message);
-  process.exit(1);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
 }

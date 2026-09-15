@@ -382,12 +382,51 @@ The release owner checks, before tagging:
 
 ## Faster local verification
 
+Every release tag also runs **BTCPay Upstream Compatibility** in parallel with
+release readiness. It discovers the newest stable upstream release and tests
+both a build against that source and the binary built against our pinned source
+on the matching Docker image. A weekly run catches upstream changes between our
+releases. No manual pull or submodule update is needed for this check. Run it
+locally with `npm run test:btcpay:latest`; see the
+[.NET testing guide](../../packages/dotnet/README.md#automatic-upstream-compatibility-checks).
+When the npm publisher falls back to local tests instead of green CI on the
+release commit, it runs this check after `test:ci`. Ordinary development runs of
+`test:ci` keep their pinned, reproducible BTCPay test dependency.
+
+Package builds, packing, npm availability checks and publishing use up to four
+concurrent jobs. Set `OPENRECEIVE_PACKAGE_JOBS=1` for serial execution or try `8`
+on a larger machine. Build and publish jobs wait for their workspace dependencies;
+a failure stops new jobs and waits for already running work to finish. Packaging
+builds each package once and disables the second build normally triggered by
+`prepack`. Direct `npm pack` still runs the package's normal build hook.
+
+On a clean checkout, package smoke and npm release commands share tarballs in
+`.release/package-artifacts/`. Reuse requires the same Git commit, Node/npm versions
+and platform, plus matching package versions and SHA-256 checksums. Dirty trees
+always build fresh. The publisher runs the import smoke against the exact archives
+before uploading, including when reusing a dry run's artifacts. Delete that cache
+to force a fresh build. This is local reuse; separate GitHub runners build their
+own artifacts. Install dependencies from the lockfile with `npm ci` before release
+verification, and do not edit source while release commands are running.
+
+Composer publishing reuses split commits from the preceding build after verifying
+the source commit, complete package tree and Composer metadata. PyPI and the
+standalone checkout use `npm run build:standalone`, which builds only elements and
+its workspace dependencies. The release dry run no longer builds every package
+before package smoke builds them again.
+
 `npm run test:ci` retains every check. After the core gate and the shared
 package build, it runs Ruby, Python, PHP, .NET and the ordered
 artifact/demo lane concurrently, with at most four lanes by default. Each
 lane prints its duration and a separate log path; any failure fails the gate.
 Set `OPENRECEIVE_CI_JOBS=1` for a serial run or raise it to `5` to run all five
 lanes together. The .NET lane uses Docker's assigned CPU and memory budget.
+
+On a Mac with 16 CPU cores and 64 GB of RAM, start with Docker Desktop's
+**Settings → Resources → Advanced** set to **16 CPUs and 16 GB memory**.
+Apply a resource change before running tests, because restarting Docker interrupts
+containers. Package builds run on the host and use `OPENRECEIVE_PACKAGE_JOBS`;
+Docker's allocation controls the container workloads.
 
 Do not overlap package smoke with package builds: both rewrite `dist/`.
 Python's package hook needs the completed standalone build. The standalone

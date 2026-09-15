@@ -25,7 +25,7 @@ parallel work. Shared contract files still need lead coordination.
 | BTCPay plugin tests | `packages/dotnet/BTCPayServer.Plugins.OpenReceive.Tests` | Implemented | Conformance lane |
 | Testkit NWC wallet service + fake LSC provider | `packages/dotnet/OpenReceive.TestkitNwc`, `packages/dotnet/OpenReceive.FakeLsc` | Implemented | Conformance lane |
 | BTCPay regtest stack | `packages/dotnet/docker/**` | Implemented | Conformance lane |
-| BTCPay source pin | `packages/dotnet/submodules/btcpayserver` (submodule, v2.4.2) | Pinned per release | Lead |
+| BTCPay source pin | `packages/dotnet/submodules/btcpayserver` (submodule, v2.4.4) | Pinned per release | Lead |
 | Buy a Button examples | `examples/buttons/**` | Implemented | Example lane |
 | PHP engine (`openreceive/openreceive`) | `packages/php/openreceive` | Implemented (vector-backed, fourth engine): kernel + PSR-15 server + PDO repository + FixedFloat + `Testing\` fakes | Ecosystem lane |
 | Laravel adapter (`openreceive/laravel`) | `packages/php/laravel` | Implemented: service provider, artisan commands, migration + Host stubs | Ecosystem lane |

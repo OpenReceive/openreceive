@@ -1,6 +1,6 @@
 # BTCPay Server quickstart
 
-Requires BTCPay Server ≥ 2.4.2.
+Requires BTCPay Server ≥ 2.4.4.
 
 The OpenReceive plugin makes a receive-only NWC wallet the Lightning node of a
 BTCPay store. BTCPay mints every Lightning invoice in that wallet and records
@@ -15,7 +15,7 @@ invoices, checkout, webhooks and Greenfield API are the host.
 
 ## 1. Prerequisites
 
-- A BTCPay Server, version 2.4.2 or later, on any network (mainnet, testnet,
+- A BTCPay Server, version 2.4.4 or later, on any network (mainnet, testnet,
   signet, regtest). The wallet must be on the same network.
 - A receive-only NWC code for the wallet you want to receive into
   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments)).

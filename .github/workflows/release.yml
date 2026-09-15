@@ -14,6 +14,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  btcpay-compatibility:
+    uses: ./.github/workflows/btcpay-compatibility.yml
+
   release-readiness:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -37,17 +40,11 @@ jobs:
           fi
       - run: npm ci
       - run: npm run check:release
-      # test:package-smoke builds each publishable package against the others'
-      # dist/ output — @openreceive/angular resolves
-      # `@openreceive/elements/wrapper-shared` to a .d.ts that only exists once
-      # elements is built. In ci.yml the smoke inherits that build from
-      # `npm test` (pretest:js), so it passes there and fails here on a fresh
-      # checkout. Build first rather than depend on a neighbouring step.
-      - run: npm run build:packages
-      # Right after build:packages: test:package-smoke rebuilds every package
-      # with a clean dist/, which removes the standalone build this checks.
-      - run: npm run check:standalone
+      # Package smoke builds in dependency order, including on a fresh checkout.
       - run: npm run test:package-smoke
+      # Build only the checkout dependency closure for the standalone artifact.
+      - run: npm run build:standalone
+      - run: npm run check:standalone
       # With ci.yml (test:ci:core, the Ruby lanes, the Rails example) these make
       # the two per-push workflows cover every step of `npm run test:ci`, which
       # is what lets release:publish skip the local suite when both are green

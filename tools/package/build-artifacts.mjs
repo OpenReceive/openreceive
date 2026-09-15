@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -15,6 +15,9 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { artifactCacheIdentity, restoreTarballs, saveTarballs } from "./artifact-cache.mjs";
+import { packageJobs, runPackageTasks } from "./parallel.mjs";
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "./public-packages.mjs";
 
 const DEFAULT_NPM_TIMEOUT_MS = 120_000;
@@ -89,21 +92,24 @@ export function validateWorkspacePackageGraph(packages) {
 export function npmEnv(cacheDir) {
   return {
     ...process.env,
-    npm_config_cache: cacheDir,
+    ...(cacheDir === undefined ? {} : { npm_config_cache: cacheDir }),
     npm_config_audit: "false",
     npm_config_fund: "false",
   };
 }
 
-export function runNpm(args, cwd, cacheDir, timeoutMs = DEFAULT_NPM_TIMEOUT_MS) {
+export async function runNpm(args, cwd, cacheDir, timeoutMs = DEFAULT_NPM_TIMEOUT_MS) {
   try {
-    return execFileSync("npm", args, {
-      cwd,
-      env: npmEnv(cacheDir),
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: timeoutMs,
-    });
+    return (
+      await promisify(execFile)("npm", args, {
+        cwd,
+        env: npmEnv(cacheDir),
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: timeoutMs,
+        maxBuffer: 10 * 1024 * 1024,
+      })
+    ).stdout;
   } catch (error) {
     const stdout = typeof error.stdout === "string" ? error.stdout : "";
     const stderr = typeof error.stderr === "string" ? error.stderr : "";
@@ -165,11 +171,11 @@ export function createPackageBuildWorkspace(input = {}) {
   };
 }
 
-export function buildPackageArtifact(pkg, _artifactRoot, input = {}) {
+export async function buildPackageArtifact(pkg, _artifactRoot, input = {}) {
   // A bin-only package (the openreceive CLI) has nothing to build and packs
   // straight from its checked-in files.
   if (pkg.manifest.scripts?.build !== undefined) {
-    runNpm(
+    await runNpm(
       ["run", "build", "-w", pkg.manifest.name],
       input.root ?? process.cwd(),
       input.cacheDir,
@@ -183,7 +189,7 @@ export function buildPackageArtifact(pkg, _artifactRoot, input = {}) {
   return pkg.dir;
 }
 
-export function packPackageArtifact(input) {
+export async function packPackageArtifact(input) {
   const {
     pkg,
     root,
@@ -195,13 +201,13 @@ export function packPackageArtifact(input) {
   } = input;
 
   log(`packing ${pkg.manifest.name}`);
-  const packageDir = buildPackageArtifact(pkg, artifactRoot, {
+  const packageDir = await buildPackageArtifact(pkg, artifactRoot, {
     root,
     cacheDir,
     npmTimeoutMs,
   });
-  const output = runNpm(
-    ["pack", packageDir, "--pack-destination", tarballDir, "--json"],
+  const output = await runNpm(
+    ["pack", packageDir, "--ignore-scripts", "--pack-destination", tarballDir, "--json"],
     root,
     cacheDir,
     npmTimeoutMs,
@@ -219,7 +225,7 @@ function parseNpmPackJson(output) {
   return Array.isArray(parsed) ? parsed : Object.values(parsed);
 }
 
-export function buildPackageTarballs(input = {}) {
+export async function buildPackageTarballs(input = {}) {
   const root = input.root ?? process.cwd();
   const packages = input.packages ?? discoverWorkspacePackages({ root });
   validateWorkspacePackageGraph(packages);
@@ -228,18 +234,33 @@ export function buildPackageTarballs(input = {}) {
   const log = input.log ?? console.error;
   log(`building ${packages.length} package artifact(s)`);
 
-  const tarballs = packages.map((pkg) => ({
-    name: pkg.manifest.name,
-    tarball: packPackageArtifact({
-      pkg,
-      root,
-      artifactRoot: workspace.artifactRoot,
-      tarballDir: workspace.tarballDir,
-      cacheDir: workspace.cacheDir,
-      npmTimeoutMs: input.npmTimeoutMs,
-      log,
+  const jobs = packageJobs(input.jobs);
+  const identity = input.cache === false ? undefined : artifactCacheIdentity(root);
+  const cached = restoreTarballs(root, identity, packages, workspace.tarballDir);
+  if (cached) {
+    log(`reusing ${cached.length} checksum-verified tarballs for ${identity.commit}`);
+    return { packages, tarballs: cached, workspace };
+  }
+  const tarballs = await runPackageTasks(
+    packages,
+    async (pkg) => ({
+      name: pkg.manifest.name,
+      tarball: await packPackageArtifact({
+        pkg,
+        root,
+        artifactRoot: workspace.artifactRoot,
+        tarballDir: workspace.tarballDir,
+        cacheDir: workspace.cacheDir,
+        npmTimeoutMs: input.npmTimeoutMs,
+        log,
+      }),
     }),
-  }));
+    jobs,
+  );
+  // A build must not populate the cache if source changed while it ran.
+  if (identity && JSON.stringify(identity) === JSON.stringify(artifactCacheIdentity(root))) {
+    saveTarballs(root, identity, tarballs);
+  }
 
   return {
     packages,
@@ -258,7 +279,7 @@ function readFlag(args, flag) {
   return value;
 }
 
-function main() {
+async function main() {
   const root = process.cwd();
   const args = process.argv.slice(2);
   const outDir = readFlag(args, "--out");
@@ -266,7 +287,7 @@ function main() {
   const npmTimeoutMs = Number(
     process.env.OPENRECEIVE_PACKAGE_SMOKE_NPM_TIMEOUT_MS ?? DEFAULT_NPM_TIMEOUT_MS,
   );
-  const result = buildPackageTarballs({
+  const result = await buildPackageTarballs({
     root,
     outDir,
     npmTimeoutMs,
@@ -286,7 +307,7 @@ function main() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    main();
+    await main();
   } catch (error) {
     console.error(error.message);
     process.exit(1);

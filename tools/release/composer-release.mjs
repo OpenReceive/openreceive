@@ -469,9 +469,45 @@ function verifySplit(root, pkg, version, commit) {
   }
 }
 
+function reusableSplits(root, args, version, outDir) {
+  if (args.snapshot === true || gitStatus(root).length !== 0) return undefined;
+  try {
+    const head = git(root, ["rev-parse", "HEAD"]);
+    return selectPackages(args).map((pkg) => {
+      const record = JSON.parse(readFileSync(path.join(outDir, `${pkg.short}.json`), "utf8"));
+      assert.equal(record.source_commit, head);
+      assert.equal(record.name, pkg.name);
+      assert.equal(record.version, version);
+      assert.equal(record.branch, branchName(pkg, version));
+      assert.equal(record.tag, `v${version}`);
+      assert.equal(record.split_repository, pkg.splitRepo);
+      // Verify the complete source tree, then reproduce the cheap composer.json
+      // fix-up. This avoids traversing the full history with git subtree again.
+      assert.equal(
+        git(root, ["rev-parse", `${record.split_commit}^{tree}`]),
+        git(root, ["rev-parse", `${head}:${pkg.dir}`]),
+      );
+      assert.equal(packagistCommit(root, pkg, version, record.split_commit), record.commit);
+      assert.equal(
+        git(root, ["rev-parse", `refs/tags/composer/${pkg.short}/v${version}`]),
+        record.commit,
+      );
+      verifySplit(root, pkg, version, record.commit);
+      return record;
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 function buildSplits(root, args) {
   const version = assertPhpVersionsReady(root);
   const outDir = outDirFor(root, version, args);
+  const cached = reusableSplits(root, args, version, outDir);
+  if (cached) {
+    console.error(`reusing ${cached.length} verified Composer split(s) for HEAD`);
+    return { version, outDir, built: cached };
+  }
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
   const built = [];
@@ -493,6 +529,8 @@ function buildSplits(root, args) {
       commit,
       tag: `v${version}`,
       split_repository: pkg.splitRepo,
+      source_commit: args.snapshot === true ? null : git(root, ["rev-parse", "HEAD"]),
+      split_commit: split,
       source: args.snapshot === true ? "working tree" : `git subtree split of ${pkg.dir} at HEAD`,
       fixup_commit: commit !== split,
     };

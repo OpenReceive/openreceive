@@ -3,6 +3,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 btcpay_source="${BTCPAY_SERVER_ROOT:-$DOTNET_DIR/submodules/btcpayserver}"
+dotnet_source="${BTCPAY_DOTNET_ROOT:-$DOTNET_DIR}"
 [ -f "$btcpay_source/BTCPayServer/BTCPayServer.csproj" ] || die "BTCPay source missing: run 'git submodule update --init --depth 1 packages/dotnet/submodules/btcpayserver' or set BTCPAY_SERVER_ROOT."
 btcpay_source="$(cd "$btcpay_source" && pwd)"
 command -v docker >/dev/null 2>&1 || die "Docker is required for test:dotnet. Install and start Docker Desktop; no host .NET SDK is needed."
@@ -11,6 +12,7 @@ docker info >/dev/null 2>&1 || die "Docker is not available. Start Docker Deskto
 log "building the .NET solution and running unit tests in $SDK_IMAGE"
 exec docker run --rm \
   -v "$REPO_ROOT":/work \
+  -v "$dotnet_source":/work/packages/dotnet \
   -v "$btcpay_source":/work/packages/dotnet/submodules/btcpayserver \
   -v "$NUGET_VOLUME":/root/.nuget \
   -e BTCPAY_SERVER_ROOT=/work/packages/dotnet/submodules/btcpayserver \

@@ -10,11 +10,18 @@ operations that are yours. The walkthrough is the
 
 | Plugin | BTCPay Server | .NET | NNostr.Client |
 | --- | --- | --- | --- |
-| lockstep with the OpenReceive workspace (`0.4.3` today) | 2.4.2 or later (compiled against 2.4.2) | 10 | 0.0.55 |
+| Current source (unreleased compatibility fix) | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
 
-The plugin identifier is `BTCPayServer.Plugins.OpenReceive`. A plugin version
-is a `System.Version`, so a workspace prerelease such as `0.5.0-alpha.0`
-stamps `0.5.0`.
+The plugin identifier is `BTCPayServer.Plugins.OpenReceive`. Its version and
+publication are independent of npm/gem releases.
+
+The published OpenReceive 0.4.7.0 plugin was built against BTCPay 2.4.2.
+On BTCPay 2.4.4 it can pass NWC preflight but fail when saving the store's
+Lightning backend with `MissingMethodException` for
+`PaymentMethodConfigValidationContext`. BTCPay 2.4.4 added a required
+`StoreData` constructor argument. The current source passes the store and
+builds against 2.4.4; installing that fix requires a rebuilt plugin.
+Changing the NWC code or its permissions does not fix this binary mismatch.
 
 ## The connection string
 
@@ -307,7 +314,7 @@ payments are the record.
 - **Beside the Nostr plugin**: each plugin loads its own copy of NNostr in
   its own load context (BTCPay's loader shares host types only), so the two
   never fight over an assembly version; they also do not share relay sockets.
-- **Upgrading BTCPay**: the plugin declares `BTCPayServer >= 2.4.2`. Rebuild
+- **Upgrading BTCPay**: the plugin declares `BTCPayServer >= 2.4.4`. Rebuild
   against the new version when BTCPay changes its Lightning interfaces; the
   Nostr and Blink plugins are the canary.
 - **Uninstalling**: remove the plugin directory and restart BTCPay, then set
@@ -322,7 +329,7 @@ payments are the record.
 | Command | What it proves |
 | --- | --- |
 | `npm run test:dotnet` | 283 unit tests: every shared vector family the `dotnet` coverage entry does not exclude, the kernel against an in-process wallet, the swap service against the fake provider |
-| `packages/dotnet/docker/up.sh`, then `e2e.sh` | the whole path over HTTP against BTCPay 2.4.2 in Docker |
+| `packages/dotnet/docker/up.sh`, then `e2e.sh` | the whole path over HTTP against BTCPay 2.4.4 in Docker |
 | `packages/dotnet/docker/test-e2e.sh` | the same legs as xunit, inside the .NET SDK image |
 | `packages/dotnet/docker/browser-e2e.sh` or `npm run test:e2e:btcpay` | the setup page, doctor and checkout in Chromium, including the swap component to "Invoice Paid" |
 | `docs/internal/btcpay-e2e.md` | the manual checklist: mutinynet with Alby Hub, coexistence with the Nostr plugin, one real provider swap per release |

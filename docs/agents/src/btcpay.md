@@ -30,7 +30,7 @@ refund path on the same checkout screen.
 
 ## Step 0 — check the deployment before you change anything
 
-1. Confirm the BTCPay Server version is 2.4.2 or later (Server Settings →
+1. Confirm the BTCPay Server version is 2.4.4 or later (Server Settings →
    About, or `GET /api/v1/server/info`). The plugin declares that minimum and
    BTCPay refuses to load it below.
 2. Check whether the plugin is installed (Server Settings → Plugins, or the

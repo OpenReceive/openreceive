@@ -160,7 +160,7 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
         var modelState = new ModelStateDictionary();
         var context = new PaymentMethodConfigValidationContext(_authorization, modelState,
             JToken.FromObject(config, handler.Serializer), user,
-            oldConfig is null ? null : JToken.FromObject(oldConfig, handler.Serializer));
+            oldConfig is null ? null : JToken.FromObject(oldConfig, handler.Serializer), store);
         await handler.ValidatePaymentMethodConfig(context);
         if (context.MissingPermission is not null)
         {

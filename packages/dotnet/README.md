@@ -3,7 +3,7 @@
 The BTCPay Server plugin and everything needed to build, test and prove it.
 This is the .NET settlement engine: it implements the shared kernel modules
 against the shared vectors in `spec/test-vectors/` and writes its host glue
-against BTCPay Server 2.4.2. The merchant-facing guide is
+against BTCPay Server 2.4.4. The merchant-facing guide is
 [docs/guides/quickstart-btcpay.md](../../docs/guides/quickstart-btcpay.md).
 
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
@@ -20,7 +20,7 @@ assets and networks depend on the provider; swaps are optional.
 | `OpenReceive.TestkitNwc/` | A NIP-47 wallet service for end-to-end tests (its own request loop over NNostr's client: NIP-44 v2 and NIP-04 per request, notifications in both kinds). In-memory invoices by default, or backed by an LND node through `BTCPayServer.Lightning`. Publishes the info event, mints one receive-only connection, pushes `payment_received`, and exposes an HTTP control API (`/health`, `/uri`, `/settle/{hash}` on the memory backend, `/invoices`). |
 | `OpenReceive.FakeLsc/` | A fake FixedFloat-compatible swap provider: `/api/v2/ccies`, `/price`, `/create`, `/order`, `/emergency` with HMAC verification, plus `/__testkit/` control endpoints to script order lifecycles, force `refund_required` or attention, fail creates and burst 429s. On `completed` it pays the order's BOLT11 from a configured Lightning node. |
 | `docker/` | The regtest end-to-end stack (below). |
-| `submodules/btcpayserver/` | BTCPay Server source, pinned to `v2.4.2`, shallow. Required for .NET builds/tests and the full `npm run test:ci` gate; focused JS and Ruby suites do not need it. |
+| `submodules/btcpayserver/` | BTCPay Server source, pinned to `v2.4.4`, shallow. Required for .NET builds/tests and the full `npm run test:ci` gate; focused JS and Ruby suites do not need it. |
 | `Directory.Build.props`, `global.json`, `*.slnx` | Shared build settings (`BtcPayServerRoot`), the .NET 10 SDK pin, and the solution. |
 
 ## Build
@@ -46,6 +46,8 @@ shares intermediates with a host build.
 npm run test:dotnet                                      # Docker: solution build + unit suite
 npm run test:dotnet -- --filter "FullyQualifiedName~Vectors"
 bash packages/dotnet/docker/test-unit.sh                 # same runner, no Node needed
+npm run test:e2e:btcpay:smoke                            # isolated Docker stack + Chromium
+npm run test:btcpay:latest                              # latest upstream source + runtime compatibility
 ```
 
 The runner builds the entire solution, then runs the kernel/vector unit suite
@@ -66,6 +68,42 @@ compatible SDK: run `dotnet build BTCPayServer.Plugins.OpenReceive.slnx` and
 `npm run validate` checks that every vector family has a consumer or a
 written exclusion in the `dotnet` entry of `spec/test-vectors/coverage.json`.
 
+The same CI job also runs `test:e2e:btcpay:smoke` on every pull request and
+push to master. It builds the plugin, starts the official pinned BTCPay image
+with PostgreSQL and a generated NWC test connection to LND over a TLS Nostr relay,
+and drives the setup page in Chromium: preflight, save, reload, then open a
+BTC checkout invoice. It needs `npm ci`, Docker Compose 2.24.4 or later, and
+the BTCPay submodule. The runner publishes no host ports, creates its own
+administrator, and removes its containers and disposable volumes on exit.
+It reuses the NuGet cache and the locked Playwright version. Setup traces are
+disabled because the form contains wallet credentials. Full payment, swap,
+and refund browser scenarios remain available through `browser-e2e.sh`.
+
+### Automatic upstream compatibility checks
+
+Every `v*` release tag runs the **BTCPay Upstream Compatibility** workflow as
+part of **Release Dry Run**, in parallel with the other release checks. It also
+runs weekly and can be started from GitHub Actions with **Run workflow**.
+`npm run test:btcpay:latest` runs the same check locally. The normal npm publisher
+runs it when it cannot reuse successful CI and Release Dry Run results for the
+release commit; the explicit `--skip-tests` override still skips release tests.
+
+The check resolves GitHub's latest stable BTCPay release on every run, fetches
+that tag's source, and pulls the matching official Docker image. It records the
+source commit and image digest in the Actions summary and locally in
+`.release/btcpay-compatibility/latest.json`. A lookup, download, compilation,
+unit-test or browser failure fails the check; it never falls back to an older
+BTCPay version. Prereleases and development branches are excluded.
+
+It builds and unit-tests against the latest source, then runs the browser
+preflight/save/reload/checkout smoke on that server. If our pinned source differs,
+it also builds against the pin and runs that binary on the latest server. This
+second test catches binary incompatibilities that rebuilding against the latest
+source could hide. When the commits match, one runtime test covers both cases.
+Separate temporary build directories keep the normal plugin output intact; the
+submodule pin and plugin version are not changed. An incompatible upstream release
+requires a source fix and another successful run before releasing the plugin.
+
 ## The regtest stack
 
 `docker/` is a complete environment in Docker Compose (project
@@ -74,7 +112,7 @@ remote wallet behind the testkit NWC service), `customer_lnd` (the payer and
 the fake provider's payout node), a `nostr-rs-relay` behind an nginx TLS
 terminator (NWC URIs must be `wss://`), `testkit-nwc`, a second
 `testkit-nwc-spend` that advertises `pay_invoice`, `fake-lsc` over https, and
-the official `btcpayserver/btcpayserver:2.4.2` image with the built plugin
+the official `btcpayserver/btcpayserver:2.4.4` image with the built plugin
 bind-mounted into its plugin directory and the stack's CA trusted.
 
 ```sh
@@ -105,7 +143,7 @@ address (a bad checksum is refused first), and a spend-capable code refused
 without the override, both through the plugin API and through BTCPay's own
 `PUT payment-methods/BTC-LN`.
 
-`test-e2e.sh` runs `OpenReceive.IntegrationTests` (four xunit legs over HTTP,
+`test-e2e.sh` runs `OpenReceive.IntegrationTests` (xunit legs over HTTP,
 skipped unless `OPENRECEIVE_E2E_BTCPAY_URL` is set). `browser-e2e.sh` runs
 `tests/e2e-btcpay` in Chromium: the setup page, the doctor, BTCPay's checkout
 paying a Lightning invoice, the swap component through to "Invoice Paid" with
@@ -132,8 +170,8 @@ public registration after the first admin.
 - Vocabularies (assets, swap states, reasons, method sets, limits) come from
   `Generated/OpenReceiveTables.cs`. `npm run check:generated` fails when it
   is stale.
-- The plugin `Version` in the csproj is stamped by `npm run release:prepare`
-  in lockstep with the workspace; `npm run check:release` verifies it.
+- The plugin `Version` in the csproj and its publication are independent of
+  npm/gem releases. Publishing it requires an explicit BTCPay release.
 - The relay transport does its own request, fetch and subscribe over NNostr's
   client and CLOSES every subscription it opens. NNostr 0.0.55's own
   `SendNIP47Request` and `FetchEvents` never do, and relays cap concurrent

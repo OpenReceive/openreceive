@@ -26,7 +26,7 @@ decision is re-made on purpose rather than inherited.
 
 The BTCPay Server plugin (`packages/dotnet`, C#) is a deliberate third settlement engine,
 decided 2026-09-03. It ports the kernel rows in `conformance.md` against the shared vectors
-and writes its host glue against BTCPay 2.4.2. Every kernel change is now three
+and writes its host glue against BTCPay 2.4.4. Every kernel change is now three
 implementations plus a vector update. Two things are different about this engine and are
 accepted on purpose. First, it owns no `openreceive_payments` table and no reconcile gate:
 BTCPay's invoices are the reference and BTCPay's payments are the settlement record, so the

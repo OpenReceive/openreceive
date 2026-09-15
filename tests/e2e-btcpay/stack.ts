@@ -17,6 +17,43 @@ export const stack = {
   network: process.env.OPENRECEIVE_E2E_NETWORK ?? "openreceive-btcpay_default",
 };
 
+/** Only the disposable CI stack registers an administrator; normal E2E uses its saved key. */
+export async function bootstrapSmokeStack(request: APIRequestContext): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        try {
+          const response = await request.get(`${stack.btcpay}/api/v1/health`, { timeout: 5_000 });
+          const wallet = await request.get(`${stack.testkit}/health`, { timeout: 5_000 });
+          const lnd = await request.get("http://merchant_lnd:8080/v1/getinfo", { timeout: 5_000 });
+          return (
+            response.ok() &&
+            wallet.ok() &&
+            (await wallet.json()).relayConnected === true &&
+            lnd.ok() &&
+            (await lnd.json()).synced_to_chain === true
+          );
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 120_000, intervals: [1_000], message: "BTCPay and the test wallet become ready" },
+    )
+    .toBe(true);
+  const registered = await request.post(`${stack.btcpay}/api/v1/users`, {
+    data: { email: stack.email, password: stack.password, isAdministrator: true },
+  });
+  expect(registered.ok(), `Register test administrator: HTTP ${registered.status()}`).toBe(true);
+  const key = await request.post(`${stack.btcpay}/api/v1/api-keys`, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${stack.email}:${stack.password}`).toString("base64")}`,
+    },
+    data: { label: "browser smoke", permissions: ["unrestricted"] },
+  });
+  expect(key.ok(), `Create test API key: HTTP ${key.status()}`).toBe(true);
+  process.env.OPENRECEIVE_BTCPAY_API_KEY = (await key.json()).apiKey;
+}
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** The Greenfield key e2e.sh saved; BTCPay closes registration after the first admin. */
@@ -61,6 +98,7 @@ export async function createInvoice(
   request: APIRequestContext,
   storeId: string,
   amount: string,
+  currency = "USD",
 ): Promise<{ id: string; bolt11: string }> {
   const invoice = await greenfield<{ id: string }>(
     request,
@@ -68,7 +106,7 @@ export async function createInvoice(
     `/api/v1/stores/${storeId}/invoices`,
     {
       amount,
-      currency: "USD",
+      currency,
       checkout: { paymentMethods: ["BTC-LN"] },
     },
   );

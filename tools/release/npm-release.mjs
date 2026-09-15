@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -12,16 +12,20 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildPackageTarballs,
   createPackageBuildWorkspace,
   discoverWorkspacePackages,
+  npmEnv,
   readJson,
+  runNpm,
 } from "../package/build-artifacts.mjs";
-
+import { runPackageTasks } from "../package/parallel.mjs";
 import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs";
-import { GEM_NAMES, gemDir, gemVersionFilePath } from "./gem-release.mjs";
+import { smokePackageTarballs } from "../validate/package-smoke.mjs";
 import { LARAVEL_COMPOSER_JSON, PHP_VERSION_FILE, updatePhpVersions } from "./composer-release.mjs";
+import { GEM_NAMES, gemDir, gemVersionFilePath } from "./gem-release.mjs";
 import { PYTHON_VERSION_FILE, updatePythonVersion } from "./pypi-release.mjs";
 
 const PUBLIC_PACKAGE_NAMES = OPENRECEIVE_PUBLIC_PACKAGE_NAMES;
@@ -469,13 +473,13 @@ function printPrepareDryRun(result) {
   for (const file of result.files) console.log(`- ${file}`);
 }
 
-function buildPublicTarballs(root, targetVersion, args) {
+async function buildPublicTarballs(root, targetVersion, args) {
   const outDir = releaseOutDir(root, targetVersion, args);
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
   const workspace = createPackageBuildWorkspace({ root, outDir });
-  const result = buildPackageTarballs({
+  const result = await buildPackageTarballs({
     root,
     packages: publicPackages(root),
     workspace,
@@ -483,7 +487,7 @@ function buildPublicTarballs(root, targetVersion, args) {
   });
   return {
     outDir,
-    tarballs: result.tarballs,
+    ...result,
   };
 }
 
@@ -510,9 +514,13 @@ function assertVersionsReady(root, targetVersion) {
   }
 }
 
-function assertNotPublished(packageName, version, root) {
+export async function assertNotPublished(packageName, version, root) {
   try {
-    const output = run("npm", ["view", `${packageName}@${version}`, "version", "--json"], root);
+    const output = await runNpm(
+      ["view", `${packageName}@${version}`, "version", "--json"],
+      root,
+      path.join(root, ".release/npm-cache"),
+    );
     if (output.trim().replace(/^"|"$/g, "") === version) {
       throw new Error(`${packageName}@${version} already exists on npm`);
     }
@@ -523,21 +531,68 @@ function assertNotPublished(packageName, version, root) {
   }
 }
 
-function publishTarballs(root, tarballs, args) {
+function publishArchive(args, root, cacheDir) {
+  // Preserve npm's terminal output and authentication prompts while independent
+  // uploads overlap. Do not echo arguments containing an optional OTP on error.
+  return new Promise((resolve, reject) => {
+    const child = spawn("npm", args, { cwd: root, env: npmEnv(cacheDir), stdio: "inherit" });
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (code === 0) resolve();
+      else
+        reject(new Error(`npm publish failed (${signal ?? code}) for ${path.basename(args[1])}`));
+    });
+  });
+}
+
+export async function publishTarballs(root, tarballs, args, input = {}) {
   const tag = String(args.tag ?? "latest");
   const publishArgs = [];
   if (args.otp !== undefined) publishArgs.push("--otp", String(args.otp));
   if (args["dry-run"] === true) publishArgs.push("--dry-run");
 
-  for (const { name, tarball } of tarballs) {
+  // Dependencies become available before their consumers. Independent leaves
+  // publish concurrently; a failed publish stops scheduling further packages.
+  const packages = input.packages ?? publicPackages(root);
+  const byName = new Map(tarballs.map((item) => [item.name, item.tarball]));
+  for (const { name } of tarballs) {
     assert(PUBLIC_PACKAGE_SET.has(name), `${name}: refusing to publish non-public package`);
-    const argsForPackage = ["publish", tarball, "--access", "public", "--tag", tag, ...publishArgs];
-    console.error(`publishing ${name} from ${path.relative(root, tarball)}`);
-    run("npm", argsForPackage, root, { stdio: "inherit" });
   }
+  assert.equal(byName.size, packages.length, "Release tarball set must match public packages");
+  for (const {
+    manifest: { name },
+  } of packages) {
+    assert(PUBLIC_PACKAGE_SET.has(name), `${name}: refusing to publish non-public package`);
+    assert(byName.has(name), `${name}: release tarball is missing`);
+  }
+  await runPackageTasks(
+    packages,
+    async (pkg) => {
+      const name = pkg.manifest.name;
+      const tarball = byName.get(name);
+      const argsForPackage = [
+        "publish",
+        tarball,
+        "--access",
+        "public",
+        "--tag",
+        tag,
+        ...publishArgs,
+      ];
+      console.error(`publishing ${name} from ${path.relative(root, tarball)}`);
+      // No package lifecycle scripts should rebuild an already tested archive.
+      await (input.runNpm ?? publishArchive)(
+        [...argsForPackage, "--ignore-scripts"],
+        root,
+        path.join(root, ".release/npm-cache"),
+      );
+      console.error(`published ${name}${args["dry-run"] ? " (dry-run)" : ""}`);
+    },
+    input.jobs,
+  );
 }
 
-function main() {
+async function main() {
   const [command, ...argv] = process.argv.slice(2);
   if (!command || command === "help" || command === "--help") {
     console.log(usage());
@@ -613,6 +668,7 @@ function main() {
       const green = greenReleaseGateRuns(root);
       if (green === undefined) {
         run("npm", ["run", "test:ci"], root, { stdio: "inherit" });
+        run("npm", ["run", "test:btcpay:latest"], root, { stdio: "inherit" });
       } else {
         console.error(
           "Skipping `npm run test:ci`: every step of it already passed on this commit in",
@@ -620,21 +676,25 @@ function main() {
         for (const entry of green) console.error(`- ${entry.workflowName}: ${entry.url}`);
       }
     }
-    for (const packageName of PUBLIC_PACKAGE_NAMES) {
-      assertNotPublished(packageName, targetVersion, root);
-    }
-    const result = buildPublicTarballs(root, targetVersion, args);
-    publishTarballs(root, result.tarballs, args);
-    console.log(`Published ${result.tarballs.length} package(s) for ${targetVersion}.`);
+    await runPackageTasks(
+      PUBLIC_PACKAGE_NAMES.map((name) => ({ manifest: { name } })),
+      (pkg) => assertNotPublished(pkg.manifest.name, targetVersion, root),
+    );
+    const result = await buildPublicTarballs(root, targetVersion, args);
+    smokePackageTarballs(result, root);
+    await publishTarballs(root, result.tarballs, args);
+    console.log(
+      `${args["dry-run"] ? "Dry-run checked" : "Published"} ${result.tarballs.length} package(s) for ${targetVersion}.`,
+    );
     return;
   }
 
   throw new Error(`Unknown release command: ${command}\n${usage()}`);
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error.message);
-  process.exit(1);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
 }
