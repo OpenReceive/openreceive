@@ -1,10 +1,18 @@
-// The single catalog of dockerized demos. Five stacks, one shop.
+// The single catalog of dockerized shop demos and the BTCPay plugin test stack.
 // Both the launcher
 // (tools/run-demo.mjs) and the container validator
 // (tools/validate/check-demo-containers.mjs) read this list, so a demo added
 // or renamed here is launchable and validated in the same change.
 
 export const OPENRECEIVE_DEMOS = [
+  {
+    kind: "btcpay",
+    keys: ["btcpayserver", "btcpay"],
+    dir: "packages/dotnet/docker",
+    service: "btcpayserver",
+    port: "14180",
+    label: "BTCPay Server — .env wallet",
+  },
   {
     kind: "wordpress",
     keys: ["wordpress", "woocommerce", "wp"],

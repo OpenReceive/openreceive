@@ -104,7 +104,57 @@ Separate temporary build directories keep the normal plugin output intact; the
 submodule pin and plugin version are not changed. An incompatible upstream release
 requires a source fix and another successful run before releasing the plugin.
 
+## Manual browser demo with your wallet
+
+Start Docker Desktop, configure the repository-root `.env` (see `.env.example`),
+and run:
+
+```sh
+npm run demo btcpayserver
+```
+
+The command initializes a missing BTCPay submodule, builds the plugin in Docker,
+and starts BTCPay plus Postgres at **http://127.0.0.1:14180**. It creates a local
+administrator and an **OpenReceive demo** store, validates your receive-only
+`NWC_URI`, and saves it as the store's Lightning backend. `LSC_URI_PRIMARY` enables
+swaps; `LSC_URI_BACKUP` configures the fallback provider. Both are optional.
+Credentials go directly from the launcher to BTCPay's server API. The command
+prints the local dummy login: **`demo@openreceive.test` / `OpenReceive-demo-123!`**.
+The ignored `docker/.state/live/login.json` holds this login and the demo API key.
+
+This is a **mainnet** Lightning demo using your real wallet and providers. Create
+an invoice in BTCPay and open its checkout to test a Lightning payment or swap.
+Optional swaps accept USDT, USDC, SOL and ETH through the configured provider,
+which converts them to BTC over Lightning in your connected wallet; available
+assets and networks depend on the provider. Starting the demo configures the store;
+payments and swaps are initiated manually in the browser.
+
+The demo does not run a Bitcoin node or NBXplorer. BTCPay may show an explorer
+connection warning; on-chain BTC checkout is unavailable in this Lightning setup.
+
+```sh
+npm run demo btcpayserver -- --stop       # stop; preserve accounts, store and invoices
+npm run demo btcpayserver -- --no-build   # reuse the plugin build and reapply .env
+```
+
+Rerunning the command reuses the same store and applies the current `.env`.
+Removing `LSC_URI_PRIMARY` disables swaps and clears the saved provider setting.
+Exported environment variables take precedence over `.env`, as in the other demos.
+The live and testkit stacks use separate Docker volumes but share port 14180;
+stop one before starting the other. CI continues to use generated test credentials.
+
 ## The regtest stack
+
+For funded local test wallets and a fake swap provider, without `.env`:
+
+```sh
+npm run demo btcpayserver -- --testkit
+npm run demo btcpayserver -- --testkit --stop
+```
+
+Register an administrator on the first visit. Startup prints commands to retrieve
+the generated test-wallet and provider settings. This mode funds regtest wallets
+and runs the full stack below. Add `--no-build` to reuse its plugin build.
 
 `docker/` is a complete environment in Docker Compose (project
 `openreceive-btcpay`): bitcoind, NBXplorer, Postgres, `merchant_lnd` (the

@@ -11,6 +11,7 @@ const railsDemo = OPENRECEIVE_DEMOS.find((demo) => demo.kind === "rails");
 const pythonDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "python");
 const phpDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "php");
 const wordpressDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "wordpress");
+const btcpayDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "btcpay");
 
 const findings = [];
 const fail = (message) => findings.push(message);
@@ -135,6 +136,26 @@ const expectPortsOnlyOverride = (relativePath, override, service, port) => {
     `${relativePath}: must override exactly one service`,
   );
 };
+
+for (const demo of btcpayDemos) {
+  const composePath = `${demo.dir}/docker-compose.live.yml`;
+  const compose = parse(composePath, parseCompose);
+  const service = compose.services?.[demo.service] ?? {};
+  expect(
+    service.image?.includes("btcpayserver/btcpayserver:"),
+    `${composePath}: must use the official BTCPay image`,
+  );
+  expect(
+    service.environment?.BTCPAY_NETWORK === "mainnet",
+    `${composePath}: the live wallet demo must use mainnet`,
+  );
+  expect(
+    service.ports?.includes(`127.0.0.1:${demo.port}:49392`),
+    `${composePath}: BTCPay must publish its catalog port on localhost`,
+  );
+  for (const script of ["live.sh", "up.sh", "down.sh", "build-plugin.sh", "regtest-fund.sh"])
+    read(`${demo.dir}/${script}`);
+}
 
 for (const demo of wordpressDemos) {
   const composePath = `${demo.dir}/compose.yml`;
@@ -792,5 +813,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Demo container validation passed for ${nodeDemos.length} Node demo(s) + Rails demo + ${pythonDemos.length} Python demo(s) + ${phpDemos.length} PHP demo(s) + ${wordpressDemos.length} WordPress demo(s) without OpenReceive runtime persistence.`,
+  `Demo container validation passed for ${nodeDemos.length} Node demo(s) + Rails demo + ${pythonDemos.length} Python demo(s) + ${phpDemos.length} PHP demo(s) + ${wordpressDemos.length} WordPress demo(s) + ${btcpayDemos.length} BTCPay demo(s).`,
 );

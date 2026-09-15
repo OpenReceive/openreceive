@@ -235,6 +235,14 @@ npm run demo php          # plain PHP, :3008
 npm run demo wordpress    # WooCommerce, :3009
 ```
 
+For manual BTCPay plugin testing with your `.env` wallet and swap providers, run
+`npm run demo btcpayserver` and open **http://127.0.0.1:14180**. It configures a
+mainnet store using `NWC_URI` and optional `LSC_URI_PRIMARY` / `LSC_URI_BACKUP`.
+Stop it with `npm run demo btcpayserver -- --stop`; accounts, stores and invoices
+are preserved. Use `-- --testkit` for funded local regtest wallets instead.
+See the [BTCPay demo](packages/dotnet/README.md#manual-browser-demo-with-your-wallet)
+for login and testing details.
+
 The [examples directory](examples/README.md) lists every stack, its launch
 command, and ways to run against fake wallets and swap providers. The
 [Buy a Button README](examples/buttons/README.md) explains the shared shop,
