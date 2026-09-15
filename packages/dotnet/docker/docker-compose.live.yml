@@ -1,0 +1,35 @@
+# Manual mainnet Lightning demo. Wallet and provider credentials are configured
+# server-side by tools/dotnet/demo-live.mjs, never interpolated into Compose.
+name: openreceive-btcpay-live
+services:
+  postgres:
+    image: btcpayserver/postgres:18.4
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres_datadir:/var/lib/postgresql
+  btcpayserver:
+    image: ${BTCPAY_IMAGE:-btcpayserver/btcpayserver:2.4.4}
+    environment:
+      BTCPAY_NETWORK: mainnet
+      BTCPAY_BIND: 0.0.0.0:49392
+      BTCPAY_CHAINS: btc
+      BTCPAY_POSTGRES: User ID=postgres;Host=postgres;Port=5432;Database=btcpayserver
+      BTCPAY_ALLOW-ADMIN-REGISTRATION: "true"
+      BTCPAY_DOCKERDEPLOYMENT: "false"
+    ports:
+      - "127.0.0.1:14180:49392"
+    volumes:
+      - btcpay_datadir:/datadir
+      - ./.state/plugins:/root/.btcpayserver/Plugins:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  postgres_datadir:
+  btcpay_datadir:

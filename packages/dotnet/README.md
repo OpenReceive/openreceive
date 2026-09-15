@@ -81,7 +81,8 @@ and refund browser scenarios remain available through `browser-e2e.sh`.
 
 ### Automatic upstream compatibility checks
 
-Every `v*` release tag runs the **BTCPay Upstream Compatibility** workflow as
+Every `btcpay-v*` plugin release tag runs **BTCPay Upstream Compatibility**.
+Every general `v*` release tag also runs that workflow as
 part of **Release Dry Run**, in parallel with the other release checks. It also
 runs weekly and can be started from GitHub Actions with **Run workflow**.
 `npm run test:btcpay:latest` runs the same check locally. The normal npm publisher

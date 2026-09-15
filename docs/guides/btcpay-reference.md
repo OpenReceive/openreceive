@@ -10,7 +10,7 @@ operations that are yours. The walkthrough is the
 
 | Plugin | BTCPay Server | .NET | NNostr.Client |
 | --- | --- | --- | --- |
-| Current source (unreleased compatibility fix) | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
+| 0.4.8 source (release candidate) | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
 
 The plugin identifier is `BTCPayServer.Plugins.OpenReceive`. Its version and
 publication are independent of npm/gem releases.

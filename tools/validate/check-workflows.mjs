@@ -430,6 +430,10 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
   }
   if (fileName === "btcpay-compatibility.yml") {
     expect(
+      workflow.on?.push?.tags?.includes("btcpay-v*"),
+      `${relativePath}: BTCPay release tags must check latest upstream compatibility`,
+    );
+    expect(
       Object.hasOwn(workflow.on ?? {}, "workflow_call") &&
         Object.hasOwn(workflow.on ?? {}, "workflow_dispatch") &&
         workflow.on?.schedule?.length > 0,

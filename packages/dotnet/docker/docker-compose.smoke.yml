@@ -1,0 +1,19 @@
+# Overlay for browser-smoke.sh. The BTCPay image/version comes from docker-compose.yml.
+# Compose >= 2.24.4 is required for !override.
+services:
+  btcpayserver:
+    ports: !reset []
+    volumes: !override
+      - btcpay_datadir:/datadir
+      - ${BTCPAY_PLUGIN_OUTPUT}:/root/.btcpayserver/Plugins/BTCPayServer.Plugins.OpenReceive:ro
+      - ./btcpay-entrypoint.sh:/usr/local/bin/or-entrypoint.sh:ro
+      - certs:/certs:ro
+  testkit-nwc:
+    image: ${SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
+    build: !reset null
+    working_dir: /work/packages/dotnet/OpenReceive.TestkitNwc/bin-docker/Debug/net10.0
+    volumes: !override
+      - certs:/certs:ro
+      - ../../..:/work:ro
+      - ${BTCPAY_DOTNET_ROOT}:/work/packages/dotnet:ro
+    ports: !reset []

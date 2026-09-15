@@ -1,0 +1,43 @@
+name: BTCPay Upstream Compatibility
+
+on:
+  push:
+    tags: ["btcpay-v*"]
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: btcpay-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  latest-stable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: btcpay-upstream-nuget-${{ runner.os }}-${{ hashFiles('packages/dotnet/**/*.csproj') }}
+          restore-keys: |
+            btcpay-upstream-nuget-${{ runner.os }}-
+      - run: npm ci
+      - name: Test latest stable BTCPay source and runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$HOME/.nuget"
+          NUGET_VOLUME="$HOME/.nuget" npm run test:btcpay:latest
