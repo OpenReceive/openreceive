@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  cleanupBuild,
-  latestBtcpayRelease,
-  testLatestBtcpay,
-} from "../tools/dotnet/test-latest.mjs";
+import { cleanupBuild, testLatestBtcpay } from "../tools/dotnet/test-latest.mjs";
+
+import { latestBtcpayRelease } from "../tools/dotnet/upstream.mjs";
 
 const stable = { tag_name: "v2.4.5", draft: false, prerelease: false };
 const response =
@@ -35,6 +34,49 @@ test("latest BTCPay lookup selects a matching stable image and fails rather than
     latestBtcpayRelease(async () => ({ ok: false, status: 403 })),
     /HTTP 403/,
   );
+});
+
+test("demo startup refreshes upstream despite a stale override and stops when resolution or pull fails", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), "openreceive-refresh-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const log = path.join(root, "docker.log");
+  writeFileSync(
+    path.join(root, "node"),
+    '#!/bin/sh\n[ "$FAIL_LOOKUP" = "1" ] && exit 23\nprintf "%s\\n" btcpayserver/btcpayserver:2.5.0\n',
+    { mode: 0o700 },
+  );
+  writeFileSync(
+    path.join(root, "docker"),
+    '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_LOG"\nexit "${FAIL_PULL:-0}"\n',
+    { mode: 0o700 },
+  );
+  const run = (file, args = [], extra = {}) =>
+    spawnSync(
+      "/bin/bash",
+      [new URL(`../packages/dotnet/docker/${file}`, import.meta.url).pathname, ...args],
+      {
+        env: {
+          ...process.env,
+          PATH: `${root}:${process.env.PATH}`,
+          TEST_LOG: log,
+          BTCPAY_IMAGE: "btcpayserver/btcpayserver:2.4.2",
+          FAIL_LOOKUP: "0",
+          FAIL_PULL: "0",
+          ...extra,
+        },
+        encoding: "utf8",
+      },
+    );
+  assert.equal(run("refresh-btcpay.sh").status, 0);
+  assert.equal(readFileSync(log, "utf8"), "pull btcpayserver/btcpayserver:2.5.0\n");
+  rmSync(log);
+  assert.equal(run("refresh-btcpay.sh", [], { FAIL_LOOKUP: "1" }).status, 23);
+  assert(!existsSync(log));
+  assert.equal(run("refresh-btcpay.sh", [], { FAIL_PULL: "24" }).status, 24);
+  rmSync(log);
+  assert.equal(run("live.sh", ["--stop"], { FAIL_LOOKUP: "1" }).status, 0);
+  assert.match(readFileSync(log, "utf8"), /down --remove-orphans/);
+  assert.doesNotMatch(readFileSync(log, "utf8"), /pull/);
 });
 
 function fixture(t, { sameCommit = false, failBrowser = false } = {}) {

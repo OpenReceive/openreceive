@@ -240,6 +240,9 @@ For manual BTCPay plugin testing with your `.env` wallet and swap providers, run
 mainnet store using `NWC_URI` and optional `LSC_URI_PRIMARY` / `LSC_URI_BACKUP`.
 Stop it with `npm run demo btcpayserver -- --stop`; accounts, stores and invoices
 are preserved. Use `-- --testkit` for funded local regtest wallets instead.
+Use `npm run demo btcpayserver -- --published` to install the current Plugin
+Directory package with the same login and `.env`, instead of building local source.
+Every BTCPay demo start resolves and pulls the latest stable upstream server.
 See the [BTCPay demo](packages/dotnet/README.md#manual-browser-demo-with-your-wallet)
 for login and testing details.
 

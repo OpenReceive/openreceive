@@ -31,7 +31,8 @@ function usage() {
       `Targets:\n${targets}\n\n` +
       `Shop demo args after -- are forwarded to "docker compose up", e.g. detached:\n` +
       `  npm run demo node -- -d\n\n` +
-      `BTCPay starts in the background with your mainnet NWC_URI and LSC_URI_* from .env.\n` +
+      `BTCPay pulls the latest stable server and uses your mainnet NWC_URI and LSC_URI_* from .env.\n` +
+      `  npm run demo btcpayserver -- --published  Install the latest stable plugin from the directory\n` +
       `  npm run demo btcpayserver -- --no-build   Reuse the previous build\n` +
       `  npm run demo btcpayserver -- --stop       Stop and preserve demo data\n` +
       `  npm run demo btcpayserver -- --testkit    Use funded regtest wallets instead of .env\n`,
@@ -57,10 +58,13 @@ if (demo === undefined) {
 if (demo.kind === "btcpay") {
   const args = extra.filter((arg) => arg !== "--");
   if (
-    args.some((arg) => !["--testkit", "--no-build", "--stop"].includes(arg)) ||
-    (args.includes("--stop") && args.includes("--no-build"))
+    args.some((arg) => !["--published", "--testkit", "--no-build", "--stop"].includes(arg)) ||
+    (args.includes("--stop") && args.includes("--no-build")) ||
+    (args.includes("--published") && (args.includes("--testkit") || args.includes("--no-build")))
   ) {
-    console.error("BTCPay options: [--testkit] [--no-build | --stop]");
+    console.error(
+      "BTCPay options: [--published | --testkit] [--stop]; --no-build is for source builds only.",
+    );
     process.exit(1);
   }
   const run = (command, commandArgs) =>
@@ -92,7 +96,10 @@ if (demo.kind === "btcpay") {
     }
   }
   const submodule = "packages/dotnet/submodules/btcpayserver";
-  if (!existsSync(path.join(root, submodule, "BTCPayServer/BTCPayServer.csproj"))) {
+  if (
+    !args.includes("--published") &&
+    !existsSync(path.join(root, submodule, "BTCPayServer/BTCPayServer.csproj"))
+  ) {
     const code = await run("git", ["submodule", "update", "--init", "--depth", "1", submodule]);
     if (code !== 0) process.exit(code);
   }

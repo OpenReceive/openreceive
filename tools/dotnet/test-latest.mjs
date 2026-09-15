@@ -5,9 +5,10 @@ import { spawn } from "node:child_process";
 import { appendFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { latestBtcpayRelease } from "./upstream.mjs";
 
 const upstream = "https://github.com/btcpayserver/btcpayserver.git";
-const latestReleaseUrl = "https://api.github.com/repos/btcpayserver/btcpayserver/releases/latest";
+
 const buildDirectories = new Set([
   "bin",
   "obj",
@@ -17,31 +18,6 @@ const buildDirectories = new Set([
   "submodules",
   ".state",
 ]);
-
-export async function latestBtcpayRelease(fetchImpl = fetch) {
-  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
-  const response = await fetchImpl(latestReleaseUrl, {
-    headers: {
-      accept: "application/vnd.github+json",
-      "user-agent": "openreceive-btcpay-compatibility",
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    signal: AbortSignal.timeout(30_000),
-  });
-  assert(response.ok, `Cannot resolve latest BTCPay release: GitHub HTTP ${response.status}`);
-  const release = await response.json();
-  assert(
-    release.draft === false && release.prerelease === false,
-    "Latest BTCPay release must be stable",
-  );
-  const match = /^v?(\d+\.\d+\.\d+)$/.exec(release.tag_name);
-  assert(match, `Unsupported BTCPay release tag: ${release.tag_name}`);
-  return {
-    tag: release.tag_name,
-    version: match[1],
-    image: `btcpayserver/btcpayserver:${match[1]}`,
-  };
-}
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {

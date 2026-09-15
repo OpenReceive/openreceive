@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_datadir:/var/lib/postgresql
   btcpayserver:
-    image: ${BTCPAY_IMAGE:-btcpayserver/btcpayserver:2.4.4}
+    image: ${BTCPAY_IMAGE:?Run npm run demo btcpayserver to resolve the latest stable BTCPay image}
     environment:
       BTCPAY_NETWORK: mainnet
       BTCPAY_BIND: 0.0.0.0:49392
@@ -26,7 +26,7 @@ services:
       - "127.0.0.1:14180:49392"
     volumes:
       - btcpay_datadir:/datadir
-      - ./.state/plugins:/root/.btcpayserver/Plugins:ro
+      - ${BTCPAY_DEMO_PLUGIN_DIR:-./.state/plugins}:/root/.btcpayserver/Plugins:${BTCPAY_DEMO_PLUGIN_ACCESS:-ro}
     depends_on:
       postgres:
         condition: service_healthy

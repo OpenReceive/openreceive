@@ -81,7 +81,8 @@ and refund browser scenarios remain available through `browser-e2e.sh`.
 
 ### Automatic upstream compatibility checks
 
-Every `btcpay-v*` plugin release tag runs **BTCPay Upstream Compatibility**.
+Every pull request, push to `master`, and `btcpay-v*` plugin release tag runs
+**BTCPay Upstream Compatibility**.
 Every general `v*` release tag also runs that workflow as
 part of **Release Dry Run**, in parallel with the other release checks. It also
 runs weekly and can be started from GitHub Actions with **Run workflow**.
@@ -114,6 +115,12 @@ and run:
 npm run demo btcpayserver
 ```
 
+Every start resolves GitHub’s latest stable BTCPay release and pulls its official
+Docker image, including `--published`, `--testkit`, and `--no-build` starts. A failed
+lookup or pull stops startup; an old `BTCPAY_IMAGE` in `.env` does not override this.
+`--stop` works offline. The plugin source stays pinned so testing can expose binary
+incompatibilities with a newer server.
+
 The command initializes a missing BTCPay submodule, builds the plugin in Docker,
 and starts BTCPay plus Postgres at **http://127.0.0.1:14180**. It creates a local
 administrator and an **OpenReceive demo** store, validates your receive-only
@@ -137,6 +144,31 @@ connection warning; on-chain BTC checkout is unavailable in this Lightning setup
 npm run demo btcpayserver -- --stop       # stop; preserve accounts, store and invoices
 npm run demo btcpayserver -- --no-build   # reuse the plugin build and reapply .env
 ```
+
+### Test the published plugin
+
+To test the same package distributed by BTCPay's Plugin Directory:
+
+```sh
+npm run demo btcpayserver -- --published
+```
+
+This downloads the latest stable OpenReceive version compatible with the demo's
+BTCPay image, verifies the directory's SHA256 checksum, and queues BTCPay's native
+plugin installer. It skips the local plugin build and submodule checkout. The
+startup output names the downloaded version and build ID; **Installed Plugins**
+in BTCPay shows the installed version.
+
+The URL, login (`demo@openreceive.test` / `OpenReceive-demo-123!`), store, invoices,
+and root `.env` wallet/provider settings are the same as in source mode. You can
+switch modes by rerunning the command; `--published` fetches the current directory
+package each time. A failed lookup or checksum check stops startup.
+
+Published files live in `docker/.state/published-plugins`, separate from the local
+build; `download.json` records the version, build, source commit, URL and checksum.
+Use `npm run demo btcpayserver -- --stop` to stop either mode. Run
+`npm run demo btcpayserver` to switch back to your local source. `--published`
+cannot be combined with `--testkit` or `--no-build`.
 
 Rerunning the command reuses the same store and applies the current `.env`.
 Removing `LSC_URI_PRIMARY` disables swaps and clears the saved provider setting.
@@ -163,7 +195,7 @@ remote wallet behind the testkit NWC service), `customer_lnd` (the payer and
 the fake provider's payout node), a `nostr-rs-relay` behind an nginx TLS
 terminator (NWC URIs must be `wss://`), `testkit-nwc`, a second
 `testkit-nwc-spend` that advertises `pay_invoice`, `fake-lsc` over https, and
-the official `btcpayserver/btcpayserver:2.4.4` image with the built plugin
+the latest stable official `btcpayserver/btcpayserver` image with the built plugin
 bind-mounted into its plugin directory and the stack's CA trusted.
 
 ```sh

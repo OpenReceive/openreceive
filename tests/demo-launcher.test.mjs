@@ -85,13 +85,38 @@ test("BTCPay stop preserves data and never bootstraps or rebuilds the stack", (t
 
 test("BTCPay startup failures propagate and conflicting or unsupported options do nothing", (t) => {
   const setup = fixture(t);
-  for (const args of [["--volumes"], ["--stop", "--no-build"]]) {
+  for (const args of [
+    ["--volumes"],
+    ["--stop", "--no-build"],
+    ["--published", "--testkit"],
+    ["--published", "--no-build"],
+  ]) {
     assert.equal(setup.run(["btcpayserver", ...args]).status, 1);
   }
   assert.deepEqual(setup.events(), []);
   const result = setup.run(["btcpayserver", "--testkit"], { TEST_FAIL_BASH: "17" });
   assert.equal(result.status, 17);
   assert.doesNotMatch(result.stdout, /BTCPay is ready/);
+});
+
+test("published demo skips source checkout and uses the same account setup", (t) => {
+  const setup = fixture(t);
+  mkdirSync(path.join(setup.root, "tools/dotnet"));
+  writeFileSync(
+    path.join(setup.root, "tools/dotnet/demo-live.mjs"),
+    `
+    export async function configureLiveDemo() {
+      return { email: 'demo@openreceive.test', password: 'OpenReceive-demo-123!', swapsEnabled: true };
+    }
+  `,
+  );
+  const result = setup.run(["btcpayserver", "--published"], { NWC_URI: "fixture-wallet" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(setup.events(), [
+    { command: "bash", args: ["packages/dotnet/docker/live.sh", "--published"] },
+  ]);
+  assert.match(result.stdout, /demo@openreceive.test \/ OpenReceive-demo-123!/);
+  assert.match(result.stdout, /BTCPay is ready/);
 });
 
 test("live demo requires a wallet before starting Docker, but stop needs no .env", (t) => {

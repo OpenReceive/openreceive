@@ -434,6 +434,11 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
       `${relativePath}: BTCPay release tags must check latest upstream compatibility`,
     );
     expect(
+      Object.hasOwn(workflow.on ?? {}, "pull_request") &&
+        workflow.on?.push?.branches?.includes("master"),
+      `${relativePath}: pull requests and master pushes must check latest upstream compatibility`,
+    );
+    expect(
       Object.hasOwn(workflow.on ?? {}, "workflow_call") &&
         Object.hasOwn(workflow.on ?? {}, "workflow_dispatch") &&
         workflow.on?.schedule?.length > 0,

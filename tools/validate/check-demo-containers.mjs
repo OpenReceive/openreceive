@@ -142,8 +142,8 @@ for (const demo of btcpayDemos) {
   const compose = parse(composePath, parseCompose);
   const service = compose.services?.[demo.service] ?? {};
   expect(
-    service.image?.includes("btcpayserver/btcpayserver:"),
-    `${composePath}: must use the official BTCPay image`,
+    service.image?.startsWith("${BTCPAY_IMAGE:?"),
+    `${composePath}: must require the latest BTCPay image resolved by the launcher`,
   );
   expect(
     service.environment?.BTCPAY_NETWORK === "mainnet",
@@ -153,7 +153,14 @@ for (const demo of btcpayDemos) {
     service.ports?.includes(`127.0.0.1:${demo.port}:49392`),
     `${composePath}: BTCPay must publish its catalog port on localhost`,
   );
-  for (const script of ["live.sh", "up.sh", "down.sh", "build-plugin.sh", "regtest-fund.sh"])
+  for (const script of [
+    "live.sh",
+    "up.sh",
+    "down.sh",
+    "build-plugin.sh",
+    "regtest-fund.sh",
+    "refresh-btcpay.sh",
+  ])
     read(`${demo.dir}/${script}`);
 }
 
