@@ -70,6 +70,14 @@ same diagnostics redacted, always exit 0 — safe to share.
 - Refunds exist only for swap deposits from `refund_required`. There is **no
   Lightning refund** — the wallet cannot spend. Do not chase one.
   https://openreceive.org/guides/swap-refunds.md
+- "Payer reports two different amounts on a stablecoin checkout" (50.05 or
+  50.03?): the deposit amount is a token quantity, `fee.pay_in_fiat` is its
+  fiat valuation. Only `swap.deposit_amount` is an instruction. From 0.4.10 the
+  packaged checkout renders a USD stablecoin's breakdown in the token and never
+  shows `pay_in_fiat`; on an older bundle, upgrade `@openreceive/*`. To verify,
+  read the row's `deposit_amount` and `fee` and confirm the UI shows only the
+  deposit amount. A custom UI must call `createSwapFeeBreakdown(fee, swap)`
+  with the swap, not the fee alone.
 
 ## 6. Checkout UI shows nothing
 

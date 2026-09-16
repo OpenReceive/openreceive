@@ -122,7 +122,10 @@ Snapshot fields are snake_case: `swap_id`, `state`, `phase`, `terminal`,
 URI; token rails encode the bare address), `provider_expires_at`,
 `expires_in_seconds`, `deposit_risk` (`pinned`, `asset_only`,
 `chain_ambiguous`), `network_warning_title`, `network_warning`, `fee`
-(`currency`, `pay_in_fiat`, `payout_fiat`), refund and transaction ids,
+(`currency`, `pay_in_fiat`, `payout_fiat`), `fee_text` (the one-line fee
+explanation the checkout shows; for USDT and USDC it is in the token and never
+repeats `pay_in_fiat`, which would read as the deposit amount with a typo),
+refund and transaction ids,
 `attention_reason`, `plugin_reason`, `provider_order_id`.
 
 Reasons a swap is not offered (`POST` 409 and the reason the pills are

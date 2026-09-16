@@ -40,6 +40,7 @@ public sealed class SwapCheckoutModel
     [JsonPropertyName("network_warning_title")] public required string NetworkWarningTitle { get; init; }
     [JsonPropertyName("network_warning")] public required string NetworkWarning { get; init; }
     [JsonPropertyName("fee")] public SwapFee? Fee { get; init; }
+    [JsonPropertyName("fee_text")] public string? FeeText { get; init; }
     [JsonPropertyName("refund_reason")] public string? RefundReason { get; init; }
     [JsonPropertyName("refund_address")] public string? RefundAddress { get; init; }
     [JsonPropertyName("refund_tx_id")] public string? RefundTxId { get; init; }
@@ -59,6 +60,9 @@ public sealed class SwapCheckoutModel
         var emphasis = $"{row.DepositAmount} {asset.Label} on the {asset.NetworkLabel} network";
         var doubleSpend = $"Pay with one method only — if you already sent {asset.Label}, do not also pay the Lightning invoice.";
         var expiresAt = invoiceExpiresAt is { } inv ? Math.Min(row.ProviderExpiresAt, inv) : row.ProviderExpiresAt;
+        var fee = row.FeeCurrency is not null && row.PayInFiat is not null && row.PayoutFiat is not null
+            ? new SwapFee(row.FeeCurrency, row.PayInFiat, row.PayoutFiat)
+            : null;
         return new SwapCheckoutModel
         {
             SwapId = row.Id,
@@ -86,9 +90,8 @@ public sealed class SwapCheckoutModel
             NetworkWarning = risk == "pinned"
                 ? $"Send exactly {emphasis}. {doubleSpend}"
                 : $"Be sure you are sending exactly {emphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost! {doubleSpend}",
-            Fee = row.FeeCurrency is not null && row.PayInFiat is not null && row.PayoutFiat is not null
-                ? new SwapFee(row.FeeCurrency, row.PayInFiat, row.PayoutFiat)
-                : null,
+            Fee = fee,
+            FeeText = fee is null ? null : FeeTextFor(asset, row.DepositAmount, fee),
             RefundReason = row.RefundReason,
             RefundAddress = row.RefundAddress,
             RefundTxId = row.RefundTxId,
@@ -100,6 +103,33 @@ public sealed class SwapCheckoutModel
             PluginReason = row.PluginReason,
             ProviderOrderId = row.ProviderOrderId,
         };
+    }
+
+    /// <summary>
+    /// The one-line fee explanation under the deposit amount. For a floating asset the
+    /// provider's two fiat valuations explain the spread. For a stablecoin pegged to the
+    /// fee currency the pay-in side is the deposit amount itself in the token and the fee
+    /// is <c>deposit_amount - payout_fiat</c> in the token: "50.03 USD sent" next to
+    /// "50.05 USDC" reads as the same number with a typo, and the payer cannot tell which
+    /// one to type into their wallet, so <see cref="SwapFee.PayInFiat"/> is never shown for
+    /// a pegged asset. Exact decimal math; never binary floats.
+    /// </summary>
+    public static string FeeTextFor(OpenReceiveSwapAssetInfo asset, string depositAmount, SwapFee fee)
+    {
+        if (asset.PeggedTo != fee.Currency)
+        {
+            return $"Includes the provider's fee: {fee.PayInFiat} {fee.Currency} sent → {fee.PayoutFiat} {fee.Currency} received";
+        }
+        var sentAndReceived = $"{depositAmount} {asset.Label} sent → {fee.PayoutFiat} {fee.Currency} received";
+        if (!decimal.TryParse(depositAmount, NumberStyles.Number, CultureInfo.InvariantCulture, out var deposit)
+            || !decimal.TryParse(fee.PayoutFiat, NumberStyles.Number, CultureInfo.InvariantCulture, out var payout)
+            || payout <= 0m)
+        {
+            return $"Includes the provider's fee: {sentAndReceived}";
+        }
+        var feeAmount = Math.Max(0m, Math.Round(deposit - payout, 2, MidpointRounding.AwayFromZero));
+        var percent = Math.Round(feeAmount / payout * 100m, 1, MidpointRounding.AwayFromZero);
+        return $"Includes the provider's fee of {feeAmount.ToString("0.00", CultureInfo.InvariantCulture)} {asset.Label} ({percent.ToString("0.0", CultureInfo.InvariantCulture)}%): {sentAndReceived}";
     }
 
     /// <summary>

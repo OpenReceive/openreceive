@@ -365,6 +365,7 @@
         "StaticPriceProvider",
         "sumAmounts",
         "swapAddressNetworkForPayInAsset",
+        "swapPayInAssetPeggedTo",
         "unixSeconds"
       ],
       "types": [

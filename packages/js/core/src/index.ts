@@ -137,6 +137,9 @@ export {
   payInAssetNetwork,
   swapAddressNetworkForPayInAsset,
 } from "./swap/address.ts";
+// The shared pay-in asset table, read by the browser's fee breakdown: a USD
+// stablecoin's fee is shown in the token, never as a fiat valuation.
+export { swapPayInAssetPeggedTo } from "./swap/assets.ts";
 // Shared value primitives — the one clock, the two record readers, the
 // non-empty-string reader, and the undefined-field compactor. Public because
 // every package needs them and a published-internal subpath would cost more

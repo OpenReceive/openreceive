@@ -205,6 +205,11 @@ public sealed class SwapServiceTests
         Assert.Equal("asset_only", model.DepositRisk);
         Assert.NotNull(model.Fee);
         Assert.Equal("USD", model.Fee.Currency);
+        // USDT is USD-pegged: the fee line is in the token, never "x USD sent".
+        Assert.NotNull(model.FeeText);
+        Assert.StartsWith("Includes the provider's fee of ", model.FeeText);
+        Assert.Contains("101 USDT sent", model.FeeText);
+        Assert.DoesNotContain("USD sent", model.FeeText);
         Assert.Equal(26, model.SwapId.Length);
 
         var order = Assert.Single(h.Core.Orders);

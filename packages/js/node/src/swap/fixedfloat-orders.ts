@@ -71,6 +71,9 @@ export function normalizeFixedFloatOrder(data: unknown, input: FixedFloatOrderIn
 // FixedFloat reports the USD equivalents of both sides of the exchange (from.usd is the
 // value of the crypto the payer sends, to.usd the value delivered to the merchant). Their
 // gap is the swap fee the payer absorbs, so we surface both to explain the price.
+// pay_in_fiat is a VALUATION that explains the spread, never an amount a payer is told
+// to send — `deposit_amount` is the only such amount. The browser does not even render
+// it for a USD stablecoin, where it reads as the deposit amount with a typo.
 export function readFixedFloatOrderFee(record: Record<string, unknown>): SwapFee | undefined {
   const payInFiat = optionalNestedString(record, ["from", "usd"]);
   const payoutFiat = optionalNestedString(record, ["to", "usd"]);

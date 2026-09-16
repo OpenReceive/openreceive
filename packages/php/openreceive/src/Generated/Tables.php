@@ -119,6 +119,7 @@ final class Tables
             'network_label' => 'Tron',
             'coin' => 'USDT',
             'network' => 'TRX',
+            'pegged_to' => 'USD',
         ],
         'USDT_SOL' => [
             'pay_in_asset' => 'USDT_SOL',
@@ -126,6 +127,7 @@ final class Tables
             'network_label' => 'Solana',
             'coin' => 'USDT',
             'network' => 'SOL',
+            'pegged_to' => 'USD',
         ],
         'USDC_SOL' => [
             'pay_in_asset' => 'USDC_SOL',
@@ -133,6 +135,7 @@ final class Tables
             'network_label' => 'Solana',
             'coin' => 'USDC',
             'network' => 'SOL',
+            'pegged_to' => 'USD',
         ],
         'ETH_ETH' => [
             'pay_in_asset' => 'ETH_ETH',
@@ -147,6 +150,7 @@ final class Tables
             'network_label' => 'Ethereum',
             'coin' => 'USDT',
             'network' => 'ETH',
+            'pegged_to' => 'USD',
         ],
         'USDC_ETH' => [
             'pay_in_asset' => 'USDC_ETH',
@@ -154,6 +158,7 @@ final class Tables
             'network_label' => 'Ethereum',
             'coin' => 'USDC',
             'network' => 'ETH',
+            'pegged_to' => 'USD',
         ],
     ];
 

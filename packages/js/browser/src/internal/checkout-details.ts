@@ -12,7 +12,11 @@ import {
   formatUnixTime,
 } from "./checkout-format.ts";
 import { createDetailExternalLink, type DetailLinkKind } from "./checkout-links.ts";
-import { createSwapFeeBreakdown, getSwapAssetDisplay } from "./checkout-swap-view.ts";
+import {
+  createSwapFeeBreakdown,
+  getSwapAssetDisplay,
+  swapFeeInTokenUnits,
+} from "./checkout-swap-view.ts";
 
 /**
  * Build display rows for settled checkout / swap state from public OpenReceive
@@ -120,7 +124,7 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
     push("Lightning payout", swap.payout_tx_id);
     push("Refund address", swap.refund_address, undefined, "address");
     push("Refund transaction", swap.refund_tx_id, undefined, "tx");
-    const feeBreakdown = createSwapFeeBreakdown(swap.fee);
+    const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap);
     if (feeBreakdown !== undefined) {
       push("Cart total", feeBreakdown.cartTotal);
       push("You send", feeBreakdown.youSend);
@@ -132,7 +136,11 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
       );
     } else if (swap.fee !== undefined) {
       push("Fee currency", swap.fee.currency);
-      push("Pay-in fiat", swap.fee.pay_in_fiat);
+      // The raw rows follow the same rule as the breakdown: a fiat valuation of
+      // a USD-stablecoin deposit is never shown next to the deposit amount.
+      if (!swapFeeInTokenUnits(swap.fee, swap.pay_in_asset)) {
+        push("Pay-in fiat", swap.fee.pay_in_fiat);
+      }
       push("Payout fiat", swap.fee.payout_fiat);
     }
   }

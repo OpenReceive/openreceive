@@ -208,6 +208,13 @@ built on `@openreceive/browser/headless`. Read that before writing components.
 - `createSwapDisplayModel` → `display.copyRows` for deposits: address, memo,
   and the bare amount each get a copy row. Render `swap.networkWarning*` as
   the model gives it.
+- `swap.deposit_amount` is the only amount a payer is told to send. Never put
+  a fiat valuation of it (`swap.fee.pay_in_fiat`) next to a stablecoin amount:
+  "$50.03" under "50.05 USDC" reads as a typo, and the payer asks which one to
+  send. The one fiat figure on a USDT/USDC deposit panel is the cart total
+  (`payout_fiat`); express "you send" and the fee in the token. Use
+  `createSwapFeeBreakdown(fee, swap)` — with the swap, not the fee alone — and
+  it applies this for you; SOL and ETH keep a fiat breakdown.
 - `createCheckoutSession` owns mint and swap start. To start swaps, pass its
   `swap` option (`selection`, `prefix`, `fetch`) together. Without it
   `startSwap` reports through `onError`.

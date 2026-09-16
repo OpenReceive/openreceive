@@ -441,7 +441,11 @@ components:
       description: >
         Fiat equivalents explaining why the payer sends more crypto than the cart
         total. Sourced from the provider's own quote; never a price authority —
-        the invoice amount is. Values are decimal strings.
+        the invoice amount is. Values are decimal strings. They are valuations,
+        never amounts to send: deposit_amount is the only amount a payer is told
+        to send, and for a stablecoin pegged to `currency` (kernel-tables
+        pegged_to) the checkout renders the breakdown in the token and never
+        shows pay_in_fiat.
       type: object
       additionalProperties: false
       required: [currency, pay_in_fiat, payout_fiat]

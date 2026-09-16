@@ -600,7 +600,10 @@ module OpenReceive
 
           # FixedFloat reports the USD equivalents of both sides of the
           # exchange; their gap is the swap fee the payer absorbs, so both are
-          # surfaced to explain the price.
+          # surfaced to explain the price. pay_in_fiat is a VALUATION, never an
+          # amount a payer is told to send: deposit_amount is the only such
+          # amount, and the checkout does not render pay_in_fiat at all for a
+          # USD stablecoin (it reads as the deposit amount with a typo).
           def read_order_fee(record)
             pay_in_fiat = read_nested_string(record, %w[from usd])
             payout_fiat = read_nested_string(record, %w[to usd])

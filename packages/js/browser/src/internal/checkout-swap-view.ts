@@ -8,6 +8,7 @@ import {
   parseDecimal,
   payInAssetNetwork,
   swapAddressNetworkForPayInAsset,
+  swapPayInAssetPeggedTo,
 } from "@openreceive/core";
 import {
   formatCountdown,
@@ -27,49 +28,108 @@ import {
 } from "./ui.ts";
 import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
 
+/** The swap attempt fields the fee breakdown needs beyond the fee itself. */
+export type SwapFeeBreakdownContext = Pick<
+  NonNullable<CheckoutInvoiceSnapshot["swap"]>,
+  "pay_in_asset" | "deposit_amount"
+>;
+
 /**
- * Turn the provider's fiat equivalents into a display-ready fee breakout. The payer
- * sends crypto worth `pay_in_fiat`; the merchant receives `payout_fiat` (the cart
- * total). The difference is the swap fee (exchange spread + network fees). Returns
- * undefined when the figures are missing or not sensible so callers can hide the row.
+ * Whether the fee breakdown for this attempt is expressed in the pay-in token
+ * rather than in fiat: true when the asset is a stablecoin pegged to the very
+ * currency the provider valued it in. "You send $50.03" under "Pay 50.05 USDC"
+ * reads as the same number with a typo, and the payer cannot tell which one to
+ * type into their wallet — so for a pegged asset the fiat valuation of the
+ * pay-in side (`fee.pay_in_fiat`) is never rendered anywhere. The peg comes
+ * from the shared asset table, keyed by asset, never by matching the symbol.
+ */
+export function swapFeeInTokenUnits(fee: CheckoutInvoiceSwapFee, payInAsset: string): boolean {
+  return swapPayInAssetPeggedTo(payInAsset) === fee.currency;
+}
+
+/**
+ * Turn the provider's fiat equivalents into a display-ready fee breakout. The
+ * merchant receives `payout_fiat` (the cart total); the payer sends more, and the
+ * difference is the swap fee (exchange spread + network fees).
+ *
+ * Two renderings, one rule ({@link swapFeeInTokenUnits}):
+ * - Floating asset (SOL, ETH): every row is fiat. `youSend` is `pay_in_fiat`.
+ * - Stablecoin pegged to the fee currency (USDC, USDT with a USD fee): `youSend`
+ *   is the deposit amount itself in the token — the identical string the header
+ *   and the copyable amount row show — and the fee is
+ *   `deposit_amount - payout_fiat` in token units. `pay_in_fiat` is not used.
+ *
+ * Without `swap` the breakdown is fiat-only. Returns undefined when the figures
+ * are missing or not sensible so callers can hide the row.
  */
 export function createSwapFeeBreakdown(
   fee: CheckoutInvoiceSwapFee | undefined,
+  swap?: SwapFeeBreakdownContext,
 ): SwapFeeBreakdown | undefined {
   if (fee === undefined) return undefined;
   // Exact decimal math on the shared money engine — never binary floats, even
-  // for display-only fiat values.
+  // for display-only values.
   // Hiding the fee row on an unreadable figure is a PRODUCT choice — a
   // breakdown that cannot be computed is worse than no breakdown — so the
   // parse is caught here, at the row boundary, and nowhere else.
-  let payIn: Decimal;
-  let payout: Decimal;
-  try {
-    payIn = parseDecimal(fee.pay_in_fiat);
-    payout = parseDecimal(fee.payout_fiat);
-  } catch {
-    return undefined;
-  }
-  // Distinct from the parse above: this one guards our own division below.
-  if (payout.units <= 0n) return undefined;
-  // Align to one scale, subtract exactly.
-  const scale = Math.max(payIn.scale, payout.scale);
-  const payInUnits = payIn.units * 10n ** BigInt(scale - payIn.scale);
-  const payoutUnits = payout.units * 10n ** BigInt(scale - payout.scale);
-  const feeUnits = payInUnits > payoutUnits ? payInUnits - payoutUnits : 0n;
-  const format = (units: bigint): string => {
+  const payout = parseFeeDecimal(fee.payout_fiat);
+  // Distinct from the parse: this one guards our own division below.
+  if (payout === undefined || payout.units <= 0n) return undefined;
+  const fiat = (units: bigint, scale: number): string => {
     const value = formatDecimal(rescaleHalfUp(units, scale, 2), 2);
     return formatFiatAmount({ currency: fee.currency, value }) ?? `${value} ${fee.currency}`;
   };
-  // fee/payout * 100 at one decimal place, half-up: tenths = fee*1000/payout.
-  const percentTenths = roundedDiv(feeUnits * 1000n, payoutUnits);
-  const feePercent = `${(percentTenths / 10n).toString()}.${(percentTenths % 10n).toString()}%`;
+
+  if (swap !== undefined && swapFeeInTokenUnits(fee, swap.pay_in_asset)) {
+    const deposit = parseFeeDecimal(swap.deposit_amount);
+    if (deposit === undefined) return undefined;
+    const { assetLabel } = getSwapAssetDisplay(swap.pay_in_asset);
+    const gap = decimalGap(deposit, payout);
+    return {
+      cartTotal: fiat(gap.base, gap.scale),
+      youSend: `${formatDepositAmount(swap.deposit_amount)} ${assetLabel}`,
+      fee: `${formatDecimal(rescaleHalfUp(gap.fee, gap.scale, 2), 2)} ${assetLabel}`,
+      feePercent: percentOf(gap.fee, gap.base),
+    };
+  }
+
+  const payIn = parseFeeDecimal(fee.pay_in_fiat);
+  if (payIn === undefined) return undefined;
+  const gap = decimalGap(payIn, payout);
   return {
-    cartTotal: format(payoutUnits),
-    youSend: format(payInUnits),
-    fee: format(feeUnits),
-    feePercent,
+    cartTotal: fiat(gap.base, gap.scale),
+    youSend: fiat(gap.base + gap.fee, gap.scale),
+    fee: fiat(gap.fee, gap.scale),
+    feePercent: percentOf(gap.fee, gap.base),
   };
+}
+
+function parseFeeDecimal(value: string): Decimal | undefined {
+  try {
+    return parseDecimal(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `paid - base` at one shared scale, floored at zero (a provider can value the
+ * pay-in side below the payout by a rounding cent; that is not a negative fee).
+ */
+function decimalGap(
+  paid: Decimal,
+  base: Decimal,
+): { readonly fee: bigint; readonly base: bigint; readonly scale: number } {
+  const scale = Math.max(paid.scale, base.scale);
+  const paidUnits = paid.units * 10n ** BigInt(scale - paid.scale);
+  const baseUnits = base.units * 10n ** BigInt(scale - base.scale);
+  return { fee: paidUnits > baseUnits ? paidUnits - baseUnits : 0n, base: baseUnits, scale };
+}
+
+/** fee/base * 100 at one decimal place, half-up: tenths = fee*1000/base. */
+function percentOf(fee: bigint, base: bigint): string {
+  const tenths = roundedDiv(fee * 1000n, base);
+  return `${(tenths / 10n).toString()}.${(tenths % 10n).toString()}%`;
 }
 
 /**
@@ -143,7 +203,7 @@ export function createSwapDisplayModel(
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
   // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
   const settled = invoice.transaction_state === "settled";
-  const feeBreakdown = createSwapFeeBreakdown(swap.fee);
+  const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap);
 
   return {
     provider: swap.provider,

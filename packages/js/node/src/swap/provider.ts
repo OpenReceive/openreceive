@@ -62,6 +62,11 @@ export interface SwapProviderAsset {
  * swap fee the payer absorbs is `pay_in_fiat` − `payout_fiat` (exchange spread plus
  * network fees, which the provider bakes into the deposit amount). All values are
  * decimal strings so hosts can round-trip them exactly when retaining an audit snapshot.
+ *
+ * These are VALUATIONS that explain the spread, never amounts a payer is told to
+ * send — `deposit_amount` is the only such amount. For a stablecoin pegged to
+ * `currency` the checkout renders the breakdown in the token and never shows
+ * `pay_in_fiat`, which would read as the deposit amount with a typo.
  */
 export interface SwapFee {
   /** Fiat currency the equivalents are expressed in, e.g. "USD". */

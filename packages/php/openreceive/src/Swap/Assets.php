@@ -21,7 +21,7 @@ final class Assets
         return is_string($value) && in_array($value, self::PAY_IN_ASSETS, true);
     }
 
-    /** @return array{pay_in_asset: string, label: string, network_label: string, coin: string, network: string} */
+    /** @return array{pay_in_asset: string, label: string, network_label: string, coin: string, network: string, pegged_to?: string} */
     public static function info(string $payInAsset): array
     {
         if (!isset(self::ASSET_INFO[$payInAsset])) {
@@ -30,7 +30,7 @@ final class Assets
         return self::ASSET_INFO[$payInAsset];
     }
 
-    /** @return list<array{pay_in_asset: string, label: string, network_label: string, coin: string, network: string}> */
+    /** @return list<array{pay_in_asset: string, label: string, network_label: string, coin: string, network: string, pegged_to?: string}> */
     public static function listInfo(): array
     {
         return array_map(static fn (string $asset): array => self::ASSET_INFO[$asset], self::PAY_IN_ASSETS);

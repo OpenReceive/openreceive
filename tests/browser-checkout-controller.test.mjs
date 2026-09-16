@@ -606,6 +606,75 @@ test("swap fee breakdown stays exact on the shared decimal engine", () => {
   );
 });
 
+// A payer asked "50.05 or 50.03?" on a USDC checkout. 50.05 USDC was the
+// deposit amount; $50.03 was the feed's USD valuation of it, one line below,
+// labelled "You send". For a stablecoin pegged to the fee currency the
+// breakdown is in the token, and the fiat valuation of the pay-in side is never
+// rendered. This is not a depeg case: any feed rate off $1.00 by a hundredth of
+// a percent puts the two numbers a cent apart.
+test("a USD stablecoin's fee breakdown is in the token and never shows the pay-in valuation", () => {
+  const fee = { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "49" };
+  const pegged = createSwapFeeBreakdown(fee, { pay_in_asset: "USDC_SOL", deposit_amount: "50.05" });
+  assert.deepEqual(pegged, {
+    cartTotal: "$49.00",
+    youSend: "50.05 USDC",
+    fee: "1.05 USDC",
+    feePercent: "2.1%",
+  });
+  assert.ok(!JSON.stringify(pegged).includes("50.03"));
+
+  // The feed above the peg instead of below it: identical output, because
+  // pay_in_fiat is not an input to the pegged rendering at all.
+  assert.deepEqual(
+    createSwapFeeBreakdown(
+      { ...fee, pay_in_fiat: "50.07" },
+      { pay_in_asset: "USDC_SOL", deposit_amount: "50.05" },
+    ),
+    pegged,
+  );
+  // Every USD stablecoin rail, not just Solana USDC.
+  for (const pay_in_asset of ["USDT_TRON", "USDT_SOL", "USDT_ETH", "USDC_ETH"]) {
+    const breakdown = createSwapFeeBreakdown(fee, { pay_in_asset, deposit_amount: "50.05" });
+    assert.equal(breakdown?.youSend, `50.05 ${pay_in_asset.split("_")[0]}`, pay_in_asset);
+  }
+  // Trailing zeros come off the way the header's deposit amount does, so the
+  // two strings are byte-identical; the fee stays at two places.
+  assert.deepEqual(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "USDT_TRON", deposit_amount: "50.500000" }),
+    { cartTotal: "$49.00", youSend: "50.5 USDT", fee: "1.50 USDT", feePercent: "3.1%" },
+  );
+  // A deposit valued under the cart total is a zero fee, never a negative one.
+  assert.equal(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "USDC_SOL", deposit_amount: "48.99" })?.fee,
+    "0.00 USDC",
+  );
+
+  // Floating assets keep the fiat rows, byte for byte.
+  const fiatRows = {
+    cartTotal: "$49.00",
+    youSend: "$50.03",
+    fee: "$1.03",
+    feePercent: "2.1%",
+  };
+  assert.deepEqual(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "SOL_SOL", deposit_amount: "0.71" }),
+    fiatRows,
+  );
+  assert.deepEqual(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "ETH_ETH", deposit_amount: "0.02" }),
+    fiatRows,
+  );
+  // The peg must match the fee currency: a USDC deposit valued in EUR is a
+  // conversion, not a near-duplicate, so it stays fiat.
+  assert.deepEqual(
+    createSwapFeeBreakdown(
+      { currency: "EUR", pay_in_fiat: "46.10", payout_fiat: "45.00" },
+      { pay_in_asset: "USDC_SOL", deposit_amount: "50.05" },
+    ),
+    { cartTotal: "45.00 EUR", youSend: "46.10 EUR", fee: "1.10 EUR", feePercent: "2.4%" },
+  );
+});
+
 /** Every string value in a log entry, at any nesting depth. */
 function logStringValues(value) {
   if (typeof value === "string") return [value];

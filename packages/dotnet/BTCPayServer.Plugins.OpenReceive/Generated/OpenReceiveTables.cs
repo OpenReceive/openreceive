@@ -14,13 +14,17 @@ using System.Collections.Generic;
 
 namespace BTCPayServer.Plugins.OpenReceive.Generated;
 
-/// <summary>One pay-in asset: its label, network label, coin, and address-checksum network.</summary>
+/// <summary>
+/// One pay-in asset: its label, network label, coin, and address-checksum network.
+/// <see cref="PeggedTo"/> is the ISO 4217 currency a stablecoin tracks; null for coins that float.
+/// </summary>
 public sealed record OpenReceiveSwapAssetInfo(
     string PayInAsset,
     string Label,
     string NetworkLabel,
     string Coin,
-    string Network);
+    string Network,
+    string? PeggedTo = null);
 
 /// <summary>
 /// One swap provider state: its coarse UI phase and whether the attempt will not change again.
@@ -146,12 +150,12 @@ public static class OpenReceiveTables
         new Dictionary<string, OpenReceiveSwapAssetInfo>
         {
             ["SOL_SOL"] = new("SOL_SOL", "SOL", "Solana", "SOL", "SOL"),
-            ["USDT_TRON"] = new("USDT_TRON", "USDT", "Tron", "USDT", "TRX"),
-            ["USDT_SOL"] = new("USDT_SOL", "USDT", "Solana", "USDT", "SOL"),
-            ["USDC_SOL"] = new("USDC_SOL", "USDC", "Solana", "USDC", "SOL"),
+            ["USDT_TRON"] = new("USDT_TRON", "USDT", "Tron", "USDT", "TRX", "USD"),
+            ["USDT_SOL"] = new("USDT_SOL", "USDT", "Solana", "USDT", "SOL", "USD"),
+            ["USDC_SOL"] = new("USDC_SOL", "USDC", "Solana", "USDC", "SOL", "USD"),
             ["ETH_ETH"] = new("ETH_ETH", "ETH", "Ethereum", "ETH", "ETH"),
-            ["USDT_ETH"] = new("USDT_ETH", "USDT", "Ethereum", "USDT", "ETH"),
-            ["USDC_ETH"] = new("USDC_ETH", "USDC", "Ethereum", "USDC", "ETH"),
+            ["USDT_ETH"] = new("USDT_ETH", "USDT", "Ethereum", "USDT", "ETH", "USD"),
+            ["USDC_ETH"] = new("USDC_ETH", "USDC", "Ethereum", "USDC", "ETH", "USD"),
         };
 
     public static readonly IReadOnlyList<string> SwapProviderStates = new[]

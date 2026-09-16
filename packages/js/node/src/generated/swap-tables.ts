@@ -22,6 +22,8 @@ export interface GeneratedSwapAssetInfo {
   readonly network_label: string;
   readonly coin: string;
   readonly network: GeneratedSwapNetwork;
+  /** ISO 4217 currency a stablecoin tracks; absent for coins that float. */
+  readonly pegged_to?: string;
 }
 
 export const OPENRECEIVE_SWAP_ASSET_INFO: Readonly<
@@ -40,6 +42,7 @@ export const OPENRECEIVE_SWAP_ASSET_INFO: Readonly<
     network_label: "Tron",
     coin: "USDT",
     network: "TRX",
+    pegged_to: "USD",
   },
   USDT_SOL: {
     pay_in_asset: "USDT_SOL",
@@ -47,6 +50,7 @@ export const OPENRECEIVE_SWAP_ASSET_INFO: Readonly<
     network_label: "Solana",
     coin: "USDT",
     network: "SOL",
+    pegged_to: "USD",
   },
   USDC_SOL: {
     pay_in_asset: "USDC_SOL",
@@ -54,6 +58,7 @@ export const OPENRECEIVE_SWAP_ASSET_INFO: Readonly<
     network_label: "Solana",
     coin: "USDC",
     network: "SOL",
+    pegged_to: "USD",
   },
   ETH_ETH: {
     pay_in_asset: "ETH_ETH",
@@ -68,6 +73,7 @@ export const OPENRECEIVE_SWAP_ASSET_INFO: Readonly<
     network_label: "Ethereum",
     coin: "USDT",
     network: "ETH",
+    pegged_to: "USD",
   },
   USDC_ETH: {
     pay_in_asset: "USDC_ETH",
@@ -75,6 +81,7 @@ export const OPENRECEIVE_SWAP_ASSET_INFO: Readonly<
     network_label: "Ethereum",
     coin: "USDC",
     network: "ETH",
+    pegged_to: "USD",
   },
 };
 

@@ -93,17 +93,17 @@ module OpenReceive
       "USDT_TRON" => {
         "pay_in_asset" => "USDT_TRON", "label" => "USDT",
         "network_label" => "Tron", "coin" => "USDT",
-        "network" => "TRX"
+        "network" => "TRX", "pegged_to" => "USD"
       }.freeze,
       "USDT_SOL" => {
         "pay_in_asset" => "USDT_SOL", "label" => "USDT",
         "network_label" => "Solana", "coin" => "USDT",
-        "network" => "SOL"
+        "network" => "SOL", "pegged_to" => "USD"
       }.freeze,
       "USDC_SOL" => {
         "pay_in_asset" => "USDC_SOL", "label" => "USDC",
         "network_label" => "Solana", "coin" => "USDC",
-        "network" => "SOL"
+        "network" => "SOL", "pegged_to" => "USD"
       }.freeze,
       "ETH_ETH" => {
         "pay_in_asset" => "ETH_ETH", "label" => "ETH",
@@ -113,12 +113,12 @@ module OpenReceive
       "USDT_ETH" => {
         "pay_in_asset" => "USDT_ETH", "label" => "USDT",
         "network_label" => "Ethereum", "coin" => "USDT",
-        "network" => "ETH"
+        "network" => "ETH", "pegged_to" => "USD"
       }.freeze,
       "USDC_ETH" => {
         "pay_in_asset" => "USDC_ETH", "label" => "USDC",
         "network_label" => "Ethereum", "coin" => "USDC",
-        "network" => "ETH"
+        "network" => "ETH", "pegged_to" => "USD"
       }.freeze,
     }.freeze
 

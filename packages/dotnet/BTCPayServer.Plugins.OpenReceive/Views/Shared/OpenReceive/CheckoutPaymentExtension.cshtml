@@ -44,7 +44,7 @@
                         </div>
                     </div>
                     <div class="d-flex justify-content-between small text-muted mt-3">
-                        <span v-if="swap.fee">Includes the provider's fee: {{ swap.fee.pay_in_fiat }} {{ swap.fee.currency }} sent → {{ swap.fee.payout_fiat }} {{ swap.fee.currency }} received</span>
+                        <span v-if="swap.fee_text">{{ swap.fee_text }}</span>
                         <span>Address valid for <strong>{{ countdown }}</strong></span>
                     </div>
                 </div>

@@ -20,6 +20,7 @@ import {
 // Test-only: an engine seam no renderer imports, read from its source module.
 import { getSwapConfirmationWaitHint } from "../packages/js/browser/src/internal/checkout-swap-view.ts";
 import { TransactionDetails, renderSwapDepositPanel } from "@openreceive/react";
+import { renderElementSwapPanelHtml } from "../packages/js/elements/src/render-swap-panel.ts";
 
 test("swap confirming copy includes network-specific wait guidance", () => {
   assert.equal(getSwapConfirmationWaitHint("USDT_TRON"), "Confirmation usually takes 1–3 minutes.");
@@ -457,4 +458,124 @@ test("react refund screen tells the payer to bookmark only when the checkout is 
     // submit a refund, and hiding it would strand the deposit outright.
     assert.match(unbookmarkable, /Review refund address/);
   }
+});
+
+// The two-amounts bug, end to end through both shipped renderers: "Pay 50.05
+// USDC" in the header and "You send $50.03" in the breakdown were two numbers
+// that looked like one with a typo. For a stablecoin pegged to the fee currency
+// every amount the payer is shown is the deposit amount in the token, and the
+// fiat valuation of the pay-in side appears nowhere — not in the breakdown, not
+// in the transaction details.
+test("a pegged stablecoin checkout shows one amount to send, in both renderers", () => {
+  const swap = {
+    attempt_id: "or_swp_usdc",
+    provider: "fixedfloat",
+    provider_order_id: "5T3PDU",
+    pay_in_asset: "USDC_SOL",
+    deposit_address: "SoLDepositAddress",
+    deposit_amount: "50.05",
+    provider_state: "awaiting_deposit",
+    provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+    fee: { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "49" },
+  };
+  const invoice = {
+    invoice_id: "or_inv_usdc",
+    rail: "swap",
+    transaction_state: "pending",
+    swap,
+  };
+
+  const display = createSwapDisplayModel(invoice);
+  assert.equal(display?.depositAmount, "50.05");
+  // The breakdown's "You send" IS the header amount plus the asset label — the
+  // same string the copyable Amount row carries.
+  assert.equal(display?.feeBreakdown?.youSend, `${display?.depositAmount} ${display?.assetLabel}`);
+  assert.equal(display?.copyRows.at(-1)?.value, display?.depositAmount);
+  assert.deepEqual(display?.feeBreakdown, {
+    cartTotal: "$49.00",
+    youSend: "50.05 USDC",
+    fee: "1.05 USDC",
+    feePercent: "2.1%",
+  });
+
+  const reactHtml = renderToStaticMarkup(
+    renderSwapDepositPanel({
+      invoice,
+      onBack: () => undefined,
+      onRefund: async () => undefined,
+    }),
+  );
+  const elementHtml = renderElementSwapPanelHtml(invoice);
+  for (const [name, html] of [
+    ["React", reactHtml],
+    ["element", elementHtml],
+  ]) {
+    assert.ok(!html.includes("50.03"), `${name} must not render the pay-in valuation`);
+    assert.match(html, /50\.05 USDC/, `${name} breakdown names the token amount`);
+    assert.match(html, /1\.05 USDC \(2\.1%\)/, `${name} fee row is in the token`);
+    // The only fiat figure left on the panel is the cart total.
+    assert.equal(
+      html.match(/\$[0-9]/g)?.length,
+      1,
+      `${name} shows one fiat amount: the cart total`,
+    );
+    assert.match(html, /\$49\.00/, `${name} keeps the cart total in fiat`);
+  }
+
+  const rows = createTransactionDetails({ rail: "swap", transaction_state: "pending", swap });
+  const byLabel = Object.fromEntries(rows.map((row) => [row.label, row.value]));
+  assert.equal(byLabel["You send"], "50.05 USDC");
+  assert.equal(byLabel["Swap + network fees"], "1.05 USDC (2.1%)");
+  assert.equal(byLabel["Pay-in fiat"], undefined);
+  assert.ok(!JSON.stringify(rows).includes("50.03"), "details must not carry the pay-in valuation");
+
+  // Control: a floating asset with the same fee object keeps today's fiat rows.
+  const sol = createSwapDisplayModel({
+    ...invoice,
+    swap: { ...swap, pay_in_asset: "SOL_SOL", deposit_amount: "0.71" },
+  });
+  assert.deepEqual(sol?.feeBreakdown, {
+    cartTotal: "$49.00",
+    youSend: "$50.03",
+    fee: "$1.03",
+    feePercent: "2.1%",
+  });
+});
+
+// The details panel's raw fallback (a fee whose breakdown cannot be computed)
+// obeys the same rule, or the valuation leaks back in through the details.
+test("transaction details never show a pegged asset's pay-in fiat, even in the raw fallback", () => {
+  const rows = createTransactionDetails({
+    rail: "swap",
+    swap: {
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TDepositAddress",
+      deposit_amount: "50.05",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: 1,
+      // A zero payout defeats the breakdown; the raw rows take over.
+      fee: { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "0" },
+    },
+  });
+  const labels = rows.map((row) => row.label);
+  assert.ok(labels.includes("Fee currency"));
+  assert.ok(labels.includes("Payout fiat"));
+  assert.ok(!labels.includes("Pay-in fiat"));
+  assert.ok(!JSON.stringify(rows).includes("50.03"));
+
+  // Floating: the raw pay-in row stays.
+  const solRows = createTransactionDetails({
+    rail: "swap",
+    swap: {
+      provider: "fixedfloat",
+      pay_in_asset: "SOL_SOL",
+      deposit_address: "SoLAddress",
+      deposit_amount: "0.71",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: 1,
+      fee: { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "0" },
+    },
+  });
+  assert.equal(solRows.find((row) => row.label === "Pay-in fiat")?.value, "50.03");
 });

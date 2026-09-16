@@ -485,8 +485,18 @@ provider wire shape:
 | Name | Type | Meaning |
 | --- | --- | --- |
 | `currency` | `string` | Fiat currency the equivalents are expressed in, e.g. `"USD"`. |
-| `pay_in_fiat` | `string` | Fiat value of the crypto the payer must send. |
+| `pay_in_fiat` | `string` | Fiat valuation of the crypto the payer sends. Explains the spread; never an amount to send. |
 | `payout_fiat` | `string` | Fiat value delivered to the merchant — the cart total. |
+
+`depositAmount` is the only amount a payer is ever told to send, in the pay-in
+token. The fee figures are valuations that explain why it exceeds the cart
+total. For a stablecoin pegged to `currency` (`pegged_to` in the shared asset
+table: USDT and USDC are pegged to USD) the packaged checkout expresses the
+breakdown in the token — "You send 50.05 USDC", "Swap + network fees 1.05 USDC
+(2.1%)" — and never renders `pay_in_fiat`, because "$50.03" one line under
+"50.05 USDC" reads as the same number with a typo. Floating assets (SOL, ETH)
+keep the fiat breakdown. `createSwapFeeBreakdown(fee, swap)` applies the rule;
+pass the swap, not just the fee.
 
 ### service.listRates
 

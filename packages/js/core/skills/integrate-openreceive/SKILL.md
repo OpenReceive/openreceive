@@ -86,6 +86,17 @@ state; do not retry-loop it, and do not build an idempotency store around it —
 that serialization is the library's job. (A hook failure while persisting an
 attempt is a **503 retryable**, deliberately distinct.)
 
+## Amounts on the deposit panel
+
+`swap.deposit_amount` is the ONLY amount a payer is ever told to send, in the
+pay-in token. `swap.fee.pay_in_fiat` / `payout_fiat` are fiat valuations that
+explain the spread (why the deposit exceeds the cart total); they are not
+instructions. For a stablecoin pegged to the fee currency (USDT, USDC) the
+packaged checkout expresses the breakdown in the token and never renders
+`pay_in_fiat` — "$50.03" under "50.05 USDC" reads as the same number with a
+typo. A custom UI gets the same rule from `createSwapFeeBreakdown(fee, swap)`;
+pass the swap, not just the fee.
+
 ## Secrets
 
 `NWC_URI` and `LSC_URI_*` are server-only. Never put them in browser code,

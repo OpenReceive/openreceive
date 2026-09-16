@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1.0",
-  "description": "The closed vocabularies and fixed numbers every OpenReceive engine must share. This file is the ONLY hand-edited copy: npm run generate:models renders it into packages/js/core/src/generated/contracts.ts, packages/js/node/src/generated/swap-tables.ts, packages/ruby/openreceive/lib/openreceive/generated/tables.rb, packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs, packages/php/openreceive/src/Generated/Tables.php and packages/python/openreceive/src/openreceive/_generated/tables.py, and npm run check:generated fails when any rendering is stale. Error codes and payment statuses are NOT here: they come from spec/schemas/error.schema.json and the OpenAPI document, which the same generator already reads. npm run validate cross-checks every enum below against the OpenAPI and JSON Schema copies, so the spec cannot disagree with itself.",
+  "description": "The closed vocabularies and fixed numbers every OpenReceive engine must share. This file is the ONLY hand-edited copy: npm run generate:models renders it into packages/js/core/src/generated/contracts.ts, packages/js/core/src/generated/swap-assets.ts, packages/js/node/src/generated/swap-tables.ts, packages/ruby/openreceive/lib/openreceive/generated/tables.rb, packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs, packages/php/openreceive/src/Generated/Tables.php and packages/python/openreceive/src/openreceive/_generated/tables.py, and npm run check:generated fails when any rendering is stale. Error codes and payment statuses are NOT here: they come from spec/schemas/error.schema.json and the OpenAPI document, which the same generator already reads. npm run validate cross-checks every enum below against the OpenAPI and JSON Schema copies, so the spec cannot disagree with itself.",
   "nwc": {
     "required_receive_methods": ["make_invoice", "list_transactions"],
     "spend_methods": ["pay_invoice", "multi_pay_invoice", "pay_keysend", "multi_pay_keysend"],
@@ -24,6 +24,7 @@
     ]
   },
   "swap": {
+    "pay_in_assets_note": "pegged_to names the fiat currency a stablecoin tracks (ISO 4217). Renderers express the swap fee breakdown in the token when the fee valuation currency equals the peg, so a payer never sees a fiat valuation that reads like the deposit amount with a typo. Absent for coins that float.",
     "pay_in_assets": [
       {
         "pay_in_asset": "SOL_SOL",
@@ -37,21 +38,24 @@
         "label": "USDT",
         "network_label": "Tron",
         "coin": "USDT",
-        "network": "TRX"
+        "network": "TRX",
+        "pegged_to": "USD"
       },
       {
         "pay_in_asset": "USDT_SOL",
         "label": "USDT",
         "network_label": "Solana",
         "coin": "USDT",
-        "network": "SOL"
+        "network": "SOL",
+        "pegged_to": "USD"
       },
       {
         "pay_in_asset": "USDC_SOL",
         "label": "USDC",
         "network_label": "Solana",
         "coin": "USDC",
-        "network": "SOL"
+        "network": "SOL",
+        "pegged_to": "USD"
       },
       {
         "pay_in_asset": "ETH_ETH",
@@ -65,14 +69,16 @@
         "label": "USDT",
         "network_label": "Ethereum",
         "coin": "USDT",
-        "network": "ETH"
+        "network": "ETH",
+        "pegged_to": "USD"
       },
       {
         "pay_in_asset": "USDC_ETH",
         "label": "USDC",
         "network_label": "Ethereum",
         "coin": "USDC",
-        "network": "ETH"
+        "network": "ETH",
+        "pegged_to": "USD"
       }
     ],
     "states_note": "phase is the coarse bucket a UI branches on; terminal states stop provider polling and UI refresh. completed is deliberately NOT terminal: provider completion is not wallet settlement.",

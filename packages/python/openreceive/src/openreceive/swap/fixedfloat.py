@@ -703,6 +703,11 @@ class FixedFloatProvider:
 
     @staticmethod
     def read_order_fee(record: dict[str, Any]) -> dict[str, Any] | None:
+        # The USD equivalents of both sides; their gap is the swap fee the payer
+        # absorbs. pay_in_fiat is a VALUATION, never an amount a payer is told to
+        # send: deposit_amount is the only such amount, and the checkout does not
+        # render pay_in_fiat for a USD stablecoin (it reads as the deposit amount
+        # with a typo).
         pay_in_fiat = read_nested_string(record, ("from", "usd"))
         payout_fiat = read_nested_string(record, ("to", "usd"))
         if pay_in_fiat is None or payout_fiat is None:

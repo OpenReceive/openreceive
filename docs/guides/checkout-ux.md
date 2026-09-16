@@ -61,6 +61,29 @@ bare number (`0.032664`), not `0.032664 SOL`.
 A required memo is part of the address. A deposit sent without it may never
 be refundable. Put it in a copy row, not inside a warning banner.
 
+## One amount to send
+
+A payer on a USDC checkout asked "50.05 or 50.03?". The header said "Pay 50.05
+USDC"; the payment breakdown said "You send $50.03". The second number was the
+rate feed's USD valuation of the first, one line below it, and the payer could
+not tell which one to type into their wallet.
+
+`swap.deposit_amount` is the only amount a payer is ever told to send, in the
+pay-in token. `swap.fee.pay_in_fiat` and `payout_fiat` are valuations that
+explain why the deposit exceeds the cart total; they are not instructions. For
+a stablecoin pegged to the fee currency (`pegged_to` in the shared asset table:
+USDT and USDC are pegged to USD) the breakdown is expressed in the token —
+"You send 50.05 USDC", "Swap + network fees 1.05 USDC (2.1%)" — and
+`pay_in_fiat` is never rendered, not in the breakdown and not in the
+transaction details. The cart total stays fiat. Floating assets (SOL, ETH)
+keep the fiat breakdown, where "$50.03" cannot be mistaken for "0.71 SOL".
+
+This is not a depeg rule. A feed rate a hundredth of a percent off $1.00 puts
+the two numbers a cent apart on an ordinary day, so the fiat valuation of a
+pegged deposit is never shown, not shown with a threshold or an "approx."
+marker. `createSwapFeeBreakdown(fee, swap)` applies the rule; pass the swap,
+not just the fee, or the breakdown falls back to fiat.
+
 ## Use the model's network warning
 
 Render `swap.networkWarningTitle` and `swap.networkWarning` as the model gives

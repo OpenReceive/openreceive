@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- Show one amount to send on a stablecoin checkout. A USDC (Solana) payer saw
+  “Pay 50.05 USDC” with “You send $50.03” one line below and could not tell
+  which to type: the second number was the rate feed's USD valuation of the
+  first. For a pay-in asset pegged to the fee currency (USDT and USDC, pegged
+  to USD) the payment breakdown and the transaction details now express “You
+  send” and “Swap + network fees” in the token (“50.05 USDC”, “1.05 USDC
+  (2.1%)”) and never render `pay_in_fiat`. Floating assets (SOL, ETH) keep the
+  fiat breakdown unchanged. The rule lives in the shared display model, so the
+  React and custom-element checkouts pick it up from one change;
+  `createSwapFeeBreakdown` accepts the swap as a second argument.
+- Add `pegged_to` to the shared pay-in asset table (`spec/data/kernel-tables.json`)
+  and its renderings in every engine, plus `swapPayInAssetPeggedTo` in
+  `@openreceive/core`. The public swap object and the `fee` data are unchanged.
+- BTCPay plugin source: the checkout fee line moves into the snapshot as
+  `fee_text` and follows the same rule (not published by this change).
+- Document deposit amounts versus fee valuations in the API reference, the
+  checkout UX guide, the integration directions, and the packaged skills.
+
 ## 0.4.9 - 2026-09-14
 
 - Hide the Lightning invoice, QR, countdown, waiting status and copy action

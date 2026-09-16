@@ -521,6 +521,9 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
 
     /**
      * The USD equivalents of both sides; their gap is the swap fee the payer absorbs.
+     * pay_in_fiat is a VALUATION, never an amount a payer is told to send: deposit_amount
+     * is the only such amount, and the checkout does not render pay_in_fiat for a USD
+     * stablecoin (it reads as the deposit amount with a typo).
      *
      * @param array<string, mixed> $record
      * @return array{currency: string, pay_in_fiat: string, payout_fiat: string}|null
