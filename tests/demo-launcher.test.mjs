@@ -19,7 +19,7 @@ function fixture(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, "tools/shared"), { recursive: true });
   mkdirSync(path.join(root, "bin"));
-  for (const name of ["run-demo.mjs", "shared/demo-catalog.mjs"]) {
+  for (const name of ["run-demo.mjs", "shared/demo-catalog.mjs", "shared/demo-banner.mjs"]) {
     copyFileSync(new URL(`../tools/${name}`, import.meta.url), path.join(root, "tools", name));
   }
   const events = path.join(root, "events.jsonl");

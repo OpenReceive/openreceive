@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Print the demo's address in a highlighted banner. `npm run demo <target>`
+  draws a boxed `http://localhost:<port>` block when it starts and again the
+  moment the published port first answers, so the URL is not lost under the
+  Docker Compose log stream. A detached run (`-- -d`) now waits for the port
+  before returning, and the BTCPay demo's ready message uses the same banner.
+  Scheduled for 0.4.11.
+
 ## 0.4.10 - 2026-09-16
 
 - Show one amount to send on a stablecoin checkout. A USDC (Solana) payer saw

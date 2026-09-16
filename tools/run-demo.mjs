@@ -16,11 +16,14 @@ import { spawn } from "node:child_process";
 import { copyFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { formatDemoBanner, waitForHttp } from "./shared/demo-banner.mjs";
 import { OPENRECEIVE_DEMOS } from "./shared/demo-catalog.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
 const DEMOS = OPENRECEIVE_DEMOS;
+// Highlight the banners on a terminal; keep piped output (and tests) plain.
+const color = process.stdout.isTTY === true;
 
 function usage() {
   const targets = DEMOS.map(
@@ -121,11 +124,19 @@ if (demo.kind === "btcpay") {
         process.exit(1);
       }
     }
-    console.log(`\nBTCPay is ready: http://127.0.0.1:${demo.port}`);
-    if (testkit)
-      console.log("On the first visit, register an administrator account to configure your store.");
     console.log(
-      `The stack keeps running in Docker. Stop it with: npm run demo btcpayserver -- ${testkit ? "--testkit " : ""}--stop`,
+      `\n${formatDemoBanner({
+        title: "BTCPay is ready",
+        url: `http://127.0.0.1:${demo.port}`,
+        lines: [
+          ...(testkit
+            ? ["On the first visit, register an administrator account to configure your store."]
+            : []),
+          "The stack keeps running in Docker. Stop it with:",
+          `  npm run demo btcpayserver -- ${testkit ? "--testkit " : ""}--stop`,
+        ],
+        color,
+      })}`,
     );
   }
   process.exit(code);
@@ -165,12 +176,42 @@ const composeArgs = [
   ...extra,
 ];
 
-console.log(`Starting ${demo.label} demo -> http://localhost:${demo.port}\n`);
+const url = `http://localhost:${demo.port}`;
+const detached = extra.some((arg) => arg === "-d" || arg === "--detach");
+console.log(
+  `${formatDemoBanner({
+    title: `Starting ${demo.label}`,
+    url,
+    lines: [
+      "The shop opens at this address once the containers report ready;",
+      "a second banner marks that moment below the container logs.",
+    ],
+    color,
+  })}\n`,
+);
 
 const child = spawn("docker", composeArgs, {
   cwd: path.join(root, demo.dir),
   stdio: "inherit",
   env: process.env,
+});
+
+// The container logs bury the address; say it again, highlighted, the moment
+// the published port first answers. A detached `up -d` returns as soon as the
+// containers are created, so there the launcher itself waits for the port.
+const readiness = new AbortController();
+const readyBanner = () =>
+  console.log(
+    `\n${formatDemoBanner({
+      title: `${demo.label} is ready`,
+      url,
+      lines: ["Open this address in your browser."],
+      color,
+    })}\n`,
+  );
+const ready = waitForHttp({ url, signal: readiness.signal }).then((answered) => {
+  if (answered) readyBanner();
+  return answered;
 });
 
 child.on("error", (error) => {
@@ -182,6 +223,14 @@ child.on("error", (error) => {
   process.exit(1);
 });
 
-child.on("exit", (code, signal) => {
-  process.exit(signal ? 1 : (code ?? 0));
+child.on("exit", async (code, signal) => {
+  const exitCode = signal ? 1 : (code ?? 0);
+  if (detached && exitCode === 0) {
+    // Containers are up in the background; wait (bounded) for the app itself.
+    const answered = await ready;
+    if (!answered) console.error(`The containers started but ${url} did not answer in time.`);
+    process.exit(answered ? 0 : 1);
+  }
+  readiness.abort();
+  process.exit(exitCode);
 });
