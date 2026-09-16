@@ -26,6 +26,16 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
 {
     public const string ReceiveOnlyMessage = "OpenReceive is receive-only: this Lightning connection cannot send.";
     private static readonly TimeSpan ExpiryTolerance = TimeSpan.FromSeconds(60);
+    /// <summary>
+    /// The longest invoice this backend mints, whatever BTCPay asks for. Most NWC wallet
+    /// services refuse or clamp an expiry further out than a day, and a clamped invoice
+    /// would trip the expiry check below and be refused; it also keeps every minted invoice
+    /// inside the memo's fallback window (<see cref="ScanMemo.Window"/>), so a hash asked
+    /// about after a restart is found by the bounded walk. The setup page lowers the
+    /// store's own timer to the same bound, so the checkout and the invoice agree.
+    /// </summary>
+    public static readonly TimeSpan MaxInvoiceExpiry = ScanMemo.Window;
+    private const int ListInvoicesMaxPages = 25;
 
     private readonly NwcConnectionState _state;
     private readonly Network _network;
@@ -173,7 +183,24 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
             // case this backend does not model (plugin plan 0.21).
             throw new PaymentMethodUnavailableException("OpenReceive needs an amount; top-up invoices are not supported on a receive-only NWC wallet.");
         }
-        var expirySeconds = (int)Math.Max(1, Math.Round(createInvoiceRequest.Expiry.TotalSeconds));
+        // Expiry: BTCPay's, capped at MaxInvoiceExpiry. BTCPay asks for the remaining life of
+        // its own invoice (the store's "invoice expires after" setting: 15 min by default, 60
+        // min once swaps are on, up to 24 days), on both the checkout BOLT11 and LNURL paths,
+        // and shows that one BOLT11 for the whole checkout, re-minting only on a partial
+        // payment. A shorter Lightning expiry than the checkout timer leaves a dead QR on the
+        // page, so the plugin never shortens what BTCPay asks for below the cap; above the
+        // cap the store's timer is lowered on save (OpenReceiveSettingsService), and a store
+        // that raises it again by hand gets a day-long invoice under a longer timer. This is
+        // deliberately unlike the Node/Ruby engines' 10-minute default: there the host owns
+        // both the timer and the expiry; here the timer is BTCPay's. Rounded to whole seconds
+        // (NIP-47 `expiry` is an integer), never below 1.
+        var requestedExpiry = createInvoiceRequest.Expiry;
+        var cappedExpiry = requestedExpiry > MaxInvoiceExpiry ? MaxInvoiceExpiry : requestedExpiry;
+        var expirySeconds = (int)Math.Max(1, Math.Round(cappedExpiry.TotalSeconds));
+        if (cappedExpiry != requestedExpiry)
+        {
+            _logger.LogInformation("nwc.invoice.expiry_capped requested_seconds={Requested} minted_seconds={Minted}", (long)requestedExpiry.TotalSeconds, expirySeconds);
+        }
         var request = new MakeInvoiceRequest
         {
             AmountMsats = amountMsats,
@@ -201,6 +228,12 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
             var error = NwcErrors.Normalize(e);
             throw new PaymentMethodUnavailableException($"The NWC wallet refused make_invoice ({error.Code}): {error.Message}");
         }
+        // The wallet must honour the requested expiry: BTCPay's checkout timer is its own
+        // invoice's expiry, so a wallet that clamps to its own minimum or maximum would make
+        // that timer lie (a QR that dies early, or one BTCPay reports expired while the wallet
+        // still accepts it). Sixty seconds of tolerance covers clock skew and a wallet that
+        // stamps created_at a moment after we asked; anything more is refused before BTCPay
+        // ever shows the invoice. A wallet that omits expires_at is taken at its word.
         var createdAt = result.CreatedAt ?? requestedAt;
         var expectedExpiry = createdAt + expirySeconds;
         if (result.ExpiresAt is { } expiresAt && Math.Abs(expiresAt - expectedExpiry) > ExpiryTolerance.TotalSeconds)
@@ -221,6 +254,7 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
             DescriptionHash = request.DescriptionHash,
         };
         _state.Memo.Record(row);
+        _state.Memo.Watch(row.PaymentHash);
         _state.Memo.NoteInvoiceMinted(createdAt);
         _logger.LogInformation("nwc.invoice.created payment_hash={Hash} amount_msats={Amount} expires_at={ExpiresAt}", row.PaymentHash, row.AmountMsats, row.ExpiresAt);
         return ToLightningInvoice(row);
@@ -233,19 +267,27 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
         GetInvoiceByHash(paymentHash.ToString(), cancellation);
 
     /// <summary>
-    /// Reads the connection's scan memo (one walk serves every caller). Paid iff the
-    /// settlement rule says settled; Expired ONLY when the wallet's own row says
-    /// expired/failed; Unpaid otherwise — including a hash the memo has not seen, because
-    /// a null or Expired answer makes BTCPay drop the hash from its watched set, and a
-    /// wallet that ignores the <c>unpaid</c> flag would otherwise make BTCPay forget a
-    /// live invoice. BTCPay's own state machine owns invoice expiry.
+    /// Every hash BTCPay asks about joins the connection's scan memo watch set, and one
+    /// walk serves every caller. A hash the memo has never seen forces one targeted
+    /// refresh (the memo looks it up when the wallet grants <c>lookup_invoice</c>, else
+    /// walks for it). Paid iff the settlement rule says settled; Expired ONLY when the
+    /// wallet's own row says expired/failed; Unpaid otherwise — including a hash the memo
+    /// still has not seen, because a null or Expired answer makes BTCPay drop the hash from
+    /// its watched set, and a wallet that ignores the <c>unpaid</c> flag would otherwise
+    /// make BTCPay forget a live invoice. BTCPay's own state machine owns invoice expiry.
     /// </summary>
     private async Task<LightningInvoice> GetInvoiceByHash(string paymentHash, CancellationToken cancellation)
     {
         var hash = paymentHash.Trim().ToLowerInvariant();
-        await _state.Memo.RefreshAsync(force: false, cancellation).ConfigureAwait(false);
+        _state.Memo.Watch(hash);
+        var walked = await _state.Memo.RefreshAsync(force: false, cancellation).ConfigureAwait(false);
         var row = _state.Memo.Lookup(hash);
-        if (row is null || (!Settlement.IsSettled(row) && _state.LookupInvoiceGranted && row.AmountMsats is null))
+        if (row is null && !walked)
+        {
+            await _state.Memo.RefreshAsync(force: true, cancellation).ConfigureAwait(false);
+            row = _state.Memo.Lookup(hash);
+        }
+        else if (row is not null && !Settlement.IsSettled(row) && row.AmountMsats is null && await _state.LookupInvoiceGrantedAsync(cancellation).ConfigureAwait(false))
         {
             row = await RefreshHashAsync(hash, cancellation).ConfigureAwait(false) ?? row;
         }
@@ -269,7 +311,8 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
     /// </summary>
     internal async Task<NwcTransaction?> RefreshHashAsync(string paymentHash, CancellationToken cancellation)
     {
-        if (_state.LookupInvoiceGranted)
+        _state.Memo.Watch(paymentHash);
+        if (await _state.LookupInvoiceGrantedAsync(cancellation).ConfigureAwait(false))
         {
             try
             {
@@ -295,8 +338,9 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
     public async Task<LightningInvoice[]> ListInvoices(ListInvoicesParams request, CancellationToken cancellation = default)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        // An untargeted listing (BTCPay's own tooling, never settlement): bounded to the window and a few pages.
         var walk = await WalletScan.WalkAsync(_state.ListPage, now - (long)ScanMemo.Window.TotalSeconds, now + ScanMemo.OverlapSeconds,
-            includeUnpaid: request.PendingOnly ?? false, expected: null, ScanMemo.MaxPagesPerView, cancellation).ConfigureAwait(false);
+            includeUnpaid: request.PendingOnly ?? false, expected: null, ListInvoicesMaxPages, cancellation).ConfigureAwait(false);
         var rows = walk.ByPaymentHash.Values.AsEnumerable();
         if (request.PendingOnly is true) rows = rows.Where(r => !Settlement.IsSettled(r));
         if (request.OffsetIndex is { } offset) rows = rows.Skip((int)offset);
@@ -306,6 +350,10 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
     public async Task<ILightningInvoiceListener> Listen(CancellationToken cancellation = default)
     {
         var info = await _state.Transport.FetchServiceInfoAsync(cancellation).ConfigureAwait(false);
+        if (info is not null && _state.Capabilities is null)
+        {
+            _state.RememberCapabilities(NwcInfo.FromServiceInfo(_state.Uri, info)); // a restart without a preflight
+        }
         var notifications = info?.Notifications.Contains("payment_received") == true
                             || _state.Capabilities?.Notifications.Contains("payment_received") == true;
         _logger.LogInformation("nwc.listen.start wallet={Wallet} mode={Mode}", _state.Uri.WalletPubkey, notifications ? "notifications" : "poll");
@@ -321,6 +369,7 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
 
     public async Task<LightningNodeBalance> GetBalance(CancellationToken cancellation = default)
     {
+        await _state.EnsureCapabilitiesAsync(cancellation).ConfigureAwait(false);
         if (!_state.MethodGranted("get_balance"))
         {
             throw new NotSupportedException("This NWC connection does not grant get_balance.");

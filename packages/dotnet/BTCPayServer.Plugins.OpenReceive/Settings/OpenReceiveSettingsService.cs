@@ -100,15 +100,51 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
         }
     }
 
-    /// <summary>The raw Lightning connection string BTCPay holds for the store (redacted for display).</summary>
+    /// <summary>
+    /// A non-secret description of the store's Lightning node: "Internal node", the backend
+    /// type word, or our own string redacted (see <see cref="Describe"/>); null when the
+    /// store has no Lightning config.
+    /// </summary>
     public string? DescribeLightningNode(StoreData store)
     {
         var config = _handlers.GetLightningConfig(store, BitcoinNetwork);
         if (config is null) return null;
         if (config.IsInternalNode) return "Internal node";
         var external = config.GetExternalLightningUrl();
-        if (string.IsNullOrEmpty(external)) return null;
-        return OpenReceiveConnectionString.IsOurs(external) ? OpenReceiveConnectionString.Redact(external) : external.Split(';').FirstOrDefault();
+        return string.IsNullOrEmpty(external) ? null : Describe(external);
+    }
+
+    /// <summary>
+    /// A non-secret description of a Lightning connection string: the backend type word
+    /// ("lndhub", "lnd-rest", "eclair", …), or our own string redacted. This is shown to
+    /// <c>CanViewStoreSettings</c> callers, a level at which BTCPay itself never returns
+    /// Lightning config, so it never returns a raw field of a foreign string: BTCPay accepts
+    /// <c>lndhub://login:password@https://host</c> verbatim and key=value fields in any
+    /// order, so any field may carry a credential. Never throws.
+    /// </summary>
+    public static string Describe(string connectionString)
+    {
+        if (OpenReceiveConnectionString.IsOurs(connectionString))
+        {
+            try
+            {
+                return OpenReceiveConnectionString.Redact(connectionString);
+            }
+            catch (FormatException)
+            {
+                return "openreceive";
+            }
+        }
+        var trimmed = connectionString.Trim();
+        if (trimmed.StartsWith("lndhub://", StringComparison.OrdinalIgnoreCase)) return "lndhub";
+        foreach (var field in trimmed.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = field.IndexOf('=');
+            if (separator < 0 || !field[..separator].Trim().Equals("type", StringComparison.OrdinalIgnoreCase)) continue;
+            var type = field[(separator + 1)..].Trim().ToLowerInvariant();
+            if (type.Length > 0) return type;
+        }
+        return "Other Lightning backend";
     }
 
     /// <summary>The shared per-connection state (memo, capabilities) for a store, when it uses our backend.</summary>
@@ -184,7 +220,22 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
         store.SetStoreBlob(blob);
         await _stores.UpdateStore(store);
         _logger.LogInformation("openreceive.setup.lightning_node_set store={Store} wallet={Wallet}", store.Id, NwcUri.Redact(nwcUri));
+        // The backend mints at most a day-long invoice (ReceiveOnlyNwcClient.MaxInvoiceExpiry);
+        // a longer store timer would keep showing a BOLT11 the payer can no longer pay.
+        await CapInvoiceExpirationAsync(store, ReceiveOnlyNwcClient.MaxInvoiceExpiry);
         return null;
+    }
+
+    /// <summary>The mirror of <see cref="EnsureInvoiceExpirationAsync"/>: lower the store's invoice expiration when it exceeds what the backend will mint.</summary>
+    public async Task<bool> CapInvoiceExpirationAsync(StoreData store, TimeSpan maximum)
+    {
+        var blob = store.GetStoreBlob();
+        if (blob.InvoiceExpiration <= maximum) return false;
+        blob.InvoiceExpiration = maximum;
+        store.SetStoreBlob(blob);
+        await _stores.UpdateStore(store);
+        _logger.LogInformation("openreceive.setup.invoice_expiration_capped store={Store} minutes={Minutes}", store.Id, maximum.TotalMinutes);
+        return true;
     }
 
     /// <summary>

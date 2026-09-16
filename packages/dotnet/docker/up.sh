@@ -3,6 +3,8 @@
 #   ./up.sh            build + start everything, fund, install plugin
 #   ./up.sh --no-build skip the plugin/testkit builds (restart with what is there)
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$HERE/port-guard.sh"
+require_btcpay_port_free "$PROJECT"
 source "$HERE/refresh-btcpay.sh"
 BUILD=1
 [ "${1:-}" = "--no-build" ] && BUILD=0

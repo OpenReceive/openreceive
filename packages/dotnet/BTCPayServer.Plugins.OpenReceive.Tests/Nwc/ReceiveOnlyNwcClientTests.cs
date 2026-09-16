@@ -42,7 +42,10 @@ public sealed class ReceiveOnlyNwcClientTests
 
         public string Secret => Service.ConnectionSecretHex;
 
-        public long Now() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        /// <summary>Added to every clock the wallet, the service and the memo share: "a day later" without waiting.</summary>
+        public long ClockOffsetSeconds;
+
+        public long Now() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ClockOffsetSeconds;
 
         public Task<LightningInvoice> Mint(long sats = 1_000, string description = "desc", int minutes = 10) =>
             Client.CreateInvoice(LightMoney.Satoshis(sats), description, TimeSpan.FromMinutes(minutes), CancellationToken.None);
@@ -305,7 +308,12 @@ public sealed class ReceiveOnlyNwcClientTests
         Assert.Equal(LightningInvoiceStatus.Unpaid, walked.Status);
         Assert.Equal(unknown, walked.Id);
         Assert.Equal(0, withoutLookup.Transport.Count("lookup_invoice"));
-        Assert.Equal(4, withoutLookup.Transport.Count("list_transactions")); // the cadence walk, then one forced walk for the hash
+        // One targeted walk for a hash of unknown age: the window (two views), then the one
+        // unbounded walk (two views) a hash gets when lookup_invoice is unavailable.
+        Assert.Equal(4, withoutLookup.Transport.Count("list_transactions"));
+        // Both walks were complete and empty: the hash is provably not this wallet's, so it
+        // leaves the watch set (BTCPay asks again if it re-listens). The answer stays Unpaid.
+        Assert.False(withoutLookup.State.Memo.IsWatched(unknown));
     }
 
     [Fact]
@@ -421,8 +429,9 @@ public sealed class ReceiveOnlyNwcClientTests
         Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
         Assert.Equal(invoice.Id, paid.Id);
         Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
-        // Not settled directly: one bounded memo refresh (settled + unpaid views) found the settlement.
-        Assert.Equal(walksBefore + 2, h.Transport.Count("list_transactions"));
+        // Not settled directly: one bounded memo refresh found the settlement in the settled view
+        // (a targeted walk stops as soon as every watched hash is seen: no unpaid view needed).
+        Assert.Equal(walksBefore + 1, h.Transport.Count("list_transactions"));
         Assert.Equal(0, h.Transport.Count("lookup_invoice"));
     }
 
@@ -467,7 +476,7 @@ public sealed class ReceiveOnlyNwcClientTests
         Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
         Assert.Equal(invoice.Id, paid.Id);
         Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
-        Assert.True(h.Transport.Count("list_transactions") >= 2); // the sweep's walk, not a push, found it
+        Assert.True(h.Transport.Count("list_transactions") >= 1); // the sweep's walk, not a push, found it
 
         // The push path and the sweep share one queue: the settlement was emitted once.
         await Task.Delay(500);
@@ -501,7 +510,191 @@ public sealed class ReceiveOnlyNwcClientTests
         Assert.Equal(invoice.Id, paid.Id);
         Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
         Assert.NotNull(paid.PaidAt);
-        Assert.True(h.Transport.Count("list_transactions") >= 4); // the first tick plus the one that saw the settlement
+        Assert.True(h.Transport.Count("list_transactions") >= 3); // the first tick (two views) plus the one that saw the settlement
+        Assert.Equal(0, h.Transport.Count("lookup_invoice"));
+    }
+
+
+    // ---- Reconcilability across pagination, long expiry and restart (Plugin Builder review of 0.4.8) ----
+
+    private static WalletInvoice Filler(int n, long createdAt, bool settled) => new()
+    {
+        PaymentHash = n.ToString("x64"),
+        Bolt11 = $"lnbcrt1filler{n}",
+        AmountMsats = 1_000_000,
+        CreatedAt = createdAt,
+        ExpiresAt = createdAt + 86_400,
+        State = settled ? InvoiceState.Settled : InvoiceState.Pending,
+        SettledAt = settled ? createdAt : null,
+        Preimage = settled ? new string('e', 64) : null,
+    };
+
+    /// <summary>Buries every invoice minted so far under <paramref name="count"/> newer wallet rows (half settled, half unpaid).</summary>
+    private static void BuryUnderNewerRows(Harness h, int count)
+    {
+        var now = h.Now();
+        for (var n = 1; n <= count; n++) h.Backend.Seed(Filler(n, now, settled: n % 2 == 0));
+    }
+
+    [Fact]
+    public async Task A_paid_invoice_buried_under_hundreds_of_newer_rows_is_found_by_the_sweep()
+    {
+        await using var h = new Harness();
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        BuryUnderNewerRows(h, 1_200); // the 0.4.8 memo read at most 500 rows per view and never reached this invoice
+        h.Transport.DropNotifications = true;
+
+        using var listener = new NwcNotificationListener(h.Client, h.Transport, h.State.Memo, NullLogger.Instance, sweepInterval: TimeSpan.FromMilliseconds(200));
+        var waiting = listener.WaitInvoice(Bounded());
+        await h.Backend.SettleAsync(invoice.Id);
+        var paid = await waiting.WaitAsync(WaitBound);
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(invoice.Id, paid.Id);
+        Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
+        Assert.True(h.Transport.Count("list_transactions") > 25, "the walk paged past the old 25-page cap");
+        Assert.Equal(0, h.Transport.Count("lookup_invoice")); // list_transactions reached it: no fallback spent
+        Assert.True(h.State.Memo.Complete);
+        Assert.Equal(LightningInvoiceStatus.Paid, (await h.Client.GetInvoice(invoice.Id)).Status);
+    }
+
+    [Fact]
+    public async Task A_paid_invoice_buried_under_hundreds_of_newer_rows_is_found_by_the_poll_listener()
+    {
+        await using var h = new Harness(new TestkitWalletOptions { Notifications = false, Methods = ["get_info", "make_invoice", "list_transactions"] });
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        BuryUnderNewerRows(h, 1_200);
+        await h.Backend.SettleAsync(invoice.Id);
+
+        using var listener = await h.Client.Listen(Bounded());
+        Assert.IsType<NwcPollListener>(listener);
+        var paid = await listener.WaitInvoice(Bounded());
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(invoice.Id, paid.Id);
+        Assert.True(h.Transport.Count("list_transactions") > 25);
+        Assert.Equal(0, h.Transport.Count("lookup_invoice")); // not granted, not needed
+        Assert.False(h.State.Memo.IsWatched(invoice.Id)); // settled: it left the walk set, so the next tick is free
+    }
+
+    [Fact]
+    public async Task A_hash_a_truncated_walk_cannot_reach_falls_back_to_lookup_invoice_when_granted()
+    {
+        // A wallet that ignores `offset` serves the same first page forever: the walk is truncated after two pages.
+        await using var h = new Harness(new TestkitWalletOptions { DropOffset = true });
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        BuryUnderNewerRows(h, 40);
+        await h.Backend.SettleAsync(invoice.Id);
+        h.Transport.DropNotifications = true;
+
+        var paid = await h.Client.GetInvoice(invoice.Id);
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(1, h.Transport.Count("lookup_invoice")); // spent only because list_transactions provably could not reach it
+        Assert.True(h.State.Memo.Complete);
+    }
+
+    [Fact]
+    public async Task A_hash_a_truncated_walk_cannot_reach_stays_Unpaid_and_watched_never_Expired()
+    {
+        await using var h = new Harness(new TestkitWalletOptions { DropOffset = true, Methods = ["get_info", "make_invoice", "list_transactions"] });
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        BuryUnderNewerRows(h, 40);
+        await h.Backend.SettleAsync(invoice.Id);
+
+        var status = (await h.Client.GetInvoice(invoice.Id)).Status;
+
+        Assert.Equal(LightningInvoiceStatus.Unpaid, status); // never Expired or null: BTCPay keeps the hash
+        Assert.False(h.State.Memo.Complete);
+        Assert.Equal(1, h.State.Memo.Unreached);
+        Assert.True(h.State.Memo.IsWatched(invoice.Id)); // retried by every later refresh
+        Assert.Equal(0, h.Transport.Count("lookup_invoice"));
+    }
+
+    [Fact]
+    public async Task CreateInvoice_caps_the_expiry_at_a_day_and_passes_shorter_ones_through()
+    {
+        await using var h = new Harness();
+        await h.Client.Validate();
+
+        var capped = await h.Mint(sats: 1_000, minutes: 48 * 60); // a store expiration BTCPay permits
+        var cappedRow = (await h.Backend.LookupAsync(capped.Id, null, CancellationToken.None))!;
+        Assert.Equal((long)ReceiveOnlyNwcClient.MaxInvoiceExpiry.TotalSeconds, cappedRow.ExpiresAt - cappedRow.CreatedAt);
+        Assert.InRange((capped.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds, 24 * 3600 - 5, 24 * 3600 + 1);
+
+        var asked = await h.Mint(sats: 1_000, minutes: 15);
+        var askedRow = (await h.Backend.LookupAsync(asked.Id, null, CancellationToken.None))!;
+        Assert.Equal(15 * 60, askedRow.ExpiresAt - askedRow.CreatedAt);
+    }
+
+    [Fact]
+    public async Task A_day_long_invoice_stays_watched_and_settles_near_its_end()
+    {
+        await using var h = new Harness(new TestkitWalletOptions { Methods = ["get_info", "make_invoice", "list_transactions"] });
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000, minutes: 24 * 60); // the longest this backend mints
+        h.ClockOffsetSeconds = 23 * 3600 + 50 * 60; // ten minutes before it expires, on every clock the wallet and the memo share
+
+        await h.State.Memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.True(h.State.Memo.IsWatched(invoice.Id));
+        Assert.Equal(LightningInvoiceStatus.Unpaid, (await h.Client.GetInvoice(invoice.Id)).Status);
+
+        await h.Backend.SettleAsync(invoice.Id);
+        await h.State.Memo.RefreshAsync(force: true, CancellationToken.None);
+        var paid = await h.Client.GetInvoice(invoice.Id);
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
+        Assert.Equal(0, h.Transport.Count("lookup_invoice"));
+    }
+
+    [Fact]
+    public async Task A_restarted_connection_learns_lookup_invoice_from_the_info_event_and_finds_an_old_hash()
+    {
+        await using var h = new Harness();
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        await h.Backend.SettleAsync(invoice.Id);
+        var getInfoBefore = h.Transport.Count("get_info");
+        var lookupsBefore = h.Transport.Count("lookup_invoice");
+        var walksBefore = h.Transport.Count("list_transactions");
+
+        // BTCPay restarts: a fresh state for the same connection string, nothing remembered, no preflight.
+        var restarted = new NwcConnectionState(h.State.Uri, allowSpendCapableWallet: false, h.Transport, h.Now, NullLogger.Instance);
+        var client = new ReceiveOnlyNwcClient(restarted, Network.RegTest, NullLogger.Instance);
+        Assert.Null(restarted.Capabilities);
+
+        var paid = await client.GetInvoice(invoice.Id);
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
+        Assert.NotNull(restarted.Capabilities); // learned from the info event
+        Assert.True(restarted.LookupInvoiceGranted);
+        Assert.Equal(getInfoBefore, h.Transport.Count("get_info")); // no preflight was needed
+        Assert.Equal(lookupsBefore + 1, h.Transport.Count("lookup_invoice")); // the single-hash path, first
+        Assert.Equal(walksBefore, h.Transport.Count("list_transactions")); // no window walk was needed
+    }
+
+    [Fact]
+    public async Task A_restarted_connection_without_lookup_invoice_walks_for_an_old_hash()
+    {
+        await using var h = new Harness(new TestkitWalletOptions { Methods = ["get_info", "make_invoice", "list_transactions"] });
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        await h.Backend.SettleAsync(invoice.Id);
+
+        var restarted = new NwcConnectionState(h.State.Uri, allowSpendCapableWallet: false, h.Transport, h.Now, NullLogger.Instance);
+        var client = new ReceiveOnlyNwcClient(restarted, Network.RegTest, NullLogger.Instance);
+
+        var paid = await client.GetInvoice(invoice.Id);
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.NotNull(restarted.Capabilities);
+        Assert.False(restarted.LookupInvoiceGranted);
         Assert.Equal(0, h.Transport.Count("lookup_invoice"));
     }
 

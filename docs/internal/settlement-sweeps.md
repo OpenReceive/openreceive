@@ -28,13 +28,18 @@ stays bounded at roughly the active invoice window.
 The BTCPay plugin has no host database row to hold the gate, and BTCPay asks about invoices
 by hash alone (`GetInvoice` on creation, at startup for every pending invoice, after a remint).
 Its `ScanMemo` (`packages/dotnet/.../Nwc/ScanMemo.cs`) is the gate's in-memory twin: one
-per connection string, holding the settled and unpaid views of one `list_transactions` walk
-over a fixed 24-hour window (pages of 20, deduped, truncation-safe), refreshed when older
-than the same 2/6/12 s cadence and shared by every concurrent caller, so N pending invoices at
-startup cost one walk. It is the NWC scan budget for that connection exactly as the durable
-gate is for JS and Ruby, and a truncated walk marks it incomplete so unreached hashes stay
-`Unpaid`. It is a cache of wallet truth, not state: two BTCPay workers each hold one and each
-pay one walk per interval, the ceiling the other engines already accept.
+per connection string, watching the hashes BTCPay asked about, and walking
+`list_transactions` for exactly those the way `reconcilePaymentAttempts` does — from the
+oldest watched pending invoice, settled view then unpaid view, stopping once every watched
+hash is seen, pages of 20, deduped, truncation-safe — refreshed when older than the same
+2/6/12 s cadence and shared by every concurrent caller, so N pending invoices at startup cost
+one walk and nothing pending costs nothing. A watched hash leaves the set the way a pending
+attempt leaves the scan set: terminal wallet row, or a complete walk at/after expiry + grace.
+A hash a truncated walk could not reach is looked up with `lookup_invoice` when granted and
+otherwise stays `Unpaid` and watched. It is the NWC scan budget for that connection exactly as
+the durable gate is for JS and Ruby. It is a cache of wallet truth, not state: two BTCPay
+workers each hold one and each pay one walk per interval, the ceiling the other engines
+already accept.
 
 OpenReceive scans shared creation-time ranges rather than walking wallet history once per hash.
 Failed callbacks leave the attempt `pending` and are retried on the next pass or after restart.

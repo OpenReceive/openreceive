@@ -27,7 +27,7 @@ public sealed record PaymentCheck(string PaymentHash, string Status, long? PaidA
 /// ended before the wallet ran out of rows — the page cap was hit, or the wallet ignored
 /// <c>offset</c> and repeated a page — so a hash it did not see is unproven, never proven absent.
 /// </summary>
-public sealed record WalletWalk(IReadOnlyDictionary<string, NwcTransaction> ByPaymentHash, bool Truncated);
+public sealed record WalletWalk(IReadOnlyDictionary<string, NwcTransaction> ByPaymentHash, bool Truncated, int Pages = 0);
 
 /// <summary>
 /// The truncation-safe wallet-history walk — the C# twin of <c>reconcilePaymentAttempts</c> and
@@ -122,6 +122,7 @@ public static class WalletScan
         // Proven false the moment the wallet runs out of rows or every expected hash is accounted
         // for; otherwise the walk hit its cap with rows still to come.
         var truncated = true;
+        var pages = 0;
 
         for (var pageNumber = 0; pageNumber < pageCap; pageNumber += 1)
         {
@@ -135,6 +136,7 @@ public static class WalletScan
                 Until = until is { } u ? NormalizeUnix(u, "until") : null,
             };
             var page = await list(request, ct);
+            pages += 1;
             foreach (var transaction in page.Transactions)
             {
                 if (transaction.Type is not null && transaction.Type != "incoming") continue;
@@ -160,7 +162,7 @@ public static class WalletScan
             previousPage = pageKey;
             offset += OpenReceiveTables.TransactionPageLimit;
         }
-        return new WalletWalk(byPaymentHash, truncated);
+        return new WalletWalk(byPaymentHash, truncated, pages);
     }
 
     /// <summary>

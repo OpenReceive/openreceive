@@ -174,7 +174,9 @@ Rerunning the command reuses the same store and applies the current `.env`.
 Removing `LSC_URI_PRIMARY` disables swaps and clears the saved provider setting.
 Exported environment variables take precedence over `.env`, as in the other demos.
 The live and testkit stacks use separate Docker volumes but share port 14180;
-stop one before starting the other. CI continues to use generated test credentials.
+stop one before starting the other. Starting one while the other holds the port
+stops immediately and prints the command that stops the other. CI continues to
+use generated test credentials.
 
 ## The regtest stack
 
@@ -243,10 +245,14 @@ public registration after the first admin.
   `nip44_v2` preferred, `nip04` fallback. Any spend method fails the
   preflight closed unless the override is set; the client never calls
   `pay_*` regardless.
-- `GetInvoice` is served from one per-connection `ScanMemo` (24 h window,
-  settled + unpaid views, pages of `OpenReceiveTables.TransactionPageLimit`,
-  deduped, truncation-safe). It never returns null or `Expired` for a hash
-  the wallet did not itself mark expired or failed.
+- `GetInvoice` is served from one per-connection `ScanMemo` that watches the
+  hashes BTCPay monitors: one targeted `list_transactions` walk from the
+  oldest watched pending invoice (settled view, then the unpaid view for what
+  is still missing; pages of `OpenReceiveTables.TransactionPageLimit`;
+  stops once every watched hash is seen). A hash a truncated walk cannot
+  reach falls back to `lookup_invoice` when granted and otherwise stays
+  pending and watched. It never returns null or `Expired` for a hash the
+  wallet did not itself mark expired or failed.
 - Settlement is BTCPay's `LightningListener`; the plugin records nothing
   about Lightning payments itself. Swaps target the invoice's existing
   BOLT11 and live in `openreceive_swaps`; the provider token is server-only.

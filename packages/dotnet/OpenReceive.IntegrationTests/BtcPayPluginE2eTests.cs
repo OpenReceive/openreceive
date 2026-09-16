@@ -39,11 +39,16 @@ public sealed class BtcPayPluginE2eTests : IClassFixture<E2eStack>
     public async Task Receive_only_wallet_preflight_and_save_persist_the_store_lightning_backend()
     {
         RequireStack();
+        // A two-day store timer: BTCPay permits it, the backend mints at most a day, so saving the wallet lowers it.
+        var store = (await _stack.BtcPay(HttpMethod.Get, $"/api/v1/stores/{_stack.StoreId}"))!.AsObject();
+        store["invoiceExpiration"] = 2 * 24 * 3600; // Greenfield's unit is seconds; the plugin reports minutes
+        await _stack.BtcPay(HttpMethod.Put, $"/api/v1/stores/{_stack.StoreId}", store);
         await ConnectWalletAsync();
         var saved = await _stack.BtcPay(HttpMethod.Get, $"/api/v1/stores/{_stack.StoreId}/openreceive/settings");
         Assert.True(saved!["lightningNodeIsOpenReceive"]!.GetValue<bool>());
         Assert.StartsWith("type=openreceive;nwc=nostr+walletconnect://", saved["lightningNode"]!.GetValue<string>());
         Assert.Contains("secret=[REDACTED]", saved["lightningNode"]!.GetValue<string>());
+        Assert.Equal(24 * 60, saved["invoiceExpirationMinutes"]!.GetValue<int>());
     }
 
     [Fact]
@@ -144,6 +149,69 @@ public sealed class BtcPayPluginE2eTests : IClassFixture<E2eStack>
         // A foreign invoice id cannot read the swap (the invoice id is the payer's bearer).
         var (foreign, _) = await _stack.Public(HttpMethod.Get, $"/api/plugins/openreceive/swaps/{invoiceId}/{refundSwapId}");
         Assert.Equal(404, foreign);
+    }
+
+    [Fact]
+    public async Task View_only_key_never_sees_a_foreign_lightning_backends_credentials()
+    {
+        RequireStack();
+        await ConnectWalletAsync();
+        // The plugin's settings route exists for every store on the server, so it must not
+        // hand a CanViewStoreSettings key what BTCPay's own Greenfield hides from it: the
+        // Lightning config body. Point the store at a foreign backend with a known fake
+        // credential and read the route back with a key that can only view settings.
+        const string login = "e2elogin";
+        const string password = "e2e-s3cret-password";
+        var viewOnly = await _stack.CreateApiKeyAsync($"btcpay.store.canviewstoresettings:{_stack.StoreId}");
+        try
+        {
+            // BTCPay's LNDhub handler accepts the URI form verbatim (its setup page documents
+            // `lndhub://login:password@https://lndhub.io`); the key=value form is the fallback
+            // should the URI form ever be refused by validation. Both put the credential in
+            // the first ';'-separated field, which is what the old description leaked.
+            var refusals = new List<string>();
+            var configured = false;
+            foreach (var connectionString in new[]
+                     {
+                         $"lndhub://{login}:{password}@https://lndhub.example.invalid",
+                         $"type=lndhub;server=https://{login}:{password}@lndhub.example.invalid",
+                     })
+            {
+                var (status, body) = await _stack.BtcPayRaw(HttpMethod.Put, $"/api/v1/stores/{_stack.StoreId}/payment-methods/BTC-LN",
+                    new { enabled = true, config = new { connectionString } });
+                if (status is >= 200 and < 300)
+                {
+                    configured = true;
+                    break;
+                }
+                refusals.Add($"{connectionString.Split(login)[0]}… -> {status}: {body?.ToJsonString()}");
+            }
+            Assert.SkipWhen(!configured, "BTCPay refused both LNDhub connection-string forms on save, so the foreign-backend leg cannot run:\n" + string.Join("\n", refusals));
+
+            var (viewStatus, view) = await _stack.BtcPayRaw(HttpMethod.Get, $"/api/v1/stores/{_stack.StoreId}/openreceive/settings", apiKey: viewOnly);
+            Assert.Equal(200, viewStatus);
+            Assert.False(view!["lightningNodeIsOpenReceive"]!.GetValue<bool>());
+            Assert.Equal("lndhub", view["lightningNode"]!.GetValue<string>());
+            var text = view.ToJsonString();
+            Assert.DoesNotContain(login, text);
+            Assert.DoesNotContain("s3cret", text);
+            Assert.DoesNotContain("lndhub.example.invalid", text);
+
+            // The write routes stay behind CanModifyStoreSettings.
+            var (putStatus, _) = await _stack.BtcPayRaw(HttpMethod.Put, $"/api/v1/stores/{_stack.StoreId}/openreceive/settings", new { swapsEnabled = false }, apiKey: viewOnly);
+            Assert.Equal(403, putStatus);
+            var (testStatus, _) = await _stack.BtcPayRaw(HttpMethod.Post, $"/api/v1/stores/{_stack.StoreId}/openreceive/wallet/test", new { nwcUri = "nostr+walletconnect://" }, apiKey: viewOnly);
+            Assert.Equal(403, testStatus);
+        }
+        finally
+        {
+            // The other tests connect the wallet themselves, but never leave a foreign backend behind.
+            await ConnectWalletAsync();
+        }
+        var restored = await _stack.BtcPay(HttpMethod.Get, $"/api/v1/stores/{_stack.StoreId}/openreceive/settings", apiKey: viewOnly);
+        Assert.True(restored!["lightningNodeIsOpenReceive"]!.GetValue<bool>());
+        Assert.Contains("secret=[REDACTED]", restored["lightningNode"]!.GetValue<string>());
+        Assert.DoesNotContain(login, restored.ToJsonString());
     }
 
     [Fact]

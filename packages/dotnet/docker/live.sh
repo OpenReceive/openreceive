@@ -9,6 +9,8 @@ if [ "${1:-}" = "--stop" ]; then
   compose down --remove-orphans
   exit
 fi
+source "$HERE/port-guard.sh"
+require_btcpay_port_free openreceive-btcpay-live
 source "$HERE/refresh-btcpay.sh"
 export BTCPAY_DEMO_PLUGIN_DIR="$HERE/.state/plugins"
 export BTCPAY_DEMO_PLUGIN_ACCESS=ro

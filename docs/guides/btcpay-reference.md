@@ -10,7 +10,7 @@ operations that are yours. The walkthrough is the
 
 | Plugin | BTCPay Server | .NET | NNostr.Client |
 | --- | --- | --- | --- |
-| 0.4.8 source (release candidate) | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
+| 0.4.10 source (release candidate) | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
 
 The plugin identifier is `BTCPayServer.Plugins.OpenReceive`. Its version and
 publication are independent of npm/gem releases.
@@ -195,17 +195,29 @@ BTCPay's `LightningListener` settles invoices; the plugin's Lightning client
 only answers its questions.
 
 - `CreateInvoice` → NIP-47 `make_invoice`. Amount within 1,000 msat and the
-  JSON safe-integer ceiling, description or description hash, expiry as
-  requested; a wallet that mints a different expiry (beyond 60 seconds) is
-  refused. Top-up invoices (no amount) are refused with a clear message.
-- `GetInvoice` → the connection's scan memo: one `list_transactions` walk
-  (settled view, then unpaid view; pages of 20; 24-hour window; deduplicated;
-  truncation-safe) shared by every caller, refreshed every 2, 6 or 12 seconds
-  depending on the age of the newest live invoice (minted by this process, or
-  seen pending in a walk after a restart). A caller that gives up (an aborted
-  checkout request) stops waiting without cancelling the shared walk; rows
-  older than the window are forgotten after a walk. Paid when
-  the settlement rule says settled (`settled_at > 0`, or `state` /
+  JSON safe-integer ceiling, description or description hash, expiry as BTCPay
+  requests it (the store's invoice expiration) capped at 24 hours — most NWC
+  wallets allow no more, and a wallet that clamped a longer request would fail
+  the check that follows; a wallet that mints a different expiry (beyond 60
+  seconds) is refused. Saving the wallet lowers a store expiration above 24
+  hours to 24 hours so the checkout timer and the invoice agree. Top-up
+  invoices (no amount) are refused with a clear message.
+- `GetInvoice` → the connection's scan memo. Every hash BTCPay asks about
+  (and every invoice minted here) is watched until the wallet's row is
+  terminal, or a complete walk at or after its expiry plus 900 seconds still
+  shows it unpaid. One refresh walks `list_transactions` for exactly the
+  watched hashes: from the oldest watched pending invoice (minus 60 seconds),
+  settled view first, then the unpaid view for what is still missing, pages
+  of 20, stopping as soon as every watched hash is seen; nothing watched
+  costs nothing. A hash a truncated walk could not reach (a wallet that
+  ignores `offset`, or a page cap) is looked up with `lookup_invoice` when
+  the wallet grants it, and otherwise stays pending and watched for the next
+  refresh — it is never closed. A hash of unknown age (asked about after a
+  restart) is looked up first when granted, else walked once without a lower
+  bound. Refreshed every 2, 6 or 12 seconds depending on the age of the
+  newest live invoice, shared by every caller; a caller that gives up (an
+  aborted checkout request) stops waiting without cancelling the shared walk.
+  Paid when the settlement rule says settled (`settled_at > 0`, or `state` /
   `transaction_state` equal to `settled`; a preimage alone never), Expired
   only when the wallet's own row says expired or failed, Unpaid otherwise,
   including for a hash the memo has not seen.
@@ -237,13 +249,13 @@ the page is titled "OpenReceive health check".
 | Lightning node is an OpenReceive connection | the BTC-LN config carries `type=openreceive` |
 | Wallet preflight (now) | the checks above pass right now |
 | Wallet pushes payment notifications | the info event advertises `payment_received` |
-| Last wallet scan | this process has walked the wallet at least once (and whether the walk was complete) |
+| Last wallet scan | this process has walked the wallet at least once, how many invoices it watches, and whether any could not be reached |
 | Spend-capable override is ON | shown only when the override is set; always a warning |
 | Top-up invoices are not supported | always informational |
 | Swap provider configured / reachable | with swaps on: an LSC is saved and its catalog loads, listing the available assets |
 | Invoice expiration covers the provider window | 45 minutes or more (60 recommended) |
 | Swaps needing attention | no row in `attention` |
-| Invoice expiration within the scan window | 24 hours or less |
+| Invoice expiration within a day | 24 hours or less: Lightning invoices are minted for at most a day |
 
 ## Troubleshooting
 
@@ -261,8 +273,9 @@ the page is titled "OpenReceive health check".
   invoice has less than the provider window left, it received a partial
   payment, or it is a top-up invoice. The doctor names which.
 - **Invoice expiration** — a swap-enabled store needs at least 45 minutes
-  (60 recommended). An expiration above 24 hours is outside the wallet scan
-  window and the doctor flags it.
+  (60 recommended). Above 24 hours the checkout timer outlives the Lightning
+  invoice, which is minted for at most a day; saving the wallet lowers the
+  store setting, and the doctor flags a setting raised afterwards.
 - **Payments settle slowly** — the wallet pushes no `payment_received`
   notifications, so settlement waits for the periodic scan (2–12 s). The
   doctor shows the notification probe and the last scan time.
@@ -312,8 +325,9 @@ payments are the record.
   creation and refunds take advisory locks, the poller's due set is computed
   in SQL so both share one backlog, and the settings cache is 5 seconds, so a
   save on one worker reaches the other within that. What is per process: the
-  scan memo (each worker pays one walk per interval) and the provider weight
-  budget (two workers can spend twice the provider's per-minute allowance).
+  scan memo (each worker walks for the invoices it was asked about, one walk
+  per interval) and the provider weight budget (two workers can spend twice
+  the provider's per-minute allowance).
 - **Beside the Nostr plugin**: each plugin loads its own copy of NNostr in
   its own load context (BTCPay's loader shares host types only), so the two
   never fight over an assembly version; they also do not share relay sockets.

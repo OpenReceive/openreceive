@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Lightning;
@@ -14,17 +15,23 @@ namespace BTCPayServer.Plugins.OpenReceive.Nwc;
 /// <summary>
 /// Everything one connection string shares across the many client instances BTCPay
 /// creates for it: the relay transport (with its negotiated encryption), the scan memo,
-/// and the last capability summary. Process-local by design.
+/// and the capability summary. Capabilities come from the wallet's kind-13194 info event
+/// the first time anything needs them (so they survive a BTCPay restart without a
+/// preflight) and are replaced by the fuller <c>get_info</c> summary when a preflight
+/// runs. Process-local by design.
 /// </summary>
 public sealed class NwcConnectionState
 {
+    private readonly ILogger _logger;
+
     public NwcConnectionState(NwcUri uri, bool allowSpendCapableWallet, IReceiveNwcTransport transport, Func<long> clock, ILogger logger)
     {
         Uri = uri;
         AllowSpendCapableWallet = allowSpendCapableWallet;
         Transport = transport;
+        _logger = logger;
         ListPage = ListPageAsync;
-        Memo = new ScanMemo(ListPage, clock, logger);
+        Memo = new ScanMemo(ListPage, clock, logger, LookupIfGrantedAsync);
     }
 
     public NwcUri Uri { get; }
@@ -34,12 +41,63 @@ public sealed class NwcConnectionState
     public ListTransactionsPage ListPage { get; }
     public WalletCapabilitySummary? Capabilities { get; private set; }
 
+    /// <summary>What is known right now; <see cref="LookupInvoiceGrantedAsync"/> learns first.</summary>
     public bool LookupInvoiceGranted => MethodGranted("lookup_invoice");
 
     public bool MethodGranted(string method) =>
         Capabilities?.Methods.Contains(method, StringComparer.Ordinal) == true;
 
     public void RememberCapabilities(WalletCapabilitySummary summary) => Capabilities = summary;
+
+    /// <summary>
+    /// Learns the capabilities from the info event when nothing has recorded them yet in
+    /// this process. One relay read per connection per process; a relay that is down
+    /// leaves them unknown (every method reads as not granted) until the next call.
+    /// </summary>
+    public async Task EnsureCapabilitiesAsync(CancellationToken cancellationToken)
+    {
+        if (Capabilities is not null) return;
+        try
+        {
+            var info = await Transport.FetchServiceInfoAsync(cancellationToken).ConfigureAwait(false);
+            if (info is null || Capabilities is not null) return;
+            RememberCapabilities(NwcInfo.FromServiceInfo(Uri, info));
+            _logger.LogInformation("nwc.capabilities.learned wallet={Wallet} methods={Methods}", Uri.WalletPubkey, string.Join(",", Capabilities!.Methods));
+        }
+        catch (NwcTransportException e)
+        {
+            _logger.LogDebug("nwc.capabilities.unavailable wallet={Wallet} error={Error}", Uri.WalletPubkey, e.Message);
+        }
+    }
+
+    public async Task<bool> LookupInvoiceGrantedAsync(CancellationToken cancellationToken)
+    {
+        await EnsureCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
+        return LookupInvoiceGranted;
+    }
+
+    /// <summary>The memo's fallback for a hash a walk could not reach: <c>lookup_invoice</c> when granted.</summary>
+    public async Task<LookupResult> LookupIfGrantedAsync(string paymentHash, CancellationToken cancellationToken)
+    {
+        if (!await LookupInvoiceGrantedAsync(cancellationToken).ConfigureAwait(false)) return LookupResult.Unavailable;
+        try
+        {
+            var raw = await Transport.RequestAsync("lookup_invoice", new JsonObject { ["payment_hash"] = paymentHash }, cancellationToken).ConfigureAwait(false);
+            // The wallet's own hash names the row; the requested one only fills a reply that omits it.
+            var row = NwcNormalize.Transaction(raw);
+            return new LookupResult(LookupOutcome.Found, row.PaymentHash is null ? row with { PaymentHash = paymentHash } : row);
+        }
+        catch (NwcRequestException e) when (string.Equals(e.Code, "NOT_FOUND", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug("nwc.lookup_invoice.not_found payment_hash={Hash}", paymentHash);
+            return LookupResult.NotFound;
+        }
+        catch (NwcRequestException e)
+        {
+            _logger.LogDebug("nwc.lookup_invoice.error payment_hash={Hash} code={Code}", paymentHash, e.Code);
+            return LookupResult.Unavailable;
+        }
+    }
 
     private async Task<ListTransactionsResult> ListPageAsync(ListTransactionsRequest request, CancellationToken cancellationToken)
     {

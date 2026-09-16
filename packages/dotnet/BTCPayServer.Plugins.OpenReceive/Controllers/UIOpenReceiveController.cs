@@ -118,7 +118,7 @@ public sealed class UIOpenReceiveController : Controller
             var state = _settings.GetConnectionState(store);
             vm.Probes.Add(Probe("Last wallet scan", state?.Memo.RefreshedAt is not null,
                 state?.Memo.RefreshedAt is { } at
-                    ? $"{DateTimeOffset.FromUnixTimeSeconds(at):u}{(state.Memo.Complete ? string.Empty : " (walk was truncated: BTCPay keeps watching every hash)")}"
+                    ? $"{DateTimeOffset.FromUnixTimeSeconds(at):u}; watching {state.Memo.WatchedCount} invoice(s){(state.Memo.Complete ? string.Empty : $"; {state.Memo.Unreached} could not be reached on the wallet yet (still watched, retried every refresh)")}"
                     : "No scan yet in this process — the first invoice triggers one.", null));
             if (connection.AllowSpendCapableWallet)
             {
@@ -127,6 +127,15 @@ public sealed class UIOpenReceiveController : Controller
         }
         var blob = store.GetStoreBlob();
         vm.Probes.Add(Probe("Top-up invoices are not supported on this backend", true, "Every invoice needs an amount; top-up (amountless) invoices fail with a clear message.", null));
+        if (connection is not null)
+        {
+            var cap = ReceiveOnlyNwcClient.MaxInvoiceExpiry;
+            vm.Probes.Add(Probe("Invoice expiration within a day", blob.InvoiceExpiration <= cap,
+                blob.InvoiceExpiration <= cap
+                    ? $"Store → Checkout → Invoice expiration is {blob.InvoiceExpiration.TotalMinutes:0} minutes; Lightning invoices are minted for the same time."
+                    : $"Store → Checkout → Invoice expiration is {blob.InvoiceExpiration.TotalHours:0.#} h, but Lightning invoices are minted for at most {cap.TotalHours:0} h (most NWC wallets allow no more): the checkout keeps showing an invoice the payer can no longer pay. Lower the store's invoice expiration to {cap.TotalHours:0} h or less, or save the wallet again.",
+                Url.Action(nameof(Setup), new { storeId = store.Id })));
+        }
         if (settings.SwapsEnabled)
         {
             var providers = await _providers.ProvidersAsync(store.Id, cancellationToken);
@@ -150,8 +159,6 @@ public sealed class UIOpenReceiveController : Controller
             var attention = await _swaps.CountAttentionAsync(store.Id, cancellationToken);
             vm.Probes.Add(Probe("Swaps needing attention", attention == 0, attention == 0 ? "None." : $"{attention} swap(s) need a human: open the invoice pages to review them.", null));
         }
-        vm.Probes.Add(Probe("Invoice expiration within the scan window", blob.InvoiceExpiration <= TimeSpan.FromHours(24),
-            $"Invoice expiration is {blob.InvoiceExpiration.TotalHours:0.#} h; the wallet scan covers 24 h.", null));
         vm.RecentSwaps = (await _swaps.ForStoreAsync(store.Id, 20, cancellationToken)).ToList();
         return vm;
     }

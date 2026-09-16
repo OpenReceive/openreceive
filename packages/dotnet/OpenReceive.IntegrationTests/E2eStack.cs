@@ -69,10 +69,21 @@ public sealed class E2eStack : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async Task<JsonNode?> BtcPay(HttpMethod method, string path, object? body = null, bool ensureSuccess = true)
+    /// <summary>
+    /// Mints a second API key for the same user with only <paramref name="permissions"/>
+    /// (e.g. <c>btcpay.store.canviewstoresettings:{storeId}</c>); the stack's own key is unrestricted.
+    /// </summary>
+    public async Task<string> CreateApiKeyAsync(params string[] permissions)
+    {
+        var key = await BtcPay(HttpMethod.Post, "/api/v1/api-keys", new { label = "e2e-" + string.Join(",", permissions), permissions });
+        return key!["apiKey"]!.GetValue<string>();
+    }
+
+    /// <summary>Sends as <paramref name="apiKey"/>, or as the stack's unrestricted key when null.</summary>
+    public async Task<JsonNode?> BtcPay(HttpMethod method, string path, object? body = null, bool ensureSuccess = true, string? apiKey = null)
     {
         using var request = new HttpRequestMessage(method, $"{BtcPayUrl!.TrimEnd('/')}{path}");
-        request.Headers.Authorization = new AuthenticationHeaderValue("token", ApiKey);
+        request.Headers.Authorization = new AuthenticationHeaderValue("token", apiKey ?? ApiKey);
         if (body is not null) request.Content = JsonContent.Create(body);
         var response = await Http.SendAsync(request);
         if (ensureSuccess) Assert.True(response.IsSuccessStatusCode, $"{method} {path} -> {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
@@ -80,10 +91,10 @@ public sealed class E2eStack : IAsyncLifetime
         return text.Length == 0 ? null : JsonNode.Parse(text);
     }
 
-    public async Task<(int Status, JsonNode? Body)> BtcPayRaw(HttpMethod method, string path, object? body = null)
+    public async Task<(int Status, JsonNode? Body)> BtcPayRaw(HttpMethod method, string path, object? body = null, string? apiKey = null)
     {
         using var request = new HttpRequestMessage(method, $"{BtcPayUrl!.TrimEnd('/')}{path}");
-        request.Headers.Authorization = new AuthenticationHeaderValue("token", ApiKey);
+        request.Headers.Authorization = new AuthenticationHeaderValue("token", apiKey ?? ApiKey);
         if (body is not null) request.Content = JsonContent.Create(body);
         var response = await Http.SendAsync(request);
         var text = await response.Content.ReadAsStringAsync();
