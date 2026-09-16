@@ -497,20 +497,25 @@ public sealed class ReceiveOnlyNwcClientTests
         using var listener = await h.Client.Listen(Bounded());
         Assert.IsType<NwcPollListener>(listener);
 
-        // Let the first tick's walk (settled + unpaid views) see the invoice still pending
-        // before settling, so the settlement is found by the 2 s cadence, not the first walk.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (h.Transport.Count("list_transactions") < 2 && DateTime.UtcNow < deadline) await Task.Delay(20);
-        Assert.Equal(2, h.Transport.Count("list_transactions"));
+        // Let the first tick's walk see the invoice still pending before settling, so the
+        // settlement is found by the 2 s cadence, not the first walk. Only the memo's state is
+        // pinned, not a request count: on a slow runner the first walk can straddle a second
+        // tick, and the exact number of pages is the memo's business (ScanMemoTests).
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (h.State.Memo.RefreshedAt is null && DateTime.UtcNow < deadline) await Task.Delay(20);
+        Assert.NotNull(h.State.Memo.RefreshedAt);
+        Assert.False(Settlement.IsSettled(h.State.Memo.Lookup(invoice.Id)!));
+        var walksBeforeSettlement = h.Transport.Count("list_transactions");
+        Assert.True(walksBeforeSettlement >= 2, "the first walk reads the settled view and then the unpaid view for the pending invoice");
 
         await h.Backend.SettleAsync(invoice.Id);
-        var paid = await listener.WaitInvoice(new CancellationTokenSource(TimeSpan.FromSeconds(15)).Token);
+        var paid = await listener.WaitInvoice(new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token);
 
         Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
         Assert.Equal(invoice.Id, paid.Id);
         Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
         Assert.NotNull(paid.PaidAt);
-        Assert.True(h.Transport.Count("list_transactions") >= 3); // the first tick (two views) plus the one that saw the settlement
+        Assert.True(h.Transport.Count("list_transactions") > walksBeforeSettlement); // a later tick, not the first walk, saw the settlement
         Assert.Equal(0, h.Transport.Count("lookup_invoice"));
     }
 
