@@ -33,7 +33,9 @@ final class Assets
     /** @return list<array{pay_in_asset: string, label: string, network_label: string, coin: string, network: string, pegged_to?: string}> */
     public static function listInfo(): array
     {
-        return array_map(static fn (string $asset): array => self::ASSET_INFO[$asset], self::PAY_IN_ASSETS);
+        // array_values keeps this a list for PHPStan now that the rows differ in
+        // shape (pegged_to is present only on stablecoins).
+        return array_values(array_map(static fn (string $asset): array => self::ASSET_INFO[$asset], self::PAY_IN_ASSETS));
     }
 
     public static function normalizeNetwork(mixed $value): string
