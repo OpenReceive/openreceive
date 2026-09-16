@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.10 - 2026-09-16
+
+Release alongside the packaged checkout fix that shows one amount to send
+on a USDT or USDC checkout: the payment breakdown and transaction details
+express “You send” and the swap fee in the token and no longer show the
+fiat valuation of the deposit, which read as the deposit amount with a typo.
+Update `@openreceive/elements` and rebuild the frontend to receive this fix;
+upgrading the gem alone does not update the checkout UI.
+
 ## 0.4.9 - 2026-09-14
 
 Release alongside the packaged checkout fix that hides the Lightning pane

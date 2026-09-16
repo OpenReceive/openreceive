@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.10 - 2026-09-16
+
+Release in lockstep with the 0.4.10 stablecoin checkout fix. The shared
+pay-in asset table (`OpenReceive::Generated::SWAP_ASSET_INFO`) gains a
+`pegged_to` key on the USDT and USDC rows. No Ruby engine or settlement
+changes.
+
 ## 0.4.9 - 2026-09-14
 
 Release in lockstep with the 0.4.9 checkout method-switch fix and updated

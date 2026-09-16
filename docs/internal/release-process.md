@@ -2,7 +2,7 @@
 
 The general release surface, versioned in lockstep:
 
-- OpenReceive `0.4.9`
+- OpenReceive `0.4.10`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -470,7 +470,7 @@ environment), each with exactly `contents: read` + `id-token: write`.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.4.9`. Per-package tags are
+Tag the prepared release commit once, as `v0.4.10`. Per-package tags are
 deliberately not used while the general package family releases in lockstep with the
 workspace version. Introduce per-package tags only if versions ever diverge,
 after the contract is stable enough to avoid confusing SDK consumers.

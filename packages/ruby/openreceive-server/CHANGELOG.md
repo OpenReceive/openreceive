@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.10 - 2026-09-16
+
+Release in lockstep with the 0.4.10 stablecoin checkout fix. The swap fee
+object (`currency`, `pay_in_fiat`, `payout_fiat`) is unchanged on the wire;
+`pay_in_fiat` is documented as a valuation that explains the spread, never
+an amount a payer is told to send. No Ruby server API or payment behavior
+changes.
+
 ## 0.4.9 - 2026-09-14
 
 Release in lockstep with the 0.4.9 checkout method-switch fix and updated

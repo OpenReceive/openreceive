@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.10 - 2026-09-16
 
 - Show one amount to send on a stablecoin checkout. A USDC (Solana) payer saw
   “Pay 50.05 USDC” with “You send $50.03” one line below and could not tell
@@ -18,7 +18,22 @@
 - BTCPay plugin source: the checkout fee line moves into the snapshot as
   `fee_text` and follows the same rule (not published by this change).
 - Document deposit amounts versus fee valuations in the API reference, the
-  checkout UX guide, the integration directions, and the packaged skills.
+  checkout UX guide, the integration directions, and the packaged skills. The
+  directions for custom checkout UIs now state the rule outright: never place
+  a fiat valuation of the deposit next to a stablecoin amount.
+- Release the general package family together at 0.4.10. Payment APIs, storage
+  and settlement behavior are unchanged. Rails, Django, FastAPI, Laravel and
+  plain-PHP hosts must update `@openreceive/elements` (or the standalone
+  checkout build) and rebuild their frontend to receive the fix; upgrading the
+  server package alone does not update the checkout UI.
+
+The release gate rebuilds the Node/Express, Fastify, Laravel, FastAPI, Django,
+static HTML, plain PHP, Next.js and Rails demo assets and the standalone
+checkout with 0.4.10 packages. The configured live wallet passed receive-only
+preflight; live invoice creation and manual payment verification are
+intentionally skipped. The BTCPay plugin remains at its current published
+version and is not published by this release; its source gains the same
+stablecoin fee rule for the next plugin release.
 
 ## 0.4.9 - 2026-09-14
 
