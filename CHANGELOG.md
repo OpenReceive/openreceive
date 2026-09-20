@@ -18,6 +18,10 @@
   invoice's scan window, a failed whole-history walk is retried, and
   `packages/dotnet/docker/restart-e2e.sh` proves "paid while BTCPay was down".
   Details in `packages/dotnet/CHANGELOG.md`.
+- BTCPay plugin source (not published by this change): the notification
+  subscription opens its own relay socket. NNostr's shared pool disposed the
+  leased client after five quiet minutes, which silently ended push and left
+  settlement to the 60-second sweep.
 - Print the demo's address in a highlighted banner. `npm run demo <target>`
   draws a boxed `http://localhost:<port>` block when it starts and again the
   moment the published port first answers, so the URL is not lost under the

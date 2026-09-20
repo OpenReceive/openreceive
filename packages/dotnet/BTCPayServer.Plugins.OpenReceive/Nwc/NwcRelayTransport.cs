@@ -175,75 +175,76 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
     public async IAsyncEnumerable<JsonObject> SubscribeNotificationsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var scheme = await NegotiateSchemeAsync(cancellationToken).ConfigureAwait(false);
-        // The lease is held for the whole subscription: returning it to the pool while
-        // subscribed would let the pool's idle sweep close the socket under us.
-        var (client, usage) = await _pool.GetClientAndConnect(Relays, cancellationToken).ConfigureAwait(false);
-        using (usage)
+        // The subscription owns its socket instead of leasing the pool's. NNostr's pool
+        // disposes any client whose lease was last taken or returned five minutes ago —
+        // a HELD lease does not count — and Dispose detaches every handler before the
+        // socket drops, so on a quiet wallet a pooled subscription goes deaf with nothing
+        // to observe, and only the listener's sweep settles invoices from then on.
+        var relays = Relays;
+        using INostrClient client = relays.Length > 1 ? new CompositeNostrClient(relays) : new NostrClient(relays[0]);
+        await client.ConnectAndWaitUntilConnected(cancellationToken, CancellationToken.None).ConfigureAwait(false);
+        var kind = scheme == NIP47.EncryptionScheme.Nip44V2 ? NIP47.Nip44NotificationEventKind : NIP47.NotificationEventKind;
+        // Author-bound at the filter: only events signed by the wallet pubkey and addressed to this connection.
+        var filter = new NostrSubscriptionFilter
         {
-            var kind = scheme == NIP47.EncryptionScheme.Nip44V2 ? NIP47.Nip44NotificationEventKind : NIP47.NotificationEventKind;
-            // Author-bound at the filter: only events signed by the wallet pubkey and addressed to this connection.
-            var filter = new NostrSubscriptionFilter
+            Authors = new[] { _uri.WalletPubkey },
+            ReferencedPublicKeys = new[] { _uri.SecretKey.CreateXOnlyPubKey().ToHex() },
+            Kinds = new[] { kind },
+        };
+        var events = Channel.CreateUnbounded<NostrEvent>(new UnboundedChannelOptions { SingleReader = true });
+        var subscriptionId = Guid.NewGuid().ToString("N");
+        void OnEvents(object? sender, (string subscriptionId, NostrEvent[] events) args)
+        {
+            if (args.subscriptionId != subscriptionId) return;
+            foreach (var evt in args.events) events.Writer.TryWrite(evt);
+        }
+        // A relay that closes the socket must end this enumeration. NNostr stops reading
+        // and aborts the WebSocket but tells no subscriber, so without this watch the
+        // push loop would wait forever on a subscription the relay no longer holds.
+        // Ending it ends the listener session, and BTCPay opens a fresh one with a fresh
+        // REQ. StateChanged lives on the concrete clients, not INostrClient (the same
+        // split NNostr's own SubscribeForEvents makes).
+        void OnState(object? sender, WebSocketState? state)
+        {
+            if (state is WebSocketState.Open) return;
+            _logger.LogWarning("nwc.notification.relay_closed wallet={Wallet} state={State}", _uri.WalletPubkey, state);
+            events.Writer.TryComplete(new NwcTransportException($"The relay connection closed ({state})."));
+        }
+        void OnCompositeState(object? sender, (Uri Relay, WebSocketState? State) change)
+        {
+            if (sender is not CompositeNostrClient composite || composite.States.Values.Any(s => s is WebSocketState.Open)) return;
+            _logger.LogWarning("nwc.notification.relay_closed wallet={Wallet} state={State}", _uri.WalletPubkey, change.State);
+            events.Writer.TryComplete(new NwcTransportException("Every relay connection closed."));
+        }
+        client.EventsReceived += OnEvents;
+        if (client is NostrClient single) single.StateChanged += OnState;
+        else if (client is CompositeNostrClient composite) composite.StateChanged += OnCompositeState;
+        try
+        {
+            await client.CreateSubscription(subscriptionId, new[] { filter }, cancellationToken).ConfigureAwait(false);
+            await foreach (var evt in events.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                Authors = new[] { _uri.WalletPubkey },
-                ReferencedPublicKeys = new[] { _uri.SecretKey.CreateXOnlyPubKey().ToHex() },
-                Kinds = new[] { kind },
-            };
-            var events = Channel.CreateUnbounded<NostrEvent>(new UnboundedChannelOptions { SingleReader = true });
-            var subscriptionId = Guid.NewGuid().ToString("N");
-            void OnEvents(object? sender, (string subscriptionId, NostrEvent[] events) args)
-            {
-                if (args.subscriptionId != subscriptionId) return;
-                foreach (var evt in args.events) events.Writer.TryWrite(evt);
-            }
-            // A relay that closes the socket must end this enumeration. NNostr stops reading
-            // and aborts the WebSocket but tells no subscriber, and the next RPC through the
-            // pool silently reconnects the same client WITHOUT re-sending this REQ — so
-            // without this watch the push loop would wait forever on a subscription the
-            // relay no longer holds. Ending it ends the listener session, and BTCPay opens a
-            // fresh one with a fresh REQ. StateChanged lives on the concrete clients, not
-            // INostrClient (the same split NNostr's own SubscribeForEvents makes).
-            void OnState(object? sender, WebSocketState? state)
-            {
-                if (state is WebSocketState.Open) return;
-                _logger.LogWarning("nwc.notification.relay_closed wallet={Wallet} state={State}", _uri.WalletPubkey, state);
-                events.Writer.TryComplete(new NwcTransportException($"The relay connection closed ({state})."));
-            }
-            void OnCompositeState(object? sender, (Uri Relay, WebSocketState? State) change)
-            {
-                if (sender is not CompositeNostrClient composite || composite.States.Values.Any(s => s is WebSocketState.Open)) return;
-                _logger.LogWarning("nwc.notification.relay_closed wallet={Wallet} state={State}", _uri.WalletPubkey, change.State);
-                events.Writer.TryComplete(new NwcTransportException("Every relay connection closed."));
-            }
-            client.EventsReceived += OnEvents;
-            if (client is NostrClient single) single.StateChanged += OnState;
-            else if (client is CompositeNostrClient composite) composite.StateChanged += OnCompositeState;
-            try
-            {
-                await client.CreateSubscription(subscriptionId, new[] { filter }, cancellationToken).ConfigureAwait(false);
-                await foreach (var evt in events.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+                if (evt.Kind != kind || evt.PublicKey != _uri.WalletPubkey) continue;
+                string decrypted;
+                try
                 {
-                    if (evt.Kind != kind || evt.PublicKey != _uri.WalletPubkey) continue;
-                    string decrypted;
-                    try
-                    {
-                        decrypted = await DecryptAsync(evt, scheme).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogWarning("nwc.notification.decrypt_failed wallet={Wallet} error={Error}", _uri.WalletPubkey, e.Message);
-                        continue;
-                    }
-                    if (JsonNode.Parse(decrypted) is not JsonObject envelope) continue;
-                    yield return envelope;
+                    decrypted = await DecryptAsync(evt, scheme).ConfigureAwait(false);
                 }
+                catch (Exception e)
+                {
+                    _logger.LogWarning("nwc.notification.decrypt_failed wallet={Wallet} error={Error}", _uri.WalletPubkey, e.Message);
+                    continue;
+                }
+                if (JsonNode.Parse(decrypted) is not JsonObject envelope) continue;
+                yield return envelope;
             }
-            finally
-            {
-                client.EventsReceived -= OnEvents;
-                if (client is NostrClient single2) single2.StateChanged -= OnState;
-                else if (client is CompositeNostrClient composite2) composite2.StateChanged -= OnCompositeState;
-                try { await client.CloseSubscription(subscriptionId, CancellationToken.None).ConfigureAwait(false); } catch { /* socket may be gone */ }
-            }
+        }
+        finally
+        {
+            client.EventsReceived -= OnEvents;
+            if (client is NostrClient single2) single2.StateChanged -= OnState;
+            else if (client is CompositeNostrClient composite2) composite2.StateChanged -= OnCompositeState;
+            try { await client.CloseSubscription(subscriptionId, CancellationToken.None).ConfigureAwait(false); } catch { /* socket may be gone */ }
         }
     }
 

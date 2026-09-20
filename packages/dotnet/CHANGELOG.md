@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Push settlement survives a quiet wallet.** The notification subscription
+  now opens its own relay socket. It used to hold a lease on NNostr's shared
+  client pool, but the pool disposes any client that saw no new request for
+  five minutes, held lease or not, and detaches every handler before the
+  socket drops — so when a store's open invoices expired unpaid and the
+  wallet went quiet, the subscription went deaf with nothing logged, and
+  every later payment waited for the 60-second sweep (seen on the regtest
+  stack as 20–40 s settlements with no `nwc.notification.received` line)
+  until BTCPay happened to open a new listener. Requests still share the
+  pool.
 - **Minted invoices are stored, so a restart loses nothing.** The plugin now
   owns a second table, `openreceive_invoices` (migration
   `20260920000000_MintedInvoices`, applied by BTCPay at startup): one row per
