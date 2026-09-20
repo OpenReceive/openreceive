@@ -229,9 +229,13 @@ export function createHttpHandler(options: CreateHttpHandlerOptions): HttpHandle
       : typeof options.opportunisticReconcile === "object"
         ? options.opportunisticReconcile
         : {};
-  if (reconcile !== undefined && typeof options.host.payments.claimReconcileGate !== "function") {
+  if (
+    reconcile !== undefined &&
+    (typeof options.host.payments.claimReconcileGate !== "function" ||
+      typeof options.host.payments.checkpointReconcileGate !== "function")
+  ) {
     throw new TypeError(
-      "Opportunistic reconcile (on by default) requires payments.claimReconcileGate — a durable " +
+      "Opportunistic reconcile (on by default) requires payments.claimReconcileGate and checkpointReconcileGate — a durable " +
         "compare-and-set gate shared by every worker (the built-in SQL repository implements it " +
         "over openreceive_meta). Implement it on the custom repository, or pass " +
         "opportunisticReconcile: false and run your own settlement worker. " +
@@ -696,13 +700,12 @@ async function persistCheckoutAttempt(
     // Meaningful repository refusals ("already paid", "live attempt for the
     // same method") keep their own status and message.
     if (error instanceof HttpError || isServiceErrorShape(error)) throw error;
-    // Anything else is infrastructure failing to persist (database down, bug):
-    // retryable 503, never a payer-blaming conflict.
+    // A raw host hook refuses exposure with 409. Repository-backed hooks
+    // separately project storage outages to an explicit retryable 503.
     throw new HttpError(
-      503,
-      "INTERNAL",
-      "The host could not persist this payment attempt; payer instructions were withheld. Please retry.",
-      { retryable: true },
+      409,
+      "CONFLICT",
+      "The host did not accept this payment attempt; payer instructions were withheld.",
     );
   }
 }

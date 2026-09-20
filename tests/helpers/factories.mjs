@@ -8,11 +8,11 @@
 // http-boundaries.test.mjs each build a host stub, and the three have genuinely
 // different contracts: adapters' returns {committed, host}; rate-limit's
 // returns the host and aliases commitAttempt; http-boundaries' is a ~45-line
-// stateful repository that also supplies `recordSettlement: async () => true`,
+// stateful repository that also supplies `recordSettlementWithFulfillment`,
 // under a comment stating that this claim is what decides whether
 // repository-mode onPaid runs. Building the "rich" variant and letting the
 // other two pass fewer overrides would hand adapters and rate-limit a
-// recordSettlement they deliberately lack, silently moving them onto a
+// settlement capability they deliberately lack, silently moving them onto a
 // different settlement path. Leave all three alone.
 //
 // NOT SHARED — the padStart hash. There are TWO incompatible hash() signatures

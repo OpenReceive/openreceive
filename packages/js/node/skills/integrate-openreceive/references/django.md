@@ -130,7 +130,7 @@ itself, and they hold for every integration.
   a placeholder that allows everything (`manage.py check` warns
   `openreceive.W002` while it is set) — replace it with this app's real
   ownership check, same as `on_paid`.
-- `on_paid` must be idempotent. It runs once per `reference` — your order
+- `on_paid` must be idempotent. Its database fulfillment commits once per `reference` — your order
   id, one per thing you fulfill, created before checkout, kept across retries,
   never reused. A fresh id per page load lets one order be paid twice.
 - Receive-only NWC is required; a spend-capable code fails closed at boot unless
@@ -307,6 +307,8 @@ enough; drop the `.md` for the same page a person would read.
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
 
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
+
 ---
 
 ## The quickstart, in full
@@ -480,7 +482,7 @@ The host class needs three things: authorization, the trusted price, and
 fulfillment. All three receive the `reference` — a string you choose, and the
 fulfillment identity: your order id, one per thing you fulfill, created before
 checkout, kept across retries, never reused. OpenReceive never looks inside
-it, but `on_paid` runs once per reference, a new checkout under a reference
+it, but `on_paid` commits fulfillment once per reference, a new checkout under a reference
 that already settled is refused with 409, and a fresh id per page load lets
 one order be paid twice.
 

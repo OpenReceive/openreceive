@@ -14,6 +14,27 @@ use OpenReceive\Support\Records;
  */
 final class Errors
 {
+    public static function redactErrorText(string $value): string
+    {
+        $value = preg_replace('/nostr\\+walletconnect:[^\\s"\'`<>]+/i', '[REDACTED_NWC]', $value) ?? $value;
+        $value = preg_replace('/lightning\\+swapconnect:[^\\s"\'`<>]+/i', '[REDACTED_LSC]', $value) ?? $value;
+        return preg_replace('/([?&](?:_or_evt|token|provider_token|secret|key|api_key|api-sign|api_sign)=)[^&\\s"\'`<>]+/i', '$1[REDACTED]', $value) ?? $value;
+    }
+
+    /** Recursive diagnostic projection; never changes the input or attaches exception internals. */
+    public static function sanitizeValue(mixed $value): mixed
+    {
+        if (is_string($value)) return self::redactErrorText($value);
+        if (!is_array($value)) return is_object($value) ? null : $value;
+        $clean = [];
+        foreach ($value as $key => $nested) {
+            $sensitive = is_string($key) && preg_match('/_present$/i', $key) !== 1
+                && preg_match('/secret|token|authorization|cookie|nwc|dsn|preimage|invoice|bolt11|swap_?data|(?:private|api)[_-]?key|^key$|api[_-]?sign/i', $key) === 1;
+            $clean[$key] = $sensitive ? '[REDACTED]' : self::sanitizeValue($nested);
+        }
+        return $clean;
+    }
+
     public const ERROR_CODES = Tables::ERROR_CODES;
     public const RETRYABLE_ERROR_CODES = Tables::RETRYABLE_ERROR_CODES;
 
@@ -85,10 +106,10 @@ final class Errors
         /** @var array{code: string, message: string, retryable: bool, request_id?: string, details?: array<string, mixed>} $result */
         $result = Records::compact([
             'code' => $code,
-            'message' => self::errorMessageFrom($records, $raw, $code),
+            'message' => self::redactErrorText(self::errorMessageFrom($records, $raw, $code)),
             'retryable' => self::firstBoolean($records, 'retryable') ?? in_array($code, self::RETRYABLE_ERROR_CODES, true),
-            'request_id' => self::firstString($records, ['request_id', 'requestId']),
-            'details' => $details,
+            'request_id' => self::sanitizeValue(self::firstString($records, ['request_id', 'requestId'])),
+            'details' => self::sanitizeValue($details),
         ]);
         return $result;
     }

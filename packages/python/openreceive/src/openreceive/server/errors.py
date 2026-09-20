@@ -104,7 +104,7 @@ class HostPersistenceError(ServiceError):
 
     def __init__(
         self,
-        message: str = "The host could not persist this payment attempt; payer instructions were withheld. Please retry.",
+        message: str = "Payment storage is unavailable; payer instructions were withheld. Please retry.",
     ) -> None:
         super().__init__(503, "INTERNAL", message, retryable=True)
 

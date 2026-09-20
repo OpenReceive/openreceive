@@ -1,12 +1,12 @@
-import { compact, isRecord } from "@openreceive/core";
+import { compact, isRecord, isSensitiveLogKey, sanitizeLogValue } from "@openreceive/core";
 import type { NwcEndpointLogger } from "../alby-nwc.ts";
 import type {
   CreateOpenReceiveOptions,
   EventHandler,
-  Logger,
-  NodeOptions,
   LogEvent,
+  Logger,
   LogLevel,
+  NodeOptions,
 } from "./types.ts";
 
 export function emitLog(
@@ -94,53 +94,6 @@ export function sanitizeEvent(entry: LogEvent): LogEvent {
     }
   }
   return clean as LogEvent;
-}
-
-export function sanitizeLogValue(value: unknown): unknown {
-  if (typeof value === "string") return redactSecrets(value);
-  if (Array.isArray(value)) return value.map(sanitizeLogValue);
-  if (typeof value !== "object" || value === null) return value;
-
-  const clean: Record<string, unknown> = {};
-  for (const [key, nested] of Object.entries(value)) {
-    if (isSensitiveLogKey(key)) {
-      clean[key] = "[REDACTED]";
-    } else {
-      clean[key] = sanitizeLogValue(nested);
-    }
-  }
-  return clean;
-}
-
-/**
- * Field names whose VALUE never belongs in a log line, whatever it holds:
- * wallet and provider credentials, the settlement preimage (proof of payment),
- * the raw invoice (`bolt11` payloads carried inside provider errors), and the
- * server-only swap recovery blob (`swap_data` holds the provider order token).
- */
-export function isSensitiveLogKey(key: string): boolean {
-  // `*_present` fields are deliberate presence flags (`preimage_present`) — the
-  // safe thing to log instead of the value.
-  if (/_present$/i.test(key)) return false;
-  return /secret|token|authorization|cookie|nwc|dsn|preimage|invoice|bolt11|swap_?data|(?:private|api)[_-]?key|^key$|api[_-]?sign/i.test(
-    key,
-  );
-}
-
-export function redactSecrets(value: string): string {
-  return (
-    value
-      // Scheme only, no slashes: parseNwcUri accepts both
-      // "nostr+walletconnect://pubkey?..." and the slashless
-      // "nostr+walletconnect:pubkey?...", and the secret rides in the query
-      // either way.
-      .replace(/nostr\+walletconnect:[^\s"'`<>]+/g, "[REDACTED_NWC]")
-      // Lightning Swap Connect credential URI: host, key, and secret in one string.
-      .replace(/lightning\+swapconnect:[^\s"'`<>]+/g, "[REDACTED_LSC]")
-      // `key=` is half an LSC credential pair on its own, so it is redacted
-      // wherever it appears in a query string, not only inside a full URI.
-      .replace(/([?&](?:token|secret|key)=)[^&\s"'`<>]+/gi, "$1[REDACTED]")
-  );
 }
 
 /**
@@ -266,3 +219,5 @@ function optionalLogString(value: unknown): string | undefined {
 function optionalLogNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
+
+export { isSensitiveLogKey, redactSecrets } from "@openreceive/core";

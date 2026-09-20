@@ -33,5 +33,12 @@ composer require openreceive/openreceive
 - Testing without a wallet: `OpenReceive\Testing\FakeWallet` and
   `FakeSwapProvider` — [host testing](https://openreceive.org/guides/host-testing)
 
+The bundled receive-only transport tries configured relays within one deadline.
+A lost response after sending `make_invoice` is reported as an uncertain outcome;
+it never automatically sends another mint. The optional notifications worker keeps
+its gated history catch-up running while subscriptions are disconnected.
+For coordinated upgrades and reviewed existing-attempt repair, see the
+[payment safety guide](https://openreceive.org/guides/payment-safety-upgrade).
+
 Source, issues and the full documentation:
 https://github.com/OpenReceive/openreceive. MIT License.

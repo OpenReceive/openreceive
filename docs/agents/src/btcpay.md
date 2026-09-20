@@ -116,3 +116,5 @@ enough; drop the `.md` for the same page a person would read.
 
 Questions, or a problem with the plugin itself:
 https://openreceive.org/contact
+
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts

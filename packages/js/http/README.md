@@ -38,8 +38,10 @@ write-once settlement with first-attempt-only fulfillment, and the
 machine (`attention` reads as `pending` on the wire; operators see it only in
 `openreceive_payments.status`). `onPaid` is the settlement hook in both modes: with `db` it receives
 `PaymentSettlement` (`reference` plus a `query` that runs inside the
-settlement transaction); with a custom repository it receives the raw
-`SettlementEvent` (`paymentHash`, `paidAt`, `details`). Settlement
+settlement transaction); with a custom repository it receives
+`SettlementEvent<Transaction>` (`reference`, `paymentHash`, `paidAt`, `details`,
+and `transaction`). The repository awaits fulfillment before commit; failure
+rolls back both payment and host writes. Settlement
 piggybacks on mounted routes by default through the durable `openreceive_meta`
 gate (`opportunisticReconcile: false` disables, `{ minIntervalSeconds }`
 tunes); `startNotificationWorker` is the optional

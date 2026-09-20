@@ -56,8 +56,14 @@ final class WalletScanTruncationTest extends TestCase
         $pageLimit = self::vector('wallet-scan-truncation')['page_limit'];
         return static function (array $request) use ($pages, $unpaidPages, $walletSpec, $pageLimit): array {
             $source = ($request['unpaid'] ?? false) === true ? $unpaidPages : $pages;
-            $index = ($walletSpec['ignores_offset'] ?? false) ? 0 : intdiv((int) ($request['offset'] ?? 0), $pageLimit);
-            return ['transactions' => $source[$index] ?? []];
+            if ($walletSpec['ignores_offset'] ?? false) return ['transactions' => $source[0] ?? []];
+            $offset = (int) ($request['offset'] ?? 0);
+            $start = 0;
+            foreach ($source as $page) {
+                if ($start === $offset) return ['transactions' => $page];
+                $start += count($page);
+            }
+            return ['transactions' => []];
         };
     }
 

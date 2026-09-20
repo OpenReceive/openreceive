@@ -102,7 +102,7 @@ itself, and they hold for every integration.
   payer-supplied amounts.
 - `authorize` runs on every request, and the `resource` it receives is a CLAIM
   the payer made, not proof. Read a framework session; never trust a body field.
-- `onPaid` must be idempotent. It runs once per `reference` — your order id, one
+- `onPaid` must be idempotent. Its database fulfillment commits once per `reference` — your order id, one
   per thing you fulfill, created before checkout, kept across retries, never
   reused. A fresh id per page load lets one order be paid twice.
 - Receive-only NWC is required; a spend-capable code fails closed at boot unless
@@ -273,3 +273,5 @@ enough; drop the `.md` for the same page a person would read.
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
+
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts

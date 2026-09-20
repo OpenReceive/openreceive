@@ -122,6 +122,7 @@ public sealed class ScanMemo
     /// </summary>
     public void Watch(string paymentHash)
     {
+        paymentHash = NwcNormalize.CanonicalHash(paymentHash);
         lock (_gate)
         {
             if (_watched.ContainsKey(paymentHash)) return;
@@ -133,6 +134,7 @@ public sealed class ScanMemo
     /// <summary>True while the hash is part of the walk set (tests and the doctor).</summary>
     public bool IsWatched(string paymentHash)
     {
+        paymentHash = NwcNormalize.CanonicalHash(paymentHash);
         lock (_gate) return _watched.ContainsKey(paymentHash);
     }
 
@@ -176,6 +178,7 @@ public sealed class ScanMemo
 
     public NwcTransaction? Lookup(string paymentHash)
     {
+        paymentHash = NwcNormalize.CanonicalHash(paymentHash);
         lock (_gate)
         {
             return _rows.TryGetValue(paymentHash, out var row) ? row : null;
@@ -459,7 +462,8 @@ public sealed class ScanMemo
 
     private void Upsert(NwcTransaction transaction)
     {
-        var hash = transaction.PaymentHash!;
+        var hash = NwcNormalize.CanonicalHash(transaction.PaymentHash!);
+        transaction = transaction with { PaymentHash = hash };
         if (_rows.TryGetValue(hash, out var existing))
         {
             if (Settlement.IsSettled(existing) && !Settlement.IsSettled(transaction))

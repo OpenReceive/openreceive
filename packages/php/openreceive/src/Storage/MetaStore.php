@@ -86,36 +86,77 @@ final class MetaStore
 
     /**
      * Claim the durable global reconcile gate: optimistic compare-and-set over
-     * one shared row. True when this caller may run a wallet scan now; false
+     * one shared row. Returns the claimed token/scheduler, or null
      * (gate_busy) when another worker scanned within `$intervalSeconds`. The
      * winner is identified by reading back its own token — the portable
      * equivalent of an affected-row count. A failed scan leaves claimed_at in
      * place on purpose so a broken wallet cannot stampede.
      */
-    public function claimReconcileGate(int $now, int $intervalSeconds): bool
+    public function claimReconcileGate(int $now, int $intervalSeconds, int $leaseSeconds = 10): ?array
     {
         $this->assertSupportedSchema();
-        $claim = json_encode(['claimed_at' => $now, 'token' => self::uuid()], JSON_THROW_ON_ERROR);
         for ($attempt = 0; $attempt < self::CAS_RETRIES; $attempt++) {
             $rows = $this->db->query("SELECT value, rev FROM {$this->table} WHERE {$this->key()} = ? LIMIT 1", [self::RECONCILE_GATE_KEY]);
+            $current = $rows === [] ? [] : self::parseGate($rows[0]['value']);
+            $claimed = $current['claimed_at'] ?? null;
+            $interval = max($intervalSeconds, (int) ($current['interval_seconds'] ?? 0));
+            if (is_int($claimed) && (self::isFreshTimestamp($now, $claimed, $interval)
+                || (($current['lease_until'] ?? 0) > $now && $claimed <= $now + self::CLOCK_SKEW_SECONDS))) {
+                return null;
+            }
+            $state = ['version' => 1, 'claimed_at' => $now, 'token' => self::uuid(),
+                'lease_until' => $now + $leaseSeconds, 'interval_seconds' => $intervalSeconds,
+                'scheduler' => $current['scheduler'] ?? ['cursor' => null, 'windows' => []]];
+            $encoded = json_encode($state, JSON_THROW_ON_ERROR);
             if ($rows === []) {
-                $this->db->execute($this->insertIfAbsentSql(), [self::RECONCILE_GATE_KEY, $claim]);
+                $this->db->execute($this->insertIfAbsentSql(), [self::RECONCILE_GATE_KEY, $encoded]);
             } else {
-                $claimedAt = self::parseClaimedAt($rows[0]['value']);
-                if ($claimedAt !== null && self::isFreshTimestamp($now, $claimedAt, $intervalSeconds)) {
-                    return false;
-                }
-                $this->db->execute(
-                    "UPDATE {$this->table} SET value = ?, rev = rev + 1 WHERE {$this->key()} = ? AND rev = ?",
-                    [$claim, self::RECONCILE_GATE_KEY, Integers::parse($rows[0]['rev'], 'rev')]
-                );
+                $this->db->execute("UPDATE {$this->table} SET value = ?, rev = rev + 1 WHERE {$this->key()} = ? AND rev = ?",
+                    [$encoded, self::RECONCILE_GATE_KEY, Integers::parse($rows[0]['rev'], 'rev')]);
             }
             $readback = $this->db->query("SELECT value FROM {$this->table} WHERE {$this->key()} = ? LIMIT 1", [self::RECONCILE_GATE_KEY]);
-            if ($readback !== [] && (string) $readback[0]['value'] === $claim) {
-                return true;
+            if ($readback !== [] && (string) $readback[0]['value'] === $encoded) {
+                return ['token' => $state['token'], 'scheduler' => $state['scheduler']];
             }
         }
+        return null;
+    }
+
+    public function checkpointReconcileGate(array $claim, array $scheduler, int $now, bool $release = false): bool
+    {
+        $this->assertSupportedSchema();
+        if (count($scheduler['windows'] ?? []) > 2) {
+            throw new \InvalidArgumentException('Reconciliation checkpoint exceeded its bounded cohort queue.');
+        }
+        foreach ($scheduler['windows'] ?? [] as $window) {
+            if (count($window['attempts'] ?? []) > 200) {
+                throw new \InvalidArgumentException('Reconciliation checkpoint exceeded its bounded cohort queue.');
+            }
+        }
+        for ($attempt = 0; $attempt < self::CAS_RETRIES; $attempt++) {
+            $rows = $this->db->query("SELECT value, rev FROM {$this->table} WHERE {$this->key()} = ? LIMIT 1", [self::RECONCILE_GATE_KEY]);
+            if ($rows === []) return false;
+            $state = self::parseGate($rows[0]['value']);
+            if (($state['token'] ?? null) !== $claim['token'] || ($state['lease_until'] ?? 0) <= $now) return false;
+            $state['scheduler'] = $scheduler;
+            if ($release) $state['lease_until'] = 0;
+            $encoded = json_encode($state, JSON_THROW_ON_ERROR);
+            if (strlen($encoded) > 128 * 1024) throw new \InvalidArgumentException('Reconciliation checkpoint exceeded 128 KiB.');
+            $this->db->execute("UPDATE {$this->table} SET value = ?, rev = rev + 1 WHERE {$this->key()} = ? AND rev = ?",
+                [$encoded, self::RECONCILE_GATE_KEY, Integers::parse($rows[0]['rev'], 'rev')]);
+            $readback = $this->db->query("SELECT value FROM {$this->table} WHERE {$this->key()} = ? LIMIT 1", [self::RECONCILE_GATE_KEY]);
+            if ($readback !== [] && (string) $readback[0]['value'] === $encoded) return true;
+        }
         return false;
+    }
+
+    private static function parseGate(mixed $value): array
+    {
+        $state = json_decode((string) $value, true);
+        if (!is_array($state)) $state = [];
+        if (($state['version'] ?? 0) > 1) throw new ConfigurationError('Unsupported reconciliation checkpoint version; upgrade OpenReceive.');
+        // Coordinated upgrades discard derived cursors only, never attempt rows.
+        return ($state['version'] ?? 0) === 1 ? $state : ['scheduler' => ['cursor' => null, 'windows' => []]];
     }
 
     /** True when `$timestamp` is inside `$windowSeconds` of `$now`, allowing for skew. */
@@ -141,13 +182,6 @@ final class MetaStore
     private function key(): string
     {
         return $this->db->dialect() === 'mysql' ? '`key`' : 'key';
-    }
-
-    private static function parseClaimedAt(mixed $value): ?int
-    {
-        $parsed = json_decode((string) $value, true);
-        $claimedAt = is_array($parsed) ? ($parsed['claimed_at'] ?? null) : null;
-        return is_int($claimedAt) ? $claimedAt : null;
     }
 
     /**

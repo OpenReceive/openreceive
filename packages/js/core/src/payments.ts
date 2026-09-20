@@ -20,6 +20,8 @@ export interface PaymentCheck {
   readonly status: PaymentStatus;
   readonly paidAt?: number;
   readonly details?: PaymentDetails;
+  /** Earliest observation proving clock-based closure; absent on partial slices. */
+  readonly coverageStartedAt?: number;
 }
 
 export interface PaidPayment {
@@ -179,7 +181,7 @@ async function listIncomingTransactions(options: ScanPaymentsOptions): Promise<T
     // The wallet ran out of rows only when the page IT sent was short: a row the
     // client could not normalize was still a row, and a full page with one of
     // them dropped must not read as the end of the history.
-    if (page.transactions.length + (page.skippedRows ?? 0) < OPENRECEIVE_TRANSACTION_PAGE_LIMIT) {
+    if (page.transactions.length + (page.skippedRows ?? 0) === 0) {
       truncated = false;
       break;
     }
@@ -190,12 +192,12 @@ async function listIncomingTransactions(options: ScanPaymentsOptions): Promise<T
       .join(",");
     if (pageKey === previousPage) break;
     previousPage = pageKey;
-    offset += OPENRECEIVE_TRANSACTION_PAGE_LIMIT;
+    offset += page.transactions.length + (page.skippedRows ?? 0);
   }
   return { byPaymentHash, truncated };
 }
 
-function paymentCheckFromTransaction(
+export function paymentCheckFromTransaction(
   paymentHash: string,
   transaction: NwcTransaction,
   observedAt: number,

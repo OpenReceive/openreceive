@@ -64,8 +64,13 @@ public sealed class NwcRequestResponseVectors
                 });
                 Assert.Equal(expectedRequest, VectorJson.Canonical(parameters));
 
+                if (c["expected_error"]?.GetValue<bool>() == true)
+                {
+                    Assert.Throws<NwcNormalizeException>(() => NwcNormalize.ListTransactions(c["raw_response"]));
+                    return;
+                }
                 var result = NwcNormalize.ListTransactions(c["raw_response"]);
-                Assert.Equal(0, result.SkippedRows);
+                Assert.Equal(c["expected_skipped_rows"]?.GetValue<int>() ?? 0, result.SkippedRows);
                 var response = new JsonObject
                 {
                     ["transactions"] = new JsonArray(result.Transactions.Select(t => (JsonNode?)VectorJson.ToJson(t)).ToArray()),

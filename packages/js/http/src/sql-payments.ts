@@ -4,6 +4,8 @@ import {
   paymentsDdlStatements,
   unixSeconds,
   type PaymentDetails,
+  OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
+  redactSecrets,
 } from "@openreceive/core";
 import type { Checkout, SwapData } from "@openreceive/node";
 import { hostError } from "./errors.ts";
@@ -13,6 +15,7 @@ import {
   type AttemptStatus,
   type PaymentRecord,
   type PaymentRepository,
+  type ReconcileScheduler,
   type ReconcilableAttempt,
   type ReconciliationTransition,
   paymentInsert,
@@ -65,15 +68,27 @@ function isMissingTableError(error: unknown, dialect: "postgres" | "sqlite"): bo
   return /no such table/i.test(message);
 }
 
-function parseClaimedAt(value: unknown): number | undefined {
+interface StoredGate {
+  version: number;
+  claimed_at: number;
+  token: string;
+  lease_until: number;
+  interval_seconds: number;
+  scheduler: ReconcileScheduler;
+}
+function parseGate(value: unknown): StoredGate | undefined {
+  let gate: StoredGate;
   try {
-    const parsed = JSON.parse(String(value)) as { claimed_at?: unknown };
-    return typeof parsed.claimed_at === "number" && Number.isFinite(parsed.claimed_at)
-      ? parsed.claimed_at
-      : undefined;
+    gate = JSON.parse(String(value)) as StoredGate;
   } catch {
     return undefined;
   }
+  if (gate.version > 1)
+    throw new TypeError(
+      "A newer reconcile scheduler is installed; upgrade every application and worker together.",
+    );
+  // Derived legacy state can be discarded; payment rows are never altered.
+  return gate.version === 1 ? gate : undefined;
 }
 
 export interface SqlPaymentsOptions {
@@ -116,7 +131,31 @@ export interface PaymentSettlement {
 
 export type PaymentSettlementHook = (settlement: PaymentSettlement) => void | Promise<void>;
 
-export interface SqlPaymentRepository extends PaymentRepository {
+/** Nonsecret dry-run report for explicit host/operator review. */
+export interface PaymentRepairCandidate {
+  readonly paymentHash: string;
+  readonly reference: string;
+  readonly status: "expired" | "attention";
+  readonly statusReason: string | null;
+  readonly updatedAt: number;
+  readonly instructionExpiresAt: number;
+  readonly settlementExpiresAt: number;
+  readonly category: "early_swap_closure" | "attention";
+}
+
+export interface SqlPaymentRepository extends PaymentRepository<SqlClient> {
+  /** Read-only, hash-keyset candidate report; normal routes never call this. */
+  listRepairCandidates(input?: {
+    after?: string;
+    limit?: number;
+  }): Promise<{ candidates: readonly PaymentRepairCandidate[]; nextCursor: string | null }>;
+  /** Requeue one reviewed row only if its reported status and version still match. */
+  requeueAttempt(input: {
+    paymentHash: string;
+    expectedStatus: "expired" | "attention";
+    expectedUpdatedAt: number;
+    reason: string;
+  }): Promise<boolean>;
   /**
    * Replay-safe settlement transaction: set the attempt's `paid_at`/`settled`
    * status once, and run `fulfill` inside the same transaction only for the
@@ -239,22 +278,34 @@ export function createSqlPayments(
       return rowsForReference(adapter, reference);
     },
 
-    async listReconcilableAttempts() {
+    async findByPaymentHash(paymentHash) {
+      await assertSupportedSchema();
+      const rows = await adapter.query(statement(`SELECT * FROM ${table} WHERE payment_hash = ?`), [
+        paymentHash.toLowerCase(),
+      ]);
+      return rows[0] === undefined ? undefined : recordFromRow(rows[0]);
+    },
+
+    async listReconcilableAttempts(after) {
       await assertSupportedSchema();
       // Oldest first, one batch per pass: the attempts closest to their closure
       // deadline are always covered, and a backlog drains over several passes
       // instead of widening one wallet scan window without bound.
       const rows = await adapter.query(
         statement(
-          `SELECT payment_hash, created_at, expires_at FROM ${table} WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?`,
+          `SELECT payment_hash, created_at, checkout_data FROM ${table} WHERE status = 'pending' ${after == null ? "" : "AND (created_at > ? OR (created_at = ? AND payment_hash > ?))"} ORDER BY created_at ASC, payment_hash ASC LIMIT ?`,
         ),
-        [OPENRECEIVE_RECONCILE_BATCH_SIZE],
+        [
+          ...(after == null ? [] : [after.created_at, after.created_at, after.payment_hash]),
+          OPENRECEIVE_RECONCILE_BATCH_SIZE,
+        ],
       );
       return rows.map(
         (row): ReconcilableAttempt => ({
           paymentHash: asString(row.payment_hash, "payment_hash"),
           createdAt: asInteger(row.created_at, "created_at"),
-          expiresAt: asInteger(row.expires_at, "expires_at"),
+          createdAtSource: savedCheckout(row).createdAtSource ?? "host",
+          expiresAt: settlementExpiresAt(row),
         }),
       );
     },
@@ -265,7 +316,7 @@ export function createSqlPayments(
       // a backlog to drain past it (payment_hash is unique).
       const rows = await adapter.query(
         statement(
-          `SELECT payment_hash, created_at, expires_at FROM ${table} WHERE payment_hash = ? AND status = 'pending'`,
+          `SELECT payment_hash, created_at, checkout_data FROM ${table} WHERE payment_hash = ? AND status = 'pending'`,
         ),
         [paymentHash.toLowerCase()],
       );
@@ -274,19 +325,14 @@ export function createSqlPayments(
       return {
         paymentHash: asString(row.payment_hash, "payment_hash"),
         createdAt: asInteger(row.created_at, "created_at"),
-        expiresAt: asInteger(row.expires_at, "expires_at"),
+        createdAtSource: savedCheckout(row).createdAtSource ?? "host",
+        expiresAt: settlementExpiresAt(row),
       };
     },
 
-    async claimReconcileGate({ now, intervalSeconds }) {
+    async claimReconcileGate({ now, intervalSeconds, leaseSeconds = 10 }) {
       await assertSupportedSchema();
-      // Optimistic CAS over the shared openreceive_meta row: every worker on
-      // this database (Node instances, Puma workers via the Rails engine) races
-      // on ONE gate row, so rapid calls collapse to one real wallet scan per
-      // interval. The winner is identified by reading back its own token — the
-      // portable equivalent of an affected-row count across both adapters.
       const token = randomUUID();
-      const claimValue = JSON.stringify({ claimed_at: now, token });
       const insertIfAbsent =
         adapter.dialect === "postgres"
           ? `INSERT INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0) ON CONFLICT (key) DO NOTHING`
@@ -297,13 +343,34 @@ export function createSqlPayments(
           [RECONCILE_GATE_META_KEY],
         );
         const current = rows[0];
+        const gate = current === undefined ? undefined : parseGate(current.value);
+        if (
+          gate !== undefined &&
+          isFreshTimestamp(
+            now,
+            gate.claimed_at,
+            Math.max(intervalSeconds, gate.interval_seconds ?? 2),
+          )
+        )
+          return null;
+        if (
+          gate !== undefined &&
+          gate.claimed_at <= now + META_CLOCK_SKEW_SECONDS &&
+          gate.lease_until > now
+        )
+          return null;
+        const scheduler = gate?.scheduler ?? { cursor: null, windows: [] };
+        const claimValue = JSON.stringify({
+          version: 1,
+          claimed_at: now,
+          token,
+          lease_until: now + leaseSeconds,
+          interval_seconds: intervalSeconds,
+          scheduler,
+        });
         if (current === undefined) {
           await adapter.query(statement(insertIfAbsent), [RECONCILE_GATE_META_KEY, claimValue]);
         } else {
-          const claimedAt = parseClaimedAt(current.value);
-          if (claimedAt !== undefined && isFreshTimestamp(now, claimedAt, intervalSeconds)) {
-            return false;
-          }
           await adapter.query(
             statement(`UPDATE ${metaTable} SET value = ?, rev = rev + 1 WHERE key = ? AND rev = ?`),
             [claimValue, RECONCILE_GATE_META_KEY, asInteger(current.rev, "rev")],
@@ -313,9 +380,114 @@ export function createSqlPayments(
           statement(`SELECT value FROM ${metaTable} WHERE key = ? LIMIT 1`),
           [RECONCILE_GATE_META_KEY],
         );
-        if (readback[0] !== undefined && String(readback[0].value) === claimValue) return true;
+        if (readback[0] !== undefined && String(readback[0].value) === claimValue)
+          return { token, scheduler };
       }
-      return false;
+      return null;
+    },
+
+    async checkpointReconcileGate({ claim, scheduler, now, release = false, intervalSeconds }) {
+      await assertSupportedSchema();
+      if (
+        scheduler.windows.length > 2 ||
+        scheduler.windows.some(
+          (window) => window.attempts.length > OPENRECEIVE_RECONCILE_BATCH_SIZE,
+        )
+      )
+        throw new RangeError("Reconcile progress exceeds its cohort bound.");
+      const rows = await adapter.query(
+        statement(`SELECT value, rev FROM ${metaTable} WHERE key = ? LIMIT 1`),
+        [RECONCILE_GATE_META_KEY],
+      );
+      const current = rows[0];
+      if (current === undefined) return false;
+      const gate = parseGate(current.value);
+      if (gate?.token !== claim.token || gate.lease_until <= now) return false;
+      const value = JSON.stringify({
+        ...gate,
+        scheduler,
+        lease_until: release ? 0 : gate.lease_until,
+        interval_seconds: intervalSeconds ?? gate.interval_seconds,
+      });
+      if (new TextEncoder().encode(value).length > 131072)
+        throw new RangeError("Reconcile progress exceeds 128 KiB.");
+      await adapter.query(
+        statement(`UPDATE ${metaTable} SET value = ?, rev = rev + 1 WHERE key = ? AND rev = ?`),
+        [value, RECONCILE_GATE_META_KEY, asInteger(current.rev, "rev")],
+      );
+      const readback = await adapter.query(
+        statement(`SELECT value FROM ${metaTable} WHERE key = ? LIMIT 1`),
+        [RECONCILE_GATE_META_KEY],
+      );
+      return readback[0]?.value === value;
+    },
+
+    async listRepairCandidates({ after = "", limit = 100 } = {}) {
+      await assertSupportedSchema();
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+        throw new RangeError("Repair report limit must be between 1 and 200.");
+      const rows = await adapter.query(
+        statement(
+          `SELECT payment_hash, reference, status, status_reason, updated_at, expires_at, checkout_data, swap_data IS NOT NULL AS has_swap FROM ${table} WHERE status IN ('expired', 'attention') AND paid_at IS NULL AND payment_hash > ? ORDER BY payment_hash LIMIT ?`,
+        ),
+        [after, limit],
+      );
+      return {
+        candidates: rows
+          .map(repairCandidate)
+          .filter((row): row is PaymentRepairCandidate => row !== null),
+        nextCursor:
+          rows.length === limit ? asString(rows.at(-1)!.payment_hash, "payment_hash") : null,
+      };
+    },
+
+    async requeueAttempt(input) {
+      await assertSupportedSchema();
+      if (!input.reason.trim() || input.reason.length > 500)
+        throw new TypeError("A reviewed repair reason of 1–500 characters is required.");
+      return adapter.transaction(async (tx) => {
+        const hash = input.paymentHash.toLowerCase();
+        const preliminary = await tx.query(
+          statement(`SELECT reference FROM ${table} WHERE payment_hash = ?`),
+          [hash],
+        );
+        if (preliminary[0] === undefined) return false;
+        await lockReference(tx, asString(preliminary[0].reference, "reference"));
+        const rows = await tx.query(
+          statement(
+            `SELECT payment_hash, reference, status, status_reason, updated_at, expires_at, checkout_data, swap_data IS NOT NULL AS has_swap FROM ${table} WHERE payment_hash = ? AND paid_at IS NULL`,
+          ),
+          [hash],
+        );
+        const row = rows[0];
+        if (
+          row === undefined ||
+          row.status !== input.expectedStatus ||
+          asInteger(row.updated_at, "updated_at") !== input.expectedUpdatedAt
+        )
+          return false;
+        const candidate = repairCandidate(row);
+        if (candidate === null) return false;
+        const auditKey = `payment_repair:${hash}:${input.expectedStatus}:${input.expectedUpdatedAt}`;
+        const prior = await tx.query(statement(`SELECT key FROM ${metaTable} WHERE key = ?`), [
+          auditKey,
+        ]);
+        if (prior.length > 0) return false;
+        const now = clock();
+        // The reference lock also excludes a concurrent settlement. Audit and
+        // requeue commit together; replay of the selected version is a no-op.
+        await tx.query(
+          statement(
+            `UPDATE ${table} SET status = 'pending', status_reason = 'operator_requeued', updated_at = ? WHERE payment_hash = ? AND status = ? AND updated_at = ?`,
+          ),
+          [now, hash, input.expectedStatus, input.expectedUpdatedAt],
+        );
+        await tx.query(statement(`INSERT INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0)`), [
+          auditKey,
+          JSON.stringify({ ...candidate, reviewedAt: now, reason: redactSecrets(input.reason) }),
+        ]);
+        return true;
+      });
     },
 
     async commitAttempt(input: CheckoutCreatedInput) {
@@ -386,6 +558,7 @@ export function createSqlPayments(
       // would move the budget window), and updated_at moves on every later
       // status transition — which would re-enter an old attempt into the
       // current window and throttle a payer for activity they did not cause.
+      await assertSupportedSchema();
       const rows = await adapter.query(
         statement(`SELECT COUNT(*) AS n FROM ${table} WHERE client_ip = ? AND inserted_at >= ?`),
         [clientIp, sinceUnixSeconds],
@@ -396,6 +569,12 @@ export function createSqlPayments(
     async recordReconciliation(transition: ReconciliationTransition) {
       await assertSupportedSchema();
       await adapter.transaction(async (tx) => {
+        const rows = await tx.query(
+          statement(`SELECT reference FROM ${table} WHERE payment_hash = ?`),
+          [transition.paymentHash.toLowerCase()],
+        );
+        if (rows[0] === undefined) return;
+        await lockReference(tx, asString(rows[0].reference, "reference"));
         // Guarding on status = 'pending' makes the transition idempotent and
         // guarantees a settled attempt is never overwritten.
         await tx.query(
@@ -412,10 +591,10 @@ export function createSqlPayments(
       });
     },
 
-    // Same write-once claim as markPaidOnce, without a fulfillment hook: in
-    // custom-repository mode the host's own handler runs outside this
-    // transaction, so it is handed no transactional query.
-    recordSettlement: (settlement) => markPaidOnce(settlement, () => undefined),
+    recordSettlementWithFulfillment: (settlement, fulfill) =>
+      markPaidOnce(settlement, ({ query, ...context }) =>
+        fulfill({ ...context, transaction: { query } }),
+      ),
 
     markPaidOnce,
   };
@@ -436,7 +615,7 @@ export function createSqlPayments(
       await lockReference(tx, asString(reference, "reference"));
       const rows = await rowsForReference(tx, asString(reference, "reference"));
       const row = rows.find((candidate) => candidate.paymentHash === paymentHash);
-      if (row === undefined || row.status === "settled") return false;
+      if (row === undefined || row.status !== "pending") return false;
       const firstForReference = !rows.some((candidate) => candidate.status === "settled");
       const now = clock();
       await tx.query(
@@ -490,6 +669,54 @@ function recordFromRow(row: Record<string, unknown>): PaymentRecord {
       swapData === null || swapData === undefined
         ? null
         : (parseRowJson(asString(swapData, "swap_data"), "swap_data", paymentHash) as SwapData),
+  };
+}
+
+/** The saved invoice, rather than the reusable deposit instructions, sets this deadline. */
+function savedCheckout(row: Record<string, unknown>): Checkout {
+  const hash = asString(row.payment_hash, "payment_hash");
+  const checkout = parseRowJson(
+    asString(row.checkout_data, "checkout_data"),
+    "checkout_data",
+    hash,
+  );
+  if (typeof checkout === "object" && checkout !== null) {
+    const value = (checkout as Checkout).expiresAt;
+    if (typeof value === "number" && Number.isSafeInteger(value) && value > 0)
+      return checkout as Checkout;
+  }
+  throw new TypeError(
+    `Invalid checkout_data invoice expiry on openreceive payment attempt ${hash}.`,
+  );
+}
+function settlementExpiresAt(row: Record<string, unknown>): number {
+  return savedCheckout(row).expiresAt;
+}
+
+function repairCandidate(row: Record<string, unknown>): PaymentRepairCandidate | null {
+  if (row.status !== "expired" && row.status !== "attention") return null;
+  const expires = settlementExpiresAt(row);
+  const instruction = asInteger(row.expires_at, "expires_at");
+  const updated = asInteger(row.updated_at, "updated_at");
+  const reason = row.status_reason == null ? null : asString(row.status_reason, "status_reason");
+  const early =
+    Boolean(row.has_swap) &&
+    expires > instruction &&
+    updated >= instruction + OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS &&
+    updated < expires + OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS &&
+    ["not_found_after_expiry", "no_finality_after_expiry", "unsettled_after_expiry"].includes(
+      reason ?? "",
+    );
+  if (!early && row.status !== "attention") return null;
+  return {
+    paymentHash: asString(row.payment_hash, "payment_hash"),
+    reference: asString(row.reference, "reference"),
+    status: row.status,
+    statusReason: reason,
+    updatedAt: updated,
+    instructionExpiresAt: instruction,
+    settlementExpiresAt: expires,
+    category: early ? "early_swap_closure" : "attention",
   };
 }
 

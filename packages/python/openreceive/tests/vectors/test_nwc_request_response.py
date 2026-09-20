@@ -22,8 +22,14 @@ def test_nwc_request_response(case: dict) -> None:
         requests.list_transactions_request(case["openreceive_request"])
         == case["expected_nip47_request"]
     )
+    if case.get("expected_error"):
+        with pytest.raises(ValueError):
+            requests.normalize_list_transactions_response(case["raw_response"])
+        return
     if "expected_openreceive_response" in case:
         actual = requests.normalize_list_transactions_response(case["raw_response"])
+        if "expected_skipped_rows" in case:
+            assert actual.get("skipped_rows", 0) == case["expected_skipped_rows"]
         expected = case["expected_openreceive_response"]
         assert len(actual["transactions"]) == len(expected["transactions"])
         for index, row in enumerate(expected["transactions"]):

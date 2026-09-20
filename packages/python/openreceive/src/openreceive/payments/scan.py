@@ -70,7 +70,7 @@ def list_incoming_transactions(
         # The wallet ran out of rows only when the page IT sent was short: a row
         # the normalizer dropped was still a row, and a full page with one of
         # them dropped must not read as the end of the history.
-        if not outstanding or len(page) + response.get("skipped_rows", 0) < TRANSACTION_PAGE_LIMIT:
+        if not outstanding or len(page) + response.get("skipped_rows", 0) == 0:
             truncated = False
             break
         # A wallet that ignores `offset` serves the same page forever; stop
@@ -79,7 +79,7 @@ def list_incoming_transactions(
         if page_key == previous_page:
             break
         previous_page = page_key
-        offset += TRANSACTION_PAGE_LIMIT
+        offset += len(page) + response.get("skipped_rows", 0)
     return ScanResult(rows=rows, truncated=truncated)
 
 

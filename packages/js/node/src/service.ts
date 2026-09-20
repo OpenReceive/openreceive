@@ -6,6 +6,7 @@ import {
   OpenReceiveError,
   parseNwcUri,
   reconcilePaymentAttempts,
+  scanPaymentSlice,
   unixSeconds,
 } from "@openreceive/core";
 import { createNwcReceiveClient } from "./alby-nwc.ts";
@@ -122,6 +123,7 @@ export async function createOpenReceive(
   };
   const service: OpenReceive = {
     priceCurrencies,
+    scanPaymentSlice: (input) => scanPaymentSlice({ ...input, client, clock }),
     prepareCheckout: (input) => prepareCheckout(context, input),
     createCheckout: (input) => createCheckout(context, input),
     reconcilePayments: async (input) => {

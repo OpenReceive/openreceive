@@ -5,11 +5,12 @@
  */
 
 import {
+  type ErrorBody,
+  type ErrorCode,
   isErrorCode,
   isRetryableErrorCode,
   OpenReceiveError,
-  type ErrorBody,
-  type ErrorCode,
+  publicErrorBody,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 
@@ -89,7 +90,8 @@ const OPENRECEIVE_ERROR_MESSAGES = {
 } satisfies Record<ErrorCode, string>;
 
 export function normalizeNwcWalletError(error: unknown): OpenReceiveError {
-  if (error instanceof OpenReceiveError) return error;
+  if (error instanceof OpenReceiveError)
+    return new OpenReceiveError(publicErrorBody(error.toJSON()));
 
   const records = collectErrorRecords(error);
   const code =
@@ -109,7 +111,7 @@ export function normalizeNwcWalletError(error: unknown): OpenReceiveError {
     ...(details === undefined ? {} : { details }),
   };
 
-  return new OpenReceiveError(body, { cause: error });
+  return new OpenReceiveError(publicErrorBody(body));
 }
 
 function knownErrorCode(error: unknown): ErrorCode | undefined {

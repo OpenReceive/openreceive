@@ -199,7 +199,7 @@ export function normalizeMakeInvoiceResult(rawResult: unknown): MakeInvoiceResul
 
   return {
     invoice,
-    payment_hash: paymentHash,
+    payment_hash: paymentHash.toLowerCase(),
     amount_msats: amountMsats,
     ...(createdAt === undefined ? {} : { created_at: createdAt }),
     ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
@@ -234,6 +234,14 @@ export function normalizeListTransactionsResult(rawResult: unknown): NormalizedL
   const transactions: NwcTransaction[] = [];
   let skippedRows = 0;
   for (const rawTransaction of rawTransactions) {
+    if (
+      typeof rawTransaction !== "object" ||
+      rawTransaction === null ||
+      Array.isArray(rawTransaction)
+    ) {
+      skippedRows += 1;
+      continue;
+    }
     try {
       transactions.push(normalizeNwcTransaction(rawTransaction));
     } catch {
@@ -284,7 +292,7 @@ export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction
     if (!/^[0-9a-fA-F]{64}$/.test(paymentHash)) {
       throw new TypeError("payment_hash must be 64 hexadecimal characters");
     }
-    normalized.payment_hash = paymentHash;
+    normalized.payment_hash = paymentHash.toLowerCase();
   }
   if (result.amount_msats !== undefined || result.amount !== undefined) {
     normalized.amount_msats = toBigInt(result.amount_msats ?? result.amount, "amount_msats");
@@ -343,7 +351,9 @@ export function normalizeNwcNotification(rawNotification: unknown): NwcWalletNot
   const rawHash =
     payload.payment_hash ?? payload.paymentHash ?? record.payment_hash ?? record.paymentHash;
   const paymentHash =
-    typeof rawHash === "string" && rawHash.length > 0 ? rawHash : transaction?.payment_hash;
+    typeof rawHash === "string" && rawHash.length > 0
+      ? rawHash.toLowerCase()
+      : transaction?.payment_hash;
   return {
     type,
     ...(paymentHash === undefined ? {} : { payment_hash: paymentHash }),

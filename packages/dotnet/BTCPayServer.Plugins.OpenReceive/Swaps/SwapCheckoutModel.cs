@@ -52,6 +52,11 @@ public sealed class SwapCheckoutModel
     [JsonPropertyName("plugin_reason")] public string? PluginReason { get; init; }
     [JsonPropertyName("provider_order_id")] public required string ProviderOrderId { get; init; }
 
+    [JsonPropertyName("retired")] public bool Retired { get; init; }
+    [JsonPropertyName("instructions_available")] public bool InstructionsAvailable { get; init; }
+    [JsonPropertyName("replacement_id")] public string? ReplacementId { get; init; }
+    [JsonPropertyName("recovery_refresh_required")] public bool RecoveryRefreshRequired { get; init; }
+
     public static SwapCheckoutModel From(OpenReceiveSwap row, long now, long? invoiceExpiresAt, string? invoiceStatus)
     {
         var asset = OpenReceiveTables.SwapAssetInfo[row.PayInAsset];
@@ -60,6 +65,9 @@ public sealed class SwapCheckoutModel
         var emphasis = $"{row.DepositAmount} {asset.Label} on the {asset.NetworkLabel} network";
         var doubleSpend = $"Pay with one method only — if you already sent {asset.Label}, do not also pay the Lightning invoice.";
         var expiresAt = invoiceExpiresAt is { } inv ? Math.Min(row.ProviderExpiresAt, inv) : row.ProviderExpiresAt;
+        var instructionsAvailable = row.RetiredAt is null && row.State == "awaiting_deposit" && expiresAt > now && row.PluginReason is null && invoiceStatus == "New";
+        var instructionsRetired = row.State == "awaiting_deposit" && !instructionsAvailable;
+        var walletDeadlinePassed = invoiceExpiresAt <= now && row.State is "completed" or "paying_invoice";
         var fee = row.FeeCurrency is not null && row.PayInFiat is not null && row.PayoutFiat is not null
             ? new SwapFee(row.FeeCurrency, row.PayInFiat, row.PayoutFiat)
             : null;
@@ -73,9 +81,15 @@ public sealed class SwapCheckoutModel
             NetworkLabel = asset.NetworkLabel,
             State = row.State,
             Phase = copy.Phase,
-            Terminal = copy.Terminal,
-            Label = copy.Label,
-            Detail = copy.Detail,
+            Terminal = copy.Terminal && !row.RecoveryRefreshRequired,
+            Retired = row.RetiredAt is not null,
+            InstructionsAvailable = instructionsAvailable,
+            ReplacementId = row.ReplacementId,
+            RecoveryRefreshRequired = row.RecoveryRefreshRequired,
+            Label = instructionsRetired || walletDeadlinePassed ? "Checking payment status" : copy.Label,
+            Detail = instructionsRetired ? "Do not send another deposit to these instructions. Existing payments and refunds are still being checked."
+                : walletDeadlinePassed ? "Checking whether the wallet received the payment. Provider status and refund recovery remain available."
+                : copy.Detail,
             DepositAddress = row.DepositAddress,
             DepositMemo = row.DepositMemo,
             DepositAmount = row.DepositAmount,

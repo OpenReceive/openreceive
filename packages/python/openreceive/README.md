@@ -101,3 +101,43 @@ shared database gate, with an optional separate notifications worker.
 OpenReceive is open source under the MIT license.
 [Source code](https://github.com/OpenReceive/openreceive) ·
 [Report an issue](https://github.com/OpenReceive/openreceive/issues)
+
+### Settlement transactions and recovery
+
+`on_paid` runs inside the settlement transaction. Write the entitlement or a host
+outbox there; rolled-back callbacks may run again on retry. External jobs need
+host-owned durable idempotency. Optional `after_paid` is best effort after the
+actual commit, receives no live connection, and may be lost if the process dies
+between commit and delivery. Django uses `transaction.on_commit` on the configured
+database alias, including outer transactions and savepoints. MySQL explicitly
+rejects ambient transactions around repository reference operations because its
+connection-scoped lock cannot be released safely at an inner savepoint.
+SQLAlchemy repositories own their transaction and connection. Advanced custom
+repositories must implement `record_settlement(..., after_commit=...)` and declare
+`supports_after_commit = True` when `after_paid` is configured.
+
+Explicit workers, notification fallback and request reconciliation share the same
+durable gate and bounded scheduler. `opportunistic_reconcile=False` disables only
+request triggers. Custom worker repositories need lease-bearing
+`claim_reconcile_gate`, `checkpoint_reconcile_gate`, and keyset
+`list_reconcilable_attempts(after=..., limit=...)`, plus
+`find_by_payment_hash` to confirm durable settlement outcomes. Deploy application and workers
+together; stop old processes before upgrading. Resumed wallet history proves
+positive finality, never absence; a dense history can therefore leave an unpaid
+attempt pending until a fresh complete sweep fits its budget.
+
+Use `repository.maintenance_candidates(after=..., limit=100)` for a dry-run report
+(`candidates`, `next_cursor`, `scanned`). After operator review, pass one unchanged
+candidate to `repository.requeue_reviewed_attempt(candidate, decision_id="ticket-42")`.
+This audits the decision and restores pending status; it does not settle or invoke
+fulfillment. Run the ordinary gated reconciler afterward. Reports distinguish
+historical early swap-deadline closure from operator-attention cases, preserve
+provider credentials, and never reopen settled rows. See the
+[coordinated upgrade guide](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/payment-safety-upgrade.md).
+
+Storage-free `RequestHandler` hooks are a separate advanced API: settled polls can
+call `on_paid` repeatedly, so the host owns the conditional write/outbox. A raw
+`on_checkout_created` refusal returns 409 and withholds instructions; repository
+infrastructure failures return retryable 503. Public error projections omit
+internal details; FixedFloat diagnostic hooks expose metadata and presence flags,
+never raw request bodies or provider responses.

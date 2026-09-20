@@ -208,6 +208,11 @@ def test_closure_waits_for_a_scan_past_expiry_plus_grace(harness: Harness) -> No
     # At expiry+grace the wallet's own unpaid listing still says pending → attention.
     harness.now = expires_at + ATTEMPT_EXPIRY_GRACE_SECONDS
     harness.app.reconcile()
+    assert (
+        harness.repository.find_by_payment_hash(payment_hash).status == "pending"
+    )  # shared gate remains busy
+    harness.now += 12
+    harness.app.reconcile()
     row = harness.repository.find_by_payment_hash(payment_hash)
     assert (
         row is not None
@@ -329,3 +334,104 @@ def test_placeholder_hooks_warn(tmp_path: Path) -> None:
             host=host,
             repository=repository,
         )
+
+
+def test_failed_fulfillment_http_reports_committed_state_and_retries(harness):
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    payment_hash = body["checkout"]["payment_hash"]
+    harness.wallet.settle_invoice(payment_hash, settled_at=harness.now + 1)
+    harness.now += 12
+    harness.app.reconciler._on_paid = lambda _: (_ for _ in ()).throw(
+        RuntimeError("rollback fixture")
+    )
+    status, body, _ = harness.call(
+        "POST", "/payments/check", {"reference": REFERENCE, "payment_hash": payment_hash}
+    )
+    assert status == 200 and body["status"] == "pending"
+    assert harness.repository.find_by_payment_hash(payment_hash).status == "pending"
+    assert harness.after == []
+    harness.now += 12
+    harness.app.reconciler._on_paid = harness.paid.append
+    status, body, _ = harness.call(
+        "POST", "/payments/check", {"reference": REFERENCE, "payment_hash": payment_hash}
+    )
+    assert status == 200 and body["status"] == "settled"
+    assert len(harness.paid) == len(harness.after) == 1
+
+
+def test_after_paid_error_cannot_reverse_committed_http_settlement(harness):
+    _, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    payment_hash = body["checkout"]["payment_hash"]
+    harness.wallet.settle_invoice(payment_hash, settled_at=harness.now + 1)
+    harness.now += 12
+    harness.app.reconciler._after_paid = lambda _: (_ for _ in ()).throw(
+        RuntimeError("after commit fixture")
+    )
+    status, body, _ = harness.call(
+        "POST", "/payments/check", {"reference": REFERENCE, "payment_hash": payment_hash}
+    )
+    assert status == 200 and body["status"] == "settled"
+    assert len(harness.paid) == 1
+
+
+def test_invalid_host_amount_is_internal_and_never_mints(harness):
+    harness.host.amount_for = lambda _: {"sats": -1}
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": REFERENCE})
+    assert status == 500 and body["code"] == "INTERNAL"
+    assert not harness.wallet.list_invoices()
+
+
+def test_public_error_drops_arbitrary_details_and_redacts_canonical_messages(harness):
+    from openreceive.server.errors import WalletFailureError
+
+    error = WalletFailureError(
+        {
+            "code": "WALLET_UNAVAILABLE",
+            "message": "via NOSTR+WALLETCONNECT:invalid-fixture?secret=invalid-secret",
+            "retryable": True,
+            "details": {"nested": [{"provider_token": "invalid-token"}]},
+        }
+    )
+    response = harness.app.handler.error_response(error, "req-fixture")
+    assert response.status == 503 and response.body["retryable"]
+    assert "invalid-secret" not in json.dumps(response.body)
+    assert "invalid-token" not in json.dumps(response.body)
+    assert "invalid-secret" in str(error)  # original remains untouched
+
+
+def test_unexpected_error_sink_receives_detached_safe_projection(harness):
+    events = []
+    error = RuntimeError("via NOSTR+WALLETCONNECT:invalid-fixture?secret=test-private")
+    error.details = {"provider_token": "test-private"}
+    harness.app.handler._report_unexpected_error = lambda projected, request_id: events.append(
+        projected
+    )
+    response = harness.app.handler.error_response(error, "req-fixture")
+    assert response.status == 500
+    assert len(events) == 1 and events[0] is not error
+    assert "test-private" not in str(events[0])
+    assert events[0].__cause__ is None and events[0].__traceback__ is None
+    assert not hasattr(events[0], "details")
+    assert "test-private" in str(error)
+
+
+@pytest.mark.parametrize("asset", [None, "UNKNOWN_NETWORK"])
+def test_refund_missing_saved_asset_fails_before_provider_mutation(harness, asset):
+    from openreceive.server.errors import InternalHostError
+
+    calls = []
+    harness.provider.request_refund = lambda *_: calls.append("refund")
+    order = {
+        "provider": harness.provider.name,
+        "provider_order_id": "synthetic-order",
+        "provider_token": "test-private",
+        "pay_in_asset": asset,
+    }
+    with pytest.raises(InternalHostError, match="asset"):
+        harness.service.refund_swap(
+            reference=REFERENCE,
+            payment_hash="1" * 64,
+            swap_data={"version": 1, "provider_order": order},
+            refund_address="fixture-any-nonempty-address",
+        )
+    assert not calls

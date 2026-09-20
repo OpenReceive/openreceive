@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Recover historical LN and LNURL payments after prompt replacement and restart using BTCPay's original invoice/method mapping and durable host payment acknowledgment.
+- Retire replaced swap instructions without abandoning provider status or refunds; add bounded invoice recovery navigation even after partial payment, expiry, or disabled swaps.
+- Preserve fair provider polling under local quota denial, with database leases, distinct attempt/observation times, and additive recovery/index migrations.
+- Normalize payment hashes, safely page short/mixed wallet history, authorize local relays before preflight, and redact credentials at diagnostic boundaries.
+- Requires a coordinated host/worker upgrade. See the plugin's `PAYMENT-SAFETY-UPGRADE.md` for migrations, legacy-row review and account binding, and provider budget scope.
+
 - **Push settlement survives a quiet wallet.** The notification subscription
   now opens its own relay socket. It used to hold a lease on NNostr's shared
   client pool, but the pool disposes any client that saw no new request for

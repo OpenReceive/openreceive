@@ -24,7 +24,11 @@ function testHost({ countAttemptsFromIp } = {}) {
         commitAttempt: (input) => committed.push(input),
         listReconcilableAttempts: async () => [],
         recordReconciliation: async () => undefined,
-        claimReconcileGate: async () => true,
+        claimReconcileGate: async () => ({
+          token: "test-claim",
+          scheduler: { cursor: null, windows: [] },
+        }),
+        checkpointReconcileGate: async () => true,
         ...(countAttemptsFromIp === undefined ? {} : { countAttemptsFromIp }),
       },
     },
@@ -616,7 +620,11 @@ test("the all-in-one form wires a custom repository instead of a db handle", asy
         listReconcilableAttempts: async () => [],
         recordReconciliation: async () => undefined,
         // The library owns write-once settlement even for custom repositories.
-        recordSettlement: async () => true,
+        findByPaymentHash: async (paymentHash) => ({ paymentHash, status: "settled" }),
+        recordSettlementWithFulfillment: async (settlement, fulfill) => {
+          await fulfill({ ...settlement, reference: "order-1", transaction: {} });
+          return true;
+        },
       },
       onPaid: async () => undefined,
     },

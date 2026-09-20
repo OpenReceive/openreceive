@@ -46,9 +46,12 @@ export async function startNotificationListener(input: {
       retryable: false,
     });
   }
-  if (typeof input.host.payments.claimReconcileGate !== "function") {
+  if (
+    typeof input.host.payments.claimReconcileGate !== "function" ||
+    typeof input.host.payments.checkpointReconcileGate !== "function"
+  ) {
     throw new TypeError(
-      "The notification listener requires payments.claimReconcileGate (a durable CAS gate shared " +
+      "The notification listener requires payments.claimReconcileGate and checkpointReconcileGate (a durable CAS gate shared " +
         "by every worker); implement it on the repository so all scan entry points stay within one budget.",
     );
   }

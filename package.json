@@ -131,6 +131,7 @@
     "knex": "^3.3.0",
     "knip": "^6.32.2",
     "ng-packagr": "^22.1.1",
+    "pg": "^8.23.0",
     "postcss": "^8.5.26",
     "postcss-selector-parser": "^7.1.5",
     "prisma": "^7.9.1",

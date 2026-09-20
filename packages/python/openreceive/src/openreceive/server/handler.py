@@ -26,13 +26,13 @@ from dataclasses import dataclass, field
 from typing import Any, NamedTuple
 from urllib.parse import parse_qsl
 
+from openreceive.nwc.errors import redact_error_text
 from openreceive.server import client_ip as client_ip_module
 from openreceive.server.errors import (
     ERROR_CODES,
     RETRYABLE_ERROR_CODES,
     ConflictError,
     ForbiddenError,
-    HostPersistenceError,
     InternalHostError,
     MethodNotAllowedError,
     NotFoundError,
@@ -304,7 +304,7 @@ class RequestHandler:
             # The catalog rides along with the mint, amount-aware against this
             # attempt's committed invoice amount, on the re-fetch path too.
             payload: dict[str, Any] = {
-                "checkout": checkout,
+                "checkout": self._public_checkout(checkout),
                 "payment_methods": self._service.list_swap_options(checkout["amount_msats"]),
             }
             description = self._resolved_description(resolved)
@@ -402,7 +402,16 @@ class RequestHandler:
                 self._commit(swap["checkout"], swap.get("swap_data"), request)
             return self._success(
                 201,
-                {"swap": {key: value for key, value in swap.items() if key != "swap_data"}},
+                {
+                    "swap": {
+                        **{
+                            key: value
+                            for key, value in swap.items()
+                            if key not in ("swap_data", "checkout")
+                        },
+                        "checkout": self._public_checkout(swap["checkout"]),
+                    }
+                },
                 request_id,
             )
         except Exception as error:
@@ -482,12 +491,14 @@ class RequestHandler:
             if retryable is None:
                 retryable = code in RETRYABLE_ERROR_CODES
             status = 503 if retryable else 502
-        body: dict[str, Any] = {"code": code, "message": str(error), "request_id": request_id}
+        body: dict[str, Any] = {
+            "code": code,
+            "message": redact_error_text(str(error)),
+            "request_id": request_id,
+        }
         if retryable is not None:
             body["retryable"] = bool(retryable)
-        details = getattr(error, "details", None)
-        if isinstance(details, dict):
-            body["details"] = details
+        # Arbitrary internal details/causes have no public projection.
         headers = self._headers(request_id)
         retry_after = getattr(error, "retry_after_seconds", None)
         if retry_after is not None:
@@ -500,7 +511,11 @@ class RequestHandler:
         which could quote request bodies, NWC URIs, invoices or preimages."""
         try:
             if self._report_unexpected_error is not None:
-                self._report_unexpected_error(error, request_id)
+                # A detached projection excludes causes, traceback frames and attached
+                # provider payloads from arbitrary host diagnostic sinks.
+                self._report_unexpected_error(
+                    RuntimeError(redact_error_text(str(error))), request_id
+                )
                 return
             origin = error.__traceback__
             where = ""
@@ -569,6 +584,10 @@ class RequestHandler:
         if row.get("paid_at") is not None:
             public["paid_at"] = int(row["paid_at"])
         return public
+
+    @staticmethod
+    def _public_checkout(checkout: Mapping[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in checkout.items() if key != "created_at_source"}
 
     @classmethod
     def _public_checked(cls, checked: dict[str, Any]) -> dict[str, Any]:
@@ -677,7 +696,9 @@ class RequestHandler:
             # through; anything else is infrastructure failing to persist.
             if hasattr(error, "status") and hasattr(error, "code"):
                 raise
-            raise HostPersistenceError() from error
+            raise ConflictError(
+                "The host did not accept this payment attempt; payer instructions were withheld."
+            ) from error
 
     def _parse(self, raw: str, route: str, request: HttpRequest | Any) -> dict[str, Any]:
         self._assert_not_cross_site(request)

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Separate swap deposit expiry from wallet settlement lifetime; retain payment and
+  refund monitoring after instruction expiry and cancel stale browser actions
+  when the checkout identity changes.
+- Make fulfillment commit atomically with settlement, defer Django post-commit callbacks
+  to host commit, and verify stored settlement before acknowledging it. Node
+  custom repositories must adopt the transactional callback and durable lookup.
+- Persist fair, bounded reconciliation progress across requests and workers;
+  resume capped scans without treating incomplete history as proof of absence.
+  Add reviewed, audited repair APIs for early closures and attention attempts.
+- Fix PostgreSQL Knex binding/transaction handling, recursive diagnostic redaction,
+  wallet normalization, refund-network checks, and PHP relay failover without
+  automatically replaying an uncertain invoice mint.
+- BTCPay source: recover historical LN/LNURL settlements, retain retired swap and
+  refund access, serialize replacements and provider poll claims, and authorize
+  wallet endpoints before network access. No plugin publication is included.
+- Coordinated upgrade and existing-row review are required; see
+  [payment safety upgrade and repair](docs/guides/payment-safety-upgrade.md).
+
 - Fix a wallet scan that could end early. The walk decided the wallet had run
   out of rows from the page length after unusable rows were dropped, so one
   malformed row on a full page ended it as complete and a paid invoice on a

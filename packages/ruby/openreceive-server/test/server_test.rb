@@ -496,8 +496,12 @@ class StorageFreeServerTest < Minitest::Test
 
     def list_transactions(request)
       @calls += 1
-      index = @ignore_offset ? 0 : Integer(request.fetch("offset", 0)) / 20
-      { "transactions" => @pages[index] || [] }
+      offset = @ignore_offset ? 0 : Integer(request.fetch("offset", 0))
+      @pages.each do |page|
+        return { "transactions" => page.drop(offset) } if offset < page.length
+        offset -= page.length
+      end
+      { "transactions" => [] }
     end
   end
 
@@ -911,7 +915,7 @@ class StorageFreeServerTest < Minitest::Test
 
   # Infrastructure failing to persist the attempt is a retryable 503 INTERNAL
   # (mirrors JS); meaningful repository refusals keep their own status/code.
-  def test_persistence_failure_withholds_the_invoice_with_a_retryable_503
+  def test_hook_refusal_withholds_the_invoice_with_a_conflict
     handler = OpenReceive::Server::RequestHandler.new(
       service: @service,
       authorize: ->(_context) { true },
@@ -923,11 +927,11 @@ class StorageFreeServerTest < Minitest::Test
       raw_body: JSON.generate("reference" => "ruby-persist"),
       request: JSON_REQUEST, request_id: "req-persist"
     )
-    assert_equal 503, status
-    assert_equal "INTERNAL", body.fetch("code")
-    assert_equal true, body.fetch("retryable")
+    assert_equal 409, status
+    assert_equal "CONFLICT", body.fetch("code")
+    refute body.key?("retryable")
     refute body.key?("checkout"), "the invoice is withheld"
-    assert_match(/could not persist this payment attempt/, body.fetch("message"))
+    assert_match(/did not accept this payment attempt/, body.fetch("message"))
 
     conflicting = OpenReceive::Server::RequestHandler.new(
       service: @service,
@@ -1088,7 +1092,7 @@ class StorageFreeServerTest < Minitest::Test
     reporter.define_singleton_method(:report) { |error, **context| reports << [error, context] }
     fake_rails = Module.new
     fake_rails.define_singleton_method(:error) { reporter }
-    error = RuntimeError.new("boom secret detail")
+    error = RuntimeError.new("boom LSC:invalid-fixture?secret=test-private")
     status = nil
     body = nil
     without_rails_constant do
@@ -1100,7 +1104,11 @@ class StorageFreeServerTest < Minitest::Test
     assert_equal 500, status
     assert_equal "Internal server error.", body.fetch("message")
     assert_equal 1, reports.length
-    assert_same error, reports.first.first
+    refute_same error, reports.first.first
+    refute_includes reports.first.first.message, "test-private"
+    assert_includes error.message, "test-private"
+    assert_nil reports.first.first.cause
+    assert_nil reports.first.first.backtrace
     assert_equal "openreceive", reports.first.last.fetch(:source)
     assert_equal true, reports.first.last.fetch(:handled)
   end
@@ -1235,6 +1243,11 @@ class StorageFreeServerTest < Minitest::Test
       on_paid: ->(_payment) {}
     )
     apps = {
+      "hook_refused" => OpenReceive::Server::RackApp.new(
+        service: @service, authorize: ->(_context) { true },
+        resolve_checkout: ->(**_context) { { "amount" => { "sats" => 1 } } },
+        on_checkout_created: ->(**_payment) { raise "host declined" }, on_paid: ->(_payment) {}
+      ),
       "default" => build_app.call(nil),
       "rate_limited" => build_app.call(->(_context) { false }),
       "settled_check" => settled_app,
@@ -1245,6 +1258,9 @@ class StorageFreeServerTest < Minitest::Test
     refute_empty golden_paths
     golden_paths.each do |path|
       vector = JSON.parse(File.read(path))
+      # Repository vectors run through real Rails controller dispatch and models.
+      next if vector.fetch("handler", "").start_with?("repository_")
+
       assert_equal 2, vector["schema_version"], "#{path}: schema_version"
       request = vector.fetch("request")
       app = apps.fetch(vector["handler"] || "default")
@@ -1315,5 +1331,36 @@ class ClientIpBucketTest < Minitest::Test
     assert_nil OpenReceive::Server::ClientIp.attributed("   ")
     assert_equal "2001:db8:1:2::/64",
                  OpenReceive::Server::ClientIp.attributed("2001:DB8:1:2:AAAA:BBBB:CCCC:DDDD")
+  end
+end
+
+class StorageFreeServerTest
+  def test_refund_requires_a_saved_supported_asset_before_provider_calls
+    provider = SwapProvider.new
+    provider.define_singleton_method(:get_status) { |_order| raise "provider must not be called" }
+    provider.define_singleton_method(:request_refund) { |_order, _address| raise "provider must not be called" }
+    service = OpenReceive::Server::Service.new(nwc_client: @wallet, swap_providers: [provider], clock: -> { 1000 })
+    [nil, "UNKNOWN_NETWORK"].each do |asset|
+      error = assert_raises(OpenReceive::Server::InternalHostError) do
+        service.refund_swap(reference: "refund", payment_hash: "1" * 64,
+          swap_data: { "version" => 1, "provider_order" => { "provider" => provider.name, "provider_order_id" => "fixture", "pay_in_asset" => asset } },
+          refund_address: "fixture-nonempty-address")
+      end
+      assert_match(/asset\/network/, error.message)
+    end
+  end
+
+  def test_public_canonical_error_projection_redacts_without_mutating_error
+    error = OpenReceive::Server::WalletFailureError.new(
+      "code" => "WALLET_UNAVAILABLE", "message" => "via NOSTR+WALLETCONNECT:invalid-fixture?secret=test-private", "retryable" => true,
+      "details" => { "nested" => [{ "provider_token" => "test-private" }] }
+    )
+    handler = build_raising_handler(error)
+    status, _headers, body = handler.error_response(error, "req-fixture")
+    assert_equal 503, status
+    assert_equal "WALLET_UNAVAILABLE", body.fetch("code")
+    assert_equal true, body.fetch("retryable")
+    refute_includes JSON.generate(body), "test-private"
+    assert_includes error.message, "test-private"
   end
 end

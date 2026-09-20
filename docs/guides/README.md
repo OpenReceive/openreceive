@@ -31,13 +31,14 @@ assets and networks depend on the provider; swaps are optional.
 19. [Lightning Swap Connect (LSC) URI](lightning-swap-connect.md)
 20. [Environment variables](environment-variables.md)
 21. [Payment storage](storage.md)
-22. [Deploying OpenReceive](deploying.md)
-23. [Testing your OpenReceive integration](host-testing.md)
-24. [API reference](api-reference.md)
-25. [Security](security.md)
-26. [Price feeds](price-feeds.md)
-27. [Provider registry](provider-registry.md)
-28. [WordPress + WooCommerce quickstart](quickstart-woocommerce.md)
+22. [Payment safety upgrade and repair](payment-safety-upgrade.md) — coordinated rollout and reviewed recovery of existing attempts.
+23. [Deploying OpenReceive](deploying.md)
+24. [Testing your OpenReceive integration](host-testing.md)
+25. [API reference](api-reference.md)
+26. [Security](security.md)
+27. [Price feeds](price-feeds.md)
+28. [Provider registry](provider-registry.md)
+29. [WordPress + WooCommerce quickstart](quickstart-woocommerce.md)
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
 [Flask](../recipes/flask.md) (the Python engine as a Blueprint)

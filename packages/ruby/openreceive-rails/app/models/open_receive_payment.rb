@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "digest"
+require "time"
 
 # Engine-owned payment attempts. The table lives in the host application's
 # database (the install generator emits the migration), but the schema, locking,
@@ -88,6 +89,10 @@ class OpenReceivePayment < ActiveRecord::Base
   # COMMIT — releasing inside the transaction would leave a window where a
   # second worker could commit against state this one has already read.
   def self.with_mysql_reference_lock(key)
+    if connection.transaction_open?
+      raise RuntimeError, "OpenReceive MySQL reference operations require an outermost transaction; ambient transactions cannot retain the connection-scoped reference lock."
+    end
+
     name = "openreceive:#{Digest::SHA256.hexdigest(key)[0, 40]}"
     acquired = connection.select_value(
       sanitize_sql_array(["SELECT GET_LOCK(?, ?)", name, MYSQL_LOCK_TIMEOUT_SECONDS])
@@ -218,7 +223,7 @@ class OpenReceivePayment < ActiveRecord::Base
 
     with_reference_lock(payment.reference) do
       payment.reload
-      return payment if payment.status == "settled"
+      return payment unless payment.status == "pending"
 
       first_for_order = !where(reference: payment.reference).settled.exists?
       payment.update!(
@@ -240,11 +245,16 @@ class OpenReceivePayment < ActiveRecord::Base
       raise ArgumentError, "invalid reconciliation status: #{status_text}"
     end
 
-    where(payment_hash: payment_hash.to_s.downcase, status: "pending").update_all(
-      status: status_text,
-      status_reason: reason,
-      updated_at: Time.at(Integer(observed_at)).utc
-    )
+    payment = find_by(payment_hash: payment_hash.to_s.downcase)
+    return if payment.nil?
+
+    with_reference_lock(payment.reference) do
+      where(payment_hash: payment.payment_hash, status: "pending").update_all(
+        status: status_text,
+        status_reason: reason,
+        updated_at: Time.at(Integer(observed_at)).utc
+      )
+    end
   end
 
   # Pending attempts for the reconciler's next wallet scan — oldest first, one
@@ -252,17 +262,101 @@ class OpenReceivePayment < ActiveRecord::Base
   # closest to their closure deadline are always covered, and a backlog drains
   # over several passes instead of widening one wallet scan window without
   # bound. Terminal rows never return.
-  def self.reconcilable_attempts
+  def self.reconcilable_attempts(after: nil, limit: OpenReceive::Server::RECONCILE_BATCH_SIZE)
     OpenReceiveMeta.assert_supported_schema!
-    pending.order(created_at: :asc)
-           .limit(OpenReceive::Server::RECONCILE_BATCH_SIZE)
-           .pluck(:payment_hash, :created_at, :expires_at).map do |hash, created_at, expires_at|
+    query = pending.order(created_at: :asc, payment_hash: :asc)
+    if after
+      created = Time.at(after.fetch("created_at")).utc
+      query = query.where("created_at > ? OR (created_at = ? AND payment_hash > ?)", created, created, after.fetch("payment_hash"))
+    end
+    query.limit([limit, OpenReceive::Server::RECONCILE_BATCH_SIZE].min)
+         .pluck(:payment_hash, :created_at, :checkout_data).map do |hash, created_at, checkout|
       {
-        "payment_hash" => hash,
-        "created_at" => created_at.to_i,
-        "expires_at" => expires_at.to_i
+        "payment_hash" => hash, "created_at" => created_at.to_i,
+        "expires_at" => settlement_expires_at(checkout, hash),
+        "created_at_source" => checkout["created_at_source"] || checkout[:created_at_source] || "host"
       }
     end
+  end
+
+  # Same reconciliation DTO for authenticated by-hash notification lookup.
+  def self.find_pending_attempt(payment_hash)
+    OpenReceiveMeta.assert_supported_schema!
+    row = pending.where(payment_hash: payment_hash.to_s.downcase).pick(:payment_hash, :created_at, :checkout_data)
+    return nil if row.nil?
+
+    hash, created_at, checkout = row
+    {
+      "payment_hash" => hash, "created_at" => created_at.to_i,
+      "expires_at" => settlement_expires_at(checkout, hash),
+      "created_at_source" => checkout["created_at_source"] || checkout[:created_at_source] || "host"
+    }
+  end
+
+  # Saved Lightning deadline, independent of the payer's deposit countdown.
+  def self.settlement_expires_at(checkout, payment_hash)
+    value = checkout[:expires_at] || checkout["expires_at"] || checkout[:expiresAt] || checkout["expiresAt"]
+    raise ArgumentError unless value.is_a?(Integer) || (value.is_a?(String) && value.match?(/\A[0-9]+\z/))
+
+    expiry = Integer(value)
+    raise ArgumentError if expiry <= 0
+
+    expiry
+  rescue TypeError, ArgumentError, NoMethodError
+    raise RuntimeError, "Corrupt checkout_data wallet expiry on openreceive payment attempt #{payment_hash}."
+  end
+
+  # Host-invoked dry-run report. Normal routes never read terminal repair candidates.
+  def self.maintenance_candidates(after: nil, limit: 100)
+    OpenReceiveMeta.assert_supported_schema!
+    limit = [[limit, 1].max, 1000].min
+    query = where(status: %w[attention expired])
+    if after
+      stamp = Time.iso8601(after.fetch("updated_at"))
+      query = query.where("updated_at > ? OR (updated_at = ? AND payment_hash > ?)", stamp, stamp, after.fetch("payment_hash"))
+    end
+    rows = query.order(:updated_at, :payment_hash).limit(limit).to_a
+    cursor = rows.length == limit ? { "updated_at" => rows.last.updated_at.utc.iso8601(6), "payment_hash" => rows.last.payment_hash } : nil
+    { "candidates" => rows.filter_map { |row| repair_candidate(row) }, "next_cursor" => cursor, "scanned" => rows.length }
+  end
+
+  def self.requeue_reviewed_attempt!(candidate, decision_id:)
+    OpenReceiveMeta.assert_supported_schema!
+    unless /\A[A-Za-z0-9._:-]{1,120}\z/.match?(decision_id.to_s)
+      raise ArgumentError, "decision_id must be a nonsecret operator ticket identifier."
+    end
+    payment = find_by(payment_hash: candidate.fetch("payment_hash"))
+    return false if payment.nil?
+
+    with_reference_lock(payment.reference) do
+      payment.reload
+      return false unless repair_candidate(payment) == candidate
+
+      audit_key = "repair:#{payment.payment_hash}:#{decision_id}"
+      return false if OpenReceiveMeta.exists?(key: audit_key)
+
+      audit = candidate.merge("decision_id" => decision_id, "requeued_at" => Time.now.to_i)
+      OpenReceiveMeta.create!(key: audit_key, value: JSON.generate(audit), rev: 0)
+      payment.update!(status: "pending", status_reason: "operator_requeued")
+      true
+    end
+  end
+
+  def self.repair_candidate(row)
+    return nil unless %w[attention expired].include?(row.status)
+
+    wallet_expiry = settlement_expires_at(row.checkout_data, row.payment_hash)
+    reason = row.status == "attention" ? "operator_attention" : nil
+    if row.swap_data.present? && %w[not_found_after_expiry no_finality_after_expiry unsettled_after_expiry].include?(row.status_reason) &&
+       wallet_expiry > row.expires_at.to_i && row.updated_at.to_i >= row.expires_at.to_i + 900 && row.updated_at.to_i < wallet_expiry + 900
+      reason = "early_deposit_deadline_closure"
+    end
+    return nil if reason.nil?
+
+    { "reference" => row.reference, "payment_hash" => row.payment_hash,
+      "status" => row.status, "status_reason" => row.status_reason,
+      "updated_at" => row.updated_at.utc.iso8601(6), "instruction_expires_at" => row.expires_at.to_i,
+      "wallet_expires_at" => wallet_expiry, "reason" => reason }
   end
 
   def self.reusable?(payment, now = Time.current)

@@ -402,7 +402,7 @@ test("characterization: lightning settled", () => {
     paid: true,
     phase: "settled",
     settled: true,
-    terminal: false,
+    terminal: true,
     expires_in_seconds: 600,
   });
   assertReactModelMatches(lightningSettled, state, "settled");
@@ -443,7 +443,7 @@ test("characterization: lightning expired", () => {
     paid: false,
     phase: "expired",
     settled: false,
-    terminal: true,
+    terminal: false,
     expires_in_seconds: 0,
   });
   assertReactModelMatches(lightningExpired, state, "expired");
@@ -546,7 +546,7 @@ test("characterization: swap settled", () => {
     paid: true,
     phase: "settled",
     settled: true,
-    terminal: false,
+    terminal: true,
     expires_in_seconds: 900,
   });
   assertReactModelMatches(swapSettled, state, "settled");
@@ -693,7 +693,7 @@ test("characterization: paid with sibling attempts", () => {
     paid: true,
     phase: "settled",
     settled: true,
-    terminal: false,
+    terminal: true,
     expires_in_seconds: 300,
   });
   assertReactModelMatches(paidWithSiblingAttempts, state, "settled");

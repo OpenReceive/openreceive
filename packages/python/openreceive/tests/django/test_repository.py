@@ -72,6 +72,8 @@ def test_schema_guard_refuses_a_newer_schema_version(repository: DjangoPaymentRe
     fresh = DjangoPaymentRepository()
     with pytest.raises(SchemaError, match="newer than this library"):
         fresh.list_reconcilable_attempts()
+    with pytest.raises(SchemaError, match="newer than this library"):
+        DjangoPaymentRepository().count_attempts_from_ip("203.0.113.9", 0)
     OpenReceiveMeta.objects.filter(key=SCHEMA_VERSION_KEY).update(value="1")
 
 
@@ -86,8 +88,116 @@ def test_schema_guard_names_the_missing_migration(repository: DjangoPaymentRepos
     try:
         with pytest.raises(SchemaError, match="have not been migrated"):
             DjangoPaymentRepository().list_reconcilable_attempts()
+        with pytest.raises(SchemaError, match="have not been migrated"):
+            DjangoPaymentRepository().count_attempts_from_ip("203.0.113.9", 0)
     finally:
         with connection.schema_editor() as editor:
             editor.execute(
                 f"ALTER TABLE {editor.quote_name(table + '_x')} RENAME TO {editor.quote_name(table)}"
             )
+
+
+def test_after_commit_waits_for_outer_transaction_and_disappears_on_rollback(repository, clock):
+    if repository.vendor == "mysql":
+        pytest.skip("MySQL explicitly rejects ambient transactions; covered by rejection test")
+    now = clock["now"]
+    repository.commit_attempt(
+        PaymentInsert("after-commit", H1, checkout("after-commit", H1, now, now + 600))
+    )
+    after = []
+    with pytest.raises(RuntimeError, match="rollback"):
+        with transaction.atomic(using=repository.using):
+            repository.record_settlement(SettlementRecord(H1, now + 10), after_commit=after.append)
+            assert after == []
+            raise RuntimeError("rollback")
+    assert repository.find_by_payment_hash(H1).status == "pending"
+    with transaction.atomic(using=repository.using):
+        repository.record_settlement(SettlementRecord(H1, now + 11), after_commit=after.append)
+        assert after == []
+    assert len(after) == 1 and after[0].connection is None
+    assert repository.find_by_payment_hash(H1).status == "settled"
+
+
+def test_after_commit_inner_savepoint_rollback_drops_callback(repository, clock):
+    if repository.vendor == "mysql":
+        pytest.skip("MySQL explicitly rejects ambient transactions; covered by rejection test")
+    now = clock["now"]
+    repository.commit_attempt(
+        PaymentInsert("savepoint", H1, checkout("savepoint", H1, now, now + 600))
+    )
+    after = []
+    with transaction.atomic(using=repository.using):
+        with pytest.raises(RuntimeError):
+            with transaction.atomic(using=repository.using):
+                repository.record_settlement(
+                    SettlementRecord(H1, now + 10), after_commit=after.append
+                )
+                raise RuntimeError("rollback inner")
+    assert after == []
+    assert repository.find_by_payment_hash(H1).status == "pending"
+
+
+test_reconciliation_uses_wallet_snapshot_deadline_and_keeps_deposit_reuse = (
+    contract.test_reconciliation_uses_wallet_snapshot_deadline_and_keeps_deposit_reuse
+)
+test_attention_requires_explicit_review_and_requeue_never_settles = (
+    contract.test_attention_requires_explicit_review_and_requeue_never_settles
+)
+test_early_closure_report_excludes_true_wallet_expiry_and_preserves_token = (
+    contract.test_early_closure_report_excludes_true_wallet_expiry_and_preserves_token
+)
+
+
+def test_mysql_rejects_nested_reference_operation_before_acquiring_lock(repository, clock):
+    if repository.vendor != "mysql":
+        pytest.skip("MySQL-only connection-scoped lock restriction")
+    now = clock["now"]
+    repository.commit_attempt(PaymentInsert("nested", H1, checkout("nested", H1, now, now + 600)))
+    with transaction.atomic(using=repository.using):
+        with pytest.raises(RuntimeError, match="outermost transaction"):
+            repository.record_settlement(SettlementRecord(H1, now + 10))
+    assert repository.find_by_payment_hash(H1).status == "pending"
+
+
+test_terminal_transition_uses_settlement_reference_lock = (
+    contract.test_terminal_transition_uses_settlement_reference_lock
+)
+
+
+def test_after_commit_uses_configured_alias(repository, clock, django_db_blocker):
+    from django.db import connections
+
+    alias = "openreceive_commit_alias"
+    connections.databases[alias] = dict(connections[repository.using].settings_dict)
+    aliased = DjangoPaymentRepository(using=alias, clock=lambda: clock["now"])
+    seen = []
+    try:
+        with django_db_blocker.unblock():
+            now = clock["now"]
+            aliased.commit_attempt(
+                PaymentInsert("aliased", H1, checkout("aliased", H1, now, now + 600))
+            )
+
+            def after_commit(payment):
+                # Independent default connection observes the committed row.
+                seen.append(
+                    (
+                        connections[alias].in_atomic_block,
+                        repository.find_by_payment_hash(H1).status,
+                        payment.connection,
+                    )
+                )
+
+            if repository.vendor == "mysql":
+                aliased.record_settlement(SettlementRecord(H1, now + 1), after_commit=after_commit)
+            else:
+                with transaction.atomic(using=alias):
+                    aliased.record_settlement(
+                        SettlementRecord(H1, now + 1), after_commit=after_commit
+                    )
+                    assert seen == []
+            assert seen == [(False, "settled", None)]
+    finally:
+        connections[alias].close()
+        del connections[alias]
+        del connections.databases[alias]

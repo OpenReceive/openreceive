@@ -196,9 +196,17 @@ test("service subscribeWalletNotifications rejects UNSUPPORTED_METHOD without cl
 function scriptedNotifierService(reconcilePayments) {
   const notifier = { handler: undefined, unsubscribed: 0, reconcileCalls: 0 };
   const service = {
-    reconcilePayments: async (input) => {
+    scanPaymentSlice: async (input) => {
       notifier.reconcileCalls += 1;
-      return reconcilePayments(input);
+      const checks = await reconcilePayments({
+        attempts: input.window.attempts.map((attempt) => ({
+          paymentHash: attempt.payment_hash,
+          createdAt: attempt.created_at,
+          expiresAt: attempt.expires_at,
+        })),
+        maxPages: input.maxPages,
+      });
+      return { checks, window: input.window, outcome: "complete" };
     },
     subscribeWalletNotifications: async (handler) => {
       notifier.handler = handler;
@@ -439,7 +447,11 @@ test("notification listener coalesces bursts and stop() unsubscribes", async () 
       ],
       commitAttempt: async () => undefined,
       recordReconciliation: async () => undefined,
-      claimReconcileGate: async () => true,
+      claimReconcileGate: async () => ({
+        token: "test-claim",
+        scheduler: { cursor: null, windows: [] },
+      }),
+      checkpointReconcileGate: async () => true,
     },
     resolveCheckout: async () => ({ amount: { sats: 100 } }),
     onCheckoutCreated: async () => undefined,
@@ -487,7 +499,11 @@ test("notification listener routes reconcile failures to onError and keeps liste
       ],
       commitAttempt: async () => undefined,
       recordReconciliation: async () => undefined,
-      claimReconcileGate: async () => true,
+      claimReconcileGate: async () => ({
+        token: "test-claim",
+        scheduler: { cursor: null, windows: [] },
+      }),
+      checkpointReconcileGate: async () => true,
     },
     resolveCheckout: async () => ({ amount: { sats: 100 } }),
     onCheckoutCreated: async () => undefined,
@@ -519,7 +535,11 @@ test("notification listener defaults its error sink to the sanitized warn", asyn
       ],
       commitAttempt: async () => undefined,
       recordReconciliation: async () => undefined,
-      claimReconcileGate: async () => true,
+      claimReconcileGate: async () => ({
+        token: "test-claim",
+        scheduler: { cursor: null, windows: [] },
+      }),
+      checkpointReconcileGate: async () => true,
     },
     resolveCheckout: async () => ({ amount: { sats: 100 } }),
     onCheckoutCreated: async () => undefined,
@@ -557,7 +577,8 @@ test("a wake while another worker holds the gate never touches the wallet", asyn
       commitAttempt: async () => undefined,
       recordReconciliation: async () => undefined,
       // Another worker (web opportunistic or a sibling instance) just scanned.
-      claimReconcileGate: async () => false,
+      claimReconcileGate: async () => null,
+      checkpointReconcileGate: async () => true,
     },
     resolveCheckout: async () => ({ amount: { sats: 100 } }),
     onCheckoutCreated: async () => undefined,

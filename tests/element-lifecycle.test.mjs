@@ -1269,3 +1269,83 @@ test("a remembered swap opens its refund panel without another create", async ()
     element.remove();
   }
 });
+
+test("identity changes discard delayed Lightning instructions and old finally cannot clear a newer mint", async () => {
+  const mints = [];
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": (body) => prepareBody(body.reference, 21000),
+    "/checkouts": (body) => {
+      const request = deferred();
+      mints.push({ ...request, reference: body.reference });
+      return request.promise;
+    },
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ reference: "A", prefix: "/one" });
+  try {
+    (
+      await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'))
+    ).click();
+    await untilLocal(() => mints.length === 1);
+    element.setAttribute("reference", "B");
+    (
+      await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'))
+    ).click();
+    await untilLocal(() => mints.length === 2);
+    mints[0].resolve(checkoutBody("A", 21000, "a".repeat(64)));
+    await flush();
+    assert.equal(element.getAttribute("reference"), "B");
+    assert.equal(element.getAttribute("invoice"), null);
+    assert.doesNotMatch(element.shadowRoot.innerHTML, /lnbc-a{64}/);
+    assert.match(element.shadowRoot.textContent, /Preparing payment/);
+    mints[1].resolve(checkoutBody("B", 21000, "b".repeat(64)));
+    await untilLocal(() => element.getAttribute("invoice")?.includes("b".repeat(64)));
+    element.setAttribute("prefix", "/two");
+    await untilLocal(() => fetchStub.calls.some((c) => c.path === "/two/checkouts/prepare"));
+    assert.equal(element.getAttribute("invoice"), null);
+  } finally {
+    element.remove();
+  }
+});
+
+for (const delayed of ["quote", "create"])
+  test(`element identity discards obsolete swap ${delayed}`, async () => {
+    const pending = deferred();
+    const fetchStub = createFetchStub({
+      "/checkouts/prepare": (body) => prepareBodyWithSwapAsset(body.reference, "SOL_SOL"),
+      "/swaps/quote": (body) =>
+        delayed === "quote" ? pending.promise : swapQuoteBody(body.pay_in_asset),
+      "/swaps": () => pending.promise,
+      "/payments/check": () => ({ status: "pending" }),
+    });
+    globalThis.fetch = fetchStub;
+    const element = mount({ reference: "A", prefix: "/openreceive" });
+    try {
+      (
+        await untilLocal(() => element.shadowRoot?.querySelector('[data-or-swap-start="SOL_SOL"]'))
+      ).click();
+      await untilLocal(
+        () => fetchStub.pathCount(delayed === "quote" ? "/swaps/quote" : "/swaps") === 1,
+      );
+      element.setAttribute("reference", "B");
+      await untilLocal(() =>
+        fetchStub.calls.some((c) => c.path.endsWith("/prepare") && c.body.reference === "B"),
+      );
+      pending.resolve(
+        delayed === "quote" ? swapQuoteBody("SOL_SOL") : swapStartBody("SOL_SOL", "a".repeat(64)),
+      );
+      await flush();
+      assert.equal(element.getAttribute("reference"), "B");
+      assert.doesNotMatch(element.shadowRoot.innerHTML, /SoLDeposit/);
+      if (delayed === "quote") assert.equal(fetchStub.pathCount("/swaps"), 0);
+      assert.equal(
+        fetchStub.calls.some(
+          (c) => c.body?.reference === "B" && c.body?.payment_hash === "a".repeat(64),
+        ),
+        false,
+      );
+    } finally {
+      element.remove();
+    }
+  });

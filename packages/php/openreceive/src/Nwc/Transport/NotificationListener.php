@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace OpenReceive\Nwc\Transport;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Handler\StreamHandler;
-use GuzzleHttp\HandlerStack;
 use OpenReceive\Nwc\Uri;
 use swentel\nostr\Encryption\Nip04;
 use swentel\nostr\Encryption\Nip44;
 use swentel\nostr\Key\Key;
-use Valtzu\WebSocketMiddleware\WebSocketMiddleware;
 
 /**
  * A blocking NWC-02 subscription over the same websocket middleware the
@@ -35,14 +31,16 @@ final class NotificationListener
     /** @var list<string> */
     private readonly array $relays;
     private bool $running = false;
+    private readonly RelayConnector $connector;
 
     /** @param array{wallet_pubkey: string, relays: list<string>, client_secret: string} $connection the Uri::parse result */
-    public function __construct(array $connection, private readonly int $lookbackSeconds = 60, private readonly ?int $idleTimeoutSeconds = 120)
+    public function __construct(array $connection, private readonly int $lookbackSeconds = 60, private readonly ?int $idleTimeoutSeconds = 120, ?RelayConnector $connector = null)
     {
         $this->walletPubkey = $connection['wallet_pubkey'];
         $this->clientSecret = $connection['client_secret'];
         $this->relays = $connection['relays'];
         $this->clientPubkey = (new Key())->getPublicKey($this->clientSecret);
+        $this->connector = $connector ?? new RelayConnector($this->relays);
     }
 
     public static function fromUri(string $uri): self
@@ -62,16 +60,7 @@ final class NotificationListener
     public function listen(callable $handler, ?callable $onIdle = null): void
     {
         $this->running = true;
-        $relayUrl = $this->relays[0];
-        $stack = new HandlerStack(new StreamHandler());
-        $stack->unshift(new WebSocketMiddleware());
-        $client = new Client(['handler' => $stack, 'timeout' => 30]);
-        $handshake = $client->requestAsync('GET', $relayUrl)->wait();
-        if ($handshake->getStatusCode() !== 101) {
-            throw new \RuntimeException("NWC relay websocket handshake failed with HTTP {$handshake->getStatusCode()}");
-        }
-        /** @var \Valtzu\WebSocketMiddleware\WebSocketStream $socket */
-        $socket = $handshake->getBody();
+        $socket = $this->connector->open(microtime(true) + 8.0, $onIdle, $this->isStopped(...));
         $subscriptionId = 'openreceive-' . bin2hex(random_bytes(8));
         $filter = [
             'kinds' => [self::NIP04_KIND, self::NIP44_KIND],
@@ -79,17 +68,18 @@ final class NotificationListener
             '#p' => [$this->clientPubkey],
             'since' => time() - $this->lookbackSeconds,
         ];
-        $socket->write(json_encode(['REQ', $subscriptionId, $filter], JSON_THROW_ON_ERROR));
+
         $buffer = '';
         $lastActivity = time();
         $lastTick = microtime(true);
         try {
+            $socket->write(json_encode(['REQ', $subscriptionId, $filter], JSON_THROW_ON_ERROR));
             while ($this->running) {
                 if ($onIdle !== null && microtime(true) - $lastTick >= 1.0) {
                     $lastTick = microtime(true);
                     $onIdle();
                 }
-                $chunk = $socket->read();
+                $chunk = $socket->read(65536);
                 if ($chunk === '') {
                     if ($socket->eof()) {
                         throw new \RuntimeException('NWC relay connection closed');
@@ -111,12 +101,14 @@ final class NotificationListener
         } finally {
             try {
                 $socket->write(json_encode(['CLOSE', $subscriptionId], JSON_THROW_ON_ERROR));
-                $socket->close();
             } catch (\Throwable) {
                 // The socket is already gone.
             }
+            try { $socket->close(); } catch (\Throwable) { }
         }
     }
+
+    private function isStopped(): bool { return !$this->running; }
 
     public function stop(): void
     {

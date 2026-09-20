@@ -138,6 +138,15 @@ vector("nwc-request-response").fetch("cases").each do |kase|
       raise "nwc-request-response parity failed: #{kase.fetch('name')} request " \
             "(got #{actual_request.inspect})"
     end
+    if kase["expected_error"]
+      failed = false
+      begin
+        OpenReceive.normalize_list_transactions_response(kase.fetch("raw_response"))
+      rescue ArgumentError
+        failed = true
+      end
+      raise "expected failed wallet scan: #{kase.fetch('name')}" unless failed
+    end
     if kase.key?("expected_openreceive_response")
       actual = OpenReceive.normalize_list_transactions_response(kase.fetch("raw_response"))
       expected = kase.fetch("expected_openreceive_response")
@@ -274,8 +283,16 @@ scan_family.fetch("cases").each do |kase|
   wallet = Object.new
   wallet.define_singleton_method(:list_transactions) do |request|
     source = request["unpaid"] ? unpaid_pages : pages
-    index = wallet_spec["ignores_offset"] ? 0 : Integer(request.fetch("offset", 0)) / scan_page_limit
-    { "transactions" => source[index] || [] }
+    offset = wallet_spec["ignores_offset"] ? 0 : Integer(request.fetch("offset", 0))
+    selected = []
+    source.each do |page|
+      if offset < page.length
+        selected = page.drop(offset)
+        break
+      end
+      offset -= page.length
+    end
+    { "transactions" => selected }
   end
   service = OpenReceive::Server::Service.new(
     nwc_client: wallet, price_provider: false, swap_providers: [],

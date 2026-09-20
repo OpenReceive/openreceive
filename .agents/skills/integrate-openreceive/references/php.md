@@ -125,7 +125,7 @@ itself, and they hold for every integration.
   is a placeholder that allows everything (the engine warns at boot while a
   host uses it) — replace it with this app's real ownership check, same as
   `onPaid`'s `Hosts\LoggingOnPaid`.
-- `onPaid` must be idempotent. It runs once per `reference` — your order id, one
+- `onPaid` must be idempotent. Its database fulfillment commits once per `reference` — your order id, one
   per thing you fulfill, created before checkout, kept across retries, never
   reused. A fresh id per page load lets one order be paid twice.
 - Receive-only NWC is required; a spend-capable code fails closed at boot unless
@@ -300,6 +300,8 @@ enough; drop the `.md` for the same page a person would read.
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
+
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -512,7 +514,7 @@ prices with exact decimal math, and returns the order id the page will pass as
 the `reference`. OpenReceive never prices from payer input. The `reference` is
 a string you choose, and it is the fulfillment identity: your order id — one
 per thing you fulfill, created before checkout, kept across retries, never
-reused. `onPaid` runs once per reference, a new checkout under a reference
+reused. `onPaid` commits fulfillment once per reference, a new checkout under a reference
 that already settled is refused with 409, and a fresh id per page load lets
 one order be paid twice.
 

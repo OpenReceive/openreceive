@@ -68,29 +68,58 @@ class OpenReceiveMeta < ActiveRecord::Base
     end
   end
 
-  # Claim the durable global reconcile gate. Returns true when this caller may
-  # run a wallet scan now; false (gate_busy) when another worker scanned within
-  # interval_seconds. The winner is identified by reading back its own token —
-  # the portable equivalent of an affected-row count, matching the JS
-  # claimReconcileGate. A failed scan leaves claimed_at in place on purpose —
-  # the next interval retries without a stampede.
-  def self.claim_reconcile_gate(now:, interval_seconds:)
+  # The durable global scan gate returns a token/scheduler claim or nil.
+  # Checkpoints require that token and an unexpired lease; failed scans retain
+  # the interval and pre-scan queue so another worker can retry fairly.
+  def self.claim_reconcile_gate(now:, interval_seconds:, lease_seconds: 10)
     assert_supported_schema!
-    claim = JSON.generate("claimed_at" => Integer(now), "token" => SecureRandom.uuid)
+    now = Integer(now)
     CAS_RETRIES.times do
       row = find_by(key: RECONCILE_GATE_KEY)
-      if row.nil?
-        cas(RECONCILE_GATE_KEY, claim, nil)
-      else
-        claimed_at = parse_claimed_at(row.value)
-        if claimed_at && fresh_timestamp?(Integer(now), claimed_at, Integer(interval_seconds))
-          return false
-        end
-        cas(RECONCILE_GATE_KEY, claim, row.rev)
-      end
-      return true if where(key: RECONCILE_GATE_KEY).pick(:value) == claim
+      current = parse_gate(row&.value)
+      claimed = current["claimed_at"]
+      return nil if claimed && fresh_timestamp?(now, claimed, interval_seconds)
+      return nil if current.fetch("lease_until", 0) > now && current.fetch("claimed_at", 0) <= now + 60
+
+      gate = {
+        "version" => 1, "claimed_at" => now, "token" => SecureRandom.uuid,
+        "lease_until" => now + lease_seconds, "interval_seconds" => interval_seconds,
+        "scheduler" => current.fetch("scheduler", { "cursor" => nil, "windows" => [] })
+      }
+      next unless cas(RECONCILE_GATE_KEY, JSON.generate(gate), row&.rev)
+
+      return { "token" => gate.fetch("token"), "scheduler" => gate.fetch("scheduler") }
     end
-    false
+    nil
+  end
+
+  def self.checkpoint_reconcile_gate(claim, scheduler, now:, release: false)
+    assert_supported_schema!
+    row = find_by(key: RECONCILE_GATE_KEY)
+    return false if row.nil?
+
+    gate = parse_gate(row.value)
+    return false unless gate["token"] == claim.fetch("token") && gate.fetch("lease_until", 0) > now
+
+    windows = scheduler.fetch("windows")
+    raise ArgumentError, "Reconciliation checkpoint exceeded bounded cohorts" if windows.length > 2 || windows.any? { |w| w.fetch("attempts").length > 200 }
+
+    gate["scheduler"] = scheduler
+    gate["lease_until"] = 0 if release
+    encoded = JSON.generate(gate)
+    raise ArgumentError, "Reconciliation checkpoint exceeded 128 KiB" if encoded.bytesize > 128 * 1024
+
+    cas(RECONCILE_GATE_KEY, encoded, row.rev)
+  end
+
+  def self.parse_gate(value)
+    gate = value.nil? ? {} : JSON.parse(value.to_s)
+    gate = {} unless gate.is_a?(Hash)
+    raise OpenReceive::ConfigurationError, "Unsupported reconciliation checkpoint version; upgrade OpenReceive." if gate.fetch("version", 0) > 1
+
+    gate["version"] == 1 ? gate : { "scheduler" => { "cursor" => nil, "windows" => [] } }
+  rescue JSON::ParserError
+    { "scheduler" => { "cursor" => nil, "windows" => [] } }
   end
 
   def self.stored_schema_version
@@ -113,13 +142,5 @@ class OpenReceiveMeta < ActiveRecord::Base
     age < window_seconds
   end
 
-  def self.parse_claimed_at(value)
-    parsed = JSON.parse(value.to_s)
-    claimed_at = parsed["claimed_at"]
-    claimed_at.is_a?(Numeric) ? Integer(claimed_at) : nil
-  rescue JSON::ParserError
-    nil
-  end
-
-  private_class_method :stored_schema_version, :fresh_timestamp?, :parse_claimed_at
+  private_class_method :stored_schema_version, :fresh_timestamp?
 end

@@ -1,18 +1,18 @@
-import * as React from "react";
 import {
+  type CheckoutController,
+  type CheckoutSnapshot,
+  type CheckoutState,
   copyInvoice as copyInvoiceHelper,
   createCheckoutController,
   createCheckoutState,
   createCheckoutStatusModel,
-  openWallet as openWalletHelper,
   deriveStatus,
-  type CheckoutController,
-  type CheckoutSnapshot,
-  type CheckoutState,
+  openWallet as openWalletHelper,
 } from "@openreceive/browser/headless";
+import * as React from "react";
 import { useTransientValue } from "./hooks.ts";
-import { getCheckoutLogContext } from "./utils.ts";
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";
+import { getCheckoutLogContext } from "./utils.ts";
 
 export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   // The hook drives a concrete checkout snapshot, which UseCheckoutOptions
@@ -198,8 +198,9 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
 
   const reloadState = React.useCallback(async () => {
     try {
-      const next = await controllerRef.current?.reloadState();
-      if (next !== undefined) setState(next);
+      const controller = controllerRef.current;
+      const next = await controller?.reloadState();
+      if (controllerRef.current === controller && next !== undefined) setState(next);
     } catch (error) {
       onErrorRef.current?.(error);
       throw error;
@@ -227,10 +228,11 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   }, []);
   const stageSwapRefund = React.useCallback<CheckoutController["stageSwapRefund"]>(
     async (refund) => {
+      const controller = swapRefundController();
       try {
-        return await swapRefundController().stageSwapRefund(refund);
+        return await controller.stageSwapRefund(refund);
       } catch (error) {
-        onErrorRef.current?.(error);
+        if (controllerRef.current === controller) onErrorRef.current?.(error);
         throw error;
       }
     },
@@ -238,10 +240,11 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   );
   const confirmSwapRefund = React.useCallback<CheckoutController["confirmSwapRefund"]>(
     async (refund) => {
+      const controller = swapRefundController();
       try {
-        return await swapRefundController().confirmSwapRefund(refund);
+        return await controller.confirmSwapRefund(refund);
       } catch (error) {
-        onErrorRef.current?.(error);
+        if (controllerRef.current === controller) onErrorRef.current?.(error);
         throw error;
       }
     },

@@ -18,7 +18,18 @@ function fakeKnex(rawResult) {
   return {
     calls,
     raw: rawOn("root"),
-    transaction: (run) => run({ raw: rawOn("trx") }),
+    client: {
+      acquireConnection: async () => ({ query: rawOn("root") }),
+      releaseConnection: async () => {},
+    },
+    transaction: (run) =>
+      run({
+        raw: rawOn("trx"),
+        client: {
+          acquireConnection: async () => ({ query: rawOn("trx") }),
+          releaseConnection: async () => {},
+        },
+      }),
   };
 }
 

@@ -161,6 +161,22 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
         return state is null ? null : new ReceiveOnlyNwcClient(state, BitcoinNetwork.NBitcoinNetwork, _logger);
     }
 
+    /// <summary>Parse and enforce BTCPay's local-network policy before transport construction.</summary>
+    public async Task<(ReceiveOnlyNwcClient? Client, string? Error)> CreateAuthorizedClientAsync(string nwcUri, bool allowSpendCapableWallet, ClaimsPrincipal user)
+    {
+        var error = await WalletEndpointErrorAsync(nwcUri, user);
+        if (error is not null) return (null, error);
+        var client = CreateClient(nwcUri, allowSpendCapableWallet, out error);
+        return (client, error);
+    }
+
+    public async Task<string?> WalletEndpointErrorAsync(string nwcUri, ClaimsPrincipal user)
+    {
+        if (!NwcUri.TryParse(nwcUri, out var uri, out var parseError) || uri is null)
+            return NwcUri.FormatInvalidNwcMessage(parseError?.Message, "The NWC code");
+        return await LocalEndpointErrorAsync(uri.Relays.Select(relay => relay.DnsSafeHost), user);
+    }
+
     /// <summary>A client for a connection string that is not (yet) saved on a store, e.g. the setup page's "Test".</summary>
     public ReceiveOnlyNwcClient? CreateClient(string nwcUri, bool allowSpendCapableWallet, out string? error)
     {
@@ -182,8 +198,7 @@ public sealed class OpenReceiveSettingsService : Swaps.ISwapSettingsSource
     /// </summary>
     public async Task<string?> UseAsLightningNodeAsync(StoreData store, string nwcUri, bool allowSpendCapableWallet, ClaimsPrincipal user)
     {
-        if (NwcUri.TryParse(nwcUri, out var parsed, out _) && parsed is not null &&
-            await LocalEndpointErrorAsync(parsed.Relays.Select(relay => relay.DnsSafeHost), user) is { } localRelay)
+        if (await WalletEndpointErrorAsync(nwcUri, user) is { } localRelay)
         {
             return localRelay;
         }

@@ -1,6 +1,7 @@
 import {
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
   type PaymentDetails,
+  type PaymentScanWindow,
   type TransactionSettlementStatus,
   unixSeconds,
 } from "@openreceive/core";
@@ -74,7 +75,9 @@ export interface ReconcilableAttempt {
   readonly paymentHash: string;
   /** Exact NIP-47 invoice creation time returned by make_invoice. */
   readonly createdAt: number;
-  /** Unix timestamp after which the attempt can be closed once a scan confirms no settlement. */
+  readonly createdAtSource?: "wallet" | "host";
+  /** Actual wallet invoice deadline from the saved checkout, never the deposit deadline.
+   * Closure also requires a covering scan after this deadline plus the expiry grace. */
   readonly expiresAt: number;
 }
 
@@ -110,19 +113,39 @@ export interface SettlementRecord {
  * `recordReconciliation` must apply the transition only while the row is still
  * `pending` — it must never overwrite a settled attempt.
  *
- * `recordSettlement` is the write-once settlement claim: the library calls it
- * for every observed settlement and runs the host's own handler only when the
- * call reports the claim won, so a redelivered settlement fulfills once.
+ * `recordSettlementWithFulfillment` locks the reference, records settlement,
+ * and awaits host fulfillment in one transaction. Failure rolls back both writes.
  */
-export interface PaymentRepository {
+export interface SettlementContext<Transaction = unknown> extends SettlementRecord {
+  readonly reference: string;
+  /** Handle owned by the settlement transaction; never a root connection. */
+  readonly transaction: Transaction;
+}
+
+export interface ReconcileCursor {
+  readonly created_at: number;
+  readonly payment_hash: string;
+}
+export interface ReconcileScheduler {
+  cursor: ReconcileCursor | null;
+  windows: PaymentScanWindow[];
+}
+export interface ReconcileGateClaim {
+  readonly token: string;
+  readonly scheduler: ReconcileScheduler;
+}
+
+export interface PaymentRepository<Transaction = unknown> {
   listForReference(reference: string): Promise<readonly PaymentRecord[]>;
+  /** Durable acknowledgment for settlement outcomes, including concurrent writes. */
+  findByPaymentHash(paymentHash: string): Promise<PaymentRecord | undefined>;
   /**
-   * The oldest `pending` attempts, terminal rows excluded. A repository with a
-   * large backlog should return an oldest-first batch (the built-in SQL one
-   * caps each pass at OPENRECEIVE_RECONCILE_BATCH_SIZE); the remainder is
-   * covered by later passes.
+   * A bounded keyset page of `pending` attempts ordered by createdAt and hash,
+   * strictly after the supplied cursor; terminal rows are excluded. Return at
+   * most OPENRECEIVE_RECONCILE_BATCH_SIZE (200). The durable scheduler wraps
+   * the cursor after exhaustion so old unpaid rows cannot starve later ones.
    */
-  listReconcilableAttempts(): Promise<readonly ReconcilableAttempt[]>;
+  listReconcilableAttempts(after?: ReconcileCursor | null): Promise<readonly ReconcilableAttempt[]>;
   /**
    * The `pending` attempt for one payment hash, or undefined when the hash is
    * unknown or already terminal. Direct settlement from an NWC notification
@@ -135,14 +158,18 @@ export interface PaymentRepository {
   commitAttempt(input: CheckoutCreatedInput): void | Promise<void>;
   recordReconciliation(transition: ReconciliationTransition): void | Promise<void>;
   /**
-   * Claim the order's first settlement for this attempt and persist it.
+   * Record this pending attempt's settlement under the reference lock, await
+   * fulfillment for the first settled sibling, then commit both writes.
    * Returns true only for the call that won the claim — the attempt was still
    * unsettled AND no sibling attempt on the order had settled. Later calls for
    * the same or a sibling attempt must record the settlement (a genuine second
    * payment is not discarded) and return false. A settled attempt is never
    * overwritten, and an unknown payment hash is a no-op returning false.
    */
-  recordSettlement(settlement: SettlementRecord): boolean | Promise<boolean>;
+  recordSettlementWithFulfillment(
+    settlement: SettlementRecord,
+    fulfill: (context: SettlementContext<Transaction>) => void | Promise<void>,
+  ): boolean | Promise<boolean>;
   /**
    * Count attempt rows recorded for this client IP at or after `sinceUnixSeconds`.
    * Backs the handler's opt-in `rateLimiting` option; when a custom repository
@@ -151,9 +178,9 @@ export interface PaymentRepository {
    */
   countAttemptsFromIp?(clientIp: string, sinceUnixSeconds: number): number | Promise<number>;
   /**
-   * Claim the durable global reconcile gate: return true when this caller may
-   * run a wallet scan now, false when another worker scanned within
-   * `intervalSeconds` (`gate_busy`). The claim MUST be a durable compare-and-set
+   * Claim the durable global reconcile gate: return a token and scheduler when
+   * this caller owns the lease, or null while another lease/interval is active
+   * (`gate_busy`). Persist progress only through the matching unexpired token. The claim MUST be a durable compare-and-set
    * shared by every process on the host database (the built-in SQL repository
    * uses the `openreceive_meta` key/value/rev table) — process-local memory
    * cannot coordinate multiple workers and must never back this. Backs the
@@ -164,6 +191,14 @@ export interface PaymentRepository {
   claimReconcileGate?(input: {
     readonly now: number;
     readonly intervalSeconds: number;
+    readonly leaseSeconds?: number;
+  }): ReconcileGateClaim | null | Promise<ReconcileGateClaim | null>;
+  checkpointReconcileGate?(input: {
+    readonly claim: ReconcileGateClaim;
+    readonly scheduler: ReconcileScheduler;
+    readonly now: number;
+    readonly release?: boolean;
+    readonly intervalSeconds?: number;
   }): boolean | Promise<boolean>;
 }
 

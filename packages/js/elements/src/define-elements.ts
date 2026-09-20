@@ -234,8 +234,17 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     }
 
     attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
-      if (!this.isConnected || this.session.applyingOwnAttributes) return;
+      if (this.session.applyingOwnAttributes) return;
+      const identityChanged =
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.reference ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix;
+      if (!this.isConnected && !identityChanged) return;
       if (oldValue === newValue) return;
+      if (
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix &&
+        oldValue?.replace(/\/+$/, "") === newValue?.replace(/\/+$/, "")
+      )
+        return;
 
       // Display-only attributes (theme, the resume-path trio) never change what is
       // polled: rebuilding the controller for them fired an extra POST
@@ -274,9 +283,41 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice;
       if (createInputChanged) {
+        const managed = this.latestCheckoutSnapshot !== undefined;
+        this.stopCheckoutController();
         this.session.forgetCreateKey();
+        this.latestCheckoutSnapshot = undefined;
+        this.lastCheckoutState = undefined;
+        this.lastSnapshotDisplayKey = undefined;
+        this.startedSwapInvoice = undefined;
+        this.dismissedSwapInvoiceId = null;
+        this.selectedSwapAsset = null;
+        this.selectedPickerKey = null;
+        this.selectedSwapAssetByGroup = {};
+        this.selection = createPaymentWizardSelection();
+        this.swapOptions = [];
+        this.swapOptionsLoaded = false;
+        this.clearRefundAddressDraft();
+        if (managed && name !== OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice) {
+          this.session.writeOwnAttributes(() => {
+            for (const key of [
+              "invoice",
+              "invoiceId",
+              "paymentHash",
+              "rail",
+              "amountMsats",
+              "fiatCurrency",
+              "fiatValue",
+              "status",
+              "expiresAt",
+            ] as const) {
+              this.removeAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES[key]);
+            }
+          });
+        }
       }
 
+      if (!this.isConnected) return;
       if (this.isCreateMode()) {
         this.render();
         this.syncThemeAncestorObserver();
@@ -292,6 +333,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     }
 
     disconnectedCallback() {
+      this.session.dispose();
       this.stopCheckoutController();
       this.stopThemeAncestorObserver();
     }
@@ -908,6 +950,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         button.addEventListener("click", () => {
           const target = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb);
           if (target === "swap-asset") {
+            this.session.clearSwapStartError();
             this.selectedSwapAsset = null;
             this.selectedPickerKey = null;
             this.selectedSwapAssetByGroup = {};
@@ -976,6 +1019,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         .querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapBack)
         ?.addEventListener("click", () => {
           const current = this.currentSwapInvoice();
+          this.session.clearSwapStartError();
           this.dismissedSwapInvoiceId = current?.invoice_id ?? null;
           this.selectedSwapAsset = null;
           this.selectedPickerKey = null;
@@ -1160,14 +1204,17 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       const controller = this.controller;
       if (controller === undefined) return;
 
+      const action = this.session.capture();
       try {
-        this.startedSwapInvoice = confirm
+        const invoice = confirm
           ? await controller.confirmSwapRefund({ attemptId, refundAddress })
           : await controller.stageSwapRefund({ attemptId, refundAddress });
+        if (!action.isCurrent() || this.controller !== controller) return;
+        this.startedSwapInvoice = invoice;
         this.dismissedSwapInvoiceId = null;
         this.render();
       } catch (error) {
-        this.dispatchError(error);
+        if (action.isCurrent() && this.controller === controller) this.dispatchError(error);
       }
     }
 

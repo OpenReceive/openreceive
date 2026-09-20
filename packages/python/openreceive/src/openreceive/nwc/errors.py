@@ -112,7 +112,7 @@ def normalize_wallet_error(raw: object) -> dict[str, Any]:
     return compact(
         {
             "code": code,
-            "message": _message_from(records, raw, code),
+            "message": redact_error_text(_message_from(records, raw, code)),
             "retryable": retryable,
             "request_id": _first_string(records, ("request_id", "requestId")),
             "details": dict(details) if details is not None else None,
@@ -194,3 +194,46 @@ def _first_boolean(records: list[dict[str, Any]], key: str) -> bool | None:
         if value is True or value is False:
             return value
     return None
+
+
+def redact_error_text(value: str) -> str:
+    """Diagnostic/public string projection; never changes the original error."""
+    value = re.sub(r"nostr\+walletconnect:[^\s\"'`<>]+", "[REDACTED_NWC]", value, flags=re.I)
+    value = re.sub(r"lightning\+swapconnect:[^\s\"'`<>]+", "[REDACTED_LSC]", value, flags=re.I)
+    return re.sub(
+        r"(?i)((?:key|secret|client_secret|provider_token|api_key|apikey|token|preimage)=)[^&\s\"'<>]+",
+        r"\1[REDACTED]",
+        value,
+    )
+
+
+def redact_secrets(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact_error_text(value)
+    if isinstance(value, list):
+        return [redact_secrets(item) for item in value]
+    if isinstance(value, dict):
+        sensitive = {
+            "secret",
+            "clientsecret",
+            "providertoken",
+            "apikey",
+            "key",
+            "token",
+            "preimage",
+            "invoice",
+            "bolt11",
+            "swapdata",
+            "authorization",
+            "password",
+            "nwc",
+            "nwcuri",
+            "lscuri",
+        }
+        return {
+            key: "[REDACTED]"
+            if re.sub(r"[^a-z0-9]", "", str(key).lower()) in sensitive
+            else redact_secrets(item)
+            for key, item in value.items()
+        }
+    return value

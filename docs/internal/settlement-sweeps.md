@@ -20,26 +20,26 @@ awaits one bounded pass (9 s scan timeout, capped pages) — serverless-safe, si
 outlives the request; a failed or timed-out scan warns and never fails the user's request, and
 the gate's `claimed_at` stays in place so a broken wallet cannot stampede.
 
-The gate is not a cursor. There is still no OpenReceive-owned sweep database, privileged sweep
-route, or durable cursor: each pass selects `openreceive_payments` rows where
-`status = 'pending'`, and because terminal rows leave the scan set, the wallet scan window
-stays bounded at roughly the active invoice window.
+The gate now persists versioned bounded scheduler progress in the existing metadata
+row: a keyset position, at most two cohorts of 200 attempts, fixed time bounds,
+page offsets and nonsecret overlap digests. Rotate the cohort before wallet I/O.
+CAS checkpoints require the current unexpired lease token, so abandoned or stale
+workers cannot replace newer progress. A capped or failed pass cannot repeatedly
+pin selection to the oldest cohort. Wallet-derived creation times permit bounded
+splits; legacy/host-clock rows use the wide fallback. Resumed offsets never prove
+absence because history is mutable. Only a fresh complete covering scan can close
+an attempt by the clock. Positive finality can be committed before a later page
+fails, with ordinary reference-level fulfillment locking.
 
-The BTCPay plugin has no host database row to hold the gate, and BTCPay asks about invoices
-by hash alone (`GetInvoice` on creation, at startup for every pending invoice, after a remint).
-Its `ScanMemo` (`packages/dotnet/.../Nwc/ScanMemo.cs`) is the gate's in-memory twin: one
-per connection string, watching the hashes BTCPay asked about, and walking
-`list_transactions` for exactly those the way `reconcilePaymentAttempts` does — from the
-oldest watched pending invoice, settled view then unpaid view, stopping once every watched
-hash is seen, pages of 20, deduped, truncation-safe — refreshed when older than the same
-2/6/12 s cadence and shared by every concurrent caller, so N pending invoices at startup cost
-one walk and nothing pending costs nothing. A watched hash leaves the set the way a pending
-attempt leaves the scan set: terminal wallet row, or a complete walk at/after expiry + grace.
-A hash a truncated walk could not reach is looked up with `lookup_invoice` when granted and
-otherwise stays `Unpaid` and watched. It is the NWC scan budget for that connection exactly as
-the durable gate is for JS and Ruby. It is a cache of wallet truth, not state: two BTCPay
-workers each hold one and each pay one walk per interval, the ceiling the other engines
-already accept.
+The BTCPay plugin persists invoice connection identity and recovery eligibility in
+its own host database tables. Historical BTC-LN and BTC-LNURL rows are resolved
+through canonical host mappings, returned to the connection's coordinated scan
+memo, and acknowledged only against the exact host payment row. The host owns
+partial, late and overpayment accounting. See the plugin's
+[payment safety upgrade procedure](../../packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md).
+Its scan memo remains per connection and process; this is not a cluster-wide
+provider or wallet quota. Swap poll leases are durable and prevent duplicate row
+claims; provider request-weight budgets are per process/configured connection.
 
 OpenReceive scans shared creation-time ranges rather than walking wallet history once per hash.
 Failed callbacks leave the attempt `pending` and are retried on the next pass or after restart.

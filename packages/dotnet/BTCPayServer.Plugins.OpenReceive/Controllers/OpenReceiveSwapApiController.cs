@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Plugins.OpenReceive.Swaps;
+using BTCPayServer.Plugins.OpenReceive.Nwc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -59,6 +60,18 @@ public sealed class OpenReceiveSwapApiController : ControllerBase
         {
             return Problem(e.Status, e.Code, e.Message);
         }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return Problem(503, "recovery_temporarily_unavailable", "Payment recovery is retained. The service could not complete this request; retry shortly.");
+        }
+    }
+
+    [HttpGet("{invoiceId}")]
+    public async Task<IActionResult> List(string invoiceId, CancellationToken cancellationToken, string? after = null, int limit = 50)
+    {
+        if (!Plausible(invoiceId) || (after is not null && !Plausible(after))) return Problem(404, "invoice_not_found", "Invoice not found.");
+        var page = await _swaps.RecoveryAsync(invoiceId, after, limit, cancellationToken);
+        return page is null ? Problem(404, "invoice_not_found", "Invoice not found.") : Json(page);
     }
 
     [HttpGet("{invoiceId}/{swapId}")]
@@ -85,6 +98,10 @@ public sealed class OpenReceiveSwapApiController : ControllerBase
         {
             return Problem(e.Status, e.Code, e.Message);
         }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return Problem(503, "recovery_temporarily_unavailable", "Payment recovery is retained. The service could not complete this request; retry shortly.");
+        }
     }
 
     private static bool Plausible(string value) => value.Length is > 0 and <= 64;
@@ -101,5 +118,5 @@ public sealed class OpenReceiveSwapApiController : ControllerBase
         new() { Content = JsonSerializer.Serialize(model, WireJson), ContentType = "application/json; charset=utf-8", StatusCode = status };
 
     private ContentResult Problem(int status, string code, string message) =>
-        Json(new { code, message }, status);
+        Json(new { code, message = SecretSafeDiagnostics.Text(message) }, status);
 }

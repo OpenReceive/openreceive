@@ -27,7 +27,8 @@
         "fiat-to-msats.usd": "BTCPay owns fiat rates (plugin plan 0.13); the plugin ports no price math.",
         "rate-limit-window": "BTCPay owns request budgets and store permissions; the plugin mounts no OpenReceive HTTP routes.",
         "http-golden": "The plugin exposes BTCPay-shaped routes, not the OpenReceive HTTP contract (plugin plan 0.17).",
-        "provider-route.crypto-usdt": "Provider wizard route data; the plugin ships no wizard (plugin plan 0.11)."
+        "provider-route.crypto-usdt": "Provider wizard route data; the plugin ships no wizard (plugin plan 0.11).",
+        "reconcile-progress": "SDK durable openreceive_meta scheduler; BTCPay uses its own coordinated invoice recovery and host payment state machine, tested in plugin integration tests."
       }
     },
     "php": {

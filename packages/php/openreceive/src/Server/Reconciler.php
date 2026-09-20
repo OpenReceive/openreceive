@@ -59,40 +59,6 @@ final class Reconciler
      *
      * @return list<array<string, mixed>>
      */
-    public function reconcile(int $overlapSeconds = 60, ?int $now = null, ?int $maxPages = null, ?float $deadline = null): array
-    {
-        $attempts = $this->repository->reconcilableAttempts();
-        if ($attempts === []) {
-            return [];
-        }
-        $observedAt = $now ?? ($this->clock)();
-        $request = ['attempts' => $attempts, 'overlap_seconds' => $overlapSeconds, 'until' => $observedAt + $overlapSeconds];
-        if ($maxPages !== null) {
-            $request['max_pages'] = $maxPages;
-        }
-        if ($deadline !== null) {
-            $request['deadline'] = $deadline;
-        }
-        $results = $this->service->reconcilePayments($request);
-        $this->logPass($attempts, $results, $overlapSeconds, $observedAt);
-        $byHash = [];
-        foreach ($attempts as $attempt) {
-            $byHash[$attempt['payment_hash']] = $attempt;
-        }
-        foreach ($results as $checked) {
-            $attempt = $byHash[$checked['payment_hash']] ?? null;
-            if ($attempt === null) {
-                continue;
-            }
-            if (($checked['status'] ?? null) === 'settled' && isset($checked['paid_at'])) {
-                $this->settleAttempt($checked);
-            } else {
-                $this->recordTransition($attempt, $checked, $observedAt);
-            }
-        }
-        return $results;
-    }
-
     /**
      * Opportunistic settlement discovery, piggybacked on any OpenReceive call:
      * skip without a wallet call when nothing is pending, claim the durable
@@ -107,22 +73,93 @@ final class Reconciler
         if ($this->opportunisticReconcile === false) {
             return ['reason' => 'disabled'];
         }
+        return $this->gatedReconcile($now);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function reconcile(int $overlapSeconds = 60, ?int $now = null): array
+    {
+        return $this->gatedReconcile($now, $overlapSeconds)['checks'] ?? [];
+    }
+
+    /** @return array{reason: string, checks?: list<array<string, mixed>>} */
+    public function gatedReconcile(?int $now = null, int $overlapSeconds = 60): array
+    {
+        $committed = [];
         try {
             $attempts = $this->repository->reconcilableAttempts();
-            if ($attempts === []) {
+            if ($attempts === []) return ['reason' => 'no_pending'];
+            $observedAt = $now ?? ($this->clock)();
+            $claim = $this->repository->claimReconcileGate($observedAt, $this->gateIntervalSeconds($attempts, $observedAt));
+            if ($claim === null) return ['reason' => 'gate_busy'];
+            $scheduler = $claim['scheduler'];
+            $windows = &$scheduler['windows'];
+            if (count($windows) < 2) {
+                $candidates = $this->repository->reconcilableAttempts($scheduler['cursor']);
+                if ($candidates === []) {
+                    $scheduler['cursor'] = null;
+                    $candidates = $this->repository->reconcilableAttempts();
+                }
+                if ($candidates !== []) {
+                    $last = $candidates[count($candidates) - 1];
+                    $scheduler['cursor'] = ['created_at' => $last['created_at'], 'payment_hash' => $last['payment_hash']];
+                    $queued = [];
+                    foreach ($windows as $queuedWindow) foreach ($queuedWindow['attempts'] as $attempt) $queued[$attempt['payment_hash']] = true;
+                    $cohort = array_values(array_filter($candidates, static fn (array $attempt): bool => !isset($queued[$attempt['payment_hash']])));
+                    if ($cohort !== []) $windows[] = ReconcileScan::newWindow($cohort, $observedAt, $overlapSeconds);
+                }
+            }
+            // Rotate before I/O so a failing cohort cannot pin newer attempts.
+            $window = array_shift($windows);
+            if ($window !== null) $windows[] = $window;
+            if (!$this->repository->checkpointReconcileGate($claim, $scheduler, $now ?? ($this->clock)())) return ['reason' => 'gate_busy'];
+            if ($window === null) {
+                $this->repository->checkpointReconcileGate($claim, $scheduler, $observedAt, true);
                 return ['reason' => 'no_pending'];
             }
-            $observedAt = $now ?? ($this->clock)();
-            $interval = $this->gateIntervalSeconds($attempts, $observedAt);
-            if (!$this->repository->claimReconcileGate($observedAt, $interval)) {
-                $this->logger?->debug(sprintf('[openreceive] opportunistic reconcile: gate_busy (%d pending, interval %ds)', count($attempts), $interval));
-                return ['reason' => 'gate_busy'];
+            $byHash = array_column($window['attempts'], null, 'payment_hash');
+            $positive = function (array $checked) use (&$committed, $claim, &$scheduler, $now, $byHash, $observedAt): bool {
+                if (!$this->repository->checkpointReconcileGate($claim, $scheduler, $now ?? ($this->clock)())) {
+                    throw new \RuntimeException('Reconciliation lease expired before recording wallet evidence.');
+                }
+                $hash = $checked['payment_hash'];
+                if (($checked['status'] ?? null) === 'settled') {
+                    if (!$this->settleAttempt($checked)) return false;
+                } else {
+                    $this->recordTransition($byHash[$hash], $checked, $observedAt);
+                }
+                $committed[$hash] = $checked;
+                return true;
+            };
+            $slice = ReconcileScan::slice($this->service, $window, self::RECONCILE_SCAN_MAX_PAGES,
+                hrtime(true) / 1e9 + self::RECONCILE_SCAN_TIMEOUT_SECONDS, $positive);
+            foreach ($slice['checks'] as $checked) {
+                $hash = $checked['payment_hash'];
+                if (isset($committed[$hash])) continue;
+                if (!$this->repository->checkpointReconcileGate($claim, $scheduler, $now ?? ($this->clock)())) break;
+                $this->recordTransition($byHash[$hash], $checked, $checked['_coverage_started_at'] ?? $observedAt);
+                unset($checked['_coverage_started_at']);
+                $committed[$hash] = $checked;
             }
-            $checks = $this->reconcile(60, $observedAt, self::RECONCILE_SCAN_MAX_PAGES, hrtime(true) / 1e9 + self::RECONCILE_SCAN_TIMEOUT_SECONDS);
-            return ['reason' => 'ran', 'checks' => $checks];
+            array_pop($windows);
+            if (!$slice['complete'] && !$slice['stalled']) {
+                $times = array_values(array_unique(array_column($window['attempts'], 'created_at')));
+                sort($times);
+                $trusted = count(array_filter($window['attempts'], static fn (array $a): bool => ($a['created_at_source'] ?? 'host') !== 'wallet')) === 0;
+                if ($windows === [] && count($times) > 1 && $trusted) {
+                    $middle = $times[intdiv(count($times), 2)];
+                    foreach ([true, false] as $lower) {
+                        $half = array_values(array_filter($window['attempts'], static fn (array $a): bool => ($a['created_at'] < $middle) === $lower));
+                        $windows[] = ReconcileScan::newWindow($half, $observedAt, $overlapSeconds);
+                    }
+                } else $windows[] = $window;
+            }
+            $this->repository->checkpointReconcileGate($claim, $scheduler, $now ?? ($this->clock)(), true);
+            $this->logPass($attempts, $committed, $overlapSeconds, $observedAt);
+            return ['reason' => 'ran', 'checks' => array_values($committed)];
         } catch (\Throwable $e) {
             $this->logger?->warning('[openreceive] opportunistic reconcile failed (will retry): ' . self::sanitizeFailureMessage($e));
-            return ['reason' => 'scan_failed'];
+            return ['reason' => 'scan_failed', 'checks' => array_values($committed)];
         }
     }
 
@@ -176,7 +213,7 @@ final class Reconciler
                     'paid_at_source' => isset($transaction['settled_at']) ? 'settled_at' : 'observed_at',
                 ],
             ]);
-            return true;
+            return $this->repository->findByPaymentHash($hash)?->status === 'settled';
         } catch (\Throwable $e) {
             // A direct-settlement failure falls back to the scan-based safety net.
             $this->logger?->warning('[openreceive] direct settlement from notification failed (falling back to a scan): ' . self::sanitizeFailureMessage($e));
@@ -218,9 +255,7 @@ final class Reconciler
     /** Failure text can embed wallet credentials (an NWC URI inside a connect error); redact before it reaches a log. */
     public static function sanitizeFailureMessage(\Throwable $error): string
     {
-        $text = $error::class . ': ' . $error->getMessage();
-        $text = preg_replace('/nostr\+walletconnect:[^\s"\'`<>]+/', '[REDACTED_NWC]', $text) ?? $text;
-        return preg_replace('/lightning\+swapconnect:[^\s"\'`<>]+/', '[REDACTED_LSC]', $text) ?? $text;
+        return \OpenReceive\Nwc\Errors::redactErrorText($error::class . ': ' . $error->getMessage());
     }
 
     /** @param array<int, array{payment_hash: string, created_at: int, expires_at: int}> $attempts */
@@ -246,12 +281,14 @@ final class Reconciler
      *
      * @param array<string, mixed> $checked
      */
-    private function settleAttempt(array $checked): void
+    private function settleAttempt(array $checked): bool
     {
         try {
             ($this->settlementHook)(['payment_hash' => $checked['payment_hash'], 'paid_at' => $checked['paid_at'], 'details' => $checked['details'] ?? null]);
+            return $this->repository->findByPaymentHash($checked['payment_hash'])?->status === 'settled';
         } catch (\Throwable $e) {
             $this->logger?->warning("[openreceive] settlement for {$checked['payment_hash']} failed (will retry next pass): " . self::sanitizeFailureMessage($e));
+            return false;
         }
     }
 

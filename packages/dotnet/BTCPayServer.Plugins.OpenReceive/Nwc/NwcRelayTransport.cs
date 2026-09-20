@@ -98,7 +98,7 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
             // The wallet may have changed its advertised scheme since we cached ours:
             // re-read the info event once (the cached one would only pick the same scheme
             // again) and retry with whatever it says now.
-            _logger.LogWarning("nwc.encryption.renegotiate wallet={Wallet} reason={Reason}", _uri.WalletPubkey, e.Message);
+            _logger.LogWarning("nwc.encryption.renegotiate wallet={Wallet} reason={Reason}", _uri.WalletPubkey, SecretSafeDiagnostics.Text(e.Message));
             _scheme = null;
             _serviceInfo = null;
             var renegotiated = await NegotiateSchemeAsync(cancellationToken).ConfigureAwait(false);
@@ -232,7 +232,7 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
                 }
                 catch (Exception e)
                 {
-                    _logger.LogWarning("nwc.notification.decrypt_failed wallet={Wallet} error={Error}", _uri.WalletPubkey, e.Message);
+                    _logger.LogWarning("nwc.notification.decrypt_failed wallet={Wallet} error={Error}", _uri.WalletPubkey, SecretSafeDiagnostics.Text(e.Message));
                     continue;
                 }
                 if (JsonNode.Parse(decrypted) is not JsonObject envelope) continue;
@@ -372,6 +372,6 @@ public sealed class NwcRelayTransport : IReceiveNwcTransport
         {
             return new NwcTransportException($"{what} timed out after {_requestTimeout.TotalSeconds:0}s on {string.Join(", ", _uri.Relays)}.", e);
         }
-        return new NwcTransportException($"{what} failed: {e.Message}", e) { DecryptFailed = decryptFailed };
+        return new NwcTransportException($"{what} failed: {SecretSafeDiagnostics.Text(e.Message)}", e) { DecryptFailed = decryptFailed };
     }
 }

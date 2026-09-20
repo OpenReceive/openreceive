@@ -190,6 +190,8 @@ module OpenReceive
       transactions = []
       skipped_rows = data["skipped_rows"].is_a?(Integer) ? data["skipped_rows"] : 0
       rows.each do |row|
+        raise ArgumentError, "non-object transaction row" unless row.respond_to?(:each_pair)
+
         transactions << normalize_transaction(row)
       rescue StandardError
         skipped_rows += 1
@@ -359,6 +361,23 @@ module OpenReceive
     # Normalize any wallet/library failure into the canonical error body shape
     # shared with JS (spec/test-vectors/error-normalization.json):
     # { "code", "message", "retryable", "request_id"?, "details"? }.
+    def redact_error_text(value)
+      value.to_s.gsub(/nostr\+walletconnect:[^\s"'`<>]+/i, "[REDACTED_NWC]")
+           .gsub(/lightning\+swapconnect:[^\s"'`<>]+/i, "[REDACTED_LSC]")
+           .gsub(/((?:key|secret|client_secret|provider_token|api_key|apikey|token|preimage)=)[^&\s"'<>]+/i, '\\1[REDACTED]')
+    end
+
+    def redact_secrets(value)
+      case value
+      when String then redact_error_text(value)
+      when Array then value.map { |item| redact_secrets(item) }
+      when Hash
+        sensitive = %w[secret clientsecret providertoken apikey key token preimage invoice bolt11 swapdata authorization password nwc nwcuri lscuri]
+        value.to_h { |key, item| [key, sensitive.include?(key.to_s.downcase.gsub(/[^a-z0-9]/, "")) ? "[REDACTED]" : redact_secrets(item)] }
+      else value
+      end
+    end
+
     def normalize_wallet_error(raw)
       records = collect_error_records(raw)
       code = error_code_from_records(records) ||
@@ -366,7 +385,7 @@ module OpenReceive
              "OTHER"
       {
         "code" => code,
-        "message" => error_message_from(records, raw, code),
+        "message" => redact_error_text(error_message_from(records, raw, code)),
         "retryable" => first_boolean(records, "retryable") { RETRYABLE_ERROR_CODES.include?(code) },
         "request_id" => first_string(records, %w[request_id requestId]),
         "details" => records.filter_map { |record| record["details"] if record["details"].is_a?(Hash) }.first
@@ -510,7 +529,7 @@ module OpenReceive
         # The wallet ran out of rows only when the page IT sent was short: a
         # row the normalizer dropped was still a row, and a full page with one
         # of them dropped must not read as the end of the history.
-        if outstanding.empty? || page.length + response.fetch("skipped_rows", 0) < TRANSACTION_PAGE_LIMIT
+        if outstanding.empty? || page.length + response.fetch("skipped_rows", 0) == 0
           truncated = false
           break
         end
@@ -519,7 +538,7 @@ module OpenReceive
         page_key = page.map { |row| row["payment_hash"].to_s }.join(",")
         break if page_key == previous_page
         previous_page = page_key
-        offset += TRANSACTION_PAGE_LIMIT
+        offset += page.length + response.fetch("skipped_rows", 0)
       end
       { rows: rows, truncated: truncated }
     end

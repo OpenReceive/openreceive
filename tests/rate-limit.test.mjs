@@ -24,7 +24,11 @@ function testHost({ onCheckoutCreated = () => undefined, countAttemptsFromIp } =
       commitAttempt: onCheckoutCreated,
       listReconcilableAttempts: async () => [],
       recordReconciliation: async () => undefined,
-      claimReconcileGate: async () => true,
+      claimReconcileGate: async () => ({
+        token: "test-claim",
+        scheduler: { cursor: null, windows: [] },
+      }),
+      checkpointReconcileGate: async () => true,
       ...(countAttemptsFromIp === undefined ? {} : { countAttemptsFromIp }),
     },
   };
@@ -146,7 +150,11 @@ test("a capped payer can still re-fetch an already-committed attempt", async () 
         commitAttempt: () => undefined,
         listReconcilableAttempts: async () => [],
         recordReconciliation: async () => undefined,
-        claimReconcileGate: async () => true,
+        claimReconcileGate: async () => ({
+          token: "test-claim",
+          scheduler: { cursor: null, windows: [] },
+        }),
+        checkpointReconcileGate: async () => true,
         // Counter says this IP is far over any limit; reuse must not consult it.
         countAttemptsFromIp: () => 1_000_000,
       },

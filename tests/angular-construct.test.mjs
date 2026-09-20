@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { until } from "./helpers/lifecycle-harness.mjs";
 // Registered before the DOM-render test dynamically imports
 // @angular/platform-browser (the static imports below never touch the DOM).
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { until } from "./helpers/lifecycle-harness.mjs";
 // The dist bundle is partially compiled; its component declarations need the
 // JIT compiler registered before the class definitions run.
 import "@angular/compiler";
@@ -132,5 +132,60 @@ test("the Angular component renders the checkout shell into a real DOM", async (
     componentRef.destroy();
     appRef.destroy();
     host.remove();
+  }
+});
+
+test("Angular input identity changes discard a delayed mint", async () => {
+  const calls = [];
+  let releaseMint;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url, body });
+    if (url.endsWith("/prepare"))
+      return Response.json({ reference: body.reference, amount_msats: 21000, payment_methods: [] });
+    if (url.endsWith("/checkouts"))
+      return new Promise((resolve) => {
+        releaseMint = resolve;
+      });
+    return Response.json({ status: "pending" });
+  };
+  const { createApplication } = await import("@angular/platform-browser");
+  const app = await createApplication({ providers: [provideZonelessChangeDetection()] });
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const component = createComponent(CheckoutComponent, {
+    environmentInjector: app.injector,
+    hostElement: host,
+  });
+  try {
+    component.setInput("reference", "A");
+    app.attachView(component.hostView);
+    component.changeDetectorRef.detectChanges();
+    const element = await until(() => host.querySelector("openreceive-checkout"));
+    (await until(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'))).click();
+    await until(() => releaseMint !== undefined);
+    component.setInput("reference", "B");
+    component.changeDetectorRef.detectChanges();
+    await until(() => calls.some((c) => c.url.endsWith("/prepare") && c.body.reference === "B"));
+    releaseMint(
+      Response.json({
+        checkout: {
+          reference: "A",
+          payment_hash: "a".repeat(64),
+          bolt11: "lnbc-obsolete-a",
+          amount_msats: 21000,
+          expires_at: Math.floor(Date.now() / 1000) + 900,
+        },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(element.getAttribute("reference"), "B");
+    assert.equal(element.getAttribute("invoice"), null);
+  } finally {
+    component.destroy();
+    app.destroy();
+    host.remove();
+    globalThis.fetch = originalFetch;
   }
 });

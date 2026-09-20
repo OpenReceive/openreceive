@@ -107,4 +107,40 @@ final class CommitConcurrencyTest extends DatabaseCase
         $db = self::connect($dialect, $path);
         self::assertSame(1, self::countRows($db, "SELECT COUNT(*) AS n FROM openreceive_payments WHERE reference = 'order-race'"));
     }
+    #[DataProvider('forkDialects')]
+    public function testConcurrentReviewedRepairsAndSettlementKeepOneEntitlement(string $dialect): void
+    {
+        [$dialect, $path] = $this->prepare($dialect);
+        $hash = self::hash('reviewed-repair');
+        $repo = new SqlPaymentRepository(self::connect($dialect, $path), static fn (): int => 3000);
+        $repo->commitAttempt('reviewed-order', $hash, self::checkout('reviewed-order', $hash));
+        $repo->recordReconciliation($hash, 'attention', 2900, 'unsettled_after_expiry');
+        $repo->connection()->execute("DELETE FROM openreceive_payments WHERE reference = 'warm'");
+        $candidate = $repo->maintenanceCandidates()['candidates'][0];
+        // Drop the parent's live network connection before forking clients.
+        unset($repo);
+        $tokens = $this->race($dialect, $path, static fn (SqlPaymentRepository $repo): string =>
+            $repo->requeueReviewedAttempt($candidate, 'review-ticket') ? 'requeued' : 'unchanged');
+        self::assertSame(1, count(array_filter($tokens, static fn (string $token): bool => $token === 'requeued')), implode(' | ', $tokens));
+        self::assertSame(self::WORKERS - 1, count(array_filter($tokens, static fn (string $token): bool => $token === 'unchanged')));
+        $tokens = $this->race($dialect, $path, static fn (SqlPaymentRepository $repo): string =>
+            $repo->markPaidOnce($hash, 3001, null, static fn () => null) ? 'fulfilled' : 'unchanged');
+        self::assertSame(1, count(array_filter($tokens, static fn (string $token): bool => $token === 'fulfilled')), implode(' | ', $tokens));
+        $repo = new SqlPaymentRepository(self::connect($dialect, $path));
+        self::assertSame('settled', $repo->findByPaymentHash($hash)->status);
+        self::assertFalse($repo->requeueReviewedAttempt($candidate, 'another-ticket'));
+        $key = $dialect === 'mysql' ? '`key`' : 'key';
+        self::assertSame(1, self::countRows($repo->connection(), "SELECT COUNT(*) AS n FROM openreceive_meta WHERE {$key} LIKE 'repair:%'"));
+    }
+
+    #[DataProvider('forkDialects')]
+    public function testConcurrentWorkersClaimOnlyOneDurableScanLease(string $dialect): void
+    {
+        [$dialect, $path] = $this->prepare($dialect);
+        $tokens = $this->race($dialect, $path, static fn (SqlPaymentRepository $repo): string =>
+            $repo->claimReconcileGate(1100, 2) === null ? 'busy' : 'claimed');
+        self::assertSame(1, count(array_filter($tokens, static fn (string $token): bool => $token === 'claimed')), implode(' | ', $tokens));
+        self::assertSame(self::WORKERS - 1, count(array_filter($tokens, static fn (string $token): bool => $token === 'busy')));
+    }
+
 }

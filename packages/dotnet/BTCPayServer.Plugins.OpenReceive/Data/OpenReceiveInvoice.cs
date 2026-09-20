@@ -18,4 +18,18 @@ public sealed class OpenReceiveInvoice
     public long AmountMsats { get; set; }
     public long CreatedAt { get; set; }
     public long ExpiresAt { get; set; }
+    /// <summary>Wallet service public key + client public key. Never the connection code.</summary>
+    public string? ConnectionId { get; set; }
+    public string? StoreId { get; set; }
+    public string? HostInvoiceId { get; set; }
+    public string? PaymentMethodId { get; set; }
+    public long NextRecoveryAt { get; set; }
+    public long? RecoveryClosedAt { get; set; }
+    public string? RecoveryReason { get; set; }
+    /// <summary>Operator-selected legacy account binding provenance, retained across retries.</summary>
+    public string? RecoveryBindingNote { get; set; }
+    /// <summary>Retained until a host update is observed; publication alone is not acknowledgment.</summary>
+    public bool HostUpdateRequired { get; set; }
+    public bool CreatedAtAuthoritative { get; set; }
+    public uint Version { get; set; }
 }

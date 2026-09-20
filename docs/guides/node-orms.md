@@ -119,6 +119,9 @@ Only if no supported handle or adapter can reach your persistence, implement
 the full `PaymentRepository` interface and pass it as `payments`
 instead of `db`; that advanced escape hatch makes you responsible for commit
 locking, write-once settlement, and reconciliation transitions. It must also
-implement `claimReconcileGate({ now, intervalSeconds })` — construction throws
-unless you do, or pass `opportunisticReconcile: false` because your own worker
-runs settlement.
+implement the lease/progress pair `claimReconcileGate` and
+`checkpointReconcileGate`. Request-path `opportunisticReconcile: false`
+disables only request triggers; an explicitly running worker still needs the
+durable gate. `recordSettlementWithFulfillment(input, fulfill)` must await
+`fulfill` with a typed transaction handle before commit. Never invoke it after
+committing a boolean claim. See [upgrade and recovery](payment-safety-upgrade.md).

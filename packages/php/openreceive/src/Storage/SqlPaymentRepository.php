@@ -48,7 +48,7 @@ final class SqlPaymentRepository implements PaymentRepository
         private readonly DatabaseConnection $db,
         ?callable $clock = null,
         private readonly string $table = PaymentsSchema::DEFAULT_TABLE,
-        string $metaTable = PaymentsSchema::DEFAULT_META_TABLE,
+        private readonly string $metaTable = PaymentsSchema::DEFAULT_META_TABLE,
     ) {
         PaymentsSchema::assertIdentifier($table);
         $this->meta = new MetaStore($db, $metaTable);
@@ -202,7 +202,7 @@ final class SqlPaymentRepository implements PaymentRepository
                     $row = $candidate;
                 }
             }
-            if ($row === null || $row->status === 'settled') {
+            if ($row === null || $row->status !== 'pending') {
                 return false;
             }
             $firstForReference = !self::anySettled($rows);
@@ -224,20 +224,100 @@ final class SqlPaymentRepository implements PaymentRepository
         if (!in_array($status, ['expired', 'failed', 'attention'], true)) {
             throw new \InvalidArgumentException("invalid reconciliation status: {$status}");
         }
-        // Guarding on status = 'pending' makes the transition idempotent and
-        // guarantees a settled attempt is never overwritten.
-        $this->db->execute(
-            "UPDATE {$this->table} SET status = ?, status_reason = ?, updated_at = ? WHERE payment_hash = ? AND status = 'pending'",
-            [$status, $reason, Timestamps::toDb($observedAt), strtolower($paymentHash)]
-        );
+        $hash = strtolower($paymentHash);
+        $payment = $this->findByHash($this->db, $hash);
+        if ($payment === null) return;
+        // Settlement, repair and automated closure serialize on the same lock.
+        $this->withReferenceLock($payment->reference, function (DatabaseConnection $tx) use ($hash, $status, $observedAt, $reason): void {
+            $tx->execute("UPDATE {$this->table} SET status = ?, status_reason = ?, updated_at = ? WHERE payment_hash = ? AND status = 'pending'",
+                [$status, $reason, Timestamps::toDb($observedAt), $hash]);
+        });
     }
 
-    public function reconcilableAttempts(): array
+    /** Bounded, read-only operator report. No route calls this maintenance API. */
+    public function maintenanceCandidates(?array $after = null, int $limit = 100): array
     {
         $this->meta->assertSupportedSchema();
+        $limit = max(1, min(1000, $limit));
+        $where = '';
+        $params = [];
+        if ($after !== null) {
+            $where = ' AND (updated_at > ? OR (updated_at = ? AND payment_hash > ?))';
+            $stamp = Timestamps::toDb((int) $after['updated_at']);
+            $params = [$stamp, $stamp, $after['payment_hash']];
+        }
+        $params[] = $limit;
+        $rows = $this->db->query("SELECT * FROM {$this->table} WHERE status IN ('attention', 'expired'){$where} ORDER BY updated_at, payment_hash LIMIT ?", $params);
+        $candidates = [];
+        foreach ($rows as $row) {
+            $candidate = self::repairCandidate($row);
+            if ($candidate !== null) $candidates[] = $candidate;
+        }
+        $last = $rows === [] ? null : $rows[count($rows) - 1];
+        return ['candidates' => $candidates, 'scanned' => count($rows), 'next_cursor' => $last === null || count($rows) < $limit ? null : [
+            'updated_at' => Timestamps::fromDb($last['updated_at'], 'updated_at'), 'payment_hash' => $last['payment_hash'],
+        ]];
+    }
+
+    /** Requeue a reviewed exact snapshot once, under the same reference lock as settlement. */
+    public function requeueReviewedAttempt(array $candidate, string $decisionId): bool
+    {
+        if (preg_match('/\\A[A-Za-z0-9._:-]{1,120}\\z/', $decisionId) !== 1) {
+            throw new \InvalidArgumentException('decision_id must be a nonsecret operator ticket identifier (letters, digits, . _ : -).');
+        }
+        $hash = (string) ($candidate['payment_hash'] ?? '');
+        $payment = $this->findByPaymentHash($hash);
+        if ($payment === null) return false;
+        return $this->withReferenceLock($payment->reference, function (DatabaseConnection $tx) use ($candidate, $hash, $decisionId): bool {
+            $rows = $tx->query("SELECT * FROM {$this->table} WHERE payment_hash = ?", [$hash]);
+            if ($rows === [] || self::repairCandidate($rows[0]) != $candidate) return false;
+            $key = $tx->dialect() === 'mysql' ? '`key`' : 'key';
+            $auditKey = 'repair:' . $hash . ':' . $decisionId;
+            if ($tx->query("SELECT value FROM {$this->metaTable} WHERE {$key} = ?", [$auditKey]) !== []) return false;
+            $now = ($this->clock)();
+            $changed = $tx->execute("UPDATE {$this->table} SET status = 'pending', status_reason = 'operator_requeue', updated_at = ? WHERE payment_hash = ? AND status = ? AND updated_at = ?", [
+                Timestamps::toDb($now), $hash, $candidate['status'], Timestamps::toDb((int) $candidate['updated_at']),
+            ]);
+            if ($changed !== 1) return false;
+            $tx->execute("INSERT INTO {$this->metaTable} ({$key}, value, rev) VALUES (?, ?, 0)", [
+                $auditKey, json_encode(['candidate' => $candidate, 'decision_id' => $decisionId, 'requeued_at' => $now], JSON_THROW_ON_ERROR),
+            ]);
+            return true;
+        });
+    }
+
+    /** @return array<string, mixed>|null */
+    private static function repairCandidate(array $row): ?array
+    {
+        if (!in_array($row['status'], ['attention', 'expired'], true)) return null;
+        $record = self::recordFromRow($row);
+        $walletExpiry = self::settlementExpiresAt($record->checkout, $record->paymentHash);
+        $updatedAt = Timestamps::fromDb($row['updated_at'], 'updated_at');
+        $reason = $record->status === 'attention' ? 'operator_attention' : null;
+        if ($record->isSwap() && in_array($record->statusReason, ['not_found_after_expiry', 'no_finality_after_expiry', 'unsettled_after_expiry'], true)
+            && $walletExpiry > $record->expiresAt && $updatedAt >= $record->expiresAt + \OpenReceive\Payments\Reconciliation::EXPIRY_GRACE_SECONDS
+            && $updatedAt < $walletExpiry + \OpenReceive\Payments\Reconciliation::EXPIRY_GRACE_SECONDS) {
+            $reason = 'early_deposit_deadline_closure';
+        }
+        if ($reason === null) return null;
+        return ['reference' => $record->reference, 'payment_hash' => $record->paymentHash,
+            'status' => $record->status, 'status_reason' => $record->statusReason, 'updated_at' => $updatedAt,
+            'instruction_expires_at' => $record->expiresAt, 'wallet_expires_at' => $walletExpiry, 'reason' => $reason];
+    }
+
+    public function reconcilableAttempts(?array $after = null, int $limit = 200): array
+    {
+        $this->meta->assertSupportedSchema();
+        $where = '';
+        $params = [];
+        if ($after !== null) {
+            $where = ' AND (created_at > ? OR (created_at = ? AND payment_hash > ?))';
+            $stamp = Timestamps::toDb((int) $after['created_at']);
+            $params = [$stamp, $stamp, $after['payment_hash']];
+        }
+        $params[] = max(1, min(self::RECONCILE_BATCH_SIZE, $limit));
         $rows = $this->db->query(
-            "SELECT payment_hash, created_at, expires_at FROM {$this->table} WHERE status = 'pending' ORDER BY created_at ASC, payment_hash ASC LIMIT ?",
-            [self::RECONCILE_BATCH_SIZE]
+            "SELECT payment_hash, created_at, checkout_data FROM {$this->table} WHERE status = 'pending'{$where} ORDER BY created_at ASC, payment_hash ASC LIMIT ?", $params
         );
         return array_map(static fn (array $row): array => self::attemptFromRow($row), $rows);
     }
@@ -246,15 +326,20 @@ final class SqlPaymentRepository implements PaymentRepository
     {
         $this->meta->assertSupportedSchema();
         $rows = $this->db->query(
-            "SELECT payment_hash, created_at, expires_at FROM {$this->table} WHERE payment_hash = ? AND status = 'pending'",
+            "SELECT payment_hash, created_at, checkout_data FROM {$this->table} WHERE payment_hash = ? AND status = 'pending'",
             [strtolower($paymentHash)]
         );
         return $rows === [] ? null : self::attemptFromRow($rows[0]);
     }
 
-    public function claimReconcileGate(int $now, int $intervalSeconds): bool
+    public function claimReconcileGate(int $now, int $intervalSeconds, int $leaseSeconds = 10): ?array
     {
-        return $this->meta->claimReconcileGate($now, $intervalSeconds);
+        return $this->meta->claimReconcileGate($now, $intervalSeconds, $leaseSeconds);
+    }
+
+    public function checkpointReconcileGate(array $claim, array $scheduler, int $now, bool $release = false): bool
+    {
+        return $this->meta->checkpointReconcileGate($claim, $scheduler, $now, $release);
     }
 
     /**
@@ -422,16 +507,27 @@ final class SqlPaymentRepository implements PaymentRepository
         return Records::asArray($parsed);
     }
 
+    /** @param array<string, mixed> $checkout */
+    public static function settlementExpiresAt(array $checkout, string $hash): int
+    {
+        $value = $checkout['expires_at'] ?? $checkout['expiresAt'] ?? null;
+        if ((!is_int($value) && !(is_string($value) && ctype_digit($value))) || (int) $value <= 0) {
+            throw new \RuntimeException("Corrupt checkout_data wallet expiry on openreceive payment attempt {$hash}.");
+        }
+        return (int) $value;
+    }
+
     /**
      * @param array<string, mixed> $row
-     * @return array{payment_hash: string, created_at: int, expires_at: int}
+     * @return array{payment_hash: string, created_at: int, created_at_source: string, expires_at: int}
      */
     private static function attemptFromRow(array $row): array
     {
         return [
             'payment_hash' => (string) $row['payment_hash'],
             'created_at' => Timestamps::fromDb($row['created_at'], 'created_at'),
-            'expires_at' => Timestamps::fromDb($row['expires_at'], 'expires_at'),
+            'created_at_source' => self::parseRowJson((string) $row['checkout_data'], 'checkout_data', (string) $row['payment_hash'])['created_at_source'] ?? 'host',
+            'expires_at' => self::settlementExpiresAt(self::parseRowJson((string) $row['checkout_data'], 'checkout_data', (string) $row['payment_hash']), (string) $row['payment_hash']),
         ];
     }
 }

@@ -70,8 +70,8 @@ async function exercisePayments(adapter) {
   assert.equal(settled[0].status, "settled");
   assert.equal(settled[0].paidAt, 990);
 
-  assert.equal(await payments.claimReconcileGate({ now: 1_000, intervalSeconds: 60 }), true);
-  assert.equal(await payments.claimReconcileGate({ now: 1_010, intervalSeconds: 60 }), false);
+  assert.ok((await payments.claimReconcileGate({ now: 1_000, intervalSeconds: 60 }))?.token);
+  assert.equal(await payments.claimReconcileGate({ now: 1_010, intervalSeconds: 60 }), null);
 }
 
 test("knex (better-sqlite3) drives the payments repository through knexDb", async () => {

@@ -194,7 +194,7 @@ final class SqlPaymentRepositoryTest extends DatabaseCase
         $repo->commitAttempt('order-6', $new, self::checkout('order-6', $new, 2_000, 2_600));
         $repo->commitAttempt('order-7', $old, self::checkout('order-7', $old, 900, 1_500));
         self::assertSame([$old, $new], array_column($repo->reconcilableAttempts(), 'payment_hash'), 'oldest first');
-        self::assertSame(['payment_hash' => $old, 'created_at' => 900, 'expires_at' => 1_500], $repo->findPendingAttempt($old));
+        self::assertSame(['payment_hash' => $old, 'created_at' => 900, 'created_at_source' => 'host', 'expires_at' => 1_500], $repo->findPendingAttempt($old));
         $repo->recordReconciliation($old, 'expired', 2_500, 'not_found_after_expiry');
         self::assertSame([$new], array_column($repo->reconcilableAttempts(), 'payment_hash'), 'terminal rows leave the scan set');
         self::assertNull($repo->findPendingAttempt($old));
@@ -210,13 +210,15 @@ final class SqlPaymentRepositoryTest extends DatabaseCase
     {
         $repo = $this->repository($dialect);
         $other = new SqlPaymentRepository($repo->connection(), fn (): int => $this->now);
-        self::assertTrue($repo->claimReconcileGate(1_000, 2));
-        self::assertFalse($other->claimReconcileGate(1_001, 2), 'another worker within the interval is gate_busy');
-        self::assertTrue($other->claimReconcileGate(1_002, 2), 'the interval elapsed');
-        self::assertFalse($repo->claimReconcileGate(1_003, 2));
+        $claim = $repo->claimReconcileGate(1_000, 2);
+        self::assertNotNull($claim);
+        self::assertTrue($repo->checkpointReconcileGate($claim, $claim['scheduler'], 1_000, true));
+        self::assertNull($other->claimReconcileGate(1_001, 2), 'another worker within the interval is gate_busy');
+        self::assertNotNull($other->claimReconcileGate(1_002, 2), 'the interval elapsed');
+        self::assertNull($repo->claimReconcileGate(1_003, 2));
         // A stamp far in the future is a clock that stepped backwards, not a fresh claim.
         $repo->connection()->execute('UPDATE openreceive_meta SET value = ? WHERE ' . ($dialect === 'mysql' ? '`key`' : 'key') . ' = ?', [json_encode(['claimed_at' => 9_000, 'token' => 'x']), 'transaction_scan_gate']);
-        self::assertTrue($repo->claimReconcileGate(1_004, 2));
+        self::assertNotNull($repo->claimReconcileGate(1_004, 2));
     }
 
     #[DataProvider('dialects')]

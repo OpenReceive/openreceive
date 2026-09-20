@@ -60,7 +60,7 @@ public sealed class NwcNotificationListener : ILightningInvoiceListener
         }
         catch (Exception e)
         {
-            _logger.LogWarning("nwc.notification.subscription_failed error={Error}", e.Message);
+            _logger.LogWarning("nwc.notification.subscription_failed error={Error}", SecretSafeDiagnostics.Text(e.Message));
             _paid.Writer.TryComplete(e);
         }
         finally
@@ -80,7 +80,7 @@ public sealed class NwcNotificationListener : ILightningInvoiceListener
             }
             catch (Exception e)
             {
-                _logger.LogWarning("nwc.notification.unreadable error={Error}", e.Message);
+                _logger.LogWarning("nwc.notification.unreadable error={Error}", SecretSafeDiagnostics.Text(e.Message));
                 continue;
             }
             if (!string.Equals(notification.Type, "payment_received", StringComparison.Ordinal))
@@ -254,11 +254,11 @@ internal sealed class FailureLog
         if (!_failing)
         {
             _failing = true;
-            _logger.LogWarning("{Prefix}.failed error={Error} (further failures at debug level until it recovers)", _prefix, e.Message);
+            _logger.LogWarning("{Prefix}.failed error={Error} (further failures at debug level until it recovers)", _prefix, SecretSafeDiagnostics.Text(e.Message));
         }
         else
         {
-            _logger.LogDebug("{Prefix}.failed error={Error}", _prefix, e.Message);
+            _logger.LogDebug("{Prefix}.failed error={Error}", _prefix, SecretSafeDiagnostics.Text(e.Message));
         }
     }
 

@@ -61,17 +61,20 @@ interface PaymentRepository
     /**
      * Pending attempts for the next wallet scan, oldest first, one batch per pass.
      *
-     * @return list<array{payment_hash: string, created_at: int, expires_at: int}>
+     * @return list<array{payment_hash: string, created_at: int, created_at_source: string, expires_at: int}>
      */
-    public function reconcilableAttempts(): array;
+    public function reconcilableAttempts(?array $after = null, int $limit = 200): array;
 
     /**
      * A pending attempt by hash — the notification shortcut must not wait for a backlog.
      *
-     * @return array{payment_hash: string, created_at: int, expires_at: int}|null
+     * @return array{payment_hash: string, created_at: int, created_at_source: string, expires_at: int}|null
      */
     public function findPendingAttempt(string $paymentHash): ?array;
 
-    /** The durable reconcile gate: true when this caller may scan the wallet now. */
-    public function claimReconcileGate(int $now, int $intervalSeconds): bool;
+    /** Claim the durable scan lease and its saved scheduler, or null when busy. */
+    public function claimReconcileGate(int $now, int $intervalSeconds, int $leaseSeconds = 10): ?array;
+
+    /** Only the live claim owner may advance durable scheduling state. */
+    public function checkpointReconcileGate(array $claim, array $scheduler, int $now, bool $release = false): bool;
 }

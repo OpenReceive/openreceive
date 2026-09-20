@@ -97,8 +97,7 @@ def _render(response: HttpResponse) -> DjangoResponse:
     status, _body, headers = response
     rendered = DjangoResponse(response.json(), status=status, content_type="application/json")
     for key, value in headers.items():
-        if key.lower() != "content-type":
-            rendered[key] = value
+        rendered[key] = value
     return rendered
 
 

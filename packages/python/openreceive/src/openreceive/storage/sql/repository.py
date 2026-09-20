@@ -22,16 +22,16 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-import uuid
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Connection, Engine, event, func, inspect, select, text
+from sqlalchemy import Connection, Engine, and_, event, func, inspect, or_, select, text
 from sqlalchemy.exc import IntegrityError
 
+from openreceive.storage.reconcile_state import checkpoint_state, claim_state, parse_gate
 from openreceive.storage.repository import (
     ADVISORY_LOCK_SEED,
     ATTEMPT_STATUSES,
@@ -49,10 +49,10 @@ from openreceive.storage.repository import (
     ReconciliationTransition,
     SchemaError,
     SettlementRecord,
-    is_fresh_timestamp,
     is_live,
     live_attempt_commit_decision,
     normalize_payment_hash,
+    settlement_expires_at,
 )
 from openreceive.storage.sql.tables import (
     DEFAULT_META_TABLE_NAME,
@@ -64,6 +64,7 @@ from openreceive.storage.sql.tables import (
 MYSQL_LOCK_TIMEOUT_SECONDS = 10
 SQLITE_BUSY_TIMEOUT_MS = 10_000
 RECONCILE_GATE_CAS_RETRIES = 6
+
 STORAGE_GUIDE_URL = "https://openreceive.org/guides/storage.md"
 
 _configured_sqlite_engines: weakref.WeakSet[Engine] = weakref.WeakSet()
@@ -107,6 +108,8 @@ def configure_sqlite_engine(engine: Engine) -> None:
 
 
 class SqlPaymentRepository:
+    supports_after_commit = True
+
     def __init__(
         self,
         engine: Engine,
@@ -129,24 +132,36 @@ class SqlPaymentRepository:
         with self.engine.connect() as connection:
             return self._rows_for_reference(connection, reference)
 
-    def list_reconcilable_attempts(self) -> list[ReconcilableAttempt]:
+    def list_reconcilable_attempts(
+        self, *, after: dict[str, Any] | None = None, limit: int = RECONCILE_BATCH_SIZE
+    ) -> list[ReconcilableAttempt]:
         self.assert_supported_schema()
         payments = self.tables.payments
         query = (
-            select(payments.c.payment_hash, payments.c.created_at, payments.c.expires_at)
+            select(payments.c.payment_hash, payments.c.created_at, payments.c.checkout_data)
             .where(payments.c.status == "pending")
             .order_by(payments.c.created_at.asc(), payments.c.payment_hash.asc())
-            .limit(RECONCILE_BATCH_SIZE)
+            .limit(min(limit, RECONCILE_BATCH_SIZE))
         )
+        if after is not None:
+            query = query.where(
+                or_(
+                    payments.c.created_at > to_datetime(after["created_at"]),
+                    and_(
+                        payments.c.created_at == to_datetime(after["created_at"]),
+                        payments.c.payment_hash > after["payment_hash"],
+                    ),
+                )
+            )
         with self.engine.connect() as connection:
             return [self._reconcilable(row) for row in connection.execute(query)]
 
     def find_pending_attempt(self, payment_hash: str) -> ReconcilableAttempt | None:
         self.assert_supported_schema()
         payments = self.tables.payments
-        query = select(payments.c.payment_hash, payments.c.created_at, payments.c.expires_at).where(
-            payments.c.payment_hash == payment_hash.lower(), payments.c.status == "pending"
-        )
+        query = select(
+            payments.c.payment_hash, payments.c.created_at, payments.c.checkout_data
+        ).where(payments.c.payment_hash == payment_hash.lower(), payments.c.status == "pending")
         with self.engine.connect() as connection:
             row = connection.execute(query).first()
         return None if row is None else self._reconcilable(row)
@@ -157,6 +172,7 @@ class SqlPaymentRepository:
             return self._find_by_hash(connection, payment_hash.lower())
 
     def count_attempts_from_ip(self, client_ip: str, since_unix_seconds: int) -> int:
+        self.assert_supported_schema()
         payments = self.tables.payments
         query = (
             select(func.count())
@@ -232,7 +248,10 @@ class SqlPaymentRepository:
         if transition.status not in ("expired", "failed", "attention"):
             raise ValueError(f"invalid reconciliation status: {transition.status}")
         payments = self.tables.payments
-        with self.engine.begin() as connection:
+        record = self.find_by_payment_hash(transition.payment_hash.lower())
+        if record is None:
+            return
+        with self._reference_transaction(record.reference) as connection:
             # Guarding on status = 'pending' makes the transition idempotent and
             # guarantees a settled attempt is never overwritten.
             connection.execute(
@@ -249,7 +268,11 @@ class SqlPaymentRepository:
             )
 
     def record_settlement(
-        self, settlement: SettlementRecord, fulfill: FulfillHook | None = None
+        self,
+        settlement: SettlementRecord,
+        fulfill: FulfillHook | None = None,
+        *,
+        after_commit: FulfillHook | None = None,
     ) -> bool:
         self.assert_supported_schema()
         payment_hash = settlement.payment_hash.lower()
@@ -262,7 +285,7 @@ class SqlPaymentRepository:
             row = next(
                 (candidate for candidate in rows if candidate.payment_hash == payment_hash), None
             )
-            if row is None or row.status == "settled":
+            if row is None or row.status != "pending":
                 return False
             first_for_reference = not any(candidate.status == "settled" for candidate in rows)
             payments = self.tables.payments
@@ -286,46 +309,165 @@ class SqlPaymentRepository:
                         connection=connection,
                     )
                 )
-            return first_for_reference
+        # _reference_transaction owns this connection and has committed now.
+        if first_for_reference and after_commit is not None:
+            after_commit(
+                PaymentSettlement(
+                    row.reference, payment_hash, int(settlement.paid_at), settlement.details
+                )
+            )
+        return first_for_reference
 
-    def claim_reconcile_gate(self, *, now: int, interval_seconds: int) -> bool:
-        """Optimistic CAS over the shared meta row: INSERT-if-absent at rev 0 or
-        UPDATE … WHERE rev = expected. The winner is identified by reading back
-        its own token — the portable equivalent of an affected-row count. A
-        failed scan leaves claimed_at in place so a broken wallet cannot stampede."""
+    def claim_reconcile_gate(
+        self, *, now: int, interval_seconds: int, lease_seconds: int = 10
+    ) -> dict[str, Any] | None:
         self.assert_supported_schema()
         meta = self.tables.meta
-        claim = json.dumps({"claimed_at": int(now), "token": str(uuid.uuid4())})
         for _ in range(RECONCILE_GATE_CAS_RETRIES):
             with self.engine.begin() as connection:
-                current = connection.execute(
+                row = connection.execute(
                     select(meta.c.value, meta.c.rev).where(meta.c.key == RECONCILE_GATE_KEY)
                 ).first()
-                if current is None:
+                gate = claim_state(
+                    parse_gate(row.value if row else None), now, interval_seconds, lease_seconds
+                )
+                if gate is None:
+                    return None
+                encoded = json.dumps(gate)
+                if row is None:
                     try:
                         with connection.begin_nested():
                             connection.execute(
-                                meta.insert().values(key=RECONCILE_GATE_KEY, value=claim, rev=0)
+                                meta.insert().values(key=RECONCILE_GATE_KEY, value=encoded, rev=0)
                             )
                     except IntegrityError:
-                        pass
+                        continue
                 else:
-                    claimed_at = _parse_claimed_at(current.value)
-                    if claimed_at is not None and is_fresh_timestamp(
-                        int(now), claimed_at, int(interval_seconds)
-                    ):
-                        return False
                     connection.execute(
                         meta.update()
-                        .where(meta.c.key == RECONCILE_GATE_KEY, meta.c.rev == current.rev)
-                        .values(value=claim, rev=int(current.rev) + 1)
+                        .where(meta.c.key == RECONCILE_GATE_KEY, meta.c.rev == row.rev)
+                        .values(value=encoded, rev=row.rev + 1)
                     )
                 readback = connection.execute(
                     select(meta.c.value).where(meta.c.key == RECONCILE_GATE_KEY)
                 ).scalar()
-            if readback == claim:
-                return True
-        return False
+            if readback == encoded:
+                return {"token": gate["token"], "scheduler": gate["scheduler"]}
+        return None
+
+    def checkpoint_reconcile_gate(
+        self, claim: dict[str, Any], scheduler: dict[str, Any], *, now: int, release: bool = False
+    ) -> bool:
+        self.assert_supported_schema()
+        meta = self.tables.meta
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                select(meta.c.value, meta.c.rev).where(meta.c.key == RECONCILE_GATE_KEY)
+            ).first()
+            if row is None:
+                return False
+            gate = checkpoint_state(parse_gate(row.value), claim, scheduler, now, release)
+            if gate is None:
+                return False
+            result = connection.execute(
+                meta.update()
+                .where(meta.c.key == RECONCILE_GATE_KEY, meta.c.rev == row.rev)
+                .values(value=json.dumps(gate), rev=row.rev + 1)
+            )
+            return result.rowcount == 1
+
+    def maintenance_candidates(
+        self, *, after: dict[str, Any] | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        """Bounded dry-run report; paginate with next_cursor until it is None."""
+        from openreceive.storage.maintenance import repair_candidate
+
+        self.assert_supported_schema()
+        payments = self.tables.payments
+        limit = min(max(limit, 1), 1000)
+        query = select(payments).where(payments.c.status.in_(["attention", "expired"]))
+        if after is not None:
+            query = query.where(
+                or_(
+                    payments.c.updated_at > to_datetime(after["updated_at"]),
+                    and_(
+                        payments.c.updated_at == to_datetime(after["updated_at"]),
+                        payments.c.payment_hash > after["payment_hash"],
+                    ),
+                )
+            )
+        with self.engine.connect() as connection:
+            rows = list(
+                connection.execute(
+                    query.order_by(payments.c.updated_at, payments.c.payment_hash).limit(limit)
+                )
+            )
+            candidates = [
+                repair_candidate(self._record(row._mapping), to_unix(row.updated_at))
+                for row in rows
+            ]
+        cursor = (
+            {"updated_at": to_unix(rows[-1].updated_at), "payment_hash": str(rows[-1].payment_hash)}
+            if len(rows) == limit
+            else None
+        )
+        return {
+            "candidates": [candidate for candidate in candidates if candidate is not None],
+            "next_cursor": cursor,
+            "scanned": len(rows),
+        }
+
+    def requeue_reviewed_attempt(self, candidate: dict[str, Any], *, decision_id: str) -> bool:
+        """Requeue one explicitly reviewed, unchanged candidate; never grants credit."""
+        from openreceive.storage.maintenance import repair_candidate, repair_decision
+
+        self.assert_supported_schema()
+        decision = repair_decision(decision_id)
+        payment_hash = normalize_payment_hash(candidate["payment_hash"])
+        record = self.find_by_payment_hash(payment_hash)
+        if record is None:
+            return False
+        payments, meta = self.tables.payments, self.tables.meta
+        with self._reference_transaction(record.reference) as connection:
+            row = connection.execute(
+                select(payments).where(payments.c.payment_hash == payment_hash)
+            ).first()
+            if (
+                row is None
+                or row.status != candidate["status"]
+                or to_unix(row.updated_at) != candidate["updated_at"]
+            ):
+                return False
+            current = repair_candidate(self._record(row._mapping), to_unix(row.updated_at))
+            if current != candidate:
+                return False
+            audit_key = "repair:" + payment_hash + ":" + decision
+            if (
+                connection.execute(select(meta.c.key).where(meta.c.key == audit_key)).first()
+                is not None
+            ):
+                return False
+            now = self._clock()
+            audit = {**current, "decision_id": decision, "requeued_at": now}
+            connection.execute(
+                meta.insert().values(
+                    key=audit_key,
+                    value=json.dumps(audit),
+                    rev=0,
+                )
+            )
+            connection.execute(
+                payments.update()
+                .where(
+                    payments.c.payment_hash == payment_hash,
+                    payments.c.status == row.status,
+                    payments.c.updated_at == row.updated_at,
+                )
+                .values(
+                    status="pending", status_reason="operator_requeued", updated_at=to_datetime(now)
+                )
+            )
+        return True
 
     # ------------------------------------------------------------ schema
 
@@ -437,7 +579,13 @@ class SqlPaymentRepository:
         return ReconcilableAttempt(
             payment_hash=str(row.payment_hash),
             created_at=to_unix(row.created_at),
-            expires_at=to_unix(row.expires_at),
+            created_at_source=_json_column(
+                row.checkout_data, "checkout_data", str(row.payment_hash)
+            ).get("created_at_source", "host"),
+            expires_at=settlement_expires_at(
+                _json_column(row.checkout_data, "checkout_data", str(row.payment_hash)),
+                str(row.payment_hash),
+            ),
         )
 
 
@@ -455,17 +603,4 @@ def _json_column(value: object, column: str, payment_hash: str) -> dict[str, Any
             return parsed
     raise ValueError(
         f"Corrupt {column} JSON on openreceive payment attempt {payment_hash}; the row cannot be read."
-    )
-
-
-def _parse_claimed_at(value: object) -> int | None:
-    try:
-        parsed = json.loads(str(value))
-    except ValueError:
-        return None
-    claimed_at = parsed.get("claimed_at") if isinstance(parsed, dict) else None
-    return (
-        int(claimed_at)
-        if isinstance(claimed_at, (int, float)) and not isinstance(claimed_at, bool)
-        else None
     )

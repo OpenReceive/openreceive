@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 3183
+      "bytes": 3318
     },
     {
       "path": "/guides/quickstart-node",
@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 12713
+      "bytes": 12813
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 13720
+      "bytes": 13820
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -43,7 +43,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 13660
+      "bytes": 13760
     },
     {
       "path": "/guides/quickstart-django",
@@ -53,7 +53,7 @@
       "slug": "quickstart-django",
       "title": "Django Quickstart",
       "category": "quickstart",
-      "bytes": 19931
+      "bytes": 19946
     },
     {
       "path": "/guides/quickstart-next",
@@ -63,7 +63,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 15599
+      "bytes": 15699
     },
     {
       "path": "/guides/quickstart-rails",
@@ -73,7 +73,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 17558
+      "bytes": 17573
     },
     {
       "path": "/guides/quickstart-php",
@@ -83,7 +83,7 @@
       "slug": "quickstart-php",
       "title": "PHP Quickstart (plain PHP)",
       "category": "quickstart",
-      "bytes": 15631
+      "bytes": 15646
     },
     {
       "path": "/guides/quickstart-laravel",
@@ -93,7 +93,7 @@
       "slug": "quickstart-laravel",
       "title": "Laravel Quickstart",
       "category": "quickstart",
-      "bytes": 19716
+      "bytes": 19731
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -113,7 +113,7 @@
       "slug": "btcpay-reference",
       "title": "BTCPay Plugin Reference",
       "category": "reference",
-      "bytes": 23391
+      "bytes": 23709
     },
     {
       "path": "/guides/node-orms",
@@ -123,7 +123,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "category": "quickstart",
-      "bytes": 6702
+      "bytes": 6970
     },
     {
       "path": "/guides/authorization",
@@ -173,7 +173,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 18156
+      "bytes": 19127
     },
     {
       "path": "/guides/automated-swaps",
@@ -223,7 +223,17 @@
       "slug": "storage",
       "title": "Payment Storage",
       "category": "operations",
-      "bytes": 4965
+      "bytes": 5676
+    },
+    {
+      "path": "/guides/payment-safety-upgrade",
+      "markdown_path": "/guides/payment-safety-upgrade.md",
+      "source": "docs/guides/payment-safety-upgrade.md",
+      "kind": "guide",
+      "slug": "payment-safety-upgrade",
+      "title": "Payment Safety Upgrade and Repair",
+      "category": "guide",
+      "bytes": 6673
     },
     {
       "path": "/guides/deploying",
@@ -253,7 +263,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 119845
+      "bytes": 120681
     },
     {
       "path": "/guides/security",
@@ -323,7 +333,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 29314
+      "bytes": 29565
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -333,7 +343,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 30808
+      "bytes": 31059
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -343,7 +353,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 31963
+      "bytes": 32214
     },
     {
       "path": "/guides/agent-directions-django",
@@ -353,7 +363,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 39020
+      "bytes": 39186
     },
     {
       "path": "/guides/agent-directions-next",
@@ -363,7 +373,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 33204
+      "bytes": 33455
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -373,7 +383,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 35652
+      "bytes": 35818
     },
     {
       "path": "/guides/agent-directions-php",
@@ -383,7 +393,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 34535
+      "bytes": 34701
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -393,7 +403,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 37729
+      "bytes": 37895
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -403,7 +413,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 10113
+      "bytes": 10239
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -423,7 +433,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 9510
+      "bytes": 9636
     },
     {
       "path": "/api_docs",
@@ -433,7 +443,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 119845,
+      "bytes": 120681,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -465,7 +475,7 @@
       "slug": "btcpay",
       "title": "OpenReceive for BTCPay Server",
       "category": "btcpay",
-      "bytes": 4109,
+      "bytes": 4484,
       "assets_base": "/assets/",
       "video": {
         "path": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
@@ -478,7 +488,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 9510,
+      "bytes": 9636,
       "copy_button": true,
       "self_contained": true
     },
@@ -488,7 +498,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 29314,
+      "bytes": 29565,
       "copy_button": true,
       "self_contained": true
     },
@@ -498,7 +508,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 30808,
+      "bytes": 31059,
       "copy_button": true,
       "self_contained": true
     },
@@ -508,7 +518,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 33204,
+      "bytes": 33455,
       "copy_button": true,
       "self_contained": true
     },
@@ -518,7 +528,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 31963,
+      "bytes": 32214,
       "copy_button": true,
       "self_contained": true
     },
@@ -528,7 +538,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39020,
+      "bytes": 39186,
       "copy_button": true,
       "self_contained": true
     },
@@ -538,7 +548,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35652,
+      "bytes": 35818,
       "copy_button": true,
       "self_contained": true
     },
@@ -548,7 +558,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34535,
+      "bytes": 34701,
       "copy_button": true,
       "self_contained": true
     },
@@ -558,7 +568,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37729,
+      "bytes": 37895,
       "copy_button": true,
       "self_contained": true
     },
@@ -568,7 +578,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 10113,
+      "bytes": 10239,
       "copy_button": true,
       "self_contained": true
     }
@@ -920,7 +930,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5115
+        "bytes": 5211
       },
       {
         "path": "/openapi.yaml",
@@ -1024,6 +1034,14 @@
     {
       "source": "docs/internal/forbidden-without-approval.md",
       "slug": "forbidden-without-approval"
+    },
+    {
+      "source": "docs/internal/payment-safety-verification-2026-09-20.md",
+      "slug": "payment-safety-verification-2026-09-20"
+    },
+    {
+      "source": "docs/internal/payment-safety-audit-2026-09-20.md",
+      "slug": "payment-safety-audit-2026-09-20"
     }
   ]
 }

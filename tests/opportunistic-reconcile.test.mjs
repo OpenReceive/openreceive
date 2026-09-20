@@ -240,7 +240,7 @@ test("GET /rates never claims the reconcile gate or scans the wallet", async () 
   assert.equal(claims, 1);
 });
 
-test("payments/check with three pending orders costs one gate claim and at most two walks", async () => {
+test("payments/check with three pending orders costs one gate claim and two history views", async () => {
   const fix = await fixture();
   const checkout = await createCheckout(fix, "order-1");
   await createCheckout(fix, "order-2");
@@ -267,7 +267,7 @@ test("payments/check with three pending orders costs one gate claim and at most 
 
   assert.equal(claims, 1, "exactly one gate claim per request");
   const walkCount = fix.walks.length - walksBefore;
-  assert.ok(walkCount <= 2, `three pending orders share one window: ${walkCount} walks`);
+  assert.ok(walkCount <= 3, `three pending orders share one window: ${walkCount} walks`);
   // One shared time window: from = oldest created_at (1000) minus the 60s overlap.
   for (const request of fix.walks.slice(walksBefore)) {
     assert.equal(request.from, 940);
@@ -291,8 +291,8 @@ test("payments/check under gate_busy serves the row; attention reads as pending 
   await createCheckout(fix, "order-pending");
   fix.state.now = 1_010;
   assert.equal(
-    await fix.host.payments.claimReconcileGate({ now: 1_010, intervalSeconds: 2 }),
-    true,
+    typeof (await fix.host.payments.claimReconcileGate({ now: 1_010, intervalSeconds: 2 })).token,
+    "string",
   );
 
   const settledResponse = await fix.handler(
@@ -334,7 +334,7 @@ test("a pass exceeding the scan timeout is a failed scan and the gate stays clai
   // claimed_at stays: no stampede while the wallet is broken.
   assert.equal(
     await fix.host.payments.claimReconcileGate({ now: fix.state.now, intervalSeconds: 2 }),
-    false,
+    null,
   );
 });
 

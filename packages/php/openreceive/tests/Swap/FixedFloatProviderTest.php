@@ -120,6 +120,33 @@ final class FixedFloatProviderTest extends TestCase
         self::assertSame(['id' => 'ORD1', 'token' => 'tok', 'choice' => 'REFUND', 'address' => 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf'], $refund);
     }
 
+    public function testDiagnosticSinksCannotSeeCredentialsOrAffectProviderRequests(): void
+    {
+        $raw = ['id' => 'diagnostic-order', 'token' => 'invalid-token', 'status' => 'NEW',
+            'from' => ['address' => 'fixture-address', 'amount' => '1.05'], 'time' => ['expiration' => 5600]];
+        $provider = $this->provider(['/api/v2/order' => self::api($raw)]);
+        $events = [];
+        $sink = static function (array $event) use (&$events): void {
+            $events[] = $event;
+            throw new \RuntimeException('synthetic failing diagnostic sink');
+        };
+        $provider->attachApiRequestLogger($sink);
+        $provider->attachApiResponseLogger($sink);
+        $stored = ['provider' => 'ff-test', 'provider_order_id' => 'diagnostic-order', 'provider_token' => 'invalid-token',
+            'pay_in_asset' => 'USDT_TRON', 'deposit_address' => 'fixture-address', 'deposit_amount' => '1.05', 'expires_at' => 5600, 'state' => 'awaiting_deposit'];
+        $status = $provider->getStatus($stored);
+        self::assertSame('invalid-token', $status['provider_token']);
+        self::assertSame('invalid-token', json_decode($this->calls[0]['body'], true)['token']);
+        self::assertCount(2, $events);
+        self::assertStringNotContainsString('invalid-token', json_encode($events));
+        self::assertStringNotContainsString('X-API', json_encode($events));
+        foreach ($events as $event) {
+            self::assertArrayNotHasKey('body', $event);
+            self::assertArrayNotHasKey('data', $event);
+            self::assertArrayNotHasKey('headers', $event);
+        }
+    }
+
     public function testAThinPollBodyKeepsThePersistedStateVerbatim(): void
     {
         $provider = $this->provider(['/api/v2/order' => self::api(['id' => 'ORD1', 'token' => 'tok'])]);

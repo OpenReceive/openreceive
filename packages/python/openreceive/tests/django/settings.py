@@ -37,6 +37,7 @@ _sqlite_dir = Path(tempfile.gettempdir()) / f"openreceive-django-tests-{os.getpi
 _sqlite_dir.mkdir(parents=True, exist_ok=True)
 
 _pgsql_url = (os.environ.get("OPENRECEIVE_TEST_PGSQL_URL") or "").strip()
+_mysql_url = (os.environ.get("OPENRECEIVE_TEST_DJANGO_MYSQL_URL") or "").strip()
 if _pgsql_url:
     _parsed = urlparse(_pgsql_url)
     DATABASES = {
@@ -47,6 +48,19 @@ if _pgsql_url:
             "PASSWORD": _parsed.password or "",
             "HOST": _parsed.hostname or "127.0.0.1",
             "PORT": str(_parsed.port or 5432),
+        }
+    }
+elif _mysql_url:
+    _parsed = urlparse(_mysql_url)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": _parsed.path.lstrip("/") or "openreceive",
+            "USER": _parsed.username or "",
+            "PASSWORD": _parsed.password or "",
+            "HOST": _parsed.hostname or "127.0.0.1",
+            "PORT": str(_parsed.port or 3306),
+            "OPTIONS": {"charset": "utf8mb4"},
         }
     }
 else:

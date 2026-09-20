@@ -18,6 +18,7 @@ import type {
  * URL input — no call in this module takes a route of its own.
  */
 export interface SwapRequestOptions {
+  readonly signal?: AbortSignal;
   readonly fetch: typeof globalThis.fetch;
   readonly prefix: string;
   readonly logger?: BrowserLoggerOption;
@@ -284,6 +285,7 @@ async function requestJson(
   const fetcher = options.fetch;
   const response = await fetcher(url, {
     method: "POST",
+    signal: options.signal,
     headers: requestHeaders(options.headers, options.csrfHeader),
     body: JSON.stringify(body),
   });

@@ -49,3 +49,57 @@ test("nested credentials, preimages, and invoices never reach a log sink", () =>
   assert.equal(sanitized.event, "swap.provider.request.failed");
   assert.equal(sanitized.provider_error.status, 502);
 });
+
+test("shared secret-redaction vectors agree at browser, server and public error boundaries", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { sanitizeLogValue, publicErrorBody, OpenReceiveError } = await import(
+    "../packages/js/core/src/index.ts"
+  );
+  const { sanitizeBrowserLogEntry } = await import(
+    "../packages/js/browser/src/internal/console-logger.ts"
+  );
+  const { errorResponse, mapHostRouteError, HttpError } = await import(
+    "../packages/js/http/src/errors.ts"
+  );
+  const { normalizeNwcWalletError } = await import("../packages/js/node/src/nwc/errors.ts");
+  const vectors = JSON.parse(
+    await readFile(new URL("../spec/test-vectors/secret-redaction.json", import.meta.url), "utf8"),
+  );
+  for (const vector of vectors.vectors) {
+    assert.deepEqual(sanitizeLogValue(vector.input), vector.expected, vector.name);
+    assert.deepEqual(
+      sanitizeBrowserLogEntry({
+        level: "error",
+        event: "fixture",
+        message: "fixture",
+        data: vector.input,
+      }).data,
+      vector.expected,
+      vector.name,
+    );
+    const body = {
+      code: "WALLET_UNAVAILABLE",
+      message: typeof vector.input === "string" ? vector.input : "Fixture outage",
+      retryable: true,
+      details: {
+        data: vector.input,
+        cause: { message: "internal" },
+        stack: "private",
+        configuration: { token: "invalid-token" },
+      },
+    };
+    const expected = publicErrorBody(body);
+    for (const error of [
+      new HttpError(503, body.code, body.message, { retryable: true, details: body.details }),
+      { status: 503, body },
+      new OpenReceiveError(body),
+    ]) {
+      const response = await errorResponse(error, "req_fixture").json();
+      assert.equal(response.message, expected.message);
+      if (response.details !== undefined) assert.deepEqual(response.details, expected.details);
+    }
+    assert.deepEqual(normalizeNwcWalletError(new OpenReceiveError(body)).toJSON(), expected);
+    assert.deepEqual(mapHostRouteError({ status: 503, body }).body, expected);
+    assert.deepEqual(body.details.data, vector.input, "projection must not mutate source");
+  }
+});

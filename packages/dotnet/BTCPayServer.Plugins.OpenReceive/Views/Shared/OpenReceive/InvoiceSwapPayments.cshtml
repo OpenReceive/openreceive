@@ -8,6 +8,7 @@
 @if (swaps.Count > 0)
 {
     <h3 class="mt-4 mb-3">OpenReceive swaps</h3>
+    <a href="@Url.Content("~/plugins/openreceive/invoices/" + Model.Id + "/recovery")">Payment status and refunds</a>
     <div class="table-responsive-md">
         <table class="table table-hover">
             <thead>

@@ -158,7 +158,7 @@ variable as set/unset only.
 price, and fulfillment. All three receive the `reference` — a string you
 choose, and the fulfillment identity: your order id, one per thing you
 fulfill, created before checkout, kept across retries, never reused.
-OpenReceive never looks inside it, but `onPaid` runs once per reference, a new
+OpenReceive never looks inside it, but `onPaid` commits fulfillment once per reference, a new
 checkout under a reference that already settled is refused with 409, and a
 fresh id per page load lets one order be paid twice.
 

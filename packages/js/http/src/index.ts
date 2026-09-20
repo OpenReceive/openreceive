@@ -55,6 +55,10 @@ export type {
   ReconcilableAttempt,
   ReconciliationTransition,
   SettlementRecord,
+  SettlementContext,
+  ReconcileCursor,
+  ReconcileScheduler,
+  ReconcileGateClaim,
 } from "./payment-repository.ts";
 // The attempt decision machinery (liveAttemptCommitDecision,
 // isReusablePaymentAttempt, reconciliationTransition) is deliberately NOT
@@ -107,6 +111,7 @@ export type {
   PaymentSettlement,
   PaymentSettlementHook,
   SqlPaymentRepository,
+  PaymentRepairCandidate,
   SqlPaymentsOptions,
 } from "./sql-payments.ts";
 export {

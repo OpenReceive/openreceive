@@ -1,4 +1,5 @@
 #nullable enable
+using BTCPayServer.Plugins.OpenReceive.Nwc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -97,7 +98,7 @@ public sealed class SwapService
         catch (Exception e) when (e is not OperationCanceledException)
         {
             _providers.MarkFailed(provider);
-            _logger.LogWarning("swap.catalog.failed provider={Provider} error={Error}", provider.Name, e.Message);
+            _logger.LogWarning("swap.catalog.failed provider={Provider} error={Error}", provider.Name, SecretSafeDiagnostics.Text(e.Message));
             var failure = SwapTransportFailures.Classify(e) == SwapTransportFailure.RateLimited ? "provider_rate_limited" : "provider_unreachable";
             var unavailable = enabled.Select(asset => Offer(asset, false, failure, FixedFloatQuote.AvailabilityMessage(failure))).ToList();
             return new SwapAvailability(true, null, unavailable, bolt11, paymentHash, amountMsats, minimumSeconds);
@@ -172,6 +173,22 @@ public sealed class SwapService
         // not as it was when the request arrived.
         await using var dbLock = await _store.LockAsync($"create:{invoiceId}:{payInAsset}", cancellationToken);
         var invoice = await _invoices.LoadAsync(invoiceId, cancellationToken) ?? throw new SwapRequestException(404, "invoice_not_found", "Invoice not found.");
+        var now = _clock();
+        var live = await _store.FindLiveAsync(invoice.InvoiceId, payInAsset, cancellationToken);
+        // Existing recovery remains accessible when new swaps are disabled or the invoice changed.
+        if (live is not null && !Supersedable(live, now)) return Model(live, invoice);
+        await using var recoveryLock = live is null ? null : await _store.LockAsync($"refund:{live.Id}", cancellationToken);
+        if (live is not null)
+        {
+            live = await _store.GetAsync(live.Id, cancellationToken) ?? throw new InvalidOperationException("Swap disappeared.");
+            try { await RefreshRowAsync(live, cancellationToken); }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                throw new SwapRequestException(503, "provider_refresh_failed", "The existing swap could not be refreshed. Its recovery remains available; retry shortly.");
+            }
+            live = await _store.GetAsync(live.Id, cancellationToken) ?? throw new InvalidOperationException("Swap disappeared.");
+            if (!Supersedable(live, now) && !live.IsTerminal) return Model(live, invoice);
+        }
         var availability = await AvailabilityAsync(invoice, cancellationToken);
         if (!availability.Offered)
         {
@@ -189,30 +206,7 @@ public sealed class SwapService
             throw new SwapRequestException(409, offer.Reason ?? "asset_unavailable", offer.Message ?? "This asset is temporarily unavailable.");
         }
 
-        var now = _clock();
-        var live = await _store.FindLiveAsync(invoice.InvoiceId, payInAsset, cancellationToken);
-        if (live is not null && !Supersedable(live, now))
-        {
-            return Model(live, invoice);
-        }
-        // The provider order first: when the provider refuses, the old order (if any) keeps its
-        // last minute instead of being closed for nothing.
         var order = await CreateProviderOrderAsync(invoice.StoreId, new CreateSwapInput(payInAsset, availability.Bolt11!, availability.InvoiceAmountMsats), cancellationToken);
-        if (live is not null)
-        {
-            var closed = await MutateAsync(live.Id, row =>
-            {
-                if (!Supersedable(row, now)) return;
-                row.State = "expired";
-                row.StateReason = "superseded_near_provider_expiry";
-                Touch(row, now, stateChanged: true);
-            }, cancellationToken);
-            if (!closed.IsTerminal)
-            {
-                // A deposit reached the old order in the meantime: that order is the payer's; the fresh one is never shown.
-                return Model(closed, invoice);
-            }
-        }
         var row = new OpenReceiveSwap
         {
             StoreId = invoice.StoreId,
@@ -224,17 +218,31 @@ public sealed class SwapService
             UpdatedAt = now,
             StateChangedAt = now,
             LastPolledAt = now,
+            LastObservedAt = now,
+            NextPollAt = now + PollSeconds,
         };
         Apply(row, order, now);
-        await _store.InsertAsync(row, cancellationToken);
+        try
+        {
+            if (live is not null) await _store.ReplaceAsync(live, row, now, cancellationToken);
+            else await _store.InsertAsync(row, cancellationToken);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A lost commit response is not a license to mint again. Re-read this same order.
+            var committed = await _store.FindProviderOrderAsync(row.Provider, row.ProviderOrderId, cancellationToken);
+            if (committed is null || committed.InvoiceId != invoiceId || committed.PayInAsset != payInAsset)
+                throw new SwapRequestException(503, "swap_persistence_failed", "The swap could not be saved. Existing payment recovery remains available.");
+            row = committed;
+        }
         _logger.LogInformation("swap.created invoice={Invoice} asset={Asset} provider={Provider} order={Order} state={State}",
             invoice.InvoiceId, payInAsset, row.Provider, row.ProviderOrderId, row.State);
         return Model(row, invoice);
     }
 
-    /// <summary>Too close to the provider's deadline to be worth showing again, and still waiting for a deposit: close it and mint afresh.</summary>
+    /// <summary>Near the provider deadline and freshly observed unfunded: retire instructions while retaining recovery.</summary>
     private static bool Supersedable(OpenReceiveSwap live, long now) =>
-        live.State == "awaiting_deposit" && live.DepositTxId is null && live.ProviderExpiresAt - ReserveWindowSeconds <= now;
+        live.RetiredAt is null && live.State == "awaiting_deposit" && live.DepositTxId is null && live.ProviderExpiresAt - ReserveWindowSeconds <= now;
 
     private async Task<SwapOrder> CreateProviderOrderAsync(string storeId, CreateSwapInput input, CancellationToken cancellationToken)
     {
@@ -254,7 +262,7 @@ public sealed class SwapService
             {
                 last = e;
                 var failure = SwapTransportFailures.Classify(e);
-                _logger.LogWarning("swap.create.failed provider={Provider} failure={Failure} error={Error}", provider.Name, failure, e.Message);
+                _logger.LogWarning("swap.create.failed provider={Provider} failure={Failure} error={Error}", provider.Name, failure, SecretSafeDiagnostics.Text(e.Message));
                 if (failure is SwapTransportFailure.Unreachable or SwapTransportFailure.RateLimited)
                 {
                     _providers.MarkFailed(provider);
@@ -271,6 +279,15 @@ public sealed class SwapService
             SwapTransportFailure.Unreachable => new SwapRequestException(502, "provider_unreachable", "The swap provider is temporarily unreachable."),
             _ => new SwapRequestException(502, "provider_refused", "The swap provider refused the order. Try another asset, or pay the Lightning invoice."),
         };
+    }
+
+    public async Task<SwapRecoveryPage?> RecoveryAsync(string invoiceId, string? after, int limit, CancellationToken cancellationToken)
+    {
+        var invoice = await _invoices.LoadAsync(invoiceId, cancellationToken);
+        if (invoice is null) return null;
+        limit = Math.Clamp(limit, 1, 100);
+        var rows = await _store.RecoveryForInvoiceAsync(invoiceId, after, limit + 1, cancellationToken);
+        return new SwapRecoveryPage(rows.Take(limit).Select(row => Model(row, invoice)).ToArray(), rows.Count > limit ? rows[limit - 1].Id : null);
     }
 
     public async Task<SwapCheckoutModel?> GetAsync(string invoiceId, string swapId, CancellationToken cancellationToken)
@@ -336,22 +353,38 @@ public sealed class SwapService
     {
         var now = _clock();
         var refreshed = 0;
-        foreach (var row in await _store.DueAsync(now, PollBatchSize, cancellationToken))
+        foreach (var candidate in await _store.DueAsync(now, PollBatchSize, cancellationToken))
         {
+            var owner = Guid.NewGuid().ToString("N");
+            var row = await _store.ClaimPollAsync(candidate.Id, now, owner, 90, cancellationToken);
+            if (row is null) continue;
             try
             {
                 await RefreshRowAsync(row, cancellationToken);
-                refreshed++;
+                if (row.LastObservedAt == now) refreshed++;
             }
-            catch (SwapConcurrencyException)
+            catch (SwapRequestException e) when (e.Code == "provider_unconfigured")
             {
-                // A payer's refund, BTCPay's payment event or another worker wrote the row first: the next tick re-reads it.
+                row.NextPollAt = now + 60;
+                await SaveAsync(row, cancellationToken);
             }
+            catch (SwapWeightBudgetException e)
+            {
+                // No provider I/O happened. Keep its place ahead of recently served rows.
+                row.NextPollAt = Math.Max(now + 1, Math.Max(e.WindowStart + SwapProviderWeightBudget.WindowSeconds, e.BackoffUntil ?? 0));
+                await SaveAsync(row, cancellationToken);
+            }
+            catch (SwapConcurrencyException) { /* A newer refund/payment stamp wins. */ }
             catch (Exception e) when (e is not OperationCanceledException)
             {
-                _logger.LogWarning("swap.poll.failed swap={Swap} provider={Provider} error={Error}", row.Id, row.Provider, e.Message);
-                row.LastPolledAt = _clock();
+                _logger.LogWarning("swap.poll.failed swap={Swap} provider={Provider} type={ErrorType}", row.Id, row.Provider, e.GetType().Name);
+                row.LastPolledAt = now;
+                row.NextPollAt = now + (SwapTransportFailures.Classify(e) == SwapTransportFailure.RateLimited ? 60 : PollIntervalSeconds(row));
                 await SaveAsync(row, cancellationToken);
+            }
+            finally
+            {
+                await _store.ReleasePollAsync(row.Id, owner, CancellationToken.None);
             }
         }
         return refreshed;
@@ -361,14 +394,16 @@ public sealed class SwapService
     /// Rows the poller still refreshes: live, and not a completed order whose Lightning side
     /// already settled — that swap is done; the row stays as the record, off the hot set.
     /// </summary>
-    public static bool IsPolled(OpenReceiveSwap row) => !row.IsTerminal && !(row.State == "completed" && row.WalletSettledAt is not null);
+    public static bool IsPolled(OpenReceiveSwap row) => row.RecoveryRefreshRequired || (!row.IsTerminal && !(row.State == "completed" && row.WalletSettledAt is not null));
 
     /// <summary>5 s while the deposit could still change the outcome; 30 s once the invoice's Lightning side settled.</summary>
     public static int PollIntervalSeconds(OpenReceiveSwap row) => row.WalletSettledAt is null ? PollSeconds : SettledPollSeconds;
 
     /// <summary>The poller's selection rule; <see cref="EfSwapStore.DueAsync"/> is the same rule in SQL.</summary>
     public static bool IsDue(OpenReceiveSwap row, long now) =>
-        IsPolled(row) && (row.LastPolledAt is not { } last || now - last >= PollIntervalSeconds(row));
+        IsPolled(row) && (row.PollLeaseUntil is null || row.PollLeaseUntil <= now)
+        && (row.NextPollAt is null || row.NextPollAt <= now)
+        && (row.RecoveryRefreshRequired || row.LastPolledAt is not { } last || now - last >= PollIntervalSeconds(row));
 
     public async Task RefreshRowAsync(OpenReceiveSwap row, CancellationToken cancellationToken)
     {
@@ -377,9 +412,7 @@ public sealed class SwapService
         if (provider is null)
         {
             _logger.LogWarning("swap.poll.provider_missing swap={Swap} provider={Provider}", row.Id, row.Provider);
-            row.LastPolledAt = now;
-            await SaveAsync(row, cancellationToken);
-            return;
+            throw new SwapRequestException(503, "provider_unconfigured", "Restore this order’s original provider configuration to continue recovery.");
         }
         var fresh = await provider.GetStatusAsync(ToOrder(row), cancellationToken);
         var before = row.State;
@@ -399,6 +432,9 @@ public sealed class SwapService
             Touch(row, now, stateChanged: true);
         }
         row.LastPolledAt = now;
+        row.LastObservedAt = now;
+        row.NextPollAt = now + PollIntervalSeconds(row);
+        row.RecoveryRefreshRequired = false;
         await _store.UpdateAsync(row, cancellationToken);
         if (before != row.State)
         {
@@ -542,3 +578,5 @@ public sealed class SwapService
     private SwapCheckoutModel Model(OpenReceiveSwap row, SwapInvoiceContext? invoice) =>
         SwapCheckoutModel.From(row, _clock(), invoice?.ExpiresAt, invoice?.Status);
 }
+
+public sealed record SwapRecoveryPage(IReadOnlyList<SwapCheckoutModel> Attempts, string? NextCursor);

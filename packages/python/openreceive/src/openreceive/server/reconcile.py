@@ -7,6 +7,7 @@ are the secondary reference.
 
 from __future__ import annotations
 
+import copy
 import logging
 import time
 from collections.abc import Callable, Mapping
@@ -15,6 +16,7 @@ from typing import Any
 from openreceive import settlement as settlement_rule
 from openreceive.nwc.requests import normalize_transaction
 from openreceive.payments import reconciliation
+from openreceive.server.reconcile_scan import new_window, scan_slice
 from openreceive.server.service import Service, sanitize_failure_message
 from openreceive.storage.repository import (
     PaymentRepository,
@@ -58,6 +60,13 @@ class Reconciler:
         opportunistic_reconcile: bool | Mapping[str, Any] = True,
         clock: Callable[[], int] | None = None,
     ) -> None:
+        if (
+            after_paid is not None
+            and getattr(repository, "supports_after_commit", False) is not True
+        ):
+            raise ValueError(
+                "after_paid requires a repository implementing the actual after_commit contract (supports_after_commit=True)."
+            )
         self.service = service
         self.repository = repository
         self._on_paid = on_paid
@@ -77,65 +86,25 @@ class Reconciler:
             paid_at=int(event["paid_at"]),
             details=event.get("details"),
         )
-        won_box: list[PaymentSettlement] = []
 
-        def fulfill(payment: PaymentSettlement) -> None:
-            self._on_paid(payment)
-            won_box.append(payment)
+        def after_commit(payment: PaymentSettlement) -> None:
+            if self._after_paid is None:
+                return
+            try:
+                self._after_paid(payment)
+            except Exception as error:
+                log.warning(
+                    "[openreceive] after_paid failed after commit: %s",
+                    sanitize_failure_message(error),
+                )
 
-        won = self.repository.record_settlement(record, fulfill)
-        if won and won_box and self._after_paid is not None:
-            after = PaymentSettlement(
-                reference=won_box[0].reference,
-                payment_hash=won_box[0].payment_hash,
-                paid_at=won_box[0].paid_at,
-                details=won_box[0].details,
-            )
-            self._after_paid(after)
-        return won
+        return self.repository.record_settlement(
+            record,
+            self._on_paid,
+            after_commit=after_commit if self._after_paid is not None else None,
+        )
 
     # ---------------------------------------------------------------- pass
-
-    def reconcile(
-        self,
-        *,
-        overlap_seconds: int = 60,
-        now: int | None = None,
-        max_pages: int | None = None,
-        deadline: float | None = None,
-    ) -> list[dict[str, Any]]:
-        """One bounded pass: scan the wallet for every pending attempt (oldest
-        batch), deliver settlements through `settle`, persist terminal
-        transitions. Closure only ever follows a successful scan observed at or
-        after expiry plus the grace window; a hash absent from a truncated
-        pass is no information. A wallet failure raises and leaves every row
-        pending. Returns the per-hash results so payments/check can serve the
-        requested hash from this pass."""
-        attempts = self.repository.list_reconcilable_attempts()
-        if not attempts:
-            return []
-        observed_at = int(now if now is not None else self._clock())
-        request: dict[str, Any] = {
-            "attempts": [attempt.as_dict() for attempt in attempts],
-            "overlap_seconds": overlap_seconds,
-            "until": observed_at + overlap_seconds,
-        }
-        if max_pages is not None:
-            request["max_pages"] = max_pages
-        if deadline is not None:
-            request["deadline"] = deadline
-        results = self.service.reconcile_payments(request)
-        self._log_pass(attempts, results, overlap_seconds, observed_at)
-        by_hash = {attempt.payment_hash: attempt for attempt in attempts}
-        for checked in results:
-            attempt = by_hash.get(str(checked["payment_hash"]))
-            if attempt is None:
-                continue
-            if checked.get("status") == "settled" and checked.get("paid_at"):
-                self._settle_attempt(checked)
-            else:
-                self._record_transition(attempt, checked, observed_at)
-        return results
 
     def maybe_reconcile(self, *, now: int | None = None) -> dict[str, Any]:
         """Opportunistic settlement discovery, piggybacked on any OpenReceive
@@ -148,6 +117,27 @@ class Reconciler:
         "disabled" | "no_pending" | "gate_busy" | "scan_failed"}."""
         if self.opportunistic_reconcile is False:
             return {"reason": "disabled"}
+        return self.gated_reconcile(now=now)
+
+    def reconcile(
+        self, *, overlap_seconds: int = 60, now: int | None = None
+    ) -> list[dict[str, Any]]:
+        checks: list[dict[str, Any]] = self.gated_reconcile(
+            now=now, overlap_seconds=overlap_seconds
+        ).get("checks", [])
+        return checks
+
+    def gated_reconcile(
+        self, *, now: int | None = None, overlap_seconds: int = 60
+    ) -> dict[str, Any]:
+        if not all(
+            callable(getattr(self.repository, name, None))
+            for name in ("claim_reconcile_gate", "checkpoint_reconcile_gate")
+        ):
+            raise ValueError(
+                "Reconciliation workers require durable claim_reconcile_gate and checkpoint_reconcile_gate repository operations."
+            )
+        claim = None
         try:
             attempts = self.repository.list_reconcilable_attempts()
             if not attempts:
@@ -156,39 +146,126 @@ class Reconciler:
             interval = reconcile_gate_interval_seconds(
                 attempts, observed_at, self.opportunistic_reconcile
             )
-            if not self.repository.claim_reconcile_gate(now=observed_at, interval_seconds=interval):
-                log.debug(
-                    "[openreceive] opportunistic reconcile: gate_busy (%d pending, interval %ds)",
-                    len(attempts),
-                    interval,
-                )
+            claim = self.repository.claim_reconcile_gate(now=observed_at, interval_seconds=interval)
+            if claim is None:
                 return {"reason": "gate_busy"}
-            checks = self.reconcile(
-                now=observed_at,
+            scheduler = copy.deepcopy(claim["scheduler"])
+            windows = scheduler["windows"]
+            if len(windows) < 2:
+                candidates = self.repository.list_reconcilable_attempts(after=scheduler["cursor"])
+                if not candidates:
+                    scheduler["cursor"] = None
+                    candidates = self.repository.list_reconcilable_attempts()
+                if candidates:
+                    last = candidates[-1]
+                    scheduler["cursor"] = {
+                        "created_at": last.created_at,
+                        "payment_hash": last.payment_hash,
+                    }
+                    queued = {a["payment_hash"] for w in windows for a in w["attempts"]}
+                    cohort = [a.as_dict() for a in candidates if a.payment_hash not in queued]
+                    if cohort:
+                        windows.append(new_window(cohort, observed_at, overlap_seconds))
+            # Rotate durably before I/O: one failing cohort cannot pin the queue.
+            window = windows.pop(0) if windows else None
+            if window is not None:
+                windows.append(window)
+            # Claim winner alone advances fair selection, before any wallet I/O.
+            if not self.repository.checkpoint_reconcile_gate(
+                claim, scheduler, now=self._clock() if now is None else observed_at
+            ):
+                return {"reason": "gate_busy"}
+            if not windows:
+                self.repository.checkpoint_reconcile_gate(
+                    claim, scheduler, now=observed_at, release=True
+                )
+                return {"reason": "no_pending"}
+            assert window is not None
+            by_hash = {a["payment_hash"]: ReconcilableAttempt(**a) for a in window["attempts"]}
+            delivered: dict[str, bool] = {}
+            before_scan = copy.deepcopy(scheduler)
+
+            def deliver_finality(checked: dict[str, Any]) -> None:
+                hash_value = str(checked["payment_hash"])
+                current_time = self._clock() if now is None else observed_at
+                if not self.repository.checkpoint_reconcile_gate(
+                    claim, before_scan, now=current_time
+                ):
+                    delivered[hash_value] = False
+                    return
+                if checked.get("status") == "settled" and checked.get("paid_at"):
+                    delivered[hash_value] = self._settle_attempt(checked)
+                else:
+                    self._record_transition(by_hash[hash_value], checked, observed_at)
+                    delivered[hash_value] = True
+
+            checks, complete, stalled = scan_slice(
+                self.service,
+                window,
                 max_pages=RECONCILE_SCAN_MAX_PAGES,
                 deadline=time.monotonic() + RECONCILE_SCAN_TIMEOUT_SECONDS,
+                on_finality=deliver_finality,
             )
-            return {"reason": "ran", "checks": checks}
+            lease_owned = self.repository.checkpoint_reconcile_gate(
+                claim, before_scan, now=self._clock() if now is None else observed_at
+            )
+            committed = []
+            for checked in checks:
+                attempt = by_hash[checked["payment_hash"]]
+                if checked["payment_hash"] in delivered:
+                    if not delivered[checked["payment_hash"]]:
+                        continue
+                elif checked.get("status") == "settled" and checked.get("paid_at"):
+                    continue  # Result arrived after this pass lost its deadline/lease.
+                else:
+                    if not lease_owned:
+                        continue
+                    self._record_transition(
+                        attempt, checked, int(checked.get("_coverage_started_at", observed_at))
+                    )
+                committed.append(
+                    {key: value for key, value in checked.items() if not key.startswith("_")}
+                )
+            windows.remove(window)
+            if not complete and not stalled:
+                # Distinct creation buckets can reduce future sweeps; same-second
+                # history keeps its physical continuation without skipping timestamps.
+                times = sorted({a["created_at"] for a in window["attempts"]})
+                if (
+                    len(windows) == 0
+                    and len(times) > 1
+                    and all(a.get("created_at_source") == "wallet" for a in window["attempts"])
+                ):
+                    middle = times[len(times) // 2]
+                    for half in (
+                        [a for a in window["attempts"] if a["created_at"] < middle],
+                        [a for a in window["attempts"] if a["created_at"] >= middle],
+                    ):
+                        windows.append(new_window(half, observed_at, overlap_seconds))
+                else:
+                    windows.append(window)
+            checkpoint_now = self._clock() if now is None else observed_at
+            self.repository.checkpoint_reconcile_gate(
+                claim, scheduler, now=checkpoint_now, release=True
+            )
+            self._log_pass(list(by_hash.values()), committed, window)
+            return {"reason": "ran", "checks": committed}
         except Exception as error:
             log.warning(
-                "[openreceive] opportunistic reconcile failed (will retry): %s",
+                "[openreceive] reconciliation failed (will retry): %s",
                 sanitize_failure_message(error),
             )
             return {"reason": "scan_failed"}
 
     def attempt_status(self, payment_hash: str) -> dict[str, Any] | None:
         """The persisted {status, paid_at?} for payments/check's row path."""
-        finder = getattr(self.repository, "find_by_payment_hash", None)
-        if callable(finder):
-            record = finder(payment_hash.lower())
-            if record is None:
-                return None
-            status: dict[str, Any] = {"status": record.status}
-            if record.paid_at is not None:
-                status["paid_at"] = record.paid_at
-            return status
-        pending = self.repository.find_pending_attempt(payment_hash.lower())
-        return None if pending is None else {"status": "pending"}
+        record = self.repository.find_by_payment_hash(payment_hash.lower())
+        if record is None:
+            return None
+        status: dict[str, Any] = {"status": record.status}
+        if record.paid_at is not None:
+            status["paid_at"] = record.paid_at
+        return status
 
     # ------------------------------------------------------- notifications
 
@@ -231,7 +308,8 @@ class Reconciler:
                     },
                 }
             )
-            return True
+            status = self.attempt_status(payment_hash)
+            return status is not None and status["status"] == "settled"
         except Exception as error:
             # A direct-settlement failure falls back to the scan-based safety net.
             log.warning(
@@ -242,7 +320,7 @@ class Reconciler:
 
     # ------------------------------------------------------------ internals
 
-    def _settle_attempt(self, checked: dict[str, Any]) -> None:
+    def _settle_attempt(self, checked: dict[str, Any]) -> bool:
         """One failing settlement must not abort the rest of the pass."""
         try:
             self.settle(
@@ -258,6 +336,10 @@ class Reconciler:
                 checked["payment_hash"],
                 sanitize_failure_message(error),
             )
+
+            return False
+        status = self.attempt_status(str(checked["payment_hash"]))
+        return status is not None and status.get("status") == "settled"
 
     def _record_transition(
         self, attempt: ReconcilableAttempt, checked: dict[str, Any], observed_at: int
@@ -288,8 +370,7 @@ class Reconciler:
     def _log_pass(
         attempts: list[ReconcilableAttempt],
         results: list[dict[str, Any]],
-        overlap: int,
-        observed_at: int,
+        window: dict[str, Any],
     ) -> None:
         """One short info line per pass: passes are durably gated, so operators
         can watch settlement discovery without raising the log level."""
@@ -303,14 +384,13 @@ class Reconciler:
                 if counts.get(status)
             ]
             scanned = "" if len(results) == len(attempts) else f" of {len(attempts)} attempts"
-            window_from = max(min(attempt.created_at for attempt in attempts) - overlap, 0)
             log.info(
-                "[openreceive] payment.reconcile.completed: %s%s attempt_count=%d window=%d..%d",
+                "[openreceive] payment.reconcile.completed: %s%s attempt_count=%d window=%s..%s",
                 ", ".join(decided) or "0 decided",
                 scanned,
                 len(attempts),
-                window_from,
-                observed_at + overlap,
+                window["from"],
+                window["until"] if window["until"] is not None else "unbounded",
             )
         except Exception:
             pass

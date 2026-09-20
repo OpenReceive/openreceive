@@ -203,6 +203,7 @@ export function createSwapDisplayModel(
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
   // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
   const settled = invoice.transaction_state === "settled";
+  const instructionsExpired = expiresInSeconds === 0 && swap.provider_state === "awaiting_deposit";
   const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap);
 
   return {
@@ -247,18 +248,26 @@ export function createSwapDisplayModel(
           ]),
       { label: checkoutLabels.swapCopyAmount, value: depositAmount, selectable: true },
     ],
-    providerStateLabel: settled
-      ? "Payment complete"
-      : getSwapProviderStateLabel(swap.provider_state),
-    providerStateDetail: settled
-      ? "Your payment is confirmed and your order is complete."
-      : getSwapProviderStateDetail(swap.provider_state, swap.pay_in_asset, {
-          refundReason: swap.refund_reason,
-          depositAmount: swap.deposit_amount,
-          depositReceivedAmount: swap.deposit_received_amount,
-          refundAmount: swap.refund_amount,
-        }),
-    state: settled ? "settled" : getSwapPanelState(swap.provider_state),
+    providerStateLabel: instructionsExpired
+      ? "Payment window closed"
+      : settled
+        ? "Payment complete"
+        : getSwapProviderStateLabel(swap.provider_state),
+    providerStateDetail: instructionsExpired
+      ? "Do not send another payment. We are checking for an existing deposit and any recovery options."
+      : settled
+        ? "Your payment is confirmed and your order is complete."
+        : getSwapProviderStateDetail(swap.provider_state, swap.pay_in_asset, {
+            refundReason: swap.refund_reason,
+            depositAmount: swap.deposit_amount,
+            depositReceivedAmount: swap.deposit_received_amount,
+            refundAmount: swap.refund_amount,
+          }),
+    state: settled
+      ? "settled"
+      : instructionsExpired
+        ? "progress"
+        : getSwapPanelState(swap.provider_state),
     expiresInSeconds,
     countdownLabel: formatCountdown(expiresInSeconds),
     qrPayload: createSwapQrPayload(swap),
@@ -421,7 +430,7 @@ function getSwapProviderStateDetail(
     return "Your payment is confirmed and being converted. This usually finishes within a minute.";
   }
   if (state === "paying_invoice" || state === "completed") {
-    return "The provider is sending the Lightning payment. This usually takes a few seconds.";
+    return "We are checking whether the wallet received the payment. Provider completion alone does not confirm payment.";
   }
   if (state === "expired") return "No payment was received before the payment window closed.";
   if (state === "refund_required" || state === "refund_pending" || state === "refunded") {

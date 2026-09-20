@@ -162,6 +162,7 @@ module OpenReceive
             "bolt11" => wallet.fetch("invoice"),
             "amount_msats" => wallet.fetch("amount_msats"),
             "created_at" => created_at,
+            "created_at_source" => wallet["created_at"].nil? ? "host" : "wallet",
             "expires_at" => expires_at,
             "fiat_quote" => fiat_quote
           }
@@ -563,6 +564,12 @@ module OpenReceive
       end
 
       def resolve_amount(input)
+        resolve_amount_value(input)
+      rescue ArgumentError, TypeError, KeyError, ValidationError
+        raise InternalHostError, "The host supplied an invalid payment amount."
+      end
+
+      def resolve_amount_value(input)
         amount = stringify(input)
         if amount.key?("sats")
           return [OpenReceive::Money.direct_to_msats(currency: "SATS", value: amount.fetch("sats")), nil]
@@ -639,6 +646,9 @@ module OpenReceive
       # checksum — a false accept here sends the payer's money somewhere
       # unrecoverable. Mirrors the JS normalizeRefundAddress exactly.
       def normalize_refund_address(value, pay_in_asset)
+        unless OpenReceive::Server::Swap::Assets::PAY_IN_ASSETS.include?(pay_in_asset)
+          raise InternalHostError, "Swap recovery requires a supported pay-in asset/network."
+        end
         normalized = value.to_s.strip
         if normalized.empty? || normalized.length > 300
           raise ValidationError, "refundAddress is invalid."

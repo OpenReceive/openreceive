@@ -114,7 +114,7 @@ itself, and they hold for every integration.
   body field. The generator installs `OpenReceive::ALLOW_ALL_AUTHORIZE`, a
   placeholder that allows everything (the engine warns at boot while it is
   set) — replace it with this app's real ownership check, same as `on_paid`.
-- `config.on_paid` must be idempotent. It runs once per `reference` — your order
+- `config.on_paid` must be idempotent. Its database fulfillment commits once per `reference` — your order
   id, one per thing you fulfill, created before checkout, kept across retries,
   never reused. A fresh id per page load lets one order be paid twice.
 - Receive-only NWC is required; a spend-capable code fails closed at boot unless
@@ -282,3 +282,5 @@ enough; drop the `.md` for the same page a person would read.
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
+
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts

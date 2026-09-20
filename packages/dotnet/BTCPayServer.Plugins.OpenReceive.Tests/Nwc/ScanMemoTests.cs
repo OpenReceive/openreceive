@@ -195,7 +195,7 @@ public sealed class ScanMemoTests
 
         Assert.True(Settlement.IsSettled(memo.Lookup(Hash(2))!)); // the second walk covered it
         Assert.Equal(Hash(2), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
-        Assert.Equal(4, wallet.Calls); // two walks, two views each
+        Assert.Equal(8, wallet.Calls); // two walks, two views each, including empty end pages
     }
 
     [Fact]
@@ -558,7 +558,7 @@ public sealed class ScanMemoTests
 
         await memo.RefreshAsync(force: true, CancellationToken.None);
 
-        Assert.Equal(4, wallet.Calls); // window: two views; unbounded: two views — all complete, nothing found
+        Assert.Equal(8, wallet.Calls); // Each view requires the physical empty end page.
         Assert.False(memo.IsWatched(Hash(1)));
         Assert.Null(memo.Lookup(Hash(1)));
         Assert.True(memo.Complete);
@@ -566,7 +566,7 @@ public sealed class ScanMemoTests
         // Asked about again: watched again, but the unbounded walk is not repeated for a hash of unknown age.
         memo.Watch(Hash(1));
         await memo.RefreshAsync(force: true, CancellationToken.None);
-        Assert.Equal(8, wallet.Calls);
+        Assert.Equal(16, wallet.Calls);
     }
 
     [Fact]

@@ -49,6 +49,7 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Lightning Swap Connect URI](https://openreceive.org/guides/lightning-swap-connect.md)
 - [Environment Variables](https://openreceive.org/guides/environment-variables.md)
 - [Payment Storage](https://openreceive.org/guides/storage.md)
+- [Payment Safety Upgrade and Repair](https://openreceive.org/guides/payment-safety-upgrade.md)
 - [Deploying OpenReceive](https://openreceive.org/guides/deploying.md)
 - [Testing Your OpenReceive Integration](https://openreceive.org/guides/host-testing.md)
 - [API Reference](https://openreceive.org/guides/api-reference.md)

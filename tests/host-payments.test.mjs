@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hash } from "./helpers/factories.mjs";
+import { hash, memoryPaymentsDb } from "./helpers/factories.mjs";
 import {
   createHost,
+  createSqlPayments,
   reconcileHostPayments,
   startReconciler,
 } from "../packages/js/http/src/index.ts";
@@ -45,10 +46,14 @@ function payment(character, overrides = {}) {
 function repository(rows) {
   return {
     listForReference: async () => rows,
+    findByPaymentHash: async (paymentHash) => ({ paymentHash, status: "settled" }),
     commitAttempt: async () => undefined,
     listReconcilableAttempts: async () => [],
     recordReconciliation: async () => undefined,
-    recordSettlement: async () => true,
+    recordSettlementWithFulfillment: async (settlement, fulfill) => {
+      await fulfill({ ...settlement, reference: "order-1", transaction: {} });
+      return true;
+    },
   };
 }
 
@@ -368,9 +373,11 @@ test("a custom repository drives the library's write-once settlement claim", asy
     amountFor: () => ({ currency: "USD", value: "1.00" }),
     payments: {
       ...repository([]),
-      recordSettlement: async (settlement) => {
+      recordSettlementWithFulfillment: async (settlement, fulfill) => {
         claims.push(settlement);
-        return claimResults.shift() ?? false;
+        const won = claimResults.shift() ?? false;
+        if (won) await fulfill({ ...settlement, reference: "order-1", transaction: {} });
+        return won;
       },
     },
     onPaid: async (settlement) => notified.push(settlement.paymentHash),
@@ -386,19 +393,49 @@ test("a custom repository drives the library's write-once settlement claim", asy
   assert.deepEqual(notified, [paymentHash], "a redelivered settlement must not fulfill twice");
 });
 
-test("a custom repository without recordSettlement is refused at construction", () => {
-  const { recordSettlement: _omitted, ...withoutClaim } = repository([]);
+test("a custom repository without recordSettlementWithFulfillment is refused at construction", () => {
+  const { recordSettlementWithFulfillment: _omitted, ...withoutClaim } = repository([]);
   // Refused alongside the other required repository methods rather than at the
   // first settlement: a host must not discover this once money has arrived.
   assert.throws(
     () =>
       createHost({
         amountFor: () => ({ currency: "USD", value: "1.00" }),
-        payments: withoutClaim,
+        payments: { ...withoutClaim, recordSettlement: async () => true },
         onPaid: async () => assert.fail("settlement must not reach the host unclaimed"),
       }),
-    /requires payments\.recordSettlement/,
+    /requires payments\.recordSettlementWithFulfillment/,
   );
+});
+
+test("custom SQL fulfillment rolls back the ledger and host writes, then retries once", async () => {
+  const db = memoryPaymentsDb();
+  db.exec("CREATE TABLE entitlements (reference TEXT PRIMARY KEY)");
+  const payments = createSqlPayments(db, { clock: () => 1_000 });
+  const row = payment("a");
+  await payments.commitAttempt({
+    reference: row.reference,
+    paymentHash: row.paymentHash,
+    checkout: row.checkout,
+  });
+  let fail = true;
+  const built = createHost({
+    payments,
+    amountFor: () => ({ sats: 1 }),
+    onPaid: async (context) => {
+      assert.equal(context.reference, row.reference);
+      await context.transaction.query("INSERT INTO entitlements VALUES (?)", [context.reference]);
+      if (fail) throw new Error("host fulfillment failed");
+    },
+  });
+  const settled = { paymentHash: row.paymentHash, paidAt: 1_010 };
+  await assert.rejects(built.onPaid(settled), /host fulfillment failed/);
+  assert.equal((await payments.listForReference(row.reference))[0].status, "pending");
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM entitlements").get().n, 0);
+  fail = false;
+  await Promise.all([built.onPaid(settled), built.onPaid(settled)]);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM entitlements").get().n, 1);
+  assert.equal((await payments.listForReference(row.reference))[0].status, "settled");
 });
 
 test("payment insert uses provider expiry and keeps swap data server-side", () => {
@@ -491,7 +528,7 @@ test("browser status polling carries the displayed payment hash", async () => {
   });
 });
 
-test("reconciler retries from the pending-attempt ledger without a cursor", async () => {
+test("reconciler retries rolled-back fulfillment through the durable cohort schedule", async () => {
   const paymentHash = hash("a");
   const controller = new AbortController();
   const inputs = [];
@@ -499,9 +536,13 @@ test("reconciler retries from the pending-attempt ledger without a cursor", asyn
   const gateClaims = [];
   const returned = await startReconciler({
     service: {
-      async reconcilePayments(input) {
+      async scanPaymentSlice(input) {
         inputs.push(input);
-        return [{ paymentHash, status: "settled", paidAt: 900 }];
+        return {
+          checks: [{ paymentHash, status: "settled", paidAt: 900 }],
+          outcome: "complete",
+          window: input.window,
+        };
       },
     },
     host: {
@@ -513,9 +554,10 @@ test("reconciler retries from the pending-attempt ledger without a cursor", asyn
       payments: {
         listReconcilableAttempts: async () => [{ paymentHash, createdAt: 800, expiresAt: 1_100 }],
         recordReconciliation: async () => undefined,
+        checkpointReconcileGate: async () => true,
         claimReconcileGate: async (input) => {
           gateClaims.push(input);
-          return true;
+          return { token: "worker-test", scheduler: { cursor: null, windows: [] } };
         },
       },
     },
@@ -525,11 +567,8 @@ test("reconciler retries from the pending-attempt ledger without a cursor", asyn
   });
   await returned.done;
   assert.equal(inputs.length, 2);
-  assert.deepEqual(inputs[0], {
-    attempts: [{ paymentHash, createdAt: 800, expiresAt: 1_100 }],
-    overlapSeconds: 60,
-    maxPages: 50,
-  });
+  assert.equal(inputs[0].maxPages, 50);
+  assert.equal(inputs[0].window.attempts[0].payment_hash, paymentHash);
   assert.deepEqual(
     delivered.map((settled) => settled.paymentHash),
     [paymentHash, paymentHash],

@@ -73,7 +73,7 @@ final class WalletScan
             // The wallet ran out of rows only when the page IT sent was short:
             // a row the normalizer dropped was still a row, and a full page with
             // one of them dropped must not read as the end of the history.
-            if ($outstanding === [] || count($page) + ($response['skipped_rows'] ?? 0) < Kernel::TRANSACTION_PAGE_LIMIT) {
+            if ($outstanding === [] || count($page) + ($response['skipped_rows'] ?? 0) === 0) {
                 $truncated = false;
                 break;
             }
@@ -84,7 +84,7 @@ final class WalletScan
                 break;
             }
             $previousPage = $pageKey;
-            $offset += Kernel::TRANSACTION_PAGE_LIMIT;
+            $offset += count($page) + ($response['skipped_rows'] ?? 0);
         }
         return ['rows' => $rows, 'truncated' => $truncated];
     }

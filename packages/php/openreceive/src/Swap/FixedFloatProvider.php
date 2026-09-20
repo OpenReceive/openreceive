@@ -124,9 +124,8 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
     }
 
     /**
-     * Sinks for outbound API requests/responses. The caller sanitizes nested
-     * secrets (the order token on status/refund bodies); the API key and HMAC
-     * signature live in headers and are never logged.
+     * Optional metadata-only diagnostics, sanitized before the host sink.
+     * Request/response bodies, credentials and signatures are never attached.
      *
      * @param callable(array<string, mixed>): void $logger
      */
@@ -338,7 +337,7 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
     {
         try {
             if ($this->apiRequestLogger !== null) {
-                ($this->apiRequestLogger)(['provider' => $this->name, 'path' => $path, 'body' => $body]);
+                ($this->apiRequestLogger)(['provider' => $this->name, 'path' => $path, 'has_body' => $body !== [], 'has_token' => isset($body['token'])]);
             }
         } catch (\Throwable) {
             // Diagnostics never affect the call.
@@ -349,7 +348,7 @@ final class FixedFloatProvider implements SwapProvider, SwapProviderRuntime
     {
         try {
             if ($this->apiResponseLogger !== null) {
-                ($this->apiResponseLogger)(['provider' => $this->name, 'path' => $path, 'status' => $status, 'ok' => $ok, 'code' => $code, 'msg' => $msg, 'data' => $data]);
+                ($this->apiResponseLogger)(['provider' => $this->name, 'path' => $path, 'status' => $status, 'ok' => $ok, 'code' => is_int($code) || is_float($code) ? $code : null, 'has_data' => $data !== null]);
             }
         } catch (\Throwable) {
             // Diagnostics never affect the call.

@@ -28,6 +28,7 @@ from openreceive.rates import (
 )
 from openreceive.server.errors import (
     ConflictError,
+    InternalHostError,
     NotImplementedHttpError,
     ServiceError,
     SpendCapableWalletError,
@@ -38,6 +39,7 @@ from openreceive.server.errors import (
 )
 from openreceive.swap import assets, providers_from_environment
 from openreceive.swap.address import valid_for_pay_in_asset
+from openreceive.swap.assets import is_pay_in_asset
 from openreceive.swap.budget import SwapProviderWeightBudget
 from openreceive.swap.cache import TransientSwapCache
 from openreceive.values import LOWER_HEX_64_PATTERN, compact, stringify, to_int
@@ -202,6 +204,7 @@ class Service:
                 "bolt11": wallet["invoice"],
                 "amount_msats": wallet["amount_msats"],
                 "created_at": created_at,
+                "created_at_source": "wallet" if wallet.get("created_at") is not None else "host",
                 "expires_at": expires_at,
                 "fiat_quote": fiat_quote,
             }
@@ -559,6 +562,12 @@ class Service:
         return option
 
     def _resolve_amount(self, payload: object) -> tuple[int, dict[str, Any] | None]:
+        try:
+            return self._resolve_amount_value(payload)
+        except (ValueError, TypeError, KeyError, ValidationError):
+            raise InternalHostError("The host supplied an invalid payment amount.") from None
+
+    def _resolve_amount_value(self, payload: object) -> tuple[int, dict[str, Any] | None]:
         amount = stringify(payload)
         if "sats" in amount:
             return money.direct_to_msats("SATS", amount["sats"]), None
@@ -709,6 +718,8 @@ class Service:
     def _normalize_refund_address(value: object, pay_in_asset: object) -> str:
         """A refund is the last chance to recover a mis-sent deposit: checked
         against the order's own pay-in network with its checksum."""
+        if not is_pay_in_asset(pay_in_asset):
+            raise InternalHostError("Swap recovery requires a supported pay-in asset/network.")
         normalized = str(value if value is not None else "").strip()
         if not normalized or len(normalized) > 300:
             raise ValidationError("refundAddress is invalid.")
@@ -781,10 +792,9 @@ class _ScanClient:
 
 
 def redact_secrets(text: str) -> str:
-    """Failure text can embed wallet credentials (an NWC URI inside a connect
-    error); redact them before the message reaches a host log."""
-    text = re.sub(r"nostr\+walletconnect:[^\s\"'`<>]+", "[REDACTED_NWC]", text)
-    return re.sub(r"lightning\+swapconnect:[^\s\"'`<>]+", "[REDACTED_LSC]", text)
+    from openreceive.nwc.errors import redact_error_text
+
+    return redact_error_text(text)
 
 
 def sanitize_failure_message(error: BaseException) -> str:

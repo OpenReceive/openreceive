@@ -39,6 +39,7 @@ public sealed class NwcConnectionState
     }
 
     public NwcUri Uri { get; }
+    public string ConnectionId => Uri.WalletPubkey.ToLowerInvariant() + ":" + Uri.SecretKey.CreateXOnlyPubKey().ToHex();
     public bool AllowSpendCapableWallet { get; }
     public IReceiveNwcTransport Transport { get; }
     public IInvoiceStore Invoices { get; }
@@ -71,7 +72,7 @@ public sealed class NwcConnectionState
         }
         catch (NwcTransportException e)
         {
-            _logger.LogDebug("nwc.capabilities.unavailable wallet={Wallet} error={Error}", Uri.WalletPubkey, e.Message);
+            _logger.LogDebug("nwc.capabilities.unavailable wallet={Wallet} error={Error}", Uri.WalletPubkey, SecretSafeDiagnostics.Text(e.Message));
         }
     }
 
@@ -81,22 +82,25 @@ public sealed class NwcConnectionState
     /// creation time and it closes by its own expiry, exactly as before the restart. A hash
     /// with no stored row was not minted here; the memo treats it as one of unknown age.
     /// </summary>
-    public async Task RestoreAsync(string paymentHash, CancellationToken cancellationToken)
+    public async Task<bool> RestoreAsync(string paymentHash, CancellationToken cancellationToken)
     {
-        if (Memo.Lookup(paymentHash) is not null) return;
+        paymentHash = NwcNormalize.CanonicalHash(paymentHash);
         var stored = await Invoices.FindAsync(paymentHash, cancellationToken).ConfigureAwait(false);
-        if (stored is null) return;
+        if (stored is null) return true; // Host invoice predating this plugin's mint table.
+        if (stored.ConnectionId != ConnectionId) return false;
+        if (Memo.Lookup(paymentHash) is not null) return true;
         Memo.Record(new NwcTransaction
         {
             Type = "incoming",
             Invoice = stored.Bolt11,
             PaymentHash = stored.PaymentHash,
             AmountMsats = stored.AmountMsats,
-            CreatedAt = stored.CreatedAt,
+            CreatedAt = stored.CreatedAtAuthoritative ? stored.CreatedAt : 0,
             ExpiresAt = stored.ExpiresAt,
             TransactionState = "pending",
         });
         _logger.LogDebug("nwc.invoice.restored payment_hash={Hash} created_at={CreatedAt}", paymentHash, stored.CreatedAt);
+        return true;
     }
 
     public async Task<bool> LookupInvoiceGrantedAsync(CancellationToken cancellationToken)
@@ -192,7 +196,7 @@ public sealed class NwcConnectionStringHandler : ILightningConnectionStringHandl
         }
         catch (FormatException e)
         {
-            error = e.Message;
+            error = SecretSafeDiagnostics.Text(e.Message);
             return null;
         }
         if (parsed is null)

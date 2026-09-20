@@ -13,6 +13,10 @@ export type SqlDialect = SqlAdapter["dialect"];
 /** The raw-query slice of a Knex instance or transaction. */
 export interface KnexExecutorLike {
   raw(sql: string, bindings: readonly unknown[]): Promise<unknown>;
+  client?: {
+    acquireConnection(): Promise<unknown>;
+    releaseConnection(connection: unknown): Promise<unknown>;
+  };
 }
 
 /** Structural view of a Knex instance. */
@@ -21,21 +25,41 @@ export interface KnexLike extends KnexExecutorLike {
 }
 
 /**
- * Wrap a Knex instance. Knex hands the SQL and bindings to the driver
- * verbatim (`?` is already the sqlite placeholder, and `$n` postgres SQL
- * contains no `?` for Knex to rewrite); only the RESULT shape differs per
- * driver. The sqlite3 driver resolves the rows array itself; pg wraps them in
- * `{ rows }` — reaching into `result[0]` would return the first ROW on
- * sqlite, which breaks every repository read.
+ * PostgreSQL SQL goes directly to the native driver, on the owning executor's
+ * connection. A transaction executor returns its own connection and retains it
+ * until commit/rollback. SQLite keeps Knex's raw-query path.
  */
 export function knexDb(knex: KnexLike, dialect: SqlDialect): SqlAdapter {
+  const connectionOwner = (executor: KnexExecutorLike) => {
+    const owner = executor.client;
+    if (
+      typeof owner?.acquireConnection !== "function" ||
+      typeof owner.releaseConnection !== "function"
+    ) {
+      throw new TypeError(
+        "PostgreSQL knexDb requires Knex client.acquireConnection/releaseConnection on both the instance and transaction.",
+      );
+    }
+    return owner;
+  };
+  if (dialect === "postgres") connectionOwner(knex);
   const queryOn =
     (executor: KnexExecutorLike): SqlQuery =>
     async (sql, params = []) => {
-      const result = await executor.raw(sql, [...params]);
-      return dialect === "sqlite"
-        ? (result as Record<string, unknown>[])
-        : ((result as { rows?: Record<string, unknown>[] }).rows ?? []);
+      if (dialect === "sqlite")
+        return (await executor.raw(sql, [...params])) as Record<string, unknown>[];
+      const owner = connectionOwner(executor);
+      const connection = await owner.acquireConnection();
+      try {
+        const driver = connection as {
+          query?: (sql: string, params: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+        };
+        if (typeof driver?.query !== "function")
+          throw new TypeError("PostgreSQL knexDb requires a native pg connection.");
+        return (await driver.query(sql, [...params])).rows ?? [];
+      } finally {
+        await owner.releaseConnection(connection);
+      }
     };
   return {
     dialect,

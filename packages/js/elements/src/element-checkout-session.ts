@@ -77,12 +77,15 @@ export interface ElementCheckoutSession {
   retryCreateCheckout(): void;
   ensureLightning(): Promise<void>;
   startSwap(payInAsset: string): Promise<void>;
+  clearSwapStartError(): void;
   /** Write attributes the element owns without re-entering attributeChangedCallback. */
   applyOwnAttributes(attributes: Parameters<typeof applyCheckoutElementAttributes>[1]): void;
   /** Run a block of self-writes under the same guard, for conditional writes. */
   writeOwnAttributes(write: () => void): void;
   /** A create input changed: the next connect/render may prepare again. */
   forgetCreateKey(): void;
+  dispose(): void;
+  capture(): { isCurrent(): boolean };
 }
 
 export function createElementCheckoutSession(
@@ -170,11 +173,13 @@ export function createElementCheckoutSession(
   const session = createCheckoutSession({
     snapshot: () => host.latestCheckoutSnapshot(),
     reference: currentReference,
-    requestCheckout: (reference) => {
+    prefix: currentPrefix,
+    requestCheckout: (reference, signal) => {
       const metadata = host.createMetadata();
       const csrfHeader = currentCsrfHeader();
       return requestCheckout({
         prefix: currentPrefix(),
+        signal,
         reference,
         ...(metadata === undefined ? {} : { metadata }),
         ...(csrfHeader === undefined ? {} : { csrfHeader }),
@@ -222,12 +227,14 @@ export function createElementCheckoutSession(
     creating = true;
     createdKey = key;
     session.resetLightningRequest();
+    const action = session.capture();
 
     try {
       createError = undefined;
       host.syncResumePath(reference);
       // Lock amount without minting a payer Lightning invoice. Bitcoin selection mints later.
       const prepared = await prepareCheckout({
+        signal: action.signal,
         prefix,
         reference,
         ...(csrfHeader === undefined ? {} : { csrfHeader }),
@@ -237,11 +244,13 @@ export function createElementCheckoutSession(
       // alone opens on the method grid — the wrong screen for a payer who was
       // told to bookmark a refund. A host that remembered the attempt names it;
       // `resumeSwapAttempt` swallows a stale hash, leaving the method grid.
+      if (!action.isCurrent()) return;
       const resumeHash = host.resumePaymentHash();
       const checkout =
         resumeHash === undefined
           ? prepared
           : await resumeSwapAttempt({
+              signal: action.signal,
               fetch: globalThis.fetch,
               prefix,
               ...(csrfHeader === undefined ? {} : { csrfHeader }),
@@ -252,7 +261,7 @@ export function createElementCheckoutSession(
       // The host may have re-pointed reference/prefix while this was in flight;
       // applying an older order's attributes here would silently show, and poll,
       // the wrong order. The finally block re-runs for whatever is current.
-      if (currentCreateKey() !== key) return;
+      if (!action.isCurrent()) return;
       if (checkout.active?.swap !== undefined) {
         host.swapSelection.setSelectedAsset(checkout.active.swap.pay_in_asset);
         host.swapSelection.setDismissedInvoiceId(null);
@@ -269,7 +278,7 @@ export function createElementCheckoutSession(
       host.render();
       host.startCheckoutController();
     } catch (error) {
-      if (currentCreateKey() !== key) return;
+      if (!action.isCurrent()) return;
       // Leave createdKey set so theme sync / host error DOM updates cannot retry-storm.
       // The payer sees an inline error with a retry button instead of an
       // infinite "Creating checkout…" spinner.
@@ -280,15 +289,17 @@ export function createElementCheckoutSession(
       host.dispatchError(error);
       host.render();
     } finally {
-      creating = false;
-      const current = currentCreateKey();
-      if (
-        host.element.isConnected &&
-        current !== undefined &&
-        current !== key &&
-        host.isCreateMode()
-      ) {
-        void createCheckout();
+      if (action.isCurrent()) {
+        creating = false;
+        const current = currentCreateKey();
+        if (
+          host.element.isConnected &&
+          current !== undefined &&
+          current !== key &&
+          host.isCreateMode()
+        ) {
+          void createCheckout();
+        }
       }
     }
   }
@@ -330,9 +341,19 @@ export function createElementCheckoutSession(
     retryCreateCheckout,
     ensureLightning: () => session.ensureLightning(),
     startSwap: (payInAsset) => session.startSwap(payInAsset),
+    clearSwapStartError: () => session.clearSwapStartError(),
     applyOwnAttributes,
     writeOwnAttributes,
+    capture: () => session.capture(),
+    dispose() {
+      session.dispose();
+      if (creating) createdKey = undefined;
+      creating = false;
+    },
     forgetCreateKey() {
+      session.reset();
+      creating = false;
+      createError = undefined;
       createdKey = undefined;
     },
   };

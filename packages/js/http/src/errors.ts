@@ -1,8 +1,9 @@
 import {
-  isErrorCode,
-  isRetryableErrorCode,
   type ErrorBody,
   type ErrorCode,
+  isErrorCode,
+  isRetryableErrorCode,
+  publicErrorBody,
 } from "@openreceive/core";
 
 // Every response — success or failure — carries a request id. Errors echo it in the JSON body
@@ -135,13 +136,13 @@ export function mapHostRouteError(
   error: unknown,
 ): { readonly status: number; readonly body: ErrorBody } | null {
   if (error instanceof HostError || isServiceErrorShape(error)) {
-    return { status: error.status, body: error.body };
+    return { status: error.status, body: publicErrorBody(error.body) };
   }
   if (isWalletErrorShape(error)) {
     const retryable = error.retryable ?? isRetryableErrorCode(error.code);
     return {
       status: walletErrorStatus(error.code, retryable),
-      body: { code: error.code, message: error.message, retryable },
+      body: publicErrorBody({ code: error.code, message: error.message, retryable }),
     };
   }
   return null;
@@ -198,13 +199,13 @@ export function errorResponse(error: unknown, requestId: string): Response {
   if (error instanceof HttpError) {
     return jsonResponse(
       error.status,
-      {
+      publicErrorBody({
         code: error.code,
         message: error.message,
         ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
         request_id: requestId,
         ...(error.details === undefined ? {} : { details: error.details }),
-      },
+      }),
       requestId,
       error.retryAfterSeconds === undefined
         ? undefined
@@ -215,7 +216,7 @@ export function errorResponse(error: unknown, requestId: string): Response {
   if (isServiceErrorShape(error)) {
     return jsonResponse(
       error.status,
-      { ...error.body, request_id: error.body.request_id ?? requestId },
+      publicErrorBody({ ...error.body, request_id: error.body.request_id ?? requestId }),
       requestId,
     );
   }
@@ -224,7 +225,12 @@ export function errorResponse(error: unknown, requestId: string): Response {
     const retryable = error.retryable ?? isRetryableErrorCode(error.code);
     return jsonResponse(
       walletErrorStatus(error.code, retryable),
-      { code: error.code, message: error.message, retryable, request_id: requestId },
+      publicErrorBody({
+        code: error.code,
+        message: error.message,
+        retryable,
+        request_id: requestId,
+      }),
       requestId,
     );
   }

@@ -1,7 +1,7 @@
-import { compact, unixSeconds } from "@openreceive/core";
+import { createPaymentScanWindow, unixSeconds, type PaymentScanWindow } from "@openreceive/core";
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
 import { type Host, warnFailure } from "./host-payments.ts";
-import type { ReconcilableAttempt } from "./payment-repository.ts";
+import type { ReconcilableAttempt, ReconcileScheduler } from "./payment-repository.ts";
 import { reconcileHostPayments } from "./reconcile-loop.ts";
 
 /**
@@ -101,9 +101,12 @@ export async function maybeReconcilePayments(
   // (the HTTP handler already refuses to construct in this state) instead of
   // silently degrading the default settlement path.
   const claimReconcileGate = input.host.payments.claimReconcileGate;
-  if (typeof claimReconcileGate !== "function") {
+  if (
+    typeof claimReconcileGate !== "function" ||
+    typeof input.host.payments.checkpointReconcileGate !== "function"
+  ) {
     throw new TypeError(
-      "Opportunistic reconcile requires payments.claimReconcileGate (a durable CAS gate); " +
+      "Opportunistic reconcile requires payments.claimReconcileGate and checkpointReconcileGate (durable lease and progress CAS); " +
         "implement it on the repository or disable with opportunisticReconcile: false.",
     );
   }
@@ -117,43 +120,174 @@ export async function maybeReconcilePayments(
       );
     });
   try {
-    const attempts = await input.host.payments.listReconcilableAttempts();
-    if (attempts.length === 0) return { reason: "no_pending" };
     const clock = input.clock ?? unixSeconds;
     const now = clock();
-    const intervalSeconds = reconcileIntervalSeconds(attempts, now, input.minIntervalSeconds);
-    const claimed = await claimReconcileGate.call(input.host.payments, { now, intervalSeconds });
-    if (!claimed) return { reason: "gate_busy" };
-    const checks = await withScanTimeout(
-      reconcileHostPayments({
-        service: input.service,
-        host: input.host,
-        // Already read above to size the gate interval; the pass scans that
-        // exact batch rather than repeating the query on the request path.
-        attempts,
-        overlapSeconds: input.overlapSeconds,
-        maxPages: input.maxPages ?? OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
-        ...compact({ clock: input.clock }),
-      }),
+    const minInterval = Math.max(2, input.minIntervalSeconds ?? 2);
+    const timeout = Math.min(
+      OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
       input.scanTimeoutMs ?? OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
     );
-    return { reason: "ran", checks };
+    const claim = await claimReconcileGate.call(input.host.payments, {
+      now,
+      intervalSeconds: minInterval,
+      leaseSeconds: Math.ceil(timeout / 1000) + 1,
+    });
+    if (claim === null) return { reason: "gate_busy" };
+    if (typeof claim !== "object" || typeof claim.token !== "string")
+      throw new TypeError(
+        "claimReconcileGate must return a lease claim or null; boolean gate repositories must upgrade.",
+      );
+    const scheduler: ReconcileScheduler = structuredClone(claim.scheduler);
+    const queued = new Set(
+      scheduler.windows.flatMap((window) => window.attempts.map((attempt) => attempt.payment_hash)),
+    );
+    if (scheduler.windows.length < 2) {
+      let candidates = await input.host.payments.listReconcilableAttempts(scheduler.cursor);
+      if (candidates.length === 0 && scheduler.cursor !== null)
+        candidates = await input.host.payments.listReconcilableAttempts(null);
+      const last = candidates.at(-1);
+      scheduler.cursor =
+        last === undefined ? null : { created_at: last.createdAt, payment_hash: last.paymentHash };
+      const fresh = candidates.filter((attempt) => !queued.has(attempt.paymentHash));
+      if (fresh.length > 0)
+        scheduler.windows.push(
+          createPaymentScanWindow(
+            fresh.map((attempt) => ({
+              payment_hash: attempt.paymentHash,
+              created_at: attempt.createdAt,
+              expires_at: attempt.expiresAt,
+              created_at_source: attempt.createdAtSource ?? "host",
+            })),
+            now,
+            input.overlapSeconds,
+          ),
+        );
+    }
+    const window = scheduler.windows.shift();
+    if (window === undefined) {
+      await input.host.payments.checkpointReconcileGate({
+        claim,
+        scheduler,
+        now: clock(),
+        release: true,
+      });
+      return { reason: "no_pending" };
+    }
+    // Rotate before I/O. Failed wallets or fulfillment callbacks cannot pin the
+    // next gate winner to this cohort. Every pending row returns on keyset wrap.
+    scheduler.windows.push(window);
+    const attempts = window.attempts.map((attempt) => ({
+      paymentHash: attempt.payment_hash,
+      createdAt: attempt.created_at,
+      expiresAt: attempt.expires_at,
+      createdAtSource: attempt.created_at_source,
+    }));
+    const intervalSeconds = reconcileIntervalSeconds(attempts, now, minInterval);
+    if (
+      !(await input.host.payments.checkpointReconcileGate({
+        claim,
+        scheduler,
+        now: clock(),
+        intervalSeconds,
+      }))
+    )
+      return { reason: "gate_busy" };
+    const streamed = new Set<string>();
+    const deliveryFailures: unknown[] = [];
+    const deadline = Date.now() + timeout;
+    const controller = new AbortController();
+    const slice = await withScanTimeout(
+      input.service.scanPaymentSlice({
+        window,
+        maxPages: Math.min(
+          OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
+          input.maxPages ?? OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
+        ),
+        deadline,
+        signal: controller.signal,
+        onFinality: async (check) => {
+          if (streamed.has(check.paymentHash) || Date.now() >= deadline) return;
+          if (
+            !(await input.host.payments.checkpointReconcileGate!({
+              claim,
+              scheduler,
+              now: clock(),
+              intervalSeconds,
+            }))
+          )
+            throw new Error("Reconciliation lease expired before finality delivery.");
+          streamed.add(check.paymentHash);
+          try {
+            await reconcileHostPayments({
+              service: input.service,
+              host: input.host,
+              attempts,
+              checks: [check],
+              clock,
+            });
+          } catch (error) {
+            deliveryFailures.push(error);
+          }
+        },
+      }),
+      timeout,
+      controller,
+    );
+    scheduler.windows.pop();
+    if (slice.outcome === "continued") {
+      const halves =
+        scheduler.windows.length === 0
+          ? splitWindow(slice.window, clock(), input.overlapSeconds)
+          : undefined;
+      scheduler.windows.push(...(halves ?? [slice.window]));
+    }
+    if (slice.outcome === "stalled")
+      report(
+        new Error(
+          "Wallet history made no pagination progress; attempts remain pending and other cohorts will be served.",
+        ),
+      );
+    if (
+      !(await input.host.payments.checkpointReconcileGate({
+        claim,
+        scheduler,
+        now: clock(),
+        release: true,
+        intervalSeconds,
+      }))
+    )
+      return { reason: "gate_busy" };
+    await reconcileHostPayments({
+      service: input.service,
+      host: input.host,
+      attempts,
+      checks: slice.checks.filter((check) => !streamed.has(check.paymentHash)),
+      clock,
+    });
+    if (deliveryFailures.length > 0)
+      throw new AggregateError(
+        deliveryFailures,
+        "One or more settlement transactions failed; pending attempts will be retried.",
+      );
+    return { reason: "ran", checks: slice.checks };
   } catch (error) {
     report(error);
     return { reason: "scan_failed" };
   }
 }
 
-function withScanTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+function withScanTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  controller: AbortController,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    // The timeout abandons the in-flight scan; it cannot cancel it. Nothing in
-    // the wallet path (`service.reconcilePayments` -> core reconcile ->
-    // `listTransactions` over the NWC relay round-trip) accepts an
-    // AbortSignal, so there is no plumbing to cancel into. The abandoned pass
-    // drains in the background and the gate's `claimed_at` stays in place, so
-    // a slow wallet is retried next interval instead of stampeding new scans.
+    // Abort the history subscription, queued relay connections and publication
+    // before rejecting the caller; the next lease must not overlap that walker.
     const timer = setTimeout(() => {
-      reject(new Error(`reconcile scan exceeded ${timeoutMs}ms`));
+      const error = new Error(`reconcile scan exceeded ${timeoutMs}ms`);
+      controller.abort(error);
+      reject(error);
     }, timeoutMs);
     work.then(
       (value) => {
@@ -166,4 +300,22 @@ function withScanTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
       },
     );
   });
+}
+
+/** Split broad cohorts on a creation-time boundary; never skip same-second rows. */
+function splitWindow(
+  window: PaymentScanWindow,
+  now: number,
+  overlap?: number,
+): PaymentScanWindow[] | undefined {
+  if (!window.attempts.every((attempt) => attempt.created_at_source === "wallet")) return undefined;
+  const timestamps = [...new Set(window.attempts.map((attempt) => attempt.created_at))].sort(
+    (a, b) => a - b,
+  );
+  if (timestamps.length < 2) return undefined;
+  const boundary = timestamps[Math.floor(timestamps.length / 2)]!;
+  return [
+    window.attempts.filter((attempt) => attempt.created_at < boundary),
+    window.attempts.filter((attempt) => attempt.created_at >= boundary),
+  ].map((attempts) => createPaymentScanWindow(attempts, now, overlap));
 }

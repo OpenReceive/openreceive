@@ -154,7 +154,8 @@ foreach (vector('make-invoice-validation')['cases'] as $case) {
 }
 
 // nwc-request-response: NIP-47 request mapping and response normalization.
-foreach (vector('nwc-request-response')['cases'] as $case) {
+$nwcWireCases = json_decode((string) file_get_contents("{$root}/spec/test-vectors/nwc-request-response.json"), false, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING)->cases;
+foreach (vector('nwc-request-response')['cases'] as $caseIndex => $case) {
     if ($case['method'] === 'make_invoice') {
         if (!same($case['expected_nip47_request'], Requests::makeInvoiceRequest($case['openreceive_request']))) {
             fail("nwc-request-response parity failed: {$case['name']} request");
@@ -172,9 +173,23 @@ foreach (vector('nwc-request-response')['cases'] as $case) {
     if (!same($case['expected_nip47_request'], Requests::listTransactionsRequest($case['openreceive_request']))) {
         fail("nwc-request-response parity failed: {$case['name']} request");
     }
+    // Preserve the wire distinction between an optional-field object and a list.
+    $wireResponse = $nwcWireCases[$caseIndex]->raw_response ?? null;
+    if (isset($case['expected_error'])) {
+        try {
+            Requests::normalizeListTransactionsResponse($wireResponse);
+            fail("nwc-request-response parity failed: {$case['name']} did not raise");
+        } catch (\InvalidArgumentException) {
+            // An unusable page must fail, never prove absence.
+        }
+        continue;
+    }
     if (isset($case['expected_openreceive_response'])) {
-        $actual = Requests::normalizeListTransactionsResponse($case['raw_response']);
+        $actual = Requests::normalizeListTransactionsResponse($wireResponse);
         $expected = $case['expected_openreceive_response'];
+        if (isset($case['expected_skipped_rows']) && ($actual['skipped_rows'] ?? 0) !== $case['expected_skipped_rows']) {
+            fail("nwc-request-response parity failed: {$case['name']} skipped rows");
+        }
         if (count($actual['transactions']) !== count($expected['transactions'])) {
             fail("nwc-request-response parity failed: {$case['name']} row count");
         }
@@ -284,7 +299,6 @@ if (Money::quoteFiatToMsats('10.00', '50000.00') !== 20_000_000) {
 // wallet-scan-truncation: through the production Service::reconcilePayments; a
 // walk cut short must OMIT undecided hashes rather than report not_found.
 $scanFamily = vector('wallet-scan-truncation');
-$pageLimit = $scanFamily['page_limit'];
 $fillerRow = static fn (int $page, int $index): array => [
     'type' => 'incoming', 'payment_hash' => str_repeat('f', 56) . sprintf('%08d', $page * 10_000 + $index),
     'amount_msats' => 1000, 'transaction_state' => 'settled', 'created_at' => 1000, 'settled_at' => 1100,
@@ -308,8 +322,8 @@ foreach ($scanFamily['cases'] as $case) {
     $walletSpec = $case['wallet'];
     $pages = $buildPages($walletSpec['pages']);
     $unpaidPages = isset($walletSpec['unpaid_pages']) ? $buildPages($walletSpec['unpaid_pages']) : $pages;
-    $wallet = new class ($pages, $unpaidPages, (bool) ($walletSpec['ignores_offset'] ?? false), $pageLimit) implements ReceiveNwcClient {
-        public function __construct(private readonly array $pages, private readonly array $unpaidPages, private readonly bool $ignoresOffset, private readonly int $pageLimit)
+    $wallet = new class ($pages, $unpaidPages, (bool) ($walletSpec['ignores_offset'] ?? false)) implements ReceiveNwcClient {
+        public function __construct(private readonly array $pages, private readonly array $unpaidPages, private readonly bool $ignoresOffset)
         {
         }
 
@@ -321,8 +335,14 @@ foreach ($scanFamily['cases'] as $case) {
         public function listTransactions(array $request): array
         {
             $source = ($request['unpaid'] ?? false) === true ? $this->unpaidPages : $this->pages;
-            $index = $this->ignoresOffset ? 0 : intdiv((int) ($request['offset'] ?? 0), $this->pageLimit);
-            return ['transactions' => $source[$index] ?? []];
+            if ($this->ignoresOffset) return ['transactions' => $source[0] ?? []];
+            $offset = (int) ($request['offset'] ?? 0);
+            $start = 0;
+            foreach ($source as $page) {
+                if ($start === $offset) return ['transactions' => $page];
+                $start += count($page);
+            }
+            return ['transactions' => []];
         }
 
         public function preflight(): array

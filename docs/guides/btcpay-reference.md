@@ -106,6 +106,8 @@ A swap row: `id`, `invoiceId`, `paymentHash`, `provider`, `providerOrderId`,
 | Route | Body / result |
 | --- | --- |
 | `POST /api/plugins/openreceive/swaps` | `{ invoiceId, payInAsset }` → the swap snapshot; 409 with a reason when swaps are not offered for the invoice |
+| `GET /api/plugins/openreceive/swaps/{invoiceId}?after={swapId}&limit=50` | bounded invoice-scoped recovery list `{ attempts, next_cursor }`, including retired orders; maximum 100 |
+| `GET /plugins/openreceive/invoices/{invoiceId}/recovery` | payer recovery page, available after expiry and when swaps are disabled |
 | `GET /api/plugins/openreceive/swaps/{invoiceId}/{swapId}` | the snapshot, including `invoice_status` and `wallet_settled`; the checkout polls it every 5 s |
 | `POST /api/plugins/openreceive/swaps/{invoiceId}/{swapId}/refund` | `{ refundAddress }` → the snapshot; 400 `invalid_refund_address`, 409 `refund_not_required` or `refund_already_requested` |
 

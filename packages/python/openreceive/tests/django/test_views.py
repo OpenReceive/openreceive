@@ -56,7 +56,7 @@ def test_rates_mount_and_wrong_method(app: OpenReceiveApp) -> None:
     client = Client()
     response = client.get(f"{PREFIX}/rates?currencies=USD")
     assert response.status_code == 200
-    assert response["Content-Type"] == "application/json"
+    assert response["Content-Type"] == "application/json; charset=utf-8"
     assert json.loads(response.content) == {"bitcoin": {"usd": "50000.00"}}
     assert response["x-request-id"].startswith("req_")
     # A known path with the wrong method is the engine's 405, not Django's.

@@ -6,6 +6,7 @@ import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import { createHttpHandler, createHost, hostError } from "../packages/js/http/src/index.ts";
 import { paymentInsert } from "../packages/js/http/src/payment-repository.ts";
+import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
@@ -54,8 +55,16 @@ function testHost({
       recordReconciliation: async () => undefined,
       // The library owns write-once settlement even for custom repositories:
       // this claim is what decides whether repository-mode onPaid runs.
-      recordSettlement: async () => true,
-      claimReconcileGate: async () => true,
+      findByPaymentHash: async (paymentHash) => ({ paymentHash, status: "settled" }),
+      recordSettlementWithFulfillment: async (settlement, fulfill) => {
+        await fulfill({ ...settlement, reference: "order-1", transaction: {} });
+        return true;
+      },
+      claimReconcileGate: async () => ({
+        token: "test-claim",
+        scheduler: { cursor: null, windows: [] },
+      }),
+      checkpointReconcileGate: async () => true,
     },
   };
 }
@@ -296,13 +305,12 @@ test("HTTP withholds invoice when host persistence fails", async () => {
       body: JSON.stringify({ reference: "order-fail" }),
     }),
   );
-  // Infrastructure failure to persist is a retryable 503, not a payer-blaming
-  // conflict; the invoice is still withheld.
-  assert.equal(response.status, 503);
+  // A raw host hook refusal withholds instructions with the required conflict.
+  assert.equal(response.status, 409);
   const body = await response.json();
   assert.equal(body.checkout, undefined);
-  assert.equal(body.code, "INTERNAL");
-  assert.equal(body.retryable, true);
+  assert.equal(body.code, "CONFLICT");
+  assert.equal(body.retryable, undefined);
 });
 
 test("HTTP retry reuses the live checkout recorded on the host order", async () => {
@@ -375,7 +383,11 @@ test("host checkout snapshot makes retry independent of wallet reads", async () 
       },
       listReconcilableAttempts: async () => [],
       recordReconciliation: async () => undefined,
-      recordSettlement: async () => true,
+      findByPaymentHash: async (paymentHash) => ({ paymentHash, status: "settled" }),
+      recordSettlementWithFulfillment: async (settlement, fulfill) => {
+        await fulfill({ ...settlement, reference: "order-1", transaction: {} });
+        return true;
+      },
     },
     onPaid: async () => undefined,
   });
@@ -800,6 +812,99 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       },
     }),
   });
+  const databases = [];
+  const persistedHost = async (onPaid = () => {}, swapData) => {
+    const db = memoryPaymentsDb();
+    databases.push(db);
+    const host = createHost({ db, clock: () => 1000, amountFor: () => ({ sats: 1 }), onPaid });
+    await host.payments.commitAttempt({
+      reference: SETTLED_GOLDEN_CHECKOUT.reference,
+      paymentHash: SETTLED_GOLDEN_HASH,
+      checkout: SETTLED_GOLDEN_CHECKOUT,
+      ...(swapData === undefined ? {} : { swapData }),
+    });
+    return { db, host };
+  };
+  const ownership = await persistedHost();
+  handlers.repository_ownership = createHttpHandler({
+    service: settledService,
+    host: ownership.host,
+    authorize: () => true,
+    clock: () => 1000,
+  });
+  const busy = await persistedHost();
+  await busy.host.onPaid({ paymentHash: SETTLED_GOLDEN_HASH, paidAt: 950 });
+  await busy.host.payments.claimReconcileGate({ now: 1000, intervalSeconds: 2 });
+  handlers.repository_gate_busy = createHttpHandler({
+    service: settledService,
+    host: busy.host,
+    authorize: () => true,
+    clock: () => 1000,
+  });
+  const failing = await persistedHost(async ({ query }) => {
+    await query("INSERT INTO entitlements (reference) VALUES ('order-golden-settled')");
+    throw new Error("simulated fulfillment failure");
+  });
+  failing.db.exec("CREATE TABLE entitlements (reference TEXT PRIMARY KEY)");
+  handlers.repository_failed_settlement = createHttpHandler({
+    service: settledService,
+    host: failing.host,
+    authorize: () => true,
+    clock: () => 1000,
+  });
+  handlers.hook_refused = createHttpHandler({
+    service,
+    authorize: () => true,
+    host: testHost({
+      resolveCheckout: () => ({ amount: { sats: 1 } }),
+      onCheckoutCreated: () => {
+        throw new Error("host refused");
+      },
+    }),
+  });
+  const createFailureDb = memoryPaymentsDb();
+  databases.push(createFailureDb);
+  createFailureDb.exec(
+    "CREATE TRIGGER fail_payment BEFORE INSERT ON openreceive_payments BEGIN SELECT RAISE(ABORT, 'simulated unavailable storage'); END",
+  );
+  handlers.repository_failed_create = createHttpHandler({
+    service,
+    authorize: () => true,
+    host: createHost({ db: createFailureDb, amountFor: () => ({ sats: 1 }), onPaid: () => {} }),
+  });
+  for (const kind of ["status", "refund"]) {
+    const vector = JSON.parse(
+      readFileSync(
+        `spec/test-vectors/http-golden/${kind === "status" ? "23-repository-swap-status" : "24-repository-swap-refund"}.json`,
+        "utf8",
+      ),
+    );
+    const order = vector.setup.provider_order;
+    let state = order.state;
+    const provider = {
+      name: "fixedfloat",
+      listAssets: async () => [],
+      getStatus: async (saved) => {
+        assert.equal(saved.provider_token, order.provider_token);
+        return { ...saved, state };
+      },
+      requestRefund: async () => {
+        state = "refund_pending";
+      },
+    };
+    const swap = await persistedHost(() => {}, { version: 1, providerOrder: order });
+    const swapService = await createOpenReceive({
+      client: createTestkitReceiveClient(),
+      swap: { provider },
+      clock: () => 1000,
+    });
+    handlers[`repository_swap_${kind}`] = createHttpHandler({
+      service: swapService,
+      host: swap.host,
+      authorize: () => true,
+      clock: () => 1000,
+    });
+  }
   for (const filename of readdirSync("spec/test-vectors/http-golden")
     .filter((name) => name !== "PLACEHOLDERS.json")
     .sort()) {
@@ -825,7 +930,11 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
         ...(vector.request.body === undefined ? {} : { body: JSON.stringify(vector.request.body) }),
       }),
     );
-    assert.equal(response.status, vector.expected.status, vector.name);
+    assert.equal(
+      response.status,
+      vector.expected.status,
+      `${vector.name}: ${await response.clone().text()}`,
+    );
     for (const [name, value] of Object.entries(vector.expected.headers ?? {})) {
       assertGoldenValue(response.headers.get(name), value, `${vector.name}: header ${name}`);
     }
@@ -833,6 +942,12 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
     // either engine fails the run.
     assertGoldenValue(await response.json(), vector.expected.body, `${vector.name}: body`);
   }
+  assert.equal(failing.db.prepare("SELECT COUNT(*) AS n FROM entitlements").get().n, 0);
+  assert.equal(
+    (await failing.host.payments.findByPaymentHash(SETTLED_GOLDEN_HASH)).status,
+    "pending",
+  );
+  for (const db of databases) db.close();
 });
 
 test("a host resolver returning a malformed payment hash is a 500 host bug, not a payer 400", async () => {

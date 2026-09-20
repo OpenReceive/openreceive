@@ -124,7 +124,13 @@ final class Requests
         $skipped = is_int($data['skipped_rows'] ?? null) ? $data['skipped_rows'] : 0;
         foreach ($rows as $row) {
             try {
-                $transactions[] = self::normalizeTransaction($row);
+                if (!Records::isRecord($row) || (is_array($row) && array_is_list($row))) {
+                    throw new \InvalidArgumentException("non-object transaction row");
+                }
+                $normalized = self::normalizeTransaction($row);
+                // Keep an optional-field-only object distinguishable from an
+                // unusable scalar/list when adapters normalize a second time.
+                $transactions[] = $normalized === [] ? ['type' => null] : $normalized;
             } catch (\InvalidArgumentException) {
                 $skipped++;
             }

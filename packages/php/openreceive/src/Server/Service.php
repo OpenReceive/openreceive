@@ -256,6 +256,7 @@ final class Service
                 'bolt11' => $wallet['invoice'],
                 'amount_msats' => $wallet['amount_msats'],
                 'created_at' => $createdAt,
+                'created_at_source' => isset($wallet['created_at']) ? 'wallet' : 'host',
                 'expires_at' => $expiresAt,
                 'fiat_quote' => $fiatQuote,
             ];
@@ -268,16 +269,14 @@ final class Service
     }
 
     /**
-     * One reconcile pass over the given attempts. Optional bounds for
-     * request-path passes: `max_pages` caps each wallet-history walk (the gated
-     * opportunistic pass sends 50), `deadline` is a monotonic-clock instant
-     * (seconds, hrtime-based) checked between page fetches — never mid-request.
-     * A hash the walk could not decide is OMITTED rather than reported
-     * not_found (wallet-scan-truncation vectors).
-     *
-     * @param array<string, mixed> $input
-     * @return list<array<string, mixed>>
+     * @param array<string, mixed> $request
+     * @return array{transactions: list<array<string, mixed>>, skipped_rows?: int}
      */
+    public function reconciliationPage(array $request): array
+    {
+        return Requests::normalizeListTransactionsResponse($this->callNwc(fn (): array => $this->nwcClient->listTransactions($request)));
+    }
+
     public function reconcilePayments(array $input): array
     {
         $attempts = $input['attempts'] ?? [];
@@ -425,6 +424,13 @@ final class Service
     public function subscribeNotifications(callable $handler, ?callable $onIdle = null): void
     {
         $this->nwcClient->subscribeNotifications($handler, $onIdle);
+    }
+
+    public function stopNotifications(): void
+    {
+        if (is_callable([$this->nwcClient, 'stopNotifications'])) {
+            $this->nwcClient->stopNotifications();
+        }
     }
 
     /** EVERY feed-side failure maps to the payer-facing retryable 503, like the JS ratesUnavailableError. */
@@ -646,7 +652,7 @@ final class Service
     }
 
     /** @param array<string, mixed> $transaction @return array<string, mixed> */
-    private function paymentResult(string $hash, array $transaction): array
+    public function paymentResult(string $hash, array $transaction): array
     {
         $status = Settlement::status($transaction);
         $observedAt = ($this->clock)();
@@ -684,6 +690,9 @@ final class Service
     /** A false accept here sends the payer's money somewhere unrecoverable, so the address is checksum-checked against the order's own network. */
     private function normalizeRefundAddress(mixed $value, mixed $payInAsset): string
     {
+        if (!\OpenReceive\Swap\Assets::isPayInAsset($payInAsset)) {
+            throw new \OpenReceive\Server\Errors\InternalHostError("Swap recovery requires a supported pay-in asset/network.");
+        }
         $normalized = trim(is_scalar($value) ? (string) $value : '');
         if ($normalized === '' || strlen($normalized) > 300) {
             throw new ValidationError('refundAddress is invalid.');

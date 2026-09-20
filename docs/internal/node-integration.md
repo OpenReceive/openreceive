@@ -65,15 +65,16 @@ transaction; `query` runs statements (`?` placeholders) in that same transaction
 update or an outbox insert. A duplicate sibling settlement is recorded with
 `status_reason = 'duplicate_settlement'` and never fulfills again.
 
-The advanced form replaces `db` with `payments: PaymentRepository`
-(`listForReference`, `listReconcilableAttempts`, `commitAttempt`, `recordReconciliation`,
-`recordSettlement`, plus `claimReconcileGate` unless the host passes
-`opportunisticReconcile: false`); the host then owns locking and the reconciliation
-transitions, while write-once settlement stays library-owned — `recordSettlement` is the
-claim, and repository-mode `onPaid` (context: `SettlementEvent` — `paymentHash`,
-`paidAt`, `details?`; no `reference` or transactional `query`) fires only when it is won. If
-`commitAttempt` refuses, OpenReceive returns
-`409` and withholds the new payer instructions (infrastructure failure: retryable `503`).
+The advanced form replaces `db` with `PaymentRepository<Transaction>`.
+It implements `listForReference`, `findByPaymentHash`, keyset
+`listReconcilableAttempts`, `commitAttempt`, `recordReconciliation`, and
+`recordSettlementWithFulfillment(input, fulfill)`. The last operation holds the
+reference lock, writes settlement, awaits `fulfill({ reference, paymentHash,
+paidAt, details?, transaction })`, and commits atomically. Failure rolls back
+both writes. Boolean-only legacy claims are rejected before use. Gated scans
+also require `claimReconcileGate` and `checkpointReconcileGate` with durable
+lease/CAS ownership. Raw hook refusal returns 409; a repository storage outage
+returns retryable 503. Both withhold payer instructions.
 
 See [Payment storage](../guides/storage.md), [Node ORM recipes](../guides/node-orms.md), and
 [Authorization](../guides/authorization.md).

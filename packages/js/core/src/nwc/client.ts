@@ -204,7 +204,11 @@ export interface ListTransactionsResult {
 export interface ReceiveNwcClient {
   preflight(): Promise<WalletCapabilitySummary>;
   makeInvoice(request: MakeInvoiceRequest): Promise<MakeInvoiceResult>;
-  listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult>;
+  /** Custom clients must cancel pending transport work when the scan signal aborts. */
+  listTransactions(
+    request: ListTransactionsRequest,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<ListTransactionsResult>;
   close?(): Promise<void> | void;
 }
 

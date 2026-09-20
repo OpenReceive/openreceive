@@ -128,6 +128,7 @@ export async function createCheckout(
     bolt11: walletInvoice.invoice,
     amountMsats: toSafeInteger(walletInvoice.amount_msats, "amount_msats"),
     createdAt,
+    createdAtSource: walletInvoice.created_at === undefined ? "host" : "wallet",
     expiresAt,
     fiatQuote: resolved.fiatQuote,
   };

@@ -80,9 +80,12 @@ test("createNwcEndpointLogger forwards list_transactions polls into the service 
 
   const client = createNwcReceiveClient({
     connectionString: NWC_URI,
-    requirePreflight: false,
     logger,
     client: {
+      getWalletServiceInfo: async () => ({
+        methods: ["get_info", "make_invoice", "list_transactions"],
+        encryption: ["nip04"],
+      }),
       listTransactions: async () => ({
         transactions: [
           {
@@ -133,9 +136,12 @@ test("make_invoice logs msat amounts as strings so huge values stay exact", asyn
   const walletAmountMsats = 9_007_199_254_740_993n;
   const client = createNwcReceiveClient({
     connectionString: NWC_URI,
-    requirePreflight: false,
     logger: (entry) => events.push(entry),
     client: {
+      getWalletServiceInfo: async () => ({
+        methods: ["get_info", "make_invoice", "list_transactions"],
+        encryption: ["nip04"],
+      }),
       makeInvoice: async () => ({
         invoice: "lnbc1",
         payment_hash: PAYMENT_HASH,

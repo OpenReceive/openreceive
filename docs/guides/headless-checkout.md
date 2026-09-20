@@ -198,6 +198,20 @@ Do not draw a Cart → Pay → Done bar. Render
 read the **model's** `phase`. Carry backwards movement with
 `checkoutLabels.switchPaymentMethod`.
 
+Local expiry closes the payment instructions and countdown, not settlement monitoring.
+Hide expired QR codes and deposit instructions. The controller keeps checking a pending
+Lightning payment until the server resolves it, and tracks swap refunds independently:
+a failed or expired wallet payment can still need a provider refund. Provider completion
+never means the order is paid. `terminal` means both workflows are complete or the host
+cancelled; `onSettled` remains a UI hint, not fulfillment authority.
+
+A headless `CheckoutSession` reads `reference()` and `prefix()` as its identity. Call
+`syncIdentity()` when either changes, `reset()` for an explicit new session, and `dispose()`
+on unmount. Clear your order-specific selection and refund draft on identity changes.
+The session aborts supported requests and discards stale results, errors and loading
+updates. Theme changes preserve the current attempt. Shipped framework bindings manage
+this lifecycle for you.
+
 ## The method picker, and what to say about a method you cannot offer
 
 - `buildMethodGridEntries` / `createMethodGridDisplay` — tiles, with

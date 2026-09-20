@@ -2,6 +2,7 @@
 
 require "json"
 require "openreceive/server"
+require "openreceive/reconcile_scan"
 
 module OpenReceive
   # Floor for the durable reconcile-gate interval (seconds); stretched by
@@ -29,8 +30,8 @@ module OpenReceive
     # from a successful wallet scan result observed at or after expiry plus
     # OpenReceive::Server::Reconciliation::EXPIRY_GRACE_SECONDS — a local clock
     # alone never closes a row, because a payment could have settled while the
-    # application was offline. A wallet failure raises and leaves every row
-    # pending for the next pass, and a hash absent from the pass results (a
+    # application was offline. A later wallet failure preserves already committed
+    # finality and leaves unresolved rows pending. A hash absent from pass results (a
     # truncated scan never proved it absent) is no information — the attempt
     # stays untouched.
     #
@@ -41,34 +42,6 @@ module OpenReceive
     # { "payment_hash", "status", "paid_at"?, "details"? } hashes) so callers —
     # notably payments/check — can serve a requested hash straight from the
     # pass instead of adding a second per-invoice wallet walk.
-    def reconcile!(overlap_seconds: 60, now: nil, max_pages: nil, deadline: nil)
-      attempts = OpenReceivePayment.reconcilable_attempts
-      return [] if attempts.empty?
-
-      observed_at = Integer(now || Time.now.to_i)
-      request = {
-        "attempts" => attempts,
-        "overlap_seconds" => overlap_seconds,
-        "until" => observed_at + overlap_seconds
-      }
-      request["max_pages"] = max_pages unless max_pages.nil?
-      request["deadline"] = deadline unless deadline.nil?
-      results = config.service.reconcile_payments(request)
-      log_reconcile_pass(attempts, results, overlap_seconds, observed_at)
-      by_hash = attempts.to_h { |attempt| [attempt.fetch("payment_hash"), attempt] }
-      results.each do |checked|
-        attempt = by_hash[checked.fetch("payment_hash")]
-        next if attempt.nil?
-
-        if checked["status"] == "settled" && checked["paid_at"]
-          settle_attempt(checked)
-        else
-          record_attempt_transition(attempt, checked, observed_at)
-        end
-      end
-      results
-    end
-
     # Opportunistic settlement discovery, piggybacked on any OpenReceive call
     # (the engine's around_action runs it before every mounted route): skip
     # without a wallet call when nothing is pending, try the durable
@@ -87,30 +60,99 @@ module OpenReceive
       setting = config.opportunistic_reconcile
       return { "reason" => "disabled" } if setting == false
 
+      gated_reconcile!(now: now)
+    end
+
+    def reconcile!(overlap_seconds: 60, now: nil)
+      gated_reconcile!(overlap_seconds: overlap_seconds, now: now).fetch("checks", [])
+    end
+
+    def gated_reconcile!(overlap_seconds: 60, now: nil)
       attempts = OpenReceivePayment.reconcilable_attempts
       return { "reason" => "no_pending" } if attempts.empty?
 
       observed_at = Integer(now || Time.now.to_i)
-      interval = reconcile_gate_interval_seconds(attempts, observed_at, setting)
-      unless OpenReceiveMeta.claim_reconcile_gate(now: observed_at, interval_seconds: interval)
-        # Another worker scanned within the interval; this request pays nothing.
-        openreceive_logger&.debug(
-          "[openreceive] opportunistic reconcile: gate_busy " \
-          "(#{attempts.length} pending, interval #{interval}s)"
-        )
-        return { "reason" => "gate_busy" }
+      interval = reconcile_gate_interval_seconds(attempts, observed_at, config.opportunistic_reconcile)
+      claim = OpenReceiveMeta.claim_reconcile_gate(now: observed_at, interval_seconds: interval)
+      return { "reason" => "gate_busy" } if claim.nil?
+
+      scheduler = claim.fetch("scheduler")
+      windows = scheduler.fetch("windows")
+      if windows.length < 2
+        candidates = OpenReceivePayment.reconcilable_attempts(after: scheduler["cursor"])
+        if candidates.empty?
+          scheduler["cursor"] = nil
+          candidates = OpenReceivePayment.reconcilable_attempts
+        end
+        unless candidates.empty?
+          last = candidates.last
+          scheduler["cursor"] = last.slice("created_at", "payment_hash")
+          queued = windows.flat_map { |w| w.fetch("attempts").map { |a| a.fetch("payment_hash") } }
+          cohort = candidates.reject { |a| queued.include?(a.fetch("payment_hash")) }
+          windows << ReconcileScan.new_window(cohort, observed_at, overlap_seconds) unless cohort.empty?
+        end
+      end
+      window = windows.shift
+      windows << window unless window.nil?
+      checkpoint_now = now.nil? ? Time.now.to_i : observed_at
+      return { "reason" => "gate_busy" } unless OpenReceiveMeta.checkpoint_reconcile_gate(claim, scheduler, now: checkpoint_now)
+      if window.nil?
+        OpenReceiveMeta.checkpoint_reconcile_gate(claim, scheduler, now: checkpoint_now, release: true)
+        return { "reason" => "no_pending" }
       end
 
-      checks = reconcile!(
-        now: observed_at,
+      by_hash = window.fetch("attempts").to_h { |a| [a.fetch("payment_hash"), a] }
+      delivered = {}
+      before_scan = JSON.parse(JSON.generate(scheduler))
+      deliver_finality = lambda do |checked|
+        hash = checked.fetch("payment_hash")
+        current = now.nil? ? Time.now.to_i : observed_at
+        unless OpenReceiveMeta.checkpoint_reconcile_gate(claim, before_scan, now: current)
+          delivered[hash] = false
+          next
+        end
+        if checked["status"] == "settled" && checked["paid_at"]
+          delivered[hash] = settle_attempt(checked)
+        else
+          record_attempt_transition(by_hash.fetch(hash), checked, observed_at)
+          delivered[hash] = true
+        end
+      end
+      checks, complete, stalled = ReconcileScan.slice(config.service, window,
         max_pages: RECONCILE_SCAN_MAX_PAGES,
-        deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) + RECONCILE_SCAN_TIMEOUT_SECONDS
-      )
-      { "reason" => "ran", "checks" => checks }
+        deadline: Process.clock_gettime(Process::CLOCK_MONOTONIC) + RECONCILE_SCAN_TIMEOUT_SECONDS, on_finality: deliver_finality)
+      lease_owned = OpenReceiveMeta.checkpoint_reconcile_gate(claim, before_scan, now: now.nil? ? Time.now.to_i : observed_at)
+      committed = checks.filter_map do |checked|
+        if delivered.key?(checked.fetch("payment_hash"))
+          next unless delivered.fetch(checked.fetch("payment_hash"))
+        elsif checked["status"] == "settled" && checked["paid_at"]
+          next
+        else
+          next unless lease_owned
+
+          record_attempt_transition(by_hash.fetch(checked.fetch("payment_hash")), checked,
+            checked.fetch("_coverage_started_at", observed_at))
+        end
+        checked.reject { |key, _| key.start_with?("_") }
+      end
+      windows.delete(window)
+      unless complete || stalled
+        times = window.fetch("attempts").map { |a| a.fetch("created_at") }.uniq.sort
+        if windows.empty? && times.length > 1 && window.fetch("attempts").all? { |a| a["created_at_source"] == "wallet" }
+          middle = times[times.length / 2]
+          window.fetch("attempts").partition { |a| a.fetch("created_at") < middle }.each do |half|
+            windows << ReconcileScan.new_window(half, observed_at, overlap_seconds)
+          end
+        else
+          windows << window
+        end
+      end
+      checkpoint_now = now.nil? ? Time.now.to_i : observed_at
+      OpenReceiveMeta.checkpoint_reconcile_gate(claim, scheduler, now: checkpoint_now, release: true)
+      log_reconcile_pass(window.fetch("attempts"), committed, window)
+      { "reason" => "ran", "checks" => committed }
     rescue StandardError => e
-      openreceive_logger&.warn(
-        "[openreceive] opportunistic reconcile failed (will retry): #{sanitize_failure_message(e)}"
-      )
+      openreceive_logger&.warn("[openreceive] reconciliation failed (will retry): #{sanitize_failure_message(e)}")
       { "reason" => "scan_failed" }
     end
 
@@ -172,12 +214,11 @@ module OpenReceive
     # `openreceive:notifications` worker — the process most likely to see a
     # connect error — logs failures of its own.
     def sanitize_failure_message(error)
-      "#{error.class}: #{error.message}"
-        .gsub(/nostr\+walletconnect:[^\s"'`<>]+/, "[REDACTED_NWC]")
-        .gsub(/lightning\+swapconnect:[^\s"'`<>]+/, "[REDACTED_LSC]")
+      OpenReceive::Nwc.redact_error_text("#{error.class}: #{error.message}")
     end
 
     private
+
 
     # Rails.logger when the engine runs inside Rails; nil in bare-gem tests.
     # Settlement behavior never depends on logging.
@@ -196,11 +237,13 @@ module OpenReceive
         "paid_at" => checked.fetch("paid_at"),
         "details" => checked["details"]
       )
+      OpenReceivePayment.where(payment_hash: checked.fetch("payment_hash"), status: "settled").exists?
     rescue StandardError => e
       openreceive_logger&.warn(
         "[openreceive] settlement for #{checked.fetch('payment_hash')} failed " \
         "(will retry next pass): #{sanitize_failure_message(e)}"
       )
+      false
     end
 
     # Closure is decided by the shared reconciliation rules from a scan result
@@ -233,7 +276,7 @@ module OpenReceive
     # never one wallet call per invoice. One short line per poll: this fires
     # on every status poll while a payer waits. Mirrors the JS
     # payment.reconcile.completed line.
-    def log_reconcile_pass(attempts, results, overlap_seconds, observed_at)
+    def log_reconcile_pass(attempts, results, window)
       logger = openreceive_logger
       return if logger.nil?
 
@@ -245,10 +288,9 @@ module OpenReceive
       decided = ["0 decided"] if decided.empty?
       # Attempts scanned vs hashes decided: a gap is how a truncated scan shows up.
       scanned = results.length == attempts.length ? "" : " of #{attempts.length} attempts"
-      window_from = [attempts.map { |attempt| Integer(attempt.fetch("created_at")) }.min - overlap_seconds, 0].max
       logger.info(
         "[openreceive] payment.reconcile.completed: #{decided.join(', ')}#{scanned} " \
-        "attempt_count=#{attempts.length} window=#{window_from}..#{observed_at + overlap_seconds}"
+        "attempt_count=#{attempts.length} window=#{window.fetch("from")}..#{window["until"] || "unbounded"}"
       )
     rescue StandardError
       # Diagnostics must never affect the pass.
@@ -303,7 +345,7 @@ module OpenReceive
       payment_hash = transaction["payment_hash"].to_s.downcase
       return false if payment_hash.empty?
 
-      return false unless OpenReceivePayment.pending.where(payment_hash: payment_hash).exists?
+      return false if OpenReceivePayment.find_pending_attempt(payment_hash).nil?
 
       observed_at = Time.now.to_i
       config.settlement_hook.call(
@@ -315,7 +357,7 @@ module OpenReceive
           "paid_at_source" => transaction["settled_at"] ? "settled_at" : "observed_at"
         }
       )
-      true
+      OpenReceivePayment.where(payment_hash: payment_hash, status: "settled").exists?
     rescue StandardError
       # A direct-settlement failure falls back to the scan-based safety net.
       false

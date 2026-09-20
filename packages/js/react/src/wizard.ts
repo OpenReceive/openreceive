@@ -54,6 +54,13 @@ import type { PaymentWizardProps, SwapOptionDisplay, SwapOptionsResult } from ".
 import { joinClassNames } from "./utils.ts";
 
 export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
+  return React.createElement(PaymentWizardSession, {
+    ...props,
+    key: JSON.stringify([props.checkout?.reference, props.prefix?.replace(/\/+$/, "")]),
+  });
+}
+
+function PaymentWizardSession(props: PaymentWizardProps): React.ReactElement {
   const [selection, setSelection] = React.useState<PaymentWizardSelection>(() =>
     createPaymentWizardController().getSelection(),
   );
@@ -88,6 +95,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const session = useCheckoutSession({
     snapshot: () => checkout,
     reference: () => reference,
+    prefix: () => props.prefix,
     swap: {
       selection: {
         started: () => startedSwapInvoice ?? undefined,
@@ -165,6 +173,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       if (prefix === undefined || reference === undefined || fetcher === undefined) {
         return;
       }
+      const action = session.capture();
       try {
         // With a controller in hand (the `<Checkout>` path) the staging lives in
         // the engine, so every later poll keeps the address the payer is
@@ -189,10 +198,11 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                 confirm,
                 ...(props.logger === undefined ? {} : { logger: props.logger }),
               });
+        if (!action.isCurrent()) return;
         setStartedSwapInvoice(invoice);
         setDismissedSwapInvoiceId(null);
       } catch (error) {
-        props.onError?.(error);
+        if (action.isCurrent()) props.onError?.(error);
       }
     },
     [
@@ -205,6 +215,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       swapRefund,
       startedSwapInvoice,
       checkout?.invoices,
+      session,
     ],
   );
   const updateWizardSelection = React.useCallback(

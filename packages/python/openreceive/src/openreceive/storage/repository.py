@@ -106,13 +106,15 @@ class PaymentInsert:
 class ReconcilableAttempt:
     payment_hash: str
     created_at: int
-    expires_at: int
+    expires_at: int  # Actual wallet deadline from the saved checkout, never deposit expiry.
+    created_at_source: str = "host"
 
     def as_dict(self) -> dict[str, int | str]:
         return {
             "payment_hash": self.payment_hash,
             "created_at": self.created_at,
             "expires_at": self.expires_at,
+            "created_at_source": self.created_at_source,
         }
 
 
@@ -152,8 +154,13 @@ class PaymentRepository(Protocol):
     def list_for_reference(self, reference: str) -> list[PaymentRecord]:
         """Every attempt for one reference, newest first (created_at desc, payment_hash desc)."""
 
-    def list_reconcilable_attempts(self) -> list[ReconcilableAttempt]:
+    def list_reconcilable_attempts(
+        self, *, after: dict[str, Any] | None = None, limit: int = RECONCILE_BATCH_SIZE
+    ) -> list[ReconcilableAttempt]:
         """The oldest `pending` attempts, at most RECONCILE_BATCH_SIZE."""
+
+    def find_by_payment_hash(self, payment_hash: str) -> PaymentRecord | None:
+        """The durable attempt including terminal status, or None if unknown."""
 
     def find_pending_attempt(self, payment_hash: str) -> ReconcilableAttempt | None:
         """The pending attempt for one hash, or None when unknown or terminal."""
@@ -168,17 +175,30 @@ class PaymentRepository(Protocol):
         """Apply a terminal transition only while the row is still pending."""
 
     def record_settlement(
-        self, settlement: SettlementRecord, fulfill: FulfillHook | None = None
+        self,
+        settlement: SettlementRecord,
+        fulfill: FulfillHook | None = None,
+        *,
+        after_commit: FulfillHook | None = None,
     ) -> bool:
         """Write-once settlement: True only for the call that won the reference's
         first-settlement claim (and ran `fulfill` inside the transaction). A
-        later sibling settlement is recorded with reason duplicate_settlement."""
+        later sibling settlement is recorded with reason duplicate_settlement.
+        Register after_commit only for the winning settlement, after the real
+        outer commit; discard on rollback. Its context has no live connection."""
 
     def count_attempts_from_ip(self, client_ip: str, since_unix_seconds: int) -> int:
         """Attempts stamped for this IP at or after `since` — on inserted_at."""
 
-    def claim_reconcile_gate(self, *, now: int, interval_seconds: int) -> bool:
-        """Durable CAS gate shared by every worker on the host database."""
+    def claim_reconcile_gate(
+        self, *, now: int, interval_seconds: int, lease_seconds: int = 10
+    ) -> dict[str, Any] | None:
+        """Durable CAS claim; explicit lease token and scheduler or None when busy."""
+
+    def checkpoint_reconcile_gate(
+        self, claim: dict[str, Any], scheduler: dict[str, Any], *, now: int, release: bool = False
+    ) -> bool:
+        """Ownership/lease/revision guarded progress write; stale passes cannot publish."""
 
 
 # ---------------------------------------------------------------- decisions
@@ -233,6 +253,24 @@ def attempt_expires_at(checkout: dict[str, Any], swap_data: dict[str, Any] | Non
         provider_expiry = swap_data["provider_order"].get("expires_at")
     value = provider_expiry if provider_expiry is not None else checkout.get("expires_at")
     return to_int(value)
+
+
+def settlement_expires_at(checkout: dict[str, Any], payment_hash: str) -> int:
+    """The persisted Lightning lifetime; deposit deadlines are payer instructions only."""
+    value = checkout.get("expires_at", checkout.get("expiresAt"))
+    try:
+        if isinstance(value, bool) or not (
+            isinstance(value, int) or (isinstance(value, str) and value.isdecimal())
+        ):
+            raise ValueError
+        expiry = int(value)
+        if expiry <= 0:
+            raise ValueError
+        return expiry
+    except (TypeError, ValueError, OverflowError):
+        raise SchemaError(
+            f"Corrupt checkout_data wallet expiry on openreceive payment attempt {payment_hash}."
+        ) from None
 
 
 def attempt_created_at(checkout: dict[str, Any]) -> int:

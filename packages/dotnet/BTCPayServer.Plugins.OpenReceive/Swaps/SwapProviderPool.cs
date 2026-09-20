@@ -1,4 +1,5 @@
 #nullable enable
+using BTCPayServer.Plugins.OpenReceive.Nwc;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

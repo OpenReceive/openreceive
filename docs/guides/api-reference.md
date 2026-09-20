@@ -594,7 +594,7 @@ In db mode `onPaid` receives a `PaymentSettlement` (callback argument, not a ret
 
 | Name | Type | Meaning |
 | --- | --- | --- |
-| `reference` | `string` | The reference that just settled — the string you passed when the checkout was created. It is the fulfillment identity: one per order, never reused, because this hook runs once per reference. |
+| `reference` | `string` | The reference that just settled — the string you passed when the checkout was created. It is the fulfillment identity: one per order, never reused, because this hook commits fulfillment once per reference. |
 | `paymentHash` | `string` | 64-character lowercase hex hash of the settled attempt. |
 | `paidAt` | `number` | Integer Unix seconds of settlement (`settled_at`, else the observation time). |
 | `details` | `PaymentDetails?` | Wallet row that proved settlement. See [PaymentDetails](#paymentdetails). |
@@ -643,7 +643,7 @@ Advanced escape hatch — replace `db` with a full repository implementation:
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `payments` | `PaymentRepository` | yes | Your repository's commit locking, settlement write-once, and reconciliation transitions. |
-| `onPaid` | `SettlementEventHook` | yes | The settlement hook is `onPaid` in this mode too, but its context differs: it receives the raw `SettlementEvent` (`paymentHash`, `paidAt`, `details?`) — no `reference` and no transactional `query`, because the custom repository owns that mapping. Delivered only when `payments.recordSettlement` won the write-once claim, so the library owns replay safety here too. |
+| `onPaid` | `SettlementEventHook<Transaction>` | yes | Receives `reference`, `paymentHash`, `paidAt`, `details?`, and the repository's typed `transaction`. `recordSettlementWithFulfillment` awaits it inside the settlement transaction; failures roll back both writes. |
 
 **Returns** `Host` for the framework adapters and reconcile passes. The
 attempt row commits before payer instructions are exposed. A commit the
@@ -754,7 +754,7 @@ reconcile gate
 ([maybeReconcilePayments](#maybereconcilepayments)), so
 N reconciler instances — and the request-path opportunistic reconcile —
 collapse to one real wallet scan per gate interval; construction throws unless
-the repository implements `claimReconcileGate`. A
+the repository implements `claimReconcileGate` and `checkpointReconcileGate`. A
 failed pass is reported and retried from the ledger, so delivery is
 at-least-once. Only `pending` attempts are scanned — settled and closed rows
 leave the scan set, keeping the window bounded with no durable cursor.
@@ -973,7 +973,7 @@ down with the app:
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `wallet` | `{ nwc }` \| `{ service }` | yes | The wallet: a receive-only NWC connection string (the adapter builds and owns the client) or a prebuilt `OpenReceive` / `Promise<OpenReceive>` (you own its lifecycle). |
-| `storage` | `{ db, onPaid, tableName? }` \| `{ payments, onPaid }` | yes | Where attempts live, which decides what `onPaid` receives: the host database handle [createHost](#createhost) takes, with the per-reference `PaymentSettlement`; or a custom `PaymentRepository` (see [Storage: the escape hatch](storage.md#escape-hatch)), with the raw `SettlementEvent`. |
+| `storage` | `{ db, onPaid, tableName? }` \| `{ payments, onPaid }` | yes | Where attempts live, which decides what `onPaid` receives: the host database handle [createHost](#createhost) takes, with the per-reference `PaymentSettlement`; or a custom `PaymentRepository` (see [Storage: the escape hatch](storage.md#escape-hatch)), with `SettlementEvent<Transaction>` and its transaction handle. |
 | `amountFor` | | yes | Same hook as [createHost](#createhost). |
 | `authorize` | `Authorize` | yes | Your policy; see [the authorize context](#the-authorize-context). |
 | `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | Request-path settlement pass on every mounted payment route (`GET …/rates` never triggers it); on by default through the durable `openreceive_meta` gate. `false` disables; `{ minIntervalSeconds }` tunes. |
@@ -992,7 +992,7 @@ custom repositories, and tests:
 | `service` | `OpenReceive` | yes | From [createOpenReceive](#createopenreceive). |
 | `authorize` | `Authorize` | yes | Your policy; see [the authorize context](#the-authorize-context). |
 | `host` | `Host` | yes | From [createHost](#createhost). |
-| `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | As above. With a custom repository, on-by-default requires `payments.claimReconcileGate` — construction throws otherwise (same fail-at-construction idiom as `rateLimiting`). |
+| `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | As above. With a custom repository, on-by-default requires `payments.claimReconcileGate` and `payments.checkpointReconcileGate` — construction throws otherwise (same fail-at-construction idiom as `rateLimiting`). |
 | `rateLimitHook` | `RateLimit` | no | Same context shape as `authorize`; `false` → `429`. |
 | `rateLimiting` | `boolean \| IpRateLimitConfig` | no | Opt-in per-IP invoice cap (default off; `true` = 60/hour). Mutually exclusive with `rateLimitHook`. See [Rate limiting](rate-limiting.md). |
 | `prefix` | `string` | no | Mount prefix. Default `/openreceive`. |
@@ -1240,16 +1240,20 @@ order's first settled attempt and never overwrites a settled row.
 | Name | Type | Meaning |
 | --- | --- | --- |
 | `listForReference` | `(reference) => Promise<PaymentRecord[]>` | Every attempt row for that order, newest first. Includes settled and closed history. |
-| `listReconcilableAttempts` | `() => Promise<ReconcilableAttempt[]>` | Every `pending` attempt. Terminal rows are omitted so the scan set stays bounded. |
+| `listReconcilableAttempts` | `(after?) => Promise<ReconcilableAttempt[]>` | Up to 200 pending rows after a `(created_at, payment_hash)` keyset. `expiresAt` is the saved wallet deadline; unknown creation-time provenance uses wider discovery. |
 | `commitAttempt` | `(input) => void \| Promise<void>` | Serialize-and-insert one new attempt. Throws on a settled order or a reusable live attempt on the same rail. |
 | `recordReconciliation` | `(transition) => void \| Promise<void>` | Apply a terminal non-settled transition only while the row is still `pending`. Never overwrites a settled row. |
-| `recordSettlement` | `(settlement) => boolean \| Promise<boolean>` | The write-once settlement claim: record the attempt settled and return whether THIS call won the claim. Repository-mode `onPaid` runs only when it returns `true`, so a redelivered event fulfills exactly once. Required. |
+| `recordSettlementWithFulfillment` | `(settlement, fulfill) => boolean \| Promise<boolean>` | Required atomic reference lock, pending-row settlement, awaited host callback, and commit. Return whether the first-reference claim won; roll back on failure. Boolean-only legacy repositories are rejected. |
+| `findByPaymentHash` | `(hash) => Promise<PaymentRecord \| undefined>` | Required durable acknowledgment: a wallet success is served only after its row is settled. |
 | `countAttemptsFromIp` | `(clientIp, sinceUnixSeconds) => number \| Promise<number>` | Attempt rows for this IP at or after that time. Backs opt-in `rateLimiting`. |
-| `claimReconcileGate` | `({ now, intervalSeconds }) => boolean \| Promise<boolean>` | Atomically claim the durable `openreceive_meta` scan gate (optimistic CAS shared by every process on the database). `true` = run a wallet scan now; `false` = another worker scanned within the interval. |
+| `claimReconcileGate` | `({ now, intervalSeconds, leaseSeconds? }) => ReconcileGateClaim \| null` | Durable CAS claim containing token and scheduler state, or `null` when busy. Async implementations return a Promise. |
+| `checkpointReconcileGate` | `({ claim, scheduler, now, release?, intervalSeconds? }) => boolean \| Promise<boolean>` | Persist bounded keyset/scan progress only while the token still owns its unexpired lease. |
+| `listRepairCandidates` | `({ after?, limit? }?)` | SQL repository: bounded dry-run report of attention and narrowly identified early swap closures, without credentials. |
+| `requeueAttempt` | `({ paymentHash, expectedStatus, expectedUpdatedAt, reason })` | SQL repository: explicitly reviewed requeue under the reference lock; preserve repair audit, never alter a settled row. |
 | `markPaidOnce` | `(input, fulfill) => Promise<boolean>` | Write-once settlement: set `paid_at` / `settled` once and run `fulfill` only for the first settled attempt for a reference. **Resolves `true` only for the call that won that first-settlement claim** — later calls (a redelivered notification, a sibling attempt) record the settlement, skip `fulfill`, and resolve `false`. A direct caller drives its own idempotency off that boolean. |
 
-`claimReconcileGate` is part of the custom-repository contract too: a custom
-`PaymentRepository` must implement it (as a durable CAS — never an
+`claimReconcileGate` and `checkpointReconcileGate` are part of the custom-repository contract too: a custom
+`PaymentRepository` must implement both (as durable CAS operations — never an
 in-process cooldown, since memory cannot coordinate workers) unless you
 pass `opportunisticReconcile: false`; handler construction throws otherwise.
 
@@ -2138,7 +2142,7 @@ per-reference commit lock per dialect, write-once settlement, the
 reconciliation transitions and the `openreceive_meta` CAS gate; it never
 selects `swap_data` into a public array. Implementing `PaymentRepository`
 yourself is the escape hatch, and then `opportunisticReconcile: false` unless
-you also implement `claimReconcileGate`.
+you also implement `claimReconcileGate` and `checkpointReconcileGate`.
 
 ### OpenReceive\Server\Doctor
 

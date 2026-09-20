@@ -26,7 +26,6 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -34,8 +33,10 @@ from typing import Any
 
 from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS, IntegrityError, connections, transaction
+from django.db.models import Q
 
 from openreceive.django.models import OpenReceiveMeta, OpenReceivePayment
+from openreceive.storage.reconcile_state import checkpoint_state, claim_state, parse_gate
 from openreceive.storage.repository import (
     ADVISORY_LOCK_SEED,
     ATTEMPT_STATUSES,
@@ -53,14 +54,15 @@ from openreceive.storage.repository import (
     ReconciliationTransition,
     SchemaError,
     SettlementRecord,
-    is_fresh_timestamp,
     is_live,
     live_attempt_commit_decision,
     normalize_payment_hash,
+    settlement_expires_at,
 )
 
 MYSQL_LOCK_TIMEOUT_SECONDS = 10
 RECONCILE_GATE_CAS_RETRIES = 6
+
 STORAGE_GUIDE_URL = "https://openreceive.org/guides/storage.md"
 
 
@@ -83,6 +85,8 @@ def to_unix(value: object) -> int:
 
 
 class DjangoPaymentRepository:
+    supports_after_commit = True
+
     """`using` names the DATABASES alias the two tables live in (the
     `OPENRECEIVE["DATABASE"]` setting, default "default")."""
 
@@ -110,14 +114,22 @@ class DjangoPaymentRepository:
         self.assert_supported_schema()
         return self._rows_for_reference(reference)
 
-    def list_reconcilable_attempts(self) -> list[ReconcilableAttempt]:
+    def list_reconcilable_attempts(
+        self, *, after: dict[str, Any] | None = None, limit: int = RECONCILE_BATCH_SIZE
+    ) -> list[ReconcilableAttempt]:
         self.assert_supported_schema()
-        rows = (
-            self._payments()
-            .filter(status="pending")
-            .order_by("created_at", "payment_hash")
-            .values_list("payment_hash", "created_at", "expires_at")[:RECONCILE_BATCH_SIZE]
-        )
+        query = self._payments().filter(status="pending")
+        if after is not None:
+            query = query.filter(
+                Q(created_at__gt=to_datetime(after["created_at"]))
+                | Q(
+                    created_at=to_datetime(after["created_at"]),
+                    payment_hash__gt=after["payment_hash"],
+                )
+            )
+        rows = query.order_by("created_at", "payment_hash").values_list(
+            "payment_hash", "created_at", "checkout_data"
+        )[: min(limit, RECONCILE_BATCH_SIZE)]
         return [self._reconcilable(row) for row in rows]
 
     def find_pending_attempt(self, payment_hash: str) -> ReconcilableAttempt | None:
@@ -125,7 +137,7 @@ class DjangoPaymentRepository:
         row = (
             self._payments()
             .filter(payment_hash=payment_hash.lower(), status="pending")
-            .values_list("payment_hash", "created_at", "expires_at")
+            .values_list("payment_hash", "created_at", "checkout_data")
             .first()
         )
         return None if row is None else self._reconcilable(row)
@@ -136,6 +148,7 @@ class DjangoPaymentRepository:
         return None if model is None else self._record(model)
 
     def count_attempts_from_ip(self, client_ip: str, since_unix_seconds: int) -> int:
+        self.assert_supported_schema()
         count: int = (
             self._payments()
             .filter(client_ip=client_ip, inserted_at__gte=to_datetime(since_unix_seconds))
@@ -195,18 +208,24 @@ class DjangoPaymentRepository:
         self.assert_supported_schema()
         if transition.status not in ("expired", "failed", "attention"):
             raise ValueError(f"invalid reconciliation status: {transition.status}")
-        # Guarding on status = 'pending' makes the transition idempotent and
-        # guarantees a settled attempt is never overwritten.
-        self._payments().filter(
-            payment_hash=transition.payment_hash.lower(), status="pending"
-        ).update(
-            status=transition.status,
-            status_reason=transition.reason,
-            updated_at=to_datetime(transition.observed_at),
-        )
+        record = self.find_by_payment_hash(transition.payment_hash.lower())
+        if record is None:
+            return
+        with self._reference_transaction(record.reference):
+            self._payments().filter(
+                payment_hash=transition.payment_hash.lower(), status="pending"
+            ).update(
+                status=transition.status,
+                status_reason=transition.reason,
+                updated_at=to_datetime(transition.observed_at),
+            )
 
     def record_settlement(
-        self, settlement: SettlementRecord, fulfill: FulfillHook | None = None
+        self,
+        settlement: SettlementRecord,
+        fulfill: FulfillHook | None = None,
+        *,
+        after_commit: FulfillHook | None = None,
     ) -> bool:
         self.assert_supported_schema()
         payment_hash = settlement.payment_hash.lower()
@@ -218,7 +237,7 @@ class DjangoPaymentRepository:
             row = next(
                 (candidate for candidate in rows if candidate.payment_hash == payment_hash), None
             )
-            if row is None or row.status == "settled":
+            if row is None or row.status != "pending":
                 return False
             first_for_reference = not any(candidate.status == "settled" for candidate in rows)
             self._payments().filter(payment_hash=payment_hash).update(
@@ -240,32 +259,35 @@ class DjangoPaymentRepository:
                         connection=None,
                     )
                 )
+            if first_for_reference and after_commit is not None:
+                context = PaymentSettlement(
+                    row.reference, payment_hash, int(settlement.paid_at), settlement.details
+                )
+                transaction.on_commit(lambda: after_commit(context), using=self.using)
             return first_for_reference
 
-    def claim_reconcile_gate(self, *, now: int, interval_seconds: int) -> bool:
-        """Optimistic CAS over the shared meta row: INSERT-if-absent at rev 0 or
-        UPDATE … WHERE rev = expected. The winner is identified by reading back
-        its own token — the portable equivalent of an affected-row count. A
-        failed scan leaves claimed_at in place so a broken wallet cannot stampede."""
+    def claim_reconcile_gate(
+        self, *, now: int, interval_seconds: int, lease_seconds: int = 10
+    ) -> dict[str, Any] | None:
         self.assert_supported_schema()
-        claim = json.dumps({"claimed_at": int(now), "token": str(uuid.uuid4())})
         for _ in range(RECONCILE_GATE_CAS_RETRIES):
             with transaction.atomic(using=self.using):
-                current = self._meta().filter(key=RECONCILE_GATE_KEY).first()
-                if current is None:
+                row = self._meta().filter(key=RECONCILE_GATE_KEY).first()
+                gate = claim_state(
+                    parse_gate(row.value if row else None), now, interval_seconds, lease_seconds
+                )
+                if gate is None:
+                    return None
+                encoded = json.dumps(gate)
+                if row is None:
                     try:
                         with transaction.atomic(using=self.using):
-                            self._meta().create(key=RECONCILE_GATE_KEY, value=claim, rev=0)
+                            self._meta().create(key=RECONCILE_GATE_KEY, value=encoded, rev=0)
                     except IntegrityError:
-                        pass
+                        continue
                 else:
-                    claimed_at = _parse_claimed_at(current.value)
-                    if claimed_at is not None and is_fresh_timestamp(
-                        int(now), claimed_at, int(interval_seconds)
-                    ):
-                        return False
-                    self._meta().filter(key=RECONCILE_GATE_KEY, rev=current.rev).update(
-                        value=claim, rev=int(current.rev) + 1
+                    self._meta().filter(key=RECONCILE_GATE_KEY, rev=row.rev).update(
+                        value=encoded, rev=row.rev + 1
                     )
                 readback = (
                     self._meta()
@@ -273,9 +295,93 @@ class DjangoPaymentRepository:
                     .values_list("value", flat=True)
                     .first()
                 )
-            if readback == claim:
-                return True
-        return False
+            if readback == encoded:
+                return {"token": gate["token"], "scheduler": gate["scheduler"]}
+        return None
+
+    def checkpoint_reconcile_gate(
+        self, claim: dict[str, Any], scheduler: dict[str, Any], *, now: int, release: bool = False
+    ) -> bool:
+        self.assert_supported_schema()
+        with transaction.atomic(using=self.using):
+            row = self._meta().filter(key=RECONCILE_GATE_KEY).first()
+            if row is None:
+                return False
+            gate = checkpoint_state(parse_gate(row.value), claim, scheduler, now, release)
+            if gate is None:
+                return False
+            return bool(
+                self._meta()
+                .filter(key=RECONCILE_GATE_KEY, rev=row.rev)
+                .update(value=json.dumps(gate), rev=row.rev + 1)
+                == 1
+            )
+
+    def maintenance_candidates(
+        self, *, after: dict[str, Any] | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        """Bounded dry-run report; paginate with next_cursor until it is None."""
+        from openreceive.storage.maintenance import repair_candidate
+
+        self.assert_supported_schema()
+        limit = min(max(limit, 1), 1000)
+        query = self._payments().filter(status__in=["attention", "expired"])
+        if after is not None:
+            query = query.filter(
+                Q(updated_at__gt=to_datetime(after["updated_at"]))
+                | Q(
+                    updated_at=to_datetime(after["updated_at"]),
+                    payment_hash__gt=after["payment_hash"],
+                )
+            )
+        rows = list(query.order_by("updated_at", "payment_hash")[:limit])
+        candidates = [repair_candidate(self._record(row), to_unix(row.updated_at)) for row in rows]
+        cursor = (
+            {"updated_at": to_unix(rows[-1].updated_at), "payment_hash": str(rows[-1].payment_hash)}
+            if len(rows) == limit
+            else None
+        )
+        return {
+            "candidates": [candidate for candidate in candidates if candidate is not None],
+            "next_cursor": cursor,
+            "scanned": len(rows),
+        }
+
+    def requeue_reviewed_attempt(self, candidate: dict[str, Any], *, decision_id: str) -> bool:
+        from openreceive.storage.maintenance import repair_candidate, repair_decision
+
+        self.assert_supported_schema()
+        decision = repair_decision(decision_id)
+        payment_hash = normalize_payment_hash(candidate["payment_hash"])
+        record = self.find_by_payment_hash(payment_hash)
+        if record is None:
+            return False
+        with self._reference_transaction(record.reference):
+            row = self._payments().filter(payment_hash=payment_hash).select_for_update().first()
+            if (
+                row is None
+                or row.status != candidate["status"]
+                or to_unix(row.updated_at) != candidate["updated_at"]
+            ):
+                return False
+            current = repair_candidate(self._record(row), to_unix(row.updated_at))
+            if current != candidate:
+                return False
+            audit_key = "repair:" + payment_hash + ":" + decision
+            if self._meta().filter(key=audit_key).exists():
+                return False
+            now = self._clock()
+            self._meta().create(
+                key=audit_key,
+                value=json.dumps({**current, "decision_id": decision, "requeued_at": now}),
+                rev=0,
+            )
+            self._payments().filter(
+                payment_hash=payment_hash, status=row.status, updated_at=row.updated_at
+            ).update(
+                status="pending", status_reason="operator_requeued", updated_at=to_datetime(now)
+            )
+        return True
 
     # ------------------------------------------------------------ schema
 
@@ -313,6 +419,11 @@ class DjangoPaymentRepository:
     def _reference_transaction(self, reference: str) -> Iterator[None]:
         connection = connections[self.using]
         if connection.vendor == "mysql":
+            if connection.in_atomic_block or not connection.get_autocommit():
+                raise RuntimeError(
+                    "OpenReceive MySQL reference operations require an outermost transaction; "
+                    "ambient atomic blocks cannot retain the connection-scoped reference lock."
+                )
             name = "openreceive:" + hashlib.sha256(reference.encode("utf-8")).hexdigest()[:40]
             with connection.cursor() as cursor:
                 cursor.execute("SELECT GET_LOCK(%s, %s)", [name, MYSQL_LOCK_TIMEOUT_SECONDS])
@@ -366,11 +477,16 @@ class DjangoPaymentRepository:
 
     @staticmethod
     def _reconcilable(row: tuple[Any, Any, Any]) -> ReconcilableAttempt:
-        payment_hash, created_at, expires_at = row
+        payment_hash, created_at, checkout_data = row
         return ReconcilableAttempt(
             payment_hash=str(payment_hash),
             created_at=to_unix(created_at),
-            expires_at=to_unix(expires_at),
+            created_at_source=_json_column(checkout_data, "checkout_data", str(payment_hash)).get(
+                "created_at_source", "host"
+            ),
+            expires_at=settlement_expires_at(
+                _json_column(checkout_data, "checkout_data", str(payment_hash)), str(payment_hash)
+            ),
         )
 
 
@@ -388,17 +504,4 @@ def _json_column(value: object, column: str, payment_hash: str) -> dict[str, Any
             return parsed
     raise ValueError(
         f"Corrupt {column} JSON on openreceive payment attempt {payment_hash}; the row cannot be read."
-    )
-
-
-def _parse_claimed_at(value: object) -> int | None:
-    try:
-        parsed = json.loads(str(value))
-    except ValueError:
-        return None
-    claimed_at = parsed.get("claimed_at") if isinstance(parsed, dict) else None
-    return (
-        int(claimed_at)
-        if isinstance(claimed_at, (int, float)) and not isinstance(claimed_at, bool)
-        else None
     )

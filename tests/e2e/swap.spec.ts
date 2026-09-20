@@ -1,10 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
   addButtonToCart,
   expectPaidReceipt,
   expectWizardCurrencies,
-  mintAttempt,
   type MintedAttempt,
+  mintAttempt,
   openShop,
   selectFrameworkTab,
   settleTestkitInvoice,
@@ -53,9 +53,8 @@ async function startUsdtTronSwap(page: Page): Promise<MintedAttempt> {
   return attempt;
 }
 
-test("USDT on Tron: deposit renders, provider advances to done, settle pays the order", async ({
-  page,
-}) => {
+test("USDT on Tron: deposit expiry keeps monitoring until wallet settlement", async ({ page }) => {
+  await page.clock.install();
   const attempt = await startUsdtTronSwap(page);
   const selector = { provider_order_id: attempt.providerOrderId as string };
 
@@ -71,6 +70,10 @@ test("USDT on Tron: deposit renders, provider advances to done, settle pays the 
   // learns each step from its own status polling.
   await stepTestkitSwap(page, selector, "confirming");
   await expect(page.getByText("Confirming payment")).toBeVisible();
+  // The browser instruction clock closes at ten minutes. The server wallet
+  // remains authoritative; its testkit payout below is made before invoice expiry.
+  await page.clock.setSystemTime(new Date(Date.now() + 26 * 60 * 1000));
+  await expect(page.getByRole("textbox", { name: "Address", exact: true })).toHaveCount(0);
   await stepTestkitSwap(page, selector, "completed");
   await expect(page.getByText("Finalizing checkout")).toBeVisible();
 
@@ -82,10 +85,14 @@ test("USDT on Tron: deposit renders, provider advances to done, settle pays the 
 test("USDT on Tron refund path: refund_required → validated address → confirmed refund", async ({
   page,
 }) => {
+  await page.clock.install();
   const attempt = await startUsdtTronSwap(page);
   const selector = { provider_order_id: attempt.providerOrderId as string };
   await expect(page.getByText(USDT_DEPOSIT_INSTRUCTION)).toBeVisible();
 
+  await page.clock.setSystemTime(new Date(Date.now() + 16 * 60 * 1000));
+  await expect(page.getByText("Payment window closed")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Address", exact: true })).toHaveCount(0);
   await stepTestkitSwap(page, selector, "refund_required");
   await expect(page.getByText("Refund needed")).toBeVisible();
 

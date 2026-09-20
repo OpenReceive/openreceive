@@ -105,8 +105,8 @@ public sealed class UIOpenReceiveController : Controller
             connection is null ? Url.Action(nameof(Setup), new { storeId = store.Id }) : null));
         if (connection is not null)
         {
-            var client = _settings.CreateClient(store);
-            var report = client is null ? null : await client.PreflightAsync(cancellationToken);
+            var (client, endpointError) = await _settings.CreateAuthorizedClientAsync(connection.NwcUri, connection.AllowSpendCapableWallet, User);
+            var report = client is null ? WalletPreflightReport.Failed("endpoint_not_allowed", endpointError ?? "Wallet unavailable.", DateTimeOffset.UtcNow) : await client.PreflightAsync(cancellationToken);
             vm.Preflight = report;
             vm.Probes.Add(Probe("Wallet preflight (now)", report?.Ok == true, report?.Ok == true
                 ? $"Methods: {string.Join(", ", report.Summary!.Methods)}; encryption {report.Summary.Encryption}; relay round trip {report.RelayRoundTrip?.TotalMilliseconds:0} ms."
@@ -150,7 +150,7 @@ public sealed class UIOpenReceiveController : Controller
                 }
                 catch (Exception e)
                 {
-                    vm.Probes.Add(Probe($"Provider {provider.Name} reachable", false, e.Message, null));
+                    vm.Probes.Add(Probe($"Provider {provider.Name} reachable", false, SecretSafeDiagnostics.Text(e.Message), null));
                 }
             }
             vm.Probes.Add(Probe("Invoice expiration covers the provider window", blob.InvoiceExpiration >= SwapService.MinimumInvoiceExpiration,
@@ -173,7 +173,7 @@ public sealed class UIOpenReceiveController : Controller
             ModelState.AddModelError(nameof(vm.NwcUri), "Paste your NWC code first.");
             return;
         }
-        var client = _settings.CreateClient(nwc, vm.AllowSpendCapableWallet, out var error);
+        var (client, error) = await _settings.CreateAuthorizedClientAsync(nwc, vm.AllowSpendCapableWallet, User);
         if (client is null)
         {
             ModelState.AddModelError(nameof(vm.NwcUri), error ?? "Invalid NWC code.");
@@ -199,7 +199,7 @@ public sealed class UIOpenReceiveController : Controller
         }
         // The preflight first, as its own report: a refusal shows the capability card (and the
         // risk checkbox when a spend method is the reason), not just an error line.
-        var client = _settings.CreateClient(nwc, vm.AllowSpendCapableWallet, out var parseError);
+        var (client, parseError) = await _settings.CreateAuthorizedClientAsync(nwc, vm.AllowSpendCapableWallet, User);
         if (client is null)
         {
             ModelState.AddModelError(nameof(vm.NwcUri), parseError ?? "Invalid NWC code.");
@@ -252,7 +252,7 @@ public sealed class UIOpenReceiveController : Controller
         }
         catch (Exception e)
         {
-            ModelState.AddModelError(nameof(vm.LscPrimary), $"Provider test failed: {e.Message}");
+            ModelState.AddModelError(nameof(vm.LscPrimary), $"Provider test failed: {SecretSafeDiagnostics.Text(e.Message)}");
         }
     }
 

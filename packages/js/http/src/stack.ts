@@ -1,4 +1,4 @@
-import { compact } from "@openreceive/core";
+import { compact, redactSecrets } from "@openreceive/core";
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
 import { createRequestId, errorResponse, HttpError } from "./errors.ts";
 import type { CreateHttpHandlerOptions, HttpHandler } from "./handler.ts";
@@ -32,19 +32,19 @@ export type StackWallet =
  * Where attempts live, which decides what `onPaid` receives. With the host
  * database handle (`db`, the default mode) it is the per-reference
  * `PaymentSettlement`, with `reference` and the transactional `query`;
- * with a custom repository (`payments`, advanced) it is the raw
- * `SettlementEvent`. The branch carries the hook's type, so the
+ * with a custom repository (`payments`, advanced) it includes the resolved
+ * reference and the repository transaction handle. The branch carries the hook's type, so the
  * wrong signature is a type error rather than a runtime surprise.
  */
-export type StackStorage =
+export type StackStorage<Transaction = unknown> =
   | Pick<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments">
-  | Pick<CreateHostRepositoryOptions, "payments" | "onPaid" | "db" | "tableName">;
+  | Pick<CreateHostRepositoryOptions<Transaction>, "payments" | "onPaid" | "db" | "tableName">;
 
-export interface CreateStackOptions
+export interface CreateStackOptions<Transaction = unknown>
   extends Omit<CreateHttpHandlerOptions, "service" | "host">,
     Omit<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments"> {
   readonly wallet: StackWallet;
-  readonly storage: StackStorage;
+  readonly storage: StackStorage<Transaction>;
   /**
    * Where the one boot-failure line goes. Boot happens before any service
    * exists, so this is the only sink @openreceive/http can offer; it defaults
@@ -67,7 +67,9 @@ export interface Stack {
   close(): Promise<void>;
 }
 
-export function createStack(options: CreateStackOptions): Stack {
+export function createStack<Transaction = unknown>(
+  options: CreateStackOptions<Transaction>,
+): Stack {
   const { wallet, storage, amountFor, clock, onBootFailure, ...handlerOptions } = options;
   // The storage branch reaches the host factory as the mode it is — a
   // repository stays repository mode, a database handle stays db mode — and
@@ -98,9 +100,9 @@ export function createStack(options: CreateStackOptions): Stack {
   // only: a boot-time wallet error object carries its raw cause, which has
   // passed through none of the redaction the host wired for every other line.
   boot.catch((error: unknown) => {
-    const message = `OpenReceive stack failed to start: ${
-      error instanceof Error ? error.message : String(error)
-    }`;
+    const message = `OpenReceive stack failed to start: ${redactSecrets(
+      error instanceof Error ? error.message : String(error),
+    )}`;
     if (onBootFailure === undefined) console.error(message);
     else onBootFailure(message);
   });

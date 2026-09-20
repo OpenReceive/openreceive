@@ -14,7 +14,8 @@ final class NwcRequestResponseTest extends TestCase
 
     public function testRequestMappingAndResponseNormalizationMatchTheSharedVectors(): void
     {
-        foreach (self::vector('nwc-request-response')['cases'] as $case) {
+        $wireCases = json_decode(file_get_contents(self::vectorsDir() . '/nwc-request-response.json'), false, 512, JSON_THROW_ON_ERROR)->cases;
+        foreach (self::vector('nwc-request-response')['cases'] as $caseIndex => $case) {
             if ($case['method'] === 'make_invoice') {
                 self::assertSameRecord($case['expected_nip47_request'], Requests::makeInvoiceRequest($case['openreceive_request']), $case['name']);
                 if (isset($case['expected_openreceive_response'])) {
@@ -26,9 +27,22 @@ final class NwcRequestResponseTest extends TestCase
                 continue;
             }
             self::assertSameRecord($case['expected_nip47_request'], Requests::listTransactionsRequest($case['openreceive_request']), $case['name']);
+            $wire = $wireCases[$caseIndex];
+            if (isset($case['expected_error'])) {
+                try {
+                    Requests::normalizeListTransactionsResponse($wire->raw_response);
+                    self::fail("{$case['name']} did not reject an unusable page");
+                } catch (\InvalidArgumentException) {
+                    self::addToAssertionCount(1);
+                }
+                continue;
+            }
             if (isset($case['expected_openreceive_response'])) {
-                $actual = Requests::normalizeListTransactionsResponse($case['raw_response']);
+                $actual = Requests::normalizeListTransactionsResponse($wire->raw_response);
                 $expected = $case['expected_openreceive_response'];
+                if (isset($case['expected_skipped_rows'])) {
+                    self::assertSame($case['expected_skipped_rows'], $actual['skipped_rows'] ?? 0, "{$case['name']} skipped rows");
+                }
                 self::assertCount(count($expected['transactions']), $actual['transactions'], "{$case['name']} row count");
                 foreach ($expected['transactions'] as $index => $row) {
                     foreach ($row as $key => $value) {

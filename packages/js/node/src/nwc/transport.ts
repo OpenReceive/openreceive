@@ -7,6 +7,8 @@
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { recordOrEmpty } from "@openreceive/core";
+import type { NWCClient as AlbySdkClient } from "@getalby/sdk/nwc";
+import { historyRequest } from "./history-request.ts";
 import { WalletPreflightError } from "./errors.ts";
 
 const require = createRequire(import.meta.url);
@@ -17,8 +19,14 @@ export interface AlbyNwcCompatibleClient {
   getWalletServiceInfo?: () => Promise<unknown>;
   makeInvoice?: (request: Record<string, unknown>) => Promise<unknown>;
   make_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
-  listTransactions?: (request: Record<string, unknown>) => Promise<unknown>;
-  list_transactions?: (request: Record<string, unknown>) => Promise<unknown>;
+  listTransactions?: (
+    request: Record<string, unknown>,
+    options?: { readonly signal?: AbortSignal },
+  ) => Promise<unknown>;
+  list_transactions?: (
+    request: Record<string, unknown>,
+    options?: { readonly signal?: AbortSignal },
+  ) => Promise<unknown>;
   subscribeNotifications?: (
     callback: (notification: unknown) => void,
     notificationTypes?: string[],
@@ -31,14 +39,17 @@ export async function callRequiredMethod(
   client: AlbyNwcCompatibleClient,
   names: readonly (keyof AlbyNwcCompatibleClient)[],
   request: Record<string, unknown>,
+  options?: { readonly signal?: AbortSignal },
 ): Promise<unknown> {
   for (const name of names) {
     const method = client[name] as unknown;
     if (typeof method === "function") {
-      return await (method as (request: Record<string, unknown>) => Promise<unknown>).call(
-        client,
-        request,
-      );
+      return await (
+        method as (
+          request: Record<string, unknown>,
+          options?: { readonly signal?: AbortSignal },
+        ) => Promise<unknown>
+      ).call(client, request, options);
     }
   }
 
@@ -69,11 +80,13 @@ export async function createDefaultAlbyNwcClient(
 
   const NWCClientConstructor = Constructor as new (options: {
     nostrWalletConnectUrl: string;
-  }) => AlbyNwcCompatibleClient;
+  }) => AlbySdkClient;
 
-  return new NWCClientConstructor({
-    nostrWalletConnectUrl: connectionString,
-  });
+  const client = new NWCClientConstructor({ nostrWalletConnectUrl: connectionString });
+  const receiveClient = client as unknown as AlbyNwcCompatibleClient;
+  receiveClient.listTransactions = (request, options) =>
+    historyRequest(client, request, options?.signal ?? AbortSignal.timeout(10_000));
+  return receiveClient;
 }
 
 function ensureNodeWebSocket(): void {

@@ -97,7 +97,7 @@ module OpenReceive
     class HostPersistenceError < StandardError
       attr_reader :status, :code, :retryable
 
-      def initialize(message = "The host could not persist this payment attempt; " \
+      def initialize(message = "Payment storage is unavailable; " \
                                "payer instructions were withheld. Please retry.")
         super(message)
         @status = 503

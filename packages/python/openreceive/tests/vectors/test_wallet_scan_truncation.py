@@ -51,8 +51,12 @@ class PagedWallet:
 
     def list_transactions(self, params: dict[str, Any]) -> dict[str, Any]:
         source = self.unpaid_pages if params.get("unpaid") else self.pages
-        index = 0 if self.ignores_offset else int(params.get("offset", 0)) // PAGE_LIMIT
-        return {"transactions": source[index] if index < len(source) else []}
+        offset = 0 if self.ignores_offset else int(params.get("offset", 0))
+        for page in source:
+            if offset < len(page):
+                return {"transactions": page[offset:]}
+            offset -= len(page)
+        return {"transactions": []}
 
 
 @pytest.mark.parametrize("case", VECTOR["cases"], ids=lambda case: case["name"])

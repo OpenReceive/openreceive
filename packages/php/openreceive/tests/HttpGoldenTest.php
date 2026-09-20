@@ -74,6 +74,53 @@ final class HttpGoldenTest extends TestCase
         ), '/openreceive', new Psr17Factory());
     }
 
+    private static function repositoryApp(array $vector, ReceiveNwcClient $settledWallet, array $checkout): array
+    {
+        $mode = $vector['handler'];
+        $db = new \OpenReceive\Storage\PdoConnection(new \PDO('sqlite::memory:'));
+        \OpenReceive\Storage\PaymentsSchema::migrate($db);
+        $db->execute('CREATE TABLE host_credits (reference TEXT)');
+        $repo = new \OpenReceive\Storage\SqlPaymentRepository($db, static fn (): int => 1000);
+        $swapData = isset($vector['setup']['provider_order']) ? ['version' => 1, 'provider_order' => $vector['setup']['provider_order']] : null;
+        $repo->commitAttempt($checkout['reference'], $checkout['payment_hash'], $checkout, $swapData);
+        $host = new class ($mode) implements \OpenReceive\Host {
+            public function __construct(private readonly string $mode) {}
+            public function authorize(\OpenReceive\Server\AuthorizeContext $context): bool { return true; }
+            public function amountFor(string $reference): ?array { return ['sats' => 1]; }
+            public function onPaid(\OpenReceive\PaymentSettlement $settlement): void {
+                $settlement->connection->execute('INSERT INTO host_credits (reference) VALUES (?)', [$settlement->reference]);
+                if ($this->mode === 'repository_failed_settlement') throw new \RuntimeException('synthetic host rollback');
+            }
+        };
+        $wallet = $mode === 'repository_failed_settlement' ? $settledWallet : new FakeWallet(static fn (): int => 1000);
+        $providers = [];
+        if ($swapData !== null) {
+            $providers[] = new class implements \OpenReceive\Swap\SwapProvider {
+                private bool $refunded = false;
+                public function name(): string { return 'fixedfloat'; }
+                public function supportedPayInAssets(): array { return ['USDT_TRON']; }
+                public function payInAssetCatalog(): array { return []; }
+                public function invoiceExpirySeconds(?string $payInAsset = null): int { return 1800; }
+                public function quote(string $payInAsset, int $invoiceAmountMsats): array { throw new \LogicException('not quoted'); }
+                public function createSwap(string $payInAsset, string $bolt11, int $invoiceAmountMsats): array { throw new \LogicException('not minted'); }
+                public function getStatus(array $order): array { return [...$order, 'state' => $this->refunded ? 'refund_pending' : 'refund_required']; }
+                public function requestRefund(array $order, string $refundAddress): void { $this->refunded = true; }
+            };
+        }
+        if ($mode === 'repository_gate_busy') {
+            $repo->markPaidOnce($checkout['payment_hash'], 950, null, static fn () => null);
+            $sibling = [...$checkout, 'reference' => 'other-pending', 'payment_hash' => str_repeat('a', 64)];
+            $repo->commitAttempt($sibling['reference'], $sibling['payment_hash'], $sibling);
+            $repo->claimReconcileGate(1000, 2);
+        }
+        if ($mode === 'repository_failed_create') {
+            $db->execute("CREATE TRIGGER fail_attempt BEFORE INSERT ON openreceive_payments BEGIN SELECT RAISE(ABORT, 'synthetic database failure'); END");
+        }
+        $service = new Service($wallet, false, $providers, ['USD'], static fn (): int => 1000);
+        $engine = new \OpenReceive\Server\Engine($host, $repo, $service, logger: new \Psr\Log\NullLogger());
+        return [$engine->psr15Handler(), $repo, $db];
+    }
+
     public function testThePsr15HandlerSatisfiesEveryHttpGoldenVector(): void
     {
         $service = new Service(new FakeWallet(), false, []);
@@ -117,6 +164,7 @@ final class HttpGoldenTest extends TestCase
         ];
         $apps = [
             'default' => self::app($service, $priceOnly),
+            'hook_refused' => self::app($service, $priceOnly, static function (): void { throw new \RuntimeException('synthetic hook refusal'); }),
             'rate_limited' => self::app($service, $priceOnly, null, static fn (): bool => false),
             'settled_check' => self::app(
                 new Service($settledWallet, false, [], ['USD'], static fn (): int => 1000),
@@ -137,7 +185,10 @@ final class HttpGoldenTest extends TestCase
             $vector = self::readJson($path);
             self::assertSame(2, $vector['schema_version'], "{$path}: schema_version");
             $request = $vector['request'];
-            $app = $apps[$vector['handler'] ?? 'default'] ?? null;
+            $repository = $database = null;
+            if (str_starts_with($vector['handler'] ?? '', 'repository_')) {
+                [$app, $repository, $database] = self::repositoryApp($vector, $settledWallet, $settledCheckout);
+            } else $app = $apps[$vector['handler'] ?? 'default'] ?? null;
             self::assertNotNull($app, "{$path}: no golden handler named " . ($vector['handler'] ?? 'default'));
             $psr = $factory->createServerRequest($request['method'], 'http://test' . $request['path'])
                 ->withHeader('content-type', $request['content_type'] ?? 'application/json');
@@ -156,6 +207,13 @@ final class HttpGoldenTest extends TestCase
             }
             $body = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
             self::assertGoldenValue($body, $vector['expected']['body'], "{$vector['name']}: body");
+            if (($vector['handler'] ?? '') === 'repository_failed_settlement') {
+                self::assertSame('pending', $repository->findByPaymentHash($settledHash)->status);
+                self::assertSame([], $database->query('SELECT * FROM host_credits'));
+            }
+            if (($vector['handler'] ?? '') === 'repository_failed_create') {
+                self::assertSame([], $repository->listForReference('order-create-failed'));
+            }
         }
     }
 }

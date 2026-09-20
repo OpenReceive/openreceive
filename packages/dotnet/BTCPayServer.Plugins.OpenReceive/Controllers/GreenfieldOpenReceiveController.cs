@@ -129,7 +129,7 @@ public sealed class GreenfieldOpenReceiveController : ControllerBase
         var nwc = string.IsNullOrWhiteSpace(request.NwcUri) ? current?.NwcUri : request.NwcUri;
         if (nwc is null) return UnprocessableEntity(new { code = "nwc_required", message = "nwcUri is required." });
         // The saved override applies to a test of the saved code, exactly as it does on save.
-        var client = _settings.CreateClient(nwc, request.AllowSpendCapableWallet ?? current?.AllowSpendCapableWallet ?? false, out var error);
+        var (client, error) = await _settings.CreateAuthorizedClientAsync(nwc, request.AllowSpendCapableWallet ?? current?.AllowSpendCapableWallet ?? false, User);
         if (client is null) return UnprocessableEntity(new { code = "invalid_nwc_uri", message = error });
         var report = await client.PreflightAsync(cancellationToken);
         var settings = await _settings.GetAsync(store.Id);

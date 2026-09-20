@@ -73,6 +73,13 @@ public sealed class OpenReceivePluginDbContext : DbContext
         swap.Property(s => s.UpdatedAt).HasColumnName("updated_at");
         swap.Property(s => s.StateChangedAt).HasColumnName("state_changed_at");
         swap.Property(s => s.LastPolledAt).HasColumnName("last_polled_at");
+        swap.Property(s => s.LastObservedAt).HasColumnName("last_observed_at");
+        swap.Property(s => s.NextPollAt).HasColumnName("next_poll_at");
+        swap.Property(s => s.PollLeaseUntil).HasColumnName("poll_lease_until");
+        swap.Property(s => s.PollLeaseOwner).HasColumnName("poll_lease_owner");
+        swap.Property(s => s.RetiredAt).HasColumnName("retired_at");
+        swap.Property(s => s.ReplacementId).HasColumnName("replacement_id");
+        swap.Property(s => s.RecoveryRefreshRequired).HasColumnName("recovery_refresh_required");
         swap.Property(s => s.WalletSettledAt).HasColumnName("wallet_settled_at");
         // Postgres' system column xmin as the concurrency token: no migration, and every
         // UPDATE is "WHERE xmin = <loaded>" (EfSwapStore turns a miss into SwapConcurrencyException).
@@ -82,7 +89,7 @@ public sealed class OpenReceivePluginDbContext : DbContext
         swap.HasIndex(s => s.StoreId).HasDatabaseName("ix_openreceive_swaps_store_id");
         swap.HasIndex(s => new { s.Provider, s.ProviderOrderId }).IsUnique().HasDatabaseName("ux_openreceive_swaps_provider_order");
         swap.HasIndex(s => s.State).HasDatabaseName("ix_openreceive_swaps_state_live").HasFilter(Migrations.InitialSwaps.LiveStateFilter);
-        swap.HasIndex(s => new { s.InvoiceId, s.PayInAsset }).IsUnique().HasDatabaseName("ux_openreceive_swaps_live_invoice_asset").HasFilter(Migrations.InitialSwaps.LiveStateFilter);
+        swap.HasIndex(s => new { s.InvoiceId, s.PayInAsset }).IsUnique().HasDatabaseName("ux_openreceive_swaps_live_invoice_asset").HasFilter(Migrations.PaymentSafetyRecovery.OfferedStateFilter);
 
         var invoice = modelBuilder.Entity<OpenReceiveInvoice>();
         invoice.ToTable("openreceive_invoices");
@@ -92,6 +99,18 @@ public sealed class OpenReceivePluginDbContext : DbContext
         invoice.Property(i => i.AmountMsats).HasColumnName("amount_msats");
         invoice.Property(i => i.CreatedAt).HasColumnName("created_at");
         invoice.Property(i => i.ExpiresAt).HasColumnName("expires_at");
+        invoice.Property(i => i.ConnectionId).HasColumnName("connection_id");
+        invoice.Property(i => i.StoreId).HasColumnName("store_id");
+        invoice.Property(i => i.HostInvoiceId).HasColumnName("host_invoice_id");
+        invoice.Property(i => i.PaymentMethodId).HasColumnName("payment_method_id");
+        invoice.Property(i => i.NextRecoveryAt).HasColumnName("next_recovery_at");
+        invoice.Property(i => i.RecoveryClosedAt).HasColumnName("recovery_closed_at");
+        invoice.Property(i => i.RecoveryReason).HasColumnName("recovery_reason");
+        invoice.Property(i => i.RecoveryBindingNote).HasColumnName("recovery_binding_note");
+        invoice.Property(i => i.HostUpdateRequired).HasColumnName("host_update_required");
+        invoice.Property(i => i.CreatedAtAuthoritative).HasColumnName("created_at_authoritative");
+        invoice.Property(i => i.Version).HasColumnName("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        invoice.HasIndex(i => new { i.NextRecoveryAt, i.PaymentHash }).HasDatabaseName("ix_openreceive_invoice_recovery").HasFilter("recovery_closed_at IS NULL");
     }
 }
 

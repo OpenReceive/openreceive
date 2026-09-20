@@ -161,7 +161,7 @@ public sealed class NwcKernelTests
         {
             requests.Add(request);
             var page = (request.Offset ?? 0) / 20;
-            var count = page < pages.Length ? pages[page] : 0;
+            var count = request.Offset >= 43 ? 0 : page < pages.Length ? pages[page] : 0;
             var rows = Enumerable.Range(0, count)
                 .Select(i => new NwcTransaction { PaymentHash = new string('e', 56) + (page * 10000 + i).ToString("D8"), SettledAt = 1 })
                 .ToArray();
@@ -171,7 +171,7 @@ public sealed class NwcKernelTests
         var walk = await WalletScan.WalkAsync(List, null, null, false, null, null, CancellationToken.None);
         Assert.False(walk.Truncated);
         Assert.Equal(43, walk.ByPaymentHash.Count);
-        Assert.Equal(3, requests.Count);
+        Assert.Equal(4, requests.Count);
         Assert.All(requests, r => Assert.Equal("incoming", r.Type));
         Assert.All(requests, r => Assert.Null(r.Unpaid));
 

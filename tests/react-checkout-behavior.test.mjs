@@ -905,6 +905,57 @@ function swapSnapshot(providerState) {
   };
 }
 
+test("an expired saved swap keeps its recovery panel when the checkout mounts", async () => {
+  const snapshot = swapSnapshot("awaiting_deposit");
+  const saved = snapshot.invoices[0];
+  saved.expires_at = Math.floor(Date.now() / 1000) - 1;
+  saved.swap.provider_expires_at = saved.expires_at;
+  snapshot.active = saved;
+  const handle = mount(React.createElement(Checkout, { checkout: snapshot, polling: false }));
+  try {
+    await until(() => handle.text().includes("Payment window closed"), {
+      label: "saved expired deposit recovery panel",
+    });
+    assert.equal(handle.container.querySelector('input[aria-label="Address"]'), null);
+    assert.equal(handle.text().includes("Start over"), false);
+    assert.equal(handle.text().includes("We are checking for an existing deposit"), true);
+  } finally {
+    handle.unmount();
+  }
+});
+
+test("dismissing a quoted swap prevents its delayed response from reopening the panel", async () => {
+  const snapshot = { ...swapSnapshot("awaiting_deposit"), invoices: [] };
+  const requests = [];
+  let resolveQuote;
+  const pending = new Promise((resolve) => {
+    resolveQuote = resolve;
+  });
+  const handle = mount(
+    React.createElement(PaymentWizard, {
+      checkout: snapshot,
+      prefix: "/openreceive",
+      fetch: async (url) => {
+        requests.push(url);
+        return pending;
+      },
+    }),
+  );
+  try {
+    (await until(() => handle.button("USDT"))).click();
+    await until(() => requests.length === 1);
+    (await until(() => handle.button("Switch payment method"))).click();
+    resolveQuote(Response.json({ quote: { pay_asset: "USDT_SOL", available: true } }));
+    await flush();
+    await flush();
+    assert.equal(requests.length, 1, "a dismissed quote cannot proceed to create");
+    assert.equal(handle.text().includes("Preparing payment address"), false);
+    assert.equal(handle.text().includes("SoLDeposit"), false);
+  } finally {
+    handle.unmount();
+  }
+});
+
 test("the wizard breadcrumb stands down while the swap attempt owes a refund", async () => {
   const handle = mount(
     React.createElement(PaymentWizard, { checkout: swapSnapshot("refund_required") }),
@@ -936,5 +987,63 @@ test("the wizard breadcrumb comes back once the refund is out of the payer's han
     } finally {
       handle.unmount();
     }
+  }
+});
+
+test("React reference and endpoint changes discard stale mint successes and failures", async () => {
+  const mints = [],
+    errors = [];
+  let update;
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    if (url.endsWith("/prepare"))
+      return Response.json({ reference: body.reference, amount_msats: 21000, payment_methods: [] });
+    if (url.endsWith("/checkouts"))
+      return new Promise((resolve, reject) =>
+        mints.push({ resolve, reject, signal: init.signal, reference: body.reference }),
+      );
+    return Response.json({ status: "pending" });
+  };
+  function Harness() {
+    const [identity, setIdentity] = React.useState({ reference: "A", prefix: "/one" });
+    update = setIdentity;
+    return React.createElement(Checkout, {
+      ...identity,
+      onError: (error) => errors.push(error),
+      logger: false,
+    });
+  }
+  const handle = mount(React.createElement(Harness));
+  try {
+    (await until(() => handle.button("Bitcoin"))).click();
+    await until(() => mints.length === 1);
+    update({ reference: "B", prefix: "/one" });
+    (await until(() => handle.button("Bitcoin"))).click();
+    await until(() => mints.length === 2);
+    mints[0].resolve(
+      Response.json({
+        checkout: {
+          reference: "A",
+          payment_hash: "a".repeat(64),
+          bolt11: "lnbc-obsolete-a",
+          amount_msats: 21000,
+          expires_at: Math.floor(Date.now() / 1000) + 900,
+        },
+      }),
+    );
+    await flush();
+    await flush();
+    assert.equal(mints[0].signal.aborted, true);
+    assert.equal(handle.button(checkoutLabels.copyInvoice), undefined);
+    assert.match(handle.text(), /Preparing payment/);
+    update({ reference: "B", prefix: "/two" });
+    await until(() => handle.button("Bitcoin"));
+    mints[1].reject(new Error("obsolete failure"));
+    await flush();
+    await flush();
+    assert.deepEqual(errors, []);
+    assert.doesNotMatch(handle.text(), /obsolete/);
+  } finally {
+    handle.unmount();
   }
 });

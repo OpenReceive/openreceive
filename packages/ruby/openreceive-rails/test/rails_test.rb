@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "active_support/testing/time_helpers"
 require "yaml"
 require "erb"
 require "json"
@@ -373,7 +374,7 @@ class OpenReceivePaymentModelTest < Minitest::Test
         payment_hash: format("%064x", index + 1),
         status: "pending",
         expires_at: Time.at(now + 600).utc,
-        checkout_data: {},
+        checkout_data: { "expires_at" => now + 600 },
         created_at: Time.at(now - (batch + 5) + index).utc,
         inserted_at: Time.current
       )
@@ -909,7 +910,8 @@ class ReconcileTest < Minitest::Test
     assert_equal %w[expired no_finality_after_expiry], [stale.status, stale.status_reason]
 
     # A second pass scans only the still-pending attempt and never re-fulfills.
-    assert_equal 1, OpenReceive.reconcile!(now: now).length
+    assert_equal 0, OpenReceive.reconcile!(now: now).length
+    assert_equal 1, OpenReceive.reconcile!(now: now + 12).length
     assert_equal 1, @fulfilled.length
   end
 
@@ -928,7 +930,7 @@ class ReconcileTest < Minitest::Test
       { "transactions" => transactions.first(Integer(request.fetch("limit", 20))) }
     end
 
-    checks = OpenReceive.reconcile!(now: now, max_pages: 3)
+    checks = OpenReceive.reconcile!(now: now)
     refute_includes checks.map { |check| check["payment_hash"] }, unseen_hash
 
     # Absence from a truncated pass is no information: the attempt stays
@@ -954,7 +956,7 @@ class ReconcileTest < Minitest::Test
     refute_empty requests
     # Mirrors the JS scan window: `until` is the observation instant plus the
     # overlap, so wallet-side clock skew cannot hide a fresh settlement.
-    assert(requests.all? { |request| request["until"] == now + 60 })
+    assert(requests.all? { |request| request["from"] == 0 && !request.key?("until") })
   end
 
   def test_a_failed_wallet_scan_closes_nothing
@@ -964,9 +966,7 @@ class ReconcileTest < Minitest::Test
 
     # Wallet failures normalize to the shared error vocabulary but still abort
     # the pass so nothing closes.
-    error = assert_raises(OpenReceive::Server::WalletFailureError) { OpenReceive.reconcile!(now: now) }
-    assert_equal "relay down", error.message
-    assert_equal "OTHER", error.code
+    assert_equal({ "reason" => "scan_failed" }, OpenReceive.gated_reconcile!(now: now))
     assert_equal "pending", OpenReceivePayment.find_by(payment_hash: hash).status
   end
 
@@ -1509,7 +1509,8 @@ class OpportunisticReconcileTest < Minitest::Test
     # shares the one durable openreceive_meta row.
     refute OpenReceiveMeta.claim_reconcile_gate(now: now, interval_seconds: 2)
     refute OpenReceiveMeta.claim_reconcile_gate(now: now + 1, interval_seconds: 2)
-    assert OpenReceiveMeta.claim_reconcile_gate(now: now + 2, interval_seconds: 2)
+    refute OpenReceiveMeta.claim_reconcile_gate(now: now + 2, interval_seconds: 2)
+    assert OpenReceiveMeta.claim_reconcile_gate(now: now + 10, interval_seconds: 2)
   end
 
   def test_gate_treats_a_far_future_claim_as_stale
@@ -1751,6 +1752,306 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
     assert_no_file "config/initializers/openreceive.rb"
     assert_file "config/routes.rb" do |content|
       refute_includes content, "OpenReceive::Engine"
+    end
+  end
+end
+
+class PaymentSafetyProgressTest < Minitest::Test
+  include OpenReceivePaymentTestHelpers
+  PROGRESS = JSON.parse(File.read(File.expand_path("../../../../spec/test-vectors/reconcile-progress.json", __dir__)))
+
+  def setup
+    reset_tables!
+    @wallet = FakeWallet.new
+    @paid = []
+    paid = @paid
+    OpenReceive.configure do |config|
+      config.authorize = ->(_) { true }
+      config.nwc_client = @wallet
+      config.amount_for = ->(_) { { "sats" => 1 } }
+      config.on_paid = ->(event) { paid << event }
+    end
+  end
+
+  def teardown
+    OpenReceive.reset_config!
+  end
+
+  def store(hash, reference, now, swap_data: nil, wallet_expiry: now + 600)
+    OpenReceivePayment.commit_attempt!(reference: reference, payment_hash: hash,
+      checkout: build_checkout(reference: reference, hash: hash, created_at: now, expires_at: wallet_expiry), swap_data: swap_data)
+  end
+
+  PROGRESS.fetch("vectors").each_with_index do |vector, index|
+    define_method("test_progress_vector_#{index}") do
+      now = Time.now.to_i
+      if vector.key?("lease_seconds")
+        old = OpenReceiveMeta.claim_reconcile_gate(now: now, interval_seconds: 2, lease_seconds: vector.fetch("lease_seconds"))
+        newer = OpenReceiveMeta.claim_reconcile_gate(now: now + vector.fetch("new_claim_at"), interval_seconds: 2)
+        refute_nil newer
+        assert_equal vector.fetch("expected_old_checkpoint"), OpenReceiveMeta.checkpoint_reconcile_gate(old, old.fetch("scheduler"), now: now + vector.fetch("new_claim_at"))
+        next
+      end
+      count = vector.fetch("pending_count", 1)
+      count.times { |i| store(format("%064x", i + 1), "progress-#{i}", now) }
+      paid_hash = format("%064x", count)
+      rows = Array.new(vector.fetch("history_rows", 1)) { |i| { "payment_hash" => format("%064x", 10_000 + i), "created_at" => now, "settled_at" => now + 1 } }
+      rows[vector.key?("history_rows") ? vector.fetch("paid_index", 0) : 0]["payment_hash"] = paid_hash unless vector.key?("expected_closed")
+      page_size = vector.fetch("page_size", 20)
+      calls = []
+      @wallet.define_singleton_method(:list_transactions) do |request|
+        calls << request.dup
+        { "transactions" => rows.slice(request.fetch("offset", 0), page_size) || [] }
+      end
+      observed = now + 1600
+      vector.fetch("max_passes", 3).times do
+        before = calls.length
+        OpenReceive.reconcile!(now: observed)
+        assert_operator calls.length - before, :<=, PROGRESS.fetch("max_pages")
+        observed += 12
+      end
+      assert_equal vector.key?("expected_closed") ? "pending" : "settled", OpenReceivePayment.find_by!(payment_hash: paid_hash).status
+      assert_equal 1, @paid.length unless vector.key?("expected_closed")
+      assert_operator OpenReceiveMeta.find_by!(key: OpenReceiveMeta::RECONCILE_GATE_KEY).value.bytesize, :<=, PROGRESS.fetch("max_checkpoint_bytes")
+    end
+  end
+
+  def test_snapshot_deadline_vectors_read_persisted_checkout
+    vectors = JSON.parse(File.read(File.expand_path("../../../../spec/test-vectors/attempt-reconciliation.json", __dir__)))
+    vectors.fetch("snapshot_cases").each_with_index do |vector, i|
+      hash = format("%064x", i + 1)
+      store(hash, "snapshot-#{i}", vector.fetch("created_at"), wallet_expiry: vector.fetch("wallet_expires_at"),
+        swap_data: build_swap_data(expires_at: vector.fetch("instruction_expires_at")))
+      attempt = OpenReceivePayment.reconcilable_attempts.find { |a| a["payment_hash"] == hash }
+      assert_equal vector.fetch("wallet_expires_at"), attempt.fetch("expires_at")
+      assert_equal vector.fetch("wallet_expires_at"), OpenReceivePayment.find_pending_attempt(hash).fetch("expires_at")
+      actual = OpenReceive::Server::Reconciliation.transition(expires_at: attempt.fetch("expires_at"), status: "not_found", observed_at: vector.fetch("observed_at"))
+      vector["expected"].nil? ? assert_nil(actual) : assert_equal(vector.fetch("expected"), actual)
+    end
+  end
+
+  def test_attention_is_recovered_only_after_explicit_review_and_preserves_audit
+    now = Time.now.to_i
+    hash = "1" * 64
+    store(hash, "attention", now)
+    OpenReceivePayment.record_reconciliation!(payment_hash: hash, status: "attention", observed_at: now + 1500, reason: "unsettled_after_expiry")
+    @wallet.add_transaction(hash, state: "settled", settled_at: now + 1600)
+    OpenReceive.reconcile!(now: now + 1700)
+    assert_empty @paid
+    report = OpenReceivePayment.maintenance_candidates.fetch("candidates")
+    assert_equal "operator_attention", report.first.fetch("reason")
+    assert OpenReceivePayment.requeue_reviewed_attempt!(report.first, decision_id: "review-1")
+    refute OpenReceivePayment.requeue_reviewed_attempt!(report.first, decision_id: "review-1")
+    OpenReceive.reconcile!(now: now + 1712)
+    assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: hash).status
+    assert_equal 1, @paid.length
+    assert_equal 1, OpenReceiveMeta.where("key LIKE ?", "repair:%").count
+  end
+
+  def test_explicit_worker_runs_with_opportunistic_requests_disabled
+    now = Time.now.to_i
+    hash = "2" * 64
+    store(hash, "offline", now)
+    @wallet.add_transaction(hash, state: "settled", settled_at: now + 2)
+    OpenReceive.config.opportunistic_reconcile = false
+    assert_equal "disabled", OpenReceive.maybe_reconcile!(now: now + 3).fetch("reason")
+    assert_empty @paid
+    OpenReceive.reconcile!(now: now + 3)
+    assert_equal 1, @paid.length
+  end
+
+  def test_secret_redaction_shared_contract
+    vectors = JSON.parse(File.read(File.expand_path("../../../../spec/test-vectors/secret-redaction.json", __dir__)))
+    vectors.fetch("vectors").each do |vector|
+      assert_equal vector.fetch("expected"), OpenReceive::Nwc.redact_secrets(vector.fetch("input"))
+    end
+  end
+end
+
+require "action_controller"
+require_relative "../app/controllers/openreceive/application_controller"
+require_relative "../app/controllers/openreceive/payments_controller"
+require_relative "../app/controllers/openreceive/checkouts_controller"
+require_relative "../app/controllers/openreceive/swaps_controller"
+
+# Shared repository goldens run through real action dispatch, the built-in host
+# hooks and actual database transactions, including a database INSERT failure.
+class RepositoryHttpGoldenTest < Minitest::Test
+  include ActiveSupport::Testing::TimeHelpers
+  GOLDEN_DIR = File.expand_path("../../../../spec/test-vectors/http-golden", __dir__)
+  RULES = JSON.parse(File.read(File.join(GOLDEN_DIR, "PLACEHOLDERS.json")))
+  HASH = "7f" * 32
+  CHECKOUT = {
+    "reference" => "order-golden-settled", "payment_hash" => HASH,
+    "bolt11" => "lnbcgoldensettled", "amount_msats" => 1000,
+    "created_at" => 900, "expires_at" => 1500, "fiat_quote" => nil
+  }.freeze
+
+  def setup
+    OpenReceive.reset_config!
+    OpenReceivePayment.delete_all
+    OpenReceiveMeta.where.not(key: "schema_version").delete_all
+    Order.delete_all
+  end
+
+  def teardown
+    ActiveRecord::Base.connection.execute("DROP TRIGGER IF EXISTS fail_golden_attempt")
+    OpenReceive.reset_config!
+  end
+
+  Dir[File.join(GOLDEN_DIR, "*-repository-*.json")].sort.each do |path|
+    define_method("test_#{File.basename(path, '.json').tr('-', '_')}") do
+      vector = JSON.parse(File.read(path))
+      travel_to(Time.at(1000).utc) { run_vector(vector) }
+    end
+  end
+
+  def run_vector(vector)
+    kind = vector.fetch("handler")
+    provider_order = vector.dig("setup", "provider_order")
+    provider = Object.new
+    provider.define_singleton_method(:name) { "fixedfloat" }
+    provider.instance_variable_set(:@state, "refund_required")
+    provider.define_singleton_method(:get_status) do |order|
+      raise "lost provider token" unless order.fetch("provider_token") == provider_order.fetch("provider_token")
+
+      order.merge("state" => @state)
+    end
+    provider.define_singleton_method(:request_refund) do |order, _address|
+      raise "lost provider token" unless order.fetch("provider_token") == provider_order.fetch("provider_token")
+
+      @state = "refund_pending"
+    end
+    wallet = FakeWallet.new
+    if kind == "repository_failed_settlement"
+      wallet.add_transaction(HASH, state: "settled", settled_at: 950)
+    end
+    order = Order.create!(id: CHECKOUT.fetch("reference"))
+    OpenReceive.configure do |config|
+      config.nwc_client = wallet
+      config.authorize = ->(_context) { true }
+      config.amount_for = ->(_reference) { { "sats" => 1 } }
+      config.swap_providers = provider_order ? [provider] : []
+      config.on_paid = lambda do |payment|
+        Order.find(payment.reference).mark_paid!
+        raise "host rollback fixture" if kind == "repository_failed_settlement"
+      end
+    end
+    OpenReceive.config.instance_variable_set(:@service, OpenReceive::Server::Service.new(
+      nwc_client: wallet, clock: -> { 1000 }, swap_providers: provider_order ? [provider] : []
+    ))
+    OpenReceivePayment.commit_attempt!(
+      reference: CHECKOUT.fetch("reference"), payment_hash: HASH, checkout: CHECKOUT,
+      swap_data: provider_order ? { "version" => 1, "provider_order" => provider_order } : nil
+    )
+    if kind == "repository_gate_busy"
+      OpenReceive.config.settlement_hook.call("payment_hash" => HASH, "paid_at" => 950)
+      extra = CHECKOUT.merge("reference" => "pending-gate", "payment_hash" => "8f" * 32)
+      OpenReceivePayment.commit_attempt!(reference: "pending-gate", payment_hash: extra.fetch("payment_hash"), checkout: extra)
+      refute_nil OpenReceiveMeta.claim_reconcile_gate(now: 1000, interval_seconds: 2)
+      wallet.define_singleton_method(:list_transactions) { |_request| raise "gate loser scanned" }
+    end
+    if kind == "repository_failed_create"
+      ActiveRecord::Base.connection.execute("CREATE TRIGGER fail_golden_attempt BEFORE INSERT ON openreceive_payments BEGIN SELECT RAISE(ABORT, 'storage fixture'); END")
+    end
+    request = vector.fetch("request")
+    raw = JSON.generate(request.fetch("body"))
+    controller, action = case request.fetch("path")
+    when "/openreceive/payments/check" then [OpenReceive::PaymentsController, :check]
+    when "/openreceive/checkouts" then [OpenReceive::CheckoutsController, :create]
+    when "/openreceive/swaps/status" then [OpenReceive::SwapsController, :status]
+    when "/openreceive/swaps/refunds" then [OpenReceive::SwapsController, :refund]
+    else raise "golden route needs a controller consumer"
+    end
+    status, headers, body = controller.action(action).call(
+      "REQUEST_METHOD" => request.fetch("method"), "PATH_INFO" => request.fetch("path"),
+      "SCRIPT_NAME" => "", "QUERY_STRING" => "", "SERVER_NAME" => "example.org", "SERVER_PORT" => "80",
+      "rack.url_scheme" => "http", "rack.input" => StringIO.new(raw), "rack.errors" => StringIO.new,
+      "CONTENT_TYPE" => "application/json", "CONTENT_LENGTH" => raw.bytesize.to_s
+    )
+    payload = +""
+    body.each { |part| payload << part }
+    parsed = JSON.parse(payload)
+    assert_equal vector.dig("expected", "status"), status, parsed.inspect
+    vector.dig("expected", "headers").each do |header, value|
+      assert_golden_value(headers.find { |key, _| key.downcase == header.downcase }&.last, value)
+    end
+    assert_golden_value(parsed, vector.dig("expected", "body"))
+    if kind == "repository_failed_settlement"
+      assert_equal "pending", OpenReceivePayment.find_by!(payment_hash: HASH).status
+      assert_equal "pending_payment", order.reload.status
+    end
+    if provider_order
+      saved = OpenReceivePayment.find_by!(payment_hash: HASH).swap_data
+      assert_equal provider_order.fetch("provider_token"), saved.dig("provider_order", "provider_token")
+      refute_includes payload, provider_order.fetch("provider_token")
+    end
+  end
+
+  def assert_golden_value(actual, expected)
+    if expected.is_a?(String) && RULES.key?(expected)
+      rule = RULES.fetch(expected)
+      if rule.fetch("type") == "integer"
+        assert actual.is_a?(Integer) && actual >= rule.fetch("minimum")
+      elsif rule.key?("prefix")
+        assert actual.is_a?(String) && actual.start_with?(rule.fetch("prefix"))
+      else
+        assert_match Regexp.new(rule.fetch("pattern")), actual
+      end
+    elsif expected.is_a?(Hash)
+      assert_equal expected.keys.sort, actual.keys.sort
+      expected.each { |key, value| assert_golden_value(actual[key], value) }
+    elsif expected.nil?
+      assert_nil actual
+    else
+      assert_equal expected, actual
+    end
+  end
+end
+
+class PaymentSafetyProgressTest
+  include ActiveSupport::Testing::TimeHelpers
+
+  def test_positive_finality_survives_a_later_invalid_page
+    now = Time.now.to_i
+    first, second = "1" * 64, "2" * 64
+    store(first, "first", now)
+    store(second, "second", now)
+    rows = [{ "payment_hash" => first, "settled_at" => now + 500 }]
+    rows.concat(Array.new(19) { |i| { "payment_hash" => format("%064x", 100 + i) } })
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      { "transactions" => request.fetch("offset").zero? ? rows : [nil, "invalid"] }
+    end
+    assert_equal "scan_failed", OpenReceive.gated_reconcile!(now: now + 1600).fetch("reason")
+    assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: first).status
+    assert_equal "pending", OpenReceivePayment.find_by!(payment_hash: second).status
+    assert_equal 1, @paid.length
+  end
+
+  [false, true].product([2600, 2900]).each do |notification, observed|
+    define_method("test_late_swap_#{notification ? 'notification' : 'scan'}_at_#{observed}") do
+      hash = "1" * 64
+      travel_to(Time.at(1000).utc) do
+        store(hash, "late", 1000, wallet_expiry: 2800, swap_data: build_swap_data(expires_at: 1600))
+      end
+      travel_to(Time.at(2500).utc) do
+        OpenReceive.reconcile!
+        assert_equal "pending", OpenReceivePayment.find_by!(payment_hash: hash).status
+      end
+      travel_to(Time.at(observed).utc) do
+        @wallet.add_transaction(hash, state: "settled", settled_at: 2600)
+        event = { "notification_type" => "payment_received", "notification" => @wallet.transactions.last }
+        if notification
+          assert OpenReceive.send(:settle_from_notification!, event)
+        else
+          OpenReceive.reconcile!
+        end
+        assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: hash).status
+        refute OpenReceive.send(:settle_from_notification!, event)
+        OpenReceive.reconcile!(now: observed + 12)
+        assert_equal 1, @paid.length
+        refute_nil OpenReceivePayment.find_by!(payment_hash: hash).swap_data
+      end
     end
   end
 end

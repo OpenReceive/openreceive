@@ -86,7 +86,7 @@ final class Engine
             $this->service,
             fn (AuthorizeContext $context): bool => $this->host->authorize($context),
             fn (array $args): array => $this->resolveCheckout($args),
-            fn (array $input): mixed => $this->repository->commitAttempt(
+            fn (array $input): mixed => $this->commitAttempt(
                 (string) $input['reference'],
                 (string) $input['payment_hash'],
                 Records::asArray($input['checkout']),
@@ -98,6 +98,17 @@ final class Engine
             $this->clientIp,
             $this->logger,
         );
+    }
+
+    private function commitAttempt(string $reference, string $hash, array $checkout, ?array $swapData, ?string $clientIp): mixed
+    {
+        try {
+            return $this->repository->commitAttempt($reference, $hash, $checkout, $swapData, $clientIp);
+        } catch (\OpenReceive\Server\Errors\HttpError $e) {
+            throw $e;
+        } catch (\Throwable) {
+            throw new \OpenReceive\Server\Errors\HostPersistenceError();
+        }
     }
 
     /** The PSR-15 mount: every payment route first runs the gated reconcile pass; payments/check is served from it. */

@@ -286,7 +286,7 @@ final class EngineTest extends TestCase
         $this->now = $expiresAt + 899;
         $engine->reconcile();
         self::assertSame('pending', $this->repository->findByPaymentHash($hash)?->status, 'inside the grace window nothing closes');
-        $this->now = $expiresAt + 900;
+        $this->now = $expiresAt + 911;
         $engine->reconcile();
         $row = $this->repository->findByPaymentHash($hash);
         // The fake lists the unpaid invoice with an explicit pending state: the wallet still claims it is in flight.
@@ -299,6 +299,7 @@ final class EngineTest extends TestCase
         // A wallet-reported expiry closes immediately.
         $second = self::json($this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-5']));
         $this->wallet->expireInvoice($second['checkout']['payment_hash']);
+        $this->now += 12;
         $engine->reconcile();
         self::assertSame('expired', $this->repository->findByPaymentHash($second['checkout']['payment_hash'])?->status);
         self::assertSame('wallet_reported_expired', $this->repository->findByPaymentHash($second['checkout']['payment_hash'])?->statusReason);

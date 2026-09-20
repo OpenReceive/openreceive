@@ -160,7 +160,11 @@ same preflight.
 The payer's swap routes are anonymous and addressed by invoice id plus swap
 id (the invoice id is the bearer, as for BTCPay's own checkout page; a repeat
 create re-serves the live order without a provider call):
-`POST /api/plugins/openreceive/swaps` `{invoiceId, payInAsset}`,
+`GET /api/plugins/openreceive/swaps/{invoiceId}?after={swapId}&limit=50`
+returns `{attempts, next_cursor}` with at most 100 rows including retired attempts.
+`GET /plugins/openreceive/invoices/{invoiceId}/recovery` is linked from checkout
+and merchant details and stays available after expiry and disabling swaps.
+The individual routes are `POST /api/plugins/openreceive/swaps` `{invoiceId, payInAsset}`,
 `GET /api/plugins/openreceive/swaps/{invoiceId}/{swapId}`, and
 `POST /api/plugins/openreceive/swaps/{invoiceId}/{swapId}/refund`
 `{refundAddress}`. The checkout component calls them; a custom checkout can

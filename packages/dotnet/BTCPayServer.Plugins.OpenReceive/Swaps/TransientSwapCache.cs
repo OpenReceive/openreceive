@@ -110,7 +110,7 @@ public sealed class TransientSwapCache
                 Value = previous?.Value,
                 FetchedAt = previous?.FetchedAt,
                 FailedAt = now,
-                Error = error.Message,
+                Error = Nwc.SecretSafeDiagnostics.Text(error.Message),
             };
             lock (_gate)
             {

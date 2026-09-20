@@ -47,6 +47,7 @@ public class OpenReceivePlugin : BaseBTCPayServerPlugin
         services.AddSingleton<ISwapStore, EfSwapStore>();
         services.AddSingleton<SwapService>();
         services.AddScheduledTask<SwapPoller>(TimeSpan.FromSeconds(5));
+        services.AddScheduledTask<HistoricalInvoiceRecovery>(TimeSpan.FromSeconds(5));
         services.AddSingleton<SwapInvoiceEventsService>();
         services.AddHostedService(provider => provider.GetRequiredService<SwapInvoiceEventsService>());
 

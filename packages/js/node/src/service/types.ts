@@ -6,6 +6,8 @@ import type {
   SourcedPriceProvider,
   PaidPayment,
   PaymentCheck,
+  PaymentScanWindow,
+  PaymentScanSlice,
   SimplePriceFetch,
 } from "@openreceive/core";
 import type { NotifyingReceiveNwcClient } from "../nwc/normalize.ts";
@@ -112,6 +114,8 @@ export interface Checkout {
   readonly bolt11: string;
   readonly amountMsats: number;
   readonly createdAt: number;
+  /** Missing on legacy snapshots; only wallet timestamps narrow history scans. */
+  readonly createdAtSource?: "wallet" | "host";
   readonly expiresAt: number;
   readonly fiatQuote: RateQuote | null;
 }
@@ -286,6 +290,14 @@ export interface OpenReceive {
   }>;
   createCheckout(input: CreateCheckoutRequest): Promise<Checkout>;
   reconcilePayments(input: ReconcilePaymentsRequest): Promise<readonly PaymentCheck[]>;
+  /** Bounded durable history slice used by repository-backed HTTP and workers. */
+  scanPaymentSlice(input: {
+    window: PaymentScanWindow;
+    maxPages?: number;
+    deadline?: number;
+    signal?: AbortSignal;
+    onFinality?: (check: PaymentCheck) => Promise<void>;
+  }): Promise<PaymentScanSlice>;
   /**
    * Opt-in NWC-02 notifications: subscribe to wallet `payment_received`
    * notifications. Notifications are authenticated wallet data — a payload

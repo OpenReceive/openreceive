@@ -101,13 +101,15 @@ export interface CheckoutSessionOptions {
   snapshot(): CheckoutSnapshot | undefined;
   /** The order being paid, read at call time (the element's is an attribute). */
   reference(): string | undefined;
+  /** Endpoint is part of checkout identity; trailing slashes are equivalent. */
+  prefix?(): string | undefined;
   /**
    * Mint a Lightning invoice for this reference (POST `${prefix}/checkouts`).
    * The host closes over its own prefix, metadata and fetch. Answer `undefined`
    * to say "this host cannot mint" — React's payment wizard is such a host: it
    * asks its parent for Lightning through `onRequestLightning` instead.
    */
-  requestCheckout?(reference: string): Promise<CheckoutSnapshot> | undefined;
+  requestCheckout?(reference: string, signal?: AbortSignal): Promise<CheckoutSnapshot> | undefined;
   /** Publish a snapshot that now carries the Lightning attempt. */
   onSnapshot?(snapshot: CheckoutSnapshot): void;
   /**
@@ -140,6 +142,11 @@ export interface CheckoutSession {
    * carries the accepted range the host renders in its unavailable panel.
    */
   readonly swapQuotes: Readonly<Record<string, CheckoutPaymentMethod>>;
+  /** Invalidate every outstanding action when identity changes. */
+  syncIdentity(): void;
+  reset(): void;
+  dispose(): void;
+  capture(): { readonly signal: AbortSignal; isCurrent(): boolean };
   ensureLightning(): Promise<void>;
   /**
    * Quote the pay-in asset, then start the swap when the quote confirms the
@@ -186,8 +193,45 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
   let mintingLightning = false;
   let startingSwapAsset: string | null = null;
   let swapQuotes: Record<string, CheckoutPaymentMethod> = {};
+  let generation = 0;
+  let abort = new AbortController();
+  const identityKey = () =>
+    JSON.stringify([
+      options.reference(),
+      (options.prefix?.() ?? options.swap?.prefix() ?? "").replace(/\/+$/, ""),
+    ]);
+  let identity = identityKey();
+  function invalidateActions(): void {
+    abort.abort();
+    abort = new AbortController();
+    generation += 1;
+    mintingLightning = false;
+    startingSwapAsset = null;
+  }
+  function reset(): void {
+    invalidateActions();
+    identity = identityKey();
+    wizardError = undefined;
+    swapStartError = undefined;
+    lightningRequested = false;
+    mintingLightning = false;
+    startingSwapAsset = null;
+    swapQuotes = {};
+  }
+  function syncIdentity(): void {
+    if (identityKey() !== identity) reset();
+  }
+  function capture() {
+    syncIdentity();
+    const captured = generation;
+    return {
+      signal: abort.signal,
+      isCurrent: () => captured === generation && identityKey() === identity,
+    };
+  }
 
   async function ensureLightning(): Promise<void> {
+    const action = capture();
     // A second click while the first mint is in flight would POST /checkouts
     // again; the loser's 409 then surfaced as a wizard error over a perfectly
     // good invoice. `startSwap` guards the same way.
@@ -214,26 +258,31 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     wizardError = undefined;
     options.onChange();
     try {
-      const pending = options.requestCheckout?.(reference);
+      const pending = options.requestCheckout?.(reference, action.signal);
       if (pending === undefined) return;
       const checkout = await pending;
+      if (!action.isCurrent()) return;
       lightningRequested = true;
       // The mint response does not carry the warmed method catalog, so the
       // merge keeps `payment_methods` and the sibling attempts from the
       // snapshot that was already on screen.
       options.onSnapshot?.(mergeMintedCheckout(checkout, options.snapshot()));
     } catch (error) {
+      if (!action.isCurrent()) return;
       // Surface the mint failure inline instead of silently returning to the
       // method picker.
       wizardError = payerFacingMessage(error, MINT_FAILED);
       options.onError(error);
     } finally {
-      mintingLightning = false;
-      options.onChange();
+      if (action.isCurrent()) {
+        mintingLightning = false;
+        options.onChange();
+      }
     }
   }
 
   async function startSwap(payInAsset: string): Promise<void> {
+    const action = capture();
     // The same double-POST guard as the mint: a poll-driven re-render hands the
     // payer a fresh, enabled button while the first start is still in flight.
     if (startingSwapAsset !== null) return;
@@ -285,9 +334,18 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       // Quote FIRST. An amount outside the provider's range is a normal answer,
       // not a failure: it becomes an unavailable entry in `swapQuotes` and the
       // host shows its accepted range, rather than a generic start error.
-      const quote = await quoteSwapAsset(payInAsset, prefix, fetcher, reference, csrfHeader);
+      const quote = await quoteSwapAsset(
+        payInAsset,
+        prefix,
+        fetcher,
+        reference,
+        csrfHeader,
+        action,
+      );
+      if (!action.isCurrent()) return;
       if (quote !== undefined && quote.available === false) return;
       const started = await startSwapRequest({
+        signal: action.signal,
         fetch: fetcher,
         prefix,
         ...(csrfHeader === undefined ? {} : { csrfHeader }),
@@ -295,6 +353,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
         payInAsset,
         ...(options.logger === undefined ? {} : { logger: options.logger }),
       });
+      if (!action.isCurrent()) return;
       selection.setStarted(started);
       selection.setDismissedInvoiceId(null);
       // Publish the attempt we just got back, never a read-back of the
@@ -309,6 +368,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       selection.setSelectedAsset(payInAsset);
       options.onChange();
     } catch (error) {
+      if (!action.isCurrent()) return;
       // A start that lost a race to instructions which already landed for THIS
       // asset must not replace the deposit panel with the loser's error — the
       // status poll can fold a server-side idempotent attempt in mid-request.
@@ -329,7 +389,10 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       selection.setSelectedAsset(payInAsset);
       failSwapStart(error);
     } finally {
-      startingSwapAsset = null;
+      if (action.isCurrent()) {
+        startingSwapAsset = null;
+        options.onChange();
+      }
     }
   }
 
@@ -344,14 +407,17 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     fetcher: typeof globalThis.fetch,
     reference: string,
     csrfHeader: string | undefined,
+    action: ReturnType<typeof capture>,
   ): Promise<CheckoutPaymentMethod | undefined> {
     const body = await postJson({
+      signal: action.signal,
       fetch: fetcher,
       prefix,
       ...(csrfHeader === undefined ? {} : { csrfHeader }),
       ...(options.logger === undefined ? {} : { logger: options.logger }),
       body: { reference, action: "swap_quote", pay_in_asset: payInAsset },
     });
+    if (!action.isCurrent()) return undefined;
     const quote = normalizeSwapQuote(body);
     if (quote === undefined) return undefined;
     swapQuotes = { ...swapQuotes, [quote.pay_in_asset]: quote };
@@ -383,12 +449,19 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
     get swapQuotes() {
       return swapQuotes;
     },
+    syncIdentity,
+    reset,
+    dispose: reset,
+    capture,
     ensureLightning,
     startSwap,
     resetLightningRequest() {
-      lightningRequested = false;
+      reset();
     },
     clearSwapStartError() {
+      // Leaving a panel also withdraws its pending quote/create/refund action.
+      // A delayed success must not reselect the asset the payer just dismissed.
+      invalidateActions();
       swapStartError = undefined;
     },
   };

@@ -253,7 +253,7 @@ for (const surface of SURFACES) {
 // P3: reachability, not fixtures — every state below is REACHED by driving the real
 // controller from wire responses, never injected as a pre-built render input.
 for (const surface of [elementSurface("create"), reactSurface("create")]) {
-  test(`${surface.name}: refund_required reaches the refund UI`, async () => {
+  test(`${surface.name}: refund_required remains actionable after deposit expiry`, async () => {
     const stack = await createLifecycleStack();
     globalThis.fetch = stack.fetchStub;
     stack.addOrder("order-1", 2000);
@@ -263,6 +263,19 @@ for (const surface of [elementSurface("create"), reactSurface("create")]) {
       await until(() => handle.html().includes(TESTKIT_TRON_DEPOSIT_ADDRESS), {
         label: `${surface.name} deposit address`,
       });
+      // Advance the browser past the displayed deposit deadline while the
+      // trusted wallet still owns its longer Lightning lifetime.
+      const realNow = Date.now;
+      const depositExpiry = stack.requests.find((entry) => entry.path === "/openreceive/swaps")
+        .responseBody.swap.provider_expires_at;
+      Date.now = () => (depositExpiry + 1) * 1000;
+      try {
+        await until(() => !handle.html().includes(TESTKIT_TRON_DEPOSIT_ADDRESS), {
+          label: "expired deposit instructions hidden",
+        });
+      } finally {
+        Date.now = realNow;
+      }
       stack.swapProvider.forceRefundRequired("USDT_TRON");
       await until(() => handle.text().includes("Refund needed"), {
         label: `${surface.name} refund panel`,
@@ -328,7 +341,7 @@ test("element-create: live provider progress states reach the UI", async () => {
   }
 });
 
-test("element-create: a completed refund is terminal and stops polling", async () => {
+test("element-create: completed refund stops provider reads and wallet finality stops payment reads", async () => {
   const stack = await createLifecycleStack();
   globalThis.fetch = stack.fetchStub;
   stack.addOrder("order-1", 2000);
@@ -345,10 +358,19 @@ test("element-create: a completed refund is terminal and stops polling", async (
     // refund_pending is not terminal: polling must continue to see "refunded".
     await until(() => handle.text().includes("Refunded"), { label: "refunded state" });
 
-    // The refund is the end of this attempt: the shadow invoice will never be
-    // paid, so neither the wallet check nor the provider read may continue. Wait for
-    // the element's own terminal state rather than timing the request stream: a
-    // count that happens to be stable for 250ms of wall clock proves nothing.
+    // A refund settles the provider workflow, but only the wallet/server can
+    // close its pending Lightning attempt. Keep discovering historical finality.
+    assert.equal(handle.terminal(), false);
+    const providerReads = stack.requests.filter((entry) =>
+      entry.path.endsWith("/swaps/status"),
+    ).length;
+    const paymentReads = stack.checkCalls().length;
+    await until(() => stack.checkCalls().length > paymentReads);
+    assert.equal(
+      stack.requests.filter((entry) => entry.path.endsWith("/swaps/status")).length,
+      providerReads,
+    );
+    stack.wallet.expireInvoice({ payment_hash: stack.wallet.listInvoices().at(-1).payment_hash });
     await until(() => handle.terminal(), { label: "terminal checkout state" });
     const requestsAfterRefund = stack.requests.length;
     await settle(10);

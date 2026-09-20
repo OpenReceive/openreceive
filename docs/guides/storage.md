@@ -22,8 +22,8 @@ openreceive_payments
   status         pending | settled | expired | failed | attention
   status_reason  nullable operator-facing detail
   paid_at        nullable, write-once
-  expires_at     required
-  created_at     required wallet invoice creation time
+  expires_at     required payer instruction/reuse deadline
+  created_at     required wallet creation time or host fallback
   updated_at     required
   inserted_at    required, stamped once
   checkout_data  required payer-safe JSON (bolt11, amount, timestamps)
@@ -32,10 +32,14 @@ openreceive_payments
 ```
 
 The same migration creates `openreceive_meta` beside it. Leave that table
-alone — it is the reconcile gate shared by every instance.
+in place — it holds the versioned reconcile gate, bounded scan progress, and
+explicit operator repair audit entries shared by every instance.
 
 `checkout_data` is how a reload re-serves the same invoice without another
-wallet call. Never serialize or log `swap_data`.
+wallet call. Its invoice expiry is the reconciliation deadline; swap deposit
+expiry only controls reuse and display. The snapshot records whether creation
+time came from the wallet so legacy/host timestamps cannot narrow history.
+Never serialize or log `swap_data`.
 
 SQL you write in `onPaid` is passed to your driver as-is. Use `?` on SQLite
 and `$1` on Postgres.
@@ -58,7 +62,9 @@ attempt. `onPaid` runs only for the first settled attempt on a reference; a
 second payment to a sibling invoice is recorded and never fulfills again.
 
 An unpaid attempt is not closed by your server clock. The library waits for
-a successful wallet scan at or after expiry, plus a grace window.
+a complete covering wallet scan at or after the saved wallet invoice expiry plus
+the 900-second observation grace. A resumed or truncated scan can discover
+settlement but cannot certify absence.
 
 ## Live attempts
 
@@ -74,7 +80,10 @@ row.
 If no supported `db` handle can reach your persistence, implement
 `PaymentRepository` and pass it as `payments` instead of `db`. You then own
 commit locking, the first-settlement claim, reconciliation transitions, and
-`claimReconcileGate` (or pass `opportunisticReconcile: false`).
+the atomic `recordSettlementWithFulfillment` callback transaction, durable
+`findByPaymentHash` acknowledgment, and lease-based `claimReconcileGate` /
+`checkpointReconcileGate` progress (or pass `opportunisticReconcile: false`).
+See the [upgrade and reviewed repair procedure](payment-safety-upgrade.md).
 
 This is the advanced path, not the quickstart. See
 [Node ORM recipes](node-orms.md) and the interface in `@openreceive/http`.

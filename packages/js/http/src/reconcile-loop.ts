@@ -46,6 +46,8 @@ export async function reconcileHostPayments(input: {
    * which is the request path.
    */
   readonly attempts?: readonly ReconcilableAttempt[];
+  /** Results from the gate-owned bounded slice; no additional wallet walk. */
+  readonly checks?: readonly PaymentCheck[];
 }): Promise<readonly PaymentCheck[]> {
   const clock = input.clock ?? unixSeconds;
   const attempts = input.attempts ?? (await input.host.payments.listReconcilableAttempts());
@@ -54,11 +56,13 @@ export async function reconcileHostPayments(input: {
     attempts.map((attempt) => [attempt.paymentHash.toLowerCase(), attempt] as const),
   );
   const scannedAt = clock();
-  const checks = await input.service.reconcilePayments({
-    attempts,
-    overlapSeconds: input.overlapSeconds,
-    ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
-  });
+  const checks =
+    input.checks ??
+    (await input.service.reconcilePayments({
+      attempts,
+      overlapSeconds: input.overlapSeconds,
+      ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
+    }));
   // One failing delivery or transition must not starve the rest of the pass:
   // each check is isolated, and the failures surface together at the end so
   // the caller's error path (reconciler warn, opportunistic report) sees them.
@@ -92,7 +96,7 @@ export async function reconcileHostPayments(input: {
       const transition = reconciliationTransition(
         attempt,
         checked.status,
-        scannedAt,
+        checked.coverageStartedAt ?? scannedAt,
         walletTransaction?.state ?? walletTransaction?.transaction_state,
       );
       if (transition !== null) {
@@ -138,9 +142,12 @@ export async function startReconciler(input: {
   if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 250) {
     throw new RangeError("pollIntervalMs must be a safe integer of at least 250");
   }
-  if (typeof input.host.payments.claimReconcileGate !== "function") {
+  if (
+    typeof input.host.payments.claimReconcileGate !== "function" ||
+    typeof input.host.payments.checkpointReconcileGate !== "function"
+  ) {
     throw new TypeError(
-      "The reconciler requires payments.claimReconcileGate (a durable CAS gate shared by every " +
+      "The reconciler requires payments.claimReconcileGate and checkpointReconcileGate (a durable CAS gate shared by every " +
         "worker); implement it on the repository so all scan entry points stay within one budget.",
     );
   }

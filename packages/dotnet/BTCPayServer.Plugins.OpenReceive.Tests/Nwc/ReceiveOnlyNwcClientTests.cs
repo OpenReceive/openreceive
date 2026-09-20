@@ -467,7 +467,8 @@ public sealed class ReceiveOnlyNwcClientTests
         Assert.Equal(walksBefore, h.Transport.Count("list_transactions"));
         // Disposing the listener ends the wait (disposed exactly once: Dispose is not idempotent).
         listener.Dispose();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+        var stopped = await Record.ExceptionAsync(() => waiting);
+        Assert.True(stopped is OperationCanceledException or System.Threading.Channels.ChannelClosedException);
     }
 
     [Fact]
@@ -709,6 +710,27 @@ public sealed class ReceiveOnlyNwcClientTests
         var paid = await client.GetInvoice(invoice.Id);
         Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
         Assert.Equal(invoice.Id, Assert.Single(restarted.Memo.DrainNewlySettled()).PaymentHash);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("different-wallet:public-client")]
+    public async Task A_stored_mint_with_unknown_or_different_account_never_joins_the_current_wallet_watch(string? identity)
+    {
+        await using var h = new Harness();
+        var invoice = await h.Mint();
+        var stored = (await h.Invoices.FindAsync(invoice.Id, CancellationToken.None))!;
+        stored.ConnectionId = identity;
+        await h.Invoices.UpdateAsync(stored, CancellationToken.None);
+        await h.Backend.SettleAsync(invoice.Id);
+        var (state, client) = h.Restart();
+        var scans = h.Transport.Requests("list_transactions").Count;
+        var lookups = h.Transport.Requests("lookup_invoice").Count;
+        Assert.Equal(LightningInvoiceStatus.Unpaid, (await client.GetInvoice(invoice.Id)).Status);
+        Assert.Null(await client.RefreshHashAsync(invoice.Id, CancellationToken.None));
+        Assert.False(state.Memo.IsWatched(invoice.Id));
+        Assert.Equal(scans, h.Transport.Requests("list_transactions").Count);
+        Assert.Equal(lookups, h.Transport.Requests("lookup_invoice").Count);
     }
 
     [Fact]

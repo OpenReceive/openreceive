@@ -203,6 +203,77 @@
           }
         ]
       }
+    },
+    {
+      "method": "list_transactions",
+      "openreceive_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "expected_nip47_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "name": "scalar and null history rows cannot prove an empty wallet",
+      "raw_response": {
+        "transactions": [null, 7, "invalid-row", []]
+      },
+      "expected_error": true
+    },
+    {
+      "method": "list_transactions",
+      "openreceive_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "expected_nip47_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "name": "optional object rows remain usable while scalar rows count as skipped",
+      "raw_response": {
+        "transactions": [null, {}, 7, []]
+      },
+      "expected_openreceive_response": {
+        "transactions": [{}]
+      },
+      "expected_skipped_rows": 3
+    },
+    {
+      "method": "list_transactions",
+      "openreceive_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "expected_nip47_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "name": "mixed-case history hashes normalize to one lowercase identity",
+      "raw_response": {
+        "transactions": [
+          {
+            "payment_hash": "AaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAa",
+            "state": "settled",
+            "settled_at": 1200
+          }
+        ]
+      },
+      "expected_openreceive_response": {
+        "transactions": [
+          {
+            "payment_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "transaction_state": "settled",
+            "settled_at": 1200
+          }
+        ]
+      }
     }
   ]
 }

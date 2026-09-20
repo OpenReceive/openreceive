@@ -7,6 +7,11 @@
 @inject BtcPayInvoiceSource InvoiceSource
 @{
     var availability = await CheckoutAvailability.ForRequestAsync(Context, Model.InvoiceId, InvoiceSource, SwapService);
+    var recovery = await SwapService.RecoveryAsync(Model.InvoiceId, null, 1, Context.RequestAborted);
+}
+@if (recovery?.Attempts.Count > 0 || availability is { Offered: true })
+{
+    <a class="d-block text-center my-2 openreceive-recovery-link" href="@Url.Content("~/plugins/openreceive/invoices/" + Model.InvoiceId + "/recovery")">Payment status and refunds</a>
 }
 @if (availability is { Offered: true })
 {
@@ -15,7 +20,7 @@
             <div v-if="error" class="alert alert-danger text-break">{{ error }}</div>
             <div v-else-if="!swap" class="text-center py-4"><div class="spinner-border" role="status"></div><p class="mt-3 mb-0">Preparing your {{ assetLabel }} payment address…</p></div>
             <template v-else>
-                <div v-if="swap.phase === 'awaiting_deposit'">
+                <div v-if="swap.phase === 'awaiting_deposit' && swap.instructions_available && remaining > 0">
                     <div class="alert py-2 px-3 mb-3" :class="swap.deposit_risk === 'pinned' ? 'alert-info' : 'alert-warning'">
                         <strong>{{ swap.network_warning_title }}</strong>
                         <div class="small">{{ swap.network_warning }}</div>
@@ -48,10 +53,10 @@
                         <span>Address valid for <strong>{{ countdown }}</strong></span>
                     </div>
                 </div>
-                <div v-else-if="swap.phase === 'processing' || swap.phase === 'settling' || swap.phase === 'preparing'" class="text-center py-3">
+                <div v-else-if="swap.phase === 'awaiting_deposit' || swap.phase === 'processing' || swap.phase === 'settling' || swap.phase === 'preparing'" class="text-center py-3">
                     <div class="spinner-border mb-3" role="status"></div>
-                    <h5 class="mb-1">{{ swap.label }}</h5>
-                    <p class="text-muted mb-0">{{ swap.detail }}</p>
+                    <h5 class="mb-1">{{ swap.phase === 'awaiting_deposit' ? 'Checking payment status' : swap.label }}</h5>
+                    <p class="text-muted mb-0">{{ swap.phase === 'awaiting_deposit' ? 'Do not send another deposit. Existing payments and refunds are still being checked.' : swap.detail }}</p>
                     <p v-if="swap.deposit_tx_id" class="small text-muted text-break mt-2 mb-0">Deposit tx {{ swap.deposit_tx_id }}</p>
                 </div>
                 <div v-else-if="swap.phase === 'refund'">
@@ -65,7 +70,7 @@
                         <input type="text" class="form-control" id="or-swap-refund-address" v-model.trim="refundAddress" placeholder="Paste an address you control" />
                         <div v-if="refundError" class="text-danger small mt-1">{{ refundError }}</div>
                         <button type="button" class="btn btn-primary rounded-pill w-100 mt-3" :disabled="refunding || !refundAddress" @@click="requestRefund">Request refund</button>
-                        <p class="small text-muted mt-2 mb-0">Keep this page open: you will need it to come back to this refund.</p>
+                        <p class="small text-muted mt-2 mb-0">Bookmark the payment status and refunds link to return to this refund.</p>
                     </div>
                     <div v-else class="small">
                         <div v-if="swap.refund_address" class="text-break">Refund address: {{ swap.refund_address }}</div>

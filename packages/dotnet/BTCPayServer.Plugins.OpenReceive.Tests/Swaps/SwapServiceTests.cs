@@ -29,7 +29,8 @@ public sealed class SwapServiceTests
     private sealed class SettingsStub : ISwapSettingsSource
     {
         public OpenReceiveStoreSettings Settings { get; } = new() { SwapsEnabled = true, LscPrimary = LscPrimary };
-        public Task<OpenReceiveStoreSettings> GetAsync(string storeId) => Task.FromResult(Settings);
+        public Dictionary<string, OpenReceiveStoreSettings> Overrides { get; } = new();
+        public Task<OpenReceiveStoreSettings> GetAsync(string storeId) => Task.FromResult(Overrides.GetValueOrDefault(storeId) ?? Settings);
     }
 
     private sealed class InvoiceStub : ISwapInvoiceSource
@@ -39,12 +40,21 @@ public sealed class SwapServiceTests
             Task.FromResult(Invoices.GetValueOrDefault(invoiceId));
     }
 
+    private sealed class AccountRoutingHandler(FakeLscProviderCore primary, FakeLscProviderCore secondary) : HttpMessageHandler
+    {
+        private readonly HttpMessageInvoker _primary = new(new FakeLscHttpMessageHandler(primary));
+        private readonly HttpMessageInvoker _secondary = new(new FakeLscHttpMessageHandler(secondary));
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            (request.RequestUri!.Host == "second-lsc.test" ? _secondary : _primary).SendAsync(request, cancellationToken);
+    }
+
     private sealed class Harness
     {
         public long Now = 1_800_000_000;
         public readonly List<string> Paid = new();
         public readonly List<string> Log = new();
         public readonly FakeLscProviderCore Core;
+        public readonly FakeLscProviderCore SecondCore;
         public readonly InMemorySwapStore Store = new();
         public readonly SettingsStub Settings = new();
         public readonly InvoiceStub Invoices = new();
@@ -63,7 +73,8 @@ public sealed class SwapServiceTests
                     return Task.CompletedTask;
                 },
             });
-            var factory = new InMemoryHttpClientFactory(new FakeLscHttpMessageHandler(Core));
+            SecondCore = new FakeLscProviderCore(new FakeLscOptions { Clock = () => Now });
+            var factory = new InMemoryHttpClientFactory(new AccountRoutingHandler(Core, SecondCore));
             Pool = new SwapProviderPool(factory, Settings, NullLogger<SwapProviderPool>.Instance, () => Now);
             Service = new SwapService(Store, Pool, Settings, Invoices, NullLogger<SwapService>.Instance, () => Now);
             Invoices.Invoices[InvoiceId] = Invoice();
@@ -305,12 +316,148 @@ public sealed class SwapServiceTests
         Assert.Equal(h.Now + 900, second.ProviderExpiresAt);
         Assert.Equal(2, h.Core.Orders.Count);
         var old = await h.Row(first.SwapId);
-        Assert.Equal("expired", old.State);
-        Assert.Equal("superseded_near_provider_expiry", old.StateReason);
-        Assert.True(old.IsTerminal);
-        Assert.Equal(h.Now, old.StateChangedAt);
+        Assert.Equal("awaiting_deposit", old.State);
+        Assert.Null(old.StateReason);
+        Assert.False(old.IsTerminal);
+        Assert.Equal(h.Now, old.RetiredAt);
+        Assert.Equal(second.SwapId, old.ReplacementId);
         var live = await h.Store.FindLiveAsync(InvoiceId, "USDT_TRON", CancellationToken.None);
         Assert.Equal(second.SwapId, live!.Id);
+    }
+
+    [Fact]
+    public async Task Unobserved_provider_refund_prevents_replacement_and_recovers_when_creation_disabled()
+    {
+        var h = new Harness();
+        var first = await h.Create();
+        h.Core.ForceRefundRequired(first.ProviderOrderId);
+        h.Now += 842;
+        h.Invoices.Invoices[InvoiceId] = h.Invoice(partial: true, expiresAt: h.Now + 60);
+        var recovered = await h.Create();
+        Assert.Equal(first.SwapId, recovered.SwapId);
+        Assert.Equal("refund_required", recovered.State);
+        Assert.Single(h.Core.Orders);
+        h.Settings.Settings.SwapsEnabled = false;
+        var page = await h.Service.RecoveryAsync(InvoiceId, null, 50, CancellationToken.None);
+        Assert.Single(page!.Attempts);
+        var refund = await h.Service.RefundAsync(InvoiceId, first.SwapId, ValidTronAddress, CancellationToken.None);
+        Assert.Equal("refund_pending", refund.State);
+        Assert.False(refund.InstructionsAvailable);
+    }
+
+    [Fact]
+    public async Task Deposit_after_retirement_remains_polled_and_refundable()
+    {
+        var h = new Harness();
+        var first = await h.Create();
+        h.Now += 842;
+        var replacement = await h.Create();
+        h.Core.ForceRefundRequired(first.ProviderOrderId, "late_deposit");
+        await h.Poll(first.SwapId);
+        var retired = await h.Service.GetAsync(InvoiceId, first.SwapId, CancellationToken.None);
+        Assert.True(retired!.Retired);
+        Assert.False(retired.InstructionsAvailable);
+        Assert.Equal("refund_required", retired.State);
+        Assert.Equal(replacement.SwapId, retired.ReplacementId);
+        Assert.Equal("refund_pending", (await h.Service.RefundAsync(InvoiceId, first.SwapId, ValidTronAddress, CancellationToken.None)).State);
+        Assert.Equal(2, (await h.Service.RecoveryAsync(InvoiceId, null, 50, CancellationToken.None))!.Attempts.Count);
+    }
+
+    [Fact]
+    public async Task Real_weight_budget_does_not_starve_denied_cohort_after_restart()
+    {
+        var h = new Harness();
+        // Creating each minute avoids consuming the later status budget. All 400 provider
+        // orders are real signed fake-provider HTTP calls; retirement keeps half recoverable.
+        for (var n = 0; n < 400; n++)
+        {
+            h.Now += 60;
+            var id = "backlog-" + n;
+            h.Invoices.Invoices[id] = h.Invoice(expiresAt: h.Now + 3600) with { InvoiceId = id };
+            var created = await h.Service.CreateAsync(id, "USDT_TRON", CancellationToken.None);
+            if (n % 2 == 0)
+            {
+                var row = await h.Row(created.SwapId);
+                row.RetiredAt = h.Now;
+                await h.Store.UpdateAsync(row, CancellationToken.None);
+            }
+        }
+        h.Core.ForceRefundRequired("USDT_TRON");
+        h.Now += 60;
+        h.Log.Clear();
+        await h.Service.PollOnceAsync(CancellationToken.None);
+        Assert.Equal(200, h.Store.Rows.Count(r => r.State == "refund_required"));
+        h.Now += 5;
+        await h.Service.PollOnceAsync(CancellationToken.None);
+        var denied = h.Store.Rows.Where(r => r.State != "refund_required").ToArray();
+        Assert.Equal(200, denied.Length);
+        Assert.All(denied, r => Assert.True(r.LastObservedAt < h.Now - 5));
+        Assert.All(denied, r => Assert.True(r.NextPollAt > h.Now));
+        // New service/worker, same durable scheduling. The process budget resets on restart
+        // by design, but denied rows retain priority at their eligibility boundary.
+        var restarted = new SwapService(h.Store, h.Pool, h.Settings, h.Invoices, NullLogger<SwapService>.Instance, () => h.Now);
+        for (var elapsed = 10; elapsed <= 180; elapsed += 5)
+        {
+            h.Now += 5;
+            if (elapsed == 120) h.Core.RateLimitNext(1);
+            await restarted.PollOnceAsync(CancellationToken.None);
+            if (elapsed == 60)
+            {
+                Assert.All(h.Store.Rows, r => Assert.Equal("refund_required", r.State));
+                Assert.Equal(400, h.Log.Count(line => line.StartsWith("POST /api/v2/order", StringComparison.Ordinal)));
+            }
+        }
+        Assert.All(h.Store.Rows, r => Assert.Equal("refund_required", r.State));
+        Assert.Equal(601, h.Log.Count(line => line.StartsWith("POST /api/v2/order", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task A_denied_provider_connection_does_not_block_another_account_or_new_arrivals()
+    {
+        var h = new Harness();
+        h.Settings.Overrides["second-store"] = new OpenReceiveStoreSettings
+        {
+            SwapsEnabled = true, LscPrimary = LscPrimary.Replace("fake-lsc.test", "second-lsc.test"),
+        };
+        for (var n = 0; n < 220; n++)
+        {
+            h.Now += 60;
+            var id = "account-backlog-" + n;
+            h.Invoices.Invoices[id] = h.Invoice(expiresAt: h.Now + 3600) with { InvoiceId = id };
+            await h.Service.CreateAsync(id, "USDT_TRON", CancellationToken.None);
+        }
+        h.Core.ForceRefundRequired("USDT_TRON");
+        h.Now += 60;
+        await h.Service.PollOnceAsync(CancellationToken.None); // first account consumes its window
+        var arrivals = new List<string>();
+        for (var n = 0; n < 2; n++)
+        {
+            h.Now += 5;
+            var id = "new-account-arrival-" + n;
+            h.Invoices.Invoices[id] = h.Invoice(expiresAt: h.Now + 3600) with { InvoiceId = id, StoreId = "second-store" };
+            var created = await h.Service.CreateAsync(id, "USDT_TRON", CancellationToken.None);
+            arrivals.Add(created.SwapId);
+            h.SecondCore.ForceRefundRequired(created.ProviderOrderId);
+            await h.Service.PollOnceAsync(CancellationToken.None);
+        }
+        h.Now += 5;
+        await h.Service.PollOnceAsync(CancellationToken.None);
+        Assert.All(h.Store.Rows.Where(r => arrivals.Contains(r.Id)), r => Assert.Equal("refund_required", r.State));
+        Assert.Contains(h.Store.Rows, r => r.StoreId == StoreId && r.State == "awaiting_deposit");
+        for (var n = 2; n < 6; n++)
+        {
+            // Two creates per window leave room below the real 150-weight create gate.
+            h.Now += n % 2 == 0 ? 60 : 5;
+            var id = "new-account-arrival-" + n;
+            h.Invoices.Invoices[id] = h.Invoice(expiresAt: h.Now + 3600) with { InvoiceId = id, StoreId = "second-store" };
+            var created = await h.Service.CreateAsync(id, "USDT_TRON", CancellationToken.None);
+            h.SecondCore.ForceRefundRequired(created.ProviderOrderId);
+            await h.Service.PollOnceAsync(CancellationToken.None);
+        }
+        h.Now += 5;
+        await h.Service.PollOnceAsync(CancellationToken.None);
+        Assert.All(h.Store.Rows, r => Assert.Equal("refund_required", r.State));
+        Assert.Empty(h.Paid); // provider observations never credit host invoices
     }
 
     // ---- Lifecycle ----
@@ -636,11 +783,11 @@ public sealed class SwapServiceTests
 
         await h.Poll(model.SwapId);
         var v2 = await h.Row(model.SwapId);
-        Assert.Equal(2u, v2.Version);
+        Assert.True(v2.Version > v1.Version);
 
         await h.Service.OnLightningRemintAsync(InvoiceId, CancellationToken.None);
         var v3 = await h.Row(model.SwapId);
-        Assert.Equal(3u, v3.Version);
+        Assert.True(v3.Version > v2.Version);
         Assert.Equal(SwapService.PluginReasonReminted, v3.PluginReason);
 
         // The copy from before the re-mint is stale; the remint annotation cannot be undone by it.

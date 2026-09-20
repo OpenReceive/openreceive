@@ -71,6 +71,8 @@ export type {
 } from "./payments.ts";
 // Storage-free payment verification and reconciliation.
 export { reconcilePaymentAttempts } from "./payments.ts";
+export { createPaymentScanWindow, scanPaymentSlice } from "./payment-scan.ts";
+export type { ScanAttempt, PaymentScanWindow, PaymentScanSlice } from "./payment-scan.ts";
 // The one canonical statement of the host's exactly-once fulfillment duty,
 // rendered into every generated file, migration template, and wiring guide so
 // the guidance can never drift.
@@ -151,3 +153,10 @@ export {
   recordOrEmpty,
   unixSeconds,
 } from "./values.ts";
+
+export {
+  sanitizeLogValue,
+  isSensitiveLogKey,
+  redactSecrets,
+  publicErrorBody,
+} from "./diagnostics.ts";

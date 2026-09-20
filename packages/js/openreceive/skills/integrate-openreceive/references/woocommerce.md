@@ -73,6 +73,8 @@ flows; a receive-only NWC wallet cannot send payments.
 - [Agent Directions: BTCPay Server](https://openreceive.org/guides/agent-directions-btcpay.md)
 - [WordPress + WooCommerce Quickstart](https://openreceive.org/guides/quickstart-woocommerce.md)
 
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
+
 ---
 
 ## The quickstart, in full

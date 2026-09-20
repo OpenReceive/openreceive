@@ -168,7 +168,7 @@ The host class needs three things: authorization, the trusted price, and
 fulfillment. All three receive the `reference` — a string you choose, and the
 fulfillment identity: your order id, one per thing you fulfill, created before
 checkout, kept across retries, never reused. OpenReceive never looks inside
-it, but `on_paid` runs once per reference, a new checkout under a reference
+it, but `on_paid` commits fulfillment once per reference, a new checkout under a reference
 that already settled is refused with 409, and a fresh id per page load lets
 one order be paid twice.
 

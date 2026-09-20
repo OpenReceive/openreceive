@@ -17,7 +17,12 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from openreceive.server.errors import ConfigurationError, ConflictError, NotFoundError
+from openreceive.server.errors import (
+    ConfigurationError,
+    ConflictError,
+    HostPersistenceError,
+    NotFoundError,
+)
 from openreceive.server.handler import HookContext, HttpRequest, HttpResponse, RequestHandler
 from openreceive.server.hosts import Host, price_description, price_only
 from openreceive.server.rate_limit import built_in_rate_limit
@@ -62,10 +67,13 @@ class OpenReceiveApp:
                 "Set either rate_limiting (the built-in per-IP limiter) or a custom rate_limit hook, not both. "
                 "https://openreceive.org/guides/rate-limiting.md"
             )
-        if opportunistic_reconcile is not False and not hasattr(repository, "claim_reconcile_gate"):
+        if opportunistic_reconcile is not False and not all(
+            callable(getattr(repository, name, None))
+            for name in ("claim_reconcile_gate", "checkpoint_reconcile_gate")
+        ):
             # The default settlement path never degrades silently.
             raise ConfigurationError(
-                "opportunistic_reconcile (on by default) needs repository.claim_reconcile_gate — a durable CAS gate "
+                "opportunistic_reconcile (on by default) needs repository.claim_reconcile_gate and checkpoint_reconcile_gate — a durable CAS gate "
                 "shared by every worker. Implement it, or pass opportunistic_reconcile=False and run your own "
                 "settlement worker. https://openreceive.org/guides/storage.md"
             )
@@ -195,6 +203,8 @@ class OpenReceiveApp:
         except AttemptConflict as error:
             # A live same-method row is a 409 CONFLICT, never a retryable 503.
             raise ConflictError(str(error))
+        except Exception as error:
+            raise HostPersistenceError() from error
 
     def _settlement_hook(self, event: dict[str, Any]) -> None:
         self.reconciler.settle(event)

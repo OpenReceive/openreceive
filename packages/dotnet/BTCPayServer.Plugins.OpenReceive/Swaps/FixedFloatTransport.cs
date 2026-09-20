@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using BTCPayServer.Plugins.OpenReceive.Nwc;
 using System.Globalization;
 using System.Net;
 using System.Net.Http;
@@ -210,14 +211,11 @@ public sealed class FixedFloatTransport
         _apiRequestLogger?.Invoke(new SwapProviderApiRequestLog(_provider, path, bodyJson));
 
     public void LogApiResponse(string path, int status, bool ok, string? code, string? message) =>
-        _apiResponseLogger?.Invoke(new SwapProviderApiResponseLog(_provider, path, status, ok, code, message));
+        _apiResponseLogger?.Invoke(new SwapProviderApiResponseLog(_provider, path, status, ok, code is null ? null : SecretSafeDiagnostics.Text(code), message is null ? null : SecretSafeDiagnostics.Text(message)));
 
     private static string RedactedBodyJson(JsonObject body)
     {
-        if (!body.ContainsKey("token")) return body.ToJsonString(BodyJsonOptions);
-        var redacted = (JsonObject)body.DeepClone();
-        redacted["token"] = "[redacted]";
-        return redacted.ToJsonString(BodyJsonOptions);
+        return SecretSafeDiagnostics.Project(body)!.ToJsonString(BodyJsonOptions);
     }
 
     private string Sign(byte[] bodyBytes) =>

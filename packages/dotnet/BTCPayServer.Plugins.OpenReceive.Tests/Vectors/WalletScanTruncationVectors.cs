@@ -41,7 +41,17 @@ public sealed class WalletScanTruncationVectors
         Task<ListTransactionsResult> List(ListTransactionsRequest request, CancellationToken ct)
         {
             var source = request.Unpaid == true ? unpaidPages : pages;
-            var index = ignoresOffset ? 0 : (request.Offset ?? 0) / OpenReceiveTables.TransactionPageLimit;
+            var index = 0;
+            if (!ignoresOffset)
+            {
+                var offset = request.Offset ?? 0;
+                var physical = 0;
+                while (index < source.Count && physical < offset)
+                {
+                    physical += source[index].Transactions.Count + source[index].SkippedRows;
+                    index++;
+                }
+            }
             return Task.FromResult(index < source.Count ? source[index] : new ListTransactionsResult { Transactions = Array.Empty<NwcTransaction>() });
         }
 

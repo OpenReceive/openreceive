@@ -6,6 +6,11 @@
 @inject BtcPayInvoiceSource InvoiceSource
 @{
     var availability = await CheckoutAvailability.ForRequestAsync(Context, Model.InvoiceId, InvoiceSource, SwapService);
+    var recovery = await SwapService.RecoveryAsync(Model.InvoiceId, null, 1, Context.RequestAborted);
+}
+@if (recovery?.Attempts.Count > 0)
+{
+    <a class="d-block text-center my-2 openreceive-recovery-link" href="@Url.Content("~/plugins/openreceive/invoices/" + Model.InvoiceId + "/recovery")">Payment status and refunds</a>
 }
 @if (availability is { Offered: true })
 {

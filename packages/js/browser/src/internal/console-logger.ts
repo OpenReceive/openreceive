@@ -1,3 +1,4 @@
+import { isSensitiveLogKey, sanitizeLogValue } from "@openreceive/core";
 import {
   browserLogLevelOrder,
   readBrowserLogLevelFromEnvironment,
@@ -73,35 +74,13 @@ function createConsoleWriter(
 export function sanitizeBrowserLogEntry(entry: BrowserLogEntry): BrowserLogEntry {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
-    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
+    if (isSensitiveLogKey(key)) {
       clean[key] = "[REDACTED]";
     } else {
-      clean[key] = sanitizeBrowserLogValue(value);
+      clean[key] = sanitizeLogValue(value);
     }
   }
   return clean as BrowserLogEntry;
-}
-
-function sanitizeBrowserLogValue(value: unknown): unknown {
-  if (typeof value === "string") return redactBrowserSecrets(value);
-  if (Array.isArray(value)) return value.map(sanitizeBrowserLogValue);
-  if (typeof value !== "object" || value === null) return value;
-
-  const clean: Record<string, unknown> = {};
-  for (const [key, nested] of Object.entries(value)) {
-    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
-      clean[key] = "[REDACTED]";
-    } else {
-      clean[key] = sanitizeBrowserLogValue(nested);
-    }
-  }
-  return clean;
-}
-
-function redactBrowserSecrets(value: string): string {
-  return value
-    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
-    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
 export interface CreateBrowserConsoleLoggerOptions {

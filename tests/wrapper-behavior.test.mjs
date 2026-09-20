@@ -214,3 +214,76 @@ test("the Svelte wrapper mounts: svelte mount() renders the checkout shell for a
     container.remove();
   }
 });
+
+for (const framework of ["vue", "svelte"])
+  test(`${framework} identity changes discard a delayed element mint`, async () => {
+    let releaseMint;
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ url, body });
+      if (url.endsWith("/prepare"))
+        return Response.json({
+          reference: body.reference,
+          amount_msats: 21000,
+          payment_methods: [],
+        });
+      if (url.endsWith("/checkouts"))
+        return new Promise((resolve) => {
+          releaseMint = resolve;
+        });
+      return Response.json({ status: "pending" });
+    };
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    let change, dispose;
+    if (framework === "vue") {
+      const Checkout = await loadVueCheckout();
+      const { createApp, h, reactive } = await import("vue");
+      const state = reactive({ reference: "A" });
+      const app = createApp({ render: () => h(Checkout, state) });
+      app.mount(target);
+      change = () => {
+        state.reference = "B";
+      };
+      dispose = () => app.unmount();
+    } else {
+      const Checkout = await loadSvelteCheckout();
+      const { createClassComponent } = await import(
+        pathToFileURL(path.join(repoRoot, "node_modules/svelte/src/legacy/legacy-client.js")).href
+      );
+      const instance = createClassComponent({
+        component: Checkout,
+        target,
+        props: { reference: "A" },
+      });
+      change = () => instance.$set({ reference: "B" });
+      dispose = () => instance.$destroy();
+    }
+    try {
+      let element = await until(() => target.querySelector("openreceive-checkout"));
+      (await until(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'))).click();
+      await until(() => releaseMint !== undefined);
+      change();
+      await until(() => calls.some((c) => c.url.endsWith("/prepare") && c.body.reference === "B"));
+      releaseMint(
+        Response.json({
+          checkout: {
+            reference: "A",
+            payment_hash: "a".repeat(64),
+            bolt11: "lnbc-obsolete-a",
+            amount_msats: 21000,
+            expires_at: Math.floor(Date.now() / 1000) + 900,
+          },
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      element = target.querySelector("openreceive-checkout");
+      assert.equal(element.getAttribute("reference"), "B");
+      assert.equal(element.getAttribute("invoice"), null);
+      assert.doesNotMatch(element.shadowRoot.innerHTML, /obsolete-a/);
+    } finally {
+      await dispose();
+      target.remove();
+    }
+  });

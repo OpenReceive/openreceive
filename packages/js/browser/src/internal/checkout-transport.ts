@@ -13,7 +13,7 @@ import {
   requiredSafeInteger,
   requiredString,
 } from "./checkout-read.ts";
-import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
+import { checkoutMonitoring } from "./checkout-state.ts";
 import { requestHeaders } from "./request-headers.ts";
 import { checkoutRoutes, type Routes } from "./routes.ts";
 import type {
@@ -114,6 +114,7 @@ export async function readJsonResponse(
 }
 
 interface NormalizedRequestCheckoutOptions {
+  readonly signal?: AbortSignal;
   readonly routes: Routes;
   readonly reference: string;
   readonly fetch?: typeof globalThis.fetch;
@@ -129,6 +130,7 @@ function normalizeRequestCheckoutOptions(
   const reference = nonEmptyString(options.reference);
   const metadata = optionalRecord(options.metadata);
   return {
+    signal: options.signal,
     routes: checkoutRoutes(options.prefix),
     reference: reference ?? "",
     fetch: options.fetch,
@@ -163,6 +165,7 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
   const headers = request.headers === undefined ? {} : request.headers;
   const response = await fetcher(request.routes.checkouts, {
     method: "POST",
+    signal: request.signal,
     headers: requestHeaders(headers, request.csrfHeader),
     body: JSON.stringify(requestBody),
   });
@@ -203,6 +206,7 @@ export async function prepareCheckout(options: PrepareCheckoutOptions): Promise<
   const headers = request.headers === undefined ? {} : request.headers;
   const response = await fetcher(request.routes.checkoutsPrepare, {
     method: "POST",
+    signal: request.signal,
     headers: requestHeaders(headers, request.csrfHeader),
     body: JSON.stringify({ reference: request.reference }),
   });
@@ -242,66 +246,61 @@ export function createStatusFetcher(
     if (activePaymentHash === undefined || !/^[0-9a-f]{64}$/i.test(activePaymentHash)) {
       return snapshot;
     }
-    const response = await fetcher(routes.paymentsCheck, {
-      method: "POST",
-      headers: requestHeaders(headers, options.csrfHeader),
-      body: JSON.stringify({
-        reference,
-        payment_hash: activePaymentHash,
-      }),
-    });
-    const body = await readJsonResponse(response, "Could not refresh invoice status.");
-
-    const payment = recordOrEmpty(body);
     const next = structuredClone(snapshot);
     if (next.active === undefined) return next;
-    const state = nonEmptyString(payment.status) ?? "pending";
-    const paidAt = optionalSafeInteger(payment.paid_at, "paid_at");
-    let active = {
-      ...next.active,
-      transaction_state: state === "not_found" ? "pending" : state,
-      ...(paidAt === undefined ? {} : { settled_at: paidAt }),
-    };
-    // A live swap needs the provider's state too: "confirming"/"exchanging"
-    // progress, expiry, and critically refund_required can only come from
-    // /swaps/status — /payments/check sees only the shadow invoice.
-    if (
-      active.rail === "swap" &&
-      active.swap !== undefined &&
-      state !== "settled" &&
-      // A terminal provider state is final; re-reading it only adds provider load.
-      !isTerminalSwapProviderState(nonEmptyString(active.swap.provider_state))
-    ) {
+    let active = next.active;
+    let payment: Record<string, unknown> = {};
+    let paymentError: unknown;
+    if (checkoutMonitoring(active).payment) {
+      try {
+        const response = await fetcher(routes.paymentsCheck, {
+          method: "POST",
+          headers: requestHeaders(headers, options.csrfHeader),
+          body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
+        });
+        payment = recordOrEmpty(
+          await readJsonResponse(response, "Could not refresh invoice status."),
+        );
+        const state = nonEmptyString(payment.status) ?? "pending";
+        const paidAt = optionalSafeInteger(payment.paid_at, "paid_at");
+        active = {
+          ...active,
+          transaction_state: state === "not_found" ? "pending" : state,
+          ...(paidAt === undefined ? {} : { settled_at: paidAt }),
+        };
+      } catch (error) {
+        // Provider recovery must remain reachable during wallet outages too.
+        paymentError = error;
+      }
+    }
+    if (active.rail === "swap" && checkoutMonitoring(active).provider) {
       try {
         const swapResponse = await fetcher(routes.swapsStatus, {
           method: "POST",
           headers: requestHeaders(headers, options.csrfHeader),
           body: JSON.stringify({ reference, payment_hash: activePaymentHash }),
         });
-        const swapBody = recordOrEmpty(
-          await readJsonResponse(swapResponse, "Could not refresh swap status."),
+        active = mergeSwapStatusIntoInvoice(
+          active,
+          recordOrEmpty(await readJsonResponse(swapResponse, "Could not refresh swap status.")),
         );
-        active = mergeSwapStatusIntoInvoice(active, swapBody);
         swapStatusFailures = 0;
       } catch (error) {
-        // Live swap state is an enrichment: one blip must not break the tick,
-        // and the shadow-invoice status above still lands. But /swaps/status is
-        // the ONLY source of refund_required (see the comment above), so a
-        // persistent failure would freeze the panel on a stale
-        // awaiting_deposit forever and never show a refund the payer must act
-        // on. Surface a definitive failure at once and a repeated one after
-        // SWAP_STATUS_FAILURE_LIMIT ticks.
         swapStatusFailures += 1;
         const definitive = error instanceof BrowserRequestError && error.retryable === false;
-        const swap = active.swap;
-        if (swap !== undefined && (definitive || swapStatusFailures >= SWAP_STATUS_FAILURE_LIMIT)) {
+        if (
+          active.swap !== undefined &&
+          (definitive || swapStatusFailures >= SWAP_STATUS_FAILURE_LIMIT)
+        ) {
           active = {
             ...active,
-            swap: { ...swap, attention: true, attention_reason: "swap_status_unavailable" },
+            swap: { ...active.swap, attention: true, attention_reason: "swap_status_unavailable" },
           };
         }
+        if (paymentError === undefined && !checkoutMonitoring(active).payment) paymentError = error;
       }
     }
+    const state = active.transaction_state;
     const paymentMethods = normalizePaymentMethods(payment.payment_methods);
     // Sibling attempts stay in the snapshot: an order can hold a live swap next
     // to a still-valid Lightning invoice, and dropping the sibling forced a
@@ -321,6 +320,7 @@ export function createStatusFetcher(
             : "open",
       ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
     };
+    if (paymentError !== undefined && active.swap === undefined) throw paymentError;
     return snapshot;
   };
 }

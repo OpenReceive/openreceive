@@ -111,6 +111,8 @@ def normalize_list_transactions_response(response: object) -> dict[str, Any]:
     skipped = carried if isinstance(carried, int) else 0
     for row in rows:
         try:
+            if not hasattr(row, "items"):
+                raise TypeError("non-object transaction row")
             transactions.append(normalize_transaction(row))
         except (KeyError, ValueError, TypeError):
             skipped += 1

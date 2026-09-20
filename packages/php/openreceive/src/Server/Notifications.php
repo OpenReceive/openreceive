@@ -24,6 +24,7 @@ final class Notifications
     /** @var callable(): float */
     private $monotonic;
     private bool $stopped = false;
+    private ?float $lastPass = null;
 
     /**
      * @param (callable(int): void)|null $sleep
@@ -56,18 +57,11 @@ final class Notifications
      */
     public function listen(): void
     {
-        $lastPass = 0.0;
         $this->service->subscribeNotifications(
             function (array $notification): void {
                 $this->reconciler->handleNotification($notification);
             },
-            function () use (&$lastPass): void {
-                if (($this->monotonic)() - $lastPass < $this->reconcileIntervalSeconds) {
-                    return;
-                }
-                $lastPass = ($this->monotonic)();
-                $this->periodicPass();
-            }
+            fn () => $this->tick()
         );
     }
 
@@ -81,7 +75,8 @@ final class Notifications
     public function run(?callable $shouldContinue = null): void
     {
         $backoff = null;
-        $this->periodicPass();
+        if ($this->stopped) return;
+        $this->tick();
         while (!$this->stopped && ($shouldContinue === null || $shouldContinue())) {
             $subscribedAt = ($this->monotonic)();
             $failure = null;
@@ -99,13 +94,28 @@ final class Notifications
             } else {
                 $this->logger?->warning('openreceive notifications error: ' . Reconciler::sanitizeFailureMessage($failure) . "; retrying in {$backoff}s (the periodic reconcile pass still covers settlements)");
             }
-            ($this->sleep)($backoff);
+            // The catch-up loop is independent of subscription availability.
+            // One-second waits keep signal cancellation and periodic work responsive.
+            for ($remaining = $backoff; $remaining > 0 && !$this->stopped; $remaining--) {
+                ($this->sleep)(1);
+                $this->tick();
+            }
         }
     }
 
     public function stop(): void
     {
         $this->stopped = true;
+        $this->service->stopNotifications();
+    }
+
+    private function tick(): void
+    {
+        if ($this->stopped) return;
+        $now = ($this->monotonic)();
+        if ($this->lastPass !== null && $now - $this->lastPass < $this->reconcileIntervalSeconds) return;
+        $this->lastPass = $now;
+        $this->periodicPass();
     }
 
     private function periodicPass(): void

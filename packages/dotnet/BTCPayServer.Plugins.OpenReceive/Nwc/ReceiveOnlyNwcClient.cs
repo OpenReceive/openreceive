@@ -97,12 +97,12 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
         catch (NwcRequestException e)
         {
             return WalletPreflightReport.Failed("get_info_failed",
-                $"The wallet refused get_info ({e.Code}): {e.Message}\nGet a receive-only NWC code here: {NwcUri.CodeHelpUrl}", startedAt);
+                $"The wallet refused get_info ({NwcErrors.Normalize(e).Code}): {SecretSafeDiagnostics.Text(e.Message)}\nGet a receive-only NWC code here: {NwcUri.CodeHelpUrl}", startedAt);
         }
         catch (NwcTransportException e)
         {
             return WalletPreflightReport.Failed("relay_unreachable",
-                $"Could not reach the wallet through its relay: {e.Message}\nGet a receive-only NWC code here: {NwcUri.CodeHelpUrl}", startedAt);
+                $"Could not reach the wallet through its relay: {SecretSafeDiagnostics.Text(e.Message)}\nGet a receive-only NWC code here: {NwcUri.CodeHelpUrl}", startedAt);
         }
         var relayRtt = DateTimeOffset.UtcNow - startedAt;
         var serviceInfoJson = new JsonObject
@@ -215,7 +215,7 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
         }
         catch (NwcValidationException e)
         {
-            throw new PaymentMethodUnavailableException($"OpenReceive cannot mint this invoice: {e.Message}");
+            throw new PaymentMethodUnavailableException($"OpenReceive cannot mint this invoice: {SecretSafeDiagnostics.Text(e.Message)}");
         }
         var requestedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         MakeInvoiceResult result;
@@ -227,7 +227,7 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
         catch (NwcRequestException e)
         {
             var error = NwcErrors.Normalize(e);
-            throw new PaymentMethodUnavailableException($"The NWC wallet refused make_invoice ({error.Code}): {error.Message}");
+            throw new PaymentMethodUnavailableException($"The NWC wallet refused make_invoice ({error.Code}): {SecretSafeDiagnostics.Text(error.Message)}");
         }
         // The wallet must honour the requested expiry: BTCPay's checkout timer is its own
         // invoice's expiry, so a wallet that clamps to its own minimum or maximum would make
@@ -259,6 +259,8 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
         await _state.Invoices.InsertAsync(new OpenReceiveInvoice
         {
             PaymentHash = row.PaymentHash,
+            ConnectionId = _state.ConnectionId,
+            CreatedAtAuthoritative = result.CreatedAt is not null,
             Bolt11 = result.Invoice,
             AmountMsats = result.AmountMsats,
             CreatedAt = createdAt,
@@ -291,7 +293,8 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
     private async Task<LightningInvoice> GetInvoiceByHash(string paymentHash, CancellationToken cancellation)
     {
         var hash = paymentHash.Trim().ToLowerInvariant();
-        await _state.RestoreAsync(hash, cancellation).ConfigureAwait(false);
+        if (!await _state.RestoreAsync(hash, cancellation).ConfigureAwait(false))
+            return UnknownInvoice(hash);
         _state.Memo.Watch(hash);
         var walked = await _state.Memo.RefreshAsync(force: false, cancellation).ConfigureAwait(false);
         var row = _state.Memo.Lookup(hash);
@@ -306,16 +309,18 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
         }
         if (row is null)
         {
-            return new LightningInvoice
-            {
-                Id = hash,
-                PaymentHash = hash,
-                Status = LightningInvoiceStatus.Unpaid,
-                ExpiresAt = DateTimeOffset.UtcNow.Add(Window()),
-            };
+            return UnknownInvoice(hash);
         }
         return ToLightningInvoice(row);
     }
+
+    private static LightningInvoice UnknownInvoice(string hash) => new()
+    {
+        Id = hash,
+        PaymentHash = hash,
+        Status = LightningInvoiceStatus.Unpaid,
+        ExpiresAt = DateTimeOffset.UtcNow.Add(Window()),
+    };
 
     /// <summary>
     /// The optional single-hash fast path: <c>lookup_invoice</c> when the wallet grants
@@ -324,6 +329,8 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
     /// </summary>
     internal async Task<NwcTransaction?> RefreshHashAsync(string paymentHash, CancellationToken cancellation)
     {
+        paymentHash = NwcNormalize.CanonicalHash(paymentHash);
+        if (!await _state.RestoreAsync(paymentHash, cancellation).ConfigureAwait(false)) return null;
         _state.Memo.Watch(paymentHash);
         if (await _state.LookupInvoiceGrantedAsync(cancellation).ConfigureAwait(false))
         {

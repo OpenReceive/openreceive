@@ -10,8 +10,10 @@ function stubPayments() {
     commitAttempt: async () => {},
     listReconcilableAttempts: async () => [],
     recordReconciliation: async () => {},
-    recordSettlement: async () => false,
-    claimReconcileGate: async () => false,
+    findByPaymentHash: async (paymentHash) => ({ paymentHash, status: "settled" }),
+    recordSettlementWithFulfillment: async () => false,
+    claimReconcileGate: async () => null,
+    checkpointReconcileGate: async () => true,
   };
 }
 

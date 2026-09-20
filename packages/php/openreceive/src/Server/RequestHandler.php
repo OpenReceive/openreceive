@@ -8,7 +8,6 @@ use OpenReceive\Nwc\Errors;
 use OpenReceive\Nwc\WalletUnavailableError;
 use OpenReceive\Server\Errors\ConflictError;
 use OpenReceive\Server\Errors\ForbiddenError;
-use OpenReceive\Server\Errors\HostPersistenceError;
 use OpenReceive\Server\Errors\HttpError;
 use OpenReceive\Server\Errors\InternalHostError;
 use OpenReceive\Server\Errors\NotFoundError;
@@ -137,6 +136,7 @@ final class RequestHandler
                 $this->commit($checkout, null, $request);
             }
             // The catalog rides along with the mint, amount-aware against this attempt's committed invoice amount.
+            unset($checkout['created_at_source']);
             $out = ['checkout' => $checkout, 'payment_methods' => $this->service->listSwapOptions((int) $checkout['amount_msats'])];
             $description = $this->resolvedDescription($resolved);
             if ($description !== null) {
@@ -217,7 +217,7 @@ final class RequestHandler
                 ]);
                 $this->commit($swap['checkout'], $swap['swap_data'] ?? null, $request);
             }
-            unset($swap['swap_data']);
+            unset($swap['swap_data'], $swap['checkout']['created_at_source']);
             return $this->success(201, ['swap' => $swap], $requestId);
         });
     }
@@ -293,13 +293,11 @@ final class RequestHandler
             $this->reportUnexpectedError($error, $requestId);
             return [500, $this->headers($requestId), ['code' => 'INTERNAL', 'message' => 'Internal server error.', 'request_id' => $requestId]];
         }
-        $body = ['code' => $error->errorCode, 'message' => $error->getMessage(), 'request_id' => $requestId];
+        $body = ['code' => $error->errorCode, 'message' => \OpenReceive\Nwc\Errors::redactErrorText($error->getMessage()), 'request_id' => $requestId];
         if ($error->retryable !== null) {
             $body['retryable'] = $error->retryable;
         }
-        if ($error->details !== null) {
-            $body['details'] = $error->details;
-        }
+        // Arbitrary internal details and causes have no public projection.
         $headers = $this->headers($requestId);
         if ($error->retryAfterSeconds !== null) {
             $headers['retry-after'] = (string) max(1, $error->retryAfterSeconds);
@@ -435,9 +433,9 @@ final class RequestHandler
             // Meaningful repository refusals ("already paid", live attempt) pass through untouched.
             throw $e;
         } catch (\Throwable $e) {
-            // Anything else is infrastructure failing to persist: retryable 503, never a payer-blaming conflict.
+            // An advanced host callback may refuse instructions; the repository wrapper attributes infrastructure failures separately.
             $this->reportUnexpectedError($e, 'commit');
-            throw new HostPersistenceError();
+            throw new ConflictError('The host did not accept this payment attempt; payer instructions were withheld.');
         }
     }
 
@@ -479,7 +477,7 @@ final class RequestHandler
         try {
             $line = "[openreceive] unexpected " . $error::class . " (request_id={$requestId}) at {$error->getFile()}:{$error->getLine()}";
             if ($this->logger !== null) {
-                $this->logger->error($line, ['exception' => $error]);
+                $this->logger->error($line);
             } else {
                 error_log($line);
             }
@@ -604,7 +602,23 @@ final class RequestHandler
             // A host order without an amount is a host-integration bug, not a payer mistake.
             throw new InternalHostError('The host resolved this order without an amount.');
         }
-        return $resolved['amount'];
+        $amount = Records::asArray($resolved['amount']);
+        try {
+            if (array_key_exists('sats', $amount)) {
+                \OpenReceive\Money\Money::directToMsats('SATS', $amount['sats']);
+            } else {
+                $currency = strtoupper((string) ($amount['currency'] ?? ''));
+                if (in_array($currency, ['BTC', 'SAT', 'SATS'], true)) {
+                    \OpenReceive\Money\Money::directToMsats($currency, $amount['value'] ?? null);
+                } else {
+                    if (!in_array($currency, $this->service->priceCurrencies(), true)) throw new \InvalidArgumentException();
+                    \OpenReceive\Money\Money::decimal($amount['value'] ?? null, 'amount.value');
+                }
+            }
+        } catch (\Throwable) {
+            throw new InternalHostError('The host resolved this order with an invalid amount.');
+        }
+        return $amount;
     }
 
     private function requiredPaymentHash(mixed $value): string

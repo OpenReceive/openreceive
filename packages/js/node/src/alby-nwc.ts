@@ -85,7 +85,6 @@ export interface AlbyNwcReceiveClientOptions {
   connectionString: string;
   client?: AlbyNwcCompatibleClient;
   clientFactory?: AlbyNwcClientFactory;
-  requirePreflight?: boolean;
   logger?: NwcEndpointLogger;
   /**
    * Explicit override: boot even when the connection advertises spend methods
@@ -121,7 +120,6 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
   #clientFactory?: AlbyNwcClientFactory;
   #preflightSummary?: WalletCapabilitySummary;
   #preflightPromise?: Promise<WalletCapabilitySummary>;
-  #requirePreflight: boolean;
   #logger?: NwcEndpointLogger;
   #allowSpendCapableWallet: boolean;
   #spendCapabilityWarningDelayMs: number;
@@ -139,7 +137,6 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
     };
     this.#client = options.client;
     this.#clientFactory = options.clientFactory;
-    this.#requirePreflight = options.requirePreflight ?? true;
     this.#logger = options.logger;
     this.#allowSpendCapableWallet = options.allowSpendCapableWallet ?? false;
     this.#spendCapabilityWarningDelayMs = options.spendCapabilityWarningDelayMs ?? 0;
@@ -342,7 +339,10 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
     return result;
   }
 
-  async listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult> {
+  async listTransactions(
+    request: ListTransactionsRequest,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<ListTransactionsResult> {
     await this.ensurePreflight();
     validateListTransactionsRequest(request);
 
@@ -368,6 +368,7 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
         await this.getClient(),
         ["listTransactions", "list_transactions"],
         toNip47ListTransactionsParams(request),
+        options,
       );
     } catch (error) {
       const normalized = normalizeNwcWalletError(error);
@@ -547,7 +548,7 @@ export class AlbyNwcReceiveClient implements ReceiveNwcClient {
   }
 
   private async ensurePreflight(): Promise<void> {
-    if (!this.#requirePreflight || this.#preflightSummary !== undefined) return;
+    if (this.#preflightSummary !== undefined) return;
     // Memoize the in-flight promise so concurrent first calls share one
     // preflight; a failure clears it so the next call retries.
     this.#preflightPromise ??= this.preflight();

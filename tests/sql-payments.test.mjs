@@ -61,6 +61,32 @@ function sqliteRepository({ now = () => 1_000 } = {}) {
   return { db, payments: createSqlPayments(db, { clock: now }) };
 }
 
+test("swap reconciliation uses the saved wallet deadline, including pre-upgrade rows", async () => {
+  const { db, payments } = sqliteRepository();
+  await payments.commitAttempt(
+    checkoutInput("delayed-swap", "a", {
+      createdAt: 1_000,
+      expiresAt: 2_800,
+      swapData: swapData("USDT_TRON", 1_600),
+    }),
+  );
+  assert.equal((await payments.listForReference("delayed-swap"))[0].expiresAt, 1_600);
+  for (const attempt of [
+    ...(await payments.listReconcilableAttempts()),
+    await payments.findPendingAttempt(hash("a")),
+  ]) {
+    assert.equal(attempt.expiresAt, 2_800);
+    assert.equal(reconciliationTransition(attempt, "not_found", 2_500), null);
+    assert.equal(reconciliationTransition(attempt, "not_found", 3_699), null);
+    assert.equal(reconciliationTransition(attempt, "not_found", 3_700).status, "expired");
+  }
+  db.prepare("UPDATE openreceive_payments SET checkout_data = ? WHERE payment_hash = ?").run(
+    JSON.stringify({ expiresAt: null }),
+    hash("a"),
+  );
+  await assert.rejects(payments.findPendingAttempt(hash("a")), /checkout_data.*[a]{64}/);
+});
+
 test("commitAttempt is idempotent for a repeated payment hash", async () => {
   const { payments } = sqliteRepository();
   await payments.commitAttempt(checkoutInput("order-1", "a"));
@@ -282,7 +308,7 @@ test("recordReconciliation applies only while pending and never overwrites settl
   assert.equal(settled.paidAt, 990);
 });
 
-test("listReconcilableAttempts returns pending rows only, with swap provider expiry", async () => {
+test("listReconcilableAttempts returns pending rows only, with saved wallet expiry", async () => {
   const { payments } = sqliteRepository();
   await payments.commitAttempt(checkoutInput("order-1", "a", { createdAt: 800 }));
   await payments.commitAttempt(checkoutInput("order-2", "b"));
@@ -302,8 +328,8 @@ test("listReconcilableAttempts returns pending rows only, with swap provider exp
     left.paymentHash.localeCompare(right.paymentHash),
   );
   assert.deepEqual(attempts, [
-    { paymentHash: hash("a"), createdAt: 800, expiresAt: 1_600 },
-    { paymentHash: hash("d"), createdAt: 850, expiresAt: 1_700 },
+    { paymentHash: hash("a"), createdAt: 800, createdAtSource: "host", expiresAt: 1_600 },
+    { paymentHash: hash("d"), createdAt: 850, createdAtSource: "host", expiresAt: 1_600 },
   ]);
 });
 
@@ -391,13 +417,13 @@ test("one reconciliation pass settles, closes, and flags rows so terminal rows l
 
   // Terminal rows leave the scan set; only the still-pending attempt remains.
   assert.deepEqual(await host.payments.listReconcilableAttempts(), [
-    { paymentHash: hash("d"), createdAt: 900, expiresAt: 1_600 },
+    { paymentHash: hash("d"), createdAt: 900, createdAtSource: "host", expiresAt: 1_600 },
   ]);
 
   // A second pass rescans only the pending attempt and never re-fulfills.
   await reconcileHostPayments({ service, host, clock: () => now });
   assert.deepEqual(scanned[1].attempts, [
-    { paymentHash: hash("d"), createdAt: 900, expiresAt: 1_600 },
+    { paymentHash: hash("d"), createdAt: 900, createdAtSource: "host", expiresAt: 1_600 },
   ]);
   assert.equal(settled.length, 1);
 });
@@ -505,7 +531,7 @@ test("pg adapter converts placeholders and serializes commits behind the advisor
   await payments.listReconcilableAttempts();
   assert.equal(poolQueries.length, 2, "the schema probe runs once per repository");
   assert.match(poolQueries[1].sql, /WHERE status = 'pending'/);
-  assert.match(poolQueries[1].sql, /ORDER BY created_at ASC LIMIT \$1/);
+  assert.match(poolQueries[1].sql, /ORDER BY created_at ASC, payment_hash ASC LIMIT \$1/);
   assert.deepEqual(poolQueries[1].params, [OPENRECEIVE_RECONCILE_BATCH_SIZE]);
 });
 
@@ -669,7 +695,7 @@ test("the schema enforces the status and payment-hash invariants at the database
       .prepare(
         `INSERT INTO openreceive_payments
            (reference, payment_hash, status, expires_at, created_at, updated_at, inserted_at, checkout_data)
-         VALUES (?, ?, ?, 1600, 900, 900, 900, '{}')`,
+         VALUES (?, ?, ?, 1600, 900, 900, 900, '{"expiresAt":1600}')`,
       )
       .run("order-check", paymentHash, status);
 
@@ -775,7 +801,7 @@ test("listReconcilableAttempts returns an oldest-first batch, not the whole back
   const insert = db.prepare(
     `INSERT INTO openreceive_payments
        (reference, payment_hash, status, expires_at, created_at, updated_at, inserted_at, checkout_data)
-     VALUES (?, ?, 'pending', 1600, ?, 900, 900, '{}')`,
+     VALUES (?, ?, 'pending', 1600, ?, 900, 900, '{"expiresAt":1600}')`,
   );
   const total = OPENRECEIVE_RECONCILE_BATCH_SIZE + 5;
   for (let index = 0; index < total; index += 1) {
@@ -809,39 +835,71 @@ test("a corrupt JSON column names the row instead of throwing a bare SyntaxError
 test("a gate claim stamped in the future is stale, not fresh", async () => {
   const { db, payments } = sqliteRepository();
   await payments.commitAttempt(checkoutInput("order-gate", "a"));
-  assert.equal(await payments.claimReconcileGate({ now: 10_000, intervalSeconds: 2 }), true);
-  assert.equal(await payments.claimReconcileGate({ now: 10_001, intervalSeconds: 2 }), false);
+  assert.ok((await payments.claimReconcileGate({ now: 10_000, intervalSeconds: 2 }))?.token);
+  assert.equal(await payments.claimReconcileGate({ now: 10_001, intervalSeconds: 2 }), null);
 
   // The host clock steps back an hour: without a negative-age clamp the claim
   // would read as "just written" and freeze the gate until time caught up.
   db.prepare("UPDATE openreceive_meta SET value = ? WHERE key = 'transaction_scan_gate'").run(
-    JSON.stringify({ claimed_at: 10_000, token: "other-worker" }),
+    JSON.stringify({
+      version: 1,
+      claimed_at: 10_000,
+      token: "other-worker",
+      lease_until: 10010,
+      interval_seconds: 2,
+      scheduler: { cursor: null, windows: [] },
+    }),
   );
-  assert.equal(await payments.claimReconcileGate({ now: 6_400, intervalSeconds: 2 }), true);
+  assert.ok((await payments.claimReconcileGate({ now: 6_400, intervalSeconds: 2 }))?.token);
   // A claim only slightly ahead is ordinary skew between workers, still fresh.
   db.prepare("UPDATE openreceive_meta SET value = ? WHERE key = 'transaction_scan_gate'").run(
-    JSON.stringify({ claimed_at: 6_410, token: "other-worker" }),
+    JSON.stringify({
+      version: 1,
+      claimed_at: 6_410,
+      token: "other-worker",
+      lease_until: 6420,
+      interval_seconds: 2,
+      scheduler: { cursor: null, windows: [] },
+    }),
   );
-  assert.equal(await payments.claimReconcileGate({ now: 6_400, intervalSeconds: 2 }), false);
+  assert.equal(await payments.claimReconcileGate({ now: 6_400, intervalSeconds: 2 }), null);
 });
 
-test("recordSettlement claims the order's first settlement exactly once", async () => {
+test("recordSettlementWithFulfillment claims the order's first settlement exactly once", async () => {
   const { payments } = sqliteRepository();
   await payments.commitAttempt(checkoutInput("order-1", "a"));
   await payments.commitAttempt(checkoutInput("order-1", "b", { swapData: swapData("USDT_TRON") }));
 
-  assert.equal(await payments.recordSettlement({ paymentHash: hash("a"), paidAt: 990 }), true);
   assert.equal(
-    await payments.recordSettlement({ paymentHash: hash("a"), paidAt: 990 }),
+    await payments.recordSettlementWithFulfillment(
+      { paymentHash: hash("a"), paidAt: 990 },
+      async () => {},
+    ),
+    true,
+  );
+  assert.equal(
+    await payments.recordSettlementWithFulfillment(
+      { paymentHash: hash("a"), paidAt: 990 },
+      async () => {},
+    ),
     false,
     "a replayed settlement never wins the claim again",
   );
   assert.equal(
-    await payments.recordSettlement({ paymentHash: hash("b"), paidAt: 995 }),
+    await payments.recordSettlementWithFulfillment(
+      { paymentHash: hash("b"), paidAt: 995 },
+      async () => {},
+    ),
     false,
     "a sibling's genuine second payment is recorded but never fulfills",
   );
-  assert.equal(await payments.recordSettlement({ paymentHash: hash("f"), paidAt: 999 }), false);
+  assert.equal(
+    await payments.recordSettlementWithFulfillment(
+      { paymentHash: hash("f"), paidAt: 999 },
+      async () => {},
+    ),
+    false,
+  );
 
   const byHash = new Map(
     (await payments.listForReference("order-1")).map((row) => [row.paymentHash, row]),

@@ -598,10 +598,11 @@ export interface RequestCheckoutOptions extends RequestCheckoutBaseOptions {
  */
 export type PrepareCheckoutOptions = Pick<
   RequestCheckoutBaseOptions,
-  "prefix" | "reference" | "fetch" | "headers" | "csrfHeader"
+  "prefix" | "reference" | "fetch" | "headers" | "csrfHeader" | "signal"
 >;
 
 export interface RequestCheckoutBaseOptions {
+  readonly signal?: AbortSignal;
   /**
    * Base path the shipped router is mounted at (e.g. `/openreceive`). The create and
    * prepare routes are derived from it — see {@link checkoutRoutes}. It is required

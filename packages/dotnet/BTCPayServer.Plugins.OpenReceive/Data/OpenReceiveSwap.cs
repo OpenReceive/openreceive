@@ -52,7 +52,15 @@ public sealed class OpenReceiveSwap
     public long UpdatedAt { get; set; }
     /// <summary>When <see cref="State"/> last changed; drives the completed-without-settlement timer.</summary>
     public long StateChangedAt { get; set; }
+    /// <summary>Last real provider request (a local quota refusal is not a request).</summary>
     public long? LastPolledAt { get; set; }
+    public long? LastObservedAt { get; set; }
+    public long? NextPollAt { get; set; }
+    public long? PollLeaseUntil { get; set; }
+    public string? PollLeaseOwner { get; set; }
+    public long? RetiredAt { get; set; }
+    public string? ReplacementId { get; set; }
+    public bool RecoveryRefreshRequired { get; set; }
     /// <summary>Set when BTCPay recorded the Lightning payment for this row's hash.</summary>
     public long? WalletSettledAt { get; set; }
     /// <summary>

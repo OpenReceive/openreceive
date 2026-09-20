@@ -4,6 +4,16 @@
 // drive.
 
 import { unixSeconds } from "@openreceive/core";
+import { copyInvoice, openWallet } from "./checkout-actions.ts";
+import { checkoutLogFields, emitBrowserLog } from "./checkout-log.ts";
+import {
+  createCheckoutState,
+  normalizeCheckoutState,
+  refreshCheckoutState,
+} from "./checkout-state.ts";
+import { overlaySwapRefundStagingIntoSnapshot } from "./checkout-swap-view.ts";
+import { BrowserRequestError, createStatusFetcher } from "./checkout-transport.ts";
+import { requestSwapRefund } from "./swap-http.ts";
 import {
   type CheckoutController,
   type CheckoutControllerOptions,
@@ -13,16 +23,6 @@ import {
   type CheckoutWatcherOptions,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
 } from "./ui.ts";
-import { checkoutLogFields, emitBrowserLog } from "./checkout-log.ts";
-import { createStatusFetcher, BrowserRequestError } from "./checkout-transport.ts";
-import {
-  createCheckoutState,
-  normalizeCheckoutState,
-  refreshCheckoutState,
-} from "./checkout-state.ts";
-import { copyInvoice, openWallet } from "./checkout-actions.ts";
-import { overlaySwapRefundStagingIntoSnapshot } from "./checkout-swap-view.ts";
-import { requestSwapRefund } from "./swap-http.ts";
 
 export class CheckoutWatcher {
   private options: CheckoutWatcherOptions;
@@ -47,6 +47,8 @@ export class CheckoutWatcher {
   private countdownTimer: ReturnType<typeof globalThis.setInterval> | undefined;
   private pollTimer: ReturnType<typeof globalThis.setInterval> | undefined;
   private running = false;
+  private generation = 0;
+  private pendingRefresh: Promise<CheckoutSnapshot | null> | undefined;
   private pollInFlight = false;
   private pollFailureCount = 0;
   private pollBackoffUntil: number | undefined;
@@ -123,6 +125,9 @@ export class CheckoutWatcher {
 
   stop(): void {
     this.running = false;
+    this.generation += 1;
+    this.pollInFlight = false;
+    this.pendingRefresh = undefined;
     this.stopCountdown();
     this.stopPolling();
   }
@@ -171,8 +176,10 @@ export class CheckoutWatcher {
       return current;
     }
 
+    const generation = this.generation;
     try {
-      const fetched = await refreshStatus(current.reference);
+      const fetched = await this.fetchSnapshot(current.reference);
+      if (generation !== this.generation) return this.state ?? current;
       if (fetched === null) return current;
       const next = this.publishSnapshot(fetched);
       const nextState = createCheckoutState(next, {
@@ -188,9 +195,22 @@ export class CheckoutWatcher {
       }
       return nextState;
     } catch (error) {
+      if (generation !== this.generation) return this.state ?? current;
       this.options.onError?.(error);
       throw error;
     }
+  }
+
+  private fetchSnapshot(reference: string): Promise<CheckoutSnapshot | null> {
+    if (this.pendingRefresh !== undefined) return this.pendingRefresh;
+    const pending = Promise.resolve(this.options.refreshStatus?.(reference) ?? null);
+    this.pendingRefresh = pending;
+    void pending
+      .finally(() => {
+        if (this.pendingRefresh === pending) this.pendingRefresh = undefined;
+      })
+      .catch(() => undefined);
+    return pending;
   }
 
   private applyState(state: CheckoutState): void {
@@ -209,7 +229,7 @@ export class CheckoutWatcher {
       return;
     }
 
-    if (state.settled || state.expires_at === undefined) {
+    if (state.settled || state.expires_at === undefined || state.expires_in_seconds === 0) {
       this.stopCountdown();
     } else if (this.countdownTimer === undefined) {
       this.countdownTimer = this.setInterval()(() => {
@@ -230,7 +250,6 @@ export class CheckoutWatcher {
       typeof state.payment_hash === "string" &&
       /^[0-9a-f]{64}$/i.test(state.payment_hash);
     if (
-      state.settled ||
       this.options.refreshStatus === undefined ||
       state.reference.length === 0 ||
       !canPollAttempt
@@ -247,7 +266,7 @@ export class CheckoutWatcher {
     const refreshStatus = this.options.refreshStatus;
     const current = this.state;
     if (!this.running || refreshStatus === undefined || current === undefined) return;
-    if (current.terminal || current.settled) {
+    if (current.terminal) {
       this.stopPolling();
       return;
     }
@@ -259,16 +278,18 @@ export class CheckoutWatcher {
     // instead of hammering at the fixed interval.
     if (this.pollBackoffUntil !== undefined && this.now() < this.pollBackoffUntil) return;
     this.pollInFlight = true;
+    const generation = this.generation;
 
     try {
-      const fetched = await refreshStatus(current.reference);
+      const fetched = await this.fetchSnapshot(current.reference);
+      if (generation !== this.generation) return;
       this.pollFailureCount = 0;
       this.pollBackoffUntil = undefined;
       if (fetched === null) return;
       if (!this.running || this.state === undefined) return;
       // A response that raced a settlement must never flip a paid screen
       // back to "waiting for payment".
-      if (this.state.settled || this.state.terminal) return;
+      if (this.state.terminal) return;
       const next = this.publishSnapshot(fetched);
       this.applyState(
         createCheckoutState(next, {
@@ -279,6 +300,7 @@ export class CheckoutWatcher {
         }),
       );
     } catch (error) {
+      if (generation !== this.generation) return;
       this.pollFailureCount += 1;
       const retryAfterSeconds =
         error instanceof BrowserRequestError ? error.retryAfterSeconds : undefined;
@@ -287,7 +309,7 @@ export class CheckoutWatcher {
       this.pollBackoffUntil = this.now() + backoffSeconds;
       this.options.onError?.(error);
     } finally {
-      this.pollInFlight = false;
+      if (generation === this.generation) this.pollInFlight = false;
     }
   }
 
@@ -320,6 +342,7 @@ export class BrowserCheckoutController implements CheckoutController {
   private options: CheckoutControllerOptions;
   private watcher: CheckoutWatcher;
   private state: CheckoutState | undefined;
+  private generation = 0;
 
   constructor(options: CheckoutControllerOptions) {
     this.options = options;
@@ -332,6 +355,7 @@ export class BrowserCheckoutController implements CheckoutController {
   }
 
   stop(): void {
+    this.generation += 1;
     this.watcher.stop();
   }
 
@@ -416,6 +440,7 @@ export class BrowserCheckoutController implements CheckoutController {
     if (paymentHash === undefined) {
       throw new Error(`No swap attempt ${options.attemptId} in this checkout.`);
     }
+    const generation = this.generation;
     const invoice = await requestSwapRefund({
       fetch: this.options.fetch ?? globalThis.fetch,
       prefix,
@@ -427,11 +452,13 @@ export class BrowserCheckoutController implements CheckoutController {
       refundAddress: options.refundAddress,
       confirm,
     });
+    if (generation !== this.generation) throw new DOMException("Checkout changed.", "AbortError");
     this.watcher.stageSwapInvoice(invoice);
     return invoice;
   }
 
   cancel(): CheckoutState {
+    this.generation += 1;
     this.state = this.watcher.cancel();
     emitBrowserLog(
       this.options.logger,

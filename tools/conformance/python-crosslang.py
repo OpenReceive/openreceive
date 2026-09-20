@@ -119,6 +119,13 @@ for case in vector("nwc-request-response")["cases"]:
         actual_request = nwc_requests.list_transactions_request(case["openreceive_request"])
         if actual_request != case["expected_nip47_request"]:
             fail(f"nwc-request-response parity: {case['name']} request (got {actual_request!r})")
+        if case.get("expected_error"):
+            try:
+                nwc_requests.normalize_list_transactions_response(case["raw_response"])
+            except ValueError:
+                pass
+            else:
+                fail(f"nwc-request-response expected failed scan: {case['name']}")
         if "expected_openreceive_response" in case:
             actual = nwc_requests.normalize_list_transactions_response(case["raw_response"])
             expected = case["expected_openreceive_response"]
@@ -255,8 +262,12 @@ class ScanWallet:
 
     def list_transactions(self, params: dict[str, Any]) -> dict[str, Any]:
         source = self.unpaid_pages if params.get("unpaid") else self.pages
-        index = 0 if self.ignores_offset else int(params.get("offset", 0)) // scan_page_limit
-        return {"transactions": source[index] if index < len(source) else []}
+        offset = 0 if self.ignores_offset else int(params.get("offset", 0))
+        for page in source:
+            if offset < len(page):
+                return {"transactions": page[offset:]}
+            offset -= len(page)
+        return {"transactions": []}
 
 
 for case in scan_family["cases"]:

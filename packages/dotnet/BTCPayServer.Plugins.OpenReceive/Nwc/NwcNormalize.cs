@@ -26,6 +26,9 @@ public static class NwcNormalize
         WriteIndented = false,
     };
 
+    /// <summary>Canonical identity across wallet adapters, memo keys and persisted hashes.</summary>
+    public static string CanonicalHash(string hash) => hash.Trim().ToLowerInvariant();
+
     // ---- requests ----
 
     public static JsonObject ToMakeInvoiceParams(MakeInvoiceRequest request)
@@ -98,7 +101,7 @@ public static class NwcNormalize
         return new MakeInvoiceResult
         {
             Invoice = invoice,
-            PaymentHash = paymentHash,
+            PaymentHash = CanonicalHash(paymentHash),
             AmountMsats = amountMsats,
             CreatedAt = createdAt,
             ExpiresAt = expiresAt,
@@ -137,6 +140,7 @@ public static class NwcNormalize
         {
             try
             {
+                if (row is not JsonObject) throw new NwcNormalizeException("transaction row must be an object");
                 transactions.Add(Transaction(row));
             }
             catch (NwcNormalizeException)
@@ -186,7 +190,7 @@ public static class NwcNormalize
         {
             Type = NormalizeTransactionType(result["type"]),
             Invoice = NonEmptyString(result["invoice"]),
-            PaymentHash = paymentHash,
+            PaymentHash = paymentHash is null ? null : CanonicalHash(paymentHash),
             AmountMsats = amountMsats,
             TransactionState = transactionState,
             CreatedAt = createdAt,
@@ -219,7 +223,7 @@ public static class NwcNormalize
         }
         var paymentHash = NonEmptyString(First(payload, "payment_hash", "paymentHash") ?? First(record, "payment_hash", "paymentHash"))
             ?? transaction?.PaymentHash;
-        return new NwcWalletNotification { Type = type, PaymentHash = paymentHash, Transaction = transaction };
+        return new NwcWalletNotification { Type = type, PaymentHash = paymentHash is null ? null : CanonicalHash(paymentHash), Transaction = transaction };
     }
 
     /// <summary>pending, settled, expired, failed or accepted (lowercased); anything else is null.</summary>

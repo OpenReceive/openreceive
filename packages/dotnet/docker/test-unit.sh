@@ -15,6 +15,7 @@ exec docker run --rm \
   -v "$dotnet_source":/work/packages/dotnet \
   -v "$btcpay_source":/work/packages/dotnet/submodules/btcpayserver \
   -v "$NUGET_VOLUME":/root/.nuget \
+  -e OPENRECEIVE_DOTNET_POSTGRES \
   -e BTCPAY_SERVER_ROOT=/work/packages/dotnet/submodules/btcpayserver \
   -e DOTNET_CLI_TELEMETRY_OPTOUT=1 -e DOTNET_NOLOGO=1 \
   -w /work/packages/dotnet \

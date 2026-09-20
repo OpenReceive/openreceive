@@ -10,7 +10,11 @@
 // reconciliations are commented individually below; do not reintroduce a second
 // path.
 
-import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
+import { deriveCheckoutStateLabels, formatCountdown } from "./checkout-format.ts";
+import { createLightningUri } from "./checkout-invoice.ts";
+import { checkoutLogFields, emitBrowserLog, emitBrowserSwapTransition } from "./checkout-log.ts";
+import { requiredInvoiceRail, requiredString } from "./checkout-read.ts";
+import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutPhase,
@@ -19,15 +23,11 @@ import {
   type CheckoutStatusModel,
   type CheckoutStatusModelInput,
   type CreateCheckoutStateOptions,
-  OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS,
   checkoutLabels,
+  OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS,
 } from "./ui.ts";
+import { resolveNow, type UnixSeconds } from "./unix-seconds.ts";
 import { getPaymentStatusText } from "./wizard.ts";
-import { deriveCheckoutStateLabels, formatCountdown } from "./checkout-format.ts";
-import { createLightningUri } from "./checkout-invoice.ts";
-import { requiredInvoiceRail, requiredString } from "./checkout-read.ts";
-import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
-import { checkoutLogFields, emitBrowserLog, emitBrowserSwapTransition } from "./checkout-log.ts";
 
 /**
  * Choose the invoice the checkout UI should treat as primary.
@@ -340,18 +340,15 @@ export function normalizeCheckoutState(
       : statePhase;
 
   const settled = base.paid || base.transaction_state === "settled";
+  const monitoring = checkoutMonitoring(base);
 
   return {
     ...base,
     ...deriveCheckoutStateLabels(base),
     phase,
     settled,
-    // A swap that expired, refunded, failed, or needs support review is over:
-    // the shadow invoice behind it will not be paid, so watchers stop polling
-    // both /payments/check and the provider instead of asking forever.
-    terminal:
-      isTerminalPhase(phase) ||
-      (!settled && isTerminalSwapProviderState(base.swap?.provider_state)),
+    // A local instruction deadline says nothing about wallet or refund finality.
+    terminal: !monitoring.payment && !monitoring.provider,
     ...(expiresInSeconds === undefined ? {} : { expires_in_seconds: expiresInSeconds }),
   };
 }
@@ -375,8 +372,26 @@ function getCheckoutPhase(transactionState: string, workflowState: string): Chec
   return "invoice_created";
 }
 
-function isTerminalPhase(phase: CheckoutPhase): boolean {
-  return phase === "expired" || phase === "failed" || phase === "cancelled";
+/** Independent authoritative workflows, shared by the watcher and HTTP transport. */
+export function checkoutMonitoring(state: {
+  readonly transaction_state?: string;
+  readonly workflow_state?: string;
+  readonly paid?: boolean;
+  readonly swap?: CheckoutInvoiceSnapshot["swap"];
+}): { readonly payment: boolean; readonly provider: boolean } {
+  if (state.workflow_state === "cancelled") return { payment: false, provider: false };
+  const payment =
+    !state.paid &&
+    !["settled", "expired", "failed", "attention"].includes(state.transaction_state ?? "pending") &&
+    !["expired", "failed", "attention"].includes(state.workflow_state ?? "invoice_created");
+  const providerState = state.swap?.provider_state;
+  const recovery = providerState === "refund_required" || providerState === "refund_pending";
+  const provider =
+    providerState !== undefined &&
+    !isTerminalSwapProviderState(providerState) &&
+    providerState !== "completed" &&
+    (recovery || (!state.paid && state.transaction_state !== "settled"));
+  return { payment, provider };
 }
 
 function snapshotFromCheckoutState(state: CheckoutState): CheckoutSnapshot {

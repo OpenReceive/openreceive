@@ -142,7 +142,8 @@ public static class WalletScan
                 if (transaction.Type is not null && transaction.Type != "incoming") continue;
                 var hash = NormalizedTransactionHash(transaction);
                 if (hash is null) continue;
-                byPaymentHash[hash] = transaction;
+                if (!byPaymentHash.TryGetValue(hash, out var existing) || !Settlement.IsSettled(existing))
+                    byPaymentHash[hash] = transaction with { PaymentHash = hash };
                 outstanding?.Remove(hash);
             }
             if (outstanding is { Count: 0 })
@@ -150,10 +151,10 @@ public static class WalletScan
                 truncated = false;
                 break;
             }
-            // The wallet ran out of rows only when the page IT sent was short: a row the
+            // Only an empty page proves exhaustion; limit is a maximum: a row the
             // normalizer dropped was still a row, and a full page with one of them dropped
             // must not read as the end of the history.
-            if (page.Transactions.Count + page.SkippedRows < OpenReceiveTables.TransactionPageLimit)
+            if (page.Transactions.Count + page.SkippedRows == 0)
             {
                 truncated = false;
                 break;
@@ -163,7 +164,7 @@ public static class WalletScan
             var pageKey = string.Join(",", page.Transactions.Select(t => t.PaymentHash ?? ""));
             if (pageKey == previousPage) break;
             previousPage = pageKey;
-            offset += OpenReceiveTables.TransactionPageLimit;
+            offset += page.Transactions.Count + page.SkippedRows;
         }
         return new WalletWalk(byPaymentHash, truncated, pages);
     }

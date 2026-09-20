@@ -15,9 +15,9 @@
 // field change back into React state.
 
 import {
-  createCheckoutSession,
   type CheckoutSession,
   type CheckoutSessionOptions,
+  createCheckoutSession,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 
@@ -33,7 +33,9 @@ export function useCheckoutSession(options: UseOpenReceiveCheckoutSessionOptions
     sessionRef.current = createCheckoutSession({
       snapshot: () => optionsRef.current.snapshot(),
       reference: () => optionsRef.current.reference(),
-      requestCheckout: (reference) => optionsRef.current.requestCheckout?.(reference),
+      prefix: () => optionsRef.current.prefix?.(),
+      requestCheckout: (reference, signal) =>
+        optionsRef.current.requestCheckout?.(reference, signal),
       onSnapshot: (snapshot) => optionsRef.current.onSnapshot?.(snapshot),
       // The inner `swap` is always present because the session is built once,
       // on the first render, and the host may only gain swap options later.
@@ -62,5 +64,8 @@ export function useCheckoutSession(options: UseOpenReceiveCheckoutSessionOptions
       onChange: rerender,
     });
   }
-  return sessionRef.current;
+  const session = sessionRef.current;
+  session.syncIdentity();
+  React.useEffect(() => () => session.dispose(), [session]);
+  return session;
 }

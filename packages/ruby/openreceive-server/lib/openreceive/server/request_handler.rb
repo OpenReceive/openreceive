@@ -99,7 +99,7 @@ module OpenReceive
           # committed invoice amount — and served on the re-fetch path too, so
           # a repeated create answers with the same shape it first did.
           payment_methods = @service.list_swap_options(amount_msats: checkout["amount_msats"])
-          body = { "checkout" => checkout, "payment_methods" => payment_methods }
+          body = { "checkout" => public_checkout(checkout), "payment_methods" => payment_methods }
           description = resolved_description(resolved)
           body["description"] = description if description
           success(201, body, request_id)
@@ -255,9 +255,9 @@ module OpenReceive
           retryable = Nwc::RETRYABLE_ERROR_CODES.include?(code) if retryable.nil?
           status = retryable ? 503 : 502
         end
-        body = { "code" => code, "message" => error.message, "request_id" => request_id }
+        body = { "code" => code, "message" => Nwc.redact_error_text(error.message), "request_id" => request_id }
         body["retryable"] = retryable unless retryable.nil?
-        body["details"] = error.details if error.respond_to?(:details) && error.details.is_a?(Hash)
+        # Arbitrary internal details and causes have no public projection.
         response_headers = headers(request_id)
         # Mirrors the JS handler: a Retry-After hint (whole seconds, minimum 1)
         # rides along with retryable throttling errors.
@@ -270,6 +270,10 @@ module OpenReceive
       end
 
       private
+
+      def public_checkout(checkout)
+        checkout.reject { |key, _| key.to_s == "created_at_source" }
+      end
 
       # Status refresh with no request-level pass: one-attempt reconcile_payments,
       # delivering settlement inline. A truncated walk raises WalletUnavailableError
@@ -391,11 +395,11 @@ module OpenReceive
         # (database down, bug): retryable 503, never a payer-blaming conflict
         # — mirrors the JS handler's commit().
         raise e if e.respond_to?(:status) && e.respond_to?(:code)
-        raise HostPersistenceError
+        raise ConflictError, "The host did not accept this payment attempt; payer instructions were withheld."
       end
 
       def public_swap(swap)
-        swap.reject { |key, _| key == "swap_data" }
+        swap.reject { |key, _| key == "swap_data" }.merge("checkout" => public_checkout(swap.fetch("checkout")))
       end
 
       # Payer-facing subset of a settlement's wallet details, whitelisted
@@ -442,7 +446,9 @@ module OpenReceive
       # preimages.
       def report_unexpected_error(error, request_id)
         if defined?(::Rails) && ::Rails.respond_to?(:error) && ::Rails.error
-          ::Rails.error.report(error, handled: true, source: "openreceive")
+          # Detached diagnostic: no cause, stack or attached provider configuration.
+          safe_error = RuntimeError.new(OpenReceive::Nwc.redact_error_text(error.message))
+          ::Rails.error.report(safe_error, handled: true, source: "openreceive")
         else
           origin = Array(error.backtrace).first
           line = "[openreceive] unexpected #{error.class} (request_id=#{request_id})" \

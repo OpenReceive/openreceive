@@ -918,24 +918,6 @@ export function renderKeepOrderNote(options: {
   );
 }
 
-/**
- * Survives wizard remounts caused by poll snapshot churn, so the draft must outlive the
- * component. Bounded because attempt ids are unique: an unbounded module map grows for as
- * long as a single-page app lives.
- */
-const REFUND_ADDRESS_DRAFT_LIMIT = 8;
-const refundAddressDraftByAttempt = new Map<string, string>();
-
-function setRefundAddressDraft(attemptId: string, value: string): void {
-  refundAddressDraftByAttempt.delete(attemptId);
-  refundAddressDraftByAttempt.set(attemptId, value);
-  while (refundAddressDraftByAttempt.size > REFUND_ADDRESS_DRAFT_LIMIT) {
-    const oldest = refundAddressDraftByAttempt.keys().next().value;
-    if (oldest === undefined) break;
-    refundAddressDraftByAttempt.delete(oldest);
-  }
-}
-
 function SwapRefundForm(props: {
   readonly attemptId: string;
   readonly payInAsset: string;
@@ -946,12 +928,19 @@ function SwapRefundForm(props: {
   readonly onRefund: (attemptId: string, refundAddress: string, confirm: boolean) => Promise<void>;
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
-  const [refundAddress, setRefundAddress] = React.useState(
-    () => refundAddressDraftByAttempt.get(props.attemptId) ?? "",
-  );
+  const [refundAddress, setRefundAddress] = React.useState("");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a different attempt starts a fresh refund draft.
   React.useEffect(() => {
-    setRefundAddress(refundAddressDraftByAttempt.get(props.attemptId) ?? "");
+    setRefundAddress("");
   }, [props.attemptId]);
+  const generation = React.useRef(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: old attempt completions must not update this form.
+  React.useEffect(
+    () => () => {
+      generation.current += 1;
+    },
+    [props.attemptId],
+  );
   const [submitting, setSubmitting] = React.useState(false);
   const [showAddressError, setShowAddressError] = React.useState(false);
   const address = refundAddress.trim();
@@ -974,10 +963,15 @@ function SwapRefundForm(props: {
           return;
         }
         setSubmitting(true);
+        const captured = generation.current;
         void props
           .onRefund(props.attemptId, address, confirm)
-          .catch(props.onError)
-          .finally(() => setSubmitting(false));
+          .catch((error) => {
+            if (captured === generation.current) props.onError?.(error);
+          })
+          .finally(() => {
+            if (captured === generation.current) setSubmitting(false);
+          });
       },
     },
     // The form says what it is and why it is here before it asks for anything:
@@ -1017,7 +1011,7 @@ function SwapRefundForm(props: {
       className: showError ? orClasses.swapRefundInputInvalid : orClasses.swapRefundInput,
       onChange: (event) => {
         const value = event.currentTarget.value;
-        setRefundAddressDraft(props.attemptId, value);
+
         setRefundAddress(value);
       },
       onBlur: () => {

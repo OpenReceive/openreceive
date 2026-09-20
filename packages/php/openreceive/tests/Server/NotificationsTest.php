@@ -15,6 +15,46 @@ use PHPUnit\Framework\TestCase;
 
 final class NotificationsTest extends TestCase
 {
+    public function testDisconnectedSubscriptionsKeepPeriodicRecoveryAndCancelDuringBackoff(): void
+    {
+        $elapsed = 0;
+        $client = new class implements ReceiveNwcClient {
+            public int $scans = 0;
+            public int $subscriptions = 0;
+            public bool $stopped = false;
+            public function makeInvoice(array $request): array { throw new \LogicException('not used'); }
+            public function listTransactions(array $request): array { $this->scans++; return ['transactions' => []]; }
+            public function preflight(): array { return ['methods' => ['make_invoice', 'list_transactions'], 'encryption' => ['nip04']]; }
+            public function subscribeNotifications(callable $handler, ?callable $onIdle = null): void {
+                $this->subscriptions++;
+                // No idle callback arrives from an unavailable subscription.
+                throw new \RuntimeException('every relay is offline');
+            }
+            public function stopNotifications(): void { $this->stopped = true; }
+        };
+        $clock = static function () use (&$elapsed): int { return 1000 + $elapsed; };
+        $db = new PdoConnection(new \PDO('sqlite::memory:'));
+        PaymentsSchema::migrate($db);
+        $repository = new SqlPaymentRepository($db, $clock);
+        $hash = str_repeat('a', 64);
+        $repository->commitAttempt('offline', $hash, ['reference' => 'offline', 'payment_hash' => $hash,
+            'bolt11' => 'lnbc-test', 'amount_msats' => 1000, 'created_at' => 1000, 'expires_at' => 9999, 'fiat_quote' => null]);
+        $service = new Service($client, false, [], clock: $clock);
+        $reconciler = new Reconciler($service, $repository, static function (): void {}, clock: $clock);
+        $worker = null;
+        $worker = new Notifications($service, $reconciler, 5, sleep: static function (int $seconds) use (&$elapsed, &$worker): void {
+            $elapsed += $seconds;
+            if ($elapsed >= 16) $worker->stop();
+        }, monotonic: static function () use (&$elapsed): float { return (float) $elapsed; });
+        $worker->run();
+        self::assertSame(16, $elapsed, 'stop interrupts the long reconnect backoff');
+        self::assertSame(5, $client->subscriptions);
+        self::assertGreaterThanOrEqual(6, $client->scans, 'periodic history scans run without subscription idle ticks');
+        self::assertTrue($client->stopped);
+        $worker->run();
+        self::assertSame(5, $client->subscriptions, 'shutdown never resubscribes');
+    }
+
     public function testTheRetryRampDoublesToTheCapAndResetsAfterAHealthySubscription(): void
     {
         self::assertSame(1, Reconciler::notificationsRetryDelay(null, 0.0));
@@ -89,7 +129,7 @@ final class NotificationsTest extends TestCase
         });
         self::assertSame(2, $subscriptions);
         self::assertSame(2, $idleTicks, 'the periodic pass runs on the idle tick of every subscription');
-        self::assertSame([1, 2], $sleeps, 'backoff 1 s after the first drop, 2 s after the second');
+        self::assertSame([1, 1, 1], $sleeps, 'backoff remains cancellable in one-second steps');
         $worker->stop();
         $worker->run();
         self::assertSame(2, $subscriptions, 'a stopped worker does not resubscribe');

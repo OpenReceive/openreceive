@@ -5,57 +5,57 @@ declare(strict_types=1);
 namespace OpenReceive\Nwc;
 
 use dsbaars\nostr\Nip47\NwcClient;
-use dsbaars\nostr\Nip47\Response\GetInfoResponse;
 use dsbaars\nostr\Nip47\Response\ListTransactionsResponse;
 use dsbaars\nostr\Nip47\Response\MakeInvoiceResponse;
 use dsbaars\nostr\Nip47\Response\ResponseInterface;
 use OpenReceive\Nwc\Transport\Nip47Command;
+use OpenReceive\Nwc\Transport\RelayRpcClient;
 use OpenReceive\Nwc\Transport\NotificationListener;
 use OpenReceive\Support\Records;
 use Psr\Log\LoggerInterface;
 
 /**
- * The receive-only client over dsbaars/nostr-php-nwc (the nwc_ruby.rb twin):
- * NIP-47 params are built by the kernel, sent through the library's blocking
- * websocket request (connect → send → await → close, no event loop), and
- * replies are normalized by the kernel. Encryption follows the info event
- * (nip44_v2 when advertised, nip04 otherwise). Notifications use the
- * in-repo listener (see Transport\NotificationListener for why).
- *
- * The connection secret never leaves this object: `redactedConnectionUri` is
- * the only form that may be logged.
+ * Receive-only NIP-47 adapter using the dependency's signing/encryption models
+ * and the bounded in-repo relay transport. Notifications use the same wallet
+ * key for decryption. Only a redacted connection URI is exposed for diagnostics.
  */
 final class NostrPhpNwcReceiveClient implements ReceiveNwcClient
 {
     public readonly string $redactedConnectionUri;
     /** @var array{wallet_pubkey: string, relays: list<string>, client_secret: string, redacted: string, lud16?: string} */
     private readonly array $connection;
-    private readonly string $clientUri;
+    private readonly RelayRpcClient $rpc;
+    private ?NotificationListener $listener = null;
     private ?NwcClient $client = null;
     private bool $encryptionChosen = false;
     /** @var array<string, mixed>|null */
     private ?array $infoCache = null;
 
-    public function __construct(string $connectionUri, private readonly ?LoggerInterface $logger = null, ?NwcClient $client = null)
+    public function __construct(string $connectionUri, ?LoggerInterface $logger = null, ?NwcClient $client = null)
     {
         $this->connection = Uri::parse($connectionUri);
         $this->redactedConnectionUri = $this->connection['redacted'];
         $this->client = $client;
-        $this->clientUri = $connectionUri;
+        $this->rpc = new RelayRpcClient($this->connection);
+        try {
+            $logger?->debug('[openreceive] receive-only wallet transport configured', ['relay_count' => count($this->connection['relays'])]);
+        } catch (\Throwable) {
+            // Optional diagnostic sinks cannot prevent wallet configuration.
+        }
     }
 
     public function makeInvoice(array $request): array
     {
         $params = Requests::makeInvoiceRequest($request);
         $response = $this->execute(new Nip47Command('make_invoice', $params), MakeInvoiceResponse::class);
-        return Requests::normalizeMakeInvoiceResponse($response->getResult());
+        return Requests::normalizeMakeInvoiceResponse($response);
     }
 
     public function listTransactions(array $request): array
     {
         $params = Requests::listTransactionsRequest($request);
-        $response = $this->execute(new Nip47Command('list_transactions', $params), ListTransactionsResponse::class);
-        return Requests::normalizeListTransactionsResponse($response->getResult());
+        $response = $this->execute(new Nip47Command('list_transactions', $params), ListTransactionsResponse::class, isset($request['_deadline']) ? (float) $request['_deadline'] : null);
+        return Requests::normalizeListTransactionsResponse($response);
     }
 
     /**
@@ -68,9 +68,13 @@ final class NostrPhpNwcReceiveClient implements ReceiveNwcClient
         if ($this->infoCache !== null) {
             return $this->infoCache;
         }
-        $response = $this->nwc()->getWalletInfo();
-        $this->assertNoError($response, 'get_info');
-        $info = Records::asArray($response->getResult());
+        if ($this->client === null) {
+            $info = $this->rpc->info();
+        } else {
+            $response = $this->client->getWalletInfo();
+            $this->assertNoError($response, 'get_info');
+            $info = Records::asArray($response->getResult());
+        }
         $this->chooseEncryption($info);
         $this->infoCache = $info;
         return $info;
@@ -78,7 +82,8 @@ final class NostrPhpNwcReceiveClient implements ReceiveNwcClient
 
     public function subscribeNotifications(callable $handler, ?callable $onIdle = null): void
     {
-        (new NotificationListener($this->connection))->listen($handler, $onIdle);
+        $this->listener ??= new NotificationListener($this->connection);
+        $this->listener->listen($handler, $onIdle);
     }
 
     /**
@@ -101,29 +106,23 @@ final class NostrPhpNwcReceiveClient implements ReceiveNwcClient
         return ['wallet_pubkey' => $this->connection['wallet_pubkey'], 'relays' => $this->connection['relays']];
     }
 
-    private function nwc(): NwcClient
+    public function stopNotifications(): void
     {
-        if ($this->client === null) {
-            $this->client = new NwcClient($this->clientUri, $this->logger instanceof \Psr\Log\AbstractLogger ? $this->logger : null);
-        }
-        return $this->client;
+        $this->listener?->stop();
     }
 
-    /**
-     * @template T of ResponseInterface
-     * @param class-string<T> $responseClass
-     * @return T
-     */
-    private function execute(Nip47Command $command, string $responseClass): ResponseInterface
+    /** @param class-string<ResponseInterface> $responseClass */
+    private function execute(Nip47Command $command, string $responseClass, ?float $deadline = null): mixed
     {
         if (!$this->encryptionChosen) {
-            // Every request rides the mode the wallet advertised; preflight normally ran at boot.
             $this->preflight();
         }
-        $response = $this->nwc()->executeCommand($command, $responseClass);
+        if ($this->client === null) {
+            return $this->rpc->execute($command, $deadline);
+        }
+        $response = $this->client->executeCommand($command, $responseClass);
         $this->assertNoError($response, $command->getMethod());
-        /** @var T $response */
-        return $response;
+        return Records::asArray($response->getResult());
     }
 
     /** @param array<string, mixed> $info */
@@ -131,7 +130,8 @@ final class NostrPhpNwcReceiveClient implements ReceiveNwcClient
     {
         $mode = Info::chooseEncryptionMode(Info::stringList($info['encryption'] ?? $info['encryptions'] ?? null));
         if ($mode !== null) {
-            $this->nwc()->setEncryption($mode);
+            $this->rpc->setEncryption($mode);
+            $this->client?->setEncryption($mode);
         }
         $this->encryptionChosen = true;
     }

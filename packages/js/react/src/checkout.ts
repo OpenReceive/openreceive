@@ -7,8 +7,8 @@ import {
   mergeAttemptIntoCheckout,
   mergeAttemptIntoSnapshot,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
-  OPENRECEIVE_STYLE_ROOT_ATTRIBUTE,
   OPENRECEIVE_DEFAULT_PREFIX,
+  OPENRECEIVE_STYLE_ROOT_ATTRIBUTE,
   orClasses,
   prepareCheckout,
   requestCheckout,
@@ -67,12 +67,22 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
     // element's snapshot-mode polling behavior.
     return React.createElement(CheckoutSnapshotMode, {
       ...props,
+      key: JSON.stringify([
+        checkout.reference,
+        (props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, ""),
+      ]),
       checkout,
       prefix: props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX,
     });
   }
   // No snapshot: the validator above already rejected a missing/empty reference.
-  return React.createElement(CheckoutCreate, props);
+  return React.createElement(CheckoutCreate, {
+    ...props,
+    key: JSON.stringify([
+      props.reference,
+      (props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, ""),
+    ]),
+  });
 }
 
 /**
@@ -164,9 +174,11 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   const session = useCheckoutSession({
     snapshot: () => createdCheckoutRef.current,
     reference: () => reference,
-    requestCheckout: (id) =>
+    prefix: () => resolvedPrefix,
+    requestCheckout: (id, signal) =>
       requestCheckout({
         prefix: resolvedPrefix,
+        signal,
         reference: id,
         ...(csrfHeader === undefined ? {} : { csrfHeader }),
         ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
@@ -192,9 +204,11 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; createFetch/onError are read from refs.
   React.useEffect(() => {
     let cancelled = false;
+    const action = session.capture();
     setCreated({ status: "pending" });
     prepareCheckout({
       prefix: resolvedPrefix,
+      signal: action.signal,
       reference,
       ...(csrfHeader === undefined ? {} : { csrfHeader }),
       ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
@@ -204,9 +218,10 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       // on the method grid. `resumeSwapAttempt` swallows a stale hash, so the
       // failure mode is the checkout the payer would have had anyway.
       .then((checkout) =>
-        resumePaymentHash === undefined
+        cancelled || !action.isCurrent() || resumePaymentHash === undefined
           ? checkout
           : resumeSwapAttempt({
+              signal: action.signal,
               fetch: createFetchRef.current ?? globalThis.fetch,
               prefix: resolvedPrefix,
               ...(csrfHeader === undefined ? {} : { csrfHeader }),
@@ -216,10 +231,10 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
             }),
       )
       .then((checkout) => {
-        if (!cancelled) setCreated({ status: "ready", checkout });
+        if (!cancelled && action.isCurrent()) setCreated({ status: "ready", checkout });
       })
       .catch((error) => {
-        if (cancelled) return;
+        if (cancelled || !action.isCurrent()) return;
         onErrorRef.current?.(error);
         setCreated({
           status: "error",
@@ -230,6 +245,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       });
     return () => {
       cancelled = true;
+      session.reset();
     };
   }, [reference, resolvedPrefix, csrfHeader, resumePaymentHash, attempt]);
 
@@ -406,7 +422,9 @@ function CheckoutView(
   // when the host locked the theme.
   const stampsTheme = !theme.fromScope;
   const ownsTheme = themeToggle && !theme.fromScope && lockedTheme === undefined;
-  const [swapFocused, setSwapFocused] = React.useState(false);
+  const [swapFocused, setSwapFocused] = React.useState(() =>
+    checkout.invoices.some((invoice) => invoice.rail === "swap" && invoice.swap !== undefined),
+  );
   const [lightningFocused, setLightningFocused] = React.useState(false);
   const QRCodeComponent = components?.QRCode ?? QRCode;
   const InvoiceSummaryComponent = components?.InvoiceSummary ?? InvoiceSummary;
@@ -427,7 +445,7 @@ function CheckoutView(
     !!checkoutModel.invoice && (!paymentWizard || lightningFocused) && !swapFocused && !expired;
   // Settled and expired keep the payment layout: after a swap deposit settles,
   // swapFocused is still true and would otherwise blank the whole widget.
-  const hideLightning = !showLightning && !expired && !settled;
+  const hideLightning = !settled && (swapFocused || (!showLightning && !expired));
   // Amount/fiat already appear under the QR; pending is covered by WaitingState.
   // Keep the meta row only for terminal states that need a compact badge.
   const showSummaryMeta = checkoutModel.status === "settled" || checkoutModel.status === "expired";
@@ -669,7 +687,11 @@ function CheckoutView(
                       ),
               ),
             ),
-        paymentWizard && !settled && (!expired || swapFocused)
+        paymentWizard &&
+        !settled &&
+        (!expired ||
+          swapFocused ||
+          checkoutModel.checkout?.invoices.some((invoice) => invoice.swap !== undefined))
           ? React.createElement(PaymentWizard, {
               key: "wizard",
               // Only pass invoice when it's a real bolt11 (non-empty, non-deferred).

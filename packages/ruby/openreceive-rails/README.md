@@ -98,3 +98,36 @@ overrides it. Keep ordinary settings such as `config.price_currencies` in
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 MIT license.
+
+### Reconciliation upgrades and operator recovery
+
+Explicit jobs, the notifications worker, notification fallback and mounted routes
+share the durable lease/CAS gate and bounded scheduler. Disabling
+`opportunistic_reconcile` disables request triggers only. Stop old application and
+worker processes before deploying this scheduler contract, then start the updated
+processes together. Resumed history slices discover positive wallet finality but
+never prove absence; unpaid dense histories stay pending until a fresh complete
+covering scan fits the budget. Deposit countdown/reuse expiry remains separate
+from the saved Lightning invoice's settlement deadline.
+
+`OpenReceivePayment.maintenance_candidates(after: cursor, limit: 100)` is a
+read-only report with `candidates`, `next_cursor` and `scanned`. An operator can
+review a selected candidate and call
+`OpenReceivePayment.requeue_reviewed_attempt!(candidate, decision_id: "ticket-42")`.
+The model checks the unchanged row under its reference lock, records the decision
+in `openreceive_meta`, and requeues it without granting fulfillment. The ordinary
+gated reconciler must still discover wallet finality. Settled rows remain
+immutable, and genuine sibling payments never grant a second entitlement.
+Candidates distinguish early swap-deadline closure from ordinary operator
+attention; reports contain no swap credentials. Follow the
+[coordinated upgrade guide](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/payment-safety-upgrade.md).
+
+MySQL repository operations require an outermost transaction; wrapping them in
+an ambient ActiveRecord transaction is rejected before taking the named lock.
+
+Fulfillment database writes and a host outbox belong in `on_paid`; a callback can
+run again after rollback. External jobs need their own durable idempotency.
+Storage-free `openreceive-server` handlers can call `on_paid` on every settled
+poll, so advanced hosts own the conditional write/outbox. A raw create hook
+refusal returns 409 with instructions withheld; repository infrastructure failures
+remain retryable 503.

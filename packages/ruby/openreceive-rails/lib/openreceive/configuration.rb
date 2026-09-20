@@ -359,6 +359,8 @@ module OpenReceive
           # 409 CONFLICT. Leaving AttemptConflict unwrapped lets request_handler
           # #commit treat it as infrastructure failure (retryable 503 persist).
           raise OpenReceive::Server::ConflictError, e.message
+        rescue StandardError
+          raise OpenReceive::Server::HostPersistenceError
         end
       end
     end

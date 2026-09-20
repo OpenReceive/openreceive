@@ -273,7 +273,7 @@ test("reconcilePayments batches known attempts into shared list_transactions sca
   });
 
   assert.equal(checked.filter((payment) => payment.status === "settled").length, 1);
-  assert.ok(requests.length <= 2, "reconciliation scans history once per wallet view");
+  assert.ok(requests.length <= 3, "the settled view needs an empty page before the inclusive view");
   await openreceive.close();
 });
 
@@ -347,8 +347,11 @@ test("normalizeMakeInvoiceResult rejects a malformed wallet payment_hash", () =>
 test("makeInvoice surfaces a malformed payment_hash as a named wallet error", async () => {
   const client = createNwcReceiveClient({
     connectionString: VALID_NWC,
-    requirePreflight: false,
     client: {
+      getWalletServiceInfo: async () => ({
+        methods: ["get_info", "make_invoice", "list_transactions"],
+        encryption: ["nip04"],
+      }),
       makeInvoice: async () => ({
         invoice: "lnbc10n1malformedhash",
         payment_hash: "definitely-not-hex",

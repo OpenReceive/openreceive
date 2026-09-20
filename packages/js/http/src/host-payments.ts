@@ -1,11 +1,7 @@
 import { unixSeconds } from "@openreceive/core";
 import { sanitizeEvent } from "@openreceive/node";
-import type {
-  CreateCheckoutAmount,
-  NodeSettlementActionHook,
-  NodeSettlementActionInput,
-} from "@openreceive/node";
-import { hostError } from "./errors.ts";
+import type { CreateCheckoutAmount, NodeSettlementActionHook } from "@openreceive/node";
+import { hostError, HttpError, isServiceErrorShape } from "./errors.ts";
 import type {
   CheckoutCreatedHook,
   ResolveCheckoutContext,
@@ -16,6 +12,7 @@ import {
   isReusablePaymentAttempt,
   type PaymentRecord,
   type PaymentRepository,
+  type SettlementContext,
 } from "./payment-repository.ts";
 import type { SqlDatabase } from "./sql-adapters.ts";
 import { createSqlPayments, type PaymentSettlementHook } from "./sql-payments.ts";
@@ -63,38 +60,25 @@ export interface CreateHostDbOptions extends CreateOpenReceiveHostBaseOptions {
   readonly payments?: never;
 }
 
-/**
- * Settlement context passed to repository-mode `onPaid`: the raw core
- * settlement event (`paymentHash`, `paidAt`, `details`). Unlike db-mode's
- * {@link PaymentSettlement} it carries no `reference` and no
- * transactional `query` — the custom repository owns that mapping.
- */
-export type SettlementEvent = NodeSettlementActionInput;
+/** Custom fulfillment receives the resolved reference and its transaction handle. */
+export type SettlementEvent<Transaction = unknown> = SettlementContext<Transaction>;
+export type SettlementEventHook<Transaction = unknown> = (
+  settlement: SettlementEvent<Transaction>,
+) => void | Promise<void>;
 
-export type SettlementEventHook = (settlement: SettlementEvent) => void | Promise<void>;
-
-/**
- * Advanced escape hatch: the host implements the full
- * `PaymentRepository` contract, including commit locking, write-once
- * settlement, and reconciliation transitions.
- *
- * The settlement hook is `onPaid` in this mode too, but its context type
- * differs from db mode: it receives the raw {@link SettlementEvent}
- * (`paymentHash`, `paidAt`, `details`), with no `reference` and no transactional
- * `query` — unlike db-mode `onPaid`, which runs inside the library's settlement
- * transaction. Write-once is still the library's: repository-mode `onPaid`
- * runs only for the settlement whose `payments.recordSettlement` claim was
- * won, so a redelivered settlement never fulfills twice.
- */
-export interface CreateHostRepositoryOptions extends CreateOpenReceiveHostBaseOptions {
-  readonly payments: PaymentRepository;
-  /** Host settlement handler; runs once, for the winning first-settlement claim. */
-  readonly onPaid: SettlementEventHook;
+/** The custom repository awaits onPaid before committing; any failure rolls back both writes. */
+export interface CreateHostRepositoryOptions<Transaction = unknown>
+  extends CreateOpenReceiveHostBaseOptions {
+  readonly payments: PaymentRepository<Transaction>;
+  /** Awaited before the winning first-reference settlement transaction commits. */
+  readonly onPaid: SettlementEventHook<Transaction>;
   readonly db?: never;
   readonly tableName?: never;
 }
 
-export type CreateHostOptions = CreateHostDbOptions | CreateHostRepositoryOptions;
+export type CreateHostOptions<Transaction = unknown> =
+  | CreateHostDbOptions
+  | CreateHostRepositoryOptions<Transaction>;
 
 export interface Host {
   readonly resolveCheckout: ResolveCheckoutHook;
@@ -110,7 +94,7 @@ export interface Host {
  * settlement write-once, and reconciliation transitions are library-owned in
  * `db` mode.
  */
-export function createHost(options: CreateHostOptions): Host {
+export function createHost<Transaction = unknown>(options: CreateHostOptions<Transaction>): Host {
   if (options?.amountFor === undefined) {
     throw new TypeError(
       "OpenReceive host requires amountFor — the host owns prices. Pass amountFor(reference) " +
@@ -121,8 +105,8 @@ export function createHost(options: CreateHostOptions): Host {
   if (options.onPaid === undefined) {
     throw new TypeError(
       "OpenReceive host requires onPaid (per-reference settlement context in db mode; the raw " +
-        "settlement event in custom repository mode). Pass onPaid to fulfill the order — it runs " +
-        "exactly once per reference. https://openreceive.org/guides/api-reference.md#onpaid",
+        "transaction context in custom repository mode). Pass onPaid to write fulfillment atomically " +
+        "for the first settled attempt per reference. https://openreceive.org/guides/api-reference.md#onpaid",
     );
   }
 
@@ -137,6 +121,7 @@ export function createHost(options: CreateHostOptions): Host {
     const fulfill = options.onPaid as PaymentSettlementHook;
     onPaid = async (input) => {
       await repository.markPaidOnce(input, fulfill);
+      await assertSettlementCommitted(repository, input.paymentHash);
     };
   } else {
     if (options.payments?.listForReference === undefined) {
@@ -167,26 +152,22 @@ export function createHost(options: CreateHostOptions): Host {
           "repository. https://openreceive.org/guides/storage.md",
       );
     }
-    if (typeof options.payments.recordSettlement !== "function") {
+    if (typeof options.payments.recordSettlementWithFulfillment !== "function") {
       throw new TypeError(
-        "OpenReceive host requires payments.recordSettlement (the write-once settlement claim). " +
+        "OpenReceive host requires payments.recordSettlementWithFulfillment(input, fulfill). Await fulfillment inside the reference settlement transaction; boolean-only repositories are unsupported. " +
           "Implement it, or pass db to use the built-in SQL repository. " +
           "https://openreceive.org/guides/storage.md",
       );
     }
+    if (typeof options.payments.findByPaymentHash !== "function")
+      throw new TypeError(
+        "OpenReceive host requires payments.findByPaymentHash to verify durable settlement acknowledgment.",
+      );
     payments = options.payments;
     const custom = options.payments;
-    const notify = options.onPaid as SettlementEventHook;
-    // Write-once stays library-owned in custom-repository mode too: the
-    // repository claims the settlement and the host is told only when the claim
-    // is won, so a redelivered settlement event fulfills exactly once.
     onPaid = async (settlement) => {
-      const claimed = await custom.recordSettlement({
-        paymentHash: settlement.paymentHash,
-        paidAt: settlement.paidAt,
-        ...(settlement.details === undefined ? {} : { details: settlement.details }),
-      });
-      if (claimed) await notify(settlement);
+      await custom.recordSettlementWithFulfillment(settlement, options.onPaid);
+      await assertSettlementCommitted(custom, settlement.paymentHash);
     };
   }
 
@@ -277,7 +258,19 @@ export function createHost(options: CreateHostOptions): Host {
 
   return {
     resolveCheckout,
-    onCheckoutCreated: (input) => payments.commitAttempt(input),
+    onCheckoutCreated: async (input) => {
+      try {
+        await payments.commitAttempt(input);
+      } catch (error) {
+        if (error instanceof HttpError || isServiceErrorShape(error)) throw error;
+        throw new HttpError(
+          503,
+          "INTERNAL",
+          "Payment storage is unavailable; payer instructions were withheld. Please retry.",
+          { retryable: true },
+        );
+      }
+    },
     onPaid,
     payments,
   };
@@ -406,4 +399,18 @@ function storedPaymentHash(value: string): string {
     );
   }
   return normalized;
+}
+
+async function assertSettlementCommitted(
+  repository: PaymentRepository,
+  paymentHash: string,
+): Promise<void> {
+  const committed = await repository.findByPaymentHash(paymentHash);
+  if (committed?.status !== "settled")
+    throw new HttpError(
+      503,
+      "INTERNAL",
+      "The payment settlement is not committed; retry reconciliation.",
+      { retryable: true },
+    );
 }

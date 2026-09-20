@@ -162,8 +162,14 @@ test("nwc-request-response vectors map through the production request builders",
     }
     const request = toNip47ListTransactionsParams(item.openreceive_request);
     assert.deepEqual(request, item.expected_nip47_request, `${item.name}: request`);
+    if (item.expected_error) {
+      assert.throws(() => normalizeListTransactionsResult(item.raw_response), undefined, item.name);
+      continue;
+    }
     if (item.expected_openreceive_response !== undefined) {
       const normalized = normalizeListTransactionsResult(item.raw_response);
+      if (item.expected_skipped_rows !== undefined)
+        assert.equal(normalized.skippedRows, item.expected_skipped_rows, item.name);
       const expected = item.expected_openreceive_response.transactions;
       assert.equal(normalized.transactions.length, expected.length, `${item.name}: row count`);
       expected.forEach((row, index) => {
@@ -235,7 +241,6 @@ test("wallet-scan-truncation vectors reconcile through the production walk", asy
   // in tools/conformance/ruby-crosslang.rb; both engines expand filler rows
   // identically.
   const family = vector("wallet-scan-truncation");
-  const pageLimit = family.page_limit;
   const fillerRow = (page, index) => ({
     type: "incoming",
     payment_hash: "f".repeat(56) + String(page * 10_000 + index).padStart(8, "0"),
@@ -256,15 +261,19 @@ test("wallet-scan-truncation vectors reconcile through the production walk", asy
     const client = {
       listTransactions: async (request) => {
         const source = request.unpaid === true ? unpaidPages : pages;
-        const index =
-          item.wallet.ignores_offset === true ? 0 : Math.floor((request.offset ?? 0) / pageLimit);
-        // This client hands over normalized pages, so an unusable row is one it
-        // already dropped and counted.
-        const skippedRows = (
+        const descriptors =
           request.unpaid === true && item.wallet.unpaid_pages !== undefined
             ? item.wallet.unpaid_pages
-            : item.wallet.pages
-        )[index]?.unusable_rows;
+            : item.wallet.pages;
+        let index = 0;
+        let consumed = 0;
+        if (!item.wallet.ignores_offset) {
+          while (index < source.length && consumed < (request.offset ?? 0)) {
+            consumed += source[index].length + (descriptors[index]?.unusable_rows ?? 0);
+            index++;
+          }
+        }
+        const skippedRows = descriptors[index]?.unusable_rows;
         return {
           transactions: source[index] ?? [],
           ...(skippedRows === undefined ? {} : { skippedRows }),

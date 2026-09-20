@@ -197,12 +197,20 @@ def test_reconcile_gate_is_a_durable_cas(
     repository: SqlPaymentRepository, clock: dict[str, int]
 ) -> None:
     now = clock["now"]
-    assert repository.claim_reconcile_gate(now=now, interval_seconds=2) is True
-    assert repository.claim_reconcile_gate(now=now + 1, interval_seconds=2) is False
-    assert repository.claim_reconcile_gate(now=now + 2, interval_seconds=2) is True
-    # A claim stamped far in the future is a rewound clock, not a fresh claim.
-    assert repository.claim_reconcile_gate(now=now + 1000, interval_seconds=2) is True
-    assert repository.claim_reconcile_gate(now=now + 1000 - 120, interval_seconds=2) is True
+    claim = repository.claim_reconcile_gate(now=now, interval_seconds=2)
+    assert claim is not None
+    assert repository.claim_reconcile_gate(now=now + 1, interval_seconds=2) is None
+    assert repository.claim_reconcile_gate(now=now + 2, interval_seconds=2) is None  # live lease
+    scheduler = {"cursor": {"created_at": now, "payment_hash": H1}, "windows": []}
+    assert repository.checkpoint_reconcile_gate(claim, scheduler, now=now + 2, release=True)
+    next_claim = repository.claim_reconcile_gate(now=now + 2, interval_seconds=2)
+    assert next_claim is not None and next_claim["scheduler"] == scheduler
+    assert not repository.checkpoint_reconcile_gate(
+        claim, {"cursor": None, "windows": []}, now=now + 2
+    )
+    assert not repository.checkpoint_reconcile_gate(next_claim, scheduler, now=now + 12)
+    assert repository.claim_reconcile_gate(now=now + 1000, interval_seconds=2) is not None
+    assert repository.claim_reconcile_gate(now=now + 880, interval_seconds=2) is not None
 
 
 def test_selection_rule_over_the_rows(
@@ -264,6 +272,8 @@ def test_schema_guard(engine: Engine) -> None:
     )
     with pytest.raises(SchemaError, match="have not been migrated"):
         unmigrated.list_reconcilable_attempts()
+    with pytest.raises(SchemaError, match="have not been migrated"):
+        unmigrated.count_attempts_from_ip("203.0.113.9", 0)
     newer = SqlPaymentRepository(engine, table_name="orp_newer", meta_table_name="orm_newer")
     newer.create_tables()
     try:
@@ -277,6 +287,8 @@ def test_schema_guard(engine: Engine) -> None:
             )
         with pytest.raises(SchemaError, match="newer than this library"):
             newer.list_reconcilable_attempts()
+        with pytest.raises(SchemaError, match="newer than this library"):
+            newer.count_attempts_from_ip("203.0.113.9", 0)
     finally:
         with engine.begin() as connection:
             connection.execute(text("DROP TABLE IF EXISTS orp_newer"))
@@ -358,3 +370,106 @@ def test_schema_sql_renders_per_dialect() -> None:
     assert "payment_hash ~ '^[0-9a-f]{64}$'" in payments_schema_sql("postgresql")
     with pytest.raises(ValueError):
         payments_schema_sql("oracle")
+
+
+def test_reconciliation_uses_wallet_snapshot_deadline_and_keeps_deposit_reuse(repository, clock):
+    now = clock["now"]
+    repository.commit_attempt(
+        PaymentInsert(
+            "swap-deadline",
+            H1,
+            checkout("swap-deadline", H1, now, now + 1800),
+            swap_data=swap_data("USDT_TRON", now + 600),
+        )
+    )
+    assert repository.find_by_payment_hash(H1).expires_at == now + 600
+    assert repository.find_pending_attempt(H1).expires_at == now + 1800
+    assert repository.list_reconcilable_attempts()[0].expires_at == now + 1800
+    clock["now"] = now + 560
+    repository.commit_attempt(
+        PaymentInsert(
+            "swap-deadline",
+            H2,
+            checkout("swap-deadline", H2, now + 560, now + 2360),
+            swap_data=swap_data("USDT_TRON", now + 1160),
+        )
+    )
+    assert repository.find_pending_attempt(H1) is not None
+
+
+def test_attention_requires_explicit_review_and_requeue_never_settles(repository, clock):
+    now = clock["now"]
+    repository.commit_attempt(PaymentInsert("review", H1, checkout("review", H1, now, now + 600)))
+    repository.record_reconciliation(
+        ReconciliationTransition(H1, "attention", now + 1500, "unsettled_after_expiry")
+    )
+    assert repository.find_pending_attempt(H1) is None
+    assert repository.record_settlement(SettlementRecord(H1, now + 1600)) is False
+    report = repository.maintenance_candidates()["candidates"]
+    assert len(report) == 1 and report[0]["reason"] == "operator_attention"
+    clock["now"] = now + 1700
+    assert repository.requeue_reviewed_attempt(report[0], decision_id="review-42")
+    assert not repository.requeue_reviewed_attempt(report[0], decision_id="review-42")
+    assert repository.find_by_payment_hash(H1).status == "pending"
+    assert repository.record_settlement(SettlementRecord(H1, now + 1600))
+    assert repository.maintenance_candidates()["candidates"] == []
+
+
+def test_early_closure_report_excludes_true_wallet_expiry_and_preserves_token(repository, clock):
+    now = clock["now"]
+    repository.commit_attempt(
+        PaymentInsert(
+            "early-close",
+            H1,
+            checkout("early-close", H1, now, now + 1800),
+            swap_data=swap_data("USDT_TRON", now + 600),
+        )
+    )
+    repository.record_reconciliation(
+        ReconciliationTransition(H1, "expired", now + 1500, "not_found_after_expiry")
+    )
+    report = repository.maintenance_candidates()["candidates"]
+    assert report[0]["reason"] == "early_deposit_deadline_closure"
+    assert "server-only" not in str(report)
+    assert repository.requeue_reviewed_attempt(report[0], decision_id="upgrade-1")
+    assert (
+        repository.find_by_payment_hash(H1).swap_data["provider_order"]["provider_token"]
+        == "server-only"
+    )
+    repository.record_reconciliation(
+        ReconciliationTransition(H1, "expired", now + 2700, "not_found_after_expiry")
+    )
+    assert repository.maintenance_candidates()["candidates"] == []
+
+
+def test_terminal_transition_uses_settlement_reference_lock(repository, clock):
+    now = clock["now"]
+    repository.commit_attempt(
+        PaymentInsert("serialize-closure", H1, checkout("serialize-closure", H1, now, now + 600))
+    )
+    ready, completed = threading.Event(), threading.Event()
+    errors = []
+
+    def close_attempt():
+        ready.set()
+        try:
+            repository.record_reconciliation(
+                ReconciliationTransition(H1, "attention", now, "fixture_review")
+            )
+        except Exception as error:
+            errors.append(error)
+        finally:
+            completed.set()
+
+    with repository._reference_transaction("serialize-closure"):
+        worker = threading.Thread(target=close_attempt)
+        worker.start()
+        assert ready.wait(5)
+        assert not completed.wait(0.1), (
+            "terminal transition must wait for the settlement reference lock"
+        )
+    worker.join(timeout=10)
+    assert not worker.is_alive() and not errors
+    assert repository.find_by_payment_hash(H1).status == "attention"
+    assert repository.record_settlement(SettlementRecord(H1, now + 1)) is False
+    assert repository.find_by_payment_hash(H1).status == "attention"

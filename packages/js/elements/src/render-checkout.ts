@@ -70,9 +70,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     view.payment_wizard !== false && view.wizard?.selectedMethod == null && !swapFocused;
   const hideLightning =
     !settled &&
-    (view.lightningRequested === false ||
-      (swapFocused && !expired) ||
-      (methodGridShowing && !expired));
+    (view.lightningRequested === false || swapFocused || (methodGridShowing && !expired));
   // Expired keeps the wizard when a swap is FOCUSED, matching React
   // (checkout.ts: `!expired || swapFocused`). Dropping it mid-swap kicked a
   // payer who had already sent a deposit back to the Lightning "Start over"

@@ -392,7 +392,7 @@ class FixedFloatProvider:
             self._weight_budget.reserve(path)
         body_string = json.dumps(body, separators=(",", ":"))
         # The API key and HMAC signature live in headers and are never logged;
-        # the host sink is responsible for sanitizing nested secrets in bodies.
+        # host sinks receive bounded metadata only, never provider bodies or tokens.
         self._log_api_request(path, body)
         try:
             response = self._http(
@@ -462,7 +462,14 @@ class FixedFloatProvider:
         if self._api_request_logger is None:
             return
         try:
-            self._api_request_logger({"provider": self.name, "path": path, "body": body or {}})
+            self._api_request_logger(
+                {
+                    "provider": self.name,
+                    "path": path,
+                    "has_body": bool(body),
+                    "has_token": bool(body and body.get("token")),
+                }
+            )
         except Exception:
             pass
 
@@ -485,9 +492,8 @@ class FixedFloatProvider:
                     "path": path,
                     "status": status,
                     "ok": ok,
-                    "code": code,
-                    "msg": msg,
-                    "data": data,
+                    "code": code if isinstance(code, (int, float)) else None,
+                    "has_data": data is not None,
                 }
             )
         except Exception:
