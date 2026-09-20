@@ -57,9 +57,8 @@ def list_incoming_transactions(
             request["from"] = _normalize_unix(scan_from, "from")
         if scan_until is not None:
             request["until"] = _normalize_unix(scan_until, "until")
-        page = normalize_list_transactions_response(client.list_transactions(request))[
-            "transactions"
-        ]
+        response = normalize_list_transactions_response(client.list_transactions(request))
+        page = response["transactions"]
         for row in page:
             if row.get("type") not in (None, "incoming"):
                 continue
@@ -68,7 +67,10 @@ def list_incoming_transactions(
                 continue
             rows[payment_hash] = row
             outstanding.discard(payment_hash)
-        if not outstanding or len(page) < TRANSACTION_PAGE_LIMIT:
+        # The wallet ran out of rows only when the page IT sent was short: a row
+        # the normalizer dropped was still a row, and a full page with one of
+        # them dropped must not read as the end of the history.
+        if not outstanding or len(page) + response.get("skipped_rows", 0) < TRANSACTION_PAGE_LIMIT:
             truncated = False
             break
         # A wallet that ignores `offset` serves the same page forever; stop

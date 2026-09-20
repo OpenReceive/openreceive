@@ -38,6 +38,22 @@ def test_unrecognized_shape_fails_the_scan() -> None:
         requests.normalize_list_transactions_response({"transactions": [{"payment_hash": "bad"}]})
 
 
+def test_a_skipped_row_count_survives_normalizing_the_page_again() -> None:
+    # The client normalizes the wallet's page and the wallet walk normalizes it
+    # again: the count must survive, or a full page with a dropped row reads as
+    # the end of the wallet's history.
+    once = requests.normalize_list_transactions_response(
+        {
+            "transactions": [
+                {"payment_hash": "not-hex"},
+                {"payment_hash": "a" * 64, "amount": 1000, "state": "settled"},
+            ]
+        }
+    )
+    assert once["skipped_rows"] == 1
+    assert requests.normalize_list_transactions_response(once)["skipped_rows"] == 1
+
+
 def test_empty_reply_is_an_empty_scan() -> None:
     assert requests.normalize_list_transactions_response({}) == {"transactions": []}
     assert requests.normalize_list_transactions_response(None) == {"transactions": []}

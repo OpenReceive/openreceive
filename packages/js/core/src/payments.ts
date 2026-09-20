@@ -176,7 +176,10 @@ async function listIncomingTransactions(options: ScanPaymentsOptions): Promise<T
       truncated = false;
       break;
     }
-    if (page.transactions.length < OPENRECEIVE_TRANSACTION_PAGE_LIMIT) {
+    // The wallet ran out of rows only when the page IT sent was short: a row the
+    // client could not normalize was still a row, and a full page with one of
+    // them dropped must not read as the end of the history.
+    if (page.transactions.length + (page.skippedRows ?? 0) < OPENRECEIVE_TRANSACTION_PAGE_LIMIT) {
       truncated = false;
       break;
     }

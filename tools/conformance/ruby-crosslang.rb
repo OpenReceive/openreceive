@@ -261,6 +261,8 @@ scan_build_pages = lambda do |specs|
   Array(specs).each_with_index.map do |spec, page|
     rows = Array(spec["rows"]).map(&:dup)
     Integer(spec["filler_rows"] || 0).times { |index| rows << scan_filler_row.call(page, index) }
+    # Raw pages: the walk's own normalizer drops and counts these.
+    Integer(spec["unusable_rows"] || 0).times { rows << { "type" => "incoming", "payment_hash" => "unusable" } }
     rows
   end
 end

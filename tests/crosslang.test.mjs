@@ -258,7 +258,17 @@ test("wallet-scan-truncation vectors reconcile through the production walk", asy
         const source = request.unpaid === true ? unpaidPages : pages;
         const index =
           item.wallet.ignores_offset === true ? 0 : Math.floor((request.offset ?? 0) / pageLimit);
-        return { transactions: source[index] ?? [] };
+        // This client hands over normalized pages, so an unusable row is one it
+        // already dropped and counted.
+        const skippedRows = (
+          request.unpaid === true && item.wallet.unpaid_pages !== undefined
+            ? item.wallet.unpaid_pages
+            : item.wallet.pages
+        )[index]?.unusable_rows;
+        return {
+          transactions: source[index] ?? [],
+          ...(skippedRows === undefined ? {} : { skippedRows }),
+        };
       },
     };
     const results = await reconcilePaymentAttempts({

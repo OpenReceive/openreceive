@@ -42,8 +42,7 @@ public sealed class WalletScanTruncationVectors
         {
             var source = request.Unpaid == true ? unpaidPages : pages;
             var index = ignoresOffset ? 0 : (request.Offset ?? 0) / OpenReceiveTables.TransactionPageLimit;
-            var rows = index < source.Count ? source[index] : Array.Empty<NwcTransaction>();
-            return Task.FromResult(new ListTransactionsResult { Transactions = rows });
+            return Task.FromResult(index < source.Count ? source[index] : new ListTransactionsResult { Transactions = Array.Empty<NwcTransaction>() });
         }
 
         var results = await WalletScan.ReconcileAsync(List, attempts, () => clock, maxPages);
@@ -59,9 +58,9 @@ public sealed class WalletScanTruncationVectors
         Assert.Equal(VectorJson.Strings(expected["omitted"]), omitted);
     }
 
-    private static List<IReadOnlyList<NwcTransaction>> Expand(JsonArray? pages)
+    private static List<ListTransactionsResult> Expand(JsonArray? pages)
     {
-        var expanded = new List<IReadOnlyList<NwcTransaction>>();
+        var expanded = new List<ListTransactionsResult>();
         if (pages is null) return expanded;
         for (var pageNumber = 0; pageNumber < pages.Count; pageNumber += 1)
         {
@@ -81,7 +80,8 @@ public sealed class WalletScanTruncationVectors
                     SettledAt = 1001,
                 });
             }
-            expanded.Add(rows);
+            // This list hands over normalized pages, so an unusable row is one already dropped and counted.
+            expanded.Add(new ListTransactionsResult { Transactions = rows, SkippedRows = page["unusable_rows"]?.GetValue<int>() ?? 0 });
         }
         return expanded;
     }

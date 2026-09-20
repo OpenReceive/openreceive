@@ -296,6 +296,10 @@ $buildPages = static function (?array $specs) use ($fillerRow): array {
         for ($index = 0; $index < ($spec['filler_rows'] ?? 0); $index++) {
             $rows[] = $fillerRow($page, $index);
         }
+        // Raw pages: the walk's own normalizer drops and counts these.
+        for ($index = 0; $index < ($spec['unusable_rows'] ?? 0); $index++) {
+            $rows[] = ['type' => 'incoming', 'payment_hash' => 'unusable'];
+        }
         $pages[] = $rows;
     }
     return $pages;

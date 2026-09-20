@@ -79,7 +79,7 @@ class NwcReceiveClient:
         if self._transport is not None:
             self._transport.close()
 
-    def _request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _request(self, method: str, params: dict[str, Any]) -> object:
         reply = self._guard(lambda: self.transport.request(method, params))
         data = dict(reply) if isinstance(reply, dict) else {}
         error = data.get("error")
@@ -88,8 +88,13 @@ class NwcReceiveClient:
                 str(error.get("code") or "OTHER"),
                 str(error.get("message") or "NWC wallet service returned an error."),
             )
-        result = data.get("result")
-        return dict(result) if isinstance(result, dict) else {}
+        if error:
+            raise WalletError("OTHER", str(error))
+        # Handed over as the wallet sent it: the normalizers decide what a shape
+        # means. Flattening a bare list (which they read) or anything else to {}
+        # here made it an empty scan, and an empty-looking scan at expiry+grace
+        # closes unpaid attempts.
+        return data.get("result")
 
     def _guard(self, call: Any) -> Any:
         try:

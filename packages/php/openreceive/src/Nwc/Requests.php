@@ -118,8 +118,10 @@ final class Requests
         } else {
             throw new \InvalidArgumentException('list_transactions returned an unrecognized result shape');
         }
+        // A page a client already normalized arrives with its count: the wallet
+        // walk normalizes again, and must still see how many rows the wallet sent.
         $transactions = [];
-        $skipped = 0;
+        $skipped = is_int($data['skipped_rows'] ?? null) ? $data['skipped_rows'] : 0;
         foreach ($rows as $row) {
             try {
                 $transactions[] = self::normalizeTransaction($row);

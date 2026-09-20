@@ -150,7 +150,10 @@ public static class WalletScan
                 truncated = false;
                 break;
             }
-            if (page.Transactions.Count < OpenReceiveTables.TransactionPageLimit)
+            // The wallet ran out of rows only when the page IT sent was short: a row the
+            // normalizer dropped was still a row, and a full page with one of them dropped
+            // must not read as the end of the history.
+            if (page.Transactions.Count + page.SkippedRows < OpenReceiveTables.TransactionPageLimit)
             {
                 truncated = false;
                 break;

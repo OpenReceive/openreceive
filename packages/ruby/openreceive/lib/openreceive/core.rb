@@ -185,8 +185,10 @@ module OpenReceive
       # settle nor close pending attempts (a permanent livelock while the bad
       # row stays inside the scan window). Bad rows are skipped and counted.
       # Mirrors the JS normalizeListTransactionsResult policy.
+      # A page a client already normalized arrives with its count: the wallet
+      # walk normalizes again, and must still see how many rows the wallet sent.
       transactions = []
-      skipped_rows = 0
+      skipped_rows = data["skipped_rows"].is_a?(Integer) ? data["skipped_rows"] : 0
       rows.each do |row|
         transactions << normalize_transaction(row)
       rescue StandardError
@@ -496,7 +498,8 @@ module OpenReceive
         request["unpaid"] = true if include_unpaid
         request["from"] = scan_from unless scan_from.nil?
         request["until"] = scan_until unless scan_until.nil?
-        page = Nwc.normalize_list_transactions_response(client.list_transactions(request)).fetch("transactions")
+        response = Nwc.normalize_list_transactions_response(client.list_transactions(request))
+        page = response.fetch("transactions")
         page.each do |row|
           next unless row["type"].nil? || row["type"] == "incoming"
           payment_hash = row_payment_hash(row)
@@ -504,7 +507,10 @@ module OpenReceive
           rows[payment_hash] = row
           outstanding.delete(payment_hash)
         end
-        if outstanding.empty? || page.length < TRANSACTION_PAGE_LIMIT
+        # The wallet ran out of rows only when the page IT sent was short: a
+        # row the normalizer dropped was still a row, and a full page with one
+        # of them dropped must not read as the end of the history.
+        if outstanding.empty? || page.length + response.fetch("skipped_rows", 0) < TRANSACTION_PAGE_LIMIT
           truncated = false
           break
         end

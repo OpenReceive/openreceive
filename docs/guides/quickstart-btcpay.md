@@ -29,9 +29,9 @@ invoices, checkout, webhooks and Greenfield API are the host.
 
 In BTCPay, open **Server Settings → Plugins**, search the plugin directory
 for **OpenReceive**, click **Install**, and restart BTCPay when prompted.
-BTCPay creates the plugin's one table (`openreceive_swaps`, schema
-`BTCPayServer.Plugins.OpenReceive`) in its own Postgres at startup; nothing
-else is created.
+BTCPay creates the plugin's two tables (`openreceive_invoices` and
+`openreceive_swaps`, schema `BTCPayServer.Plugins.OpenReceive`) in its own
+Postgres at startup; nothing else is created.
 
 To build the plugin from source instead, follow
 [the .NET workspace README](https://github.com/OpenReceive/openreceive/blob/master/packages/dotnet/README.md).

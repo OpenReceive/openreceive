@@ -212,9 +212,13 @@ only answers its questions.
   costs nothing. A hash a truncated walk could not reach (a wallet that
   ignores `offset`, or a page cap) is looked up with `lookup_invoice` when
   the wallet grants it, and otherwise stays pending and watched for the next
-  refresh — it is never closed. A hash of unknown age (asked about after a
-  restart) is looked up first when granted, else walked once without a lower
-  bound. Refreshed every 2, 6 or 12 seconds depending on the age of the
+  refresh — it is never closed. After a restart the memo is empty, and a hash
+  BTCPay asks about is first restored from `openreceive_invoices` (its
+  creation and expiry time, BOLT11 and amount), so it is walked for and
+  closed exactly as before the restart. Only a hash with no stored row (one
+  minted before the plugin kept them, or by another wallet) is of unknown age: looked up
+  first when granted, else walked once without a lower bound; a walk the
+  relay fails is repeated by the next refresh. Refreshed every 2, 6 or 12 seconds depending on the age of the
   newest live invoice, shared by every caller; a caller that gives up (an
   aborted checkout request) stops waiting without cancelling the shared walk.
   Paid when the settlement rule says settled (`settled_at > 0`, or `state` /
@@ -301,17 +305,26 @@ categories. Secrets never appear; the wallet is named by its pubkey.
 
 ## Database
 
-Schema `BTCPayServer.Plugins.OpenReceive`, table `openreceive_swaps`, one
-migration (`20260903000000_InitialSwaps`) applied by BTCPay at startup with
-its own migrations history table. Indexes: `invoice_id`, `store_id`, unique
+Schema `BTCPayServer.Plugins.OpenReceive`, two tables, each with one
+migration (`20260903000000_InitialSwaps`, `20260920000000_MintedInvoices`)
+applied by BTCPay at startup with its own migrations history table.
+
+`openreceive_invoices` holds one row per Lightning invoice the plugin mints —
+`payment_hash`, `bolt11`, `amount_msats`, `created_at`, `expires_at` —
+committed before BTCPay shows the invoice to a payer and never updated. It is
+the plugin's counterpart of an `openreceive_payments` row, cut down to what
+only the plugin knows: status, settlement and fulfillment are BTCPay's own
+invoice and payment rows and are not copied.
+
+`openreceive_swaps` holds one row per provider swap order. Indexes: `invoice_id`, `store_id`, unique
 `(provider, provider_order_id)`, and unique `(invoice_id, pay_in_asset)`
 restricted to non-terminal rows, which is what makes "one live order per
 invoice and asset" hold across BTCPay workers. Every update is conditional on
 the row's `xmin` (no extra column). The provider token is a plain column,
 like every other BTCPay credential; guard the database.
 
-Nothing is written for plain Lightning invoices: BTCPay's invoices and
-payments are the record.
+BTCPay's invoices and payments stay the record of what was paid; the
+plugin's rows only make sure a payment is found.
 
 ## Operations
 

@@ -23,6 +23,7 @@ public sealed class OpenReceivePluginDbContext : DbContext
     }
 
     public DbSet<OpenReceiveSwap> Swaps => Set<OpenReceiveSwap>();
+    public DbSet<OpenReceiveInvoice> Invoices => Set<OpenReceiveInvoice>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -82,6 +83,15 @@ public sealed class OpenReceivePluginDbContext : DbContext
         swap.HasIndex(s => new { s.Provider, s.ProviderOrderId }).IsUnique().HasDatabaseName("ux_openreceive_swaps_provider_order");
         swap.HasIndex(s => s.State).HasDatabaseName("ix_openreceive_swaps_state_live").HasFilter(Migrations.InitialSwaps.LiveStateFilter);
         swap.HasIndex(s => new { s.InvoiceId, s.PayInAsset }).IsUnique().HasDatabaseName("ux_openreceive_swaps_live_invoice_asset").HasFilter(Migrations.InitialSwaps.LiveStateFilter);
+
+        var invoice = modelBuilder.Entity<OpenReceiveInvoice>();
+        invoice.ToTable("openreceive_invoices");
+        invoice.HasKey(i => i.PaymentHash);
+        invoice.Property(i => i.PaymentHash).HasColumnName("payment_hash");
+        invoice.Property(i => i.Bolt11).HasColumnName("bolt11");
+        invoice.Property(i => i.AmountMsats).HasColumnName("amount_msats");
+        invoice.Property(i => i.CreatedAt).HasColumnName("created_at");
+        invoice.Property(i => i.ExpiresAt).HasColumnName("expires_at");
     }
 }
 

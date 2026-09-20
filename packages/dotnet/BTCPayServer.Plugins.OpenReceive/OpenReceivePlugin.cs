@@ -32,6 +32,7 @@ public class OpenReceivePlugin : BaseBTCPayServerPlugin
     {
         // Lightning backend. NostrClientPool is TryAdd so the Nostr plugin and this one share relay sockets.
         services.TryAddSingleton<NostrClientPool>();
+        services.AddSingleton<IInvoiceStore, EfInvoiceStore>();
         services.AddSingleton<NwcConnectionRegistry>();
         services.AddSingleton<NwcConnectionStringHandler>();
         services.AddSingleton<ILightningConnectionStringHandler>(provider => provider.GetRequiredService<NwcConnectionStringHandler>());
@@ -49,7 +50,7 @@ public class OpenReceivePlugin : BaseBTCPayServerPlugin
         services.AddSingleton<SwapInvoiceEventsService>();
         services.AddHostedService(provider => provider.GetRequiredService<SwapInvoiceEventsService>());
 
-        // The plugin's own table inside BTCPay's database, migrated by BTCPay at startup —
+        // The plugin's own tables inside BTCPay's database, migrated by BTCPay at startup —
         // as a startup task, i.e. before the poller and the event listener above start.
         services.AddSingleton<OpenReceiveDbContextFactory>();
         services.AddDbContext<OpenReceivePluginDbContext>((provider, options) =>

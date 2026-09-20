@@ -1,5 +1,38 @@
 # BTCPay Server plugin changelog
 
+## Unreleased
+
+- **Minted invoices are stored, so a restart loses nothing.** The plugin now
+  owns a second table, `openreceive_invoices` (migration
+  `20260920000000_MintedInvoices`, applied by BTCPay at startup): one row per
+  Lightning invoice it mints — payment hash, BOLT11, amount, creation and
+  expiry time — committed before BTCPay shows the invoice to a payer. The
+  scan memo stays a process-local cache, but after a restart a hash BTCPay
+  asks about is restored from its row first, so the wallet walk starts at the
+  invoice's own creation time and it closes by its own expiry, as in the
+  Node, Ruby, PHP and Python engines. Before, such a hash was "of unknown
+  age": a 24-hour window walk, then one walk of the whole history, and on a
+  wallet that lists no unpaid invoices and grants no `lookup_invoice` a
+  checkout still open across the restart was dropped from the watch set and
+  its later payment never reached BTCPay. That path remains only for a hash
+  with no stored row (minted before this version, or by another wallet).
+  Status and settlement are not copied: BTCPay's invoices and payments stay
+  the record.
+- **A full page with an unusable row no longer ends a walk.** The walk
+  compared the normalized page length to the page limit, so one dropped row
+  on a full page read as the end of the wallet's history; it now counts the
+  rows the wallet sent (shared fix and vector cases across all engines).
+- `docker/restart-e2e.sh`: an invoice paid while BTCPay is down is `Settled`
+  after the restart; `--failed-scan` also takes the relay down for the first
+  scans, `--manual` pauses at each step.
+- **A failed unbounded walk is retried.** After a restart, a hash BTCPay asks
+  about that the 24-hour fallback window cannot find (and that
+  `lookup_invoice` cannot serve) gets one walk of the whole history. The memo
+  marked that walk as spent before it ran, so a relay failure during it left
+  the hash with bounded walks only, and an invoice paid more than a day ago
+  while the server was down stayed unpaid in BTCPay. The walk now counts as
+  spent only once it completes; the next refresh repeats a failed one.
+
 ## 0.4.10 — release candidate
 
 Addresses both findings of the Plugin Builder review of 0.4.8.0. The plugin

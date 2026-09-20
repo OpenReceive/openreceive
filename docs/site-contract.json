@@ -103,7 +103,7 @@
       "slug": "quickstart-btcpay",
       "title": "BTCPay Server Quickstart",
       "category": "quickstart",
-      "bytes": 3588
+      "bytes": 3616
     },
     {
       "path": "/guides/btcpay-reference",
@@ -113,7 +113,7 @@
       "slug": "btcpay-reference",
       "title": "BTCPay Plugin Reference",
       "category": "reference",
-      "bytes": 22508
+      "bytes": 23391
     },
     {
       "path": "/guides/node-orms",
@@ -403,7 +403,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 10085
+      "bytes": 10113
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -568,7 +568,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 10085,
+      "bytes": 10113,
       "copy_button": true,
       "self_contained": true
     }

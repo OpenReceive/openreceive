@@ -30,8 +30,10 @@ and writes its host glue against BTCPay 2.4.4. Every kernel change is now three
 implementations plus a vector update. Two things are different about this engine and are
 accepted on purpose. First, it owns no `openreceive_payments` table and no reconcile gate:
 BTCPay's invoices are the reference and BTCPay's payments are the settlement record, so the
-gate survives only as the in-memory `ScanMemo` (`settlement-sweeps.md`), and the plugin's one
-table is `openreceive_swaps` inside BTCPay's Postgres, migrated by BTCPay at startup. Second,
+gate survives only as the in-memory `ScanMemo` (`settlement-sweeps.md`), and the plugin's
+tables are `openreceive_invoices` (what it minted: hash, creation and expiry time — the scan
+inputs a restart must not lose) and `openreceive_swaps` inside BTCPay's Postgres, migrated by
+BTCPay at startup. Second,
 it is the first and only emitter of the attention reason
 `provider_completed_without_wallet_settlement`, which stays `reserved` in
 `spec/data/kernel-tables.json`: the plugin's poller flags a swap the provider reports

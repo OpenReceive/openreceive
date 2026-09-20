@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace BTCPayServer.Plugins.OpenReceive.Data.Migrations;
 
-/// <summary>The one table the plugin owns. Hand-written (BTCPay migration rules: no Designer, no Down).</summary>
+/// <summary>The swap table. Hand-written (BTCPay migration rules: no Designer, no Down).</summary>
 [DbContext(typeof(OpenReceivePluginDbContext))]
 [Migration("20260903000000_InitialSwaps")]
 public sealed class InitialSwaps : Migration

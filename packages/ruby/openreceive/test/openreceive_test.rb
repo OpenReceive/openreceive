@@ -108,6 +108,20 @@ class OpenReceiveCoreTest < Minitest::Test
     end
     assert_raises(ArgumentError) { OpenReceive.normalize_list_transactions_response("ok") }
   end
+
+  def test_a_skipped_row_count_survives_normalizing_the_page_again
+    # The adapter normalizes the wallet's page and the wallet walk normalizes it
+    # again: the count must survive, or a full page with a dropped row reads as
+    # the end of the wallet's history.
+    once = OpenReceive.normalize_list_transactions_response(
+      "transactions" => [
+        { "payment_hash" => "not-hex" },
+        { "payment_hash" => "a" * 64, "amount" => 1000, "state" => "settled" }
+      ]
+    )
+    assert_equal 1, once.fetch("skipped_rows")
+    assert_equal 1, OpenReceive.normalize_list_transactions_response(once).fetch("skipped_rows")
+  end
 end
 
 class OpenReceivePaymentsWalkTest < Minitest::Test

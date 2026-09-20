@@ -41,12 +41,15 @@ public sealed class ScanMemoTests
         public List<ListTransactionsRequest> Requests { get; } = new();
         public List<string> Lookups { get; } = new();
         public bool DropOffset { get; set; }
+        /// <summary>Fails the matching page requests, as a relay that drops mid-walk does.</summary>
+        public Func<ListTransactionsRequest, bool>? FailWhen { get; set; }
         public Func<string, LookupResult>? LookupScript { get; set; }
         public int Calls => Requests.Count;
 
         public Task<ListTransactionsResult> Page(ListTransactionsRequest request, CancellationToken ct)
         {
             lock (Requests) Requests.Add(request);
+            if (FailWhen?.Invoke(request) is true) throw new NwcTransportException("relay down");
             IEnumerable<NwcTransaction> rows = Rows;
             if (request.Unpaid is not true) rows = rows.Where(Settlement.IsSettled);
             if (request.From is { } from) rows = rows.Where(r => r.CreatedAt is null || r.CreatedAt >= from);
@@ -564,6 +567,25 @@ public sealed class ScanMemoTests
         memo.Watch(Hash(1));
         await memo.RefreshAsync(force: true, CancellationToken.None);
         Assert.Equal(8, wallet.Calls);
+    }
+
+    [Fact]
+    public async Task A_failed_unbounded_walk_is_retried_by_the_next_refresh()
+    {
+        var (memo, wallet) = NewMemo(() => T0);
+        var old = T0 - 3 * 86_400; // paid while the server was down, far outside the fallback window
+        wallet.Rows.Add(Settled(Hash(1), settledAt: old + 30, createdAt: old));
+        memo.Watch(Hash(1));
+
+        wallet.FailWhen = request => request.From is null; // the relay drops during the unbounded walk
+        await Assert.ThrowsAsync<NwcTransportException>(() => memo.RefreshAsync(force: true, CancellationToken.None));
+        Assert.True(memo.IsWatched(Hash(1)));
+
+        wallet.FailWhen = null;
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+
+        Assert.True(Settlement.IsSettled(memo.Lookup(Hash(1))!)); // the failed walk did not spend the hash's one unbounded walk
+        Assert.Equal(Hash(1), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
     }
 
     // ---- Failures ----

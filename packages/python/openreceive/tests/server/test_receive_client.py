@@ -98,6 +98,32 @@ def test_receive_client_normalizes_requests_replies_and_errors() -> None:
         client.close()
 
 
+def test_a_reply_shape_reaches_the_normalizer_as_the_wallet_sent_it() -> None:
+    # A bare list is a shape the normalizer reads; anything it does not know must
+    # fail the scan. Neither may be flattened into an empty-looking scan, because
+    # an empty scan at expiry + grace closes unpaid attempts.
+    row = {"type": "incoming", "payment_hash": HASH, "amount": 1000, "settled_at": 1200}
+    replies: dict[str, Any] = {"result": [row]}
+
+    def handler(method: str, params: dict[str, Any]) -> dict[str, Any]:
+        return {"result_type": method, **replies}
+
+    wallet = FakeWallet(WALLET_SECRET, handler=handler)
+    with FakeRelay(wallet) as relay:
+        client = client_for(relay, wallet)
+        rows = client.list_transactions({"type": "incoming"})["transactions"]
+        assert [r["payment_hash"] for r in rows] == [HASH]
+        replies.clear()
+        replies["result"] = "unexpected"
+        with pytest.raises(ValueError):
+            client.list_transactions({"type": "incoming"})
+        replies.clear()
+        replies["error"] = "wallet on fire"
+        with pytest.raises(WalletError):
+            client.list_transactions({"type": "incoming"})
+        client.close()
+
+
 def test_transport_errors_become_canonical_wallet_errors() -> None:
     wallet = FakeWallet(WALLET_SECRET, handler=wallet_handler)
     with FakeRelay(wallet, silent=True) as relay:

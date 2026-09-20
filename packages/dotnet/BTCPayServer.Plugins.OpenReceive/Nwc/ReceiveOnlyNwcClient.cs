@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using BTCPayServer.Lightning;
 using BTCPayServer.Payments;
 using BTCPayServer.Payments.Lightning;
+using BTCPayServer.Plugins.OpenReceive.Data;
 using BTCPayServer.Plugins.OpenReceive.Generated;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
@@ -30,8 +31,8 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
     /// The longest invoice this backend mints, whatever BTCPay asks for. Most NWC wallet
     /// services refuse or clamp an expiry further out than a day, and a clamped invoice
     /// would trip the expiry check below and be refused; it also keeps every minted invoice
-    /// inside the memo's fallback window (<see cref="ScanMemo.Window"/>), so a hash asked
-    /// about after a restart is found by the bounded walk. The setup page lowers the
+    /// inside the memo's fallback window (<see cref="ScanMemo.Window"/>), so a hash with no
+    /// stored row (minted before the plugin kept one) is still found by the bounded walk. The setup page lowers the
     /// store's own timer to the same bound, so the checkout and the invoice agree.
     /// </summary>
     public static readonly TimeSpan MaxInvoiceExpiry = ScanMemo.Window;
@@ -253,6 +254,16 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
             Description = request.Description,
             DescriptionHash = request.DescriptionHash,
         };
+        // Committed before BTCPay can show the invoice to a payer: after a restart the memo
+        // gets this row back (NwcConnectionState.RestoreAsync) instead of guessing its age.
+        await _state.Invoices.InsertAsync(new OpenReceiveInvoice
+        {
+            PaymentHash = row.PaymentHash,
+            Bolt11 = result.Invoice,
+            AmountMsats = result.AmountMsats,
+            CreatedAt = createdAt,
+            ExpiresAt = result.ExpiresAt ?? expectedExpiry,
+        }, cancellation).ConfigureAwait(false);
         _state.Memo.Record(row);
         _state.Memo.Watch(row.PaymentHash);
         _state.Memo.NoteInvoiceMinted(createdAt);
@@ -268,7 +279,8 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
 
     /// <summary>
     /// Every hash BTCPay asks about joins the connection's scan memo watch set, and one
-    /// walk serves every caller. A hash the memo has never seen forces one targeted
+    /// walk serves every caller. A hash the memo has forgotten (a restart) is first restored
+    /// from the plugin's own table; one that was never minted here forces one targeted
     /// refresh (the memo looks it up when the wallet grants <c>lookup_invoice</c>, else
     /// walks for it). Paid iff the settlement rule says settled; Expired ONLY when the
     /// wallet's own row says expired/failed; Unpaid otherwise — including a hash the memo
@@ -279,6 +291,7 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
     private async Task<LightningInvoice> GetInvoiceByHash(string paymentHash, CancellationToken cancellation)
     {
         var hash = paymentHash.Trim().ToLowerInvariant();
+        await _state.RestoreAsync(hash, cancellation).ConfigureAwait(false);
         _state.Memo.Watch(hash);
         var walked = await _state.Memo.RefreshAsync(force: false, cancellation).ConfigureAwait(false);
         var row = _state.Memo.Lookup(hash);

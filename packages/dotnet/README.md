@@ -203,6 +203,7 @@ bind-mounted into its plugin directory and the stack's CA trusted.
 ```sh
 docker/up.sh              # build the plugin and the testkit images, start, fund, restart BTCPay
 docker/e2e.sh             # the end-to-end proof, over HTTP only; ends with E2E PASSED
+docker/restart-e2e.sh     # an invoice paid while BTCPay is DOWN is Settled after the restart; --failed-scan, --manual
 docker/test-e2e.sh        # OpenReceive.IntegrationTests (xunit, pure HTTP) inside the .NET SDK image
 docker/browser-e2e.sh     # tests/e2e-btcpay (Playwright, Chromium) inside the Playwright image; --host uses local browsers
 docker/down.sh            # stop; --volumes wipes chain, wallets, relay and BTCPay data
@@ -227,6 +228,17 @@ stamped `wallet_settled`), an underpaid swap refunded to a checksum-validated
 address (a bad checksum is refused first), and a spend-capable code refused
 without the override, both through the plugin API and through BTCPay's own
 `PUT payment-methods/BTC-LN`.
+
+`restart-e2e.sh` (after one `e2e.sh` run, which creates the store it reuses)
+makes an invoice, stops the BTCPay container, pays the invoice from
+`customer_lnd`, starts BTCPay and waits for `Settled`. `--failed-scan` also
+stops the relay before BTCPay starts, so the first wallet scans after the
+restart fail: the invoice must still read `New` after 25 seconds, and settle
+once the relay is back (BTCPay retries its Lightning connection every minute).
+`--manual` pauses before each step and prints the command that performs it,
+for an operator who wants to pay from another wallet or watch the BTCPay UI.
+If the stack has been down for more than a day LND never reports
+`synced_to_chain`; mine one block and rerun `up.sh --no-build`.
 
 `test-e2e.sh` runs `OpenReceive.IntegrationTests` (xunit legs over HTTP,
 skipped unless `OPENRECEIVE_E2E_BTCPAY_URL` is set). `browser-e2e.sh` runs

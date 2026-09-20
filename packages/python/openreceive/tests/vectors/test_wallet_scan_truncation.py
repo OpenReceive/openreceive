@@ -32,6 +32,11 @@ def build_pages(specs: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     for page, spec in enumerate(specs):
         rows = [dict(row) for row in spec.get("rows", [])]
         rows.extend(filler_row(page, index) for index in range(int(spec.get("filler_rows", 0))))
+        # Raw pages: the walk's own normalizer drops and counts these.
+        rows.extend(
+            {"type": "incoming", "payment_hash": "unusable"}
+            for _ in range(int(spec.get("unusable_rows", 0)))
+        )
         pages.append(rows)
     return pages
 

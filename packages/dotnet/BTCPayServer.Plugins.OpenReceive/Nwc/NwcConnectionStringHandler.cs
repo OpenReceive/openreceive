@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Lightning;
+using BTCPayServer.Plugins.OpenReceive.Data;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NNostr.Client;
@@ -18,17 +19,20 @@ namespace BTCPayServer.Plugins.OpenReceive.Nwc;
 /// and the capability summary. Capabilities come from the wallet's kind-13194 info event
 /// the first time anything needs them (so they survive a BTCPay restart without a
 /// preflight) and are replaced by the fuller <c>get_info</c> summary when a preflight
-/// runs. Process-local by design.
+/// runs. All of that is process-local; what a restart must not lose — the invoices minted
+/// here — lives in <see cref="IInvoiceStore"/>, and <see cref="RestoreAsync"/> hands a
+/// forgotten one back to the memo.
 /// </summary>
 public sealed class NwcConnectionState
 {
     private readonly ILogger _logger;
 
-    public NwcConnectionState(NwcUri uri, bool allowSpendCapableWallet, IReceiveNwcTransport transport, Func<long> clock, ILogger logger)
+    public NwcConnectionState(NwcUri uri, bool allowSpendCapableWallet, IReceiveNwcTransport transport, IInvoiceStore invoices, Func<long> clock, ILogger logger)
     {
         Uri = uri;
         AllowSpendCapableWallet = allowSpendCapableWallet;
         Transport = transport;
+        Invoices = invoices;
         _logger = logger;
         ListPage = ListPageAsync;
         Memo = new ScanMemo(ListPage, clock, logger, LookupIfGrantedAsync);
@@ -37,6 +41,7 @@ public sealed class NwcConnectionState
     public NwcUri Uri { get; }
     public bool AllowSpendCapableWallet { get; }
     public IReceiveNwcTransport Transport { get; }
+    public IInvoiceStore Invoices { get; }
     public ScanMemo Memo { get; }
     public ListTransactionsPage ListPage { get; }
     public WalletCapabilitySummary? Capabilities { get; private set; }
@@ -68,6 +73,30 @@ public sealed class NwcConnectionState
         {
             _logger.LogDebug("nwc.capabilities.unavailable wallet={Wallet} error={Error}", Uri.WalletPubkey, e.Message);
         }
+    }
+
+    /// <summary>
+    /// Gives the memo back an invoice it has forgotten (a restart): the stored row, as the
+    /// pending row the memo held when it was minted. The walk for it then starts at its own
+    /// creation time and it closes by its own expiry, exactly as before the restart. A hash
+    /// with no stored row was not minted here; the memo treats it as one of unknown age.
+    /// </summary>
+    public async Task RestoreAsync(string paymentHash, CancellationToken cancellationToken)
+    {
+        if (Memo.Lookup(paymentHash) is not null) return;
+        var stored = await Invoices.FindAsync(paymentHash, cancellationToken).ConfigureAwait(false);
+        if (stored is null) return;
+        Memo.Record(new NwcTransaction
+        {
+            Type = "incoming",
+            Invoice = stored.Bolt11,
+            PaymentHash = stored.PaymentHash,
+            AmountMsats = stored.AmountMsats,
+            CreatedAt = stored.CreatedAt,
+            ExpiresAt = stored.ExpiresAt,
+            TransactionState = "pending",
+        });
+        _logger.LogDebug("nwc.invoice.restored payment_hash={Hash} created_at={CreatedAt}", paymentHash, stored.CreatedAt);
     }
 
     public async Task<bool> LookupInvoiceGrantedAsync(CancellationToken cancellationToken)
@@ -111,12 +140,14 @@ public sealed class NwcConnectionRegistry
 {
     private readonly ConcurrentDictionary<string, NwcConnectionState> _states = new(StringComparer.Ordinal);
     private readonly NostrClientPool _pool;
+    private readonly IInvoiceStore _invoices;
     private readonly ILoggerFactory _loggerFactory;
     private readonly Func<long> _clock;
 
-    public NwcConnectionRegistry(NostrClientPool pool, ILoggerFactory loggerFactory)
+    public NwcConnectionRegistry(NostrClientPool pool, IInvoiceStore invoices, ILoggerFactory loggerFactory)
     {
         _pool = pool;
+        _invoices = invoices;
         _loggerFactory = loggerFactory;
         _clock = static () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
@@ -128,7 +159,7 @@ public sealed class NwcConnectionRegistry
         {
             var logger = _loggerFactory.CreateLogger<ReceiveOnlyNwcClient>();
             var transport = new NwcRelayTransport(_pool, uri, logger);
-            return new NwcConnectionState(uri, connection.AllowSpendCapableWallet, transport, _clock, logger);
+            return new NwcConnectionState(uri, connection.AllowSpendCapableWallet, transport, _invoices, _clock, logger);
         });
     }
 

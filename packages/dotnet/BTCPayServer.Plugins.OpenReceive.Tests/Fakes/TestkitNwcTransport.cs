@@ -23,6 +23,7 @@ public sealed class TestkitNwcTransport : IReceiveNwcTransport
     private readonly ECXOnlyPubKey _walletPub;
     private readonly Channel<WalletInvoice> _settled = Channel.CreateUnbounded<WalletInvoice>();
     private readonly ConcurrentDictionary<string, int> _requestCount = new(StringComparer.Ordinal);
+    private readonly ConcurrentQueue<(string Method, JsonObject Parameters)> _requests = new();
     private int _serviceInfoFetches;
 
     public TestkitNwcTransport(TestkitWalletService service)
@@ -37,6 +38,10 @@ public sealed class TestkitNwcTransport : IReceiveNwcTransport
     public IReadOnlyDictionary<string, int> RequestCount => _requestCount;
 
     public int Count(string method) => _requestCount.GetValueOrDefault(method);
+
+    /// <summary>The parameters of every request sent so far for one method, in order.</summary>
+    public IReadOnlyList<JsonObject> Requests(string method) =>
+        _requests.Where(r => r.Method == method).Select(r => r.Parameters).ToList();
 
     public int ServiceInfoFetches => _serviceInfoFetches;
 
@@ -69,6 +74,7 @@ public sealed class TestkitNwcTransport : IReceiveNwcTransport
     public async Task<JsonNode?> RequestAsync(string method, JsonObject parameters, CancellationToken cancellationToken)
     {
         _requestCount.AddOrUpdate(method, 1, static (_, count) => count + 1);
+        _requests.Enqueue((method, (JsonObject)parameters.DeepClone()));
         var nip44 = NegotiatedEncryption == EncryptionScheme.Nip44V2;
         var request = new NIP47.Nip47Request { Method = method, Parameters = (JsonObject)parameters.DeepClone() };
         var evt = NIP47.CreateRequestEvent(request, _walletPub);

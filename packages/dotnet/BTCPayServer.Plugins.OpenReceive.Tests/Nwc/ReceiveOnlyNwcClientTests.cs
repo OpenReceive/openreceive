@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using BTCPayServer.Lightning;
 using BTCPayServer.Payments;
+using BTCPayServer.Plugins.OpenReceive.Data;
 using BTCPayServer.Plugins.OpenReceive.Nwc;
 using BTCPayServer.Plugins.OpenReceive.Tests.Fakes;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,6 +30,8 @@ public sealed class ReceiveOnlyNwcClientTests
         public readonly TestkitNwcTransport Transport;
         public readonly NwcConnectionState State;
         public readonly ReceiveOnlyNwcClient Client;
+        /// <summary>The plugin's table: it outlives a <see cref="Restart"/>.</summary>
+        public readonly InMemoryInvoiceStore Invoices = new();
 
         public Harness(TestkitWalletOptions? options = null, string walletNetwork = "regtest", bool allowSpend = false, Network? btcpayNetwork = null)
         {
@@ -36,7 +39,7 @@ public sealed class ReceiveOnlyNwcClientTests
             Service = new TestkitWalletService(Backend, options ?? new TestkitWalletOptions(), clock: Now);
             Transport = new TestkitNwcTransport(Service);
             var uri = NwcUri.Parse(Service.NwcUri(new Uri("wss://relay.test")));
-            State = new NwcConnectionState(uri, allowSpend, Transport, Now, NullLogger.Instance);
+            State = new NwcConnectionState(uri, allowSpend, Transport, Invoices, Now, NullLogger.Instance);
             Client = new ReceiveOnlyNwcClient(State, btcpayNetwork ?? Network.RegTest, NullLogger.Instance);
         }
 
@@ -46,6 +49,13 @@ public sealed class ReceiveOnlyNwcClientTests
         public long ClockOffsetSeconds;
 
         public long Now() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ClockOffsetSeconds;
+
+        /// <summary>BTCPay restarts: a fresh state for the same connection, nothing in memory, the same database.</summary>
+        public (NwcConnectionState State, ReceiveOnlyNwcClient Client) Restart()
+        {
+            var state = new NwcConnectionState(State.Uri, State.AllowSpendCapableWallet, Transport, Invoices, Now, NullLogger.Instance);
+            return (state, new ReceiveOnlyNwcClient(state, Network.RegTest, NullLogger.Instance));
+        }
 
         public Task<LightningInvoice> Mint(long sats = 1_000, string description = "desc", int minutes = 10) =>
             Client.CreateInvoice(LightMoney.Satoshis(sats), description, TimeSpan.FromMinutes(minutes), CancellationToken.None);
@@ -658,6 +668,66 @@ public sealed class ReceiveOnlyNwcClientTests
     }
 
     [Fact]
+    public async Task A_minted_invoice_is_committed_before_it_is_returned()
+    {
+        await using var h = new Harness();
+        await h.Client.Validate();
+
+        var invoice = await h.Mint(sats: 1_000, minutes: 10);
+
+        var stored = await h.Invoices.FindAsync(invoice.Id, CancellationToken.None);
+        Assert.NotNull(stored);
+        Assert.Equal(invoice.BOLT11, stored.Bolt11);
+        Assert.Equal(1_000_000, stored.AmountMsats);
+        Assert.Equal(600, stored.ExpiresAt - stored.CreatedAt);
+    }
+
+    [Fact]
+    public async Task A_restart_restores_a_minted_invoice_and_walks_from_its_creation_time()
+    {
+        // No lookup_invoice: before the plugin stored its invoices this hash was "of unknown
+        // age" after a restart and cost a 24-hour window walk, then a walk of the whole history.
+        await using var h = new Harness(new TestkitWalletOptions { Methods = ["get_info", "make_invoice", "list_transactions"] });
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000);
+        var stored = await h.Invoices.FindAsync(invoice.Id, CancellationToken.None);
+        var (restarted, client) = h.Restart();
+        var requestsBefore = h.Transport.Requests("list_transactions").Count;
+
+        var unpaid = await client.GetInvoice(invoice.Id);
+
+        Assert.Equal(LightningInvoiceStatus.Unpaid, unpaid.Status);
+        Assert.Equal(invoice.BOLT11, unpaid.BOLT11); // the stored row, not a synthetic answer
+        Assert.Equal(LightMoney.Satoshis(1_000), unpaid.Amount);
+        Assert.True(restarted.Memo.IsWatched(invoice.Id));
+        var walks = h.Transport.Requests("list_transactions").Skip(requestsBefore).ToList();
+        Assert.NotEmpty(walks);
+        Assert.All(walks, w => Assert.Equal(stored!.CreatedAt - ScanMemo.OverlapSeconds, w["from"]!.GetValue<long>()));
+
+        await h.Backend.SettleAsync(invoice.Id); // paid after the restart
+        h.ClockOffsetSeconds += 15;
+        var paid = await client.GetInvoice(invoice.Id);
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(invoice.Id, Assert.Single(restarted.Memo.DrainNewlySettled()).PaymentHash);
+    }
+
+    [Fact]
+    public async Task An_invoice_paid_while_the_server_was_down_is_paid_on_the_first_ask_after_the_restart()
+    {
+        await using var h = new Harness(new TestkitWalletOptions { Methods = ["get_info", "make_invoice", "list_transactions"] });
+        await h.Client.Validate();
+        var invoice = await h.Mint(sats: 1_000, minutes: 10);
+        await h.Backend.SettleAsync(invoice.Id);
+        h.ClockOffsetSeconds += 3 * 86_400; // a long outage: far past the expiry, the grace and the fallback window
+        var (_, client) = h.Restart();
+
+        var paid = await client.GetInvoice(invoice.Id);
+
+        Assert.Equal(LightningInvoiceStatus.Paid, paid.Status);
+        Assert.Equal(LightMoney.Satoshis(1_000), paid.AmountReceived);
+    }
+
+    [Fact]
     public async Task A_restarted_connection_learns_lookup_invoice_from_the_info_event_and_finds_an_old_hash()
     {
         await using var h = new Harness();
@@ -668,8 +738,8 @@ public sealed class ReceiveOnlyNwcClientTests
         var lookupsBefore = h.Transport.Count("lookup_invoice");
         var walksBefore = h.Transport.Count("list_transactions");
 
-        // BTCPay restarts: a fresh state for the same connection string, nothing remembered, no preflight.
-        var restarted = new NwcConnectionState(h.State.Uri, allowSpendCapableWallet: false, h.Transport, h.Now, NullLogger.Instance);
+        // BTCPay restarts with no stored row for the hash (minted before the plugin kept one): nothing remembered, no preflight.
+        var restarted = new NwcConnectionState(h.State.Uri, allowSpendCapableWallet: false, h.Transport, new InMemoryInvoiceStore(), h.Now, NullLogger.Instance);
         var client = new ReceiveOnlyNwcClient(restarted, Network.RegTest, NullLogger.Instance);
         Assert.Null(restarted.Capabilities);
 
@@ -692,7 +762,7 @@ public sealed class ReceiveOnlyNwcClientTests
         var invoice = await h.Mint(sats: 1_000);
         await h.Backend.SettleAsync(invoice.Id);
 
-        var restarted = new NwcConnectionState(h.State.Uri, allowSpendCapableWallet: false, h.Transport, h.Now, NullLogger.Instance);
+        var restarted = new NwcConnectionState(h.State.Uri, allowSpendCapableWallet: false, h.Transport, new InMemoryInvoiceStore(), h.Now, NullLogger.Instance);
         var client = new ReceiveOnlyNwcClient(restarted, Network.RegTest, NullLogger.Instance);
 
         var paid = await client.GetInvoice(invoice.Id);

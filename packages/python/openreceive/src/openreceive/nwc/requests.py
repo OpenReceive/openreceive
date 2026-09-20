@@ -104,8 +104,11 @@ def normalize_list_transactions_response(response: object) -> dict[str, Any]:
     # One quirky wallet row must never reject the whole scan (a rejected scan
     # can neither settle nor close attempts — a livelock while the bad row
     # stays inside the window). Bad rows are skipped and counted.
+    # A page a client already normalized arrives with its count: the wallet
+    # walk normalizes again, and must still see how many rows the wallet sent.
     transactions: list[dict[str, Any]] = []
-    skipped = 0
+    carried = data.get("skipped_rows")
+    skipped = carried if isinstance(carried, int) else 0
     for row in rows:
         try:
             transactions.append(normalize_transaction(row))

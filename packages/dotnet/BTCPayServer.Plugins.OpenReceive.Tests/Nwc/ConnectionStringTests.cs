@@ -1,3 +1,4 @@
+using BTCPayServer.Plugins.OpenReceive.Data;
 using BTCPayServer.Plugins.OpenReceive.Nwc;
 using Microsoft.Extensions.Logging.Abstractions;
 using NBitcoin;
@@ -100,7 +101,7 @@ public sealed class ConnectionStringTests
     private static (NwcConnectionStringHandler Handler, NostrClientPool Pool, NwcConnectionRegistry Registry) NewHandlerWithRegistry()
     {
         var pool = new NostrClientPool();
-        var registry = new NwcConnectionRegistry(pool, NullLoggerFactory.Instance);
+        var registry = new NwcConnectionRegistry(pool, new InMemoryInvoiceStore(), NullLoggerFactory.Instance);
         return (new NwcConnectionStringHandler(registry, NullLogger<ReceiveOnlyNwcClient>.Instance), pool, registry);
     }
 

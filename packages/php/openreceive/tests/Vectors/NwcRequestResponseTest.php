@@ -59,6 +59,9 @@ final class NwcRequestResponseTest extends TestCase
         ]]);
         self::assertCount(1, $result['transactions']);
         self::assertSame(1, $result['skipped_rows']);
+        // The wallet walk normalizes the client's page again: the count must survive,
+        // or a full page with a dropped row reads as the end of the wallet's history.
+        self::assertSame(1, Requests::normalizeListTransactionsResponse($result)['skipped_rows']);
     }
 
     public function testBigIntAmountsDecodedAsStringsCoerceToInts(): void

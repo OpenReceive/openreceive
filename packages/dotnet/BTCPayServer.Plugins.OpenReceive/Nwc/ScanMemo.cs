@@ -49,12 +49,16 @@ public delegate Task<LookupResult> LookupInvoiceFallback(string paymentHash, Can
 /// each pending invoice, the listeners' sweeps); the refresh cadence stretches with the age
 /// of the newest live invoice (2 s / 6 s / 12 s) and IS the NWC scan budget for the
 /// connection. It is a cache of wallet truth, not state: two BTCPay workers each hold one.
+/// What must outlive the process — each minted invoice's hash, creation and expiry time —
+/// is a row in <c>openreceive_invoices</c>; the client records it back here before it
+/// watches a hash this memo has forgotten, so a restart changes nothing about how that
+/// invoice is walked for or closed. Only a hash with no stored row is of unknown age.
 /// </summary>
 public sealed class ScanMemo
 {
     /// <summary>
     /// The lower bound of a walk that has no watched row with a creation time (a hash BTCPay
-    /// asked about after a restart), and how long an unwatched row stays in memory.
+    /// asked about that has no stored row), and how long an unwatched row stays in memory.
     /// Never a correctness bound on a watched invoice.
     /// </summary>
     public static readonly TimeSpan Window = TimeSpan.FromHours(24);
@@ -244,7 +248,7 @@ public sealed class ScanMemo
         var absent = new HashSet<string>(StringComparer.Ordinal);
         var lookedUp = new HashSet<string>(StringComparer.Ordinal);
 
-        // A hash of unknown age (BTCPay asked about it after a restart) is asked of the wallet's
+        // A hash of unknown age (BTCPay asked about it and the plugin stored no row) is asked of the wallet's
         // single-hash path first when it is granted: one request, instead of a window walk.
         List<string> unknownNow;
         lock (_gate) unknownNow = _watched.Keys.Where(hash => !_rows.ContainsKey(hash)).ToList();
@@ -306,8 +310,8 @@ public sealed class ScanMemo
         }
 
         // Both ends of the window are padded: `from` against a wallet clock that lags, `until`
-        // against one that runs ahead. A hash with no known creation time (asked about after a
-        // restart) gets the fallback window here and one unbounded walk below.
+        // against one that runs ahead. A hash with no known creation time (no stored
+        // row) gets the fallback window here and one unbounded walk below.
         var from = Math.Max(0, (oldest ?? now - (long)Window.TotalSeconds) - OverlapSeconds);
         var until = now + OverlapSeconds;
         var settled = await WalletScan.WalkAsync(_list, from, until, includeUnpaid: false, expected, MaxPagesPerView, CancellationToken.None).ConfigureAwait(false);
@@ -351,7 +355,6 @@ public sealed class ScanMemo
         deep.IntersectWith(missing);
         if (deep.Count > 0)
         {
-            lock (_gate) foreach (var hash in deep) if (_watched.TryGetValue(hash, out var watch)) watch.DeepWalked = true;
             var deepSettled = await WalletScan.WalkAsync(_list, null, until, includeUnpaid: false, deep, MaxPagesPerView, CancellationToken.None).ConfigureAwait(false);
             var deepMissing = deep.Where(hash => !deepSettled.ByPaymentHash.ContainsKey(hash)).ToHashSet(StringComparer.Ordinal);
             var deepTruncated = deepSettled.Truncated;
@@ -365,6 +368,8 @@ public sealed class ScanMemo
                 pages += deepUnpaid.Pages;
                 lock (_gate) foreach (var row in deepUnpaid.ByPaymentHash.Values) Learn(row, now);
             }
+            // Spent only now: a walk the relay failed threw above, and the next refresh walks again.
+            lock (_gate) foreach (var hash in deep) if (_watched.TryGetValue(hash, out var watch)) watch.DeepWalked = true;
             missing.ExceptWith(deep);
             if (!deepTruncated) absent.UnionWith(deepMissing); // proven absent from the whole history
             else missing.UnionWith(deepMissing);

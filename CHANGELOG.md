@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Fix a wallet scan that could end early. The walk decided the wallet had run
+  out of rows from the page length after unusable rows were dropped, so one
+  malformed row on a full page ended it as complete and a paid invoice on a
+  later page could be closed as not found. Every engine (Node, Ruby, PHP,
+  Python, and the BTCPay plugin source) now counts the rows the wallet sent.
+  Ruby, PHP and Python also keep the skipped-row count when a page is
+  normalized a second time, which the walk does after the wallet client.
+  Two new cases in `spec/test-vectors/wallet-scan-truncation.json`.
+- Python: a wallet reply whose `result` is a bare list no longer reads as an
+  empty scan. The receive client hands the result to the normalizer as sent,
+  and a non-object `error` raises.
+- BTCPay plugin source (not published by this change): minted invoices are
+  stored in a new `openreceive_invoices` table so a restart keeps each
+  invoice's scan window, a failed whole-history walk is retried, and
+  `packages/dotnet/docker/restart-e2e.sh` proves "paid while BTCPay was down".
+  Details in `packages/dotnet/CHANGELOG.md`.
 - Print the demo's address in a highlighted banner. `npm run demo <target>`
   draws a boxed `http://localhost:<port>` block when it starts and again the
   moment the published port first answers, so the URL is not lost under the
