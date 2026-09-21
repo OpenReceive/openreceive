@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Keep a refund address the payer types the moment the swap refund panel
+  appears. The React checkout reset its per-attempt refund draft from a mount
+  effect, which flushes after the panel is on screen, so the first address
+  typed into a freshly shown panel could be wiped; the reset now happens during
+  render, only when the attempt actually changes.
 - Document plugin installation with screenshots in the BTCPay Server README and
   on the `/btcpay` page: four new steps walk the Plugins menu, the plugin
   directory, the OpenReceive search result and the install button, so the setup

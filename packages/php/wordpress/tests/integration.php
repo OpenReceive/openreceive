@@ -12,6 +12,20 @@ $check = static function ($condition, string $message) use (&$checks): void {
     if (!$condition) { throw new RuntimeException($message); }
     $checks++;
 };
+// Every scan entry point claims the one durable reconcile gate, a directly
+// driven pass included (docs/internal/settlement-sweeps.md), so a pass issued in
+// the same second as a route dispatch is refused as `gate_busy` and touches no
+// wallet. The scheduled action reaches the wallet on a later tick; a test that
+// asserts on what a scan found waits the gate out instead.
+$scan = static function () use ($check): void {
+    $reconciler = Plugin::engine()->reconciler();
+    $scanned = false;
+    for ($spin = 0; $spin < 50 && !$scanned; $spin++) {
+        if ($spin > 0) { usleep(200000); }
+        $scanned = ($reconciler->gatedReconcile()['reason'] ?? '') !== 'gate_busy';
+    }
+    $check($scanned, 'reconcile gate opened for a settlement scan');
+};
 $makeOrder = static function () {
     $product = wc_get_product(wc_get_product_id_by_sku('safety-orange'));
     $order = wc_create_order();
@@ -92,12 +106,12 @@ $productId = wc_get_product_id_by_sku('safety-orange');
 $stock = wc_get_product($productId)->get_stock_quantity();
 $wallet = Plugin::engine()->service()->nwcClient();
 $wallet->settleInvoice($hash);
-Plugin::engine()->reconcile();
+$scan();
 $paid = wc_get_order($order->get_id());
 $check($paid->is_paid(), 'WooCommerce order paid');
 $check($paid->get_transaction_id() === $hash, 'transaction id recorded');
 $check(wc_get_product($productId)->get_stock_quantity() === $stock - 1, 'stock reduced exactly once');
-Plugin::engine()->reconcile(); OrderHost::repair();
+$scan(); OrderHost::repair();
 $check(wc_get_product($productId)->get_stock_quantity() === $stock - 1, 'settlement replay does not reduce stock again');
 
 // Simulate COMMIT followed by process death before afterPaid. No wallet scan is
