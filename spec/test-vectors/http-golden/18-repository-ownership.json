@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/payments/check",
+    "body": {
+      "reference": "another-reference",
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+    }
+  },
+  "name": "repository ownership",
+  "handler": "repository_ownership",
+  "expected": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "NOT_FOUND",
+      "message": "Payment attempt not found for this reference.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "Exercise the real repository and request handler. Seed the deterministic settled-golden checkout/hash. Do not stub resolve_checkout or return this expected body directly."
+}

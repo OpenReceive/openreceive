@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/payments/check",
+    "body": {
+      "reference": "order-golden-settled",
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+    }
+  },
+  "name": "repository gate busy",
+  "handler": "repository_gate_busy",
+  "expected": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+      "status": "settled",
+      "paid_at": 950,
+      "payment_methods": []
+    }
+  },
+  "note": "Exercise the real repository and request handler. Seed the deterministic settled-golden checkout/hash. Do not stub resolve_checkout or return this expected body directly. Commit settlement at950, then preclaim gate; wallet I/O must not occur."
+}

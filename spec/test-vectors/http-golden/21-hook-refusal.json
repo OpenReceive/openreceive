@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": {
+      "reference": "order-create-failed"
+    }
+  },
+  "name": "hook refusal",
+  "handler": "hook_refused",
+  "expected": {
+    "status": 409,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "CONFLICT",
+      "message": "The host did not accept this payment attempt; payer instructions were withheld.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "Exercise the real repository and request handler. Seed the deterministic settled-golden checkout/hash. Do not stub resolve_checkout or return this expected body directly. Raw on_checkout_created raises a generic refusal; instructions are withheld with409."
+}

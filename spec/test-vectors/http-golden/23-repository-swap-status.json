@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/swaps/status",
+    "body": {
+      "reference": "order-golden-settled",
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+    }
+  },
+  "name": "repository swap status",
+  "handler": "repository_swap_status",
+  "expected": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+      "reference": "order-golden-settled",
+      "provider": "fixedfloat",
+      "pay_in_asset": "USDT_TRON",
+      "deposit_address": "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+      "deposit_amount": "1.05",
+      "provider_state": "refund_required",
+      "provider_expires_at": 1600,
+      "provider_order_id": "golden-order"
+    }
+  },
+  "note": "Exercise the real repository and request handler. Seed the deterministic settled-golden checkout/hash. Do not stub resolve_checkout or return this expected body directly.",
+  "setup": {
+    "provider_order": {
+      "provider": "fixedfloat",
+      "provider_order_id": "golden-order",
+      "provider_token": "test-private",
+      "pay_in_asset": "USDT_TRON",
+      "deposit_address": "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+      "deposit_amount": "1.05",
+      "expires_at": 1600,
+      "state": "refund_required"
+    }
+  }
+}

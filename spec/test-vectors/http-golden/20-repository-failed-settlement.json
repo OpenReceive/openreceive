@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/payments/check",
+    "body": {
+      "reference": "order-golden-settled",
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+    }
+  },
+  "name": "repository failed settlement",
+  "handler": "repository_failed_settlement",
+  "expected": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+      "status": "pending",
+      "payment_methods": []
+    }
+  },
+  "note": "Exercise the real repository and request handler. Seed the deterministic settled-golden checkout/hash. Do not stub resolve_checkout or return this expected body directly. Wallet reports settled but on_paid writes then throws inside its transaction; ledger stays pending, host write rolls back, and response uses persisted state."
+}

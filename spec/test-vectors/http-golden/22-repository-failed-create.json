@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": {
+      "reference": "order-create-failed"
+    }
+  },
+  "name": "repository failed create",
+  "handler": "repository_failed_create",
+  "expected": {
+    "status": 503,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INTERNAL",
+      "message": "Payment storage is unavailable; payer instructions were withheld. Please retry.",
+      "retryable": true,
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "Exercise the real repository and request handler. Seed the deterministic settled-golden checkout/hash. Do not stub resolve_checkout or return this expected body directly. Use an actual database INSERT failure (for example a trigger), preserving503 as distinct from raw hook refusal."
+}
