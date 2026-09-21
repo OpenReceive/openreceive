@@ -1,4 +1,13 @@
 FROM node:22-bookworm-slim AS client
+# `npm ci` at the workspace root installs better-sqlite3 (the Prisma adapter the
+# Node examples test against). It ships prebuilt binaries, but only for the Node
+# ABIs it was released for: when this image's node moves ahead of them, its
+# install script falls back to compiling from source and the slim image has
+# neither Python nor a compiler, so the build fails with "Could not find any
+# Python installation to use". This stage is thrown away — only the standalone
+# checkout is copied out — so the toolchain costs build time, not image size.
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY package.json package-lock.json ./
 COPY tsconfig*.json ./
