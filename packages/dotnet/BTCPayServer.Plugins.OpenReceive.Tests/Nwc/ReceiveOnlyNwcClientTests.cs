@@ -5,6 +5,7 @@ using BTCPayServer.Plugins.OpenReceive.Data;
 using BTCPayServer.Plugins.OpenReceive.Nwc;
 using BTCPayServer.Plugins.OpenReceive.Tests.Fakes;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using NBitcoin;
 using OpenReceive.TestkitNwc;
 
@@ -496,6 +497,48 @@ public sealed class ReceiveOnlyNwcClientTests
     }
 
     // ---- Listen: polling ----
+
+    [Fact]
+    public async Task Disposing_between_dequeue_and_channel_write_keeps_the_persisted_invoice_recoverable()
+    {
+        await using var h = new Harness(new TestkitWalletOptions { Notifications = false });
+        h.Service.UppercaseSettlementHashes = true;
+        var invoice = await h.Mint();
+        await h.Backend.SettleAsync(invoice.Id);
+        using var logger = new DeliveryBarrierLogger();
+        using var listener = new NwcPollListener(h.State.Memo, logger);
+        try
+        {
+            await logger.Dequeued.Task.WaitAsync(WaitBound);
+            listener.Dispose();
+        }
+        finally { logger.Release.Set(); }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => listener.WaitInvoice(Bounded()));
+        Assert.True(Settlement.IsSettled(h.State.Memo.Lookup(invoice.Id)!));
+
+        // The channel is only a hint. A fresh process restores the original mint
+        // and discovers its wallet finality even though its prior hint was lost.
+        var (_, restarted) = h.Restart();
+        var recovered = await restarted.GetInvoice(invoice.Id, Bounded());
+        Assert.NotNull(recovered);
+        Assert.Equal(LightningInvoiceStatus.Paid, recovered.Status);
+        Assert.Equal(invoice.Id, recovered.Id);
+    }
+
+    private sealed class DeliveryBarrierLogger : ILogger, IDisposable
+    {
+        public readonly TaskCompletionSource Dequeued = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly ManualResetEventSlim Release = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel level) => true;
+        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (!formatter(state, exception).StartsWith("nwc.scan.settled", StringComparison.Ordinal)) return;
+            Dequeued.TrySetResult();
+            if (!Release.Wait(WaitBound)) throw new TimeoutException("test delivery barrier timed out");
+        }
+        public void Dispose() => Release.Dispose();
+    }
 
     [Fact]
     public async Task Listen_polls_the_memo_when_the_wallet_has_no_notifications()

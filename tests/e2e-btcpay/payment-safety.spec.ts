@@ -14,6 +14,14 @@ import {
 test.describe.configure({ mode: "serial" });
 let store = "";
 const hostContainer = "openreceive-btcpay-btcpayserver-1";
+test.beforeEach(async ({ request }) => {
+  // Real signed/encrypted wallet replies: lower-case mint and host mapping,
+  // upper-case settled history/notifications, including cold historical recovery.
+  expect((await request.post(`${stack.testkit}/hash-case/upper`)).ok()).toBe(true);
+});
+test.afterAll(async ({ request }) => {
+  expect((await request.post(`${stack.testkit}/hash-case/lower`)).ok()).toBe(true);
+});
 function docker(...args: string[]): string {
   return execFileSync("docker", args, { encoding: "utf8", timeout: 120_000 }).trim();
 }

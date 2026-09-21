@@ -1758,6 +1758,7 @@ end
 
 class PaymentSafetyProgressTest < Minitest::Test
   include OpenReceivePaymentTestHelpers
+  include ActiveSupport::Testing::TimeHelpers
   PROGRESS = JSON.parse(File.read(File.expand_path("../../../../spec/test-vectors/reconcile-progress.json", __dir__)))
 
   def setup
@@ -1774,6 +1775,7 @@ class PaymentSafetyProgressTest < Minitest::Test
   end
 
   def teardown
+    travel_back
     OpenReceive.reset_config!
   end
 
@@ -1792,8 +1794,30 @@ class PaymentSafetyProgressTest < Minitest::Test
         assert_equal vector.fetch("expected_old_checkpoint"), OpenReceiveMeta.checkpoint_reconcile_gate(old, old.fetch("scheduler"), now: now + vector.fetch("new_claim_at"))
         next
       end
+      if vector.key?("coverage_started_at")
+        hash = "a" * 64
+        store(hash, "coverage", vector.fetch("created_at"), wallet_expiry: vector.fetch("expires_at"))
+        travel_to(Time.at(vector.fetch("coverage_started_at")))
+        clock = self
+        @wallet.define_singleton_method(:list_transactions) do |_request|
+          clock.travel_to(Time.at([Time.now.to_i, vector.fetch("completed_at")].max))
+          { "transactions" => [] }
+        end
+        OpenReceive.reconcile!
+        assert_equal "pending", OpenReceivePayment.find_by!(payment_hash: hash).status
+        travel_to(Time.at(vector.fetch("next_scan_at")))
+        OpenReceive.reconcile!
+        assert_equal "expired", OpenReceivePayment.find_by!(payment_hash: hash).status
+        next
+      end
       count = vector.fetch("pending_count", 1)
-      count.times { |i| store(format("%064x", i + 1), "progress-#{i}", now) }
+      count.times do |i|
+        hash = format("%064x", i + 1)
+        created = now + i * vector.fetch("creation_stride", 0)
+        checkout = build_checkout(reference: "progress-#{i}", hash: hash, created_at: created, expires_at: created + 600)
+        checkout["created_at_source"] = "wallet"
+        OpenReceivePayment.commit_attempt!(reference: "progress-#{i}", payment_hash: hash, checkout: checkout)
+      end
       paid_hash = format("%064x", count)
       rows = Array.new(vector.fetch("history_rows", 1)) { |i| { "payment_hash" => format("%064x", 10_000 + i), "created_at" => now, "settled_at" => now + 1 } }
       rows[vector.key?("history_rows") ? vector.fetch("paid_index", 0) : 0]["payment_hash"] = paid_hash unless vector.key?("expected_closed")
@@ -1801,10 +1825,25 @@ class PaymentSafetyProgressTest < Minitest::Test
       calls = []
       @wallet.define_singleton_method(:list_transactions) do |request|
         calls << request.dup
+        if vector.key?("failed_cohorts") && request.fetch("from") < now + vector.fetch("paid_index") * vector.fetch("creation_stride") - 60
+          raise "historical cohort unavailable"
+        end
         { "transactions" => rows.slice(request.fetch("offset", 0), page_size) || [] }
       end
       observed = now + 1600
-      vector.fetch("max_passes", 3).times do
+      failures = vector.fetch("failed_fulfillments", 0)
+      paid = @paid
+      OpenReceive.config.on_paid = lambda do |event|
+        if failures > 0
+          failures -= 1
+          raise "host rollback"
+        end
+        paid << event
+      end
+      vector.fetch("max_passes", 3).times do |pass|
+        vector.fetch("arrivals_per_pass", 0).times do |arrival|
+          store(format("%064x", 50000 + pass * vector.fetch("arrivals_per_pass") + arrival), "arrival-#{pass}-#{arrival}", observed)
+        end
         before = calls.length
         OpenReceive.reconcile!(now: observed)
         assert_operator calls.length - before, :<=, PROGRESS.fetch("max_pages")
@@ -1858,6 +1897,27 @@ class PaymentSafetyProgressTest < Minitest::Test
     assert_empty @paid
     OpenReceive.reconcile!(now: now + 3)
     assert_equal 1, @paid.length
+  end
+
+  def test_failed_fulfillment_after_grace_does_not_hide_payment_or_block_other_hashes
+    now = Time.now.to_i
+    hashes = %w[a b c].map { |c| c * 64 }
+    hashes.each { |hash| store(hash, "isolated-#{hash}", now) }
+    hashes.first(2).each { |hash| @wallet.add_transaction(hash, state: "settled", settled_at: now + 10) }
+    fail_first = true
+    paid = @paid
+    OpenReceive.config.on_paid = lambda do |event|
+      raise "host rollback" if fail_first && event.payment_hash == hashes.first
+      paid << event
+    end
+    OpenReceive.reconcile!(now: now + 2000)
+    assert_equal %w[pending settled expired], hashes.map { |hash| OpenReceivePayment.find_by!(payment_hash: hash).status }
+    assert_equal [hashes[1]], @paid.map(&:payment_hash)
+    fail_first = false
+    OpenReceive.reconcile!(now: now + 2012)
+    OpenReceive.reconcile!(now: now + 2024)
+    assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: hashes.first).status
+    assert_equal [hashes[1], hashes.first], @paid.map(&:payment_hash)
   end
 
   def test_secret_redaction_shared_contract

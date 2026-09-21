@@ -157,7 +157,8 @@ class PaymentRepository(Protocol):
     def list_reconcilable_attempts(
         self, *, after: dict[str, Any] | None = None, limit: int = RECONCILE_BATCH_SIZE
     ) -> list[ReconcilableAttempt]:
-        """The oldest `pending` attempts, at most RECONCILE_BATCH_SIZE."""
+        """The oldest `pending` attempts, filling the requested limit (capped at
+        RECONCILE_BATCH_SIZE) unless fewer remain. A short page signals exhaustion."""
 
     def find_by_payment_hash(self, payment_hash: str) -> PaymentRecord | None:
         """The durable attempt including terminal status, or None if unknown."""

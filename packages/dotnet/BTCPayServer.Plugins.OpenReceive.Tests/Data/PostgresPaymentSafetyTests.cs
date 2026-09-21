@@ -5,14 +5,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 
 namespace BTCPayServer.Plugins.OpenReceive.Tests.Data;
 
 public sealed class PostgresPaymentSafetyTests
 {
-    [Fact]
-    public async Task Shipped_rows_upgrade_without_losing_refund_credentials_or_guessing_wallet_scope()
+    [Theory]
+    [InlineData("20260903000000_InitialSwaps", false)]
+    [InlineData("20260903000000_InitialSwaps", true)]
+    [InlineData("20260920000000_MintedInvoices", false)]
+    public async Task Shipped_rows_upgrade_without_losing_refund_credentials_or_guessing_wallet_scope(string fromMigration, bool missingHistory)
     {
         var connection = Environment.GetEnvironmentVariable("OPENRECEIVE_DOTNET_POSTGRES");
         Assert.SkipUnless(!string.IsNullOrEmpty(connection), "OPENRECEIVE_DOTNET_POSTGRES is not configured: migration lane skipped.");
@@ -24,13 +28,21 @@ public sealed class PostgresPaymentSafetyTests
         {
             var builder = new NpgsqlConnectionStringBuilder(connection) { Database = name, Pooling = false };
             var factory = new OpenReceiveDbContextFactory(Options.Create(new DatabaseOptions { ConnectionString = builder.ConnectionString }));
+            var hadInvoiceTable = fromMigration == "20260920000000_MintedInvoices";
+            string originalSwaps;
             await using (var baseline = factory.CreateContext())
             {
-                await baseline.GetService<IMigrator>().MigrateAsync("20260920000000_MintedInvoices");
+                await baseline.GetService<IMigrator>().MigrateAsync(fromMigration);
+                Assert.Equal(hadInvoiceTable, await baseline.Database.SqlQueryRaw<bool>("""
+                    SELECT to_regclass('"BTCPayServer.Plugins.OpenReceive".openreceive_invoices') IS NOT NULL AS "Value"
+                    """).SingleAsync());
+                if (hadInvoiceTable)
+                    await baseline.Database.ExecuteSqlRawAsync("""
+                        INSERT INTO "BTCPayServer.Plugins.OpenReceive".openreceive_invoices
+                            (payment_hash, bolt11, amount_msats, created_at, expires_at)
+                        VALUES (repeat('a',64), 'fixture-bolt', 1000, 100, 1900);
+                        """);
                 await baseline.Database.ExecuteSqlRawAsync("""
-                    INSERT INTO "BTCPayServer.Plugins.OpenReceive".openreceive_invoices
-                        (payment_hash, bolt11, amount_msats, created_at, expires_at)
-                    VALUES (repeat('a',64), 'fixture-bolt', 1000, 100, 1900);
                     INSERT INTO "BTCPayServer.Plugins.OpenReceive".openreceive_swaps
                         (id, store_id, invoice_id, payment_hash, bolt11, invoice_amount_msats, provider, provider_order_id,
                          provider_token, pay_in_asset, deposit_address, deposit_amount, provider_expires_at, state, state_reason,
@@ -40,11 +52,38 @@ public sealed class PostgresPaymentSafetyTests
                          'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 100, 650, 650),
                         ('terminal', 'store', 'invoice', repeat('b',64), 'fixture-bolt', 1000, 'fixture', 'terminal-order',
                          'invalid-terminal-token', 'USDT_TRON', 'fixture-address', '1', 700, 'refunded', NULL,
+                         'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 100, 650, 650),
+                        ('active', 'store', 'invoice', repeat('c',64), 'fixture-bolt', 1000, 'fixture', 'active-order',
+                         'invalid-active-token', 'USDT_TRON', 'fixture-address', '1', 700, 'refund_pending', NULL,
                          'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 100, 650, 650);
                     """);
-                await baseline.Database.MigrateAsync();
+                originalSwaps = await baseline.Database.SqlQueryRaw<string>("""
+                    SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id)::text AS "Value"
+                    FROM "BTCPayServer.Plugins.OpenReceive".openreceive_swaps s
+                    """).SingleAsync();
+                // Some legacy/manual installs have the original table but no
+                // recorded initial migration. InitialSwaps must safely adopt it.
+                if (missingHistory)
+                    await baseline.Database.ExecuteSqlRawAsync(baseline.GetService<IHistoryRepository>().GetDeleteScript(fromMigration));
+            }
+            var runner = new PluginMigrationRunner(factory, NullLogger<PluginMigrationRunner>.Instance);
+            await runner.ExecuteAsync();
+            // Subsequent restarts must use migration history rather than replay ALTERs.
+            await runner.ExecuteAsync();
+            await using (var upgraded = factory.CreateContext())
+            {
+                Assert.Empty(await upgraded.Database.GetPendingMigrationsAsync());
+                Assert.Equal(4, (await upgraded.Database.GetAppliedMigrationsAsync()).Count());
+                var preservedSwaps = await upgraded.Database.SqlQueryRaw<string>("""
+                    SELECT jsonb_agg(to_jsonb(s) - ARRAY['retired_at','replacement_id','recovery_refresh_required',
+                        'last_observed_at','next_poll_at','poll_lease_until','poll_lease_owner'] ORDER BY s.id)::text AS "Value"
+                    FROM "BTCPayServer.Plugins.OpenReceive".openreceive_swaps s
+                    """).SingleAsync();
+                Assert.Equal(originalSwaps, preservedSwaps); // Every original column, not only the token.
+                Assert.Equal(hadInvoiceTable ? 1 : 0, await upgraded.Invoices.CountAsync());
             }
             var rows = await new EfSwapStore(factory).ForInvoiceAsync("invoice", CancellationToken.None);
+            Assert.Equal(3, rows.Count);
             var legacy = rows.Single(r => r.Id == "legacy");
             Assert.Equal(650, legacy.RetiredAt);
             Assert.True(legacy.RecoveryRefreshRequired);
@@ -54,10 +93,26 @@ public sealed class PostgresPaymentSafetyTests
             var terminal = rows.Single(r => r.Id == "terminal");
             Assert.False(terminal.RecoveryRefreshRequired);
             Assert.False(SwapService.IsPolled(terminal));
+            var active = rows.Single(r => r.Id == "active");
+            Assert.Null(active.RetiredAt);
+            Assert.False(active.RecoveryRefreshRequired);
+            Assert.Equal("active", (await new EfSwapStore(factory).FindLiveAsync("invoice", "USDT_TRON", CancellationToken.None))!.Id);
             var mint = await new EfInvoiceStore(factory).FindAsync(new string('a', 64), CancellationToken.None);
-            Assert.Null(mint!.ConnectionId);
-            Assert.Null(mint.RecoveryClosedAt);
-            Assert.False(mint.CreatedAtAuthoritative);
+            if (hadInvoiceTable)
+            {
+                Assert.NotNull(mint);
+                Assert.Null(mint.ConnectionId);
+                Assert.Null(mint.RecoveryClosedAt);
+                Assert.Null(mint.RecoveryBindingNote);
+                Assert.Equal(0, mint.NextRecoveryAt);
+                Assert.False(mint.CreatedAtAuthoritative);
+            }
+            else Assert.Null(mint); // No invented wallet identity or historic mint metadata.
+
+            var invoices = new EfInvoiceStore(factory);
+            await invoices.InsertAsync(new OpenReceiveInvoice { PaymentHash = new string('d', 64), Bolt11 = "fixture-new-bolt",
+                AmountMsats = 2000, CreatedAt = 1000, ExpiresAt = 2800, ConnectionId = "wallet-public:client-public", CreatedAtAuthoritative = true }, CancellationToken.None);
+            Assert.Equal("wallet-public:client-public", (await invoices.FindAsync(new string('d', 64), CancellationToken.None))!.ConnectionId);
         }
         finally
         {

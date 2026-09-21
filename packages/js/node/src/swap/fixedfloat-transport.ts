@@ -6,6 +6,7 @@
  */
 
 import { createHmac } from "node:crypto";
+import { isRecord } from "@openreceive/core";
 import { optionalCoercedString } from "./fixedfloat-fields.ts";
 import type { SwapProviderApiRequestLog, SwapProviderApiResponseLog } from "./provider.ts";
 
@@ -192,11 +193,16 @@ export class FixedFloatTransport {
   }
 
   logApiRequest(path: string, body: Record<string, unknown> = {}): void {
-    this.apiRequestLogger?.({
-      provider: this.provider,
-      path,
-      body,
-    });
+    try {
+      this.apiRequestLogger?.({
+        provider: this.provider,
+        path,
+        has_body: Object.keys(body).length > 0,
+        has_token: body.token != null,
+      });
+    } catch {
+      // Diagnostic sinks cannot interrupt provider operations.
+    }
   }
 
   logApiResponse(input: {
@@ -207,15 +213,21 @@ export class FixedFloatTransport {
     readonly msg?: unknown;
     readonly data?: unknown;
   }): void {
-    this.apiResponseLogger?.({
-      provider: this.provider,
-      path: input.path,
-      status: input.status,
-      ok: input.ok,
-      code: input.code,
-      msg: input.msg,
-      data: input.data,
-    });
+    const pairCount = isRecord(input.data) ? input.data.pair_count : undefined;
+    try {
+      this.apiResponseLogger?.({
+        provider: this.provider,
+        path: input.path,
+        status: input.status,
+        ok: input.ok,
+        code: typeof input.code === "number" ? input.code : undefined,
+        has_data: input.data != null,
+        items: Array.isArray(input.data) ? input.data.length : undefined,
+        pair_count: typeof pairCount === "number" ? pairCount : undefined,
+      });
+    } catch {
+      // Diagnostic sinks cannot interrupt provider operations.
+    }
   }
 }
 

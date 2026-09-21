@@ -6,6 +6,7 @@
 # `openreceive` umbrella, which loads this adapter — carries everything the
 # adapter calls, so requiring this file directly keeps working.
 require_relative "core"
+require "timeout"
 
 module OpenReceive
   # Thin adapter binding the engine to the nwc-ruby gem (NwcRuby::Client).
@@ -29,7 +30,18 @@ module OpenReceive
     def list_transactions(request)
       params = symbolize_keys(OpenReceive.list_transactions_nip47_request(request))
       params[:until_ts] = params.delete(:until) if params.key?(:until)
-      OpenReceive.normalize_list_transactions_response(@client.list_transactions(**params))
+      deadline = request["_deadline"]
+      response = if deadline.nil?
+                   @client.list_transactions(**params)
+                 else
+                   remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                   raise Timeout::Error, "Wallet history scan deadline exceeded." unless remaining.positive?
+
+                   # Bound only wallet I/O. The gem closes its per-call socket in
+                   # ensure; no database transaction or fulfillment is interrupted.
+                   Timeout.timeout(remaining) { @client.list_transactions(**params) }
+                 end
+      OpenReceive.normalize_list_transactions_response(response)
     end
 
     def preflight

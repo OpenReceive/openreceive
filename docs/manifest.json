@@ -506,6 +506,14 @@
       "public": true
     },
     {
+      "slug": "payment-safety-verification-2026-09-21",
+      "title": "Payment Safety Review Closure — 2026-09-21",
+      "source_path": "docs/internal/payment-safety-verification-2026-09-21.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "payment-safety-verification-2026-09-20",
       "title": "Payment Safety Verification — 2026-09-20",
       "source_path": "docs/internal/payment-safety-verification-2026-09-20.md",

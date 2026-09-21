@@ -5,6 +5,7 @@ and TransportError mapping — the seam the live smoke exercises for real."""
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import pytest
@@ -58,6 +59,29 @@ def client_for(relay: FakeRelay, wallet: FakeWallet) -> NwcReceiveClient:
     client._deadline_seconds = 5
     client.redacted_connection_uri = "[test]"
     return client
+
+
+@pytest.mark.parametrize("preflight", [False, True])
+def test_history_deadline_cancels_socket_and_does_not_start_an_expired_request(preflight) -> None:
+    wallet = FakeWallet(WALLET_SECRET, handler=wallet_handler)
+    with FakeRelay(wallet) as relay:
+        client = client_for(relay, wallet)
+        if preflight:
+            client.preflight()
+        relay.silent = True
+        started = time.monotonic()
+        with pytest.raises(WalletError) as raised:
+            client.list_transactions({"limit": 20, "_deadline": started + 0.05})
+        assert raised.value.code == "TIMEOUT"
+        assert time.monotonic() - started < 0.5
+        with pytest.raises(WalletError):
+            client.list_transactions({"limit": 20, "_deadline": started})
+        assert wallet.requests == []
+        relay.silent = False
+        rows = client.list_transactions({"limit": 20, "_deadline": time.monotonic() + 1})
+        assert rows["transactions"][0]["payment_hash"] == HASH
+        assert "_deadline" not in wallet.requests[-1][1]
+        client.close()
 
 
 def test_receive_client_normalizes_requests_replies_and_errors() -> None:

@@ -306,9 +306,7 @@ module OpenReceive
         def post(path, body)
           @weight_budget&.reserve(path)
           body_string = JSON.generate(body)
-          # Surface every outbound request before the call. The host sink is
-          # responsible for sanitizing nested secrets; the API key and HMAC
-          # signature live in headers and are deliberately never logged.
+          # Host diagnostic sinks receive summaries only, before any provider I/O.
           log_api_request(path, body)
           begin
             response = @http.call(
@@ -341,9 +339,7 @@ module OpenReceive
               message: "FixedFloat #{path} returned invalid JSON."
             )
           end
-          # Surface every response (including API-error envelopes) before any
-          # raise. The host sink sanitizes nested secrets — notably the order
-          # token in a create/order response — so this must not pre-redact.
+          # Summarize before invoking any host sink, including error envelopes.
           log_api_response(path: path, status: status, ok: ok,
                            code: parsed["code"], msg: parsed["msg"], data: parsed["data"])
           unless ok
@@ -369,7 +365,10 @@ module OpenReceive
         end
 
         def log_api_request(path, body = {})
-          @api_request_logger&.call("provider" => @name, "path" => path, "body" => body)
+          @api_request_logger&.call(
+            "provider" => @name, "path" => path, "has_body" => !body.empty?,
+            "has_token" => body.is_a?(Hash) && !body["token"].nil?
+          )
         rescue StandardError
           nil
         end
@@ -377,7 +376,7 @@ module OpenReceive
         def log_api_response(path:, status:, ok:, code: nil, msg: nil, data: nil)
           @api_response_logger&.call(
             "provider" => @name, "path" => path, "status" => status, "ok" => ok,
-            "code" => code, "msg" => msg, "data" => data
+            "code" => code.is_a?(Numeric) ? code : nil, "has_data" => !data.nil?
           )
         rescue StandardError
           nil

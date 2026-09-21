@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Close the September payment-safety review gaps: reject refunds without a saved
+  supported network in Node, retain PHP paid observations after fulfillment
+  rollback, accept legacy Node wallet-deadline snapshots, and let newer payments
+  progress past failed historical scan batches without postponing older retries
+  under continuous arrivals. Enforce Python/Ruby scan deadlines
+  inside wallet requests and sanitize direct Node/Ruby provider diagnostic hooks.
+- Run the Knex PostgreSQL transaction and binding acceptance suite on every CI push.
 - Separate swap deposit expiry from wallet settlement lifetime; retain payment and
   refund monitoring after instruction expiry and cancel stale browser actions
   when the checkout identity changes.

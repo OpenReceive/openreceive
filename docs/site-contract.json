@@ -233,7 +233,7 @@
       "slug": "payment-safety-upgrade",
       "title": "Payment Safety Upgrade and Repair",
       "category": "guide",
-      "bytes": 6673
+      "bytes": 8076
     },
     {
       "path": "/guides/deploying",
@@ -1034,6 +1034,10 @@
     {
       "source": "docs/internal/forbidden-without-approval.md",
       "slug": "forbidden-without-approval"
+    },
+    {
+      "source": "docs/internal/payment-safety-verification-2026-09-21.md",
+      "slug": "payment-safety-verification-2026-09-21"
     },
     {
       "source": "docs/internal/payment-safety-verification-2026-09-20.md",

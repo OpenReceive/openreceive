@@ -64,6 +64,36 @@ jobs:
       # check-workflows.mjs cannot drift apart.
       - run: npm run test:ci:core
 
+  js-orms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: openreceive
+          POSTGRES_PASSWORD: openreceive
+          POSTGRES_DB: openreceive_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      NWC_URI: ""
+      OPENRECEIVE_TEST_POSTGRES_URL: postgresql://openreceive:openreceive@127.0.0.1:5432/openreceive_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build:packages
+      - run: npm run test:orms
+
   ruby-engine:
     runs-on: ubuntu-latest
     timeout-minutes: 20

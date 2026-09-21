@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import knexFactory from "knex";
+import { scanPaymentSlice } from "../../packages/js/core/src/payment-scan.ts";
 import {
   createHost,
   createSqlPayments,
   knexDb,
+  maybeReconcilePayments,
   paymentsSchemaSql,
 } from "../../packages/js/http/src/index.ts";
 
@@ -89,6 +91,92 @@ test("PostgreSQL Knex preserves native SQL and atomic custom-repository fulfillm
     assert.ok((await payments.listForReference("order")).every((x) => x.status === "settled"));
     assert.ok((await payments.claimReconcileGate({ now: 1000, intervalSeconds: 2 }))?.token);
     assert.equal(await payments.claimReconcileGate({ now: 1001, intervalSeconds: 2 }), null);
+
+    // Restart workers over real PostgreSQL with >200 unresolved attempts,
+    // continuous arrivals, two failed scans and a rolled-back fulfillment.
+    let now = 100_000;
+    const hash = (n) => (1000 + n).toString(16).padStart(64, "0");
+    const seed = async (n, createdAt) =>
+      payments.commitAttempt({
+        reference: `progress-${n}`,
+        paymentHash: hash(n),
+        checkout: {
+          reference: `progress-${n}`,
+          paymentHash: hash(n),
+          bolt11: `lnbc-test-${n}`,
+          amountMsats: 1000,
+          createdAt,
+          createdAtSource: "wallet",
+          expiresAt: 200_000,
+          fiatQuote: null,
+        },
+      });
+    for (let n = 0; n < 401; n++) await seed(n, 1000 + n * 120);
+    const walletRows = [0, 400].map((n) => ({
+      payment_hash: hash(n),
+      created_at: 1000 + n * 120,
+      settled_at: 1001 + n * 120,
+    }));
+    let calls = 0,
+      failures = 2,
+      rollback = true;
+    const client = {
+      async listTransactions(request) {
+        calls++;
+        if (failures > 0) {
+          failures--;
+          throw new Error("historical wallet outage");
+        }
+        return {
+          transactions: walletRows
+            .filter((row) => row.created_at >= request.from && row.created_at <= request.until)
+            .slice(request.offset, request.offset + request.limit),
+        };
+      },
+    };
+    const fulfilled = [];
+    const scanFailures = [];
+    for (let pass = 0; pass < 8; pass++) {
+      for (let n = 0; n < 20; n++) await seed(401 + pass * 20 + n, now);
+      const workerDb = knexFactory({ client: "pg", connection, pool: { min: 0, max: 2 } });
+      try {
+        const worker = createHost({
+          payments: createSqlPayments(knexDb(workerDb, "postgres"), {
+            tableName,
+            metaTableName,
+            clock: () => now,
+          }),
+          amountFor: () => ({ sats: 1 }),
+          onPaid: ({ paymentHash }) => {
+            if (paymentHash === hash(400) && rollback) {
+              rollback = false;
+              throw new Error("fulfillment rollback");
+            }
+            fulfilled.push(paymentHash);
+          },
+        });
+        const input = {
+          host: worker,
+          clock: () => now,
+          onError: (error) =>
+            scanFailures.push(String(error) + (error.errors ? String(error.errors) : "")),
+          service: {
+            scanPaymentSlice: (options) =>
+              scanPaymentSlice({ ...options, client, clock: () => now }),
+          },
+        };
+        const before = calls;
+        await maybeReconcilePayments(input);
+        assert.ok(calls - before <= 50);
+        assert.equal((await maybeReconcilePayments(input)).reason, "gate_busy");
+      } finally {
+        await workerDb.destroy();
+      }
+      now += 12;
+    }
+    assert.equal(rollback, false, "the failed fulfillment was exercised");
+    assert.deepEqual(fulfilled.sort(), [hash(0), hash(400)].sort(), scanFailures.join("\n"));
+    assert.equal((await payments.findByPaymentHash(hash(400))).status, "settled");
     assert.equal(knex.client.pool.numUsed(), 0, "all acquired connections released");
   } finally {
     await adapter.query(`DROP TABLE IF EXISTS ${orders}, ${tableName}, ${metaTableName}`);

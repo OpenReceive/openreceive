@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Verify in-place upgrades from the original single-table installation, including
+  a missing initial migration-history entry and repeated startup. Preserve all
+  legacy swap fields; document that the new invoice table does not reconstruct
+  pre-upgrade mint history automatically.
 - Recover historical LN and LNURL payments after prompt replacement and restart using BTCPay's original invoice/method mapping and durable host payment acknowledgment.
 - Retire replaced swap instructions without abandoning provider status or refunds; add bounded invoice recovery navigation even after partial payment, expiry, or disabled swaps.
 - Preserve fair provider polling under local quota denial, with database leases, distinct attempt/observation times, and additive recovery/index migrations.

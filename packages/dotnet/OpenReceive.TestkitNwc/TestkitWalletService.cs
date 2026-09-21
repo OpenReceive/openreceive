@@ -56,6 +56,8 @@ public sealed class TestkitWalletService
     }
 
     public TestkitWalletOptions Options { get; }
+    /// <summary>Test control: mint lowercase, then return uppercase settled history and authenticated pushes.</summary>
+    public bool UppercaseSettlementHashes { get; set; }
     public string WalletPubKeyHex { get; }
     public string ConnectionSecretHex { get; }
     public string ConnectionPubKeyHex { get; }
@@ -191,7 +193,7 @@ public sealed class TestkitWalletService
     {
         JsonObject? metadata;
         lock (_gate) _metadataByHash.TryGetValue(invoice.PaymentHash, out metadata);
-        return Nip47Json.Transaction(invoice, metadata);
+        return Nip47Json.Transaction(invoice, metadata, UppercaseSettlementHashes && invoice.IsSettled);
     }
 
     // ---- events -------------------------------------------------------------------------------
@@ -244,7 +246,7 @@ public sealed class TestkitWalletService
         evt.SetReferencedPublickKey(ConnectionPubKeyHex);
         JsonObject? metadata;
         lock (_gate) _metadataByHash.TryGetValue(invoice.PaymentHash, out metadata);
-        var content = Nip47Json.Notification(invoice, metadata).ToJsonString();
+        var content = Nip47Json.Notification(invoice, metadata, UppercaseSettlementHashes).ToJsonString();
         return EncryptAndSignAsync(evt, _connectionPubKey, content, nip44 ? EncryptionScheme.Nip44V2 : EncryptionScheme.Nip04);
     }
 

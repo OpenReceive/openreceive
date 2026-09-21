@@ -7,6 +7,7 @@ namespace OpenReceive\Tests\Storage;
 use OpenReceive\Nwc\Errors;
 use OpenReceive\Nwc\ReceiveNwcClient;
 use OpenReceive\Server\Reconciler;
+use OpenReceive\Server\Notifications;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\SqlPaymentRepository;
 use OpenReceive\Tests\VectorSupport;
@@ -18,6 +19,7 @@ final class PaymentSafetyTest extends DatabaseCase
     use VectorSupport;
     private int $now = 1000;
     private int $fulfilled = 0;
+    private Service $service;
 
     private function reconciler(SqlPaymentRepository $repo, callable $list, ?callable $fulfill = null): Reconciler
     {
@@ -29,7 +31,8 @@ final class PaymentSafetyTest extends DatabaseCase
             public function subscribeNotifications(callable $handler, ?callable $onIdle = null): void {}
         };
         $fulfill ??= function (): void { $this->fulfilled++; };
-        return new Reconciler(new Service($wallet, false, [], ['USD'], fn (): int => $this->now), $repo,
+        $this->service = new Service($wallet, false, [], ['USD'], fn (): int => $this->now);
+        return new Reconciler($this->service, $repo,
             static fn (array $event): bool => $repo->markPaidOnce($event['payment_hash'], $event['paid_at'], $event['details'], $fulfill),
             false, new NullLogger(), fn (): int => $this->now);
     }
@@ -43,6 +46,28 @@ final class PaymentSafetyTest extends DatabaseCase
     private static function paid(string $hash): array
     {
         return ['type' => 'incoming', 'payment_hash' => $hash, 'created_at' => 1000, 'transaction_state' => 'settled', 'settled_at' => 1500];
+    }
+
+    public function testWorkerSettlesWhenHttpOpportunismIsDisabled(): void
+    {
+        $repo = new SqlPaymentRepository(self::freshDatabase('sqlite'), fn (): int => $this->now);
+        $hash = self::hash('worker-only');
+        $this->seed($repo, $hash);
+        $calls = 0;
+        $reconciler = $this->reconciler($repo, static function (array $request) use (&$calls, $hash): array {
+            $calls++;
+            return ['transactions' => ($request['offset'] ?? 0) === 0 ? [self::paid($hash)] : []];
+        });
+        self::assertSame(['reason' => 'disabled'], $reconciler->maybeReconcile());
+        self::assertSame(0, $calls);
+        $worker = new Notifications($this->service, $reconciler);
+        $worker->run(static fn (): bool => false);
+        self::assertSame(1, $this->fulfilled);
+        self::assertSame('settled', $repo->listForReference('order-' . $hash)[0]->status);
+        $before = $calls;
+        $worker->run(static fn (): bool => false);
+        self::assertSame($before, $calls);
+        self::assertSame(1, $this->fulfilled);
     }
 
     #[DataProvider('dialects')]
@@ -59,10 +84,27 @@ final class PaymentSafetyTest extends DatabaseCase
                 self::assertSame($vector['expected_old_checkpoint'], $repo->checkpointReconcileGate($claim, $claim['scheduler'], $vector['new_claim_at']));
                 continue;
             }
+            if (isset($vector['coverage_started_at'])) {
+                $this->now = $vector['coverage_started_at'];
+                $hash = self::hash('coverage');
+                $this->seed($repo, $hash, expiry: $vector['expires_at']);
+                $list = function () use ($vector): array {
+                    $this->now = max($this->now, $vector['completed_at']);
+                    return ['transactions' => []];
+                };
+                $engine = $this->reconciler($repo, $list);
+                $engine->reconcile();
+                self::assertSame('pending', $repo->findByPaymentHash($hash)->status);
+                $this->now = $vector['next_scan_at'];
+                $engine->reconcile();
+                self::assertSame('expired', $repo->findByPaymentHash($hash)->status);
+                continue;
+            }
             $target = str_pad(dechex(($vector['paid_index'] ?? 0) + 1), 64, '0', STR_PAD_LEFT);
             for ($i = 0; $i < ($vector['pending_count'] ?? 1); $i++) {
                 $hash = isset($vector['pending_count']) ? str_pad(dechex($i + 1), 64, '0', STR_PAD_LEFT) : $target;
-                $this->seed($repo, $hash, expiry: isset($vector['paid_index']) ? 9000 : 2800);
+                $created = 1000 + $i * ($vector['creation_stride'] ?? 0);
+                $repo->commitAttempt('progress-' . $i, $hash, [...self::checkout('progress-' . $i, $hash, $created, isset($vector['paid_index']) ? 100000 : 2800), 'created_at_source' => 'wallet']);
             }
             $rows = [];
             for ($i = 0; $i < ($vector['history_rows'] ?? 1); $i++) $rows[] = self::paid(self::hash('history-' . $i));
@@ -70,11 +112,22 @@ final class PaymentSafetyTest extends DatabaseCase
             $calls = 0;
             $list = static function (array $request) use ($rows, $vector, &$calls): array {
                 $calls++;
+                if (isset($vector['failed_cohorts']) && $request['from'] < 1000 + $vector['paid_index'] * $vector['creation_stride'] - 60) throw new \RuntimeException('historical cohort unavailable');
                 return ['transactions' => array_slice($rows, $request['offset'], $vector['page_size'] ?? 20)];
             };
+            $failures = $vector['failed_fulfillments'] ?? 0;
+            $fulfill = function () use (&$failures): void {
+                if ($failures > 0) { $failures--; throw new \RuntimeException('host rollback'); }
+                $this->fulfilled++;
+            };
             for ($pass = 0; $pass < ($vector['max_passes'] ?? 4); $pass++) {
+                for ($arrival = 0; $arrival < ($vector['arrivals_per_pass'] ?? 0); $arrival++) {
+                    $ref = "arrival-{$pass}-{$arrival}";
+                    $hash = self::hash($ref);
+                    $repo->commitAttempt($ref, $hash, self::checkout($ref, $hash, $this->now, $this->now + 600));
+                }
                 $before = $calls;
-                $this->reconciler($repo, $list)->reconcile();
+                $this->reconciler($repo, $list, $fulfill)->reconcile();
                 self::assertLessThanOrEqual($family['max_pages'], $calls - $before, $vector['name']);
                 $this->now += 12;
                 // A fresh instance each pass proves progress is stored in the database.
@@ -131,6 +184,34 @@ final class PaymentSafetyTest extends DatabaseCase
         $this->reconciler($repo, static fn (array $request): array => ['transactions' => $request['offset'] === 0 ? [self::paid($pending)] : []],
             static function (): void { throw new \RuntimeException('synthetic callback failure'); })->reconcile();
         self::assertSame('pending', $repo->findByPaymentHash($pending)->status);
+    }
+
+    #[DataProvider('dialects')]
+    public function testFailedFulfillmentPastGraceCannotBecomeAbsenceAndDoesNotBlockSibling(string $dialect): void
+    {
+        $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
+        $failed = self::hash('failed-delivery'); $paid = self::hash('other-paid'); $unpaid = self::hash('unpaid');
+        foreach ([$failed, $paid, $unpaid] as $hash) $this->seed($repo, $hash);
+        $this->now = 4000;
+        $list = static fn (array $request): array => ['transactions' => $request['offset'] === 0 && !($request['unpaid'] ?? false) ? [self::paid($failed), self::paid($paid)] : []];
+        $delivered = [];
+        $fail = true;
+        $fulfill = static function (\OpenReceive\PaymentSettlement $event) use ($failed, &$fail, &$delivered): void {
+            if ($fail && $event->paymentHash === $failed) throw new \RuntimeException('synthetic fulfillment rollback');
+            $delivered[] = $event->paymentHash;
+        };
+        $checks = $this->reconciler($repo, $list, $fulfill)->reconcile();
+        self::assertSame('pending', $repo->findByPaymentHash($failed)->status);
+        self::assertSame('settled', $repo->findByPaymentHash($paid)->status);
+        self::assertSame('expired', $repo->findByPaymentHash($unpaid)->status);
+        self::assertNotContains($failed, array_column($checks, 'payment_hash'));
+        self::assertSame([$paid], $delivered);
+        $fail = false; $this->now += 12;
+        $this->reconciler($repo, $list, $fulfill)->reconcile();
+        $this->now += 12;
+        $this->reconciler($repo, $list, $fulfill)->reconcile();
+        self::assertSame('settled', $repo->findByPaymentHash($failed)->status);
+        self::assertSame([$paid, $failed], $delivered);
     }
 
     #[DataProvider('dialects')]

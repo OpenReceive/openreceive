@@ -116,33 +116,24 @@ export interface SwapOrder {
   readonly raw?: unknown;
 }
 
-/**
- * A single raw provider API response, surfaced for server-side observability.
- * Carries the HTTP status and the parsed `{code, msg, data}` envelope. Emitted
- * through the service's sanitizing log sink, so any nested secret (e.g. a
- * FixedFloat order token) is redacted before it reaches a log line.
- */
+/** Allowlisted metadata, sanitized before invoking any diagnostic sink. */
 export interface SwapProviderApiResponseLog {
   readonly provider: string;
   readonly path: string;
   readonly status: number;
   readonly ok: boolean;
-  readonly code: unknown;
-  readonly msg: unknown;
-  readonly data: unknown;
+  readonly code?: number;
+  readonly has_data: boolean;
+  readonly items?: number;
+  readonly pair_count?: number;
 }
 
-/**
- * A single outbound provider API request, surfaced for server-side observability
- * alongside {@link SwapProviderApiResponseLog}. Carries the request path and body.
- * Emitted through the service's sanitizing log sink, so any secret in the body
- * (e.g. a FixedFloat order token on status/refund calls) is redacted; provider
- * auth headers are never included here.
- */
+/** Request bodies, credentials, invoices and addresses never enter this hook. */
 export interface SwapProviderApiRequestLog {
   readonly provider: string;
   readonly path: string;
-  readonly body: unknown;
+  readonly has_body: boolean;
+  readonly has_token: boolean;
 }
 
 export interface SwapProvider {
@@ -153,15 +144,13 @@ export interface SwapProvider {
   attachSwapCache?(cache: TransientSwapCache): void;
   /**
    * Attach a sink for outbound provider API requests, mirroring
-   * {@link attachApiResponseLogger}. The
-   * service routes entries through its sanitizing log sink, so secrets in the body
-   * are redacted. Providers that make no remote calls may omit this.
+   * {@link attachApiResponseLogger}. Emit only the allowlisted metadata;
+   * diagnostics must not affect payment behavior. Providers without remote calls may omit this.
    */
   attachApiRequestLogger?(log: (entry: SwapProviderApiRequestLog) => void): void;
   /**
-   * Attach a sink for raw provider API responses. The service routes entries through
-   * its sanitizing log sink, so nested secrets are redacted. Providers that make no
-   * remote calls may omit this.
+   * Attach a sink for allowlisted response metadata, never raw envelopes.
+   * Providers without remote calls may omit this.
    */
   attachApiResponseLogger?(log: (entry: SwapProviderApiResponseLog) => void): void;
   /**

@@ -81,6 +81,47 @@ async function statusFor(orderData, baseOrder = BASE_ORDER) {
   return await provider.getStatus(baseOrder);
 }
 
+test("direct provider diagnostic hooks receive only metadata and cannot interrupt payments", async () => {
+  const { provider, calls } = makeProvider({
+    ccies: SAMPLE_CCIES,
+    create: CREATE_DATA,
+    order: CREATE_DATA,
+    emergency: {},
+  });
+  const events = [];
+  provider.attachApiRequestLogger((entry) => events.push(entry));
+  provider.attachApiResponseLogger((entry) => events.push(entry));
+  const order = await provider.createSwap({
+    payInAsset: "USDT_TRON",
+    bolt11: BOLT11,
+    invoiceAmountMsats: INVOICE_AMOUNT_MSATS,
+  });
+  await provider.getStatus(order);
+  await provider.requestRefund(order, TRX_ADDRESS);
+  const logged = JSON.stringify(events);
+  for (const value of [
+    API_KEY,
+    API_SECRET,
+    BOLT11,
+    TRX_ADDRESS,
+    "TOKEN1",
+    "X-API-KEY",
+    "X-API-SIGN",
+  ]) {
+    assert.equal(logged.includes(value), false, value);
+  }
+  assert.equal(order.provider_token, "TOKEN1");
+  assert.equal(calls.find((call) => call.path === "emergency").body.token, "TOKEN1");
+  provider.attachApiRequestLogger(() => {
+    throw new Error("sink down");
+  });
+  provider.attachApiResponseLogger(() => {
+    throw new Error("sink down");
+  });
+  await provider.getStatus(order);
+  await provider.requestRefund(order, TRX_ADDRESS);
+});
+
 test("createSwap sends a signed fixed-rate create request and maps the order", async () => {
   const { provider, calls } = makeProvider({ ccies: SAMPLE_CCIES, create: CREATE_DATA });
   const order = await provider.createSwap({

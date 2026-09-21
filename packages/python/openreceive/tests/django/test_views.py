@@ -8,6 +8,7 @@ import json
 from typing import Any
 
 import pytest
+from django.db import connection
 from django.http import HttpRequest
 from django.middleware.csrf import get_token
 from django.test import Client, RequestFactory
@@ -152,6 +153,39 @@ def test_mint_settle_fulfill_once_through_the_orm(
         client, "/checkouts", {"reference": test_host.REFERENCE}, x_test_user="alice"
     )
     assert status == 409 and body["message"] == "This reference is already paid."
+
+
+def test_atomic_requests_defers_after_paid_until_the_request_commits(app, state, monkeypatch):
+    if connection.vendor == "mysql":
+        pytest.skip(
+            "MySQL intentionally refuses an ambient transaction before acquiring its named lock"
+        )
+    monkeypatch.setitem(connection.settings_dict, "ATOMIC_REQUESTS", True)
+    observations = []
+    app.reconciler._after_paid = lambda payment: observations.append(
+        (payment.reference, connection.in_atomic_block)
+    )
+    client = Client()
+    status, body = post(
+        client, "/checkouts", {"reference": test_host.REFERENCE}, x_test_user="alice"
+    )
+    assert status == 201, body
+    payment_hash = body["checkout"]["payment_hash"]
+    state.wallet.settle_invoice(payment_hash, settled_at=state.now + 1)
+    state.now += 3
+    for _ in range(2):
+        status, body = post(
+            client,
+            "/payments/check",
+            {
+                "reference": test_host.REFERENCE,
+                "payment_hash": payment_hash,
+            },
+            x_test_user="alice",
+        )
+        assert status == 200 and body["status"] == "settled", body
+    assert state.in_atomic_block == [True]
+    assert observations == [(test_host.REFERENCE, False)]
 
 
 def test_swap_data_never_reaches_the_wire(app: OpenReceiveApp, state: test_host.State) -> None:

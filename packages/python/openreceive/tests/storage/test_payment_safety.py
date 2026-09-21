@@ -55,13 +55,35 @@ def test_durable_progress_vectors(case, repository, clock):
             is case["expected_old_checkpoint"]
         )
         return
+    if "coverage_started_at" in case:
+        clock["now"] = case["coverage_started_at"]
+        repository.commit_attempt(
+            PaymentInsert(
+                "coverage", H1, checkout("coverage", H1, case["created_at"], case["expires_at"])
+            )
+        )
+        wallet = HistoryWallet([])
+
+        def crossing_deadline(request):
+            clock["now"] = max(clock["now"], case["completed_at"])
+            return {"transactions": []}
+
+        wallet.list_transactions = crossing_deadline
+        engine = reconciler(repository, clock, wallet, [])
+        engine.reconcile()
+        assert repository.find_by_payment_hash(H1).status == "pending"
+        clock["now"] = case["next_scan_at"]
+        engine.reconcile()
+        assert repository.find_by_payment_hash(H1).status == "expired"
+        return
     count = case.get("pending_count", 1)
     paid_hash = f"{count:064x}"
     for i in range(count):
         h = f"{i + 1:064x}"
-        repository.commit_attempt(
-            PaymentInsert(f"progress-{i}", h, checkout(f"progress-{i}", h, now, now + 600))
-        )
+        created = now + i * case.get("creation_stride", 0)
+        saved = checkout(f"progress-{i}", h, created, created + 600)
+        saved["created_at_source"] = "wallet"
+        repository.commit_attempt(PaymentInsert(f"progress-{i}", h, saved))
     total = case.get("history_rows", 1)
     rows = [
         {"payment_hash": f"{10000 + i:064x}", "created_at": now, "settled_at": now + 1}
@@ -70,12 +92,39 @@ def test_durable_progress_vectors(case, repository, clock):
     if "expected_closed" not in case:
         rows[case.get("paid_index", 0) if "history_rows" in case else 0]["payment_hash"] = paid_hash
     wallet = HistoryWallet(rows, case.get("page_size", 20))
+    if "failed_cohorts" in case:
+        normal_list = wallet.list_transactions
+
+        def list_with_failed_history(request):
+            if request["from"] < now + case["paid_index"] * case["creation_stride"] - 60:
+                wallet.calls.append(dict(request))
+                raise RuntimeError("historical cohort unavailable")
+            return normal_list(request)
+
+        wallet.list_transactions = list_with_failed_history
     paid = []
+    failed_fulfillments = case.get("failed_fulfillments", 0)
+
+    def fulfill(event):
+        nonlocal failed_fulfillments
+        if failed_fulfillments:
+            failed_fulfillments -= 1
+            raise RuntimeError("host rollback")
+        paid.append(event)
+
     clock["now"] = now + 1600
-    for _ in range(case.get("max_passes", 3)):
+    for pass_index in range(case.get("max_passes", 3)):
+        for arrival in range(case.get("arrivals_per_pass", 0)):
+            ref = f"arrival-{pass_index}-{arrival}"
+            h = f"{50000 + pass_index * case['arrivals_per_pass'] + arrival:064x}"
+            repository.commit_attempt(
+                PaymentInsert(ref, h, checkout(ref, h, clock["now"], clock["now"] + 600))
+            )
         # Recreate the reconciler on every slice; only DB state carries progress.
         before = len(wallet.calls)
-        reconciler(repository, clock, wallet, paid).reconcile()
+        engine = reconciler(repository, clock, wallet, paid)
+        engine._on_paid = fulfill
+        engine.reconcile()
         assert len(wallet.calls) - before <= 50
         clock["now"] += 12
     record = repository.find_by_payment_hash(paid_hash)

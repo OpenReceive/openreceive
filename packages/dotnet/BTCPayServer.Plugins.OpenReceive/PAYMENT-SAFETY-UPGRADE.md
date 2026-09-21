@@ -8,6 +8,40 @@ safely; keep the backup and use a forward repair or restore the coordinated back
 Existing hashes, accepted refund addresses, provider tokens and host payments are
 preserved. No plugin publishing or Plugin Builder submission is part of this change.
 
+## Upgrading the original single-table installation
+
+An existing installation with only `openreceive_swaps` upgrades in place. The
+startup task checks the plugin's EF migration history and applies the missing
+migrations in order, before payment workers start:
+
+1. `20260920000000_MintedInvoices` creates `openreceive_invoices`; it does not
+   rename, replace, truncate or copy over `openreceive_swaps`.
+2. `20260921000000_PaymentSafetyRecovery` adds recovery fields and indexes to both
+   tables. Existing rows receive nullable fields or safe defaults. The offered
+   swap index is rebuilt to exclude retired attempts; no payment table is dropped.
+3. `20260921000001_RecoveryBindingAudit` adds the optional legacy-account review note.
+
+Every original swap column is preserved, including provider credentials, accepted
+refund addresses, transaction IDs, amounts and state. Previously superseded swaps
+are marked retired and due for provider refresh; genuinely refunded/failed rows
+are not generally reactivated. BTCPay's own invoice/payment tables are untouched.
+Subsequent restarts skip already applied migrations. No manual table creation or
+separate migration runner is needed. An original-schema table with a missing
+initial migration-history record is also safely adopted by `InitialSwaps`.
+
+The new invoice table starts empty for single-table installations: the migration
+does **not** invent historic mint rows or infer their original wallet from current
+settings. A pre-upgrade hash that BTCPay still requests retains the wallet
+lookup/history fallback. Fully automatic recovery of a superseded old hash that
+BTCPay no longer requests requires a persisted mint and proven host/account
+mapping; the schema upgrade alone cannot reconstruct those missing records.
+Existing swaps keep their provider/refund recovery independently of this table.
+
+For users who already have the earlier `openreceive_invoices` table, its rows are
+preserved. Missing connection identities remain unset and require the reviewed
+binding procedure below; a wallet that happens to be configured now is not proof
+of which account originally issued an invoice.
+
 ## Historical Lightning invoices
 
 Each new mint records its wallet service and connection public keys before payer
@@ -114,7 +148,10 @@ providers. The recovery page never mints new deposit instructions.
 `npm run test:dotnet` runs component/vector tests in Docker. Set
 `OPENRECEIVE_DOTNET_POSTGRES` to a dedicated PostgreSQL test database to exercise
 actual `xmin`, replacement transactions and competing poll leases (otherwise that
-lane explicitly skips). The running Docker stack is exercised by
+lane explicitly skips). Upgrade tests start from the original single-table schema,
+that schema without its initial history entry, and the earlier two-table schema;
+they compare every original swap field, repeat the actual startup runner and
+write a new mint through the upgraded model. The running Docker stack is exercised by
 `npm run test:e2e:btcpay -- payment-safety.spec.ts`, including partial-payment remint,
 LN/LNURL payment while the host is stopped, recovery after expiry, duplicate restart
 and browser refund navigation. Use the disposable testkit wallet/provider only.

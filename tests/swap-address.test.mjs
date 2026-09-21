@@ -163,6 +163,58 @@ test("the server refund path rejects an address that fails its network checksum"
   }
 });
 
+test("refunds require a saved supported network before any provider I/O", async () => {
+  const provider = createTestkitSwapProvider({ now: () => 1000 });
+  const service = await createOpenReceive({
+    client: createTestkitReceiveClient({ now: () => 1000 }),
+    swap: { provider },
+    clock: () => 1000,
+  });
+  try {
+    const swap = await service.createSwap({
+      reference: "refund-network",
+      amount: { sats: 20_000 },
+      payInAsset: "USDT_TRON",
+    });
+    let calls = 0;
+    provider.getStatus = async () => {
+      calls++;
+      throw new Error("unexpected provider read");
+    };
+    provider.requestRefund = async () => {
+      calls++;
+      throw new Error("unexpected provider mutation");
+    };
+    for (const asset of [undefined, null, 42, {}, "UNKNOWN_NETWORK"]) {
+      const swapData = structuredClone(swap.swapData);
+      if (asset === undefined) delete swapData.providerOrder.pay_in_asset;
+      else swapData.providerOrder.pay_in_asset = asset;
+      const before = structuredClone(swapData);
+      await assert.rejects(
+        service.refundSwap({
+          reference: swap.reference,
+          paymentHash: swap.paymentHash,
+          swapData,
+          refundAddress: TRX_BAD_CHECKSUM,
+        }),
+        (error) => {
+          assert.equal(error.status, 503);
+          assert.equal(error.body.code, "INTERNAL");
+          assert.equal(
+            error.body.message,
+            "Swap recovery requires a supported pay-in asset/network.",
+          );
+          return true;
+        },
+      );
+      assert.deepEqual(swapData, before);
+      assert.equal(calls, 0);
+    }
+  } finally {
+    await service.close();
+  }
+});
+
 test("the all-'1' Solana System Program address decodes to 32 zero bytes and validates", () => {
   assert.equal(isValidAddressForSwapNetwork("SOL", "11111111111111111111111111111111"), true);
   // 31 leading '1' chars decode to 31 zero bytes: one short of a pubkey.

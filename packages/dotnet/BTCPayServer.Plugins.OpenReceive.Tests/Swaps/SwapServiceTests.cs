@@ -705,6 +705,28 @@ public sealed class SwapServiceTests
     // ---- Provider down ----
 
     [Fact]
+    public async Task Create_preserves_the_old_order_when_refresh_fails_before_replacement()
+    {
+        var h = new Harness();
+        h.Invoices.Invoices[InvoiceId] = h.Invoice(expiresAt: h.Now + 7200);
+        var first = await h.Create("USDT_TRON");
+        var original = await h.Row(first.SwapId);
+        h.Now += 900;
+        h.Core.RateLimitNext(1);
+
+        var error = await Assert.ThrowsAsync<SwapRequestException>(() => h.Create("USDT_TRON"));
+
+        Assert.Equal(503, error.Status);
+        Assert.Equal("provider_refresh_failed", error.Code);
+        var old = await h.Row(first.SwapId);
+        Assert.Equal(original.ProviderToken, old.ProviderToken);
+        Assert.Equal(original.PaymentHash, old.PaymentHash);
+        Assert.Equal("awaiting_deposit", old.State);
+        Assert.Single(h.Core.Orders);
+        Assert.Equal(first.SwapId, (await h.Store.FindLiveAsync(InvoiceId, "USDT_TRON", CancellationToken.None))!.Id);
+    }
+
+    [Fact]
     public async Task Create_keeps_the_old_order_when_the_provider_refuses_the_replacement()
     {
         var h = new Harness();

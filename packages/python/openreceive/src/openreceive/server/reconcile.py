@@ -19,6 +19,7 @@ from openreceive.payments import reconciliation
 from openreceive.server.reconcile_scan import new_window, scan_slice
 from openreceive.server.service import Service, sanitize_failure_message
 from openreceive.storage.repository import (
+    RECONCILE_BATCH_SIZE,
     PaymentRepository,
     PaymentSettlement,
     ReconcilableAttempt,
@@ -33,7 +34,7 @@ log = logging.getLogger("openreceive")
 # else 12s). The gate IS the NWC scan budget.
 MIN_RECONCILE_INTERVAL_SECONDS = 2
 # Wall-clock bound on an awaited request-path pass, enforced as a deadline the
-# wallet scan checks between page fetches — never mid-request.
+# wallet scan passes into each RPC; host transactions are never interrupted.
 RECONCILE_SCAN_TIMEOUT_SECONDS = 9
 # Wallet-history pages a request-path pass may walk.
 RECONCILE_SCAN_MAX_PAGES = 50
@@ -158,24 +159,27 @@ class Reconciler:
                     candidates = self.repository.list_reconcilable_attempts()
                 if candidates:
                     last = candidates[-1]
-                    scheduler["cursor"] = {
-                        "created_at": last.created_at,
-                        "payment_hash": last.payment_hash,
-                    }
+                    scheduler["cursor"] = (
+                        None
+                        if len(candidates) < RECONCILE_BATCH_SIZE
+                        else {
+                            "created_at": last.created_at,
+                            "payment_hash": last.payment_hash,
+                        }
+                    )
                     queued = {a["payment_hash"] for w in windows for a in w["attempts"]}
                     cohort = [a.as_dict() for a in candidates if a.payment_hash not in queued]
                     if cohort:
                         windows.append(new_window(cohort, observed_at, overlap_seconds))
-            # Rotate durably before I/O: one failing cohort cannot pin the queue.
+            # Remove durably before I/O: failures/crashes cannot occupy every slot.
+            # Pending rows return on keyset wrap; successful slices save progress.
             window = windows.pop(0) if windows else None
-            if window is not None:
-                windows.append(window)
             # Claim winner alone advances fair selection, before any wallet I/O.
             if not self.repository.checkpoint_reconcile_gate(
                 claim, scheduler, now=self._clock() if now is None else observed_at
             ):
                 return {"reason": "gate_busy"}
-            if not windows:
+            if window is None:
                 self.repository.checkpoint_reconcile_gate(
                     claim, scheduler, now=observed_at, release=True
                 )
@@ -226,7 +230,6 @@ class Reconciler:
                 committed.append(
                     {key: value for key, value in checked.items() if not key.startswith("_")}
                 )
-            windows.remove(window)
             if not complete and not stalled:
                 # Distinct creation buckets can reduce future sweeps; same-second
                 # history keeps its physical continuation without skipping timestamps.

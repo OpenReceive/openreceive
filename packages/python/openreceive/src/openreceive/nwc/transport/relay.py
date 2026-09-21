@@ -33,7 +33,8 @@ class RelaySession:
         if remaining <= 0:
             raise TransportError("deadline", f"deadline passed before connecting to {url}")
         try:
-            connection = connect(url, open_timeout=remaining, max_size=2**22)
+            # Cleanup after an expired scan must not wait for a closing handshake.
+            connection = connect(url, open_timeout=remaining, close_timeout=0, max_size=2**22)
         except TimeoutError as exc:
             raise TransportError("deadline", f"connecting to {url} timed out") from exc
         except Exception as exc:  # OSError, InvalidURI, InvalidHandshake, ...

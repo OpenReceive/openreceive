@@ -54,6 +54,8 @@ def scan_slice(
             request["until"] = window["until"]
         if window["view"] == "inclusive":
             request["unpaid"] = True
+        # Internal monotonic deadline, consumed by the client before NIP-47 encoding.
+        request["_deadline"] = deadline
         page = normalize_list_transactions_response(service._call_nwc("list_transactions", request))
         used += 1
         if time.monotonic() >= deadline:

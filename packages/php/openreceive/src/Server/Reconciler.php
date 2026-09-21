@@ -8,6 +8,7 @@ use OpenReceive\Nwc\Requests;
 use OpenReceive\Payments\Reconciliation;
 use OpenReceive\Settlement\Settlement;
 use OpenReceive\Storage\PaymentRepository;
+use OpenReceive\Storage\SqlPaymentRepository;
 use OpenReceive\Support\Records;
 use Psr\Log\LoggerInterface;
 
@@ -102,16 +103,17 @@ final class Reconciler
                 }
                 if ($candidates !== []) {
                     $last = $candidates[count($candidates) - 1];
-                    $scheduler['cursor'] = ['created_at' => $last['created_at'], 'payment_hash' => $last['payment_hash']];
+                    $scheduler['cursor'] = count($candidates) < SqlPaymentRepository::RECONCILE_BATCH_SIZE
+                        ? null : ['created_at' => $last['created_at'], 'payment_hash' => $last['payment_hash']];
                     $queued = [];
                     foreach ($windows as $queuedWindow) foreach ($queuedWindow['attempts'] as $attempt) $queued[$attempt['payment_hash']] = true;
                     $cohort = array_values(array_filter($candidates, static fn (array $attempt): bool => !isset($queued[$attempt['payment_hash']])));
                     if ($cohort !== []) $windows[] = ReconcileScan::newWindow($cohort, $observedAt, $overlapSeconds);
                 }
             }
-            // Rotate before I/O so a failing cohort cannot pin newer attempts.
+            // Remove before I/O so failure/process loss frees a cohort slot.
+            // Pending rows return on cursor wrap; successful slices save progress.
             $window = array_shift($windows);
-            if ($window !== null) $windows[] = $window;
             if (!$this->repository->checkpointReconcileGate($claim, $scheduler, $now ?? ($this->clock)())) return ['reason' => 'gate_busy'];
             if ($window === null) {
                 $this->repository->checkpointReconcileGate($claim, $scheduler, $observedAt, true);
@@ -141,7 +143,6 @@ final class Reconciler
                 unset($checked['_coverage_started_at']);
                 $committed[$hash] = $checked;
             }
-            array_pop($windows);
             if (!$slice['complete'] && !$slice['stalled']) {
                 $times = array_values(array_unique(array_column($window['attempts'], 'created_at')));
                 sort($times);

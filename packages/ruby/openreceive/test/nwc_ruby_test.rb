@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "async"
 require "openreceive/nwc_ruby"
 
 # The engine speaks NIP-47 param names ("from", "until", "limit", ...); nwc-ruby
@@ -52,6 +53,37 @@ class NwcRubyReceiveClientParamsTest < Minitest::Test
 
     assert_equal [[:make_invoice, { amount: 100_000, description: "coffee", expiry: 600 }]], client.calls
     assert_equal "a" * 64, invoice["payment_hash"]
+  end
+
+  def test_history_deadline_interrupts_only_wallet_io_and_unwinds_cleanup
+    calls = []
+    closed = false
+    client = Object.new
+    client.define_singleton_method(:list_transactions) do |**params|
+      calls << params
+      reader, writer = IO.pipe
+      begin
+        # nwc-ruby performs RPCs inside Async; interrupt a blocked read in that
+        # same scheduler rather than just timing a plain Ruby sleep.
+        Async { reader.read(1) }.wait
+      ensure
+        reader.close
+        writer.close
+        closed = true
+      end
+    end
+    adapter = OpenReceive::NwcRubyReceiveClient.new(client: client)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    assert_raises(Timeout::Error) do
+      adapter.list_transactions(scan_request.merge("_deadline" => started + 0.02))
+    end
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 0.5
+    assert closed
+    refute calls.first.key?(:_deadline)
+    assert_raises(Timeout::Error) do
+      adapter.list_transactions(scan_request.merge("_deadline" => started))
+    end
+    assert_equal 1, calls.length
   end
 end
 

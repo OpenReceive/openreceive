@@ -20,7 +20,7 @@ public static class Nip47Json
     };
 
     /// <summary>Transaction JSON; preimage and settled_at appear only once the invoice is settled.</summary>
-    public static JsonObject Transaction(WalletInvoice invoice, JsonObject? metadata = null)
+    public static JsonObject Transaction(WalletInvoice invoice, JsonObject? metadata = null, bool uppercaseHash = false)
     {
         var tx = new JsonObject
         {
@@ -28,7 +28,7 @@ public static class Nip47Json
             ["invoice"] = invoice.Bolt11,
             ["description"] = invoice.Description,
             ["description_hash"] = invoice.DescriptionHash,
-            ["payment_hash"] = invoice.PaymentHash,
+            ["payment_hash"] = uppercaseHash ? invoice.PaymentHash.ToUpperInvariant() : invoice.PaymentHash,
             ["amount"] = invoice.AmountMsats,
             ["fees_paid"] = 0L,
             ["created_at"] = invoice.CreatedAt,
@@ -45,10 +45,10 @@ public static class Nip47Json
         return tx;
     }
 
-    public static JsonObject Notification(WalletInvoice invoice, JsonObject? metadata = null) => new()
+    public static JsonObject Notification(WalletInvoice invoice, JsonObject? metadata = null, bool uppercaseHash = false) => new()
     {
         ["notification_type"] = PaymentReceived,
-        ["notification"] = Transaction(invoice, metadata),
+        ["notification"] = Transaction(invoice, metadata, uppercaseHash),
     };
 
     public static class ErrorCodes

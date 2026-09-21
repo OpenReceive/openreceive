@@ -34,6 +34,7 @@ module OpenReceive
         request = { "type" => "incoming", "limit" => 20, "offset" => offset, "from" => window.fetch("from") }
         request["until"] = window["until"] unless window["until"].nil?
         request["unpaid"] = true if window.fetch("view") == "inclusive"
+        request["_deadline"] = deadline
         page = OpenReceive.normalize_list_transactions_response(service.send(:call_nwc, :list_transactions, request))
         return [results.values, false, false] if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 

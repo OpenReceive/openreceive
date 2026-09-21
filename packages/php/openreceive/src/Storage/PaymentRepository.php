@@ -60,6 +60,8 @@ interface PaymentRepository
 
     /**
      * Pending attempts for the next wallet scan, oldest first, one batch per pass.
+     * Fill the requested limit (capped at 200) unless fewer remain after the
+     * cursor. A short repository page tells the scheduler to wrap for retries.
      *
      * @return list<array{payment_hash: string, created_at: int, created_at_source: string, expires_at: int}>
      */

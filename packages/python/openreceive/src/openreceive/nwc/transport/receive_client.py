@@ -68,10 +68,12 @@ class NwcTransport:
 
     # -- info ---------------------------------------------------------------
 
-    def info(self) -> dict[str, Any]:
+    def info(self, *, deadline_at: float | None = None) -> dict[str, Any]:
         """The wallet's kind 13194 info event, summarized; cached per instance."""
         if self._info is None:
-            deadline_at = time.monotonic() + self.deadline_seconds
+            deadline_at = (
+                deadline_at if deadline_at is not None else time.monotonic() + self.deadline_seconds
+            )
             self._info = self._with_relay(deadline_at, self._fetch_info)
         return self._info
 
@@ -91,10 +93,10 @@ class NwcTransport:
                     "protocol", f"{session.url} holds no info event for the wallet pubkey"
                 )
 
-    def encryption(self) -> str:
+    def encryption(self, *, deadline_at: float | None = None) -> str:
         """The negotiated mode: the first kernel-preferred mode the wallet advertises."""
         if self._encryption is None:
-            advertised = self.info()["encryption"] or [NIP04]
+            advertised = self.info(deadline_at=deadline_at)["encryption"] or [NIP04]
             chosen = next((mode for mode in NWC_ENCRYPTION_MODES if mode in advertised), None)
             if chosen is None:
                 raise TransportError(
@@ -111,7 +113,7 @@ class NwcTransport:
         """One NIP-47 request; returns the decrypted reply dict verbatim."""
         budget = self.deadline_seconds if deadline_seconds is None else deadline_seconds
         deadline_at = time.monotonic() + budget
-        mode = self.encryption()
+        mode = self.encryption(deadline_at=deadline_at)
         tags = [["p", self.wallet_pubkey]]
         if mode == NIP44:
             tags.append(["encryption", NIP44])

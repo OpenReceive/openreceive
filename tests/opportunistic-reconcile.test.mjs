@@ -55,6 +55,55 @@ function postJson(path, body) {
   });
 }
 
+test("disabling HTTP scans still allows the worker to settle through the shared gate", async () => {
+  const fix = await fixture();
+  const checkout = await createCheckout(fix, "worker-only");
+  fix.wallet.settleInvoice({ payment_hash: checkout.payment_hash }, { settled_at: 1005 });
+  fix.state.now = 1010;
+  const handler = createHttpHandler({
+    service: fix.service,
+    host: fix.host,
+    authorize: () => true,
+    clock: () => fix.state.now,
+    opportunisticReconcile: false,
+  });
+  const body = { reference: "worker-only", payment_hash: checkout.payment_hash };
+  assert.equal((await (await handler(postJson("/payments/check", body))).json()).status, "pending");
+  assert.equal(fix.walks.length, 0);
+  const worker = await startReconciler({
+    service: fix.service,
+    host: fix.host,
+    clock: () => fix.state.now,
+    pollIntervalMs: 250,
+  });
+  try {
+    await until(() => fix.paid.length === 1, {
+      timeoutMs: 2000,
+      stepMs: 10,
+      label: "worker settlement",
+    });
+    const calls = fix.walks.length;
+    assert.equal(
+      (await (await handler(postJson("/payments/check", body))).json()).status,
+      "settled",
+    );
+    assert.equal(fix.walks.length, calls);
+    assert.equal(
+      (
+        await maybeReconcilePayments({
+          service: fix.service,
+          host: fix.host,
+          clock: () => fix.state.now,
+        })
+      ).reason,
+      "gate_busy",
+    );
+  } finally {
+    worker.stop();
+    await worker.done;
+  }
+});
+
 async function createCheckout(fix, reference) {
   fix.orders.set(reference, { amount: { sats: 21 } });
   const response = await fix.handler(postJson("/checkouts", { reference: reference }));

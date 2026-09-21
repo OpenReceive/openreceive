@@ -71,6 +71,47 @@ for (const scenario of JSON.parse(
   });
 }
 
+test("legacy snake_case checkout deadlines remain reconcilable without extending deposit reuse", async () => {
+  const db = memoryPaymentsDb();
+  const clock = () => 2500;
+  const host = createHost({
+    db,
+    clock,
+    amountFor: () => ({ sats: 1 }),
+    onPaid: () => assert.fail("no payment"),
+  });
+  await host.payments.commitAttempt({ ...input, swapData });
+  const checkout = { ...input.checkout, expires_at: 2800, created_at_source: "wallet" };
+  delete checkout.expiresAt;
+  db.prepare("UPDATE openreceive_payments SET checkout_data = ?").run(JSON.stringify(checkout));
+  assert.equal((await host.payments.findPendingAttempt(hash)).expiresAt, 2800);
+  assert.equal((await host.payments.findPendingAttempt(hash)).createdAtSource, "wallet");
+  await maybeReconcilePayments({
+    host,
+    clock,
+    service: {
+      scanPaymentSlice: (args) =>
+        scanPaymentSlice({
+          ...args,
+          clock,
+          client: { listTransactions: async () => ({ transactions: [] }) },
+        }),
+    },
+  });
+  const row = await host.payments.findByPaymentHash(hash);
+  assert.equal(row.status, "pending");
+  assert.equal(row.expiresAt, 1600);
+  db.prepare("UPDATE openreceive_payments SET checkout_data = ?").run(
+    JSON.stringify({ expires_at: "bad", provider_token: "test-private" }),
+  );
+  await assert.rejects(host.payments.findPendingAttempt(hash), (error) => {
+    assert.match(error.message, new RegExp(`checkout_data.*${hash}`));
+    assert.ok(!error.message.includes("test-private"));
+    return true;
+  });
+  db.close();
+});
+
 test("dry-run recovery distinguishes early closures and attention, audits only reviewed requeue", async () => {
   const db = memoryPaymentsDb();
   const repository = createSqlPayments(db, { clock: () => 5000 });

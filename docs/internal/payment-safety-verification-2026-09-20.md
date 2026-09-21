@@ -1,5 +1,9 @@
 # Payment safety implementation verification — 2026-09-20
 
+The [September 21 follow-up](payment-safety-verification-2026-09-21.md) records
+review-discovered defects, their corrections and the expanded acceptance runs.
+The historical results below alone do not establish closure of those findings.
+
 Verification for `zz-astra-sep20-fixes.txt`, findings F01–F20. This is source
 implementation evidence, not a release or a claim that existing installations
 have been repaired. See the [upgrade and repair guide](../guides/payment-safety-upgrade.md).

@@ -335,11 +335,14 @@ function parsePayInAsset(value: string): SwapPayInAsset {
  * accept here sends the payer's money somewhere unrecoverable.
  */
 function parseRefundAddress(value: string, payInAsset: unknown): string {
+  if (!isSwapPayInAsset(payInAsset)) {
+    throw serviceError(503, "INTERNAL", "Swap recovery requires a supported pay-in asset/network.");
+  }
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.length > 300) {
     throw serviceError(400, "INVALID_REQUEST", "refundAddress is invalid.");
   }
-  if (typeof payInAsset === "string" && !isValidSwapAddressForPayInAsset(payInAsset, normalized)) {
+  if (!isValidSwapAddressForPayInAsset(payInAsset, normalized)) {
     throw serviceError(
       400,
       "INVALID_REQUEST",

@@ -18,6 +18,8 @@ uses the saved Lightning invoice deadline in `checkout_data`. For example, a
 an unpaid attempt until a successful covering scan at or after 1800 + 900 seconds.
 The 900-second constant is an observation grace period, not extra time to pay.
 Malformed saved wallet deadlines fail visibly and remain unresolved.
+Both `expiresAt` and legacy `expires_at` snapshots retain the wallet deadline;
+neither falls back to the swap deposit deadline.
 
 The browser continues wallet and refund monitoring after local instruction expiry.
 Provider completion still needs wallet settlement. Retired swap instructions and
@@ -34,12 +36,31 @@ service across process restarts. Creation-time bounds are narrowed only when the
 saved timestamp came from the wallet; legacy or host-clock timestamps use the
 wider fallback.
 
+A selected batch leaves the saved queue before wallet I/O. A successful capped
+scan saves its continuation; a failure or crash frees a slot so newer batches
+can run. Its unresolved attempts remain in the ledger for the next rotation.
+Selection wraps as soon as a batch reaches the ledger's current tail, so new
+arrivals between passes cannot indefinitely postpone older fulfillment retries.
+Custom repositories must fill the requested 200-row page unless fewer pending
+rows remain after the cursor; a short repository page signals the ledger's tail.
+Python custom wallet clients must honor the internal monotonic `_deadline`
+request value; Ruby's bundled adapter enforces it around the wallet RPC. Custom
+Ruby clients must enforce the same deadline. This value never belongs in a NIP-47
+request. HTTP opportunism can be disabled while the separate worker continues
+using the same durable gate.
+
 A resumed offset walk can discover finality but cannot prove absence: wallet
 history can change between pages. Clock-based closure requires a fresh complete
 covering scan. Dense history that cannot be safely split may therefore stay
 pending until positive wallet evidence or operator review resolves it. Failed,
 truncated, stale-lease and unusable scans never provide absence proof. Only
 pending attempts receive automatic transitions.
+
+Refunds require a supported asset/network from the server's saved swap data
+before contacting the provider. Missing recovery metadata requires host repair;
+the payer cannot supply a replacement network. Provider diagnostic hooks in
+Node and Ruby now receive allowlisted metadata and presence flags instead of raw
+request/response bodies. Update custom log consumers accordingly.
 
 ## Custom repository and transaction changes
 

@@ -216,3 +216,98 @@ test("positive finality commits before a later failed page, while unknown attemp
   assert.equal((await host.payments.findByPaymentHash(hash(2))).status, "pending");
   db.close();
 });
+
+test(spec.vectors[5].name, async () => {
+  const scenario = spec.vectors[5];
+  const db = memoryPaymentsDb();
+  let now = 100_000;
+  const clock = () => now;
+  const repository = createSqlPayments(db, { clock });
+  for (let n = 0; n < scenario.pending_count; n++)
+    await repository.commitAttempt(snapshot(n, 1000 + n * scenario.creation_stride));
+  const paidAt = 1000 + scenario.paid_index * scenario.creation_stride;
+  let calls = 0;
+  const client = {
+    async listTransactions(request) {
+      calls++;
+      if (request.from < paidAt - 60) throw new Error("historical cohort unavailable");
+      return {
+        transactions: [
+          { payment_hash: hash(scenario.paid_index), created_at: paidAt, settled_at: paidAt + 1 },
+        ],
+      };
+    },
+  };
+  const paid = [];
+  for (let pass = 0; pass < scenario.max_passes; pass++) {
+    const host = createHost({
+      db,
+      clock,
+      amountFor: () => ({ sats: 1 }),
+      onPaid: (event) => paid.push(event.reference),
+    });
+    await maybeReconcilePayments({ host, service: service(client, clock), clock, onError: silent });
+    now += 12;
+  }
+  assert.deepEqual(paid, [`order-${scenario.paid_index}`]);
+  assert.equal(calls, scenario.max_passes);
+  assert.equal((await repository.findByPaymentHash(hash(0))).status, "pending");
+  db.close();
+});
+
+test(spec.vectors[7].name, async () => {
+  const scenario = spec.vectors[7];
+  const db = memoryPaymentsDb();
+  let now = 2000,
+    failures = scenario.failed_fulfillments;
+  const clock = () => now;
+  const repo = createSqlPayments(db, { clock });
+  await repo.commitAttempt(snapshot(0));
+  const client = wallet([{ payment_hash: hash(0), created_at: 1000, settled_at: 1001 }]);
+  const paid = [];
+  for (let pass = 0; pass < scenario.max_passes; pass++) {
+    for (let n = 0; n < scenario.arrivals_per_pass; n++)
+      await repo.commitAttempt(snapshot(1000 + pass * scenario.arrivals_per_pass + n, now));
+    const host = createHost({
+      db,
+      clock,
+      amountFor: () => ({ sats: 1 }),
+      onPaid: (event) => {
+        if (failures-- > 0) throw new Error("host rollback");
+        paid.push(event.paymentHash);
+      },
+    });
+    await maybeReconcilePayments({ host, service: service(client, clock), clock, onError: silent });
+    now += 12;
+  }
+  assert.deepEqual(paid, [hash(0)]);
+  assert.equal((await repo.findByPaymentHash(hash(0))).status, "settled");
+  db.close();
+});
+
+test(spec.vectors[6].name, async () => {
+  const scenario = spec.vectors[6];
+  const db = memoryPaymentsDb();
+  let now = scenario.coverage_started_at;
+  const clock = () => now;
+  const host = createHost({
+    db,
+    clock,
+    amountFor: () => ({ sats: 1 }),
+    onPaid: () => assert.fail("no payment"),
+  });
+  await host.payments.commitAttempt(snapshot(1, scenario.created_at));
+  const client = {
+    async listTransactions() {
+      now = Math.max(now, scenario.completed_at);
+      return { transactions: [] };
+    },
+  };
+  const result = await maybeReconcilePayments({ host, service: service(client, clock), clock });
+  assert.equal(result.checks[0].coverageStartedAt, scenario.coverage_started_at);
+  assert.equal((await host.payments.findByPaymentHash(hash(1))).status, "pending");
+  now = scenario.next_scan_at;
+  await maybeReconcilePayments({ host, service: service(client, clock), clock });
+  assert.equal((await host.payments.findByPaymentHash(hash(1))).status, "expired");
+  db.close();
+});

@@ -9,11 +9,8 @@ module OpenReceive
   # invoice age (2s while any pending invoice is under 2 minutes old, 6s under
   # 5 minutes, else 12s). Mirrors the JS OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS.
   MIN_RECONCILE_INTERVAL_SECONDS = 2
-  # Wall-clock bound on an awaited request-path pass. Enforced as a deadline
-  # the wallet scan checks between page fetches rather than a Timeout.timeout:
-  # Thread#raise at an arbitrary point could tear down an ActiveRecord
-  # connection or kill a host's on_paid fulfillment mid-flight, on every
-  # winning request. A pass that runs out of budget simply stops walking.
+  # The deadline reaches the wallet adapter, which bounds only network I/O.
+  # Never interrupt the whole pass: it also runs host/database transactions.
   RECONCILE_SCAN_TIMEOUT_SECONDS = 9
   # Wallet-history pages a request-path pass may walk, mirroring the JS
   # OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES.
@@ -86,14 +83,15 @@ module OpenReceive
         end
         unless candidates.empty?
           last = candidates.last
-          scheduler["cursor"] = last.slice("created_at", "payment_hash")
+          scheduler["cursor"] = candidates.length < Server::RECONCILE_BATCH_SIZE ? nil : last.slice("created_at", "payment_hash")
           queued = windows.flat_map { |w| w.fetch("attempts").map { |a| a.fetch("payment_hash") } }
           cohort = candidates.reject { |a| queued.include?(a.fetch("payment_hash")) }
           windows << ReconcileScan.new_window(cohort, observed_at, overlap_seconds) unless cohort.empty?
         end
       end
       window = windows.shift
-      windows << window unless window.nil?
+      # Checkpoint without the active window, so failures and process loss free
+      # its slot. Pending rows return on cursor wrap; successful slices resume.
       checkpoint_now = now.nil? ? Time.now.to_i : observed_at
       return { "reason" => "gate_busy" } unless OpenReceiveMeta.checkpoint_reconcile_gate(claim, scheduler, now: checkpoint_now)
       if window.nil?
@@ -135,7 +133,6 @@ module OpenReceive
         end
         checked.reject { |key, _| key.start_with?("_") }
       end
-      windows.delete(window)
       unless complete || stalled
         times = window.fetch("attempts").map { |a| a.fetch("created_at") }.uniq.sort
         if windows.empty? && times.length > 1 && window.fetch("attempts").all? { |a| a["created_at_source"] == "wallet" }

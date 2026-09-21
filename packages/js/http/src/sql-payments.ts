@@ -673,7 +673,9 @@ function recordFromRow(row: Record<string, unknown>): PaymentRecord {
 }
 
 /** The saved invoice, rather than the reusable deposit instructions, sets this deadline. */
-function savedCheckout(row: Record<string, unknown>): Checkout {
+function savedCheckout(
+  row: Record<string, unknown>,
+): Pick<Checkout, "expiresAt" | "createdAtSource"> {
   const hash = asString(row.payment_hash, "payment_hash");
   const checkout = parseRowJson(
     asString(row.checkout_data, "checkout_data"),
@@ -681,9 +683,14 @@ function savedCheckout(row: Record<string, unknown>): Checkout {
     hash,
   );
   if (typeof checkout === "object" && checkout !== null) {
-    const value = (checkout as Checkout).expiresAt;
+    const saved = checkout as Record<string, unknown>;
+    const value = saved.expiresAt ?? saved.expires_at;
     if (typeof value === "number" && Number.isSafeInteger(value) && value > 0)
-      return checkout as Checkout;
+      return {
+        expiresAt: value,
+        createdAtSource:
+          (saved.createdAtSource ?? saved.created_at_source) === "wallet" ? "wallet" : "host",
+      };
   }
   throw new TypeError(
     `Invalid checkout_data invoice expiry on openreceive payment attempt ${hash}.`,

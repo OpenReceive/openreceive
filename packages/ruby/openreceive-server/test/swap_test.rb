@@ -691,11 +691,34 @@ class FixedFloatProviderTest < Minitest::Test
       kind == "response" && entry["path"] == "rates/fixed.xml" && entry["ok"]
     end
     # DOGE→BTC and ETH→USDT are ignored; only OpenReceive LN pairs remain.
-    assert_equal({ "pair_count" => 2 }, rates_response[1].fetch("data"))
+    assert_equal true, rates_response[1].fetch("has_data")
     serialized = JSON.generate(events)
     refute_includes serialized, API_SECRET
     refute_includes serialized, "X-API-KEY"
     refute_includes serialized, "X-API-SIGN"
+  end
+
+  def test_order_diagnostic_hooks_only_receive_safe_summaries_and_cannot_break_refunds
+    provider, calls = make_provider("ccies" => SAMPLE_CCIES, "create" => CREATE_DATA,
+                                   "order" => CREATE_DATA, "emergency" => {})
+    events = []
+    provider.attach_api_request_logger(->(entry) { events << entry })
+    provider.attach_api_response_logger(->(entry) { events << entry })
+    order = provider.create_swap(pay_in_asset: "USDT_TRON", bolt11: BOLT11, invoice_amount_msats: INVOICE_AMOUNT_MSATS)
+    provider.get_status(order)
+    provider.request_refund(order, TRX_ADDRESS)
+    serialized = JSON.generate(events)
+    [API_KEY, API_SECRET, "TOKEN1", BOLT11, TRX_ADDRESS, "X-API-KEY", "X-API-SIGN"].each do |secret|
+      refute_includes serialized, secret
+    end
+    assert_equal "TOKEN1", order.fetch("provider_token")
+    assert_equal "TOKEN1", calls.find { |call| call[:path] == "emergency" }[:body].fetch("token")
+    assert events.any? { |event| event["path"] == "order" && event["has_token"] }
+    assert events.any? { |event| event["path"] == "create" && event["has_data"] }
+    provider.attach_api_request_logger(->(_entry) { raise "sink unavailable" })
+    provider.attach_api_response_logger(->(_entry) { raise "sink unavailable" })
+    provider.get_status(order)
+    provider.request_refund(order, TRX_ADDRESS)
   end
 
   def test_quote_derives_pay_amount_and_limits_from_the_rates_feed

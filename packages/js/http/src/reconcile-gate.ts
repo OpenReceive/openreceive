@@ -3,6 +3,7 @@ import type { OpenReceive, PaymentCheck } from "@openreceive/node";
 import { type Host, warnFailure } from "./host-payments.ts";
 import type { ReconcilableAttempt, ReconcileScheduler } from "./payment-repository.ts";
 import { reconcileHostPayments } from "./reconcile-loop.ts";
+import { OPENRECEIVE_RECONCILE_BATCH_SIZE } from "./sql-payments.ts";
 
 /**
  * Floor for the durable reconcile-gate interval: at most one real wallet scan
@@ -147,7 +148,11 @@ export async function maybeReconcilePayments(
         candidates = await input.host.payments.listReconcilableAttempts(null);
       const last = candidates.at(-1);
       scheduler.cursor =
-        last === undefined ? null : { created_at: last.createdAt, payment_hash: last.paymentHash };
+        last === undefined || candidates.length < OPENRECEIVE_RECONCILE_BATCH_SIZE
+          ? null
+          : { created_at: last.createdAt, payment_hash: last.paymentHash };
+      // A short batch already reached the ledger's tail. Wrap now: waiting
+      // for an empty next query lets continuous arrivals starve old retries.
       const fresh = candidates.filter((attempt) => !queued.has(attempt.paymentHash));
       if (fresh.length > 0)
         scheduler.windows.push(
@@ -173,9 +178,9 @@ export async function maybeReconcilePayments(
       });
       return { reason: "no_pending" };
     }
-    // Rotate before I/O. Failed wallets or fulfillment callbacks cannot pin the
-    // next gate winner to this cohort. Every pending row returns on keyset wrap.
-    scheduler.windows.push(window);
+    // Checkpoint selection before I/O, with this window removed. A failed or
+    // abandoned pass must free its slot for the next cohort. Pending rows return
+    // on keyset wrap; only a successful slice checkpoints its continuation.
     const attempts = window.attempts.map((attempt) => ({
       paymentHash: attempt.payment_hash,
       createdAt: attempt.created_at,
@@ -233,7 +238,6 @@ export async function maybeReconcilePayments(
       timeout,
       controller,
     );
-    scheduler.windows.pop();
     if (slice.outcome === "continued") {
       const halves =
         scheduler.windows.length === 0

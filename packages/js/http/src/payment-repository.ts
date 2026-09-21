@@ -142,8 +142,9 @@ export interface PaymentRepository<Transaction = unknown> {
   /**
    * A bounded keyset page of `pending` attempts ordered by createdAt and hash,
    * strictly after the supplied cursor; terminal rows are excluded. Return at
-   * most OPENRECEIVE_RECONCILE_BATCH_SIZE (200). The durable scheduler wraps
-   * the cursor after exhaustion so old unpaid rows cannot starve later ones.
+   * OPENRECEIVE_RECONCILE_BATCH_SIZE (200) when that many remain, otherwise
+   * all remaining rows. A short page signals exhaustion; the durable scheduler
+   * wraps immediately so new arrivals cannot postpone old fulfillment retries.
    */
   listReconcilableAttempts(after?: ReconcileCursor | null): Promise<readonly ReconcilableAttempt[]>;
   /**

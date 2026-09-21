@@ -10,6 +10,7 @@ tests never load websockets/coincurve.
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 from openreceive.nwc import requests
@@ -66,8 +67,14 @@ class NwcReceiveClient:
 
     def list_transactions(self, params: dict[str, Any]) -> dict[str, Any]:
         nip47 = requests.list_transactions_request(params)
+        deadline = params.get("_deadline")
+        remaining = (
+            None if deadline is None else min(self._deadline_seconds, deadline - time.monotonic())
+        )
+        if remaining is not None and remaining <= 0:
+            raise WalletError("TIMEOUT", "Wallet history scan deadline exceeded.")
         return requests.normalize_list_transactions_response(
-            self._request("list_transactions", nip47)
+            self._request("list_transactions", nip47, deadline_seconds=remaining)
         )
 
     def subscribe_notifications(
@@ -79,8 +86,11 @@ class NwcReceiveClient:
         if self._transport is not None:
             self._transport.close()
 
-    def _request(self, method: str, params: dict[str, Any]) -> object:
-        reply = self._guard(lambda: self.transport.request(method, params))
+    def _request(
+        self, method: str, params: dict[str, Any], *, deadline_seconds: float | None = None
+    ) -> object:
+        options = {} if deadline_seconds is None else {"deadline_seconds": deadline_seconds}
+        reply = self._guard(lambda: self.transport.request(method, params, **options))
         data = dict(reply) if isinstance(reply, dict) else {}
         error = data.get("error")
         if isinstance(error, dict):

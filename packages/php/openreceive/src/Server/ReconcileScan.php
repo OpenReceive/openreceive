@@ -51,6 +51,9 @@ final class ReconcileScan
                 if (!isset($expected[$hash]) || !in_array($row['type'] ?? null, [null, 'incoming'], true)) continue;
                 $status = Settlement::status($row);
                 if (($window['observations'][$hash]['status'] ?? null) === 'settled') continue;
+                // Wallet evidence remains observed even if its host transaction rolls back.
+                // Otherwise the end of this same sweep could invent absence for a paid hash.
+                $window['observations'][$hash] = ['status' => $status, 'transaction_state' => $row['transaction_state'] ?? null];
                 if (in_array($status, ['settled', 'expired', 'failed'], true)) {
                     $checked = $service->paymentResult($hash, $row);
                     // Commit evidence while this page is available. A later page
@@ -58,7 +61,6 @@ final class ReconcileScan
                     if ($onPositive !== null && !$onPositive($checked)) continue;
                     $results[$hash] = $checked;
                 }
-                $window['observations'][$hash] = ['status' => $status, 'transaction_state' => $row['transaction_state'] ?? null];
             }
             if ($replayingAnchor) {
                 $replayingAnchor = false;

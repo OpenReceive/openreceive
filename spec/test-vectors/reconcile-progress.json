@@ -37,6 +37,30 @@
       "lease_seconds": 10,
       "new_claim_at": 11,
       "expected_old_checkpoint": false
+    },
+    {
+      "name": "two failing historical cohorts cannot starve a newer payment",
+      "pending_count": 401,
+      "paid_index": 400,
+      "failed_cohorts": 2,
+      "creation_stride": 120,
+      "max_passes": 3
+    },
+    {
+      "name": "sweep straddling expiry grace requires fresh coverage",
+      "created_at": 1000,
+      "expires_at": 1600,
+      "coverage_started_at": 2499,
+      "completed_at": 2501,
+      "next_scan_at": 2513
+    },
+    {
+      "name": "continuous arrivals cannot postpone a failed fulfillment retry",
+      "pending_count": 1,
+      "paid_index": 0,
+      "arrivals_per_pass": 20,
+      "failed_fulfillments": 1,
+      "max_passes": 2
     }
   ]
 }

@@ -29,7 +29,12 @@ class ReceiveNwcClient(Protocol):
 
     def list_transactions(self, params: dict[str, Any]) -> dict[str, Any]:
         """{type?, from?, until?, limit?, offset?, unpaid?} →
-        {transactions: [normalized rows], skipped_rows?}."""
+        {transactions: [normalized rows], skipped_rows?}.
+
+        Internal `_deadline` is an absolute time.monotonic() deadline. Bound
+        connection, negotiation and response I/O to it, closing requests on
+        expiry; omit it from the wallet's NIP-47 params.
+        """
 
     def subscribe_notifications(
         self, handler: NotificationHandler, *, stop: threading.Event

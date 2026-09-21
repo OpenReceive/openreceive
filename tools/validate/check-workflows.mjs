@@ -29,6 +29,7 @@ const requiredWorkflows = {
     // demo in Chromium (full spec matrix stays in the weekly demos lane).
     "npm run test:e2e:smoke",
     "npm run test:package-assets",
+    "npm run test:orms",
     "tools/ci/ruby-tests.sh",
     "tools/ci/ruby-gem-build.sh",
     // The Python engine (packages/python/openreceive): pytest on 3.10 and 3.13

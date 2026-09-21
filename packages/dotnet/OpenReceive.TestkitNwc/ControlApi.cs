@@ -27,6 +27,13 @@ public static class ControlApi
 
         app.MapGet("/uri", () => Results.Text(nwcUri, "text/plain"));
 
+        app.MapPost("/hash-case/{mode}", (string mode) =>
+        {
+            if (mode is not ("upper" or "lower")) return Results.BadRequest();
+            service.UppercaseSettlementHashes = mode == "upper";
+            return Results.NoContent();
+        });
+
         app.MapPost("/settle/{paymentHash}", async (string paymentHash) =>
         {
             if (backend is not InMemoryWalletBackend memory)

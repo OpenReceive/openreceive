@@ -53,6 +53,58 @@ const flush = async () => {
   for (let n = 0; n < 12; n++) await Promise.resolve();
 };
 
+test("provider completion never reports wallet settlement and wallet failure retains refund recovery", async () => {
+  const states = [];
+  let active = swap("completed");
+  const controller = createCheckoutController({
+    snapshot: snapshot(active),
+    now: () => 2701,
+    logger: false,
+    refreshStatus: async () => snapshot(active),
+    onState: (state) => states.push(state),
+    setInterval: () => 0,
+    clearInterval: () => {},
+  });
+  controller.start();
+  await controller.reloadState();
+  assert.equal(controller.getState().settled, false);
+  assert.equal(controller.getState().terminal, false);
+  active = { ...swap("refund_required"), transaction_state: "failed" };
+  await controller.reloadState();
+  assert.equal(controller.getState().terminal, false);
+  active.swap.provider_state = "refunded";
+  await controller.reloadState();
+  assert.equal(controller.getState().terminal, true);
+  assert.equal(
+    states.some((state) => state.settled),
+    false,
+  );
+  controller.stop();
+});
+
+test("staged and confirmed refund replies cannot update a replaced controller", async () => {
+  for (const action of ["stageSwapRefund", "confirmSwapRefund"]) {
+    const pending = deferred();
+    const states = [];
+    const controller = createCheckoutController({
+      snapshot: snapshot(swap("refund_required")),
+      prefix: "/pay",
+      polling: false,
+      logger: false,
+      fetch: () => pending.promise,
+      onState: (state) => states.push(state),
+    });
+    controller.start();
+    const request = controller[action]({ attemptId: hash, refundAddress: "fixture-address" });
+    controller.stop();
+    const previous = states.length;
+    pending.resolve(Response.json({ ...swap("refund_pending").swap, payment_hash: hash }));
+    await assert.rejects(request, { name: "AbortError" });
+    assert.equal(states.length, previous);
+    assert.equal(controller.getState().swap.provider_state, "refund_required");
+  }
+});
+
 test("instruction expiry preserves independent wallet and refund monitoring", async () => {
   for (const state of [
     "awaiting_deposit",
