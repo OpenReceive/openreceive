@@ -108,8 +108,13 @@ test.beforeAll(async ({ request }) => {
 });
 
 for (const method of ["BTC-LN", "BTC-LNURL"]) {
-  for (const pastExpiry of [false, true]) {
-    test(`historical ${method} survives partial remint and restart${pastExpiry ? " beyond expiry" : ""}`, async ({
+  for (const scenario of [
+    { pastExpiry: false, payAfterRestart: false, suffix: "" },
+    { pastExpiry: true, payAfterRestart: false, suffix: " beyond expiry" },
+    { pastExpiry: false, payAfterRestart: true, suffix: " before payment" },
+  ]) {
+    const { pastExpiry, payAfterRestart } = scenario;
+    test(`historical ${method} survives partial remint and restart${scenario.suffix}`, async ({
       request,
     }) => {
       test.setTimeout(210_000);
@@ -156,9 +161,18 @@ for (const method of ["BTC-LN", "BTC-LNURL"]) {
         expect(replacement.ok()).toBe(true);
         expect((await replacement.json()).pr).not.toBe(original);
       }
+      let recoveryBeforeRestart = 0;
       docker("stop", hostContainer);
       try {
-        await payFromCustomer(original);
+        if (payAfterRestart) {
+          recoveryBeforeRestart = Number(
+            postgres(
+              `SELECT next_recovery_at FROM "BTCPayServer.Plugins.OpenReceive".openreceive_invoices WHERE bolt11 = ${sqlLiteral(original)};`,
+            ),
+          );
+        } else {
+          await payFromCustomer(original);
+        }
         if (pastExpiry) {
           await expect
             .poll(() => Date.now() / 1000, { timeout: 80_000, intervals: [1000] })
@@ -168,6 +182,28 @@ for (const method of ["BTC-LN", "BTC-LNURL"]) {
         docker("start", hostContainer);
       }
       await ready(request);
+      if (payAfterRestart) {
+        // The fresh process must revisit the original, still-unpaid mint even
+        // though the checkout now offers a replacement. Pay only after that pass.
+        await expect
+          .poll(
+            () =>
+              Number(
+                postgres(
+                  `SELECT next_recovery_at FROM "BTCPayServer.Plugins.OpenReceive".openreceive_invoices WHERE bolt11 = ${sqlLiteral(original)};`,
+                ),
+              ),
+            { timeout: 45_000 },
+          )
+          .toBeGreaterThan(recoveryBeforeRestart);
+        expect(
+          postgres(
+            `SELECT recovery_closed_at IS NULL FROM "BTCPayServer.Plugins.OpenReceive".openreceive_invoices WHERE bolt11 = ${sqlLiteral(original)};`,
+          ),
+        ).toBe("t");
+        expect(findMethod(await methods(request, invoice.id), method).payments).toHaveLength(0);
+        await payFromCustomer(original);
+      }
       await expect
         .poll(
           async () =>

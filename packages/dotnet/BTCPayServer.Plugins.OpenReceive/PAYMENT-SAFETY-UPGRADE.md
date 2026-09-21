@@ -153,5 +153,6 @@ that schema without its initial history entry, and the earlier two-table schema;
 they compare every original swap field, repeat the actual startup runner and
 write a new mint through the upgraded model. The running Docker stack is exercised by
 `npm run test:e2e:btcpay -- payment-safety.spec.ts`, including partial-payment remint,
-LN/LNURL payment while the host is stopped, recovery after expiry, duplicate restart
-and browser refund navigation. Use the disposable testkit wallet/provider only.
+LN/LNURL payment while the host is stopped or after it restarts with the original
+mint still unpaid, recovery after expiry, duplicate restart and browser refund
+navigation. Use the disposable testkit wallet/provider only.

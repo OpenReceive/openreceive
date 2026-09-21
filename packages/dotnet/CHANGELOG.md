@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extend Docker restart coverage for both LN and LNURL: retain a replaced invoice
+  while it is still unpaid after startup, accept its later payment, and record it
+  exactly once across another restart.
 - Verify in-place upgrades from the original single-table installation, including
   a missing initial migration-history entry and repeated startup. Preserve all
   legacy swap fields; document that the new invoice table does not reconstruct
