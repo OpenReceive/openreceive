@@ -581,7 +581,7 @@ your application's existing database:
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `db` | `SqlDatabase` | yes | pg Pool/Client, `node:sqlite` DatabaseSync, better-sqlite3, or a custom [SqlAdapter](#sqladapter). |
-| `amountFor` | `(reference, context) => amount \| null` | yes | The trusted price for a reference, from your data, or `null` → 404. Called only where a price is minted or quoted. Return an optional `description` beside the price — one display string, echoed on the prepare and create responses and rendered above the amount by both drop-ins. See [Frontend checkout → Show the payer what they are buying](frontend-checkout.md#show-the-payer-what-they-are-buying). |
+| `amountFor` | `(reference, context) => amount \| null` | yes | The trusted price for a reference, from your data, or `null` → 404. Called only where a price is minted or quoted. Return an optional `description` beside the price — one display string, echoed on the prepare and create responses, rendered above the amount by both drop-ins, and used as the invoice memo so the payer's wallet shows it too. See [Frontend checkout → Show the payer what they are buying](frontend-checkout.md#show-the-payer-what-they-are-buying). |
 | `onPaid` | `PaymentSettlementHook` | yes | Fulfillment; see [onPaid](#onpaid). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
 | `clock` | `() => number` | no | Unix-seconds clock override (the reconcile gate and the payment-methods cache TTL). |
@@ -1615,9 +1615,9 @@ OpenReceive.configure do |config|
   #
   # An optional "description" beside the price is what the payer is buying, in
   # your own words: one display string, echoed on the prepare and create
-  # responses and rendered above the amount by both drop-ins. The checkout
-  # shows a total and never an order, so without it the payer sees a QR and a
-  # number.
+  # responses, rendered above the amount by both drop-ins, and used as the
+  # invoice memo so the payer's wallet shows it too. The checkout shows a total
+  # and never an order, so without it the payer sees a QR and a number.
   config.amount_for = lambda do |reference|
     order = Order.find_by(id: reference)
     order && { currency: "USD", value: order.total.to_s,

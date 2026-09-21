@@ -20,55 +20,67 @@ https://github.com/user-attachments/assets/9aee9edb-e62c-4935-b885-a2e2c4380834
 Sign in to your BTCPay Server as a **server administrator**. If someone else
 hosts your server, ask them to install the plugin for you.
 
-1. Open the **Plugins** menu in the top-right corner and click **Plugin Directory**.
-2. Search for **OpenReceive**, select it, and click **Install**. Confirm the
-   installation when prompted.
-3. Click **Restart now** when prompted and wait for BTCPay to come back.
-   Then select your store and follow the setup below.
+**1. Open the Plugins menu** — the plug icon in the top-right corner.
+
+<img alt="Click the plug icon in the top-right corner" width="300" src="../../../docs/assets/btcpayserver/1-open-plugins-menu.webp">
+
+**2. Click Plugin Directory.**
+
+<img alt="Choose Plugin Directory from the Plugins menu" width="420" src="../../../docs/assets/btcpayserver/2-click-plugin-directory.webp">
+
+**3. Search for `openreceive`** and click the **OpenReceive** result.
+
+<img alt="Search the plugin directory for openreceive" width="600" src="../../../docs/assets/btcpayserver/3-search-openreceive.webp">
+
+**4. Click Install in BTCPay Server.** Confirm when prompted, then click
+**Restart now** and wait for BTCPay to come back. Select your store and follow
+the setup below.
+
+<img alt="Click Install in BTCPay Server on the OpenReceive plugin page" width="300" src="../../../docs/assets/btcpayserver/4-install-openreceive.webp">
 
 For the full quickstart, see https://openreceive.org/guides/quickstart-btcpay.
 
 ## Setup
 
-**1. Open OpenReceive** in the store's sidebar, under Wallets.
+**5. Open OpenReceive** in the store's sidebar, under Wallets.
 
-<img alt="Click OpenReceive in the store sidebar" width="300" src="../../../docs/assets/btcpayserver/1-click-OR-icon.webp">
+<img alt="Click OpenReceive in the store sidebar" width="300" src="../../../docs/assets/btcpayserver/5-click-OR-icon.webp">
 
-**2. Paste your receive-only NWC code** and click **Save NWC Code**.
+**6. Paste your receive-only NWC code** and click **Save NWC Code**.
 **Test connection** first if you want to see what the wallet supports.
 Get a code at https://openreceive.org/get_a_nwc_code_to_receive_payments.
 
-<img alt="Paste the NWC code and save" width="360" src="../../../docs/assets/btcpayserver/2-enter-nwc-code-and-save.webp">
+<img alt="Paste the NWC code and save" width="360" src="../../../docs/assets/btcpayserver/6-enter-nwc-code-and-save.webp">
 
-**3. Optional: turn on swaps.** Paste a Lightning Swap Connect code and click
+**7. Optional: turn on swaps.** Paste a Lightning Swap Connect code and click
 **Save swap settings**. Get one at https://openreceive.org/set_up_swap_provider.
 
-<img alt="Paste the swap provider code and save" width="300" src="../../../docs/assets/btcpayserver/3-enter-optional-LSC.webp">
+<img alt="Paste the swap provider code and save" width="300" src="../../../docs/assets/btcpayserver/7-enter-optional-LSC.webp">
 
-**4. Done.** The page shows **Wallet connected** and, if you set up a
+**8. Done.** The page shows **Wallet connected** and, if you set up a
 provider, **Swaps on**. Your wallet is now the store's Lightning node.
 
-<img alt="Wallet connected and swaps on" width="480" src="../../../docs/assets/btcpayserver/4-you-should-see-wallet-connected-and-swaps-on.webp">
+<img alt="Wallet connected and swaps on" width="480" src="../../../docs/assets/btcpayserver/8-you-should-see-wallet-connected-and-swaps-on.webp">
 
 ## Try it
 
-**5. Open Invoices** in the sidebar.
+**9. Open Invoices** in the sidebar.
 
-<img alt="Click Invoices" width="260" src="../../../docs/assets/btcpayserver/5-click-invoices-to-make-test-invoice.webp">
+<img alt="Click Invoices" width="260" src="../../../docs/assets/btcpayserver/9-click-invoices-to-make-test-invoice.webp">
 
-**6. Click Create Invoice.**
+**10. Click Create Invoice.**
 
-<img alt="Click Create Invoice" width="340" src="../../../docs/assets/btcpayserver/6-click-create-invoice.webp">
+<img alt="Click Create Invoice" width="340" src="../../../docs/assets/btcpayserver/10-click-create-invoice.webp">
 
-**7. Enter an amount** and click **Create**.
+**11. Enter an amount** and click **Create**.
 
-<img alt="Enter an amount and create" width="600" src="../../../docs/assets/btcpayserver/7-enter-amount-click-create.webp">
+<img alt="Enter an amount and create" width="600" src="../../../docs/assets/btcpayserver/11-enter-amount-click-create.webp">
 
-**8. The checkout** offers Lightning, plus one option per asset your swap
+**12. The checkout** offers Lightning, plus one option per asset your swap
 provider supports. Lightning payments land in your wallet; swaps settle into
 it through the provider.
 
-<img alt="The checkout with Lightning and swap options" width="360" src="../../../docs/assets/btcpayserver/8-see-example-invoice.webp">
+<img alt="The checkout with Lightning and swap options" width="360" src="../../../docs/assets/btcpayserver/12-see-example-invoice.webp">
 
 ## Good to know
 

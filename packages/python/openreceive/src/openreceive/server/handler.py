@@ -296,7 +296,7 @@ class RequestHandler:
                     {
                         "reference": reference,
                         "amount": self._required_amount(resolved),
-                        "memo": self._validated_memo(body),
+                        "memo": self._mint_memo(body, resolved),
                         "metadata": body.get("metadata"),
                     }
                 )
@@ -395,7 +395,7 @@ class RequestHandler:
                         "reference": reference,
                         "amount": self._required_amount(resolved),
                         "pay_in_asset": asset,
-                        "memo": self._validated_memo(body),
+                        "memo": self._mint_memo(body, resolved),
                         "metadata": body.get("metadata"),
                     }
                 )
@@ -778,9 +778,28 @@ class RequestHandler:
             raise ValidationError(f"memo must be {MAX_MEMO_LENGTH} characters or fewer.")
         return memo
 
+    @classmethod
+    def _mint_memo(cls, body: dict[str, Any], resolved: dict[str, Any]) -> Any:
+        """The description that goes INTO the invoice.
+
+        An explicit body memo wins, so a client that writes its own copy keeps
+        it; otherwise the host's display string is it. Without the fallback a
+        host on the mounted routes mints BOLT11s with no description at all and
+        the payer's wallet shows a blank line next to the amount. Only the body
+        memo carries the length cap: the cap bounds client input, the host
+        description is host data exactly like the price beside it.
+        """
+        memo = cls._validated_memo(body)
+        blank = memo is None or (isinstance(memo, str) and not memo.strip())
+        return cls._resolved_description(resolved) if blank else memo
+
     @staticmethod
     def _resolved_description(resolved: dict[str, Any]) -> str | None:
-        """What the payer is buying, in the host's own words. Response only."""
+        """What the payer is buying, in the host's own words.
+
+        Never read from a request body; it rides the prepare and create
+        responses and, via _mint_memo, defaults the invoice description.
+        """
         value = resolved.get("description")
         if not isinstance(value, str):
             return None

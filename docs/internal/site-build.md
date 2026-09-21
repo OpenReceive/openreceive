@@ -128,7 +128,7 @@ something new.
 8. Serve every `assets[]` entry **verbatim**: the named `source` file's bytes
    at `path` with the given `content_type`. The `publish[]` entry that embeds
    them (`referenced_by`) references them relative to its own source file —
-   `../../../docs/assets/btcpayserver/1-click-OR-icon.webp` from the plugin
+   `../../../docs/assets/btcpayserver/5-click-OR-icon.webp` from the plugin
    README — so the renderer resolves each `<img src>` against the source path
    and maps anything under `docs/assets/` to `/assets/<rest>`, in the page and
    in the markdown twin alike. The generator refuses an image outside

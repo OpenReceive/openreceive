@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Document plugin installation with screenshots in the BTCPay Server README and
+  on the `/btcpay` page: four new steps walk the Plugins menu, the plugin
+  directory, the OpenReceive search result and the install button, so the setup
+  and try-it screenshots now run 5–12.
+- Use the host's checkout description as the default invoice memo on the mounted
+  HTTP routes in every engine (Node, Ruby, PHP, Python). The display string
+  `amountFor` returns beside the price now reaches `make_invoice`, so hosts that
+  write no invoice code no longer mint BOLT11s with an empty description and
+  payer wallets show what was bought. An explicit request-body `memo` still
+  wins, and a host that returns no description still mints without one.
 - Close the September payment-safety review gaps: reject refunds without a saved
   supported network in Node, retain PHP paid observations after fulfillment
   rollback, accept legacy Node wallet-deadline snapshots, and let newer payments

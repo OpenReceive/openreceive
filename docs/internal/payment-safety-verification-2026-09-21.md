@@ -153,6 +153,20 @@ Configured live receive-only NWC preflight passed with NIP-44 v2. Live invoice
 creation and payment waiting were intentionally disabled. Delayed payments and
 refund behavior were exercised using testkit/regtest services, not real funds.
 
+Restart-before-payment follow-up: `npm run test:e2e:btcpay -- payment-safety.spec.ts`
+passed all 9 Docker integration tests in 5.4 minutes, with zero skips. The two new
+cases cover both LN and LNURL: partially pay the host invoice to replace its
+Lightning instructions, stop/start BTCPay while the original mint remains unpaid,
+wait for startup recovery to revisit that mint and confirm it remains open, then
+pay the original BOLT11. Each case observes exactly one settled host payment and
+retains that count after a second restart. Existing pay-while-down, past-expiry,
+refund, account-mapping and failed-host-write cases also passed.
+`npm run typecheck`, `npm test` (722 passed, zero skipped), `npm run check`,
+`npm run check:docs`, `npx --no-install biome check tests/e2e-btcpay/payment-safety.spec.ts`
+and `git diff --check` passed. The initial sandboxed JavaScript run could not bind
+localhost for two CLI tests; the rerun with localhost access passed the full suite.
+Only tests and documentation changed in this follow-up; no real-fund payments were made.
+
 No automatic historical repair, host deployment, package publication, or plugin
 release is implied by these checks. Best-effort post-commit effects, explicit
 operator review, conservative closure for resumed dense history, and the plugin's

@@ -127,14 +127,16 @@ class StorageFreeServerTest < Minitest::Test
   SPEC_DIR = File.expand_path("../../../../spec", __dir__)
 
   class Wallet
-    attr_reader :transactions
+    attr_reader :transactions, :requests
 
     def initialize
       @counter = 0
       @transactions = []
+      @requests = []
     end
 
     def make_invoice(request)
+      @requests << request
       @counter += 1
       hash = @counter.to_s(16).rjust(64, "0")
       @transactions << {
@@ -203,6 +205,58 @@ class StorageFreeServerTest < Minitest::Test
       end.new,
       clock: -> { 1000 }
     )
+  end
+
+  # A host on the mounted routes writes no invoice code at all, so the display
+  # string it returns beside the price is the only copy it can put in front of a
+  # payer. Without the fallback every such host mints BOLT11s with an empty
+  # description and the payer's wallet shows a blank line next to the amount.
+  def described_app(description: "2 kg Ataulfo mangoes")
+    OpenReceive::Server::RackApp.new(
+      service: @service,
+      authorize: ->(_context) { true },
+      resolve_checkout: lambda do |**_context|
+        amount = { "amount" => { "sats" => 1 } }
+        description.nil? ? amount : amount.merge("description" => description)
+      end,
+      on_checkout_created: ->(**_payment) {},
+      on_paid: ->(_payment) {}
+    )
+  end
+
+  def post_checkout(app, body)
+    app.call(
+      "REQUEST_METHOD" => "POST",
+      "PATH_INFO" => "/openreceive/checkouts",
+      "QUERY_STRING" => "",
+      "CONTENT_TYPE" => "application/json",
+      "rack.input" => StringIO.new(JSON.generate(body))
+    )
+  end
+
+  def test_host_description_is_the_invoice_memo_when_the_body_writes_none
+    app = described_app
+    status, = post_checkout(app, { "reference" => "order-described" })
+    assert_equal 201, status
+    assert_equal "2 kg Ataulfo mangoes", @wallet.requests.last["description"]
+
+    # A blank memo is the same as none: whitespace must not silently blank the
+    # description the checkout itself is showing.
+    status, = post_checkout(app, { "reference" => "order-blank", "memo" => "   " })
+    assert_equal 201, status
+    assert_equal "2 kg Ataulfo mangoes", @wallet.requests.last["description"]
+  end
+
+  def test_explicit_body_memo_beats_the_host_description
+    status, = post_checkout(described_app, { "reference" => "order-own", "memo" => "Table 4" })
+    assert_equal 201, status
+    assert_equal "Table 4", @wallet.requests.last["description"]
+  end
+
+  def test_host_without_description_mints_an_invoice_without_one
+    status, = post_checkout(described_app(description: nil), { "reference" => "order-bare" })
+    assert_equal 201, status
+    refute @wallet.requests.last.key?("description")
   end
 
   def test_lsc_uri_shared_vectors
@@ -1231,8 +1285,9 @@ class StorageFreeServerTest < Minitest::Test
       on_paid: ->(_payment) {}
     )
     # The host returning a display string beside the price. `description` rides
-    # the prepare and create responses and NOTHING else: it is never read from a
-    # request body, because the payer does not write the copy next to the amount.
+    # the prepare and create responses and defaults the invoice memo; it is
+    # never read from a request body, because the payer does not write the copy
+    # next to the amount.
     described_app = OpenReceive::Server::RackApp.new(
       service: @service,
       authorize: ->(_context) { true },

@@ -153,7 +153,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 11518
+      "bytes": 11591
     },
     {
       "path": "/guides/checkout-ux",
@@ -163,7 +163,7 @@
       "slug": "checkout-ux",
       "title": "Checkout UX",
       "category": "guide",
-      "bytes": 7691
+      "bytes": 7817
     },
     {
       "path": "/guides/headless-checkout",
@@ -263,7 +263,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 120681
+      "bytes": 120805
     },
     {
       "path": "/guides/security",
@@ -443,7 +443,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 120681,
+      "bytes": 120805,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -475,7 +475,7 @@
       "slug": "btcpay",
       "title": "OpenReceive for BTCPay Server",
       "category": "btcpay",
-      "bytes": 4484,
+      "bytes": 5079,
       "assets_base": "/assets/",
       "video": {
         "path": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
@@ -786,8 +786,44 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/1-click-OR-icon.webp",
-      "source": "docs/assets/btcpayserver/1-click-OR-icon.webp",
+      "path": "/assets/btcpayserver/1-open-plugins-menu.webp",
+      "source": "docs/assets/btcpayserver/1-open-plugins-menu.webp",
+      "content_type": "image/webp",
+      "bytes": 22950,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/2-click-plugin-directory.webp",
+      "source": "docs/assets/btcpayserver/2-click-plugin-directory.webp",
+      "content_type": "image/webp",
+      "bytes": 9310,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/3-search-openreceive.webp",
+      "source": "docs/assets/btcpayserver/3-search-openreceive.webp",
+      "content_type": "image/webp",
+      "bytes": 47418,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/4-install-openreceive.webp",
+      "source": "docs/assets/btcpayserver/4-install-openreceive.webp",
+      "content_type": "image/webp",
+      "bytes": 54092,
+      "referenced_by": [
+        "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/btcpayserver/5-click-OR-icon.webp",
+      "source": "docs/assets/btcpayserver/5-click-OR-icon.webp",
       "content_type": "image/webp",
       "bytes": 16282,
       "referenced_by": [
@@ -795,8 +831,8 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/2-enter-nwc-code-and-save.webp",
-      "source": "docs/assets/btcpayserver/2-enter-nwc-code-and-save.webp",
+      "path": "/assets/btcpayserver/6-enter-nwc-code-and-save.webp",
+      "source": "docs/assets/btcpayserver/6-enter-nwc-code-and-save.webp",
       "content_type": "image/webp",
       "bytes": 39636,
       "referenced_by": [
@@ -804,8 +840,8 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/3-enter-optional-LSC.webp",
-      "source": "docs/assets/btcpayserver/3-enter-optional-LSC.webp",
+      "path": "/assets/btcpayserver/7-enter-optional-LSC.webp",
+      "source": "docs/assets/btcpayserver/7-enter-optional-LSC.webp",
       "content_type": "image/webp",
       "bytes": 22236,
       "referenced_by": [
@@ -813,8 +849,8 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/4-you-should-see-wallet-connected-and-swaps-on.webp",
-      "source": "docs/assets/btcpayserver/4-you-should-see-wallet-connected-and-swaps-on.webp",
+      "path": "/assets/btcpayserver/8-you-should-see-wallet-connected-and-swaps-on.webp",
+      "source": "docs/assets/btcpayserver/8-you-should-see-wallet-connected-and-swaps-on.webp",
       "content_type": "image/webp",
       "bytes": 43594,
       "referenced_by": [
@@ -822,8 +858,8 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/5-click-invoices-to-make-test-invoice.webp",
-      "source": "docs/assets/btcpayserver/5-click-invoices-to-make-test-invoice.webp",
+      "path": "/assets/btcpayserver/9-click-invoices-to-make-test-invoice.webp",
+      "source": "docs/assets/btcpayserver/9-click-invoices-to-make-test-invoice.webp",
       "content_type": "image/webp",
       "bytes": 17012,
       "referenced_by": [
@@ -831,8 +867,8 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/6-click-create-invoice.webp",
-      "source": "docs/assets/btcpayserver/6-click-create-invoice.webp",
+      "path": "/assets/btcpayserver/10-click-create-invoice.webp",
+      "source": "docs/assets/btcpayserver/10-click-create-invoice.webp",
       "content_type": "image/webp",
       "bytes": 6848,
       "referenced_by": [
@@ -840,8 +876,8 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/7-enter-amount-click-create.webp",
-      "source": "docs/assets/btcpayserver/7-enter-amount-click-create.webp",
+      "path": "/assets/btcpayserver/11-enter-amount-click-create.webp",
+      "source": "docs/assets/btcpayserver/11-enter-amount-click-create.webp",
       "content_type": "image/webp",
       "bytes": 15186,
       "referenced_by": [
@@ -849,8 +885,8 @@
       ]
     },
     {
-      "path": "/assets/btcpayserver/8-see-example-invoice.webp",
-      "source": "docs/assets/btcpayserver/8-see-example-invoice.webp",
+      "path": "/assets/btcpayserver/12-see-example-invoice.webp",
+      "source": "docs/assets/btcpayserver/12-see-example-invoice.webp",
       "content_type": "image/webp",
       "bytes": 78970,
       "referenced_by": [

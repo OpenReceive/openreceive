@@ -82,8 +82,10 @@ export interface ResolvedHostCheckout {
    * What the payer is buying, in the host's own words — one display string,
    * echoed on the prepare and create responses so the shipped checkout can show
    * something other than a QR and a number. OpenReceive owns no line items and
-   * never will; this is the whole of what it carries. Response only: it is
-   * never read from a request body.
+   * never will; this is the whole of what it carries. Never read from a request
+   * body: the payer does not write the copy next to the amount. On create it is
+   * also the default invoice memo, so the payer's wallet shows the same words
+   * the checkout did.
    */
   readonly description?: string;
   /** Return the selected host payment attempt's hash to reuse or inspect its checkout. */
@@ -378,7 +380,7 @@ async function dispatch(
           runtime.service.createCheckout({
             reference,
             amount: requireResolvedAmount(resolved),
-            ...optionalCheckoutFields(body),
+            ...optionalCheckoutFields(body, resolved.description),
           }),
         recover: () => committedCheckout(reference, resolved),
         attempt: (minted) => ({ paymentHash: minted.paymentHash, checkout: minted }),
@@ -500,7 +502,7 @@ async function dispatch(
             reference,
             amount: requireResolvedAmount(resolved),
             payInAsset,
-            ...optionalCheckoutFields(body),
+            ...optionalCheckoutFields(body, resolved.description),
           }),
         recover: () => recoverCommittedSwap(runtime, reference, resolved),
         attempt: (minted) => ({

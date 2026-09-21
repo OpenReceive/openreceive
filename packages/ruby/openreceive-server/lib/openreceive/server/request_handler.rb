@@ -88,7 +88,7 @@ module OpenReceive
                      else
                        @service.create_checkout(
                          "reference" => reference, "amount" => required_amount(resolved),
-                         "memo" => validated_memo(body), "metadata" => body["metadata"]
+                         "memo" => mint_memo(body, resolved), "metadata" => body["metadata"]
                        )
                      end
           commit(checkout, nil, request) unless resolved["payment_hash"]
@@ -180,7 +180,7 @@ module OpenReceive
                      "reference" => reference,
                      "amount" => required_amount(resolved),
                      "pay_in_asset" => asset,
-                     "memo" => validated_memo(body),
+                     "memo" => mint_memo(body, resolved),
                      "metadata" => body["metadata"]
                    )
                  end
@@ -556,10 +556,24 @@ module OpenReceive
         memo
       end
 
+      # The description that goes INTO the invoice. An explicit body memo wins,
+      # so a client that writes its own copy keeps it; otherwise the host's
+      # display string is it. Without the fallback a host on the mounted routes
+      # mints BOLT11s with no description at all and the payer's wallet shows a
+      # blank line next to the amount. Only the body memo carries the length
+      # cap: the cap bounds client input, and the host description is host data
+      # exactly like the price beside it.
+      def mint_memo(body, resolved)
+        memo = validated_memo(body)
+        blank = memo.nil? || (memo.is_a?(String) && memo.strip.empty?)
+        blank ? resolved_description(resolved) : memo
+      end
+
       # What the payer is buying, in the host's own words: one optional display
-      # string the host returns beside the price. Response only — it is never
-      # read from a request body, because the payer does not get to write the
-      # copy next to the amount. Blank is the same as absent.
+      # string the host returns beside the price. Never read from a request
+      # body, because the payer does not get to write the copy next to the
+      # amount; it rides the prepare and create responses and, via mint_memo,
+      # defaults the invoice description. Blank is the same as absent.
       def resolved_description(resolved)
         value = resolved["description"]
         return nil unless value.is_a?(String)

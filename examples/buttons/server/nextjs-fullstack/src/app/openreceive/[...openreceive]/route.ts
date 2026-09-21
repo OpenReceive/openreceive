@@ -8,8 +8,9 @@ import { httpOptions } from "../../../server/shop.ts";
  * /openreceive/rates and the rest.
  *
  * There is no memo injection here, unlike the Hello Fruit demo it replaces.
- * `amountFor` returns a `description` beside the price, so the invoice memo is
- * host data that never travels through a request body at all.
+ * `amountFor` returns a `description` beside the price; the mounted routes show
+ * it on the checkout AND use it as the invoice memo, so what the payer's wallet
+ * displays is host data that never travels through a request body at all.
  */
 
 export const runtime = "nodejs";

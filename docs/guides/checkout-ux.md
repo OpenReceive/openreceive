@@ -26,7 +26,9 @@ when Bitcoin is selected again; do not dismiss it. Only a swap's
 
 The shipped checkout can only show the amount — OpenReceive does not own your
 line items. Return an optional `description` from `amountFor`
-(`config.amount_for` in Rails) and both drop-ins print it above the amount.
+(`config.amount_for` in Rails) and both drop-ins print it above the amount. It
+is also the invoice memo, so the payer's wallet shows the same words; without
+it the BOLT11 carries no description at all.
 
 It is one display string. For a richer order summary, pass markup: React
 `<Checkout>` takes `children` (a render prop with the live model); the custom

@@ -183,8 +183,8 @@ for (const method of ["BTC-LN", "BTC-LNURL"]) {
       }
       await ready(request);
       if (payAfterRestart) {
-        // The fresh process must revisit the original, still-unpaid mint even
-        // though the checkout now offers a replacement. Pay only after that pass.
+        // Wait for recovery to revisit the unpaid original after restart, even
+        // though the checkout now offers a replacement, before paying it.
         await expect
           .poll(
             () =>

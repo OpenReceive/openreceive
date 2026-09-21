@@ -291,7 +291,7 @@ function describePrice(price: HostCheckoutPrice): { readonly description?: strin
   return description === undefined || description.length === 0 ? {} : { description };
 }
 
-/** The price alone. The display string is a response field, never a mint input. */
+/** The price alone: the display string travels beside it, never inside the amount. */
 function priceOnly(price: HostCheckoutPrice): CreateCheckoutAmount {
   const { description: _description, ...amount } = price;
   return amount as CreateCheckoutAmount;

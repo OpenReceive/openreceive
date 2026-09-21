@@ -435,3 +435,72 @@ def test_refund_missing_saved_asset_fails_before_provider_mutation(harness, asse
             refund_address="fixture-any-nonempty-address",
         )
     assert not calls
+
+
+# A host on the mounted routes writes no invoice code at all, so the display
+# string it returns beside the price is the only copy it can put in front of a
+# payer. Without the fallback every such host mints BOLT11s with an empty
+# description and the payer's wallet shows a blank line next to the amount.
+DESCRIBED = "2 kg Ataulfo mangoes"
+
+
+def _record_mints(harness: Harness) -> list[dict[str, Any]]:
+    """Capture what actually reaches the wallet's make_invoice."""
+    minted: list[dict[str, Any]] = []
+    mint = harness.wallet.make_invoice
+
+    def record(params: dict[str, Any]) -> dict[str, Any]:
+        minted.append(params)
+        return mint(params)
+
+    harness.wallet.make_invoice = record  # type: ignore[method-assign]
+    return minted
+
+
+def _describing_host(harness: Harness, description: str | None = DESCRIBED) -> None:
+    harness.host.amount_for = lambda reference: {
+        "currency": "USD",
+        "value": "1.00",
+        **({} if description is None else {"description": description}),
+    }
+
+
+def test_host_description_is_the_invoice_memo_when_the_body_writes_none(
+    harness: Harness,
+) -> None:
+    minted = _record_mints(harness)
+    _describing_host(harness)
+
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": "order-described"})
+    assert status == 201, body
+    assert minted[-1]["description"] == DESCRIBED
+    # Still echoed on the response: the fallback adds a use, it does not move it.
+    assert body["description"] == DESCRIBED
+
+    # A blank memo is the same as none: whitespace must not silently blank the
+    # description the checkout itself is showing.
+    status, body, _ = harness.call(
+        "POST", "/checkouts", {"reference": "order-blank", "memo": "   "}
+    )
+    assert status == 201, body
+    assert minted[-1]["description"] == DESCRIBED
+
+
+def test_an_explicit_body_memo_beats_the_host_description(harness: Harness) -> None:
+    minted = _record_mints(harness)
+    _describing_host(harness)
+
+    status, body, _ = harness.call(
+        "POST", "/checkouts", {"reference": "order-own", "memo": "Table 4"}
+    )
+    assert status == 201, body
+    assert minted[-1]["description"] == "Table 4"
+
+
+def test_a_host_without_a_description_mints_an_invoice_without_one(harness: Harness) -> None:
+    minted = _record_mints(harness)
+    _describing_host(harness, None)
+
+    status, body, _ = harness.call("POST", "/checkouts", {"reference": "order-bare"})
+    assert status == 201, body
+    assert "description" not in minted[-1]

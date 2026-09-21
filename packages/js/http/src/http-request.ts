@@ -174,15 +174,25 @@ export function ratesCurrencies(raw: string | null): readonly string[] | undefin
 // Payer-supplied description_hash is deliberately NOT accepted: it would let any
 // client make the merchant's wallet mint an invoice committing to arbitrary
 // content. Hosts minting hash-committed invoices do so server-side via the service.
-export function optionalCheckoutFields(body: Record<string, unknown>) {
-  const memo = trimmedField(body.memo);
-  if (memo !== undefined && memo.length > MAX_MEMO_LENGTH) {
+//
+// `hostDescription` is the display string `amountFor` returned beside the price.
+// It is the DEFAULT invoice memo: without it a host on the mounted routes mints
+// BOLT11s with no description at all, and the payer's wallet shows a blank line
+// next to the amount it is about to pay. An explicit body `memo` still wins, so
+// a client that describes the purchase itself keeps that copy.
+//
+// Only the body memo carries the length cap. The cap bounds CLIENT input; the
+// host description is the host's own data, the same as the price beside it.
+export function optionalCheckoutFields(body: Record<string, unknown>, hostDescription?: string) {
+  const bodyMemo = trimmedField(body.memo);
+  if (bodyMemo !== undefined && bodyMemo.length > MAX_MEMO_LENGTH) {
     throw new HttpError(
       400,
       "INVALID_REQUEST",
       `memo must be ${MAX_MEMO_LENGTH} characters or fewer.`,
     );
   }
+  const memo = bodyMemo ?? hostDescription;
   const metadata = readRecord(body.metadata);
   return {
     ...(memo === undefined ? {} : { memo }),

@@ -130,7 +130,7 @@ final class RequestHandler
                 ? $this->committedCheckout($reference, $resolved)
                 : $this->service->createCheckout([
                     'reference' => $reference, 'amount' => $this->requiredAmount($resolved),
-                    'memo' => $this->validatedMemo($body), 'metadata' => $body['metadata'] ?? null,
+                    'memo' => $this->mintMemo($body, $resolved), 'metadata' => $body['metadata'] ?? null,
                 ]);
             if (!$reused) {
                 $this->commit($checkout, null, $request);
@@ -213,7 +213,7 @@ final class RequestHandler
                 // Explicit, validated fields only: the raw payer body never reaches the service.
                 $swap = $this->service->createSwap([
                     'reference' => $reference, 'amount' => $this->requiredAmount($resolved), 'pay_in_asset' => $asset,
-                    'memo' => $this->validatedMemo($body), 'metadata' => $body['metadata'] ?? null,
+                    'memo' => $this->mintMemo($body, $resolved), 'metadata' => $body['metadata'] ?? null,
                 ]);
                 $this->commit($swap['checkout'], $swap['swap_data'] ?? null, $request);
             }
@@ -581,7 +581,26 @@ final class RequestHandler
     }
 
     /**
-     * What the payer is buying, in the host's own words — response only, blank is absent.
+     * The description that goes INTO the invoice. An explicit body memo wins, so a client
+     * that writes its own copy keeps it; otherwise the host's display string is it. Without
+     * the fallback a host on the mounted routes mints BOLT11s with no description at all and
+     * the payer's wallet shows a blank line next to the amount. Only the body memo carries
+     * the length cap: the cap bounds client input, the host description is host data.
+     *
+     * @param array<string, mixed> $body
+     * @param array<string, mixed> $resolved
+     */
+    private function mintMemo(array $body, array $resolved): mixed
+    {
+        $memo = $this->validatedMemo($body);
+        $blank = $memo === null || (is_string($memo) && trim($memo) === '');
+        return $blank ? $this->resolvedDescription($resolved) : $memo;
+    }
+
+    /**
+     * What the payer is buying, in the host's own words. Never read from a request body; it
+     * rides the prepare and create responses and, via mintMemo, defaults the invoice
+     * description. Blank is absent.
      *
      * @param array<string, mixed> $resolved
      */

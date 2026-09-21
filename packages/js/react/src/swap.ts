@@ -929,10 +929,15 @@ function SwapRefundForm(props: {
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
   const [refundAddress, setRefundAddress] = React.useState("");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a different attempt starts a fresh refund draft.
-  React.useEffect(() => {
+  // A different attempt starts a fresh refund draft — adjusted during render,
+  // never in an effect. A mount effect flushes AFTER the panel is on screen and
+  // clickable, so a payer who types as the refund panel appears has the address
+  // wiped out from under them by the reset for the attempt they are already on.
+  const [draftAttemptId, setDraftAttemptId] = React.useState(props.attemptId);
+  if (draftAttemptId !== props.attemptId) {
+    setDraftAttemptId(props.attemptId);
     setRefundAddress("");
-  }, [props.attemptId]);
+  }
   const generation = React.useRef(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: old attempt completions must not update this form.
   React.useEffect(

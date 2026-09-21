@@ -361,4 +361,54 @@ final class EngineTest extends TestCase
         $this->engine();
         new Engine($this->host(), $this->repository, new Service($this->wallet, false, []), true, true, static fn (): bool => true);
     }
+
+    /**
+     * The minted wallet row for a hash, so a test can read what reached make_invoice.
+     *
+     * @return array<string, mixed>
+     */
+    private function mintedRow(string $paymentHash): array
+    {
+        foreach ($this->wallet->listTransactions(['unpaid' => true])['transactions'] as $row) {
+            if ($row['payment_hash'] === $paymentHash) {
+                return $row;
+            }
+        }
+        self::fail("no minted wallet row for {$paymentHash}");
+    }
+
+    /**
+     * A host on the mounted routes writes no invoice code at all, so the display string it
+     * returns beside the price is the only copy it can put in front of a payer. Without the
+     * fallback every such host mints BOLT11s with an empty description and the payer's wallet
+     * shows a blank line next to the amount.
+     */
+    public function testTheHostDescriptionIsTheInvoiceMemoWhenTheBodyWritesNone(): void
+    {
+        $engine = $this->engine();
+
+        $plain = self::json($this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'usd-described']));
+        self::assertSame('One dollar', $this->mintedRow($plain['checkout']['payment_hash'])['description']);
+        // Still echoed on the response: the fallback adds a use, it does not move it.
+        self::assertSame('One dollar', $plain['description']);
+
+        // A blank memo is the same as none: whitespace must not silently blank
+        // the description the checkout itself is showing.
+        $blank = self::json($this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'usd-blank', 'memo' => '   ']));
+        self::assertSame('One dollar', $this->mintedRow($blank['checkout']['payment_hash'])['description']);
+    }
+
+    public function testAnExplicitBodyMemoBeatsTheHostDescription(): void
+    {
+        $engine = $this->engine();
+        $written = self::json($this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'usd-own', 'memo' => 'Table 4']));
+        self::assertSame('Table 4', $this->mintedRow($written['checkout']['payment_hash'])['description']);
+    }
+
+    public function testAHostThatReturnsNoDescriptionMintsAnInvoiceWithoutOne(): void
+    {
+        $engine = $this->engine();
+        $bare = self::json($this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-bare']));
+        self::assertArrayNotHasKey('description', $this->mintedRow($bare['checkout']['payment_hash']));
+    }
 }

@@ -1138,6 +1138,77 @@ test("declared length caps are enforced (reference 200, memo 500)", async () => 
   assert.equal(longMemo.status, 400);
 });
 
+// A host on the mounted routes writes no invoice code at all, so the display
+// string it returns beside the price is the ONLY copy it can put in front of a
+// payer. Without this fallback every such host mints BOLT11s with an empty
+// description and the payer's wallet shows a blank line next to the amount.
+// `description: null` means the host returns none at all (passing `undefined`
+// would re-trigger the default).
+function describedHandler(minted, description = "2 kg Ataulfo mangoes") {
+  const wallet = createTestkitReceiveClient();
+  const mintInvoice = wallet.makeInvoice.bind(wallet);
+  wallet.makeInvoice = async (request) => {
+    minted.push(request);
+    return mintInvoice(request);
+  };
+  return async () =>
+    createHttpHandler({
+      service: await createOpenReceive({ client: wallet }),
+      authorize: () => true,
+      host: testHost({
+        resolveCheckout: () => ({
+          amount: { sats: 1 },
+          ...(description === null ? {} : { description }),
+        }),
+        onCheckoutCreated: () => {},
+      }),
+    });
+}
+
+const postCheckout = (handler, body) =>
+  handler(
+    new Request("http://test/openreceive/checkouts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+
+test("the host description is the invoice memo when the body writes none", async () => {
+  const minted = [];
+  const handler = await describedHandler(minted)();
+
+  const plain = await postCheckout(handler, { reference: "order-described" });
+  assert.equal(plain.status, 201);
+  assert.equal(minted.at(-1).description, "2 kg Ataulfo mangoes");
+  // Still echoed on the response: the fallback adds a use, it does not move it.
+  assert.equal((await plain.json()).description, "2 kg Ataulfo mangoes");
+
+  // A blank memo is the same as none: whitespace must not silently blank the
+  // description the checkout itself is showing.
+  const blank = await postCheckout(handler, { reference: "order-blank", memo: "   " });
+  assert.equal(blank.status, 201);
+  assert.equal(minted.at(-1).description, "2 kg Ataulfo mangoes");
+});
+
+test("an explicit body memo still beats the host description", async () => {
+  const minted = [];
+  const handler = await describedHandler(minted)();
+
+  const written = await postCheckout(handler, { reference: "order-own", memo: "Table 4" });
+  assert.equal(written.status, 201);
+  assert.equal(minted.at(-1).description, "Table 4");
+});
+
+test("a host that returns no description mints an invoice without one", async () => {
+  const minted = [];
+  const handler = await describedHandler(minted, null)();
+
+  const bare = await postCheckout(handler, { reference: "order-bare" });
+  assert.equal(bare.status, 201);
+  assert.equal(minted.at(-1).description, undefined);
+});
+
 test("oversized request bodies are rejected 413 before authorize runs", async () => {
   const service = await createOpenReceive({
     client: createTestkitReceiveClient(),

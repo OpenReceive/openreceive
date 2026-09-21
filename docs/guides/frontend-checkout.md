@@ -192,7 +192,8 @@ openreceive-checkout { display: block; width: 100%; }
 ## Show the payer what they are buying
 
 Return a `description` beside the price. Both drop-ins print it above the
-amount on every screen:
+amount on every screen, and it becomes the invoice memo, so the payer's wallet
+shows it as well:
 
 ```ts
 amountFor: async (reference) => {
