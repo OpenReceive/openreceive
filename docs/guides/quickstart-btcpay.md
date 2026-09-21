@@ -27,8 +27,26 @@ invoices, checkout, webhooks and Greenfield API are the host.
 
 ## 2. Install the plugin
 
-In BTCPay, open **Server Settings → Plugins**, search the plugin directory
-for **OpenReceive**, click **Install**, and restart BTCPay when prompted.
+Sign in as a **server administrator**; if someone else hosts your server, ask
+them to install the plugin for you.
+
+**1. Open the Plugins menu** — the plug icon in the top-right corner.
+
+<img alt="Click the plug icon in the top-right corner" width="300" src="../assets/btcpayserver/1-open-plugins-menu.webp">
+
+**2. Click Plugin Directory.**
+
+<img alt="Choose Plugin Directory from the Plugins menu" width="420" src="../assets/btcpayserver/2-click-plugin-directory.webp">
+
+**3. Search for `openreceive`** and click the **OpenReceive** result.
+
+<img alt="Search the plugin directory for openreceive" width="600" src="../assets/btcpayserver/3-search-openreceive.webp">
+
+**4. Click Install in BTCPay Server.** Confirm when prompted, then click
+**Restart now** and wait for BTCPay to come back.
+
+<img alt="Click Install in BTCPay Server on the OpenReceive plugin page" width="300" src="../assets/btcpayserver/4-install-openreceive.webp">
+
 BTCPay creates the plugin's two tables (`openreceive_invoices` and
 `openreceive_swaps`, schema `BTCPayServer.Plugins.OpenReceive`) in its own
 Postgres at startup; nothing else is created.
@@ -38,13 +56,17 @@ To build the plugin from source instead, follow
 
 ## 3. Connect the wallet
 
-Follow the plugin README's illustrated walkthrough:
-[OpenReceive for BTCPay Server](https://github.com/OpenReceive/openreceive/blob/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md).
-It opens the **OpenReceive** page in the store's sidebar, saves the
-receive-only NWC code, optionally saves the LSC code to turn swaps on, and
-creates a first test invoice. There is nothing else to configure: you never
-open BTCPay's Lightning node screen, and the plugin never reads the internal
-node.
+Select your store and open **OpenReceive** in its sidebar, under Wallets.
+Paste your receive-only NWC code and click **Save NWC Code** — **Test
+connection** first if you want to see what the wallet supports. To turn swaps
+on, paste a Lightning Swap Connect code and click **Save swap settings**. The
+page then shows **Wallet connected** and, if you set up a provider, **Swaps
+on**. There is nothing else to configure: you never open BTCPay's Lightning
+node screen, and the plugin never reads the internal node.
+
+Screenshots for each of those steps, and for creating a first test invoice,
+are in the plugin's
+[README](https://github.com/OpenReceive/openreceive/blob/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md).
 
 Saving fails closed if the wallet advertises a spend method such as
 `pay_invoice`. Mint a receive-only code instead; the override for a wallet

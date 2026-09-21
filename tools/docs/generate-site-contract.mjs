@@ -261,7 +261,8 @@ const FRAMEWORKS = [
     quickstart_slug: "quickstart-btcpay",
     agent_stack: "btcpay",
     adapter_package: "BTCPayServer.Plugins.OpenReceive",
-    install: "Server Settings → Plugins → OpenReceive → Install",
+    install:
+      'Plugins (the plug icon, top right) → Plugin Directory → search "openreceive" → Install',
     requires: "BTCPay Server ≥ 2.4.4",
     // Not a shop demo: the plugin's home is its README, and the landing page
     // shows the README's video and screenshots instead of the shared checkout.
@@ -337,9 +338,15 @@ for (const payloadPath of AGENT_PAYLOAD_PATHS) {
 }
 
 const publish = [];
+const assets = [];
 for (const doc of manifest.docs) {
   if (!doc.public) continue;
   const urlPath = doc.slug === "guides" ? "/guides" : `/guides/${doc.slug}`;
+  // A guide may embed screenshots too (the BTCPay quickstart carries the
+  // plugin's four install steps), so its images join `assets[]` on the same
+  // terms as a plugin README's: collected from the source, resolved relative
+  // to it, and refused if they sit outside docs/assets/.
+  const docAssets = embeddedAssets({ source: doc.source_path, path: urlPath });
   publish.push({
     path: urlPath,
     // The same document as raw markdown. The site renders `path` in the
@@ -352,7 +359,10 @@ for (const doc of manifest.docs) {
     title: doc.title,
     category: doc.category,
     bytes: statSync(path.join(root, doc.source_path)).size,
+    // Only when the page has images to map: see `assets[]`.
+    ...(docAssets.length > 0 && { assets_base: "/assets/" }),
   });
+  assets.push(...docAssets);
 }
 
 for (const alias of ALIASES) {
@@ -384,7 +394,6 @@ for (const page of AGENT_PAGES) {
   });
 }
 
-const assets = [];
 for (const page of PLUGIN_PAGES) {
   publish.push({
     path: page.path,
@@ -417,6 +426,22 @@ for (const page of PLUGIN_PAGES) {
     }
   }
   assets.push(...pageAssets);
+}
+
+// One entry per served file, whoever embeds it: the BTCPay install
+// screenshots are in both the plugin README and the quickstart guide, and the
+// site serves those bytes once. `referenced_by` names every page that shows
+// them.
+const servedAssets = [];
+for (const asset of assets) {
+  const seen = servedAssets.find((entry) => entry.path === asset.path);
+  if (!seen) {
+    servedAssets.push(asset);
+    continue;
+  }
+  for (const page of asset.referenced_by) {
+    if (!seen.referenced_by.includes(page)) seen.referenced_by.push(page);
+  }
 }
 
 const frameworks = FRAMEWORKS.map((framework) => {
@@ -458,7 +483,7 @@ const frameworks = FRAMEWORKS.map((framework) => {
   const videoOk =
     video === null ||
     /^https:\/\//.test(video) ||
-    assets.some((asset) => asset.path === video && asset.content_type === "video/mp4");
+    servedAssets.some((asset) => asset.path === video && asset.content_type === "video/mp4");
   if (!videoOk) {
     throw new Error(
       `${TARGET}: framework ${row.id} video must be null, an absolute https URL, or an assets[] mp4 under docs/assets/ (got ${video})`,
@@ -539,7 +564,7 @@ const contract = {
   // Images embedded by a publish[] entry (contract v4). Serve `source`'s bytes
   // at `path` with `content_type`; the renderer maps the source's relative
   // <img src> to `path`, in the page and in the markdown twin alike.
-  assets,
+  assets: servedAssets,
   // Pages openreceive.org authors and owns. The agent directions link to these,
   // so removing or renaming one breaks a payload that is already pasted into
   // other people's editors and cannot be recalled.
@@ -596,5 +621,5 @@ if (!check && current !== serialized) writeFileSync(absolute, serialized);
 
 console.log(
   `${check ? "Checked" : "Wrote"} ${TARGET}: ${publish.length} routes, ` +
-    `${copyButton.length} copy payloads, ${frameworks.length} frameworks, ${assets.length} assets, ${contract.never_publish.length} never-publish.`,
+    `${copyButton.length} copy payloads, ${frameworks.length} frameworks, ${servedAssets.length} assets, ${contract.never_publish.length} never-publish.`,
 );

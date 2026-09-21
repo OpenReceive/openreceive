@@ -497,7 +497,6 @@ from shop.models import Order  # YOUR model — it could be named anything. Open
                                # never sees it or touches its table; these hooks are the
                                # only bridge between the engine and your data.
 
-
 class Host:
     # Your policy, called before every checkout/payment/swap request. `context`
     # has three attributes:

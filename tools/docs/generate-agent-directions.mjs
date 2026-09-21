@@ -211,10 +211,19 @@ export function inlineGuide(markdown, publicSlugs) {
   // say the same thing twice.
   // The shared-section fences (tools/docs/check-quickstart-parity.mjs) are a
   // build-time gate, not prose; a pasted payload has no use for them.
+  // A screenshot is for a human reading the guide. The payload's reader is a
+  // coding agent, so an <img> line is budget spent on a picture it cannot see,
+  // pointing at a repository path that is dead once this file is pasted
+  // elsewhere — the same reason the relative-link rewrite below drops those.
+  // The step's own bold instruction above it says what the picture shows.
   const lines = markdown
     .replace(/\n## Next\n[\s\S]*$/, "\n")
     .split("\n")
-    .filter((line) => !/^<!-- shared:(begin|end) [a-z0-9-]+ -->$/.test(line));
+    .filter(
+      (line) =>
+        !/^<!-- shared:(begin|end) [a-z0-9-]+ -->$/.test(line) &&
+        !/^\s*<img\b[^>]*>\s*$/.test(line),
+    );
   const out = [];
   let inFence = false;
   for (const line of lines) {
@@ -231,6 +240,8 @@ export function inlineGuide(markdown, publicSlugs) {
       // once the file has been pasted somewhere else, and cloning is not the
       // shape of this integration. Keep the name, drop the link.
       .replace(/\[([^\]]+)\]\(\.{1,2}\/[^)]+\)/g, "$1")
+      // Removing an <img> line leaves the blank line that framed it.
+      .replace(/\n{3,}/g, "\n\n")
       .trim()
   );
 }

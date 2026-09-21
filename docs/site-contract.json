@@ -103,7 +103,8 @@
       "slug": "quickstart-btcpay",
       "title": "BTCPay Server Quickstart",
       "category": "quickstart",
-      "bytes": 3616
+      "bytes": 4633,
+      "assets_base": "/assets/"
     },
     {
       "path": "/guides/btcpay-reference",
@@ -363,7 +364,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 39186
+      "bytes": 39185
     },
     {
       "path": "/guides/agent-directions-next",
@@ -413,7 +414,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 10239
+      "bytes": 10846
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -538,7 +539,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39186,
+      "bytes": 39185,
       "copy_button": true,
       "self_contained": true
     },
@@ -578,7 +579,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 10239,
+      "bytes": 10846,
       "copy_button": true,
       "self_contained": true
     }
@@ -690,7 +691,7 @@
       "agent_stack": "btcpay",
       "agent_payload_path": "/agent-directions/btcpay.md",
       "adapter_package": "BTCPayServer.Plugins.OpenReceive",
-      "install": "Server Settings → Plugins → OpenReceive → Install",
+      "install": "Plugins (the plug icon, top right) → Plugin Directory → search \"openreceive\" → Install",
       "requires": "BTCPay Server ≥ 2.4.4",
       "example_path": "packages/dotnet/BTCPayServer.Plugins.OpenReceive",
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive",
@@ -777,20 +778,12 @@
   ],
   "assets": [
     {
-      "path": "/assets/wordpress/checkout.png",
-      "source": "docs/assets/wordpress/checkout.png",
-      "content_type": "image/png",
-      "bytes": 232579,
-      "referenced_by": [
-        "/wordpress"
-      ]
-    },
-    {
       "path": "/assets/btcpayserver/1-open-plugins-menu.webp",
       "source": "docs/assets/btcpayserver/1-open-plugins-menu.webp",
       "content_type": "image/webp",
       "bytes": 22950,
       "referenced_by": [
+        "/guides/quickstart-btcpay",
         "/btcpay"
       ]
     },
@@ -800,6 +793,7 @@
       "content_type": "image/webp",
       "bytes": 9310,
       "referenced_by": [
+        "/guides/quickstart-btcpay",
         "/btcpay"
       ]
     },
@@ -809,6 +803,7 @@
       "content_type": "image/webp",
       "bytes": 47418,
       "referenced_by": [
+        "/guides/quickstart-btcpay",
         "/btcpay"
       ]
     },
@@ -818,7 +813,17 @@
       "content_type": "image/webp",
       "bytes": 54092,
       "referenced_by": [
+        "/guides/quickstart-btcpay",
         "/btcpay"
+      ]
+    },
+    {
+      "path": "/assets/wordpress/checkout.png",
+      "source": "docs/assets/wordpress/checkout.png",
+      "content_type": "image/png",
+      "bytes": 232579,
+      "referenced_by": [
+        "/wordpress"
       ]
     },
     {
