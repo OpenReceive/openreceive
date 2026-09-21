@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.11 - 2026-09-21
 
 - Keep a refund address the payer types the moment the swap refund panel
   appears. The React checkout reset its per-attempt refund draft from a mount
@@ -36,12 +36,14 @@
 - Fix PostgreSQL Knex binding/transaction handling, recursive diagnostic redaction,
   wallet normalization, refund-network checks, and PHP relay failover without
   automatically replaying an uncertain invoice mint.
-- BTCPay source: recover historical LN/LNURL settlements, retain retired swap and
-  refund access, serialize replacements and provider poll claims, and authorize
-  wallet endpoints before network access. No plugin publication is included.
+- BTCPay Server plugin 0.4.11: recover historical LN/LNURL settlements, retain
+  retired swap and refund access, serialize replacements and provider poll
+  claims, and authorize wallet endpoints before network access. This release
+  publishes the plugin; see `packages/dotnet/CHANGELOG.md` for its full notes
+  and `packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md`
+  for the migration and existing-row review it requires.
 - Coordinated upgrade and existing-row review are required; see
   [payment safety upgrade and repair](docs/guides/payment-safety-upgrade.md).
-
 - Fix a wallet scan that could end early. The walk decided the wallet had run
   out of rows from the page length after unusable rows were dropped, so one
   malformed row on a full page ended it as complete and a paid invoice on a
@@ -53,21 +55,26 @@
 - Python: a wallet reply whose `result` is a bare list no longer reads as an
   empty scan. The receive client hands the result to the normalizer as sent,
   and a non-object `error` raises.
-- BTCPay plugin source (not published by this change): minted invoices are
-  stored in a new `openreceive_invoices` table so a restart keeps each
-  invoice's scan window, a failed whole-history walk is retried, and
+- BTCPay Server plugin: minted invoices are stored in a new
+  `openreceive_invoices` table so a restart keeps each invoice's scan window,
+  a failed whole-history walk is retried, and
   `packages/dotnet/docker/restart-e2e.sh` proves "paid while BTCPay was down".
-  Details in `packages/dotnet/CHANGELOG.md`.
-- BTCPay plugin source (not published by this change): the notification
-  subscription opens its own relay socket. NNostr's shared pool disposed the
-  leased client after five quiet minutes, which silently ended push and left
-  settlement to the 60-second sweep.
+- BTCPay Server plugin: the notification subscription opens its own relay
+  socket. NNostr's shared pool disposed the leased client after five quiet
+  minutes, which silently ended push and left settlement to the 60-second
+  sweep.
 - Print the demo's address in a highlighted banner. `npm run demo <target>`
   draws a boxed `http://localhost:<port>` block when it starts and again the
   moment the published port first answers, so the URL is not lost under the
   Docker Compose log stream. A detached run (`-- -d`) now waits for the port
   before returning, and the BTCPay demo's ready message uses the same banner.
-  Scheduled for 0.4.11.
+- Release verification: the nine Buy a Button examples (`django`, `fastapi`,
+  `fastify`, `laravel`, `nextjs-fullstack`, `node-express`, `php-plain`,
+  `rails`, `static-html-small-api`) were rebuilt against the 0.4.11 workspace
+  packages and gems. The live wallet smoke ran against a Rizful NWC
+  connection: preflight plus a real invoice mint and a production reconcile
+  pass in all four engines (Node, Ruby, Python, PHP). No invoice was paid
+  manually, so settlement of a live payment was not exercised in this release.
 
 ## 0.4.10 - 2026-09-16
 

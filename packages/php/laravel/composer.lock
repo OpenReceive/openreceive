@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b7d8c79e9a2ca17f7414fb3d58f5fd07",
+    "content-hash": "5512e538124bed1e97d817b732893227",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.10",
+            "version": "0.4.11",
             "dist": {
                 "type": "path",
                 "url": "../openreceive",
-                "reference": "1ddca3bc6c4bb532f40ee965003b38b86eb4dac0"
+                "reference": "e2db64d6e2e78ae7ed13c79cbcd197b19af4645e"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20",

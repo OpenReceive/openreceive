@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.11 - 2026-09-21
+
+Wallet history scans stop trusting a page's usable length. A page the wallet
+sent full but that lost a malformed row to normalization no longer reads as
+the end of the history, the skipped-row count survives a second normalization
+(the walk normalizes a page the client already normalized), and the offset
+advances by the rows the wallet actually sent. A non-object transaction row is
+now a skipped row rather than a normalization crash. Two new cases in
+`spec/test-vectors/wallet-scan-truncation.json` cover both shapes.
+
+Normalized wallet errors are redacted: `nostr+walletconnect:` and
+`lightning+swapconnect:` URIs and `key=`/`token=`/`preimage=`-style parameters
+never survive into a message, and `redact_secrets` is available for diagnostic
+payloads. The nwc-ruby adapter enforces a scan deadline inside the wallet
+request itself (`_deadline`), bounding only wallet I/O — no database
+transaction or fulfillment callback is interrupted.
+
 ## 0.4.10 - 2026-09-16
 
 Release in lockstep with the 0.4.10 stablecoin checkout fix. The shared

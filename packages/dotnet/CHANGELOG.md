@@ -1,6 +1,6 @@
 # BTCPay Server plugin changelog
 
-## Unreleased
+## 0.4.11 — 2026-09-21
 
 - Extend Docker restart coverage for both LN and LNURL: retain a replaced invoice
   while it is still unpaid after startup, accept its later payment, and record it
@@ -56,7 +56,7 @@
   while the server was down stayed unpaid in BTCPay. The walk now counts as
   spent only once it completes; the next refresh repeats a failed one.
 
-## 0.4.10 — release candidate
+## 0.4.10 — published 2026-09-16
 
 Addresses both findings of the Plugin Builder review of 0.4.8.0. The plugin
 version skips 0.4.9 to match the npm and gem release of 2026-09-16; the

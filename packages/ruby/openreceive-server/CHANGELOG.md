@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.11 - 2026-09-21
+
+The mounted HTTP routes mint invoices with the host's own description. The
+display string `amount_for` returns beside the price is now the default
+`make_invoice` memo, so a host that writes no invoice code stops minting
+BOLT11s with an empty description. An explicit request-body `memo` still wins
+and still carries the length cap; a host that returns no description still
+mints without one.
+
+Payment safety and disclosure fixes: a checkout's `created_at_source` (whether
+the creation time came from the wallet or from us) is internal and is stripped
+from every public body, error responses carry a redacted message and no
+arbitrary internal `details`, unexpected errors are reported to `Rails.error`
+detached from their cause and backtrace, a host callback that returns an
+invalid amount raises `InternalHostError` instead of leaking a validation
+failure, and a refund address is rejected unless the attempt has a saved,
+supported pay-in asset. A host that refuses an attempt now answers 409 with
+instructions withheld, while genuine storage failure stays a retryable 503.
+
 ## 0.4.10 - 2026-09-16
 
 Release in lockstep with the 0.4.10 stablecoin checkout fix. The swap fee

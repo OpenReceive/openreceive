@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.11 - 2026-09-21
+
+Reconciliation progress is durable and bounded. A capped wallet walk now
+stores its window — attempt identities, page offset, view and page
+fingerprint — in `OpenReceive::ReconcileScan`, so the next request or worker
+resumes where the last one stopped instead of restarting the history, and a
+resumed scan is never treated as proof that a payment is absent. Scans carry
+a deadline into the wallet request, and fulfillment commits in the same
+transaction as settlement.
+
+The default repository maps an unexpected persistence failure to
+`HostPersistenceError` (retryable 503, payer instructions withheld) rather
+than letting it surface as an unrelated error.
+
 ## 0.4.10 - 2026-09-16
 
 Release alongside the packaged checkout fix that shows one amount to send

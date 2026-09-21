@@ -10,18 +10,15 @@ operations that are yours. The walkthrough is the
 
 | Plugin | BTCPay Server | .NET | NNostr.Client |
 | --- | --- | --- | --- |
-| 0.4.10 source (release candidate) | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
+| 0.4.11 | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
 
 The plugin identifier is `BTCPayServer.Plugins.OpenReceive`. Its version and
 publication are independent of npm/gem releases.
 
-The published OpenReceive 0.4.7.0 plugin was built against BTCPay 2.4.2.
-On BTCPay 2.4.4 it can pass NWC preflight but fail when saving the store's
-Lightning backend with `MissingMethodException` for
-`PaymentMethodConfigValidationContext`. BTCPay 2.4.4 added a required
-`StoreData` constructor argument. The current source passes the store and
-builds against 2.4.4; installing that fix requires a rebuilt plugin.
-Changing the NWC code or its permissions does not fix this binary mismatch.
+0.4.11 requires a coordinated upgrade: it adds database migrations and
+changes how existing rows are read. Review
+[the plugin's payment safety upgrade notes](https://github.com/OpenReceive/openreceive/blob/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md)
+before installing it over an earlier version.
 
 ## The connection string
 
