@@ -304,15 +304,15 @@ Add the Rails engine gem to your `Gemfile`:
 gem "openreceive-rails"
 ```
 
-That is the whole install: `openreceive-rails` depends on `openreceive`,
-`openreceive-server` and `nwc-ruby`, so the default wallet client — built from
-`NWC_URI` — works with nothing else added. Hosts that bring their own NWC
-client set `config.nwc_client` instead.
+That is the whole install. `openreceive-rails` depends on `openreceive`,
+`openreceive-server` and `nwc-ruby`, so the default wallet client works with
+nothing else added. It is built from `NWC_URI`. If your app brings its own NWC
+client, set `config.nwc_client` instead.
 
-One native prerequisite: `nwc-ruby`'s `rbsecp256k1` builds libsecp256k1 from
-source, so minimal images (`ruby:3.3-slim`, fresh Docker builds) need the
-autotools or `bundle install` dies at `autoreconf: not found`. Before
-bundling:
+There is one native prerequisite. `nwc-ruby` uses `rbsecp256k1`, which builds
+libsecp256k1 from source. Minimal images (`ruby:3.3-slim`, fresh Docker builds)
+need the autotools for that, or `bundle install` fails with
+`autoreconf: not found`. Install them before bundling:
 
 ```sh
 apt-get install -y autoconf automake libtool build-essential pkg-config
@@ -327,34 +327,34 @@ bin/rails generate openreceive:install
 bin/rails db:migrate
 ```
 
-`openreceive:install` emits one migration for both engine tables, the
-initializer, and the engine mount. The migration adapts to the app's configured
-database adapter — PostgreSQL, SQLite, and MySQL (`mysql2`/`trilogy`) are
-supported.
+The migration adapts to your app's database adapter. PostgreSQL, SQLite, and
+MySQL (`mysql2`/`trilogy`) are supported.
 → [openreceive:install](https://openreceive.org/guides/api-reference.md#openreceiveinstall)
 
-The generator emits three things:
+The `openreceive:install` generator emits three things:
 
-- `db/migrate/*_create_openreceive_tables.rb` — one migration creating both
-  engine tables (`openreceive_payments` and `openreceive_meta`);
-- a simplified `config/initializers/openreceive.rb`;
-- the `OpenReceive::Engine` route mount at `/openreceive`.
+- `db/migrate/*_create_openreceive_tables.rb`: one migration that creates both
+  engine tables (`openreceive_payments` and `openreceive_meta`).
+- A simplified `config/initializers/openreceive.rb`.
+- The `OpenReceive::Engine` route mount at `/openreceive`.
 
-The `OpenReceivePayment` model is engine-owned — no model file is generated.
-The engine owns the table's commit locking, write-once settlement, and
-reconciliation state machine. `reference` is indexed but not unique (a
-reference may have many historical attempts); `payment_hash` is globally unique.
+The engine owns the `OpenReceivePayment` model, so no model file is generated.
+The engine also owns the table's commit locking, write-once settlement, and
+reconciliation state machine. `reference` is indexed but not unique, because
+one reference may have many historical attempts. `payment_hash` is globally
+unique.
 
 #### Fulfill exactly once
 
 Within OpenReceive's own settlement paths, `on_paid` runs at most once per
-reference: a second payment to a second invoice is recorded with
-`status_reason = "duplicate_settlement"` and never fulfills again.
+reference. If a second invoice for the same reference is paid, OpenReceive
+records that payment with `status_reason = "duplicate_settlement"` and does
+not fulfill again.
 
-The one thing you own: **if anything other than OpenReceive can also fulfill
-an order** — an admin action, a second payment processor, a replayed job —
-those paths race each other, and `on_paid` must be idempotent. The generated
-initializer spells this out and shows the guarded transition:
+One case is yours to handle. **If anything other than OpenReceive can also
+fulfill an order**, such as an admin action, a second payment processor, or a
+replayed job, those paths race each other. Then `on_paid` must be idempotent.
+The generated initializer explains this and shows the guarded transition:
 
 ```ruby
 config.on_paid = lambda do |settlement|
@@ -369,19 +369,19 @@ config.on_paid = lambda do |settlement|
 end
 ```
 
-Delivery is at-least-once: `on_paid` runs inside the settlement transaction,
-and a raise rolls it back for the next pass to retry. Keep it to database
-writes on the order — an email or webhook sent from here would survive the
-rollback and go out again. The `state: "paid"` transition above is the flag;
-let your own job drain it after commit.
+Delivery is at-least-once. `on_paid` runs inside the settlement transaction. If
+it raises, the transaction rolls back and the next pass retries. So keep
+`on_paid` to database writes on the order. An email or webhook sent from here
+would survive the rollback and go out again. The `state: "paid"` transition
+above is the flag. Let your own job drain it after commit.
 
-**`update_all` fires no Active Record callbacks.** That is the point — it is one
-conditional `UPDATE`, so the claim is atomic and there is no model code between
-the check and the write. It also means there is no `after_commit` to hang a
-post-commit side effect on, which is fine for a background job draining the flag
-and useless for a page that wants to know *now*. If you push settlement over
-Action Cable, or your model owns the transition through callbacks, take a row
-lock for the duration instead:
+**`update_all` fires no Active Record callbacks.** That is intended. It runs one
+conditional `UPDATE`, so the claim is atomic and no model code runs between the
+check and the write. It also means there is no `after_commit` to attach a
+post-commit side effect to. That is fine for a background job that drains the
+flag. It does not help a page that needs to know right away. If you push
+settlement over Action Cable, or your model owns the transition through
+callbacks, take a row lock for the duration instead:
 
 ```ruby
 config.on_paid = lambda do |settlement|
@@ -391,52 +391,61 @@ config.on_paid = lambda do |settlement|
 end
 ```
 
-**Unlocking a download works the same way.** If what the payer bought is a
-file, do not unlock it in the browser: gate the download route on the paid
-order row — `Order.find_by(id: params[:id], user: current_user, state: "paid")`
-or a 404 — and serve the file only then. The `state: "paid"` written above is
-the unlock; the client never decides an order was fulfilled, it re-reads the
-row. Buy a Button's `ShopController#download` is this in twenty lines.
+**Unlocking a download works the same way.** If the payer bought a file, do not
+unlock it in the browser. Gate the download route on the paid order row, and
+serve the file only if that row exists:
+`Order.find_by(id: params[:id], user: current_user, state: "paid")`, or a 404
+otherwise. The `state: "paid"` written above is the unlock. The client never
+decides that an order was fulfilled. It re-reads the row. Buy a Button's
+`ShopController#download` does this in twenty lines.
 
-Both shapes are idempotent, and both are correct. They differ only in whether
-your model layer gets to run: `update_all` skips it and is the right default;
-the row lock holds the row for the duration of the block and is what you want
-when the transition has to go through your model. The generated fulfillment note
-says the same thing — if your fulfillment is a read-modify-write that cannot be
-expressed as one conditional `UPDATE`, take the lock.
+Both shapes are idempotent and correct. They differ only in whether your model
+layer runs:
 
-Either way the rule above still holds: whatever the callback does must be
-database writes on the order. `after_commit` on the settlement transaction runs
-after OpenReceive's own commit, so an email enqueued there is as safe as one
-enqueued from a job draining the flag — and an email sent *inline* from
-`on_paid` is not, in either shape.
+- `update_all` skips the model layer. It is the right default.
+- The row lock holds the row for the duration of the block. Use it when the
+  transition has to go through your model.
 
-A runnable illustration of this boundary — not a template to copy models from —
-is Buy a Button
-(`examples/buttons/server/rails`).
-It has products, visitors, and orders, with the three hooks as the only bridge.
-Map that shape onto the models in THIS app.
+The generated fulfillment note says the same thing. If your fulfillment is a
+read-modify-write that one conditional `UPDATE` cannot express, take the lock.
+
+Either way, the rule above still holds: the callback must only make database
+writes on the order. `after_commit` on the settlement transaction runs after
+OpenReceive's own commit. So an email enqueued there is as safe as one enqueued
+from a job that drains the flag. An email sent *inline* from `on_paid` is not
+safe, in either shape.
+
+Buy a Button
+(`examples/buttons/server/rails`)
+is a runnable illustration of this boundary. It is not a template to copy
+models from. It has products, visitors, and orders, and the three hooks are the
+only bridge. Map that shape onto the models in THIS app.
 
 Supply the receive-only wallet connection as `ENV["NWC_URI"]`. Never put it in
 browser code, logs, or assets. Your application refuses to start when the code
-advertises spend methods such as `pay_invoice`; the explicit override is
-`config.allow_spend_capable_wallet = true` or
+advertises spend methods such as `pay_invoice`. To override that explicitly,
+set `config.allow_spend_capable_wallet = true` or
 `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` ([Security](https://openreceive.org/guides/security.md)).
 
-OpenReceive reads `ENV`; Rails does not load a `.env` file on its own.
-`dotenv-rails`, an exported shell environment, or your production secret
-manager has to put the values there first.
+OpenReceive reads `ENV`. Rails does not load a `.env` file on its own, so
+something has to put the values there first: `dotenv-rails`, an exported shell
+environment, or your production secret manager.
 → [Environment variables](https://openreceive.org/guides/environment-variables.md).
 
 ### Configure the host hooks
 
 The initializer needs three things: authorization, the trusted price, and
-fulfillment. All three receive the `reference` — a string you choose, and the
-fulfillment identity: your order id, one per thing you fulfill, created before
-checkout, kept across retries, never reused. OpenReceive never looks inside
-it, but `on_paid` commits fulfillment once per reference, a new checkout under a reference
-that already settled is refused with 409, and a fresh id per page load lets
-one order be paid twice.
+fulfillment. All three receive the `reference`. This is a string you choose,
+and it is the fulfillment identity. Use your order id:
+
+- one per thing you fulfill,
+- created before checkout,
+- kept across retries,
+- never reused.
+
+OpenReceive never looks inside it. But `on_paid` commits fulfillment once per
+reference, and a new checkout under a reference that already settled is
+refused with 409. A fresh id per page load would let one order be paid twice.
 
 ```ruby
 OpenReceive.configure do |config|
@@ -488,25 +497,27 @@ OpenReceive.configure do |config|
 end
 ```
 
-`OpenReceive.configure` sets the three host hooks; `on_paid` runs inside the
+`OpenReceive.configure` sets the three host hooks. `on_paid` runs inside the
 settlement transaction, only for the first settled attempt for a reference.
 → [OpenReceive.configure](https://openreceive.org/guides/api-reference.md#openreceiveconfigure)
 
-The engine's controllers inherit from `config.parent_controller` — the
-generated initializer sets it to `"ApplicationController"`. That is how the
-engine picks up your application's `protect_from_forgery`. Keep
-`csrf_meta_tags` in the layout that renders the checkout; the checkout client
-sends `X-CSRF-Token` from it automatically.
+The engine's controllers inherit from `config.parent_controller`. The generated
+initializer sets it to `"ApplicationController"`. That is how the engine picks
+up your application's `protect_from_forgery`. Keep `csrf_meta_tags` in the
+layout that renders the checkout. The checkout client sends `X-CSRF-Token` from
+it automatically.
 
-The same inheritance brings every global `before_action` your
-`ApplicationController` declares. A filter that redirects signed-out users to
-a login page will redirect the engine's JSON routes too, and a guest checkout
-then never gets an invoice. The engine reads nothing from the parent except
-that forgery protection — `config.authorize` receives the request and your
-policy reads its own session from it — so if your `ApplicationController`
-carries such filters, either point `config.parent_controller` at a slimmer
-controller that still calls `protect_from_forgery`, or skip the filter for
-the engine only:
+The same inheritance also brings every global `before_action` that your
+`ApplicationController` declares. A filter that redirects signed-out users to a
+login page will redirect the engine's JSON routes too. A guest checkout then
+never gets an invoice. The engine reads nothing from the parent except forgery
+protection. `config.authorize` receives the request, and your policy reads its
+own session from it. So if your `ApplicationController` has such filters, do one
+of these:
+
+- Point `config.parent_controller` at a slimmer controller that still calls
+  `protect_from_forgery`.
+- Skip the filter for the engine only:
 
 ```ruby
 # config/initializers/openreceive.rb (after OpenReceive.configure)
@@ -515,47 +526,51 @@ Rails.application.config.to_prepare do
 end
 ```
 
-Filters your authorize policy depends on (a tenant resolver, `Current`
-attributes) should stay: they run before `config.authorize`.
+Keep the filters your authorize policy depends on, such as a tenant resolver
+or `Current` attributes. They run before `config.authorize`.
 
-The generated initializer ships
-`config.on_paid = OpenReceive::LOGGING_ON_PAID` — a placeholder that only logs
-the settlement and fulfills nothing. Replace it with your real fulfillment (as
-above); the engine warns every time your application boots while the
-placeholder is still configured, because orders would otherwise be recorded as settled without ever
-being fulfilled. The same applies to
-`config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE`, the generated
-allow-all placeholder: it treats possession of the reference as
-authorization, which is safe only while references are unguessable, and the
-engine warns at boot until you replace it with your own ownership check (as
-above). Replace both, not just `on_paid`.
+The generated initializer ships two placeholders. Replace both, not just
+`on_paid`:
 
-The amount always comes from your own order record; payer-supplied amounts are
-rejected. Advanced hooks (`resolve_checkout`, `on_checkout_created`) remain as
-overrides for custom-repository applications and are not part of the quickstart.
+- `config.on_paid = OpenReceive::LOGGING_ON_PAID` only logs the settlement and
+  fulfills nothing. Replace it with your real fulfillment (as above). Until you
+  do, orders would be recorded as settled without ever being fulfilled, so the
+  engine warns every time your application boots.
+- `config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE` allows everything. It
+  treats possession of the reference as authorization, which is safe only while
+  references are unguessable. The engine warns at boot until you replace it
+  with your own ownership check (as above).
 
-For public web shops, opt into the per-IP invoice cap with
-`config.rate_limiting = true`; leave it off (the default) when many payers
+The amount always comes from your own order record. Payer-supplied amounts are
+rejected. The advanced hooks `resolve_checkout` and `on_checkout_created` remain
+as overrides for apps with a custom repository. They are not part of the
+quickstart.
+
+For public web shops, turn on the per-IP invoice cap with
+`config.rate_limiting = true`. Leave it off (the default) when many payers
 share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md#rails)
 
-In production the engine builds the wallet client — and runs its receive-only
-preflight — eagerly when your application boots, so a missing `NWC_URI`, a
-dead relay, or a spend-capable wallet stops the deploy instead of surfacing as
-customer-facing 500s on the first checkout. Outside production (tests,
-consoles) the client is built lazily so no live wallet is needed.
+In production, the engine builds the wallet client when your app boots. It
+also runs the receive-only preflight right away: it reaches the wallet and
+checks that the code cannot spend. A missing `NWC_URI`, a dead relay, or a
+spend-capable wallet then stops the deploy. Otherwise those problems would
+show up as 500 errors for customers on the first checkout. Outside production
+(tests, consoles), the engine builds the client lazily, on first use, so no
+live wallet is needed.
 
 ### Render the checkout
 
-Serve the compiled `styles.css` without Tailwind processing: import it from
-JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
-Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
-allow host styles to override checkout styles; scoping does not prevent that.
+Serve the compiled `styles.css` without Tailwind processing. Either import it
+from JavaScript (with a CSS-capable bundler) or use a plain
+`<link rel="stylesheet">`. Do not `@import` it into your Tailwind entry. Its
+rules have zero specificity, so your own styles can override checkout styles.
+Scoping does not prevent that.
 
-The engine serves JSON checkout routes only — rendering is your view. Any
-OpenReceive frontend package works against the `/openreceive` mount; the
-smallest is the custom element (its default `prefix` is already
-`/openreceive`, and the package ships a self-contained `styles.css` a plain
-stylesheet link can serve; it is scoped to what OpenReceive renders):
+The engine serves JSON checkout routes only. Your view does the rendering. Any
+OpenReceive frontend package works against the `/openreceive` mount. The
+smallest is the custom element. Its default `prefix` is already
+`/openreceive`. The package ships a self-contained `styles.css` that a plain
+stylesheet link can serve, scoped to what OpenReceive renders.
 
 ```erb
 <%# app/views/orders/pay.html.erb %>
@@ -574,9 +589,9 @@ import "@openreceive/elements/styles.css"; // or link the compiled styles.css
 defineElements();
 ```
 
-Bundling with esbuild (jsbundling-rails)? Build ESM and load it as a module.
-esbuild's default IIFE output evaluates a dependency's Node fallback in the
-browser and throws `ReferenceError: __filename is not defined`:
+If you bundle with esbuild (jsbundling-rails), build ESM and load it as a
+module. esbuild's default IIFE output runs a dependency's Node fallback in the
+browser, which throws `ReferenceError: __filename is not defined`:
 
 ```sh
 esbuild app/javascript/application.js --bundle --format=esm --outdir=app/assets/builds
@@ -590,24 +605,24 @@ Everything the checkout draws ships inside the JavaScript: the payment-method
 icons, the wallet logos and the pay tutorials. There is no image file to copy
 or serve and no asset option to set. Deploy your normal JavaScript and CSS
 build output, including any generated JavaScript chunks. Bundlers with code
-splitting can defer tutorial screenshots until first open; single-file builds
-(including the standalone checkout) include them upfront. If your
-Content-Security-Policy has a strict `img-src`, allow `data:`
+splitting can load tutorial screenshots only when a tutorial is first opened.
+Single-file builds, including the standalone checkout, include them upfront. If
+your Content-Security-Policy has a strict `img-src`, allow `data:`
 ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
 
-Then open the checkout in a browser, confirm the payment-method icons and
+Then open the checkout in a browser. Confirm the payment-method icons and
 wallet logos render, and open a wallet's pay tutorial to check its screenshots.
-If an image is missing, inspect the console for CSP violations and the Network
+If an image is missing, check the console for CSP violations and the Network
 panel for failed JavaScript chunks. Allow `data:` in `img-src` and deploy the
 complete build output. Do not add image routes, copy package source images, or
 use registry `icon_path` / tutorial `path` keys as browser URLs.
 
 The element creates the checkout for `reference`, then renders and polls
-itself. React/Vue/Svelte/Angular apps use the matching wrapper package
-instead — same props and defaults ([Frontend checkout](https://openreceive.org/guides/frontend-checkout.md)).
-Build a custom checkout only if this app cannot use a drop-in; then
-`@openreceive/browser/headless` is the API
-([Headless checkout](https://openreceive.org/guides/headless-checkout.md)).
+itself. React, Vue, Svelte, and Angular apps use the matching wrapper package
+instead, with the same props and defaults
+([Frontend checkout](https://openreceive.org/guides/frontend-checkout.md)). Build a custom checkout only if
+this app cannot use a drop-in. In that case `@openreceive/browser/headless` is
+the API ([Headless checkout](https://openreceive.org/guides/headless-checkout.md)).
 
 ### Reconciliation
 
@@ -624,29 +639,33 @@ bin/rails openreceive:notifications
 
 → [rake openreceive:notifications](https://openreceive.org/guides/api-reference.md#rake-openreceivenotifications)
 
-`OpenReceive.reconcile!` and `bin/rails openreceive:reconcile` are one-shot
-primitives if you want to drive a pass yourself.
+To run a pass yourself, use the one-shot `OpenReceive.reconcile!` or
+`bin/rails openreceive:reconcile`.
 → [OpenReceive.reconcile!](https://openreceive.org/guides/api-reference.md#openreceivereconcile)
 
 ### Swap secrets
 
-The Ruby server recognizes `LSC_URI_PRIMARY` and `LSC_URI_BACKUP` using the
-shared [Lightning Swap Connect](https://openreceive.org/guides/lightning-swap-connect.md) vectors: setting either one
-auto-builds the matching provider, so an app that wants swaps only supplies the
-connection strings ([Environment variables](https://openreceive.org/guides/environment-variables.md)).
-`config.swap_providers` is the override knob — pass your own adapters to
-replace the auto-built set, or an empty array to disable swaps.
+The Ruby server recognizes `LSC_URI_PRIMARY` and `LSC_URI_BACKUP`, using the
+shared [Lightning Swap Connect](https://openreceive.org/guides/lightning-swap-connect.md) vectors. Setting
+either one auto-builds the matching provider. So an app that wants swaps only
+supplies the connection strings
+([Environment variables](https://openreceive.org/guides/environment-variables.md)). To override this, use
+`config.swap_providers`. Pass your own adapters to replace the auto-built set,
+or an empty array to disable swaps.
 
-One `openreceive_payments` row holds at most one provider order in its
-server-only `swap_data`. The engine filters `swap_data` from Active Record
-inspection and ordinary serialization. Do not explicitly serialize it, log it,
-or return it from your own API; it may contain a provider credential.
+One `openreceive_payments` row holds at most one provider order, in its
+server-only `swap_data`. The engine hides `swap_data` from Active Record
+inspection and ordinary serialization. Do not serialize it explicitly, log it,
+or return it from your own API. It may contain a provider credential.
 
 **Setting either connection string commits you to refunds.** A swap deposit can
-arrive short or late, which leaves it `refund_required` at the provider with
-only your UI able to claim it — and the payer claims it on a second visit,
-after leaving your page for an address in another wallet. That needs a
-per-order URL your app serves, a route that restores the order behind it, and
-something that restores the ATTEMPT, since `/checkouts/prepare` returns none.
-[Swap refunds](https://openreceive.org/guides/swap-refunds.md) is the whole of it; read it before you set
+arrive short or late. The provider then marks it `refund_required`, and only
+your UI can claim it. The payer claims it on a second visit, after leaving your
+page to get an address in another wallet. That needs three things:
+
+- a per-order URL your app serves,
+- a route that restores the order behind it,
+- something that restores the ATTEMPT, since `/checkouts/prepare` returns none.
+
+[Swap refunds](https://openreceive.org/guides/swap-refunds.md) covers all of it. Read it before you set
 `LSC_URI_PRIMARY`.

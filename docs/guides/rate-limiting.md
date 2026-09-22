@@ -1,7 +1,7 @@
 # Rate limiting
 
 OpenReceive can cap how many invoices one client IP may create. It is **off by
-default** and enabled with one option:
+default**. You turn it on with one option:
 
 ```ts
 app.use(openReceiveExpress({
@@ -12,29 +12,29 @@ app.use(openReceiveExpress({
 }));
 ```
 
-Over-limit requests get `429` with code `RATE_LIMITED`, `retryable: true`, and
-the payer-facing message *"Too many payment attempts. Please try again later."*
-The message string travels to the browser unchanged — `requestCheckout` throws
-it and the checkout element/React `onError` receives it — so the payer sees a
-useful error, not a network failure.
+Requests over the limit get `429` with code `RATE_LIMITED`, `retryable: true`,
+and the payer-facing message *"Too many payment attempts. Please try again later."*
+The message reaches the browser unchanged. `requestCheckout` throws it, and the
+checkout element or React `onError` receives it. So the payer sees a useful
+error, not a network failure.
 
 ## When to enable it
 
-Enable `rateLimiting` when payers reach checkout from their own devices — a
-public web shop, paywall, or donation page — so one address cannot farm
-invoices. Every invoice creation costs a wallet call and a database row;
-without a cap, a scripted client can mint them for free.
+Enable `rateLimiting` when payers reach checkout from their own devices, as in
+a public web shop, paywall, or donation page. This stops one address from
+farming invoices. Every invoice you create costs a wallet call and a database
+row. Without a cap, a script can create them for free.
 
-Leave it **off** (the default) when many payers legitimately share one IP:
+Leave it **off** (the default) when many real payers share one IP:
 
-- **point-of-sale** — every customer pays through the terminal's connection;
-- kiosks, box offices, and market stalls on venue Wi-Fi;
-- corporate or campus NAT where one egress IP serves a whole building.
+- **point-of-sale**: every customer pays through the terminal's connection
+- kiosks, box offices, and market stalls on venue Wi-Fi
+- corporate or campus NAT, where one outgoing IP serves a whole building
 
-This is why the option is opt-in rather than opt-out: a default cap would
-silently break exactly these deployments. If you need both — a public shop and
-a POS lane — mount two handlers with different `rateLimiting` settings, or
-supply a custom `rateLimitHook` that exempts authenticated terminals.
+That is why you have to opt in. A default cap would quietly break exactly these
+setups. If you need both, such as a public shop and a POS lane, mount two
+handlers with different `rateLimiting` settings. Or supply a custom
+`rateLimitHook` that exempts authenticated terminals.
 
 ## Defaults
 
@@ -45,15 +45,15 @@ Rate limiting is **off** unless you set `rateLimiting`. With
 | --- | --- |
 | Hourly cap | 60 invoice creations per IP per rolling hour |
 | Daily cap | none (hourly only) |
-| Throttled actions | `checkout.create`, `swap.create` — status polling and quotes are never throttled |
-| Missing IP | **fail open**: an unattributable request is always allowed (a one-time warning is logged) |
-| Counting | `openreceive_payments` rows via `client_ip` — persistent counting is required, there is no in-memory mode |
-| Reuse | never throttled: the limit applies only when a new attempt would be minted |
+| Throttled actions | `checkout.create`, `swap.create`. Status polling and quotes are never throttled |
+| Missing IP | **fail open**: a request with no known IP is always allowed (a one-time warning is logged) |
+| Counting | `openreceive_payments` rows by `client_ip`. Persistent counting is required. There is no in-memory mode |
+| Reuse | never throttled. The limit applies only when a new attempt would be created |
 
-The 60/hour default is deliberately generous: a genuine payer switching
-payment methods mints a handful of attempts, and the browser and server already
-reuse open invoices where possible. The cap exists to stop farming, not to
-meter buyers.
+The 60/hour default is generous on purpose. A real payer who switches payment
+methods creates only a handful of attempts. The browser and server also reuse
+open invoices where they can. The cap is there to stop farming, not to meter
+buyers.
 
 ## Changing the limits
 
@@ -67,60 +67,62 @@ rateLimiting: {
 }
 ```
 
-Advanced knobs, rarely needed: `actions` (which of the two invoice-minting
-actions to throttle — other actions are rejected when the handler is
-constructed, because row counting
-counts mints and a throttle on anything else could never trigger), `ip`
-(custom client-IP extractor), and `countAttemptsFromIp` (custom counting).
+There are also advanced options you will rarely need:
+
+- `actions`: which of the two invoice-creating actions to throttle. The handler
+  rejects any other action when it is constructed. Row counting counts created
+  invoices, so a throttle on anything else could never trigger.
+- `ip`: a custom client-IP extractor.
+- `countAttemptsFromIp`: custom counting.
 
 ## How counting works
 
 The limiter counts `openreceive_payments` rows by `client_ip`. There is no
-separate counter table and no in-memory fallback, so the cap survives
-restarts and applies across every instance sharing the database.
+separate counter table and no in-memory fallback. So the cap survives restarts
+and applies across every instance that shares the database.
 
-Reuse is never throttled — a capped payer can still re-fetch instructions
-they were already given.
+Reuse is never throttled. A payer who hit the cap can still fetch the
+instructions they were already given.
 
-A custom repository must implement `countAttemptsFromIp`, or disable
-`rateLimiting` and pass a `rateLimitHook` backed by your own store. The
-handler refuses to start rather than silently running without a counter.
+A custom repository must implement `countAttemptsFromIp`. Otherwise, turn off
+`rateLimiting` and pass a `rateLimitHook` backed by your own store. The handler
+refuses to start rather than quietly running without a counter.
 
 ## Getting the client IP right
 
-The IP comes from the framework request (`native.ip` — Express, Fastify).
-Behind a proxy or load balancer you must configure the framework to trust your
-proxy's `X-Forwarded-For` (Express: `app.set("trust proxy", 1)`); otherwise
-every request appears to come from the proxy — or worse, from a spoofable
-header.
+The IP comes from the framework request (`native.ip` in Express and Fastify).
+Behind a proxy or load balancer, you must configure the framework to trust your
+proxy's `X-Forwarded-For` header (Express: `app.set("trust proxy", 1)`).
+Otherwise every request seems to come from the proxy. Worse, it may come from a
+header anyone can fake.
 
-All three adapters also accept `trustProxyIpHeader` as an alternative:
-`true` reads the first hop of `x-forwarded-for` (safe only when **your own**
-reverse proxy sets the header — a direct-to-origin client can forge it), and a
-string names another trusted header (e.g. `"cf-connecting-ip"`).
+All three adapters also accept `trustProxyIpHeader` instead:
 
-**Next.js has no socket IP**: App Router handlers receive a web `Request`, so
-the Next adapter cannot read `native.ip`. Enabling `rateLimiting` there
-requires an explicit IP source — `openReceiveNextHandlers({ ...,
-trustProxyIpHeader: true })`, a trusted-header name, or your own
-`rateLimiting.ip` extractor.
-Without one of these, the adapter refuses to construct rather than silently
-running an inactive limiter.
+- `true` reads the first hop of `x-forwarded-for`. This is safe only when
+  **your own** reverse proxy sets the header. A client that connects straight
+  to your origin server can forge it.
+- A string names another trusted header (e.g. `"cf-connecting-ip"`).
 
-When no IP is attributable the request is allowed and the row's
-`client_ip` stays null: rate limiting degrades to off rather than blocking
-payers. The first such request logs a one-time warning — if you see it on
-every request, your adapter is not supplying an IP and the limiter is
-effectively inactive.
+**Next.js has no socket IP.** App Router handlers receive a web `Request`, so
+the Next adapter cannot read `native.ip`. To enable `rateLimiting` there, you
+must give it an IP source: `openReceiveNextHandlers({ ...,
+trustProxyIpHeader: true })`, a trusted header name, or your own
+`rateLimiting.ip` extractor. Without one, the adapter refuses to construct
+instead of quietly running a limiter that does nothing.
 
-`client_ip` is payer network metadata — treat it under your privacy policy
-like any other request log, and prune old rows if you retain attempts long
-term.
+When a request has no known IP, it is allowed and the row's `client_ip` stays
+null. Rate limiting falls back to off rather than blocking payers. The first
+such request logs a one-time warning. If you see that warning on every request,
+your adapter is not supplying an IP and the limiter is effectively off.
+
+`client_ip` is network metadata about the payer. Handle it under your privacy
+policy like any other request log. Prune old rows if you keep attempts for a
+long time.
 
 ## Rails
 
-The Rails engine ships the same control with the same semantics, configured in
-the initializer:
+The Rails engine has the same control, with the same behavior. You configure it
+in the initializer:
 
 ```ruby
 OpenReceive.configure do |config|
@@ -130,26 +132,26 @@ OpenReceive.configure do |config|
 end
 ```
 
-Off by default. `true` is the same 60/hour cap as Node. The client IP
-defaults to `ActionDispatch::Request#ip` (honors Rails' trusted proxies);
+It is off by default. `true` gives the same 60/hour cap as Node. The client IP
+defaults to `ActionDispatch::Request#ip`, which honors Rails' trusted proxies.
 `config.client_ip` supplies a custom extractor. For a policy the built-in
-limiter cannot express, pass `config.rate_limit` instead — same context as
-`config.authorize`. Do not combine `rate_limiting` with a custom repository.
+limiter cannot express, pass `config.rate_limit` instead. It gets the same
+context as `config.authorize`. Do not combine `rate_limiting` with a custom
+repository.
 
 ## Custom policies
 
-Scope note: the built-in limiter meters invoice **minting** only
-(`checkout.create` / `swap.create`) because it counts committed attempt rows.
-`swap.quote` and `checkout.prepare` are not metered — a scripted client can
-call them freely, and each swap quote is a live outbound provider call. If
-that matters for your deployment, police those actions with a custom
-`rateLimitHook` backed by your own counter.
+The built-in limiter only meters invoice **creation** (`checkout.create` /
+`swap.create`), because it counts committed attempt rows. It does not meter
+`swap.quote` or `checkout.prepare`. A script can call those freely, and each
+swap quote is a live outgoing call to the provider. If that matters for your
+deployment, limit those actions with a custom `rateLimitHook` backed by your
+own counter.
 
-`rateLimiting` and the lower-level `rateLimitHook` are mutually exclusive.
-For policies the built-in limiter cannot express (per-session budgets,
-exempting signed-in users, an external limiter service), pass `rateLimitHook`
-instead — same context as `authorize`; return `false` for a generic `429`, or
-throw an `HttpError(429, "RATE_LIMITED", message, { retryable: true })`
-for a custom payer-facing message. `createIpRateLimit(config)` is
-exported from `@openreceive/http` so a custom hook can compose the built-in
-behavior.
+You can use `rateLimiting` or the lower-level `rateLimitHook`, but not both.
+Pass `rateLimitHook` for policies the built-in limiter cannot express, such as
+per-session budgets, exempting signed-in users, or an external limiter service.
+It gets the same context as `authorize`. Return `false` for a generic `429`. Or
+throw an `HttpError(429, "RATE_LIMITED", message, { retryable: true })` for a
+custom payer-facing message. `@openreceive/http` exports
+`createIpRateLimit(config)` so a custom hook can build on the built-in behavior.

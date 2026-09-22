@@ -1,14 +1,14 @@
 # OpenReceive guides
 
-Add Bitcoin Lightning checkout to your application, with payments received
-directly in your wallet and payment attempts stored in your existing database.
-Choose a framework quickstart below, then add the checkout UI and connect
-your authorization, pricing, and fulfillment hooks.
+OpenReceive adds Bitcoin Lightning checkout to your application. Payments go
+straight to your wallet, and payment attempts are stored in your existing
+database. Pick a framework quickstart below. Then add the checkout UI and
+connect your authorization, pricing, and fulfillment hooks.
 
-OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
-a configured swap provider. The provider converts the payment to **BTC over
-Lightning**, which settles into the merchant's connected wallet. Available
-assets and networks depend on the provider; swaps are optional.
+OpenReceive can also accept **USDT, USDC, SOL, and ETH** through a swap
+provider you configure. The provider converts the payment to **BTC over
+Lightning**, and it settles into the merchant's connected wallet. Swaps are
+optional. The provider decides which assets and networks are available.
 
 1. [Express quickstart (Node)](quickstart-node.md)
 2. [Fastify quickstart](quickstart-fastify.md)
@@ -19,7 +19,7 @@ assets and networks depend on the provider; swaps are optional.
 7. [Django quickstart](quickstart-django.md)
 8. [PHP quickstart (plain PHP)](quickstart-php.md)
 9. [Laravel quickstart](quickstart-laravel.md)
-10. [BTCPay Server quickstart](quickstart-btcpay.md) — and its [reference](btcpay-reference.md)
+10. [BTCPay Server quickstart](quickstart-btcpay.md), plus its [reference](btcpay-reference.md)
 11. [Authorization and the host](authorization.md)
 12. [Rate limiting](rate-limiting.md)
 13. [Frontend checkout](frontend-checkout.md)
@@ -31,7 +31,7 @@ assets and networks depend on the provider; swaps are optional.
 19. [Lightning Swap Connect (LSC) URI](lightning-swap-connect.md)
 20. [Environment variables](environment-variables.md)
 21. [Payment storage](storage.md)
-22. [Payment safety upgrade and repair](payment-safety-upgrade.md) — coordinated rollout and reviewed recovery of existing attempts.
+22. [Payment safety upgrade and repair](payment-safety-upgrade.md): how to roll out the upgrade and how to review and recover existing attempts.
 23. [Deploying OpenReceive](deploying.md)
 24. [Testing your OpenReceive integration](host-testing.md)
 25. [API reference](api-reference.md)
@@ -43,7 +43,7 @@ assets and networks depend on the provider; swaps are optional.
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
 [Flask](../recipes/flask.md) (the Python engine as a Blueprint)
 
-Building this with a coding agent? Hand it one of the agent-directions
+Building this with a coding agent? Give it one of the agent-directions
 payloads instead of a reading list:
 [Node (Express)](https://openreceive.org/agent-directions/node.md),
 [Fastify](https://openreceive.org/agent-directions/fastify.md),
@@ -54,9 +54,9 @@ payloads instead of a reading list:
 [PHP](https://openreceive.org/agent-directions/php.md),
 [Laravel](https://openreceive.org/agent-directions/laravel.md),
 [WooCommerce](https://openreceive.org/agent-directions/woocommerce.md) or
-[BTCPay Server](https://openreceive.org/agent-directions/btcpay.md) — the
-byte-exact files behind the site's copy button (in this repo: `docs/agents/`).
-Each is Step 0, the rules no API call can state for itself, and the matching
-quickstart inlined in full, so it works pasted into an editor with no network
-access. All payloads are generated — edit `docs/agents/src/<stack>.md` and run
-`npm run build:docs`.
+[BTCPay Server](https://openreceive.org/agent-directions/btcpay.md).
+These are the exact files the site's copy button copies. In this repo they live
+in `docs/agents/`. Each payload contains Step 0 (the rules that no API call can
+state for itself) and the full matching quickstart. It works pasted into an
+editor with no network access. All payloads are generated. To change one, edit
+`docs/agents/src/<stack>.md` and run `npm run build:docs`.

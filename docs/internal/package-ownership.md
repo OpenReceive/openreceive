@@ -1,7 +1,7 @@
 # Package Ownership Map
 
-This map records current package ownership and which areas are safe for
-parallel work. Shared contract files still need lead coordination.
+This map records who owns each package today and which areas are safe for
+parallel work. Changes to shared contract files still need the lead to coordinate.
 
 | Area | Package or Path | Status | Owner |
 | --- | --- | --- | --- |
@@ -35,21 +35,21 @@ parallel work. Shared contract files still need lead coordination.
 `packages/dotnet/BTCPayServer.Plugins.OpenReceive/Generated/OpenReceiveTables.cs`,
 `packages/php/openreceive/src/Generated/Tables.php` and
 `packages/python/openreceive/src/openreceive/_generated/tables.py` are generated from
-`spec/data/kernel-tables.json` and follow the lead-owned contract files, not the engine lanes.
+`spec/data/kernel-tables.json`. They follow the lead-owned contract files, not the engine lanes.
 
-Why this many packages: each framework adapter (`express`, `fastify`, `next`;
-`react`, `vue`, `svelte`, `angular`) carries its own framework peer
-dependency, so a host installs exactly one framework's peer set and nothing
-else. The unscoped `openreceive` package is the CLI only; the library ships as
+Why there are this many packages: each framework adapter (`express`, `fastify`, `next`,
+`react`, `vue`, `svelte`, `angular`) carries its own framework as a peer
+dependency. A host therefore installs exactly one framework's peer set and nothing
+else. The unscoped `openreceive` package is only the CLI. The library ships as
 the scoped packages.
 
-Safe post-reference parallel lanes:
+Work that is safe to do in parallel:
 
 - Provider-data API/test/doc polish that does not edit canonical provider data.
 - Testkit conformance helpers that do not change production package behavior.
 - API and security docs that use specs as source of truth.
-- Read-only conformance/security review.
+- Read-only conformance and security review.
 
-Do not let parallel contributors independently edit shared schemas, vectors,
-settlement semantics, idempotency rules, or OpenAPI/AsyncAPI behavior without
-lead coordination.
+Parallel contributors must not edit these on their own without the lead
+coordinating: shared schemas, vectors, settlement semantics, idempotency rules,
+or OpenAPI/AsyncAPI behavior.

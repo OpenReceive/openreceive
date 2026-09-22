@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 3318
+      "bytes": 3360
     },
     {
       "path": "/guides/quickstart-node",
@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 12813
+      "bytes": 13389
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 13820
+      "bytes": 14404
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -43,7 +43,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 13760
+      "bytes": 14446
     },
     {
       "path": "/guides/quickstart-django",
@@ -53,7 +53,7 @@
       "slug": "quickstart-django",
       "title": "Django Quickstart",
       "category": "quickstart",
-      "bytes": 19946
+      "bytes": 20339
     },
     {
       "path": "/guides/quickstart-next",
@@ -63,7 +63,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 15699
+      "bytes": 16314
     },
     {
       "path": "/guides/quickstart-rails",
@@ -73,7 +73,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 17573
+      "bytes": 17725
     },
     {
       "path": "/guides/quickstart-php",
@@ -83,7 +83,7 @@
       "slug": "quickstart-php",
       "title": "PHP Quickstart (plain PHP)",
       "category": "quickstart",
-      "bytes": 15646
+      "bytes": 15881
     },
     {
       "path": "/guides/quickstart-laravel",
@@ -93,7 +93,7 @@
       "slug": "quickstart-laravel",
       "title": "Laravel Quickstart",
       "category": "quickstart",
-      "bytes": 19731
+      "bytes": 20103
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -103,7 +103,7 @@
       "slug": "quickstart-btcpay",
       "title": "BTCPay Server Quickstart",
       "category": "quickstart",
-      "bytes": 4633,
+      "bytes": 4799,
       "assets_base": "/assets/"
     },
     {
@@ -114,7 +114,7 @@
       "slug": "btcpay-reference",
       "title": "BTCPay Plugin Reference",
       "category": "reference",
-      "bytes": 23528
+      "bytes": 25308
     },
     {
       "path": "/guides/node-orms",
@@ -124,7 +124,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "category": "quickstart",
-      "bytes": 6970
+      "bytes": 7065
     },
     {
       "path": "/guides/authorization",
@@ -134,7 +134,7 @@
       "slug": "authorization",
       "title": "Authorization",
       "category": "security",
-      "bytes": 12911
+      "bytes": 13145
     },
     {
       "path": "/guides/rate-limiting",
@@ -144,7 +144,7 @@
       "slug": "rate-limiting",
       "title": "Rate Limiting",
       "category": "security",
-      "bytes": 6776
+      "bytes": 6851
     },
     {
       "path": "/guides/frontend-checkout",
@@ -154,7 +154,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 11591
+      "bytes": 11934
     },
     {
       "path": "/guides/checkout-ux",
@@ -164,7 +164,7 @@
       "slug": "checkout-ux",
       "title": "Checkout UX",
       "category": "guide",
-      "bytes": 7817
+      "bytes": 8083
     },
     {
       "path": "/guides/headless-checkout",
@@ -174,7 +174,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 19127
+      "bytes": 19672
     },
     {
       "path": "/guides/automated-swaps",
@@ -184,7 +184,7 @@
       "slug": "automated-swaps",
       "title": "Automated Swaps",
       "category": "guide",
-      "bytes": 3920
+      "bytes": 4169
     },
     {
       "path": "/guides/swap-refunds",
@@ -194,7 +194,7 @@
       "slug": "swap-refunds",
       "title": "Swap Refunds",
       "category": "guide",
-      "bytes": 6549
+      "bytes": 6954
     },
     {
       "path": "/guides/lightning-swap-connect",
@@ -204,7 +204,7 @@
       "slug": "lightning-swap-connect",
       "title": "Lightning Swap Connect URI",
       "category": "reference",
-      "bytes": 4266
+      "bytes": 4260
     },
     {
       "path": "/guides/environment-variables",
@@ -214,7 +214,7 @@
       "slug": "environment-variables",
       "title": "Environment Variables",
       "category": "reference",
-      "bytes": 3327
+      "bytes": 3509
     },
     {
       "path": "/guides/storage",
@@ -224,7 +224,7 @@
       "slug": "storage",
       "title": "Payment Storage",
       "category": "operations",
-      "bytes": 5676
+      "bytes": 5970
     },
     {
       "path": "/guides/payment-safety-upgrade",
@@ -234,7 +234,7 @@
       "slug": "payment-safety-upgrade",
       "title": "Payment Safety Upgrade and Repair",
       "category": "guide",
-      "bytes": 8076
+      "bytes": 8863
     },
     {
       "path": "/guides/deploying",
@@ -244,7 +244,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 10831
+      "bytes": 11613
     },
     {
       "path": "/guides/host-testing",
@@ -254,7 +254,7 @@
       "slug": "host-testing",
       "title": "Testing Your OpenReceive Integration",
       "category": "guide",
-      "bytes": 10999
+      "bytes": 11416
     },
     {
       "path": "/guides/api-reference",
@@ -264,7 +264,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 120805
+      "bytes": 125249
     },
     {
       "path": "/guides/security",
@@ -274,7 +274,7 @@
       "slug": "security",
       "title": "Security",
       "category": "security",
-      "bytes": 3864
+      "bytes": 4044
     },
     {
       "path": "/guides/provider-registry",
@@ -284,7 +284,7 @@
       "slug": "provider-registry",
       "title": "Provider Registry",
       "category": "reference",
-      "bytes": 6534
+      "bytes": 6677
     },
     {
       "path": "/guides/price-feeds",
@@ -294,7 +294,7 @@
       "slug": "price-feeds",
       "title": "Price Feeds",
       "category": "reference",
-      "bytes": 2408
+      "bytes": 2590
     },
     {
       "path": "/guides/react-material-ui-recipe",
@@ -324,7 +324,7 @@
       "slug": "custom-checkout-route",
       "title": "Writing Your Own Checkout Route",
       "category": "guide",
-      "bytes": 5160
+      "bytes": 5423
     },
     {
       "path": "/guides/agent-directions-node",
@@ -334,7 +334,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 29565
+      "bytes": 30101
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -344,7 +344,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 31059
+      "bytes": 31603
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -354,7 +354,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 32214
+      "bytes": 32860
     },
     {
       "path": "/guides/agent-directions-django",
@@ -364,7 +364,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 39185
+      "bytes": 39538
     },
     {
       "path": "/guides/agent-directions-next",
@@ -374,7 +374,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 33455
+      "bytes": 34030
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -384,7 +384,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 35818
+      "bytes": 35970
     },
     {
       "path": "/guides/agent-directions-php",
@@ -394,7 +394,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 34701
+      "bytes": 34896
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -404,7 +404,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 37895
+      "bytes": 38227
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -414,7 +414,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 10846
+      "bytes": 11012
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -424,7 +424,7 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 4467
+      "bytes": 4892
     },
     {
       "path": "/guides/agent-directions-woocommerce",
@@ -434,7 +434,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 9636
+      "bytes": 10061
     },
     {
       "path": "/api_docs",
@@ -444,7 +444,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 120805,
+      "bytes": 125249,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -489,7 +489,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 9636,
+      "bytes": 10061,
       "copy_button": true,
       "self_contained": true
     },
@@ -499,7 +499,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 29565,
+      "bytes": 30101,
       "copy_button": true,
       "self_contained": true
     },
@@ -509,7 +509,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 31059,
+      "bytes": 31603,
       "copy_button": true,
       "self_contained": true
     },
@@ -519,7 +519,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 33455,
+      "bytes": 34030,
       "copy_button": true,
       "self_contained": true
     },
@@ -529,7 +529,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 32214,
+      "bytes": 32860,
       "copy_button": true,
       "self_contained": true
     },
@@ -539,7 +539,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39185,
+      "bytes": 39538,
       "copy_button": true,
       "self_contained": true
     },
@@ -549,7 +549,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35818,
+      "bytes": 35970,
       "copy_button": true,
       "self_contained": true
     },
@@ -559,7 +559,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34701,
+      "bytes": 34896,
       "copy_button": true,
       "self_contained": true
     },
@@ -569,7 +569,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37895,
+      "bytes": 38227,
       "copy_button": true,
       "self_contained": true
     },
@@ -579,7 +579,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 10846,
+      "bytes": 11012,
       "copy_button": true,
       "self_contained": true
     }

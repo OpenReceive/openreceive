@@ -8,11 +8,11 @@ Express + React. Requires Node ≥ 22.
 npm install @openreceive/express @openreceive/react
 ```
 
-Install the adapter for your server and the UI package for your frontend; the
+Install the adapter for your server and the UI package for your frontend. The
 wallet client, HTTP handler, and contracts come along as dependencies. The
-`openreceive` package is the CLI only — `npx openreceive …` below needs no
-install. Different stack? Swap the two packages; the rest of this guide is
-identical.
+`openreceive` package is only the CLI, and `npx openreceive …` below needs no
+install. On a different stack, swap the two packages; the rest of this guide
+stays the same.
 
 |          | Packages                                                                                                                      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -22,15 +22,17 @@ identical.
 Fastify: [quickstart-fastify.md](quickstart-fastify.md) · Next.js:
 [quickstart-next.md](quickstart-next.md). This page is the Express one.
 
-On a fresh project, also install what this guide assumes is already there: the
-framework and an env loader (`npm install express dotenv`), plus your ORM
-before step 2 (`npm install prisma @prisma/client` on the Prisma path) —
-`openreceive scaffold` emits files for the ORM you name but never installs it.
+On a fresh project, also install what this guide assumes you already have: the
+framework and an env loader (`npm install express dotenv`). Install your ORM
+before step 2 too (`npm install prisma @prisma/client` on the Prisma path).
+`openreceive scaffold` emits files for the ORM you name, but it never installs
+that ORM.
 
 <!-- shared:begin install-notes -->
-npm environments that run with `ignore-scripts` (some editor sandboxes) skip
-Prisma's engine download and esbuild's binary postinstall, so a typecheck or
-build that fails only there is environmental, not a code problem.
+Some editor sandboxes run npm with `ignore-scripts`. That setting skips
+Prisma's engine download and esbuild's binary postinstall. If a typecheck or
+build fails only in such an environment, the environment is the cause, not
+your code.
 <!-- shared:end install-notes -->
 
 <!-- shared:begin migrate -->
@@ -40,19 +42,19 @@ build that fails only there is environmental, not a code problem.
 npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequelize | knex
 ```
 
-`openreceive scaffold payments` emits one schema/migration file for your ORM
-and a wiring guide. It never touches a database.
+`openreceive scaffold payments` writes one schema or migration file for your
+ORM, plus a wiring guide. It never touches a database.
 → [openreceive scaffold payments](api-reference.md#openreceive-scaffold-payments)
 
-Then run the emitted migration through your normal workflow (for example
-`npx prisma migrate dev`). OpenReceive owns the tables' logic at runtime; there
-is nothing else to generate. Details:
+Then run the generated migration the way you normally do (for example
+`npx prisma migrate dev`). OpenReceive runs the tables' logic at runtime, so
+there is nothing else to generate. Details:
 [Payment storage](storage.md), [Node ORM recipes](node-orms.md).
 
-No ORM? A bare driver handle (`pg`, `node:sqlite`, `better-sqlite3`) is a
-supported `db` in step 4, and there is no scaffold flavor for it — execute the
-same DDL once yourself with `paymentsSchemaSql(dialect)` from
-`@openreceive/http` instead of scaffolding.
+No ORM? You can pass a bare driver handle (`pg`, `node:sqlite`,
+`better-sqlite3`) as the `db` in step 4. The scaffold has no flavor for it.
+Instead of scaffolding, run the same DDL once yourself, using
+`paymentsSchemaSql(dialect)` from `@openreceive/http`.
 <!-- shared:end migrate -->
 
 ## 3. Add wallet credentials
@@ -67,26 +69,28 @@ LSC_URI_BACKUP=
 ```
 
 1. Get a receive-only NWC code from a compatible wallet
-   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments))
-   → `NWC_URI`.
-2. Optionally set up a [swap provider](https://openreceive.org/set_up_swap_provider)
-   → `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP` if you have one).
+   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments)).
+   Put it in `NWC_URI`.
+2. Optional: set up a [swap provider](https://openreceive.org/set_up_swap_provider).
+   Put its connection string in `LSC_URI_PRIMARY`, and a second one in
+   `LSC_URI_BACKUP` if you have one.
 
-Never put these values in browser code. Your application refuses to start if
-the NWC code also advertises spend methods such as `pay_invoice`; mint a
-receive-only code ([Security](security.md)).
+Never put these values in browser code. Your app refuses to start if the NWC
+code also advertises spend methods such as `pay_invoice`. Create a
+receive-only code instead ([Security](security.md)).
 <!-- shared:end credentials -->
 
-OpenReceive reads `process.env`; creating a `.env` file is not enough on its
-own. How that file (or production secrets) get into the process —
-`dotenv` on Express/Fastify, Next.js auto-load, secret managers in
-production — is on [Environment variables](environment-variables.md).
+OpenReceive reads `process.env`, so creating a `.env` file is not enough on
+its own. [Environment variables](environment-variables.md) explains how that
+file or your production secrets get into the process: `dotenv` on
+Express/Fastify, auto-load on Next.js, and secret managers in production.
 
 ## 4. Wire OpenReceive
 
-One factory: your hooks plus a database handle. The adapter builds the
-wallet client and the host; there is no background reconciler —
-settlement piggybacks on requests through the durable gate.
+One factory call takes your hooks and a database handle. The adapter builds
+the wallet client and the host. There is no background reconciler, meaning no job that checks pending
+payments on a timer. Settlement runs during normal requests instead, through
+the durable reconcile gate.
 
 ```ts
 import "dotenv/config"; // loads .env into process.env; nothing else does
@@ -163,26 +167,35 @@ An optional worker, `startNotificationWorker({ service, host })`, listens for
 wallet payment notifications so settlement does not wait for the next page
 load. → [startNotificationWorker](api-reference.md#startnotificationworker)
 
-Composing the pieces yourself (`createOpenReceive` + `createHost`) is
-supported when you need a shared wallet client or a custom repository.
+You can also compose the pieces yourself (`createOpenReceive` + `createHost`)
+when you need a shared wallet client or a custom repository.
 → [createOpenReceive](api-reference.md#createopenreceive) ·
 [createHost](api-reference.md#createhost)
 
 <!-- shared:begin reference -->
-Your app also needs an ordinary order-creation route that validates the cart,
-prices with exact decimal math, and returns the order id the page will pass as
-the `reference`. OpenReceive never prices from payer input.
+Your app also needs an ordinary route that creates the order. It validates the
+cart, computes the price with exact decimal math, and returns the order id.
+The page passes that id as the `reference`. OpenReceive never takes a price
+from payer input.
 
-The `reference` is a string you choose, and it is the fulfillment identity:
-your order id — one per thing you fulfill, created before checkout, kept
-across retries, never reused. OpenReceive never looks inside it, but `onPaid`
-commits fulfillment once per reference, a new checkout under a reference that already
-settled is refused with 409, and a fresh id per page load lets one order be
-paid twice.
+The `reference` is a string you choose, and it identifies what gets fulfilled.
+Use your order id. Make it:
+
+- one per thing you fulfill,
+- created before checkout,
+- kept across retries,
+- never reused.
+
+OpenReceive never looks inside the `reference`, but it relies on it:
+
+- `onPaid` commits fulfillment once per reference.
+- A new checkout under a reference that already settled is refused with 409.
+- A fresh id on every page load would let one order be paid twice.
 
 Naming boundary: TypeScript APIs use camelCase fields (`paymentHash`,
-`amountMsats`); everything on the wire — the mounted HTTP routes and the
-browser snapshots — is snake_case (`payment_hash`, `amount_msats`).
+`amountMsats`). Everything on the wire is snake_case (`payment_hash`,
+`amount_msats`). The wire means the mounted HTTP routes and the browser
+snapshots.
 <!-- shared:end reference -->
 
 <!-- shared:begin render -->
@@ -195,48 +208,54 @@ import "@openreceive/react/styles.css";
 <Checkout reference={order.id} prefix="/openreceive" />;
 ```
 
-The checkout renders, polls, and settles itself. The compiled `styles.css`
-sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
-plain `<link rel="stylesheet">` works with no build step — and scoped: every
+The checkout renders, polls, and settles itself.
+
+`@openreceive/react` and `@openreceive/elements` each ship a compiled
+`styles.css`. Each sheet is self-contained, so a plain
+`<link rel="stylesheet">` works with no build step. Each is also scoped: every
 rule applies only inside what OpenReceive renders.
 
-Serve the compiled `styles.css` without Tailwind processing: import it from
-JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
-Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
-allow host styles to override checkout styles; scoping does not prevent that.
+Serve the compiled `styles.css` without Tailwind processing. Import it from
+JavaScript if your bundler handles CSS, or use a plain
+`<link rel="stylesheet">`. Do not `@import` it into your app's Tailwind entry.
+Its rules have zero specificity, so your page's styles can override checkout
+styles. Scoping does not prevent that.
 <!-- shared:end render -->
 
 <!-- shared:begin render-notes -->
-`<Checkout>` is complete as rendered: it already shows the `description` from
+`<Checkout>` is complete as rendered. It already shows the `description` from
 `amountFor` and the collapsed transaction-details panel. Do not build a custom
-UI to satisfy those rules — they only become your job if you replace the
-drop-in ([Checkout UX](checkout-ux.md)).
+UI to show them. The display rules for them become your job only if you
+replace the drop-in component ([Checkout UX](checkout-ux.md)).
 
-Match the host page's theme: by default the checkout follows the payer's
-stored choice, then the system scheme. If this page is always one theme, lock
-it — `<Checkout theme="dark" … />` (`theme` attribute on the custom element) —
-so a white card never lands on a dark page. The checkout is styled by CSS
-variables under `data-theme`; [Frontend checkout](frontend-checkout.md) has
-the knobs.
+Match the host page's theme. By default the checkout follows the payer's
+stored choice, then the system color scheme. If this page always uses one
+theme, lock it with `<Checkout theme="dark" … />`. On the custom element, set
+the `theme` attribute. Locking the theme keeps a white card off a dark page.
+CSS variables under `data-theme` style the checkout.
+[Frontend checkout](frontend-checkout.md) lists the settings you can change.
 
 Everything the checkout draws ships inside the JavaScript: the payment-method
-icons, the wallet logos and the pay tutorials. There is no image file to copy
-or serve and no asset option to set. Deploy your normal JavaScript and CSS
+icons, the wallet logos, and the pay tutorials. There is no image file to copy
+or serve, and no asset option to set. Deploy your normal JavaScript and CSS
 build output, including any generated JavaScript chunks. Bundlers with code
-splitting can defer tutorial screenshots until first open; single-file builds
-(including the standalone checkout) include them upfront. If your
-Content-Security-Policy has a strict `img-src`, allow `data:`
+splitting can wait to load tutorial screenshots until a tutorial first opens.
+Single-file builds, including the standalone checkout, include them from the
+start. If your Content-Security-Policy has a strict `img-src`, allow `data:`
 ([Provider registry](provider-registry.md#assets)).
 
-That is the whole loop: your server owns the price and the order, the payer gets
-an invoice, and `onPaid` runs inside the settlement transaction. Rolled-back transactions may retry the callback; use a host outbox for external delivery.
+That is the whole loop. Your server owns the price and the order. The payer
+gets an invoice. `onPaid` runs inside the settlement transaction. If that
+transaction rolls back, the callback may run again. For delivery to outside
+systems, use an outbox in your app: record the message in the transaction and
+send it after commit.
 <!-- shared:end render-notes -->
 
-A runnable illustration of this boundary — not a template to copy models from —
-is Buy a Button
+Buy a Button is a runnable illustration of this boundary
 ([`examples/buttons/server/node-express`](../../examples/buttons/server/node-express)).
-It has products, visitors, and orders, with the three hooks as the only bridge.
-Map that shape onto the models in THIS app.
+It is not a template to copy models from. It has products, visitors, and
+orders, and the three hooks are the only bridge to OpenReceive. Map that shape
+onto the models in THIS app.
 
 <!-- shared:begin verify -->
 ## 6. Verify
@@ -245,30 +264,31 @@ Map that shape onto the models in THIS app.
 npx openreceive doctor
 ```
 
-`openreceive doctor` checks Node, `NWC_URI`, and swap-provider configuration,
-and probes the wallet relay to confirm the code is receive-only. Add
-`--db <file-or-url>` to confirm the migration ran, and
-`--url http://localhost:3000` to confirm the routes are mounted; every failing
+`openreceive doctor` checks Node, `NWC_URI`, and the swap-provider
+configuration. It also probes the wallet relay to confirm the code is
+receive-only. Add `--db <file-or-url>` to confirm the migration ran. Add
+`--url http://localhost:3000` to confirm the routes are mounted. Every failing
 line states its own fix.
 → [openreceive doctor](api-reference.md#openreceive-doctor)
 
-Then open the checkout in a browser, confirm the payment-method icons and
-wallet logos render, and open a wallet's pay tutorial to check its screenshots.
-If an image is missing, inspect the console for CSP violations and the Network
-panel for failed JavaScript chunks. Allow `data:` in `img-src` and deploy the
-complete build output. Do not add image routes, copy package source images, or
-use registry `icon_path` / tutorial `path` keys as browser URLs.
+Then open the checkout in a browser. Confirm the payment-method icons and
+wallet logos render. Open a wallet's pay tutorial to check its screenshots.
+If an image is missing, look in the console for CSP violations and in the
+Network panel for failed JavaScript chunks. To fix it, allow `data:` in
+`img-src` and deploy the complete build output. Do not add image routes or
+copy package source images. Do not use registry `icon_path` or tutorial
+`path` keys as browser URLs.
 <!-- shared:end verify -->
 
 <!-- shared:begin next -->
 ## Next
 
 - [Authorization](authorization.md) — your policy boundary
-- [Payment storage](storage.md) — the library-owned table and state machine
-- [Frontend Checkout](frontend-checkout.md) — browser responsibilities
+- [Payment storage](storage.md) — the table the library owns, and its state machine
+- [Frontend Checkout](frontend-checkout.md) — what the browser side is responsible for
 - [Automated Swaps](automated-swaps.md) — `swap_data`, and what turning swaps on commits you to
-- [Swap refunds](swap-refunds.md) — the refund flow, and the per-order URL a payer needs to come back and use it. Read it before setting `LSC_URI_PRIMARY`
-- [Security](security.md) — server-only secret boundaries
+- [Swap refunds](swap-refunds.md) — the refund flow, and the per-order URL a payer needs to come back and claim a refund. Read it before you set `LSC_URI_PRIMARY`
+- [Security](security.md) — which secrets must stay on the server
 
 More on wiring, storage, and routes:
 [Authorization](authorization.md), [Payment storage](storage.md),

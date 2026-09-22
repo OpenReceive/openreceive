@@ -1,34 +1,48 @@
 # Conformance
 
-Every OpenReceive engine must reproduce the same money, settlement, NIP-47 paging, swap
-provider, and HTTP behavior. Two things make that checkable rather than aspirational:
+Every OpenReceive engine must behave the same way for money, settlement, NIP-47 paging, the swap
+provider and HTTP. Two things let us check that instead of just hoping for it:
 
-- **Shared vectors** under `spec/test-vectors/` feed the real production functions of each
-  engine (`tests/crosslang.test.mjs` and the per-topic JS tests; `tools/conformance/ruby-crosslang.rb`
-  and the per-gem Ruby tests). A vector never runs against a re-implementation in the validator.
-- **Shared tables** in `spec/data/kernel-tables.json` are rendered by `npm run generate:models`
-  into every engine, so a closed vocabulary or a fixed number is typed once. `npm run check:generated`
-  fails when any rendering is stale; `npm run validate` fails when the OpenAPI document, the JSON
-  Schemas, or a vector restates one of them differently.
+- **Shared vectors** under `spec/test-vectors/` are fed into each engine's real production
+  functions (`tests/crosslang.test.mjs` and the per-topic JS tests; `tools/conformance/ruby-crosslang.rb`
+  and the per-gem Ruby tests). A vector never runs against a copy of the logic written inside the validator.
+- **Shared tables** in `spec/data/kernel-tables.json` are rendered into every engine by
+  `npm run generate:models`. So a closed vocabulary or a fixed number is typed only once.
+  `npm run check:generated` fails when any rendering is stale. `npm run validate` fails when the
+  OpenAPI document, the JSON Schemas or a vector states one of those values differently.
 
-Conformance requires: pages no larger than 20; dedupe by payment hash; creation-time scan
-ranges; preimage-alone rejection; create response only after host commit; replay-safe paid
-delivery; and truncated-scan safety (`wallet-scan-truncation` vectors: a scan that ran out of
-pages proves nothing about the attempts it never reached — they stay pending).
+Conformance requires:
+
+- pages no larger than 20
+- dedupe by payment hash
+- scan ranges based on creation time
+- rejecting a preimage on its own as proof of payment
+- sending the create response only after the host commits
+- paid delivery that is safe to replay
+- truncated-scan safety (`wallet-scan-truncation` vectors). A scan that ran out of pages
+  proves nothing about the attempts it never reached, so they stay pending.
 
 ## The kernel boundary
 
 The NWC rows below implement [NIP-47 core](https://github.com/nostr-protocol/nips/blob/master/47.md)
-plus two extensions, [NWC-05 Transaction History](https://github.com/nostr-wallet-connect/nwc/blob/main/05.md)
-(`list_transactions`, the 20-row page) and [NWC-02 Notifications](https://github.com/nostr-wallet-connect/nwc/blob/main/02.md)
-(`payment_received`, kinds 23196/23197). `spec/README.md` maps each document to the
-vectors that pin it.
+plus two extensions:
 
-An engine is two layers. The **kernel** is the behavior the vectors pin; a new engine ports
-every row below and proves it against the same files. The **host glue** is everything that
-binds the kernel to one platform; it is written fresh per engine and is never shared or
-generated. When someone asks "how much of a new language is real work", the answer is: the
-kernel rows are bounded and mechanical, the glue is the project.
+- [NWC-05 Transaction History](https://github.com/nostr-wallet-connect/nwc/blob/main/05.md)
+  (`list_transactions`, the 20-row page)
+- [NWC-02 Notifications](https://github.com/nostr-wallet-connect/nwc/blob/main/02.md)
+  (`payment_received`, kinds 23196/23197)
+
+`spec/README.md` maps each document to the vectors that pin it.
+
+An engine has two layers:
+
+- The **kernel** is the behavior the vectors pin. A new engine ports every row below and proves
+  it against the same files.
+- The **host glue** is everything that connects the kernel to one platform. It is written fresh
+  for each engine and is never shared or generated.
+
+So if someone asks how much real work a new language is: the kernel rows are bounded and
+mechanical, and the glue is the actual project.
 
 | Kernel module | Pinned by | JS | Ruby | C# (BTCPay plugin) | PHP (`packages/php/openreceive`) | Python (`packages/python/openreceive/src/openreceive`) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -38,28 +52,33 @@ kernel rows are bounded and mechanical, the glue is the project.
 | Wallet error normalization | `error-normalization` | `node/src/nwc/errors.ts` | `core.rb` (`Nwc.normalize_wallet_error`) | `Nwc/NwcErrors.cs` | `src/Nwc/Errors.php` | `nwc/errors.py` |
 | Settlement classification | `settlement-detection` | `core/src/settlement/` | `core.rb` (`Settlement`) | `Nwc/Settlement.cs` | `src/Settlement/Settlement.php` | `settlement.py` |
 | Paged, deduped, truncation-safe wallet walk | `wallet-scan-truncation` | `core/src/payments.ts` | `service.rb` (`reconcile_payments`) + `core.rb` (`Payments`) | `Nwc/WalletScan.cs` | `src/Payments/WalletScan.php` | `payments/scan.py` |
-| Attempt closure decision (expiry + grace) | `attempt-reconciliation` | `http/src/payment-repository.ts` | `openreceive-server/.../reconciliation.rb` | `ReceiveOnlyNwcClient.GetInvoice` status mapping: Paid/Unpaid, and Expired only for a wallet-reported expiry; the grace-window cases are asserted NOT to yield Expired, because BTCPay owns invoice expiry | `src/Payments/Reconciliation.php` | `payments/reconciliation.py` |
+| Attempt closure decision (expiry + grace) | `attempt-reconciliation` | `http/src/payment-repository.ts` | `openreceive-server/.../reconciliation.rb` | `ReceiveOnlyNwcClient.GetInvoice` status mapping: Paid/Unpaid, and Expired only when the wallet reports expiry. The tests assert that the grace-window cases do NOT yield Expired, because BTCPay owns invoice expiry | `src/Payments/Reconciliation.php` | `payments/reconciliation.py` |
 | Exact money and fiat quoting | `fiat-to-msats.usd` | `core/src/money/`, `core/src/rates/` | `core.rb` (`Money`), `rates.rb` | excluded: BTCPay owns rates | `src/Money/Money.php`, `src/Rates/` | `money.py`, `rates/` |
 | LSC URI | `lsc-uri` | `node/src/lsc-uri.ts` | `openreceive-server/.../lsc_uri.rb` | `Swaps/LscUri.cs` | `src/Swap/LscUri.php` | `swap/lsc_uri.py` |
 | Swap address checksums | `swap-address` | `core/src/swap/address.ts` | `openreceive/lib/openreceive/swap_address.rb` | `Swaps/SwapAddress.cs` | `src/Swap/SwapAddress.php` (+ `Keccak256.php`, `Base58.php`) | `swap/address.py` (+ `keccak.py`, `base58.py`) |
-| FixedFloat status → state and reasons | `swap-state`; the mapping itself is data, `spec/data/swap-state-table.json`, rendered next to the kernel tables and interpreted by each engine | `node/src/swap/fixedfloat-orders.ts` (`normalizeFixedFloatStatus` over `node/src/generated/swap-state-table.ts`) | `openreceive-server/.../swap/fixedfloat.rb` (`normalize_status` over `Generated::SWAP_STATUS_ROWS`) | `Swaps/FixedFloatOrders.cs` (`NormalizeStatus` over `OpenReceiveTables.SwapStatusRows`) | `src/Swap/StateTable.php` (`normalizeStatus` over `Tables::SWAP_STATUS_ROWS`) | `swap/state.py` (`normalize_status` over `SWAP_STATUS_ROWS`) |
+| FixedFloat status → state and reasons | `swap-state`. The mapping itself is data, `spec/data/swap-state-table.json`, rendered next to the kernel tables and interpreted by each engine | `node/src/swap/fixedfloat-orders.ts` (`normalizeFixedFloatStatus` over `node/src/generated/swap-state-table.ts`) | `openreceive-server/.../swap/fixedfloat.rb` (`normalize_status` over `Generated::SWAP_STATUS_ROWS`) | `Swaps/FixedFloatOrders.cs` (`NormalizeStatus` over `OpenReceiveTables.SwapStatusRows`) | `src/Swap/StateTable.php` (`normalizeStatus` over `Tables::SWAP_STATUS_ROWS`) | `swap/state.py` (`normalize_status` over `SWAP_STATUS_ROWS`) |
 | Per-IP budget window column | `rate-limit-window` | `http/src/rate-limit.ts` | Rails `OpenReceivePayment` model | excluded: BTCPay owns budgets | `src/Server/RateLimit.php` + `SqlPaymentRepository` | `server/rate_limit.py` + `storage/sql/repository.py` |
 | HTTP wire bodies and statuses | `http-golden/*` | `http/src/handler.ts` | `openreceive-server/.../rack_app.rb` | excluded: BTCPay-shaped routes | `src/Server/Psr15Handler.php` (+ `RequestHandler.php`) | `server/handler.py` |
 | Provider wizard routes | `provider-route.*` | `provider-data` | excluded: no wizard | excluded: no wizard | excluded: no wizard | excluded: no wizard |
 | Shared vocabularies and numbers | generated from `spec/data/kernel-tables.json` and `spec/data/swap-state-table.json` | `core/src/generated/contracts.ts`, `node/src/generated/swap-tables.ts`, `node/src/generated/swap-state-table.ts` | `openreceive/lib/openreceive/generated/tables.rb` | `Generated/OpenReceiveTables.cs` | `src/Generated/Tables.php` | `_generated/tables.py` |
 
-The exclusions are the ones written into `spec/test-vectors/coverage.json`; the table above is
-the prose reading of that file. The PHP and Python columns shipped on 2026-09-07 through the same
-checklist: each has one vector test per non-excluded family (`packages/php/openreceive/tests/
-Vectors/`, `packages/python/openreceive/tests/vectors/`), the `http-golden` files run against
-the PSR-15 handler and the framework-free Python handler, and both engines' FixedFloat
-normalizers are interpreters of the decision table, never hand-written mappings. The C# column shipped on 2026-09-03: every file named exists
-under `packages/dotnet/BTCPayServer.Plugins.OpenReceive/`, and the test project
+The exclusions are the ones written in `spec/test-vectors/coverage.json`. The table above is
+that file in prose.
+
+The PHP and Python columns shipped on 2026-09-07 through the same checklist:
+
+- Each has one vector test per non-excluded family (`packages/php/openreceive/tests/
+  Vectors/`, `packages/python/openreceive/tests/vectors/`).
+- The `http-golden` files run against the PSR-15 handler and the framework-free Python handler.
+- Both engines' FixedFloat normalizers interpret the decision table. Neither is a hand-written mapping.
+
+The C# column shipped on 2026-09-03. Every file named exists under
+`packages/dotnet/BTCPayServer.Plugins.OpenReceive/`, and the test project
 `BTCPayServer.Plugins.OpenReceive.Tests/Vectors/` has one class per non-excluded family.
 
 ### Host glue, per engine
 
-Never shared, never generated, and always the larger half of an engine:
+Host glue is never shared, never generated, and always the larger half of an engine:
 
 - **JS**: the `openreceive_payments` repository and SQL/ORM adapters (`@openreceive/http`), the
   Express/Fastify/Next mounts, the CLI scaffold, the browser checkout and framework wrappers.
@@ -69,7 +88,7 @@ Never shared, never generated, and always the larger half of an engine:
   WordPress plugin), `SqlPaymentRepository` + `MetaStore` + `PaymentsSchema` DDL per dialect,
   `Server\Engine` (the Rails `Configuration` twin), the PSR-15 mount, the
   `dsbaars/nostr-php-nwc` adapter plus the in-repo NWC-02 `NotificationListener`, the Laravel
-  service provider / artisan commands (`packages/php/laravel`), and the `Testing\` fakes.
+  service provider and artisan commands (`packages/php/laravel`), and the `Testing\` fakes.
 - **Python**: `SqlPaymentRepository` on SQLAlchemy Core and the Django ORM repository, the
   `OpenReceiveApp` composition, the in-repo NWC transport (`nwc/transport`: NIP-01/NIP-44/
   NIP-04 over a synchronous websocket), the Django app (models, shipped migrations, views,
@@ -83,70 +102,84 @@ Never shared, never generated, and always the larger half of an engine:
 
 ## Shared tables
 
-`spec/data/kernel-tables.json` holds: the seven pay-in assets with labels and networks; the twelve
-swap provider states with their UI phase and terminal flag; the attention, refund, and
-availability reason enums; the NWC required-receive and spend method sets, the encryption mode
-preference, the notification types, the page limit and the metadata byte cap; the attempt expiry
-grace; and the retryable error codes. Error codes and payment statuses stay in
-`spec/schemas/error.schema.json` and the OpenAPI document, which the generator already reads.
+`spec/data/kernel-tables.json` holds:
 
-Engine code reads the generated rendering and adds behavior on top (lookups, matching, copy).
-The JS state catalog, for instance, keeps its payer-facing labels in `node/src/swap/state.ts`
-but takes the state list, phases, and terminal flags from the generated table, so a new state
-cannot ship without copy and copy cannot name a state the spec lacks.
+- the seven pay-in assets, with labels and networks
+- the twelve swap provider states, with their UI phase and terminal flag
+- the attention, refund and availability reason enums
+- the NWC required-receive and spend method sets, the preferred encryption mode, the
+  notification types, the page limit and the metadata byte cap
+- the attempt expiry grace
+- the retryable error codes
 
-An attention reason marked `reserved: true` is vocabulary no `swap-state` case produces:
-`provider_completed_without_wallet_settlement` is a time-based transition, not a status
-mapping. The BTCPay plugin's `SwapPoller` is its first and only emitter (completed for 30
-minutes with no wallet settlement); JS and Ruby still never emit it (`scope-lock.md`). Every
-other reason must be produced by at least one `swap-state` case, which is how the table cannot
-grow dead entries again.
+Error codes and payment statuses stay in `spec/schemas/error.schema.json` and the OpenAPI
+document, which the generator already reads.
+
+Engine code reads the generated rendering and adds behavior on top: lookups, matching and copy.
+For example, the JS state catalog keeps its payer-facing labels in `node/src/swap/state.ts`,
+but takes the state list, phases and terminal flags from the generated table. So a new state
+cannot ship without copy, and copy cannot name a state the spec does not have.
+
+An attention reason marked `reserved: true` is vocabulary that no `swap-state` case produces.
+`provider_completed_without_wallet_settlement` is one: it comes from a time-based transition,
+not a status mapping. The BTCPay plugin's `SwapPoller` is its first and only emitter (the swap
+has been completed for 30 minutes with no wallet settlement). JS and Ruby still never emit it
+(`scope-lock.md`). Every other reason must be produced by at least one `swap-state` case. That
+rule keeps dead entries from creeping back into the table.
 
 ## Coverage rule
 
-`spec/test-vectors/coverage.json` lists each engine's test roots and its exclusions with a
-reason. `npm run validate` walks every vector family and fails when an engine has neither a
-consumer (a test naming `<family>.json` or `vector("<family>")`) nor an exclusion. An engine
-with no test source in its extensions under any of its roots yet is reported as absent and
-skipped, so its entry can be written before its first test does — a shared root such as
-`tools/conformance` existing for another engine does not make it present — and enforcement
-starts with the first test file. Five engines — `js`, `ruby`, `dotnet`, `php`, `python` — have sources; the
-`dotnet` entry excludes `fiat-to-msats.usd`, `rate-limit-window`, `http-golden` and
-`provider-route.*` with the reasons written in the file. The `php` and `python` entries
-(each excluding only `provider-route.crypto-usdt`) have had consumers since 2026-09-07.
+`spec/test-vectors/coverage.json` lists each engine's test roots and its exclusions, each with a
+reason. `npm run validate` walks every vector family. It fails when an engine has neither a
+consumer (a test naming `<family>.json` or `vector("<family>")`) nor an exclusion for that family.
+
+An engine with no test source yet (no file with its extensions under any of its roots) is
+reported as absent and skipped. So you can write its entry before its first test. A shared root
+such as `tools/conformance` that exists for another engine does not make it present.
+Enforcement starts with the first test file.
+
+Five engines have sources: `js`, `ruby`, `dotnet`, `php` and `python`. The `dotnet` entry
+excludes `fiat-to-msats.usd`, `rate-limit-window`, `http-golden` and `provider-route.*`, with
+the reasons written in the file. The `php` and `python` entries each exclude only
+`provider-route.crypto-usdt`, and both have had consumers since 2026-09-07.
 
 ## Adding an engine
 
 1. Add the engine to `spec/test-vectors/coverage.json` with its test roots and any exclusions,
    each with a one-line reason.
 2. Add a rendering of `spec/data/kernel-tables.json` to `tools/codegen/generate-js-models.mjs`
-   and register the output path; `npm run check:generated` now guards it.
+   and register the output path. `npm run check:generated` then guards it.
 3. Port the kernel rows in the table above, in the order the vectors dictate: URI and info,
    settlement, the wallet walk, the closure decision, then the swap rows if the engine has a
    swap rail. Each port reads its vector file directly and fails on drift.
-4. Write the host glue, including the engine's port of the fake wallet and fake swap
-   provider with the fixtures in [`testkit-contract.md`](testkit-contract.md), so the shared
-   E2E suite can drive the engine's demo through the `__testkit` control routes.
-5. Add the engine's test command to `package.json` and `docs/internal/test-command-map.md`, and a
-   CI job; record the decision in `docs/internal/scope-lock.md` next to the Ruby paragraph.
+4. Write the host glue. Include the engine's port of the fake wallet and fake swap provider
+   with the fixtures in [`testkit-contract.md`](testkit-contract.md). Then the shared E2E suite
+   can drive the engine's demo through the `__testkit` control routes.
+5. Add the engine's test command to `package.json` and `docs/internal/test-command-map.md`, and
+   add a CI job. Record the decision in `docs/internal/scope-lock.md` next to the Ruby paragraph.
 
-The BTCPay plugin (`packages/dotnet`) is the first engine added through this checklist: its
+The BTCPay plugin (`packages/dotnet`) was the first engine added through this checklist. Its
 command is `npm run test:dotnet`, its CI job is `dotnet-plugin`, and its decision paragraph
 sits next to Ruby's in `scope-lock.md`.
 
 The PHP engine (`packages/php`, `npm run test:php`, CI job `php-engine`) and the Python engine
 (`packages/python`, `npm run test:python`, CI job `python-engine`) followed the same five steps
-on 2026-09-07; their `coverage.json` entries are enforced (15 families consumed, one excluded
-each) and their decision paragraphs sit under the BTCPay one in `scope-lock.md`.
+on 2026-09-07. Their `coverage.json` entries are enforced: each consumes 15 families and
+excludes one. Their decision paragraphs sit under the BTCPay one in `scope-lock.md`.
 
 ## The FixedFloat mapping is data (2026-09-06)
 
-The FixedFloat-compatible status mapping — status, emergency block and refund-tx presence →
-state plus attention/refund reasons — used to be the largest kernel module written three
-times by hand. Since 2026-09-06 it is one decision table, `spec/data/swap-state-table.json`
-(14 ordered status rows matched first-match-wins, plus the emergency-status → refund-reason
-rows and the OVER/OVERPAID → MORE aliases), rendered by `npm run generate:models` next to the
-kernel tables and interpreted by each engine's production normalizer:
+The FixedFloat-compatible status mapping turns a status, an emergency block and whether a refund
+transaction exists into a state plus attention and refund reasons. It used to be the largest
+kernel module, and it was written by hand three times. Since 2026-09-06 it is one decision
+table, `spec/data/swap-state-table.json`. The table has:
+
+- 14 ordered status rows, where the first matching row wins
+- the rows that map an emergency status to a refund reason
+- the OVER/OVERPAID → MORE aliases
+
+`npm run generate:models` renders it next to the kernel tables, and each engine's production
+normalizer interprets it:
 
 | Engine | Rendering | Interpreter |
 | --- | --- | --- |
@@ -156,12 +189,13 @@ kernel tables and interpreted by each engine's production normalizer:
 | PHP | `packages/php/openreceive/src/Generated/Tables.php` (`SWAP_STATUS_ROWS`, `SWAP_REFUND_REASON_ROWS`) | `src/Swap/StateTable.php` (`normalizeStatus`) |
 | Python | `packages/python/openreceive/src/openreceive/_generated/tables.py` (`SWAP_STATUS_ROWS`, refund-reason rows) | `swap/state.py` (`normalize_status`) |
 
-The `swap-state` vector still runs against each production interpreter, and `npm run
-validate` additionally replays the vector through a reference interpreter of the JSON (and
-checks its vocabularies against `kernel-tables.json`, that its last row is a catch-all, and
-that every row is hit by at least one case), so a table edit that breaks a case fails before
-any engine runs. A provider behavior change is now one data edit plus one vector case instead
-of three code changes; the explanatory notes (overpay takes the full-refund path, LIMIT names
-no reason, unrecognized is not an emergency) live once, in the JSON's `how_to_read` and row
-`note` fields. The rest of the provider module — request signing, field extraction, the
-persisted-order fallback — is still host-shaped code per engine, on purpose.
+The `swap-state` vector still runs against each production interpreter. `npm run validate` also
+replays the vector through a reference interpreter of the JSON. It checks that the table's
+vocabularies match `kernel-tables.json`, that its last row is a catch-all, and that at least one
+case hits every row. So a table edit that breaks a case fails before any engine runs.
+
+A change in provider behavior is now one data edit plus one vector case, instead of three code
+changes. The explanatory notes live once, in the JSON's `how_to_read` and row `note` fields. For
+example: overpay takes the full-refund path, LIMIT names no reason, and an unrecognized status is
+not an emergency. The rest of the provider module stays host-shaped code in each engine, on
+purpose: request signing, field extraction and the fallback to the persisted order.

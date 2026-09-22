@@ -312,13 +312,14 @@ passes. The page it comes from is https://openreceive.org/guides/quickstart-php.
 
 ## PHP quickstart (plain PHP)
 
-Plain PHP, no framework. Requires PHP ≥ 8.2 (64-bit) with `ext-gmp`, `ext-sodium`,
-`ext-mbstring`, `ext-json`, `ext-pdo` and one PDO driver (`pdo_pgsql`,
-`pdo_sqlite` or `pdo_mysql`). `ext-gmp` is **required**, not optional: the NWC
-transport signs every wallet request with it. Laravel has its own quickstart
-(`openreceive/laravel`, the thin adapter over this engine); this page is the
-one for a host with no framework at all — a front controller, a PDO handle and
-three methods.
+This page is for plain PHP, with no framework: a front controller, a PDO handle
+and three methods. Laravel has its own quickstart (`openreceive/laravel`, the
+thin adapter over this engine).
+
+Requires PHP ≥ 8.2 (64-bit) with `ext-gmp`, `ext-sodium`, `ext-mbstring`,
+`ext-json`, `ext-pdo` and one PDO driver (`pdo_pgsql`, `pdo_sqlite` or
+`pdo_mysql`). `ext-gmp` is **required**, not optional. The NWC transport signs
+every wallet request with it.
 
 ### 1. Install
 
@@ -326,26 +327,27 @@ three methods.
 composer require openreceive/openreceive nyholm/psr7 nyholm/psr7-server
 ```
 
-`openreceive/openreceive` is the whole engine: the receive-only wallet client,
-exact money, settlement, the `openreceive_payments` repository over PDO, swaps,
-rates and a PSR-15 handler. It depends on the PSR interfaces only, so bring the
-PSR-7/PSR-17 implementation your app already has; `nyholm/psr7` +
-`nyholm/psr7-server` is the smallest pair and the one this page uses.
+`openreceive/openreceive` is the whole engine. It includes the receive-only
+wallet client, exact money, settlement, the `openreceive_payments` repository
+over PDO, swaps, rates and a PSR-15 handler. It depends only on the PSR
+interfaces, so bring the PSR-7/PSR-17 implementation your app already has.
+`nyholm/psr7` + `nyholm/psr7-server` is the smallest pair, and this page uses
+it.
 
 The **checkout UI is not in the Composer package.** Packagist installs from git
-and cannot run a JS build, so the browser side ships separately as
+and cannot run a JS build. So the browser side ships separately, as
 `standalone-checkout-<version>.tar.gz` on every
-[GitHub release](https://github.com/openreceive/openreceive/releases) — one
-self-contained ES module, its stylesheet, a source map and a
-`MANIFEST.json`. Unpack it somewhere your web server serves as static files
-(step 5). A host with a JS bundler can `npm install @openreceive/elements`
-instead; the tarball is the same build.
+[GitHub release](https://github.com/openreceive/openreceive/releases). It holds
+one self-contained ES module, its stylesheet, a source map and a
+`MANIFEST.json`. Unpack it somewhere your web server serves static files
+(step 5). If your app has a JS bundler, you can `npm install @openreceive/elements`
+instead. The tarball is the same build.
 
 ### 2. Migrate the payment tables
 
-The engine owns two tables in **your** database and renders their DDL per
-dialect. Run it through whatever your application uses for schema changes —
-Phinx, Doctrine Migrations, a plain SQL file, a `bin/migrate` script:
+The engine owns two tables in **your** database and renders their DDL for each
+SQL dialect. Run that DDL through whatever your app uses for schema changes:
+Phinx, Doctrine Migrations, a plain SQL file, or a `bin/migrate` script.
 
 ```php
 use OpenReceive\Storage\PaymentsSchema;
@@ -357,16 +359,18 @@ foreach (PaymentsSchema::statements($dialect) as $sql) {
 // down(): PaymentsSchema::dropStatements()
 ```
 
-`PaymentsSchema::migrate(new PdoConnection($pdo))` does the same in one call
-for a script that has no migration tool. It creates `openreceive_payments`
-(one row per payment attempt) and `openreceive_meta` (the reconcile gate and
-the schema version); leave both to the library. Details:
-[Payment storage](https://openreceive.org/guides/storage.md).
+If your script has no migration tool, `PaymentsSchema::migrate(new PdoConnection($pdo))`
+does the same in one call. It creates two tables. Leave both to the library:
+
+- `openreceive_payments`: one row per payment attempt.
+- `openreceive_meta`: the reconcile gate and the schema version.
+
+Details: [Payment storage](https://openreceive.org/guides/storage.md).
 
 ### 3. Add wallet credentials
 
-Create a server-only `.env` (or export the variables from your process
-manager — the engine reads `getenv()` and `$_ENV`):
+Create a server-only `.env`, or export the variables from your process manager.
+The engine reads `getenv()` and `$_ENV`.
 
 ```dotenv
 NWC_URI=
@@ -375,27 +379,28 @@ LSC_URI_BACKUP=
 ```
 
 1. Get a receive-only NWC code from a compatible wallet
-   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments))
-   → `NWC_URI`.
-2. Optionally set up a [swap provider](https://openreceive.org/set_up_swap_provider)
-   → `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP` if you have one).
+   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments)).
+   Put it in `NWC_URI`.
+2. Optional: set up a [swap provider](https://openreceive.org/set_up_swap_provider).
+   Put its connection string in `LSC_URI_PRIMARY`, and a second one in
+   `LSC_URI_BACKUP` if you have one.
 
-Never put these values in browser code. Your application refuses to start if
-the NWC code also advertises spend methods such as `pay_invoice`; mint a
-receive-only code ([Security](https://openreceive.org/guides/security.md)).
+Never put these values in browser code. Your app refuses to start if the NWC
+code also advertises spend methods such as `pay_invoice`. Create a
+receive-only code instead ([Security](https://openreceive.org/guides/security.md)).
 
-Nothing in PHP loads a `.env` file on its own; `vlucas/phpdotenv`, your web
-server's `SetEnv`/`fastcgi_param`, or the container runtime has to put the
-values in the process environment first
+Nothing in PHP loads a `.env` file on its own. Something has to put the values
+in the process environment first: `vlucas/phpdotenv`, your web server's
+`SetEnv`/`fastcgi_param`, or the container runtime
 ([Environment variables](https://openreceive.org/guides/environment-variables.md)).
 
 ### 4. Wire OpenReceive
 
 Three methods on one object are the entire bridge between the engine and your
-data; the engine never sees an order, a user or a price except through them.
-Then `Engine` composes the wallet, the repository over your PDO and that
-object into a PSR-15 handler, which your front controller dispatches to under
-one path prefix:
+data. The engine never sees an order, a user or a price except through them.
+`Engine` combines the wallet, the repository over your PDO, and that object
+into a PSR-15 handler. Your front controller sends requests under one path
+prefix to that handler:
 
 ```php
 <?php
@@ -481,57 +486,73 @@ if (str_starts_with($path, '/openreceive')) {
 ```
 
 `Service::fromEnvironment()` builds the wallet client from `NWC_URI` and runs
-the receive-only preflight — a missing, invalid or spend-capable code throws
+the receive-only preflight. A missing, invalid or spend-capable code throws
 before any route is served. PHP starts every request from nothing, so that
-check runs per request that reaches the engine; the settlement gate the
-engine relies on lives in `openreceive_meta`, not in memory, which is why a
-fleet of PHP-FPM workers shares one wallet-scan budget with no worker of its
-own. Later OpenReceive requests also settle pending invoices, so a payer who
-closes the tab is still covered. `authorize` runs on every request.
+check runs on every request that reaches the engine.
+
+The settlement gate the engine relies on lives in `openreceive_meta`, not in
+memory. That is why a fleet of PHP-FPM workers shares one wallet-scan budget,
+with no worker process of its own. Later OpenReceive requests also settle
+pending invoices, so a payer who closes the tab is still covered. `authorize`
+runs on every request.
 → [Engine](https://openreceive.org/guides/api-reference.md#openreceiveserverengine) ·
 [Host](https://openreceive.org/guides/api-reference.md#openreceivehost) ·
 [the authorize context](https://openreceive.org/guides/api-reference.md#the-authorize-context-php)
 
-**Cross-site requests.** Plain PHP has no CSRF layer, exactly like Express, and
-the engine does not need one: every mounted route refuses a request whose
-`Sec-Fetch-Site` header says `cross-site`, so a form or script on another
-origin cannot mint invoices with a payer's cookie. `<meta name="csrf-token">`
-is therefore optional — set it and the checkout sends the value back as
-`X-CSRF-Token` (or the header named by `csrf-header`) for your own layer to
-check. What the engine's check does NOT cover: a browser too old to send
-`Sec-Fetch-Site` (the header is absent, and absent passes), and anything that
-is not a browser at all — a script holding a stolen cookie is a session
-problem, not a forgery problem. `authorize` is still the boundary that decides
-whether *this caller* may act on *this order* ([Security](https://openreceive.org/guides/security.md)).
+**Cross-site requests.** Plain PHP has no CSRF layer, just like Express, and the
+engine does not need one. Every mounted route refuses a request whose
+`Sec-Fetch-Site` header says `cross-site`. So a form or script on another
+origin cannot create invoices using a payer's cookie. That makes
+`<meta name="csrf-token">` optional. If you set it, the checkout sends the value
+back as `X-CSRF-Token` (or the header named by `csrf-header`) for your own layer
+to check.
 
-For public web shops, opt into the per-IP invoice cap with
-`rateLimiting: true` on `Engine`; leave it off (the default) when many payers
-share one IP. Behind a proxy pass `clientIp: fn ($request) => …` so the cap
-counts the payer, not the proxy. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
+The engine's check does NOT cover two cases:
 
-Your app also needs an ordinary order-creation route that validates the cart,
-prices with exact decimal math, and returns the order id the page will pass as
-the `reference`. OpenReceive never prices from payer input. The `reference` is
-a string you choose, and it is the fulfillment identity: your order id — one
-per thing you fulfill, created before checkout, kept across retries, never
-reused. `onPaid` commits fulfillment once per reference, a new checkout under a reference
-that already settled is refused with 409, and a fresh id per page load lets
-one order be paid twice.
+- A browser too old to send `Sec-Fetch-Site`. The header is absent, and an
+  absent header passes.
+- Anything that is not a browser at all. A script holding a stolen cookie is a
+  session problem, not a forgery problem.
 
-Naming boundary: PHP APIs use camelCase methods and snake_case array keys
-(`amount_msats`, `payment_hash`), matching the wire — the mounted HTTP routes
-and the browser snapshots are snake_case throughout.
+`authorize` is still the boundary that decides whether *this caller* may act on
+*this order* ([Security](https://openreceive.org/guides/security.md)).
+
+For public web shops, turn on the per-IP invoice cap with `rateLimiting: true`
+on `Engine`. Leave it off (the default) when many payers share one IP. Behind a
+proxy, pass `clientIp: fn ($request) => …` so the cap counts the payer, not the
+proxy. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
+
+Your app also needs an ordinary order-creation route. It validates the cart,
+prices with exact decimal math, and returns the order id. The page then passes
+that id as the `reference`. OpenReceive never prices from payer input.
+
+The `reference` is a string you choose, and it is the fulfillment identity. Use
+your order id:
+
+- one per thing you fulfill,
+- created before checkout,
+- kept across retries,
+- never reused.
+
+`onPaid` commits fulfillment once per reference, and a new checkout under a
+reference that already settled is refused with 409. A fresh id per page load
+would let one order be paid twice.
+
+Naming: PHP APIs use camelCase methods and snake_case array keys
+(`amount_msats`, `payment_hash`). The keys match the wire format. The mounted
+HTTP routes and the browser snapshots are snake_case throughout.
 
 ### 5. Render checkout
 
-Serve the compiled `styles.css` without Tailwind processing: import it from
-JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
-Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
-allow host styles to override checkout styles; scoping does not prevent that.
+Serve the compiled `styles.css` without Tailwind processing. Either import it
+from JavaScript (with a CSS-capable bundler) or use a plain
+`<link rel="stylesheet">`. Do not `@import` it into your Tailwind entry. Its
+rules have zero specificity, so your own styles can override checkout styles.
+Scoping does not prevent that.
 
 Unpack the release's `standalone-checkout-<version>.tar.gz` into a directory
-your web server serves — `public/openreceive/` here — and add two tags plus
-the element:
+your web server serves. This page uses `public/openreceive/`. Then add two tags
+and the element:
 
 ```html
 <link rel="stylesheet" href="/openreceive/openreceive-checkout.css" />
@@ -543,32 +564,33 @@ the element:
 ></openreceive-checkout>
 ```
 
-The module registers `<openreceive-checkout>` as it loads; the element creates
+The module registers `<openreceive-checkout>` as it loads. The element creates
 the checkout for `reference`, then renders, polls and settles itself. The
-stylesheet is scoped to what OpenReceive renders. The checkout follows the payer's theme; on a page that is
-always one theme, lock it with `theme="dark"`. React/Vue/Svelte/Angular apps
-use the matching wrapper package instead — same attributes
-([Frontend checkout](https://openreceive.org/guides/frontend-checkout.md)); a custom UI builds on
+stylesheet is scoped to what OpenReceive renders. The checkout follows the
+payer's theme. On a page that always uses one theme, lock it with
+`theme="dark"`. React, Vue, Svelte, and Angular apps use the matching wrapper
+package instead, with the same attributes
+([Frontend checkout](https://openreceive.org/guides/frontend-checkout.md)). A custom UI builds on
 `@openreceive/browser/headless` ([Headless checkout](https://openreceive.org/guides/headless-checkout.md)).
 
 Everything the checkout draws ships inside the JavaScript: the payment-method
 icons, the wallet logos and the pay tutorials. There is no image file to copy
 or serve and no asset option to set. Deploy your normal JavaScript and CSS
 build output, including any generated JavaScript chunks. Bundlers with code
-splitting can defer tutorial screenshots until first open; single-file builds
-(including the standalone checkout) include them upfront. If your
-Content-Security-Policy has a strict `img-src`, allow `data:`
+splitting can load tutorial screenshots only when a tutorial is first opened.
+Single-file builds, including the standalone checkout, include them upfront. If
+your Content-Security-Policy has a strict `img-src`, allow `data:`
 ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
 
-`MANIFEST.json` in the tarball carries the version and a SHA-256 per file, so a
-copied tree can be checked against the release it came from; keep the tarball
-version in step with the Composer package.
+`MANIFEST.json` in the tarball carries the version and a SHA-256 per file. You
+can use it to check a copied tree against the release it came from. Keep the
+tarball version in step with the Composer package.
 
-A runnable illustration of this boundary — not a template to copy models from —
-is Buy a Button
-(`examples/buttons/server/php-plain`).
-It has products, visitors, and orders, with the three hooks as the only bridge.
-Map that shape onto the models in THIS app.
+Buy a Button
+(`examples/buttons/server/php-plain`)
+is a runnable illustration of this boundary. It is not a template to copy
+models from. It has products, visitors, and orders, and the three hooks are the
+only bridge. Map that shape onto the models in THIS app.
 
 ### 6. Verify
 
@@ -581,28 +603,33 @@ foreach (\OpenReceive\Server\Doctor::report(
 ) as $line) echo $line, PHP_EOL;
 ```
 
-`Doctor::report()` prints every credential as set/unset (never a value), the
-host class and which of the three methods are still the scaffolded
-placeholders (`Hosts\AllowAllAuthorize`, `Hosts\LoggingOnPaid` — the engine
-also warns at boot while either is in use), where the handler is mounted, and
-the receive-only wallet preflight. `$engine->doctor()` is the same report for
-an engine you already built. Put it behind a `bin/doctor` script; the demo's
-is twelve lines. → [Doctor](https://openreceive.org/guides/api-reference.md#openreceiveserverdoctor)
+`Doctor::report()` prints:
 
-Then open the checkout in a browser, confirm the payment-method icons and
+- every credential as set or unset, never its value;
+- the host class, and which of the three methods are still the scaffolded
+  placeholders (`Hosts\AllowAllAuthorize`, `Hosts\LoggingOnPaid`). The engine
+  also warns at boot while either is in use;
+- where the handler is mounted;
+- the receive-only wallet preflight.
+
+`$engine->doctor()` is the same report for an engine you already built. Put it
+behind a `bin/doctor` script. The demo's is twelve lines.
+→ [Doctor](https://openreceive.org/guides/api-reference.md#openreceiveserverdoctor)
+
+Then open the checkout in a browser. Confirm the payment-method icons and
 wallet logos render, and open a wallet's pay tutorial to check its screenshots.
-If an image is missing, inspect the console for CSP violations and the Network
+If an image is missing, check the console for CSP violations and the Network
 panel for failed JavaScript chunks. Allow `data:` in `img-src` and deploy the
 complete build output. Do not add image routes, copy package source images, or
 use registry `icon_path` / tutorial `path` keys as browser URLs.
 
 ### Reconciliation
 
-Settlement runs on the request path: every payment route first runs one
-bounded reconcile pass through the durable `openreceive_meta` gate (minimum 2
-seconds between real wallet scans, shared by every PHP process). You do not
-need a cron job. Tune or disable it with `Engine`'s `opportunisticReconcile`
-(`false`, or `['min_interval_seconds' => …]`).
+Settlement runs on the request path. Every payment route first runs one bounded
+reconcile pass through the durable `openreceive_meta` gate. The gate allows at
+most one real wallet scan every 2 seconds, shared by every PHP process. You do
+not need a cron job. Tune or disable it with `Engine`'s
+`opportunisticReconcile` (`false`, or `['min_interval_seconds' => …]`).
 
 Optionally, run one worker so settlement does not wait for the next page load:
 
@@ -610,18 +637,20 @@ Optionally, run one worker so settlement does not wait for the next page load:
 $engine->notificationsWorker()->run();   // blocks: an NWC-02 listener plus a periodic pass
 ```
 
-as its own long-lived process (`php bin/notifications`). `$engine->reconcile()`
-is the one-shot pass if you want to drive it yourself.
+Run it as its own long-lived process (`php bin/notifications`). To run a pass
+yourself, use the one-shot `$engine->reconcile()`.
 → [Engine notificationsWorker](https://openreceive.org/guides/api-reference.md#engine-notificationsworker)
 
 ### Swap secrets
 
-Setting `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP`) auto-builds the matching
-swap providers; nothing in your code changes. One `openreceive_payments` row
-holds at most one provider order in its server-only `swap_data`; the
-repository never selects it into public arrays — do not log it or return it
-from your own API. **Setting either connection string commits you to
-refunds**: a deposit that arrives short or late is claimed on a second visit,
-which needs a per-order URL your app serves and the attempt's `payment_hash`
-kept. [Swap refunds](https://openreceive.org/guides/swap-refunds.md) is the whole of it; read it before you
-set `LSC_URI_PRIMARY`.
+Setting `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP`) auto-builds the matching swap
+providers. Nothing in your code changes. One `openreceive_payments` row holds
+at most one provider order, in its server-only `swap_data`. The repository
+never selects it into public arrays. Do not log it or return it from your own
+API.
+
+**Setting either connection string commits you to refunds.** A deposit that
+arrives short or late is claimed on a second visit. That needs a per-order URL
+your app serves, and the attempt's `payment_hash` kept.
+[Swap refunds](https://openreceive.org/guides/swap-refunds.md) covers all of it. Read it before you set
+`LSC_URI_PRIMARY`.

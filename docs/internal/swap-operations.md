@@ -1,7 +1,7 @@
 # Swap operations
 
-The host stores each swap attempt in `openreceive_payments`, with optional server-only
-`swap_data` beside its `payment_hash`. Wallet settlement and provider workflow recovery remain
+The host stores each swap attempt in `openreceive_payments`. Next to its `payment_hash`, the
+row can hold server-only `swap_data`. Wallet settlement and provider workflow recovery stay
 independent:
 
 | Question | Authority | Host data |
@@ -9,8 +9,8 @@ independent:
 | Did the merchant receive Lightning? | NWC wallet | `payment_hash` |
 | What is the provider doing? | Swap provider | `swap_data` |
 
-Provider `completed` is not payment. Fulfillment waits for NWC `settled_at` or transaction
-`state == "settled"`; a preimage alone is corroboration.
+A provider status of `completed` is not a payment. Fulfillment waits for NWC `settled_at` or
+transaction `state == "settled"`. A preimage alone only corroborates payment.
 
 ## Creation and recovery
 
@@ -22,37 +22,41 @@ Creation order is fixed:
 4. Have the host atomically commit `payment_hash` and `swap_data`.
 5. Only then return the public deposit address and exact amount. Never serialize `swap_data`.
 
-If provider creation times out without returning credentials, no deposit address was shown. The
-orphan may expire at the provider; OpenReceive has no local workflow row to reconcile.
+If provider creation times out without returning credentials, the payer never saw a deposit
+address. The orphaned order may expire at the provider. OpenReceive has no local workflow row to
+reconcile.
 
-`getSwap({ reference, paymentHash, swapData })` validates the stored object, selects the named provider, calls its current
-status endpoint, verifies provider/order identity, and returns a normalized public snapshot.
-Cached provider state is process-local and disposable.
+`getSwap({ reference, paymentHash, swapData })` validates the stored object and selects the
+named provider. It calls the provider's current status endpoint, verifies the provider and order
+identity, and returns a normalized public snapshot. Cached provider state is process-local and
+disposable.
 
 ## State handling
 
 Common normalized states are `awaiting_deposit`, `confirming`, `exchanging`,
 `paying_invoice`, `completed`, `expired`, `refund_required`, `refund_pending`, `refunded`,
-`attention`, and `failed`. Treat them as provider presentation state only:
+`attention`, and `failed`. Treat them only as provider state for display:
 
-- `completed` means finalizing until the wallet settles;
-- `refund_required` enables the refund flow;
-- `refunded`, `expired`, `attention`, and `failed` stop payer use of deposit instructions;
-- a late wallet settlement still wins and must be delivered to the host.
+- `completed` means finalizing until the wallet settles.
+- `refund_required` enables the refund flow.
+- `refunded`, `expired`, `attention`, and `failed` stop the payer from using the deposit
+  instructions.
+- A late wallet settlement still wins and must be delivered to the host.
 
-Polling stops at settlement: the checkout controller drops its status watcher as soon as the
-order is settled, so the persisted `provider_state` is the last pre-settlement snapshot, not
-the provider's terminal status. Fast providers finish deposit → payout inside one poll
-interval, so a settled order may still record `awaiting_deposit`. Do not "fix" this by
-resuming polling — settlement authority is the wallet, and the snapshot is presentation state
-only. UIs must label the field as last-known once settled (`createTransactionDetails`
-renders it as "Last provider state"); anything needing the true terminal record calls
-`getSwap` on demand.
+Polling stops at settlement. The checkout controller drops its status watcher as soon as the
+order is settled. The persisted `provider_state` is therefore the last snapshot before
+settlement, not the provider's terminal status. Fast providers finish deposit → payout inside one
+poll interval, so a settled order may still record `awaiting_deposit`.
+
+Do not "fix" this by resuming polling. The wallet decides settlement, and the snapshot is only
+for display. Once the order is settled, UIs must label the field as last-known.
+`createTransactionDetails` renders it as "Last provider state". Code that needs the true
+terminal record calls `getSwap` on demand.
 
 ## Refund safety
 
-The browser sends `reference`, `payment_hash`, and `refund_address`. The host authorizes order
-access, verifies that attempt belongs to it, loads `swap_data`, and then calls:
+The browser sends `reference`, `payment_hash`, and `refund_address`. The host authorizes access
+to the order, verifies that the attempt belongs to it, loads `swap_data`, and then calls:
 
 ```ts
 await openreceive.refundSwap({
@@ -63,22 +67,22 @@ await openreceive.refundSwap({
 });
 ```
 
-`refundSwap` queries the provider immediately before acting and permits only
-`refund_required`. Repeated or stale calls therefore fail against provider authority. The host
-may add its own approval or single-use guard when its product requires one.
+`refundSwap` queries the provider right before acting, and proceeds only when the state is
+`refund_required`. Repeated or stale calls therefore fail, because the provider's state decides.
+The host may add its own approval step or single-use guard if its product needs one.
 
 ## Storage and loss
 
-The provider token inside `swap_data` is sensitive. Keep it server-side and exclude it from
-logs, serializers, and browser bundles. Hosts may use Rails encrypted attributes, database
-encryption, or another at-rest policy; OpenReceive does not require a second key.
+The provider token inside `swap_data` is sensitive. Keep it on the server and out of
+logs, serializers, and browser bundles. Hosts may encrypt it at rest with Rails encrypted
+attributes, database encryption, or another policy. OpenReceive does not require a second key.
 
-Losing `swap_data` does not prevent wallet settlement by payment hash, but provider status and
-refund recovery then require provider dashboard/support access.
+Losing `swap_data` does not prevent wallet settlement by payment hash. Provider status and
+refund recovery then need access to the provider's dashboard or support.
 
 ## Multi-instance behavior
 
 No OpenReceive coordination service is required. Each process may poll the provider or wallet
-independently; callbacks can repeat. The library's write-once settlement and first-settlement
-fulfillment absorb duplicate delivery. Process-local rate/catalog caches and request-weight guards are
-performance aids, not durable correctness state.
+on its own, so callbacks can repeat. The library absorbs duplicate delivery: settlement is
+write-once, and fulfillment runs only for the first settlement. Process-local rate and catalog
+caches and request-weight guards only help performance. Correctness never depends on them.

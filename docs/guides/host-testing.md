@@ -1,13 +1,13 @@
 # Testing your OpenReceive integration
 
-How to test your integration — your `amountFor`, `authorize`, and `onPaid`
-wiring — without touching a real wallet or a swap
-provider.
+This page shows how to test your integration without touching a real wallet
+or a swap provider. Your integration here means your `amountFor`,
+`authorize`, and `onPaid` wiring.
 
 ## Inject a fake wallet client
 
-`createOpenReceive` accepts a pre-built client via the `client` option and
-skips NWC entirely when one is supplied:
+Pass a pre-built client to `createOpenReceive` through the `client` option.
+When you do, it skips NWC entirely:
 
 ```ts
 import { createOpenReceive } from "@openreceive/node";
@@ -60,29 +60,32 @@ const service = await createOpenReceive({
 });
 ```
 
-Any object implementing `ReceiveNwcClient` works: mint
-deterministic invoices from `makeInvoice`, report settlement from
-`listTransactions`, and your whole integration — HTTP routes,
-persistence, reconcile, `onPaid` — runs the production code paths against it.
+Any object that implements `ReceiveNwcClient` works. Have `makeInvoice`
+return predictable invoices, and have `listTransactions` report settlement.
+Your whole integration then runs the production code against it. That
+includes the HTTP routes, persistence, reconcile, and `onPaid`.
+
 With the fake above, `settledAt.set(checkout.paymentHash,
-Math.floor(Date.now() / 1000))` marks an attempt paid; the next
+Math.floor(Date.now() / 1000))` marks an attempt paid. The next
 `/payments/check` poll or reconcile pass settles it through the production
-rules. Settlement follows the real rule: a transaction settles on a finality
-signal (`settled_at`, a settled state, or a settled/paid boolean), never on
-the mere presence of a preimage.
+rules. Settlement follows the real rule. A transaction settles only on a
+finality signal: `settled_at`, a settled state, or a settled/paid boolean. It
+never settles just because a preimage is present.
 
 For fiat pricing without a network, pass
 `priceProviders: [new StaticPriceProvider()]` (from `@openreceive/core`).
-There is deliberately no implicit static fallback: a wallet client must refuse to
-price invoices rather than silently quote a hard-coded rate, so tests opt in
-explicitly.
+There is no automatic static fallback, on purpose. A wallet client must
+refuse to price invoices rather than silently quote a hard-coded rate. So
+tests have to opt in explicitly.
 
 ## Inject a fake wallet client (Rails)
 
-The engine takes the same seams from a Rails initializer. `config.nwc_client`
-skips NWC entirely, `config.swap_providers` replaces the FixedFloat-compatible
-providers built from `LSC_URI_*`, and `OpenReceive::Rates::StaticPriceProvider`
-prices without a network:
+The Rails engine lets you swap in the same fakes from an initializer:
+
+- `config.nwc_client` skips NWC entirely.
+- `config.swap_providers` replaces the FixedFloat-compatible providers built
+  from `LSC_URI_*`.
+- `OpenReceive::Rates::StaticPriceProvider` prices without a network.
 
 ```ruby
 OpenReceive.configure do |config|
@@ -95,31 +98,37 @@ OpenReceive.configure do |config|
 end
 ```
 
-Both objects are DUCK-TYPED, so there is no base class to inherit:
+Both objects are DUCK-TYPED. They only need the right methods, so there is
+no base class to inherit:
 
 - The wallet answers `make_invoice(request)` and `list_transactions(request)`
-  with string-keyed hashes, plus one info method (`preflight`, `get_info`, …)
-  advertising at least `make_invoice` and `list_transactions` — receive-only,
-  because the service refuses a spend-capable wallet unless you override it.
-  Settlement is read from `list_transactions`, on a finality signal, exactly as
-  in production.
+  with string-keyed hashes. It also needs one info method (`preflight`,
+  `get_info`, …) that advertises at least `make_invoice` and
+  `list_transactions`. It must be receive-only, because the service refuses a
+  wallet that can spend unless you override it. Settlement is read from
+  `list_transactions`, on a finality signal, exactly as in production.
 - The swap provider answers `name`, `supported_pay_in_assets`,
   `pay_in_asset_catalog`, `invoice_expiry_seconds`, `quote`, `create_swap`,
-  `get_status` and `request_refund`. `invoice_expiry_seconds` is a FLOOR the
-  service passes to `make_invoice`: the shadow invoice has to outlive the
-  provider order, so a fake wallet that clamps expiry fails every swap.
+  `get_status` and `request_refund`. `invoice_expiry_seconds` is a FLOOR, a
+  minimum the service passes to `make_invoice`. The shadow invoice has to
+  outlive the provider order. So a fake wallet that shortens the expiry fails
+  every swap.
 
-A worked pair is
+You can see a working pair in
 [`examples/buttons/server/rails/lib/button_shop/testkit/`](../../examples/buttons/server/rails/lib/button_shop/testkit).
 
 ## Inject a fake wallet client (Python)
 
-The Python engine ships its fakes: `openreceive.testing` holds `FakeWallet`
-and `FakeSwapProvider` on the shared testkit contract (the same fixtures the
-Node testkit and the Rails demo use — a payment hash is the mint counter in 64
-hex characters, invoices are `lnbcopenreceive000001`) plus
-`StaticPriceProvider` (BTC/USD `50000.00`). The FastAPI router takes them
-through the same keyword arguments production wiring never sets:
+The Python engine ships its own fakes in `openreceive.testing`:
+
+- `FakeWallet` and `FakeSwapProvider` follow the shared testkit contract. They
+  use the same fixtures as the Node testkit and the Rails demo. A payment hash
+  is the mint counter written as 64 hex characters. Invoices look like
+  `lnbcopenreceive000001`.
+- `StaticPriceProvider` prices BTC/USD at `50000.00`.
+
+The FastAPI router takes them through keyword arguments that production code
+never sets:
 
 ```python
 from fastapi import FastAPI
@@ -151,24 +160,30 @@ with TestClient(app) as client:
     client.post("/openreceive/payments/check", json={"reference": order.id, "payment_hash": payment_hash})
 ```
 
-`wallet.settle_invoice(hash, notify=True)` also emits the NWC-02
-`payment_received` notification for a test of the notifications worker;
-`FakeSwapProvider.script(selector, states)`, `force_refund_required` and
-`force_attention` drive the swap states. Django hosts inject the same objects
-through `OPENRECEIVE["SERVICE"]` (a callable returning a `Service` built on
-them); the [testkit contract](../internal/testkit-contract.md) pins every
-fixture value.
+- `wallet.settle_invoice(hash, notify=True)` also sends the NWC-02
+  `payment_received` notification, for testing the notifications worker.
+- `FakeSwapProvider.script(selector, states)`, `force_refund_required` and
+  `force_attention` move the swap through its states.
+- Django apps inject the same objects through `OPENRECEIVE["SERVICE"]`. That
+  setting is a callable that returns a `Service` built on the fakes.
+
+The [testkit contract](../internal/testkit-contract.md) fixes every fixture
+value.
 
 ## Inject a fake wallet client (PHP)
 
-The PHP engine ships its fakes in `OpenReceive\Testing`: `FakeWallet` and
-`FakeSwapProvider` on the shared testkit contract (the same fixtures as the
-Node testkit, the Rails demo and the Python fakes — a payment hash is the mint
-counter in 64 hex characters, invoices are `lnbcopenreceive000001`, one Tron
-deposit address, `testkit-swap-N`) plus `OpenReceive\Rates\StaticPriceProvider`
-(BTC/USD `50000.00`). `Service` takes them through its constructor — the
-production path is `Service::fromEnvironment()`, and everything after the
-`Service` is identical:
+The PHP engine ships its fakes in `OpenReceive\Testing`:
+
+- `FakeWallet` and `FakeSwapProvider` follow the shared testkit contract. They
+  use the same fixtures as the Node testkit, the Rails demo and the Python
+  fakes. A payment hash is the mint counter written as 64 hex characters.
+  Invoices look like `lnbcopenreceive000001`. There is one Tron deposit
+  address, and swap orders are `testkit-swap-N`.
+- `OpenReceive\Rates\StaticPriceProvider` prices BTC/USD at `50000.00`.
+
+Pass them to the `Service` constructor. In production you call
+`Service::fromEnvironment()` instead. Everything after the `Service` is
+identical:
 
 ```php
 use OpenReceive\Rates\StaticPriceProvider;
@@ -192,22 +207,26 @@ $wallet->settleInvoice($hash);                      // or expireInvoice / failIn
 $handler->handle($request('POST', '/openreceive/payments/check', ['reference' => $order->id, 'payment_hash' => $hash]));
 ```
 
-`$wallet->settleInvoice($hash, notify: true)` also emits the NWC-02
-`payment_received` notification for a test of `Notifications`;
-`FakeSwapProvider::script($selector, $states)`, `forceRefundRequired()` and
-`forceAttention()` drive the swap states; `scriptTransactionSequence()` makes
-the wallet's history reads misbehave on purpose. Inject a clock into either
-fake when a test needs to cross the expiry-plus-grace boundary. One PHP-specific
-note: the fakes live in process memory, and a PHP request IS a process — a
-demo that drives them over several HTTP requests has to persist their state
-between requests (`examples/buttons/server/php-plain/src/Testkit.php` does it
-with a serialised snapshot under a lock); in a PHPUnit test, where one process
-runs the whole scenario, nothing of the kind is needed.
+- `$wallet->settleInvoice($hash, notify: true)` also sends the NWC-02
+  `payment_received` notification, for testing `Notifications`.
+- `FakeSwapProvider::script($selector, $states)`, `forceRefundRequired()` and
+  `forceAttention()` move the swap through its states.
+- `scriptTransactionSequence()` makes the wallet's history reads misbehave on
+  purpose.
+- Inject a clock into either fake when a test needs to pass the
+  expiry-plus-grace point.
+
+One thing is specific to PHP. The fakes live in process memory, and each PHP
+request IS a separate process. So a demo that drives the fakes over several
+HTTP requests has to save their state between requests.
+`examples/buttons/server/php-plain/src/Testkit.php` does this with a
+serialised snapshot under a lock. A PHPUnit test runs the whole scenario in
+one process, so it needs nothing like this.
 
 ## Click through a full checkout with no wallet
 
-Every stack of the Buy a Button demo boots against in-process fakes when
-`DEMO_WALLET=testkit` is set — no `NWC_URI`, no LSC keys, no network:
+Set `DEMO_WALLET=testkit` and every stack of the Buy a Button demo boots
+against in-process fakes. You need no `NWC_URI`, no LSC keys, and no network:
 
 ```sh
 DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/node-express
@@ -216,22 +235,29 @@ DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/fastapi (Vite + u
 DEMO_WALLET=testkit npm run dev   # in examples/buttons/server/php-plain (Vite + php -S)
 ```
 
-The shop, the checkout wizard (all four framework tabs), Lightning invoices,
-and swap flows all work — including a swap that reaches `refund_required` and a
-refund submitted through the real engine routes. A test-only control surface
-under `/__testkit` lets you settle or expire invoices and advance swap states
-from `curl` or a browser console. The prefix hard-404s in every other mode, the
-compose files never set `DEMO_WALLET`, and the client-bundle scanner proves no
-testkit code ships — see
-[examples/README.md](../../examples/README.md) for the endpoint list.
+Everything works: the shop, the checkout wizard (all four framework tabs),
+Lightning invoices, and swap flows. That includes a swap that reaches
+`refund_required` and a refund submitted through the real engine routes.
 
-The Rails fakes are a port of the JS ones with identical fixtures — the same
+Test-only endpoints under `/__testkit` let you settle or expire invoices and
+advance swap states from `curl` or a browser console. They are locked away
+outside testkit mode:
+
+- The prefix always returns 404 in every other mode.
+- The compose files never set `DEMO_WALLET`.
+- The client-bundle scanner proves no testkit code ships.
+
+See [examples/README.md](../../examples/README.md) for the endpoint list.
+
+The Rails fakes are a port of the JS ones with identical fixtures: the same
 payment hashes, the same `testkit-swap-N` order ids, the same deposit
-addresses, BTC at a static $50,000 — so one browser harness drives either
-language. That is worth copying if you run both: a fake that satisfies the
-contract but disagrees with its twin needs a second harness, and the second
-harness is where the two stacks drift apart.
+addresses, and BTC at a static $50,000. So one browser harness drives either
+language. If you run both, copy this approach. A fake that meets the contract
+but disagrees with its twin needs a second harness. The second harness is
+where the two stacks drift apart.
 
-The stable seams for your own tests are the `client` option and
-`StaticPriceProvider` in Node, and `config.nwc_client` /
-`config.swap_providers` / `OpenReceive::Rates::StaticPriceProvider` in Rails.
+For your own tests, rely on these stable hooks:
+
+- Node: the `client` option and `StaticPriceProvider`.
+- Rails: `config.nwc_client` / `config.swap_providers` /
+  `OpenReceive::Rates::StaticPriceProvider`.

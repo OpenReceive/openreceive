@@ -322,19 +322,20 @@ pip install "openreceive[fastapi]"
 npm install @openreceive/react
 ```
 
-One Python distribution with framework extras: `openreceive[fastapi]` brings
-FastAPI, Starlette and SQLAlchemy; the wallet client (websockets, coincurve,
-cryptography), the HTTP engine and the `openreceive` CLI come with the base
-package. The npm package is the checkout UI for your frontend. Different
-stack? Swap the two: `openreceive[django]` with the Django quickstart; a
-bundler-less page uses `@openreceive/elements` instead of React.
+OpenReceive is one Python distribution with framework extras.
+`openreceive[fastapi]` brings FastAPI, Starlette and SQLAlchemy. The base
+package includes the wallet client (websockets, coincurve, cryptography), the
+HTTP engine and the `openreceive` CLI. The npm package is the checkout UI for
+your frontend. On a different stack, swap the two: use `openreceive[django]`
+with the Django quickstart. A page without a bundler uses
+`@openreceive/elements` instead of React.
 
 |          | Packages                                                                                                                      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Server   | `openreceive[fastapi]`, `openreceive[django]`, `openreceive[sqlalchemy]` (Flask and plain WSGI/ASGI: the Flask recipe) |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Use `uv` or a virtualenv on Python 3.10 or newer; a system Python 3.9 cannot
+Use `uv` or a virtualenv on Python 3.10 or newer. A system Python 3.9 cannot
 install the package.
 
 ### 2. Migrate the payment tables
@@ -344,24 +345,27 @@ openreceive scaffold payments --alembic --dialect postgres    # or sqlite | mysq
 ```
 
 `openreceive scaffold payments --alembic` writes one Alembic revision into
-`alembic/versions/` that creates `openreceive_payments` (the payment attempts)
-and `openreceive_meta` (the reconcile gate) with the DDL frozen in the file.
-Set its `down_revision` to your current head (`alembic heads`), then apply it
-the way you apply your own: `alembic upgrade head`. It never opens a database
-connection.
+`alembic/versions/`. The DDL is frozen in the file, and it creates two tables:
+
+- `openreceive_payments`, the payment attempts
+- `openreceive_meta`, the reconcile gate
+
+Set the revision's `down_revision` to your current head (`alembic heads`).
+Then apply it the way you apply your own revisions: `alembic upgrade head`.
+The command never opens a database connection.
 → [openreceive scaffold payments](https://openreceive.org/guides/api-reference.md#openreceive-scaffold-payments-python)
 
 No Alembic? `openreceive scaffold payments --sql --dialect postgres` prints
-the same DDL for `psql`, a Flyway file, or whatever runs your migrations; in
-code, `payments_schema_sql(dialect)` from `openreceive.storage.sql` is the
-same string. OpenReceive owns the tables' logic at runtime — locking,
-write-once settlement, the reconciliation state machine — and there is
-nothing else to generate. Details: [Payment storage](https://openreceive.org/guides/storage.md).
+the same DDL. Feed it to `psql`, a Flyway file, or whatever runs your
+migrations. In code, `payments_schema_sql(dialect)` from
+`openreceive.storage.sql` returns the same string. OpenReceive owns the
+tables' logic at runtime: locking, write-once settlement, and the
+reconciliation state machine. There is nothing else to generate. Details: [Payment storage](https://openreceive.org/guides/storage.md).
 
 ### 3. Add wallet credentials
 
-Put the credentials in the server's environment (a `.env` your process
-manager loads, `uvicorn --env-file .env`, or your secret store):
+Put the credentials in the server's environment. That can be a `.env` your
+process manager loads, `uvicorn --env-file .env`, or your secret store:
 
 ```dotenv
 NWC_URI=
@@ -370,27 +374,33 @@ LSC_URI_BACKUP=
 ```
 
 1. Get a receive-only NWC code from a compatible wallet
-   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments))
-   → `NWC_URI`.
-2. Optionally set up a [swap provider](https://openreceive.org/set_up_swap_provider)
-   → `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP` if you have one).
+   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments)).
+   Put it in `NWC_URI`.
+2. Optional: set up a [swap provider](https://openreceive.org/set_up_swap_provider).
+   Put its connection string in `LSC_URI_PRIMARY`, and a second one in
+   `LSC_URI_BACKUP` if you have one.
 
-Never put these values in browser code. Your application refuses to start if
-the NWC code also advertises spend methods such as `pay_invoice`; mint a
-receive-only code ([Security](https://openreceive.org/guides/security.md)).
+Never put these values in browser code. Your app refuses to start if the NWC
+code also advertises spend methods such as `pay_invoice`. Create a
+receive-only code instead ([Security](https://openreceive.org/guides/security.md)).
 
-OpenReceive reads `os.environ`; a `.env` file on disk is not enough on its
-own. `uvicorn --env-file .env` loads one in development; in production the
-process manager or secret store injects the values. Every variable is on
-[Environment variables](https://openreceive.org/guides/environment-variables.md).
+OpenReceive reads `os.environ`, so a `.env` file on disk is not enough on its
+own. `uvicorn --env-file .env` loads one in development. In production, the
+process manager or secret store injects the values.
+[Environment variables](https://openreceive.org/guides/environment-variables.md) lists every variable.
 
 ### 4. Wire OpenReceive
 
-Twelve lines: your three hooks as a `Host`, a router included under a
-prefix, and a lifespan that checks the wallet at startup. The router builds
-the wallet client from `NWC_URI` and mounts the framework-free engine; there
-is no background reconciler — settlement piggybacks on requests through the
-durable gate.
+The wiring takes twelve lines:
+
+- your three hooks as a `Host`
+- a router included under a prefix
+- a lifespan that checks the wallet at startup
+
+The router builds the wallet client from `NWC_URI` and mounts the
+framework-free engine. There is no background reconciler, meaning no job that checks pending
+payments on a timer. Settlement runs during normal requests instead, through
+the durable reconcile gate.
 
 ```python
 from fastapi import FastAPI
@@ -439,26 +449,28 @@ app.include_router(
 )
 ```
 
-`authorize` receives the Starlette `Request`, so cookies, headers and whatever
+`authorize` receives the Starlette `Request`. Cookies, headers, and whatever
 `SessionMiddleware` or auth dependency this app already has are readable
-there — FastAPI ships no session of its own, so the payer's `reference` must
-be bound to something the request proves. Run uvicorn with `--proxy-headers`
-behind a reverse proxy, or `rate_limiting` counts the proxy as the one payer.
+there. FastAPI ships no session of its own, so you must bind the payer's
+`reference` to something the request proves. Behind a reverse proxy, run
+uvicorn with `--proxy-headers`. Otherwise `rate_limiting` counts the proxy as
+the one payer.
 
-**There is no CSRF layer to add.** FastAPI has none, and OpenReceive does not
-want one: every mounted route refuses a request whose `Sec-Fetch-Site` header
-says `cross-site`, which is what stops another origin's page from minting or
-refunding on a logged-in payer's behalf — exactly the protection the Express
-and Fastify adapters rely on. Its limit is the header itself: a client that
-does not send it (a non-browser, an old browser) is not refused, so
-`authorize` stays the actual boundary. [Security](https://openreceive.org/guides/security.md) has the full
-account.
+**There is no CSRF layer to add.** FastAPI has no CSRF (cross-site request
+forgery) layer, and OpenReceive does not want one. Every mounted route refuses
+a request whose `Sec-Fetch-Site` header says `cross-site`. That stops another
+origin's page from minting or refunding on a logged-in payer's behalf. The
+Express and Fastify adapters rely on exactly the same protection. Its limit is
+the header itself. A client that does not send it, such as a non-browser or an
+old browser, is not refused. So `authorize` stays the actual boundary.
+[Security](https://openreceive.org/guides/security.md) has the full account.
 
 `openreceive_lifespan` runs the receive-only wallet preflight when uvicorn
-starts and stops the process on a missing, unreachable or spend-capable code —
-the deploy fails instead of the first payer. Pass `lazy=True` for tests and
-secretless build steps; the first request then checks the wallet and answers
-`503 WALLET_UNAVAILABLE` until it passes.
+starts. It stops the process if the code is missing, unreachable, or able to
+spend. That way the deploy fails instead of the first payer. Pass `lazy=True`
+for tests and for build steps that have no secrets. The first request then
+checks the wallet, and requests get `503 WALLET_UNAVAILABLE` until the check
+passes.
 → [openreceive_router](https://openreceive.org/guides/api-reference.md#openreceive_router) ·
 [openreceive_lifespan](https://openreceive.org/guides/api-reference.md#openreceive_lifespan) ·
 [the authorize context](https://openreceive.org/guides/api-reference.md#the-authorize-context)
@@ -475,14 +487,16 @@ prices with exact decimal math, and returns the order id the page will pass as
 the `reference`. OpenReceive never prices from payer input.
 
 The `reference` is a string you choose, and it is the fulfillment identity:
-your order id — one per thing you fulfill, created before checkout, kept
-across retries, never reused. OpenReceive never looks inside it, but `on_paid`
-commits fulfillment once per reference, a new checkout under a reference that already
-settled is refused with 409, and a fresh id per page load lets one order be
-paid twice.
+your order id. Use one per thing you fulfill, create it before checkout, keep
+it across retries, and never reuse it. OpenReceive never looks inside it, but
+the reference still matters:
+
+- `on_paid` commits fulfillment once per reference.
+- A new checkout under a reference that already settled is refused with 409.
+- A fresh id per page load lets one order be paid twice.
 
 Naming boundary: the Python API is snake_case (`payment_hash`,
-`amount_msats`) and so is everything on the wire — the mounted HTTP routes and
+`amount_msats`), and so is everything on the wire. The mounted HTTP routes and
 the browser snapshots use the same names.
 
 ### 5. Render checkout
@@ -494,49 +508,57 @@ import "@openreceive/react/styles.css";
 <Checkout reference={order.id} prefix="/openreceive" />;
 ```
 
-The checkout renders, polls, and settles itself. The compiled `styles.css`
-sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
-plain `<link rel="stylesheet">` works with no build step — and scoped: every
+The checkout renders, polls, and settles itself.
+
+`@openreceive/react` and `@openreceive/elements` each ship a compiled
+`styles.css`. Each sheet is self-contained, so a plain
+`<link rel="stylesheet">` works with no build step. Each is also scoped: every
 rule applies only inside what OpenReceive renders.
 
-Serve the compiled `styles.css` without Tailwind processing: import it from
-JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
-Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
-allow host styles to override checkout styles; scoping does not prevent that.
+Serve the compiled `styles.css` without Tailwind processing. Import it from
+JavaScript if your bundler handles CSS, or use a plain
+`<link rel="stylesheet">`. Do not `@import` it into your app's Tailwind entry.
+Its rules have zero specificity, so your page's styles can override checkout
+styles. Scoping does not prevent that.
 
-`<Checkout>` is complete as rendered: it already shows the `description` from
+`<Checkout>` is complete as rendered. It already shows the `description` from
 `amountFor` and the collapsed transaction-details panel. Do not build a custom
-UI to satisfy those rules — they only become your job if you replace the
-drop-in ([Checkout UX](https://openreceive.org/guides/checkout-ux.md)).
+UI to show them. The display rules for them become your job only if you
+replace the drop-in component ([Checkout UX](https://openreceive.org/guides/checkout-ux.md)).
 
-Match the host page's theme: by default the checkout follows the payer's
-stored choice, then the system scheme. If this page is always one theme, lock
-it — `<Checkout theme="dark" … />` (`theme` attribute on the custom element) —
-so a white card never lands on a dark page. The checkout is styled by CSS
-variables under `data-theme`; [Frontend checkout](https://openreceive.org/guides/frontend-checkout.md) has
-the knobs.
+Match the host page's theme. By default the checkout follows the payer's
+stored choice, then the system color scheme. If this page always uses one
+theme, lock it with `<Checkout theme="dark" … />`. On the custom element, set
+the `theme` attribute. Locking the theme keeps a white card off a dark page.
+CSS variables under `data-theme` style the checkout.
+[Frontend checkout](https://openreceive.org/guides/frontend-checkout.md) lists the settings you can change.
 
 Everything the checkout draws ships inside the JavaScript: the payment-method
-icons, the wallet logos and the pay tutorials. There is no image file to copy
-or serve and no asset option to set. Deploy your normal JavaScript and CSS
+icons, the wallet logos, and the pay tutorials. There is no image file to copy
+or serve, and no asset option to set. Deploy your normal JavaScript and CSS
 build output, including any generated JavaScript chunks. Bundlers with code
-splitting can defer tutorial screenshots until first open; single-file builds
-(including the standalone checkout) include them upfront. If your
-Content-Security-Policy has a strict `img-src`, allow `data:`
+splitting can wait to load tutorial screenshots until a tutorial first opens.
+Single-file builds, including the standalone checkout, include them from the
+start. If your Content-Security-Policy has a strict `img-src`, allow `data:`
 ([Provider registry](https://openreceive.org/guides/provider-registry.md#assets)).
 
-That is the whole loop: your server owns the price and the order, the payer gets
-an invoice, and `onPaid` runs inside the settlement transaction. Rolled-back transactions may retry the callback; use a host outbox for external delivery.
+That is the whole loop. Your server owns the price and the order. The payer
+gets an invoice. `onPaid` runs inside the settlement transaction. If that
+transaction rolls back, the callback may run again. For delivery to outside
+systems, use an outbox in your app: record the message in the transaction and
+send it after commit.
 
 A page without a bundler renders the same checkout as a custom element:
 `<openreceive-checkout reference="…" prefix="/openreceive">` from
-`@openreceive/elements` (or its standalone build, served from your static
-directory). A runnable illustration of the boundary — not a template to copy
-models from — is Buy a Button
-(`examples/buttons/server/fastapi`):
-products, visitors and orders in SQLite, the three hooks as the only bridge,
-and the smallest correct FastAPI integration of the packaged checkout. Map
-that shape onto the models in THIS app.
+`@openreceive/elements`. You can also serve its standalone build from your
+static directory.
+
+Buy a Button is a runnable illustration of the boundary
+(`examples/buttons/server/fastapi`).
+It is not a template to copy models from. It keeps products, visitors and
+orders in SQLite, and the three hooks are the only bridge to OpenReceive. It
+is the smallest correct FastAPI integration of the packaged checkout. Map that
+shape onto the models in THIS app.
 
 ### 6. Verify
 
@@ -545,13 +567,13 @@ openreceive doctor --app main:app
 ```
 
 `openreceive doctor` checks Python, `NWC_URI`, and swap-provider
-configuration, and probes the wallet relay to confirm the code is
+configuration. It also probes the wallet relay to confirm the code is
 receive-only. With `--app module:attr` (your FastAPI app, the router, or an
-`OpenReceiveApp`) it also confirms the migration ran and names any hook still
-on a placeholder; add `--url http://localhost:8000` to confirm the routes are
-mounted. Every failing line states its own fix; exit code 1 when anything
-fails. `openreceive debug-report` prints the same as a redacted support
-report.
+`OpenReceiveApp`), it also confirms the migration ran and names any hook still
+on a placeholder. Add `--url http://localhost:8000` to confirm the routes are
+mounted. Every failing line states its own fix, and the command exits with
+code 1 when anything fails. `openreceive debug-report` prints the same output
+as a redacted support report.
 → [openreceive doctor](https://openreceive.org/guides/api-reference.md#openreceive-doctor-python)
 
 Then open the checkout in a browser, confirm the payment-method icons and
@@ -561,6 +583,6 @@ panel for failed JavaScript chunks. Allow `data:` in `img-src` and deploy the
 complete build output. Do not add image routes, copy package source images, or
 use registry `icon_path` / tutorial `path` keys as browser URLs.
 
-Swap credentials (`LSC_URI_*`) stay server-side too: the provider order id and
-token live in the attempt's server-only `swap_data` column and never reach a
+Swap credentials (`LSC_URI_*`) stay server-side too. The provider order id and
+token live in the attempt's server-only `swap_data` column. They never reach a
 response or a log ([Automated swaps](https://openreceive.org/guides/automated-swaps.md)).

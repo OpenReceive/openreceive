@@ -1,14 +1,14 @@
 # Node ORM recipes
 
-You never hand-write a payment repository. OpenReceive owns the
-`openreceive_payments` logic; your ORM contributes two things:
+You never write a payment repository by hand. OpenReceive owns the
+`openreceive_payments` logic. Your ORM provides two things:
 
 1. **The migration.** `npx openreceive scaffold payments --orm prisma`
    (or `drizzle | typeorm | sequelize | knex`, `--dialect postgres | sqlite`)
-   emits one migration/schema file that creates two tables,
-   `openreceive_payments` and `openreceive_meta`, plus a wiring guide. Run it
-   through your normal migration workflow.
-2. **The `db` handle** passed to `createHost({ db, ... })`.
+   writes one migration or schema file and a wiring guide. The file creates two
+   tables, `openreceive_payments` and `openreceive_meta`. Run it with your
+   normal migration workflow.
+2. **The `db` handle** you pass to `createHost({ db, ... })`.
 
 ## What to pass as `db`
 
@@ -24,25 +24,27 @@ You never hand-write a payment repository. OpenReceive owns the
 | Sequelize              | `sequelizeDb(sequelize, dialect)` from `@openreceive/http`   |
 
 A custom adapter is `{ dialect, query, transaction }` (`SqlAdapter`):
-`dialect` is `"postgres"` or `"sqlite"`, `query` runs one statement and returns
-SELECT rows (`[]` otherwise), and `transaction` runs a callback against a
-transactional client.
 
-**Host SQL reaches the driver verbatim.** The library renders each statement in
-the dialect you declared — `?` on sqlite, `$1`-style on postgres — so an
-adapter passes SQL through as written. A custom adapter must not rewrite
-placeholders either: renumbering `?` to `$1` would corrupt statements that were
-already correct, which is exactly the failure `prismaDb`'s statement router
-exists to prevent. See [Storage](storage.md).
+- `dialect` is `"postgres"` or `"sqlite"`.
+- `query` runs one statement and returns the SELECT rows (`[]` for other
+  statements).
+- `transaction` runs a callback against a transactional client.
 
-You only write a custom adapter for a stack the factories below don't cover.
+**Host SQL reaches the driver unchanged.** The library writes each of its own
+statements in the dialect you declared: `?` on sqlite, `$1`-style on postgres.
+So an adapter passes SQL through exactly as written. A custom adapter must not
+rewrite placeholders either. Renumbering `?` to `$1` would break statements
+that were already correct. `prismaDb`'s statement router exists to prevent
+exactly that failure. See [Storage](storage.md).
+
+You only need a custom adapter for a stack the factories below do not cover.
 
 ## Prisma, Knex, TypeORM, Sequelize
 
-`@openreceive/http` ships a named factory per ORM. The parameter types are
+`@openreceive/http` ships a named factory for each ORM. The parameter types are
 structural, so no ORM dependency is added and your existing handle passes
 straight in. `dialect` is a required argument because nothing on the handles
-states it reliably — for Prisma, match your datasource provider:
+states it reliably. For Prisma, match your datasource provider:
 
 ```ts
 import { knexDb, prismaDb, sequelizeDb, typeOrmDb } from "@openreceive/http";
@@ -53,50 +55,52 @@ createHost({ db: typeOrmDb(dataSource, "postgres"), ... });
 createHost({ db: sequelizeDb(sequelize, "postgres"), ... });
 ```
 
-Use the factory for your ORM. Each one makes settlement SQL run on the
-same transaction as `onPaid`.
+Use the factory for your ORM. Each one makes settlement SQL run in the same
+transaction as `onPaid`.
 
-Prisma-specific trap: the Prisma CLI auto-loads `.env` for every command. If
-that file holds a container-path `DATABASE_URL`, host-side migrations break —
-see [Deploying → Node in Docker](deploying.md#node-in-docker).
+A Prisma trap: the Prisma CLI loads `.env` automatically for every command. If
+that file holds a `DATABASE_URL` that points to a container path, migrations run
+from the host machine break. See [Deploying → Node in Docker](deploying.md#node-in-docker).
 
 ## Schema and `onPaid`
 
 The scaffolded migration renders the canonical DDL in `@openreceive/core`
-(`payments-ddl.ts` — the same source `paymentsSchemaSql(dialect)` renders, so
-the two cannot drift). Keep every column:
+(`payments-ddl.ts`). `paymentsSchemaSql(dialect)` renders from the same source,
+so the two cannot drift apart. Keep every column:
 
 | Column          | Notes                                                        |
 | --------------- | ------------------------------------------------------------ |
 | `reference`     | Indexed but not unique.                                       |
-| `payment_hash`  | Unique; CHECK enforces 64 lowercase hex.                      |
-| `status`        | CHECK over the five statuses.                                 |
-| `status_reason` | Nullable operator-facing detail.                              |
+| `payment_hash`  | Unique. A CHECK constraint enforces 64 lowercase hex.         |
+| `status`        | A CHECK constraint limits it to the five statuses.            |
+| `status_reason` | Nullable detail for operators.                                |
 | `paid_at`       | Nullable, write-once.                                         |
 | `expires_at`    | Required.                                                     |
-| `created_at`    | The wallet's exact mint time.                                 |
-| `updated_at`    | Locally clocked.                                              |
+| `created_at`    | The exact time the wallet created the invoice.                |
+| `updated_at`    | Set from the local clock.                                     |
 | `inserted_at`   | Write-once.                                                   |
 | `checkout_data` | The payer-safe JSON snapshot (BOLT11, amount, timestamps).    |
-| `swap_data`     | Server-only — never reaches a serializer, log, or browser.    |
-| `client_ip`     | Nullable, with its `(client_ip, inserted_at)` index — DB-backed rate limiting counts on it. |
+| `swap_data`     | Server-only. Never reaches a serializer, log, or browser.     |
+| `client_ip`     | Nullable, with its `(client_ip, inserted_at)` index. Database-backed rate limiting relies on it. |
 
-See [Payment storage](storage.md) for the full column semantics.
+See [Payment storage](storage.md) for what each column means in full.
 
-The same file also creates `openreceive_meta`. Keep it — the library uses it
-to share one wallet scan across every instance. See
+The same file also creates `openreceive_meta`. Keep it. The library uses it to
+share one wallet scan across every instance. See
 [Payment storage](storage.md).
 
 `onPaid({ reference, paymentHash, paidAt, details?, query })` runs inside the
-library's settlement transaction, only for the first settled attempt for a reference.
-Use `query` (statements written for your own dialect) to update your order or insert an outbox
-row transactionally — do not use your ORM's separate connection there. Never
-map `swap_data` into an API serializer, log, or browser bundle.
+library's settlement transaction. It runs only for the first settled attempt
+for a reference. Use `query`, with statements written for your own dialect, to
+update your order or insert an outbox row in that transaction. Do not use your
+ORM's separate connection there. Never map `swap_data` into an API serializer,
+log, or browser bundle.
 
-That "first settled attempt" guarantee covers every settlement path OpenReceive
-owns; it cannot cover fulfillment your application triggers elsewhere. If an
-admin action, a second processor, or a replayed job can also fulfill an order,
-those race each other — so make the transition itself the guard:
+The "first settled attempt" guarantee covers every settlement path that
+OpenReceive owns. It cannot cover fulfillment your application triggers
+elsewhere. An admin action, a second payment processor, or a replayed job might
+also fulfill an order. If so, they race each other. Make the state change itself
+the guard:
 
 ```ts
 const onPaid = async ({ reference, paidAt, query }) => {
@@ -113,15 +117,20 @@ const onPaid = async ({ reference, paidAt, query }) => {
 };
 ```
 
-Every scaffolded file carries the long-form version of this note.
+Every scaffolded file includes a longer version of this note.
 
-Only if no supported handle or adapter can reach your persistence, implement
-the full `PaymentRepository` interface and pass it as `payments`
-instead of `db`; that advanced escape hatch makes you responsible for commit
-locking, write-once settlement, and reconciliation transitions. It must also
-implement the lease/progress pair `claimReconcileGate` and
-`checkpointReconcileGate`. Request-path `opportunisticReconcile: false`
-disables only request triggers; an explicitly running worker still needs the
-durable gate. `recordSettlementWithFulfillment(input, fulfill)` must await
-`fulfill` with a typed transaction handle before commit. Never invoke it after
-committing a boolean claim. See [upgrade and recovery](payment-safety-upgrade.md).
+Implement the full `PaymentRepository` interface only if no supported handle
+or adapter can reach your storage. Pass it as `payments` instead of `db`. This
+is an advanced escape hatch, and it makes you responsible for:
+
+- commit locking
+- write-once settlement
+- reconciliation transitions
+- the lease and progress pair `claimReconcileGate` and
+  `checkpointReconcileGate`
+
+Setting `opportunisticReconcile: false` turns off only the triggers on
+requests. A worker you run explicitly still needs the durable gate.
+`recordSettlementWithFulfillment(input, fulfill)` must await `fulfill` with a
+typed transaction handle before it commits. Never call it after committing a
+boolean claim. See [upgrade and recovery](payment-safety-upgrade.md).

@@ -1,7 +1,7 @@
 # Node integration details
 
-Use this when the [Node quickstart](../guides/quickstart-node.md) is not enough.
-Most apps should mount `@openreceive/express` (or Fastify/Next) and keep host policy in
+Use this page when the [Node quickstart](../guides/quickstart-node.md) is not enough.
+Most apps should mount `@openreceive/express` (or Fastify/Next). They keep host policy in
 `createHost({ db, amountFor, onPaid })` plus the host's
 `authorize` policy.
 
@@ -46,8 +46,8 @@ later status refresh or reconcile pass
 
 ## Host integration
 
-Mounted browser routes receive one `host` object. In the default `db` mode the host supplies
-only:
+Mounted browser routes receive one `host` object. In the default `db` mode, the host supplies
+only these:
 
 | Option           | Host responsibility                                        |
 | ---------------- | ---------------------------------------------------------- |
@@ -55,70 +55,84 @@ only:
 | `amountFor`      | Authoritative `{ sats }` or `{ currency, value }` price, or `null` → 404 |
 | `onPaid`         | In-transaction fulfillment for the first settled attempt   |
 
-Attempt selection, per-reference commit locking, the status state machine, write-once settlement,
-and reconciliation transitions are library-owned. `authorize` stays separate on the adapter:
-OpenReceive does not inspect the host session; it passes the Web-standard `Request`, requested
-action, and order ID. Knowing an order ID is not authentication.
+The library owns attempt selection, the commit lock per reference, the status state machine,
+write-once settlement, and reconciliation transitions. `authorize` stays separate, on the
+adapter. OpenReceive does not inspect the host session. It passes the Web-standard `Request`,
+the requested action, and the order ID. Knowing an order ID is not authentication.
 
 `onPaid({ reference, paymentHash, paidAt, details?, query })` runs inside the settlement
-transaction; `query` runs statements (`?` placeholders) in that same transaction for the order
-update or an outbox insert. A duplicate sibling settlement is recorded with
+transaction. Use `query` to run statements (`?` placeholders) in that same transaction, for the
+order update or an outbox insert. If a sibling attempt settles as a duplicate, it is recorded with
 `status_reason = 'duplicate_settlement'` and never fulfills again.
 
 The advanced form replaces `db` with `PaymentRepository<Transaction>`.
-It implements `listForReference`, `findByPaymentHash`, keyset
-`listReconcilableAttempts`, `commitAttempt`, `recordReconciliation`, and
-`recordSettlementWithFulfillment(input, fulfill)`. The last operation holds the
-reference lock, writes settlement, awaits `fulfill({ reference, paymentHash,
-paidAt, details?, transaction })`, and commits atomically. Failure rolls back
-both writes. Boolean-only legacy claims are rejected before use. Gated scans
-also require `claimReconcileGate` and `checkpointReconcileGate` with durable
-lease/CAS ownership. Raw hook refusal returns 409; a repository storage outage
-returns retryable 503. Both withhold payer instructions.
+It implements:
+
+- `listForReference`,
+- `findByPaymentHash`,
+- `listReconcilableAttempts`, paginated by keyset (a cursor on the last row seen),
+- `commitAttempt`,
+- `recordReconciliation`,
+- `recordSettlementWithFulfillment(input, fulfill)`.
+
+`recordSettlementWithFulfillment` holds the reference lock and writes settlement. It then awaits
+`fulfill({ reference, paymentHash, paidAt, details?, transaction })` and commits both atomically.
+A failure rolls back both writes. Legacy claims that return only a boolean are rejected before
+use. Gated scans also require `claimReconcileGate` and `checkpointReconcileGate`, which own the
+gate through a durable lease and compare-and-swap (CAS). If the hook itself refuses, the route
+returns 409. If repository storage is down, it returns a retryable 503. Both withhold payer
+instructions.
 
 See [Payment storage](../guides/storage.md), [Node ORM recipes](../guides/node-orms.md), and
 [Authorization](../guides/authorization.md).
 
 ## Settlement and reconciliation
 
-Opportunistic reconcile is the default: every mounted payment route runs one gated
-`reconcileHostPayments` pass when attempts are pending, serialized across instances by
-the durable `openreceive_meta` gate (unauthenticated `GET /rates` never triggers it). `maybeReconcilePayments({ service, host })`
-exposes the same gated pass for host-owned routes and middleware; the optional
-`startNotificationWorker` runs listening plus the periodic pass in one separate
-process. Each pass loads only `pending` attempts and issues one batched `list_transactions`
-scan (never one lookup per invoice), so the window stays roughly the active invoice window and
-no durable cursor exists. Delivery is at-least-once; the settlement transaction makes replays
-harmless. Final settlement always requires `settled_at` or wallet state `settled` — never a
-preimage. A notification carrying that signal for a known pending attempt settles it directly
-through the write-once path (no redundant scan for that invoice); a notification without it, or
-for an unknown hash, only wakes a bounded scan.
+Opportunistic reconcile is the default. Every mounted payment route runs one gated
+`reconcileHostPayments` pass when attempts are pending. The durable `openreceive_meta` gate
+makes these passes run one at a time across instances. The unauthenticated `GET /rates` never
+triggers a pass.
+
+- `maybeReconcilePayments({ service, host })` exposes the same gated pass for host-owned routes
+  and middleware.
+- The optional `startNotificationWorker` listens for notifications and runs the periodic pass,
+  in one separate process.
+
+Each pass loads only `pending` attempts and issues one batched `list_transactions` scan. It never
+does one lookup per invoice. The scan window therefore stays close to the window of active
+invoices, and no durable cursor exists. Delivery is at-least-once, and the settlement
+transaction makes replays harmless.
+
+Final settlement always requires `settled_at` or wallet state `settled`, never a preimage.
+Suppose a notification carries that signal for a known pending attempt. It settles the attempt
+directly through the write-once path, with no extra scan for that invoice. A notification
+without the signal, or for an unknown hash, only wakes a bounded scan.
 
 Terminal transitions (`expired`, `failed`, `attention` plus `status_reason`) require a
-successful wallet scan; closure of an unpaid attempt additionally requires the scan to be at or
+successful wallet scan. To close an unpaid attempt, that scan must also happen at or
 after `expires_at + OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS` (900). Vectors:
-`spec/test-vectors/attempt-reconciliation.json`. Stop the notifications worker (if you run
-one) before `service.close()` on shutdown.
+`spec/test-vectors/attempt-reconciliation.json`. On shutdown, stop the notifications worker, if
+you run one, before `service.close()`.
 
 ## Retries, concurrency, and expired invoices
 
 - If the order has no live attempt for the requested rail/asset, OpenReceive creates one and
   commits it before responding.
-- Retries reuse a live attempt that still has more than the reuse buffer (60 s) of life; a
-  near-expiry same-rail attempt is superseded (`status_reason = 'superseded'`); it stays
-  `pending` so a late payment to it still reconciles, and closes only on a wallet scan.
-- Concurrent creates serialize per reference inside the library repository; the loser receives
-  `409` and no invoice.
-- A payer can hold one live Lightning attempt and one live swap attempt per asset to switch
-  methods; the first wallet settlement fulfills.
+- A retry reuses a live attempt if it has more than the reuse buffer (60 s) of life left.
+- A same-rail attempt near expiry is superseded (`status_reason = 'superseded'`). It stays
+  `pending`, so a late payment to it still reconciles. It closes only on a wallet scan.
+- Concurrent creates run one at a time per reference inside the library repository. The loser
+  receives `409` and no invoice.
+- A payer can hold one live Lightning attempt and one live swap attempt per asset, so they can
+  switch methods. The first wallet settlement fulfills.
 - Status polling never creates a new invoice. When all attempts are terminal, a create request
-  appends another row. Historical hashes are kept so a late settlement updates the exact
-  attempt originally exposed.
+  appends another row. Historical hashes are kept, so a late settlement updates the exact
+  attempt the payer originally saw.
 
 ## Direct server-side checkout
 
-For a server-rendered flow that does not use mounted browser routes, call the service directly
-and commit through the host's library-owned repository before display:
+For a server-rendered flow that does not use the mounted browser routes, call the service
+directly. Commit through the host's library-owned repository before you display anything:
 
 ```ts
 const checkout = await service.createCheckout({
@@ -138,15 +152,15 @@ await host.payments.commitAttempt({
 return checkout;
 ```
 
-For retry recovery, return the selected attempt's stored `checkout` snapshot
-(`host.payments.listForReference`). Full custom-controller patterns are in
+To recover on retry, return the selected attempt's stored `checkout` snapshot
+from `host.payments.listForReference`. Full custom-controller patterns are in
 [Writing your own checkout route](../guides/custom-checkout-route.md).
 
 ## Mounted routes
 
-Default prefix is `/openreceive`. The route set is defined normatively in
-[`spec/openapi/openreceive-http.v1.yaml`](../../spec/openapi/openreceive-http.v1.yaml);
-the generated route, body, and error tables are in the
-[API reference](../guides/api-reference.md#framework-adapters), and the route
+The default prefix is `/openreceive`. The route set is defined by
+[`spec/openapi/openreceive-http.v1.yaml`](../../spec/openapi/openreceive-http.v1.yaml).
+The generated route, body, and error tables are in the
+[API reference](../guides/api-reference.md#framework-adapters). The route
 list is in [Shipped routes](shipped-routes.md). Do not recreate these routes in
 the application.
