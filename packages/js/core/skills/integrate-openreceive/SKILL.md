@@ -34,9 +34,10 @@ code** (`NWC_URI`).
    - BTCPay Server: [references/btcpay.md](references/btcpay.md) — a plugin,
      configured in BTCPay's store UI or Greenfield API; no application code,
      no npm packages, no gem. The rest of this file is about the library.
-3. Follow its **Step 0** first: confirm `NWC_URI` is set in the server
-   environment before writing code. Never print the value; never invent a
-   placeholder.
+3. Follow its **Step 0** first: before writing code or searching the machine,
+   ask the user for the receive-only NWC code (then the swap URI), one question
+   per message, and store each pasted code in the project's env file yourself.
+   Never print the value; never invent a placeholder.
 
 Install, per adapter — Express: `npm install @openreceive/express @openreceive/react`;
 Fastify: `npm install @openreceive/fastify @openreceive/react`; Next.js:

@@ -37,78 +37,101 @@ The one required credential is a receive-only NWC code (Nostr Wallet Connect):
 a string from the merchant's wallet that can create invoices and read their
 status, and cannot spend. A swap provider (an "LSC" code) optionally lets the
 payer send USDT, USDC, ETH or SOL instead, converted into that same
-Lightning payment. You supply those credentials and three hooks — `authorize`,
+Lightning payment. Step 0 collects those credentials from the user; you write three hooks — `authorize`,
 `amount_for`, `on_paid` on a `Host` class named in `settings.OPENRECEIVE`;
 OpenReceive supplies invoices, polling, settlement and the checkout UI. It never
 owns orders, users, prices, or fulfillment.
 
-## Step 0 — check the environment before you write code
+## Step 0 — ask for the two codes, one question at a time
 
-Do this before installing the package or editing files.
+Before anything else, look at one file: the project's `.env`, if it exists.
+Read it only far enough to see whether `NWC_URI` and `LSC_URI_PRIMARY` are
+there and non-empty, and never print the values. A code that is already
+set is not asked for again; if both are set, skip to step 5
+(making the server load the file), then the quickstart.
 
-1. Look for `NWC_URI` in this app's server environment — `.env`, the process
-   env, the deploy config, whatever this app already uses (Django itself loads
-   no `.env`; `django-environ` or the process manager does). If the app runs in
-   a container the value is in none of those: ask the running process
-   (`docker exec <container> printenv NWC_URI`), because finding the NAME in a
-   compose file proves nothing about the value. Never print or echo the value
-   itself; only report whether it is set. Check for `LSC_URI_PRIMARY` in the
-   same pass.
+Otherwise your next action is a question to the user. Do not install the package,
+edit the app, write `.env.example`, or search anywhere else before asking
+it. Do not read deploy config (compose files, platform secrets), `settings.py` secrets, Docker containers, or process environments, and never run
+`printenv`. A new shop has neither code yet: hunting for one burns the turn and
+can leak other secrets into the transcript.
 
-   If OpenReceive is already installed here, `manage.py openreceive_doctor`
-   answers this whole step in one command — every credential as present or
-   missing, the wallet preflight, the two tables, the mount, and whether a hook
-   is still on a placeholder. It never prints a value; `--offline` skips the
-   relay probe.
-2. If BOTH are already set — the common case in an existing app — say so and go
-   straight to the quickstart. Steps 3 and 4 are for an environment that is
-   missing one; do not stop to ask about altcoins that are already configured.
-   If only `NWC_URI` is set, Bitcoin already works: continue, and raise the
-   altcoin question at step 4 rather than blocking on it.
-3. If `NWC_URI` is missing or empty, stop and tell the user exactly what to
-   create:
+Two server-only URIs are needed before the quickstart:
 
-   > OpenReceive cannot issue an invoice without a receive-only NWC code. Get
-   > one at https://openreceive.org/get_a_nwc_code_to_receive_payments, then
-   > put `NWC_URI=<the code>` in this app's server environment — for most apps
-   > that is a `.env` file the process manager loads, or an exported variable —
-   > and tell me when it's set.
+- `NWC_URI` — a receive-only Nostr Wallet Connect code,
+  `nostr+walletconnect://…`. Required for Bitcoin.
+- `LSC_URI_PRIMARY` — a Lightning Swap Connect URI,
+  `lightning+swapconnect://…`. Required for USDT, USDC, ETH and SOL. Skip it
+  only when the user says they want Bitcoin alone.
 
-   Wait for the user before wiring OpenReceive; do not invent a placeholder
-   value. Waiting is not idleness: you may write `.env.example` with the
-   variable NAMES only (`NWC_URI=`, `LSC_URI_PRIMARY=`) so the merchant has a
-   file to copy, and keep building the parts of the host that do not touch
-   OpenReceive — the order model, the cart, the views. The stop guards the
-   credential, not the rest of the app.
-4. If `LSC_URI_PRIMARY` was not already set, ask the user: "Do you want to
-   accept altcoins and stablecoins (USDT, USDC, ETH, SOL) as well as
-   Bitcoin?"
+The user never edits an environment file. They paste each code into the chat;
+you store it. Ask one question per message.
 
-   - Yes → send them to https://openreceive.org/set_up_swap_provider for a
-     swap-provider (LSC) code, to set as `LSC_URI_PRIMARY` in the same server
-     environment. Do NOT wait for it: no application code reads the value, so
-     the integration is identical with or without it — the engine picks it up
-     from the environment and swaps switch on. What a yes DOES change is the
-     refund route back (the swap non-negotiable below): build it as part of
-     this integration, not when the code arrives.
-   - No → skip it. Bitcoin over Lightning works with `NWC_URI` alone, and you
-     can add a swap provider later without changing application code.
-5. Check the environment again and confirm `NWC_URI` is present.
-   `LSC_URI_PRIMARY` may land later; swaps stay off until it does, and no code
-   changes when it arrives.
-6. If OpenReceive is ALREADY installed here, check the installed versions of
-   `openreceive` (`pip show openreceive`) and `@openreceive/browser` (or the
-   `MANIFEST.json` beside the packaged static checkout) against the release
-   named at the top of this file. The headless display models below do not
-   exist in older versions, and the first tile click throws with nothing saying
-   why. Upgrade first — and if this app runs in containers, rebuild the images:
-   the package is baked into the image, so an in-place `pip install -U` is
-   undone by the next `compose up`.
-7. Before the deploy that turns this on, run
-   `OPENRECEIVE_PREFLIGHT=1 manage.py check --deploy`: it runs the receive-only
-   wallet preflight as a system check (`openreceive.E002` on a missing, dead or
-   spend-capable code), because the wallet client is built lazily on the first
-   request rather than in `AppConfig.ready()`.
+1. **First message — the NWC code, and nothing else.** Ask for it and walk them
+   through getting it:
+
+   > To receive payments I need a receive-only wallet code. In Rizful: open
+   > the menu, tap NWC, choose Receive-only NWC code, and tap Copy
+   > (https://openreceive.org/get_a_nwc_code_to_receive_payments). If you would
+   > rather run your own wallet, Alby Hub works too: Connections → Add
+   > Connection → Read Only. Paste the code here and I will store it.
+
+   Do not mention `.env`, exports, or "tell me when it's set".
+2. **When they paste it.** If it does not start with `nostr+walletconnect://`,
+   ask them to copy the receive-only code again. Otherwise write
+   `NWC_URI=<paste>` into the project's `.env`, creating the file if needed.
+   Make sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has
+   one). Never echo the value, commit it, or put it in client code. Reply only
+   that it is saved, then ask the next question.
+3. **Second message — swaps.** If the user already asked for stablecoins or
+   altcoins, skip the yes/no and go straight to the walkthrough. Otherwise ask
+   whether payers should also be able to pay with USDT, USDC, ETH or SOL. The
+   walkthrough:
+
+   > Go to https://lightning-swap.com, sign in for API keys, create a key, and
+   > copy the whole URI (https://openreceive.org/set_up_swap_provider). Paste
+   > it here and I will store it — or say "Bitcoin only" and I will continue
+   > without it.
+
+   Mention FixedFloat only if they already use it.
+4. **When they paste it.** If it does not start with
+   `lightning+swapconnect://`, ask them to copy it again. Otherwise add
+   `LSC_URI_PRIMARY=<paste>` to the same `.env`, without echoing it. Swaps
+   are now on, so build the refund route back (the swap non-negotiable below) as
+   part of this integration. If they chose Bitcoin only, leave
+   `LSC_URI_PRIMARY` unset and skip that route.
+5. **Make the server load the file — yourself.** Django does not
+   read `.env` on its own. If the app already uses `django-environ`, make sure
+   it reads this file; otherwise add it and call `environ.Env.read_env()` in
+   `settings.py` before anything reads the environment. When the app is started
+   with Docker Compose, give the service `env_file: .env`. Restart the server
+   after writing the file.
+
+Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
+saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
+runs the receive-only preflight: if it reports spend methods such as
+`pay_invoice`, remove `NWC_URI` from `.env` and ask for a receive-only code
+again. Never set the spend-capable override to get past it.
+
+Before the deploy that turns this on, run
+`OPENRECEIVE_PREFLIGHT=1 manage.py check --deploy`: it runs the receive-only
+wallet preflight as a system check (`openreceive.E002` on a missing, dead or
+spend-capable code), because the wallet client is built lazily on the first
+request rather than in `AppConfig.ready()`.
+
+### Upgrading an existing install
+
+This is not the opening move of a new integration. When OpenReceive is ALREADY
+installed here, `manage.py openreceive_doctor` reports every credential as
+present or missing (never the value), the wallet preflight, the two tables, the
+mount, and any hook still on a placeholder; `--offline` skips the relay probe.
+Check the installed `openreceive` (`pip show openreceive`) and
+`@openreceive/browser` (or the `MANIFEST.json` beside the packaged static
+checkout) against the release named at the top of this file: the headless
+display models below do not exist in older versions, and the first tile click
+throws with nothing saying why. Upgrade first — and if this app runs in
+containers, rebuild the images: the package is baked into the image, so an
+in-place `pip install -U` is undone by the next `compose up`.
 
 Only then start the quickstart.
 
