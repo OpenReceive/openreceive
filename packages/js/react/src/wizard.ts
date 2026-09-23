@@ -75,7 +75,15 @@ function PaymentWizardSession(props: PaymentWizardProps): React.ReactElement {
   // When a swap provider is configured, each pay-in coin is promoted to a top-level
   // choice. Selecting one jumps straight to its deposit address, bypassing the
   // country/route/provider steps. Null means the standard method grid is shown.
-  const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<string | null>(null);
+  //
+  // A snapshot that already carries an attempt starts ON that attempt. Adopting
+  // it here, not in an effect, is what keeps the first paint off the Lightning
+  // "Start over" pane: the focus effect below reports this value, and an effect
+  // that adopted a frame later left one committed paint where an expired deposit
+  // and "Start over" were on screen together.
+  const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<string | null>(
+    () => selectCurrentSwapInvoice(props.checkout)?.swap?.pay_in_asset ?? null,
+  );
   // For multi-network coins (USDT), remember which network the payer picked before
   // confirming the method tile.
   const [selectedSwapAssetByGroup, setSelectedSwapAssetByGroup] = React.useState<
@@ -282,12 +290,14 @@ function PaymentWizardSession(props: PaymentWizardProps): React.ReactElement {
           : undefined;
 
   // AN ATTEMPT THE SNAPSHOT ALREADY CARRIES IS THE SCREEN THE PAYER IS ON, even
-  // though this session never clicked it. `resumePaymentHash` folds a
-  // remembered attempt into the prepared snapshot, and a wizard that waits for
-  // a click shows the method grid over it — or, once the shadow invoice behind
-  // the swap has expired, an "Invoice expired" panel over a deposit that is
-  // waiting to be refunded. The money is at the provider; the invoice is
-  // bookkeeping, and the refund screen has to win.
+  // though this session never clicked it. The mount case is the useState
+  // initializer above, so the first paint is already that screen.
+  // `resumePaymentHash` can fold a remembered attempt into the snapshot only
+  // after this session has rendered once; a wizard that waits for a click shows
+  // the method grid over it — or, once the shadow invoice behind the swap has
+  // expired, an "Invoice expired" panel over a deposit that is waiting to be
+  // refunded. The money is at the provider; the invoice is bookkeeping, and
+  // the refund screen has to win.
   //
   // It cannot fight the payer: backing out of a method sets
   // `dismissedSwapInvoiceId`, which removes the attempt from
@@ -298,7 +308,7 @@ function PaymentWizardSession(props: PaymentWizardProps): React.ReactElement {
   // would fight the breadcrumb: backing out of a method is the payer saying
   // "show me the others", and an effect that re-adopts the attempt they just
   // left puts them straight back on it.
-  const resumeAdoptedRef = React.useRef(false);
+  const resumeAdoptedRef = React.useRef(selectedSwapAsset !== null);
   React.useEffect(() => {
     if (resumeAdoptedRef.current) return;
     if (selectedSwapAsset !== null) {
