@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.12 - 2026-10-01
 
 - Make “Switch payment method” return to the method grid every time in
   headless checkouts. `selectCurrentSwapInvoice` fell back to “the first swap
@@ -16,6 +16,17 @@
 - Drop “Pay with one method only — if you already sent …, do not also pay the
   Lightning invoice.” from the swap deposit warning (JS and the BTCPay Server
   plugin source). The banner now only covers the exact amount and the network.
+- Open a React checkout that already carries a swap attempt directly on that
+  attempt. The wizard used to adopt it one frame late, so the first paint could
+  show an expired deposit next to the Lightning “Start over” pane.
+- Correct the BTCPay Server plugin install steps everywhere they were still
+  written as Server Settings → Plugins: the integration landing page, the
+  BTCPay quickstart (which now carries the four install screenshots itself)
+  and the agent directions. Guides and agent directions were reworded
+  throughout.
+- Install Python, make and g++ in the WordPress demo image's client stage, so a
+  failed better-sqlite3 prebuilt download falls back to compiling instead of
+  failing the image build.
 
 ## 0.4.11 - 2026-09-21
 

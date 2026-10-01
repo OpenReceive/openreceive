@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.12 - 2026-10-01
+
+Release in lockstep with the 0.4.12 checkout fixes. The Rails Buy a Button
+demo's checkout now returns to the method grid on every "Switch payment
+method" click. No Rails engine API change.
+
 ## 0.4.11 - 2026-09-21
 
 Reconciliation progress is durable and bounded. A capped wallet walk now

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.12 - 2026-10-01
+
+Release in lockstep with the 0.4.12 checkout fixes. The swap deposit
+warning text the browser shows no longer carries the "pay with one method
+only" sentence; it is built in the browser package, not here. No Ruby server
+API or payment behavior changes.
+
 ## 0.4.11 - 2026-09-21
 
 The mounted HTTP routes mint invoices with the host's own description. The

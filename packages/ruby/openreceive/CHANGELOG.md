@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.12 - 2026-10-01
+
+Release in lockstep with the 0.4.12 checkout fixes ("Switch payment method"
+always returns to the method grid; the swap deposit warning drops its "pay
+with one method only" sentence). No Ruby core changes.
+
 ## 0.4.11 - 2026-09-21
 
 Wallet history scans stop trusting a page's usable length. A page the wallet
