@@ -86,7 +86,9 @@ test("swap deposit warning stresses exact asset and network", () => {
   assert.equal(deposit?.networkWarningTitle, "Wrong currency or network = lost funds");
   assert.equal(deposit?.networkWarningEmphasis, "15.01 USDT on the Solana network");
   assert.match(deposit?.networkWarning ?? "", /funds will be lost/);
-  assert.match(deposit?.networkWarning ?? "", /Lightning invoice/);
+  // The banner is about the deposit alone; the "pay with one method only"
+  // sentence was dropped as one warning too many.
+  assert.doesNotMatch(deposit?.networkWarning ?? "", /Lightning invoice/);
 
   const html = renderToStaticMarkup(
     renderSwapDepositPanel({
@@ -166,8 +168,7 @@ test("deposit panel shouts only on the rails a deposit can actually be lost on",
       );
       assert.match(display?.networkWarning ?? "", /funds will be lost/, payInAsset);
     }
-    // Double-paying is reachable on every rail, so this half is never dropped.
-    assert.match(display?.networkWarning ?? "", /Lightning invoice/, payInAsset);
+    assert.doesNotMatch(display?.networkWarning ?? "", /Lightning invoice/, payInAsset);
     assert.match(display?.networkWarning ?? "", /1\.5 /, payInAsset);
   }
 });

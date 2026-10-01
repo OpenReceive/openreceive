@@ -194,10 +194,6 @@ export function createSwapDisplayModel(
   const depositAmount = formatDepositAmount(swap.deposit_amount);
   const networkWarningEmphasis = `${depositAmount} ${asset.assetLabel} on the ${asset.networkLabel} network`;
   const depositRisk = swapDepositRisk(swap.pay_in_asset);
-  // The lost-funds half is claimed only where it is reachable. The
-  // "one method only" half is on every rail: double-paying does not care what
-  // the address format pins.
-  const doubleSpendWarning = `Pay with one method only — if you already sent ${asset.assetLabel}, do not also pay the Lightning invoice.`;
   // Settlement authority is OpenReceive's own wallet sweep, surfaced as the shadow
   // invoice's settled transaction_state — never the provider's `completed` state (see
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
@@ -218,10 +214,11 @@ export function createSwapDisplayModel(
         ? checkoutLabels.sendExactAmountTitle
         : checkoutLabels.wrongCurrencyOrNetworkTitle,
     networkWarningEmphasis,
+    // The lost-funds sentence is claimed only where it is reachable.
     networkWarning:
       depositRisk === "pinned"
-        ? `Send exactly ${networkWarningEmphasis}. ${doubleSpendWarning}`
-        : `Be sure you are sending exactly ${networkWarningEmphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost! ${doubleSpendWarning}`,
+        ? `Send exactly ${networkWarningEmphasis}.`
+        : `Be sure you are sending exactly ${networkWarningEmphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost!`,
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
     depositAmount,
@@ -361,8 +358,14 @@ export function overlaySwapRefundStagingIntoSnapshot(
  * renderers used to keep a near-identical copy of this; a headless UI holding
  * its own snapshot store wants the same three rules.
  *
- * `dismissedInvoiceId` is the "back to Lightning" exit: a dismissed attempt is
- * invisible until a new start or a refund clears the dismissal.
+ * `dismissedInvoiceId` is the "back to Lightning" / "switch payment method"
+ * exit: while it is set, NO attempt is current until a new start or a refund
+ * clears it. The payer walked away from the swap they were looking at, and every
+ * older attempt in the snapshot is one they walked away from before that. The
+ * snapshot copy is the fallback only when nothing was dismissed (a resumed
+ * attempt this session never started). Falling back to "the first other swap"
+ * reopened the previous coin's deposit once an order had two attempts, and
+ * every further click re-dismissed the same one, so the exit stopped working.
  */
 export function selectCurrentSwapInvoice(
   snapshot: CheckoutSnapshot | undefined,
@@ -373,13 +376,13 @@ export function selectCurrentSwapInvoice(
 ): CheckoutInvoiceSnapshot | undefined {
   const dismissedInvoiceId = options.dismissedInvoiceId ?? null;
   const started = options.started ?? null;
-  const fromSnapshot = snapshot?.invoices.find(
-    (invoice) =>
-      invoice.rail === "swap" &&
-      invoice.swap !== undefined &&
-      invoice.invoice_id !== dismissedInvoiceId,
-  );
-  if (started === null || started.invoice_id === dismissedInvoiceId) return fromSnapshot;
+  if (started === null) {
+    if (dismissedInvoiceId !== null) return undefined;
+    return snapshot?.invoices.find(
+      (invoice) => invoice.rail === "swap" && invoice.swap !== undefined,
+    );
+  }
+  if (started.invoice_id === dismissedInvoiceId) return undefined;
   const matched =
     snapshot?.invoices.find((invoice) => invoice.invoice_id === started.invoice_id) ?? started;
   return overlaySwapRefundStaging(matched, started);

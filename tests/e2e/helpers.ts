@@ -178,7 +178,7 @@ export async function startCheckout(page: Page): Promise<void> {
  */
 export async function selectFrameworkTab(page: Page, framework: CheckoutFramework): Promise<void> {
   const label = FRAMEWORK_TAB_LABELS[framework];
-  const tab = page.locator(".or-shop-stage label", { hasText: label }).first();
+  const tab = frameworkTab(page, label);
   // A host with ONE packaged checkout and no strip (the fastify stack) is the
   // React tab by construction; only a request for another framework is an
   // error there.
@@ -188,6 +188,18 @@ export async function selectFrameworkTab(page: Page, framework: CheckoutFramewor
   }
   await tab.click();
   await expect(page.getByRole("radio", { name: label, exact: true })).toBeChecked();
+}
+
+/**
+ * Whether this host has the framework tab strip at all (node-express does).
+ * A spec that runs across every stack skips the non-React tabs without it.
+ */
+export async function hasFrameworkTabs(page: Page): Promise<boolean> {
+  return (await frameworkTab(page, FRAMEWORK_TAB_LABELS.react).count()) > 0;
+}
+
+function frameworkTab(page: Page, label: string): Locator {
+  return page.locator(".or-shop-stage label", { hasText: label }).first();
 }
 
 /**

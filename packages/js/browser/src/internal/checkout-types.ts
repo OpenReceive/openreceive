@@ -235,9 +235,7 @@ export interface SwapDisplayModel {
   readonly networkWarningEmphasis: string;
   /**
    * Full plain-text network warning (accessible / non-HTML consumers). The
-   * lost-funds sentence is present only when `depositRisk` is not `pinned`; the
-   * "pay with one method only" sentence is on every rail, because double-paying
-   * is reachable on all of them.
+   * lost-funds sentence is present only when `depositRisk` is not `pinned`.
    */
   readonly networkWarning: string;
   readonly depositAddress: string;

@@ -27,6 +27,7 @@ import {
   paymentMethods,
   prepareCheckout,
   resolveWizardSelection,
+  selectCurrentSwapInvoice,
   swapPickerKey,
 } from "@openreceive/browser/headless";
 
@@ -261,6 +262,44 @@ test("selectedAssetByGroup is keyed by group key and valued by pay_in_asset", ()
   store.selectedAssetByGroup = { USDT: "USDT_TRON" };
   assert.equal(swapGroup(gridOf(store), "USDT").selectedOption.pay_in_asset, "USDT_TRON");
   assert.equal(gridOf(store).canContinue, true);
+});
+
+// The "Switch payment method" regression. The selector used to fall back to
+// "the first swap attempt that is not the dismissed one", so once an order had
+// two attempts, leaving the second reopened the FIRST coin's deposit, and every
+// further click re-dismissed the same attempt, so the exit did nothing.
+test("a dismissal hides every swap attempt, not just the one the payer left", () => {
+  const attempt = (invoiceId, payInAsset) => ({
+    invoice_id: invoiceId,
+    rail: "swap",
+    payment_hash: invoiceId.padEnd(64, "0"),
+    swap: {
+      provider: "fixedfloat",
+      pay_in_asset: payInAsset,
+      deposit_address: "So11111111111111111111111111111111111111112",
+      deposit_amount: "1.05",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: EXPIRES_AT,
+    },
+  });
+  const usdt = attempt("a1", "USDT_SOL");
+  const sol = attempt("b2", "SOL_SOL");
+  const snapshot = { reference: REFERENCE, invoices: [usdt, sol] };
+
+  // Showing the attempt this session started, as the snapshot carries it.
+  assert.equal(selectCurrentSwapInvoice(snapshot, { started: sol })?.invoice_id, "b2");
+  // Leaving it shows NO deposit, not the USDT one left before it.
+  assert.equal(
+    selectCurrentSwapInvoice(snapshot, { started: sol, dismissedInvoiceId: "b2" }),
+    undefined,
+  );
+  // Same with nothing started this session (a resumed attempt the payer left).
+  assert.equal(
+    selectCurrentSwapInvoice(snapshot, { started: null, dismissedInvoiceId: "a1" }),
+    undefined,
+  );
+  // With nothing dismissed, the resumed attempt is still found in the snapshot.
+  assert.equal(selectCurrentSwapInvoice(snapshot)?.invoice_id, "a1");
 });
 
 // D1's regression: `swapSelection` / `swapPrefix` / `fetch` used to be three

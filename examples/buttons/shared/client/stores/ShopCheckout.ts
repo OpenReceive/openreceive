@@ -427,18 +427,24 @@ export class ShopCheckout extends Model({
     );
   }
 
-  // The live deposit panel, when there is a swap attempt to show.
+  // The swap attempt on screen, if any.
   //
   // `selectCurrentSwapInvoice` is the three rules a renderer needs and would
   // otherwise re-derive: the polled snapshot's copy of the attempt, the locally
   // started one while polling catches up, and the staged refund address folded
   // over either — so a review in progress survives a status tick.
   @computed
-  get swapDisplay() {
-    const invoice = selectCurrentSwapInvoice(this.snapshotValue ?? undefined, {
+  get currentSwapInvoice(): CheckoutInvoiceSnapshot | undefined {
+    return selectCurrentSwapInvoice(this.snapshotValue ?? undefined, {
       started: this.startedSwap?.data ?? null,
       dismissedInvoiceId: this.dismissedInvoiceId,
     });
+  }
+
+  // The live deposit panel, when there is a swap attempt to show.
+  @computed
+  get swapDisplay() {
+    const invoice = this.currentSwapInvoice;
     if (!invoice) return undefined;
     // `resumable` decides ONE string — `refundReturnLabel`, the sentence the
     // refund screen shows about getting back here — and the safe default is the
@@ -537,9 +543,11 @@ export class ShopCheckout extends Model({
     this.clearRefundStaging();
     // A dismissed attempt is invisible until a new start or a refund clears the
     // dismissal — the deposit panel must not survive the payer walking away
-    // from it.
-    const invoice = this.swapDisplay ? (this.startedSwap?.data?.invoice_id ?? null) : null;
-    this.setDismissedInvoiceId(invoice);
+    // from it. Leaving a screen that shows no deposit (Bitcoin, an unavailable
+    // coin) keeps the dismissal already in force: clearing it there put the
+    // deposit the payer left before Bitcoin back on screen.
+    const shown = this.currentSwapInvoice;
+    if (shown) this.setDismissedInvoiceId(shown.invoice_id);
     this.setSelectedSwapAsset(null);
     this.setPickerKey(null);
   };

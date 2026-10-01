@@ -1,5 +1,11 @@
 # BTCPay Server plugin changelog
 
+## Unreleased
+
+- Drop “Pay with one method only — if you already sent …, do not also pay the
+  Lightning invoice.” from the swap deposit warning. The banner now only covers
+  the exact amount and the network, matching the JS checkout.
+
 ## 0.4.11 — 2026-09-21
 
 - Extend Docker restart coverage for both LN and LNURL: retain a replaced invoice

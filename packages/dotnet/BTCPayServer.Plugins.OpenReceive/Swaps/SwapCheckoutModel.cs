@@ -63,7 +63,6 @@ public sealed class SwapCheckoutModel
         var copy = SwapStateCopy.For(row.State);
         var risk = DepositRiskFor(row.PayInAsset);
         var emphasis = $"{row.DepositAmount} {asset.Label} on the {asset.NetworkLabel} network";
-        var doubleSpend = $"Pay with one method only — if you already sent {asset.Label}, do not also pay the Lightning invoice.";
         var expiresAt = invoiceExpiresAt is { } inv ? Math.Min(row.ProviderExpiresAt, inv) : row.ProviderExpiresAt;
         var instructionsAvailable = row.RetiredAt is null && row.State == "awaiting_deposit" && expiresAt > now && row.PluginReason is null && invoiceStatus == "New";
         var instructionsRetired = row.State == "awaiting_deposit" && !instructionsAvailable;
@@ -102,8 +101,8 @@ public sealed class SwapCheckoutModel
             DepositRisk = risk,
             NetworkWarningTitle = risk == "pinned" ? "Send exactly this amount" : "Wrong currency or network = lost funds",
             NetworkWarning = risk == "pinned"
-                ? $"Send exactly {emphasis}. {doubleSpend}"
-                : $"Be sure you are sending exactly {emphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost! {doubleSpend}",
+                ? $"Send exactly {emphasis}."
+                : $"Be sure you are sending exactly {emphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost!",
             Fee = fee,
             FeeText = fee is null ? null : FeeTextFor(asset, row.DepositAmount, fee),
             RefundReason = row.RefundReason,

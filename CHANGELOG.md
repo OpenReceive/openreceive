@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Make “Switch payment method” return to the method grid every time in
+  headless checkouts. `selectCurrentSwapInvoice` fell back to “the first swap
+  attempt that is not the dismissed one”, so once an order had two swap
+  attempts, leaving the second reopened the first coin's deposit, and every
+  further click re-dismissed the same attempt, so the link did nothing. While a
+  dismissal is in force, no attempt is current until a new start or a refund
+  clears it. The Buy a Button shop checkout (Rails and Next.js demos) also kept
+  clearing the dismissal when the payer left Bitcoin, which brought back the
+  deposit they had left before it. A new browser spec,
+  `tests/e2e/switch-method.spec.ts`, walks USDT, SOL, ETH and Bitcoin repeatedly
+  on every framework tab and on the shop checkout.
+- Drop “Pay with one method only — if you already sent …, do not also pay the
+  Lightning invoice.” from the swap deposit warning (JS and the BTCPay Server
+  plugin source). The banner now only covers the exact amount and the network.
+
 ## 0.4.11 - 2026-09-21
 
 - Keep a refund address the payer types the moment the swap refund panel
