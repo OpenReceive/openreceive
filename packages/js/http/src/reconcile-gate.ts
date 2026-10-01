@@ -174,7 +174,9 @@ export async function maybeReconcilePayments(
       // its own window, so it never drags wallet-timed attempts into that
       // walk; one the cap leaves out returns on cursor wrap.
       for (const wallet of [true, false]) {
-        const cohort = fresh.filter((attempt) => (attempt.created_at_source === "wallet") === wallet);
+        const cohort = fresh.filter(
+          (attempt) => (attempt.created_at_source === "wallet") === wallet,
+        );
         if (cohort.length > 0 && scheduler.windows.length < 2)
           scheduler.windows.push(createPaymentScanWindow(cohort, now, input.overlapSeconds));
       }

@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/testkit",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "description": "Internal, unpublished fake NWC wallet and swap provider used by OpenReceive's own test suite.",
   "keywords": [
     "bitcoin",
@@ -18,13 +18,13 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/core": "0.4.12"
+    "@openreceive/core": "0.4.13"
   },
   "peerDependencies": {
-    "@openreceive/node": "0.4.12"
+    "@openreceive/node": "0.4.13"
   },
   "devDependencies": {
-    "@openreceive/node": "0.4.12"
+    "@openreceive/node": "0.4.13"
   },
   "exports": {
     ".": {

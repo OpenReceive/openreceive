@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.13 - 2026-10-01
 
 Reconciliation no longer livelocks on a slow wallet. A wallet-history page
 still in flight at the scan deadline (`Timeout` in the nwc-ruby adapter) failed

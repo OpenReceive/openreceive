@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/react",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "description": "React components and hooks for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -19,8 +19,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.4.12",
-    "@openreceive/core": "0.4.12"
+    "@openreceive/browser": "0.4.13",
+    "@openreceive/core": "0.4.13"
   },
   "peerDependencies": {
     "react": ">=18.0.0"

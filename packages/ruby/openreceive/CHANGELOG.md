@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.13 - 2026-10-01
+
+Release in lockstep with the 0.4.13 reconciliation fixes (in
+`openreceive-rails`: a slow wallet no longer livelocks the reconcile pass,
+host-clock attempts get their own scan window, the gate floor is 3 s). No
+change to this gem's API.
+
 ## 0.4.12 - 2026-10-01
 
 Release in lockstep with the 0.4.12 checkout fixes ("Switch payment method"

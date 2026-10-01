@@ -392,7 +392,10 @@ test(spec.vectors[9].name, async () => {
     if (pass === 0) {
       assert.deepEqual(
         [client.calls[0].from, client.calls[0].until],
-        [scenario.wallet_created_at - scenario.overlap, scenario.wallet_created_at + scenario.overlap],
+        [
+          scenario.wallet_created_at - scenario.overlap,
+          scenario.wallet_created_at + scenario.overlap,
+        ],
       );
       assert.deepEqual(paid, ["order-2"]);
     }

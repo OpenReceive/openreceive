@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.13 - 2026-10-01
 
 - Fix a reconciliation livelock on slow wallets, in every engine (JS, Ruby,
   Python, PHP). A wallet-history page still in flight at the 9 s scan deadline
