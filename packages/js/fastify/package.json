@@ -20,7 +20,7 @@
     "@openreceive/http": "0.4.12"
   },
   "peerDependencies": {
-    "fastify": "^4.0.0 || ^5.0.0"
+    "fastify": "^5.12.5"
   },
   "exports": {
     ".": {
