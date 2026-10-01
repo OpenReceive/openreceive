@@ -7,25 +7,31 @@ import { OPENRECEIVE_RECONCILE_BATCH_SIZE } from "./sql-payments.ts";
 
 /**
  * Floor for the durable reconcile-gate interval: at most one real wallet scan
- * per two seconds across EVERY worker sharing the host database. This gate is
+ * per three seconds across EVERY worker sharing the host database. This gate is
  * the NWC rate limit for settlement scans — open tabs polling `payments/check`
  * (~3s) all share the one global pass instead of fanning out wallet walks.
  */
-export const OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS = 2 as const;
+export const OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS = 3 as const;
 
 /**
  * Wall-clock bound on an awaited request-path pass: a slow wallet must not
- * hang user-facing requests. A timed-out pass counts as a failed scan; the
- * gate stays claimed so the next interval retries without a stampede.
+ * hang user-facing requests. A page still in flight at the deadline is cut;
+ * the pass keeps the progress of its completed pages, and the next interval
+ * resumes there.
  */
 export const OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS = 9_000 as const;
+
+// The slice cuts its own in-flight page at the deadline. This backstop fires
+// just after it, inside the lease, and only fails a pass whose slice could not
+// stop (a settlement write still running).
+const SCAN_BACKSTOP_GRACE_MS = 500;
 
 /** Page cap per wallet-history walk on the awaited request path. */
 export const OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES = 50 as const;
 
 // Invoice-age stretch for the gate interval: young invoices (payer likely
-// watching) scan every 2s, then 6s, then 12s once everything pending is stale.
-const EARLY_INVOICE_INTERVAL_SECONDS = 2;
+// watching) scan every 3s, then 6s, then 12s once everything pending is stale.
+const EARLY_INVOICE_INTERVAL_SECONDS = 3;
 const MID_INVOICE_INTERVAL_SECONDS = 6;
 const LATE_INVOICE_INTERVAL_SECONDS = 12;
 const EARLY_INVOICE_WINDOW_SECONDS = 2 * 60;
@@ -38,7 +44,7 @@ export type OpportunisticReconcileResult =
 export interface MaybeReconcilePaymentsOptions {
   readonly service: OpenReceive;
   readonly host: Host;
-  /** Gate interval floor. Default (and minimum) 2 seconds. */
+  /** Gate interval floor. Default (and minimum) 3 seconds. */
   readonly minIntervalSeconds?: number;
   readonly overlapSeconds?: number;
   readonly scanTimeoutMs?: number;
@@ -50,7 +56,7 @@ export interface MaybeReconcilePaymentsOptions {
 
 /**
  * The gate interval for the current pending set: the configured floor,
- * stretched by invoice age (2s while any pending invoice is under 2 minutes
+ * stretched by invoice age (3s while any pending invoice is under 2 minutes
  * old, 6s under 5 minutes, else 12s).
  */
 export function reconcileIntervalSeconds(
@@ -123,7 +129,10 @@ export async function maybeReconcilePayments(
   try {
     const clock = input.clock ?? unixSeconds;
     const now = clock();
-    const minInterval = Math.max(2, input.minIntervalSeconds ?? 2);
+    const minInterval = Math.max(
+      OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS,
+      input.minIntervalSeconds ?? OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS,
+    );
     const timeout = Math.min(
       OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
       input.scanTimeoutMs ?? OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
@@ -153,20 +162,22 @@ export async function maybeReconcilePayments(
           : { created_at: last.createdAt, payment_hash: last.paymentHash };
       // A short batch already reached the ledger's tail. Wrap now: waiting
       // for an empty next query lets continuous arrivals starve old retries.
-      const fresh = candidates.filter((attempt) => !queued.has(attempt.paymentHash));
-      if (fresh.length > 0)
-        scheduler.windows.push(
-          createPaymentScanWindow(
-            fresh.map((attempt) => ({
-              payment_hash: attempt.paymentHash,
-              created_at: attempt.createdAt,
-              expires_at: attempt.expiresAt,
-              created_at_source: attempt.createdAtSource ?? "host",
-            })),
-            now,
-            input.overlapSeconds,
-          ),
-        );
+      const fresh = candidates
+        .filter((attempt) => !queued.has(attempt.paymentHash))
+        .map((attempt) => ({
+          payment_hash: attempt.paymentHash,
+          created_at: attempt.createdAt,
+          expires_at: attempt.expiresAt,
+          created_at_source: attempt.createdAtSource ?? "host",
+        }));
+      // A host-clock attempt's window spans the whole wallet history. It gets
+      // its own window, so it never drags wallet-timed attempts into that
+      // walk; one the cap leaves out returns on cursor wrap.
+      for (const wallet of [true, false]) {
+        const cohort = fresh.filter((attempt) => (attempt.created_at_source === "wallet") === wallet);
+        if (cohort.length > 0 && scheduler.windows.length < 2)
+          scheduler.windows.push(createPaymentScanWindow(cohort, now, input.overlapSeconds));
+      }
     }
     const window = scheduler.windows.shift();
     if (window === undefined) {
@@ -235,7 +246,7 @@ export async function maybeReconcilePayments(
           }
         },
       }),
-      timeout,
+      timeout + SCAN_BACKSTOP_GRACE_MS,
       controller,
     );
     if (slice.outcome === "continued") {

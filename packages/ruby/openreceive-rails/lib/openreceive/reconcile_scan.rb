@@ -27,7 +27,7 @@ module OpenReceive
       anchor = resumed ? window["anchor_offset"] : nil
       replaying = !anchor.nil?
       previous = window["fingerprint"]
-      max_pages.times do
+      max_pages.times do |page_number|
         break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
         offset = replaying ? anchor : window.fetch("offset")
@@ -35,7 +35,20 @@ module OpenReceive
         request["until"] = window["until"] unless window["until"].nil?
         request["unpaid"] = true if window.fetch("view") == "inclusive"
         request["_deadline"] = deadline
-        page = OpenReceive.normalize_list_transactions_response(service.send(:call_nwc, :list_transactions, request))
+        page = begin
+          OpenReceive.normalize_list_transactions_response(service.send(:call_nwc, :list_transactions, request))
+        rescue Server::WalletFailureError
+          # The client cuts the in-flight page at this deadline. After at least
+          # one answered page that ends the slice like a page answered late:
+          # the completed pages keep their progress. Failing the pass would drop
+          # the resume offset, and a wallet too slow to finish the walk in one
+          # slice would then re-walk the same first pages on every pass. A cut
+          # first page made no progress and still fails the pass, so a wallet
+          # that never answers stays visible.
+          raise if page_number.zero? || Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+
+          return [results.values, false, false]
+        end
         return [results.values, false, false] if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
         rows = page.fetch("transactions")

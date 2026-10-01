@@ -651,7 +651,7 @@ use registry `icon_path` / tutorial `path` keys as browser URLs.
 
 Settlement runs on the request path. Every payment route first runs one bounded
 reconcile pass through the durable `openreceive_meta` gate. The gate allows at
-most one real wallet scan every 2 seconds, shared by every PHP process. You do
+most one real wallet scan every 3 seconds, shared by every PHP process. You do
 not need a cron job. Tune or disable it with `Engine`'s
 `opportunisticReconcile` (`false`, or `['min_interval_seconds' => …]`).
 

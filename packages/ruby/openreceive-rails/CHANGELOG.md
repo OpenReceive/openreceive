@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Reconciliation no longer livelocks on a slow wallet. A wallet-history page
+still in flight at the scan deadline (`Timeout` in the nwc-ruby adapter) failed
+the whole pass and dropped its resume offset, so a long walk restarted at
+offset 0 on every pass and logged `reconciliation failed (will retry):
+OpenReceive::Server::WalletFailureError: execution expired` forever. A cut page
+now ends the slice and keeps the completed pages' progress. A first page cut
+before the wallet answers still fails the pass. Host-clock attempts (legacy
+rows without `created_at_source`) get their own full-history cohort instead of
+widening the window of every wallet-timed attempt pending with them. The gate
+floor rises from 2 s to 3 s (`OpenReceive::MIN_RECONCILE_INTERVAL_SECONDS`).
+
 ## 0.4.12 - 2026-10-01
 
 Release in lockstep with the 0.4.12 checkout fixes. The Rails Buy a Button

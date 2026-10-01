@@ -6,12 +6,15 @@ namespace OpenReceive\Tests\Storage;
 
 use OpenReceive\Nwc\Errors;
 use OpenReceive\Nwc\ReceiveNwcClient;
+use OpenReceive\Nwc\WalletUnavailableError;
 use OpenReceive\Server\Reconciler;
 use OpenReceive\Server\Notifications;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\SqlPaymentRepository;
 use OpenReceive\Tests\VectorSupport;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 final class PaymentSafetyTest extends DatabaseCase
@@ -21,7 +24,7 @@ final class PaymentSafetyTest extends DatabaseCase
     private int $fulfilled = 0;
     private Service $service;
 
-    private function reconciler(SqlPaymentRepository $repo, callable $list, ?callable $fulfill = null): Reconciler
+    private function reconciler(SqlPaymentRepository $repo, callable $list, ?callable $fulfill = null, float $scanTimeout = Reconciler::RECONCILE_SCAN_TIMEOUT_SECONDS, ?LoggerInterface $logger = null): Reconciler
     {
         $wallet = new class ($list) implements ReceiveNwcClient {
             public function __construct(private readonly mixed $list) {}
@@ -34,7 +37,15 @@ final class PaymentSafetyTest extends DatabaseCase
         $this->service = new Service($wallet, false, [], ['USD'], fn (): int => $this->now);
         return new Reconciler($this->service, $repo,
             static fn (array $event): bool => $repo->markPaidOnce($event['payment_hash'], $event['paid_at'], $event['details'], $fulfill),
-            false, new NullLogger(), fn (): int => $this->now);
+            false, $logger ?? new NullLogger(), fn (): int => $this->now, $scanTimeout);
+    }
+
+    /** The one reconcile-progress vector carrying $key; its rule needs a dedicated test. */
+    private static function progressVector(string $key): array
+    {
+        $matches = array_values(array_filter(self::vector('reconcile-progress')['vectors'], static fn (array $vector): bool => isset($vector[$key])));
+        self::assertCount(1, $matches, $key);
+        return $matches[0];
     }
 
     private function seed(SqlPaymentRepository $repo, string $hash, ?string $reference = null, string $source = 'wallet', int $expiry = 2800, ?array $swap = null): void
@@ -75,6 +86,8 @@ final class PaymentSafetyTest extends DatabaseCase
     {
         $family = self::vector('reconcile-progress');
         foreach ($family['vectors'] as $vector) {
+            // Dedicated tests below drive the deadline-cut and host-clock rules.
+            if (isset($vector['pages_before_deadline']) || isset($vector['host_created_at'])) continue;
             $this->now = 5000;
             $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
             if (isset($vector['lease_seconds'])) {
@@ -124,7 +137,7 @@ final class PaymentSafetyTest extends DatabaseCase
                 for ($arrival = 0; $arrival < ($vector['arrivals_per_pass'] ?? 0); $arrival++) {
                     $ref = "arrival-{$pass}-{$arrival}";
                     $hash = self::hash($ref);
-                    $repo->commitAttempt($ref, $hash, self::checkout($ref, $hash, $this->now, $this->now + 600));
+                    $repo->commitAttempt($ref, $hash, [...self::checkout($ref, $hash, $this->now, $this->now + 600), 'created_at_source' => 'wallet']);
                 }
                 $before = $calls;
                 $this->reconciler($repo, $list, $fulfill)->reconcile();
@@ -140,6 +153,100 @@ final class PaymentSafetyTest extends DatabaseCase
             self::assertLessThanOrEqual($family['max_checkpoint_bytes'], strlen($checkpoint));
             self::assertStringNotContainsString('preimage', $checkpoint);
         }
+    }
+
+    #[DataProvider('dialects')]
+    public function testPageCutByTheScanDeadlineKeepsTheWalksProgress(string $dialect): void
+    {
+        $vector = self::progressVector('pages_before_deadline');
+        $this->now = 5000;
+        $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
+        $target = self::hash('deadline-cut');
+        $this->seed($repo, $target, expiry: 100000);
+        $rows = [];
+        for ($i = 0; $i < $vector['history_rows']; $i++) $rows[] = self::paid(self::hash('history-' . $i));
+        $rows[$vector['paid_index']] = self::paid($target);
+        $calls = 0;
+        // Past the answered pages the wallet goes quiet, and the page in flight
+        // fails at the slice deadline exactly as the relay client fails it.
+        $list = static function (array $request) use ($rows, $vector, &$calls): array {
+            if (++$calls > $vector['pages_before_deadline']) {
+                while (microtime(true) < $request['_deadline']) usleep(10_000);
+                throw new WalletUnavailableError('NWC response timed out.');
+            }
+            return ['transactions' => array_slice($rows, $request['offset'], $vector['page_size'])];
+        };
+        for ($pass = 0; $pass < $vector['max_passes']; $pass++) {
+            $calls = 0;
+            $result = $this->reconciler($repo, $list, scanTimeout: 0.5)->gatedReconcile();
+            self::assertSame('ran', $result['reason'], "pass {$pass}");
+            self::assertLessThanOrEqual($vector['pages_before_deadline'] + 1, $calls, "pass {$pass}");
+            if ($pass === 0) self::assertSame($vector['pages_before_deadline'] + 1, $calls, 'the first pass is cut by the deadline');
+            $this->now += 12;
+            $repo = new SqlPaymentRepository($repo->connection(), fn (): int => $this->now);
+        }
+        self::assertSame('settled', $repo->findByPaymentHash($target)->status, $vector['name']);
+        self::assertSame(1, $this->fulfilled, $vector['name']);
+    }
+
+    #[DataProvider('dialects')]
+    public function testFirstPageCutByTheScanDeadlineStillFailsThePass(string $dialect): void
+    {
+        $this->now = 5000;
+        $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
+        $hash = self::hash('silent-wallet');
+        $this->seed($repo, $hash, expiry: 100000);
+        $calls = 0;
+        $list = static function (array $request) use (&$calls): array {
+            $calls++;
+            while (microtime(true) < $request['_deadline']) usleep(10_000);
+            throw new WalletUnavailableError('NWC response timed out.');
+        };
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $warnings = [];
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                if ($level === 'warning') $this->warnings[] = (string) $message;
+            }
+        };
+        // No page answered: the slice made no progress, and a wallet that never answers must stay visible.
+        self::assertSame('scan_failed', $this->reconciler($repo, $list, scanTimeout: 0.2, logger: $logger)->gatedReconcile()['reason']);
+        self::assertSame(1, $calls);
+        self::assertCount(1, $logger->warnings);
+        self::assertStringContainsString('opportunistic reconcile failed', $logger->warnings[0]);
+        self::assertSame('pending', $repo->findByPaymentHash($hash)->status);
+    }
+
+    #[DataProvider('dialects')]
+    public function testHostClockAttemptCannotWidenAWalletTimedCohort(string $dialect): void
+    {
+        $vector = self::progressVector('host_created_at');
+        $this->now = $vector['wallet_created_at'];
+        $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
+        $host = self::hash('host-clock'); $wallet = self::hash('wallet-clock');
+        // A legacy row predates created_at_source, so the key is absent.
+        $repo->commitAttempt('host-clock', $host, self::checkout('host-clock', $host, $vector['host_created_at'], 100000));
+        $repo->commitAttempt('wallet-clock', $wallet, [...self::checkout('wallet-clock', $wallet, $vector['wallet_created_at'], 100000), 'created_at_source' => 'wallet']);
+        $row = [...self::paid($wallet), 'created_at' => $vector['wallet_created_at']];
+        $requests = [];
+        $list = static function (array $request) use ($row, &$requests): array {
+            $requests[] = $request;
+            $inside = $request['from'] <= $row['created_at'] && $row['created_at'] <= ($request['until'] ?? PHP_INT_MAX);
+            return ['transactions' => array_slice($inside ? [$row] : [], $request['offset'], 20)];
+        };
+        for ($pass = 0; $pass < $vector['max_passes']; $pass++) {
+            $this->reconciler($repo, $list)->reconcile($vector['overlap']);
+            if ($pass === 0) {
+                self::assertSame($vector['wallet_created_at'] - $vector['overlap'], $requests[0]['from'], $vector['name']);
+                self::assertSame($vector['wallet_created_at'] + $vector['overlap'], $requests[0]['until'] ?? null, $vector['name']);
+                self::assertSame('settled', $repo->findByPaymentHash($wallet)->status, $vector['name']);
+            }
+            $this->now += 12;
+        }
+        self::assertNotSame([], array_filter($requests, static fn (array $request): bool => $request['from'] === 0 && !isset($request['until'])),
+            'the host-clock attempt keeps its full-history walk');
+        self::assertSame(1, $this->fulfilled);
     }
 
     #[DataProvider('dialects')]

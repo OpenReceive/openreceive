@@ -29,7 +29,7 @@ return [
 
     // Settlement discovery on the request path: every mounted OpenReceive route
     // first runs one reconcile pass through the durable openreceive_meta gate
-    // (shared by every worker; at least 2 s between real wallet scans). Set
+    // (shared by every worker; at least 3 s between real wallet scans). Set
     // false only when a dedicated worker owns scanning, or tune the floor with
     // ['min_interval_seconds' => 5].
     'opportunistic_reconcile' => true,

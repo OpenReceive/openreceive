@@ -846,7 +846,7 @@ have built your own.
 | --- | --- | --- | --- |
 | `service` | `OpenReceive` | yes | The wallet client. |
 | `host` | `Host` | yes | From [createHost](#createhost). |
-| `minIntervalSeconds` | `number` | no | The shortest gate interval. Default and minimum: `OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS` (2). The interval grows with the age of pending invoices: 2 s while any pending invoice is under 2 minutes old, 6 s under 5 minutes, else 12 s. |
+| `minIntervalSeconds` | `number` | no | The shortest gate interval. Default and minimum: `OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS` (3). The interval grows with the age of pending invoices: 3 s while any pending invoice is under 2 minutes old, 6 s under 5 minutes, else 12 s. |
 | `scanTimeoutMs` | `number` | no | Time limit on the awaited pass. Default `OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS` (9000). |
 | `maxPages` | `number` | no | Page cap per wallet walk. Default `OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES` (50). |
 | `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
@@ -864,9 +864,11 @@ middleware. Your own routes never run it automatically. It works like this:
 3. Otherwise it awaits one bounded
    [reconcileHostPayments](#reconcilehostpayments) pass.
 
-It never throws. A failed or timed-out scan reports to `onError` and returns
-`scan_failed`. The gate's claim stays in place, so a broken wallet cannot
-trigger a flood of retries.
+It never throws. A failed scan reports to `onError` and returns `scan_failed`.
+The gate's claim stays in place, so a broken wallet cannot trigger a flood of
+retries. A page still in flight at the 9 s scan deadline is cut: when earlier
+pages answered, the pass returns `ran` and the next pass resumes after them;
+when none did, the pass fails like any other wallet failure.
 
 **Returns** `{ reason: "ran", checks }` (the per-hash
 [PaymentCheck](#paymentcheck) results) or
@@ -1935,8 +1937,11 @@ payer polls, such as an order-status endpoint, so settlement gets a chance to
 run there too. It is safe to call on every request. It returns at once when
 nothing is pending or another worker just scanned.
 
-It never raises. A failed or timed-out scan warns and returns `scan_failed`. The
-gate stays claimed, so a broken wallet cannot trigger a flood of retries. It
+It never raises. A failed scan warns and returns `scan_failed`. The gate stays
+claimed, so a broken wallet cannot trigger a flood of retries. A page still in
+flight at the 9 s scan deadline is cut: when earlier pages answered, the pass
+returns `ran` and the next pass resumes after them; when none did, the pass
+fails like any other wallet failure. It
 returns `{ "reason" => "ran", "checks" => [...] }` (the check hash for each
 payment hash) or
 `{ "reason" => "disabled" | "no_pending" | "gate_busy" | "scan_failed" }`.

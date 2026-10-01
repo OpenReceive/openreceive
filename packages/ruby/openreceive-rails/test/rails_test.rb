@@ -1548,7 +1548,7 @@ class OpportunisticReconcileTest < Minitest::Test
     scans_after_pass = scans[:count]
     assert scans_after_pass >= 1
 
-    # A rapid second call inside the 2s interval never touches the wallet.
+    # A rapid second call inside the 3s interval never touches the wallet.
     _other_order, _other_hash = pending_attempt(expires_at: now + 600)
     assert_equal({ "reason" => "gate_busy" }, OpenReceive.maybe_reconcile!(now: now))
     assert_equal scans_after_pass, scans[:count]
@@ -1784,8 +1784,107 @@ class PaymentSafetyProgressTest < Minitest::Test
       checkout: build_checkout(reference: reference, hash: hash, created_at: now, expires_at: wallet_expiry), swap_data: swap_data)
   end
 
+  # A wallet-timed attempt unless source is nil (a legacy row) or "host".
+  def store_timed(hash, reference, created_at, source)
+    checkout = build_checkout(reference: reference, hash: hash, created_at: created_at, expires_at: created_at + 600)
+    checkout["created_at_source"] = source unless source.nil?
+    OpenReceivePayment.commit_attempt!(reference: reference, payment_hash: hash, checkout: checkout)
+  end
+
+  # A short scan deadline, so a page cut by it costs the test a fraction of a second.
+  def with_scan_timeout(seconds)
+    original = OpenReceive::RECONCILE_SCAN_TIMEOUT_SECONDS
+    OpenReceive.send(:remove_const, :RECONCILE_SCAN_TIMEOUT_SECONDS)
+    OpenReceive.const_set(:RECONCILE_SCAN_TIMEOUT_SECONDS, seconds)
+    yield
+  ensure
+    OpenReceive.send(:remove_const, :RECONCILE_SCAN_TIMEOUT_SECONDS)
+    OpenReceive.const_set(:RECONCILE_SCAN_TIMEOUT_SECONDS, original)
+  end
+
+  def run_deadline_cut_vector(vector)
+    now = Time.now.to_i
+    paid_hash = format("%064x", 1)
+    store_timed(paid_hash, "deadline-cut", now, "wallet")
+    rows = Array.new(vector.fetch("history_rows")) { |i| { "payment_hash" => format("%064x", 10_000 + i), "created_at" => now, "settled_at" => now + 1 } }
+    rows[vector.fetch("paid_index")]["payment_hash"] = paid_hash
+    page_size = vector.fetch("page_size")
+    answered = vector.fetch("pages_before_deadline")
+    calls = 0
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      calls += 1
+      if calls > answered
+        # What NwcRubyReceiveClient does: the page is still in flight when the
+        # slice deadline passes, and Timeout cuts it there.
+        remaining = request.fetch("_deadline") - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        sleep(remaining) if remaining.positive?
+        raise Timeout::Error, "execution expired"
+      end
+      { "transactions" => rows.slice(request.fetch("offset", 0), page_size) || [] }
+    end
+    observed = now + 1600
+    with_scan_timeout(0.3) do
+      vector.fetch("max_passes").times do
+        calls = 0
+        OpenReceive.reconcile!(now: observed)
+        assert_operator calls, :<=, answered + 1
+        observed += 12
+      end
+    end
+    assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: paid_hash).status
+    assert_equal 1, @paid.length
+  end
+
+  def run_host_clock_cohort_vector(vector)
+    host_hash = format("%064x", 1)
+    paid_hash = format("%064x", 2)
+    wallet_created_at = vector.fetch("wallet_created_at")
+    store_timed(host_hash, "legacy", vector.fetch("host_created_at"), nil)
+    store_timed(paid_hash, "recent", wallet_created_at, "wallet")
+    rows = [{ "payment_hash" => paid_hash, "created_at" => wallet_created_at, "settled_at" => wallet_created_at + 1 }]
+    calls = []
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      calls << request.reject { |key, _| key == "_deadline" }
+      seen = rows.select do |row|
+        row.fetch("created_at") >= request.fetch("from", 0) &&
+          (request["until"].nil? || row.fetch("created_at") <= request["until"])
+      end
+      { "transactions" => seen.slice(request.fetch("offset", 0), 20) || [] }
+    end
+    observed = wallet_created_at + 1000
+    overlap = vector.fetch("overlap")
+    vector.fetch("max_passes").times do |pass|
+      OpenReceive.reconcile!(now: observed, overlap_seconds: overlap)
+      if pass.zero?
+        assert_equal [wallet_created_at - overlap, wallet_created_at + overlap], calls.first.values_at("from", "until")
+        assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: paid_hash).status
+      end
+      observed += 12
+    end
+    assert(calls.any? { |call| call.fetch("from").zero? && !call.key?("until") }, "the host-clock attempt still walks full history")
+    assert_equal 1, @paid.length
+  end
+
+  def test_first_page_cut_by_the_deadline_still_fails_the_pass
+    now = Time.now.to_i
+    hash = format("%064x", 1)
+    store_timed(hash, "silent-wallet", now, "wallet")
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      remaining = request.fetch("_deadline") - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      sleep(remaining) if remaining.positive?
+      raise Timeout::Error, "execution expired"
+    end
+    with_scan_timeout(0.2) do
+      assert_equal({ "reason" => "scan_failed" }, OpenReceive.maybe_reconcile!(now: now + 1600))
+    end
+    assert_equal "pending", OpenReceivePayment.find_by!(payment_hash: hash).status
+  end
+
   PROGRESS.fetch("vectors").each_with_index do |vector, index|
     define_method("test_progress_vector_#{index}") do
+      next run_deadline_cut_vector(vector) if vector.key?("pages_before_deadline")
+      next run_host_clock_cohort_vector(vector) if vector.key?("host_created_at")
+
       now = Time.now.to_i
       if vector.key?("lease_seconds")
         old = OpenReceiveMeta.claim_reconcile_gate(now: now, interval_seconds: 2, lease_seconds: vector.fetch("lease_seconds"))
@@ -1842,7 +1941,7 @@ class PaymentSafetyProgressTest < Minitest::Test
       end
       vector.fetch("max_passes", 3).times do |pass|
         vector.fetch("arrivals_per_pass", 0).times do |arrival|
-          store(format("%064x", 50000 + pass * vector.fetch("arrivals_per_pass") + arrival), "arrival-#{pass}-#{arrival}", observed)
+          store_timed(format("%064x", 50000 + pass * vector.fetch("arrivals_per_pass") + arrival), "arrival-#{pass}-#{arrival}", observed, "wallet")
         end
         before = calls.length
         OpenReceive.reconcile!(now: observed)

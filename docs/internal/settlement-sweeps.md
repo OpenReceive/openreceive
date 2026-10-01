@@ -18,10 +18,10 @@ The gate is a durable row in the host database: `openreceive_meta` key
 one pass runs at a time across every instance and Puma worker. Rapid calls collapse to one
 real wallet scan per interval.
 
-The interval has a floor of 2 seconds (`OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS`). It
+The interval has a floor of 3 seconds (`OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS`). It
 grows with the age of the pending invoices:
 
-- 2 s while any pending invoice is under 2 minutes old,
+- 3 s while any pending invoice is under 2 minutes old,
 - 6 s while any is under 5 minutes old,
 - 12 s otherwise.
 
@@ -29,8 +29,10 @@ The gate is the NWC scan budget. Open tabs polling `payments/check` share the on
 pass. When User A closes the tab, User B's later call wins the gate and settles A's invoice.
 
 The winning call awaits one bounded pass: a 9 s scan timeout and a capped number of pages.
-This is safe on serverless hosts, because no timer outlives the request. A failed or timed-out
-scan logs a warning and never fails the user's request. The gate's `claimed_at` stays in
+This is safe on serverless hosts, because no timer outlives the request. A page still in
+flight at the deadline is cut. When earlier pages answered, the pass ends there and keeps
+their progress, and the next pass resumes after them. When none did, the pass fails. A
+failed scan logs a warning and never fails the user's request. The gate's `claimed_at` stays in
 place, so a broken wallet cannot cause a stampede of retries.
 
 The gate stores versioned, bounded scheduler progress in the same metadata row:
@@ -47,8 +49,9 @@ Rules for this progress:
 - CAS checkpoints require the current, unexpired lease token. Abandoned or stale workers
   therefore cannot replace newer progress.
 - A capped or failed pass cannot keep pinning selection to the oldest cohort.
-- Creation times that come from the wallet allow bounded splits. Legacy rows and rows timed by
-  the host clock use the wide fallback.
+- Creation times that come from the wallet allow bounded windows and splits. Legacy rows and
+  rows timed by the host clock use the wide fallback: the whole wallet history, from 0. They
+  get their own cohort, so that walk never widens the window of wallet-timed attempts.
 - Resumed offsets never prove that a payment is absent, because wallet history is mutable.
 - Only a fresh, complete scan that covers the attempt's time range can close an attempt by the
   clock.

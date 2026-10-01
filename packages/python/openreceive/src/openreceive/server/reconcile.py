@@ -30,9 +30,9 @@ from openreceive.storage.repository import (
 log = logging.getLogger("openreceive")
 
 # Floor for the durable reconcile-gate interval (seconds); stretched by invoice
-# age (2s while any pending invoice is under 2 minutes old, 6s under 5 minutes,
+# age (3s while any pending invoice is under 2 minutes old, 6s under 5 minutes,
 # else 12s). The gate IS the NWC scan budget.
-MIN_RECONCILE_INTERVAL_SECONDS = 2
+MIN_RECONCILE_INTERVAL_SECONDS = 3
 # Wall-clock bound on an awaited request-path pass, enforced as a deadline the
 # wallet scan passes into each RPC; host transactions are never interrupted.
 RECONCILE_SCAN_TIMEOUT_SECONDS = 9
@@ -169,8 +169,15 @@ class Reconciler:
                     )
                     queued = {a["payment_hash"] for w in windows for a in w["attempts"]}
                     cohort = [a.as_dict() for a in candidates if a.payment_hash not in queued]
-                    if cohort:
-                        windows.append(new_window(cohort, observed_at, overlap_seconds))
+                    # A host-clock attempt's window spans the whole wallet
+                    # history. It gets its own window, so it never drags
+                    # wallet-timed attempts into that walk; one the cap leaves
+                    # out returns on cursor wrap.
+                    wallet_timed = [a for a in cohort if a.get("created_at_source") == "wallet"]
+                    host_timed = [a for a in cohort if a.get("created_at_source") != "wallet"]
+                    for group in (wallet_timed, host_timed):
+                        if group and len(windows) < 2:
+                            windows.append(new_window(group, observed_at, overlap_seconds))
             # Remove durably before I/O: failures/crashes cannot occupy every slot.
             # Pending rows return on keyset wrap; successful slices save progress.
             window = windows.pop(0) if windows else None
@@ -402,7 +409,7 @@ class Reconciler:
 def reconcile_gate_interval_seconds(
     attempts: list[ReconcilableAttempt], now: int, setting: bool | Mapping[str, Any]
 ) -> int:
-    """The configured floor stretched by invoice age: 2s while any pending
+    """The configured floor stretched by invoice age: 3s while any pending
     invoice is under 2 minutes old, 6s under 5 minutes, else 12s."""
     floor = MIN_RECONCILE_INTERVAL_SECONDS
     if isinstance(setting, Mapping) and setting.get("min_interval_seconds") is not None:
@@ -415,7 +422,7 @@ def reconcile_gate_interval_seconds(
 
 def _interval_for_age(elapsed: int) -> int:
     if elapsed < 120:
-        return 2
+        return 3
     if elapsed < 300:
         return 6
     return 12

@@ -117,7 +117,7 @@ def test_mint_poll_settle_fulfills_exactly_once(harness: Harness) -> None:
     assert status == 200 and body["status"] == "pending" and "details" not in body
 
     harness.wallet.settle_invoice(payment_hash, settled_at=harness.now + 5)
-    harness.now += 3  # past the 2 s gate floor for a young invoice
+    harness.now += 3  # past the 3 s gate floor for a young invoice
     status, body, _ = harness.call(
         "POST", "/payments/check", {"reference": REFERENCE, "payment_hash": payment_hash}
     )

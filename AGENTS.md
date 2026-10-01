@@ -38,7 +38,7 @@ blanket security guarantees or implying that a helper package is a full backend.
   row. A settled row is never overwritten.
 - Settlement discovery is opportunistic by default: every mounted OpenReceive route first runs
   one reconcile pass through the durable `openreceive_meta` gate (CAS in the host database,
-  minimum 2 seconds between real wallet scans, stretched by invoice age), shared by every
+  minimum 3 seconds between real wallet scans, stretched by invoice age), shared by every
   worker/process — the gate IS the NWC scan budget, and `payments/check` serves the requested
   hash from that pass (or the host row on `gate_busy`), never a second per-invoice wallet
   walk. No web process starts a settlement timer; the optional notifications worker

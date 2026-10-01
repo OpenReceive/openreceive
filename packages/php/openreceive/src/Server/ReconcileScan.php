@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OpenReceive\Server;
 
+use OpenReceive\Nwc\WalletUnavailableError;
+use OpenReceive\Server\Errors\WalletFailureError;
 use OpenReceive\Settlement\Settlement;
 
 /** Durable bounded wallet slices; checkpoints never contain wallet payloads or credentials. */
@@ -40,8 +42,22 @@ final class ReconcileScan
             $request = ['type' => 'incoming', 'limit' => 20, 'offset' => $offset, 'from' => $window['from']];
             if ($window['until'] !== null) $request['until'] = $window['until'];
             if ($window['view'] === 'inclusive') $request['unpaid'] = true;
-            $request['_deadline'] = microtime(true) + max(0, $deadline - hrtime(true) / 1e9);
-            $page = $service->reconciliationPage($request);
+            // Monotonic clock first: the client's wall-clock deadline never falls before this one.
+            $remaining = max(0, $deadline - hrtime(true) / 1e9);
+            $request['_deadline'] = microtime(true) + $remaining;
+            try {
+                $page = $service->reconciliationPage($request);
+            } catch (WalletFailureError | WalletUnavailableError $e) {
+                // The client cuts the in-flight page at this deadline. That ends the
+                // slice like a page answered late: the completed pages keep their
+                // progress. Failing the pass would drop the resume offset, and a
+                // wallet too slow to finish the walk in one slice would then re-walk
+                // the same first pages on every pass. A cut first page made no
+                // progress and still fails the pass, so a silent wallet stays visible.
+                if (hrtime(true) / 1e9 < $deadline || $used === 0) throw $e;
+                return ['checks' => array_values($results), 'complete' => false, 'stalled' => false];
+            }
+            if (hrtime(true) / 1e9 >= $deadline) return ['checks' => array_values($results), 'complete' => false, 'stalled' => false];
             $used++;
             $rows = $page['transactions'];
             $physical = count($rows) + ($page['skipped_rows'] ?? 0);

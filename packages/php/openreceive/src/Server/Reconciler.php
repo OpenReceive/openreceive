@@ -22,8 +22,8 @@ use Psr\Log\LoggerInterface;
  */
 final class Reconciler
 {
-    /** Floor for the durable gate interval, stretched by invoice age (2 s under 2 min old, 6 s under 5 min, else 12 s). */
-    public const MIN_RECONCILE_INTERVAL_SECONDS = 2;
+    /** Floor for the durable gate interval, stretched by invoice age (3 s under 2 min old, 6 s under 5 min, else 12 s). */
+    public const MIN_RECONCILE_INTERVAL_SECONDS = 3;
     /** Wall-clock bound on an awaited request-path pass, enforced as a deadline checked between page fetches. */
     public const RECONCILE_SCAN_TIMEOUT_SECONDS = 9;
     public const RECONCILE_SCAN_MAX_PAGES = 50;
@@ -39,6 +39,7 @@ final class Reconciler
      * @param callable(array{payment_hash: string, paid_at: int, details: ?array<string, mixed>}): mixed $settlementHook write-once settlement + onPaid
      * @param bool|array{min_interval_seconds?: int} $opportunisticReconcile
      * @param (callable(): int)|null $clock
+     * @param float $scanTimeoutSeconds the pass deadline; RECONCILE_SCAN_TIMEOUT_SECONDS unless a test shortens it
      */
     public function __construct(
         private readonly Service $service,
@@ -47,6 +48,7 @@ final class Reconciler
         private readonly bool|array $opportunisticReconcile = true,
         private readonly ?LoggerInterface $logger = null,
         ?callable $clock = null,
+        private readonly float $scanTimeoutSeconds = self::RECONCILE_SCAN_TIMEOUT_SECONDS,
     ) {
         $this->settlementHook = $settlementHook;
         $this->clock = $clock ?? static fn (): int => time();
@@ -108,7 +110,13 @@ final class Reconciler
                     $queued = [];
                     foreach ($windows as $queuedWindow) foreach ($queuedWindow['attempts'] as $attempt) $queued[$attempt['payment_hash']] = true;
                     $cohort = array_values(array_filter($candidates, static fn (array $attempt): bool => !isset($queued[$attempt['payment_hash']])));
-                    if ($cohort !== []) $windows[] = ReconcileScan::newWindow($cohort, $observedAt, $overlapSeconds);
+                    // A host-clock attempt's window spans the whole wallet history. It
+                    // gets its own window, so it never drags wallet-timed attempts into
+                    // that walk; one the cap leaves out returns on cursor wrap.
+                    foreach ([true, false] as $walletTimed) {
+                        $group = array_values(array_filter($cohort, static fn (array $attempt): bool => (($attempt['created_at_source'] ?? 'host') === 'wallet') === $walletTimed));
+                        if ($group !== [] && count($windows) < 2) $windows[] = ReconcileScan::newWindow($group, $observedAt, $overlapSeconds);
+                    }
                 }
             }
             // Remove before I/O so failure/process loss frees a cohort slot.
@@ -134,7 +142,7 @@ final class Reconciler
                 return true;
             };
             $slice = ReconcileScan::slice($this->service, $window, self::RECONCILE_SCAN_MAX_PAGES,
-                hrtime(true) / 1e9 + self::RECONCILE_SCAN_TIMEOUT_SECONDS, $positive);
+                hrtime(true) / 1e9 + $this->scanTimeoutSeconds, $positive);
             foreach ($slice['checks'] as $checked) {
                 $hash = $checked['payment_hash'];
                 if (isset($committed[$hash])) continue;
@@ -272,7 +280,7 @@ final class Reconciler
         $stretch = PHP_INT_MAX;
         foreach ($attempts as $attempt) {
             $elapsed = max($now - $attempt['created_at'], 0);
-            $stretch = min($stretch, $elapsed < 120 ? 2 : ($elapsed < 300 ? 6 : 12));
+            $stretch = min($stretch, $elapsed < 120 ? 3 : ($elapsed < 300 ? 6 : 12));
         }
         return max($floor, $stretch);
     }

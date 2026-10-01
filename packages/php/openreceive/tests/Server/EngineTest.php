@@ -310,12 +310,12 @@ final class EngineTest extends TestCase
         $engine = $this->engine();
         $reconciler = $engine->reconciler();
         $attempt = static fn (int $createdAt): array => ['payment_hash' => str_repeat('a', 64), 'created_at' => $createdAt, 'expires_at' => $createdAt + 600];
-        self::assertSame(2, $reconciler->gateIntervalSeconds([$attempt(1000)], 1010));
+        self::assertSame(3, $reconciler->gateIntervalSeconds([$attempt(1000)], 1010));
         self::assertSame(6, $reconciler->gateIntervalSeconds([$attempt(1000)], 1200));
         self::assertSame(12, $reconciler->gateIntervalSeconds([$attempt(1000)], 1400));
-        self::assertSame(2, $reconciler->gateIntervalSeconds([$attempt(1000), $attempt(1399)], 1400), 'the youngest pending invoice wins');
-        self::assertSame(2, $reconciler->gateIntervalSeconds([$attempt(5000)], 1000), 'a wallet clock ahead of the host reads as freshly minted');
-        self::assertSame(2, $reconciler->gateIntervalSeconds([], 1000));
+        self::assertSame(3, $reconciler->gateIntervalSeconds([$attempt(1000), $attempt(1399)], 1400), 'the youngest pending invoice wins');
+        self::assertSame(3, $reconciler->gateIntervalSeconds([$attempt(5000)], 1000), 'a wallet clock ahead of the host reads as freshly minted');
+        self::assertSame(3, $reconciler->gateIntervalSeconds([], 1000));
     }
 
     public function testTheBuiltInRateLimiterMetersMintingOnly(): void

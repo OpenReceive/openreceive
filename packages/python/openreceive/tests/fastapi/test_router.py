@@ -149,7 +149,7 @@ def test_mint_settle_fulfill_exactly_once(tmp_path: Path) -> None:
         assert pending.status_code == 200 and pending.json()["status"] == "pending"
 
         wallet.settle_invoice(payment_hash)
-        # The gate floor is 2 s for a young invoice; the app's clock is the real
+        # The gate floor is 3 s for a young invoice; the app's clock is the real
         # one, so poll until the pass ran rather than sleeping a fixed time.
         import time
 

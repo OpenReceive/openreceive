@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
-from openreceive.nwc.errors import redact_secrets
+from openreceive.nwc.errors import WalletError, redact_secrets
 from openreceive.server import Service
 from openreceive.server.reconcile import Reconciler
 from openreceive.storage import PaymentInsert
 from openreceive.testing import FakeWallet
 from tests.conftest import load_vector
-from tests.storage.test_sql_repository import H1, checkout
+from tests.storage.test_sql_repository import H1, H2, checkout
 
 
 class HistoryWallet(FakeWallet):
@@ -40,8 +41,14 @@ def reconciler(repository, clock, wallet, paid):
 @pytest.mark.parametrize(
     "case", load_vector("reconcile-progress.json")["vectors"], ids=lambda row: row["name"]
 )
-def test_durable_progress_vectors(case, repository, clock):
+def test_durable_progress_vectors(case, repository, clock, monkeypatch):
     now = clock["now"]
+    if "pages_before_deadline" in case:
+        deadline_cut_page_keeps_progress(case, repository, clock, monkeypatch)
+        return
+    if "host_created_at" in case:
+        host_clock_attempt_gets_its_own_window(case, repository, clock)
+        return
     if "lease_seconds" in case:
         old = repository.claim_reconcile_gate(
             now=now, interval_seconds=2, lease_seconds=case["lease_seconds"]
@@ -117,9 +124,9 @@ def test_durable_progress_vectors(case, repository, clock):
         for arrival in range(case.get("arrivals_per_pass", 0)):
             ref = f"arrival-{pass_index}-{arrival}"
             h = f"{50000 + pass_index * case['arrivals_per_pass'] + arrival:064x}"
-            repository.commit_attempt(
-                PaymentInsert(ref, h, checkout(ref, h, clock["now"], clock["now"] + 600))
-            )
+            saved = checkout(ref, h, clock["now"], clock["now"] + 600)
+            saved["created_at_source"] = "wallet"
+            repository.commit_attempt(PaymentInsert(ref, h, saved))
         # Recreate the reconciler on every slice; only DB state carries progress.
         before = len(wallet.calls)
         engine = reconciler(repository, clock, wallet, paid)
@@ -140,6 +147,96 @@ def test_durable_progress_vectors(case, repository, clock):
         <= load_vector("reconcile-progress.json")["max_checkpoint_bytes"]
     )
     assert "settled_at" not in json.dumps(claim)
+
+
+def deadline_cut_page_keeps_progress(case, repository, clock, monkeypatch):
+    from openreceive.server import reconcile
+
+    # A short real slice: the cut page waits out the deadline like the client.
+    monkeypatch.setattr(reconcile, "RECONCILE_SCAN_TIMEOUT_SECONDS", 0.3)
+    now = clock["now"]
+    saved = checkout("deadline-cut", H1, now, now + 600)
+    saved["created_at_source"] = "wallet"
+    repository.commit_attempt(PaymentInsert("deadline-cut", H1, saved))
+    rows = [
+        {"payment_hash": f"{10000 + i:064x}", "created_at": now, "settled_at": now + 1}
+        for i in range(case["history_rows"])
+    ]
+    rows[case["paid_index"]]["payment_hash"] = H1
+    wallet = HistoryWallet(rows, case["page_size"])
+    answer_page = wallet.list_transactions
+    answered = []
+
+    def page_until_deadline(request):
+        if len(answered) < case["pages_before_deadline"]:
+            answered.append(request["offset"])
+            return answer_page(request)
+        # The next page is still in flight when the slice deadline passes.
+        wallet.calls.append(dict(request))
+        while time.monotonic() < request["_deadline"]:
+            time.sleep(max(request["_deadline"] - time.monotonic(), 0.001))
+        raise WalletError("TIMEOUT", "Wallet history scan deadline exceeded.")
+
+    wallet.list_transactions = page_until_deadline
+    paid = []
+    for _ in range(case["max_passes"]):
+        answered.clear()
+        before = len(wallet.calls)
+        reconciler(repository, clock, wallet, paid).reconcile()
+        assert len(wallet.calls) - before <= case["pages_before_deadline"] + 1
+        clock["now"] += 12
+    assert repository.find_by_payment_hash(H1).status == "settled"
+    assert len(paid) == 1
+
+
+def test_first_page_cut_by_the_deadline_still_fails_the_pass(repository, clock, monkeypatch):
+    from openreceive.server import reconcile
+
+    monkeypatch.setattr(reconcile, "RECONCILE_SCAN_TIMEOUT_SECONDS", 0.3)
+    now = clock["now"]
+    saved = checkout("silent", H1, now, now + 600)
+    saved["created_at_source"] = "wallet"
+    repository.commit_attempt(PaymentInsert("silent", H1, saved))
+    wallet = HistoryWallet([{"payment_hash": H1, "created_at": now, "settled_at": now + 1}])
+
+    def never_answers(request):
+        wallet.calls.append(dict(request))
+        while time.monotonic() < request["_deadline"]:
+            time.sleep(max(request["_deadline"] - time.monotonic(), 0.001))
+        raise WalletError("TIMEOUT", "Wallet history scan deadline exceeded.")
+
+    wallet.list_transactions = never_answers
+    paid = []
+    assert reconciler(repository, clock, wallet, paid).gated_reconcile()["reason"] == "scan_failed"
+    assert len(wallet.calls) == 1
+    assert repository.find_by_payment_hash(H1).status == "pending" and not paid
+
+
+def host_clock_attempt_gets_its_own_window(case, repository, clock):
+    host, timed = H1, H2
+    host_at, timed_at, overlap = case["host_created_at"], case["wallet_created_at"], case["overlap"]
+    # Legacy host-clock row: the saved checkout carries no created_at_source.
+    repository.commit_attempt(
+        PaymentInsert("host-clock", host, checkout("host-clock", host, host_at, host_at + 600))
+    )
+    saved = checkout("wallet-timed", timed, timed_at, timed_at + 600)
+    saved["created_at_source"] = "wallet"
+    repository.commit_attempt(PaymentInsert("wallet-timed", timed, saved))
+    wallet = HistoryWallet(
+        [{"payment_hash": timed, "created_at": timed_at, "settled_at": timed_at + 1}]
+    )
+    paid = []
+    clock["now"] = timed_at + overlap
+    for pass_index in range(case["max_passes"]):
+        before = len(wallet.calls)
+        reconciler(repository, clock, wallet, paid).reconcile()
+        if pass_index == 0:
+            first = wallet.calls[before]
+            assert (first["from"], first.get("until")) == (timed_at - overlap, timed_at + overlap)
+            assert repository.find_by_payment_hash(timed).status == "settled"
+        clock["now"] += 12
+    assert len(paid) == 1
+    assert any(call["from"] == 0 and "until" not in call for call in wallet.calls)
 
 
 @pytest.mark.parametrize(

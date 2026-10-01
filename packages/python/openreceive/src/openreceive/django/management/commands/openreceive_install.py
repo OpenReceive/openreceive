@@ -154,7 +154,7 @@ Add to settings.py:
         "RATE_LIMITING": False,
         # Settlement discovery is opportunistic by default: every OpenReceive
         # request first runs one reconcile pass through the durable
-        # openreceive_meta gate (shared by every worker; min 2s between real
+        # openreceive_meta gate (shared by every worker; min 3s between real
         # wallet scans). Set False only if a dedicated worker owns scanning.
         "OPPORTUNISTIC_RECONCILE": True,
     }}

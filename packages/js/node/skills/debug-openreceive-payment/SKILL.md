@@ -49,7 +49,7 @@ same diagnostics redacted, always exit 0 — safe to share.
 ## 4. Paid but never settles
 
 - Settlement is opportunistic: any OpenReceive request runs one reconcile pass
-  through a durable gate (min 2s between wallet scans, stretched by invoice
+  through a durable gate (min 3s between wallet scans, stretched by invoice
   age). A quiet server settles on the next request — or run the optional
   notification worker. No timer is missing; that is the design.
 - An unpaid attempt closes only after a successful wallet scan at/after expiry

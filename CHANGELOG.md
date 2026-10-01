@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+- Fix a reconciliation livelock on slow wallets, in every engine (JS, Ruby,
+  Python, PHP). A wallet-history page still in flight at the 9 s scan deadline
+  failed the whole pass, and the pass threw away its resume offset. A walk too
+  long for one slice then restarted at offset 0 on every pass: nothing settled,
+  every pass logged `reconciliation failed (will retry): … execution expired`,
+  and the repeated walks used up the wallet's request budget (`RATE_LIMITED`).
+  A cut page now ends the slice like a page answered late: the completed pages
+  keep their progress, and the next pass resumes after them. A slice whose
+  first page is cut still fails the pass, so a wallet that never answers stays
+  visible in the logs.
+- Give host-clock attempts their own scan cohort. An attempt whose creation
+  time came from the host clock (a legacy row, or a wallet whose
+  `make_invoice` reply has no `created_at`) is scanned over the whole wallet
+  history. One such row used to widen the window of every wallet-timed attempt
+  pending with it to that full walk. Wallet-timed attempts now keep their
+  bounded window.
+- Raise the reconcile gate's floor from 2 s to 3 s
+  (`OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS`, and the first invoice-age tier
+  in every engine). This cuts settlement-scan volume by about a third, at the
+  cost of at most one extra second before a payment is seen.
+- Two new `spec/test-vectors/reconcile-progress.json` vectors pin both fixes
+  for every engine.
+
 ## 0.4.12 - 2026-10-01
 
 - Make “Switch payment method” return to the method grid every time in

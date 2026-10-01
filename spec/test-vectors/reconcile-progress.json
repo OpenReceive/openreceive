@@ -61,6 +61,23 @@
       "arrivals_per_pass": 20,
       "failed_fulfillments": 1,
       "max_passes": 2
+    },
+    {
+      "name": "page cut by the scan deadline keeps the walk's progress",
+      "rule": "Each pass the wallet answers pages_before_deadline pages; the next page is still in flight when the slice deadline passes, and the client fails it. A slice cut after at least one answered page ends continued with the progress of its completed pages, so the walk reaches paid_index within max_passes instead of restarting at offset 0 every pass. A slice whose first page is cut made no progress and still fails the pass (scan_failed, with its warning), so a wallet that never answers stays visible.",
+      "history_rows": 200,
+      "paid_index": 199,
+      "page_size": 20,
+      "pages_before_deadline": 4,
+      "max_passes": 3
+    },
+    {
+      "name": "host-clock attempt cannot widen a wallet-timed cohort",
+      "rule": "A legacy host-clock attempt (created_at_source missing or host) and a paid wallet-timed attempt are pending together. The wallet-timed attempt gets its own bounded window [wallet_created_at - overlap, wallet_created_at + overlap], scanned first, and settles in the first pass; the host-clock attempt keeps its full-history window (from 0, no until) and is walked on the next pass.",
+      "host_created_at": 1000,
+      "wallet_created_at": 5000,
+      "overlap": 60,
+      "max_passes": 2
     }
   ]
 }

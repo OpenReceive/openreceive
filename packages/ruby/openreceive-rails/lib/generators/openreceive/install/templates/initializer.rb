@@ -90,7 +90,7 @@ OpenReceive.configure do |config|
 
   # Settlement discovery is opportunistic by default: every engine request
   # first runs one reconcile pass through the durable openreceive_meta gate
-  # (shared by all Puma workers; min 2s between real wallet scans), so pending
+  # (shared by all Puma workers; min 3s between real wallet scans), so pending
   # attempts settle or close on any later OpenReceive call — no scheduled job
   # required. Set false only if a dedicated worker owns scanning.
   # config.opportunistic_reconcile = false

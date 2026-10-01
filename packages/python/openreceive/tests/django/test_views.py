@@ -134,7 +134,7 @@ def test_mint_settle_fulfill_once_through_the_orm(
     assert status == 200 and body["status"] == "pending"
 
     state.wallet.settle_invoice(payment_hash, settled_at=state.now + 5)
-    state.now += 3  # past the 2 s gate floor
+    state.now += 3  # past the 3 s gate floor
     status, body = post(
         client,
         "/payments/check",

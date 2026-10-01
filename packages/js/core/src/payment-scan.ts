@@ -82,18 +82,34 @@ export async function scanPaymentSlice(input: {
     if (input.signal?.aborted || (input.deadline !== undefined && Date.now() >= input.deadline))
       break;
     const offset = verifyingAnchor ? window.anchor_offset! : window.offset;
-    const page = await input.client.listTransactions(
-      {
-        type: "incoming",
-        limit: OPENRECEIVE_TRANSACTION_PAGE_LIMIT,
-        offset,
-        from: window.from,
-        ...(window.until === undefined ? {} : { until: window.until }),
-        ...(window.view === "inclusive" ? { unpaid: true } : {}),
-      },
-      input.signal === undefined ? undefined : { signal: input.signal },
+    const page = await pageBeforeDeadline(
+      (signal) =>
+        input.client.listTransactions(
+          {
+            type: "incoming",
+            limit: OPENRECEIVE_TRANSACTION_PAGE_LIMIT,
+            offset,
+            from: window.from,
+            ...(window.until === undefined ? {} : { until: window.until }),
+            ...(window.view === "inclusive" ? { unpaid: true } : {}),
+          },
+          signal === undefined ? undefined : { signal },
+        ),
+      input.deadline,
+      input.signal,
     );
     input.signal?.throwIfAborted();
+    // The deadline cut this page. After at least one answered page that ends
+    // the slice like a page answered late: the completed pages keep their
+    // progress. Failing the slice would drop the resume offset, and a wallet
+    // too slow to finish the walk in one slice would then re-walk the same
+    // first pages on every pass. A cut first page made no progress and still
+    // fails the pass, so a wallet that never answers stays visible.
+    if (page === DEADLINE_CUT) {
+      if (pageNumber === 0)
+        throw new Error("Reconcile scan deadline passed before the wallet answered a page.");
+      return { checks: [...checks.values()], outcome: "continued", window };
+    }
     const physicalRows = page.transactions.length + (page.skippedRows ?? 0);
     if (physicalRows > 0 && page.transactions.length === 0)
       throw new TypeError("list_transactions returned no usable rows");
@@ -197,6 +213,40 @@ export async function scanPaymentSlice(input: {
     }
   }
   return { checks: [...checks.values()], outcome: "continued", window };
+}
+
+const DEADLINE_CUT = Symbol("deadline cut");
+
+/**
+ * One page, cut at the slice deadline: when the deadline passes first, the
+ * page's transport work is aborted and the result is DEADLINE_CUT, without
+ * waiting on a client that ignores its signal. A page that fails at or after
+ * the deadline is cut too. An aborted outer signal still fails the slice.
+ */
+async function pageBeforeDeadline<T>(
+  request: (signal: AbortSignal | undefined) => Promise<T>,
+  deadline: number | undefined,
+  outer: AbortSignal | undefined,
+): Promise<T | typeof DEADLINE_CUT> {
+  if (deadline === undefined) return request(outer);
+  const cut = new AbortController();
+  const pending = request(outer === undefined ? cut.signal : AbortSignal.any([outer, cut.signal]));
+  // The losing page rejects once aborted; nobody awaits it any more.
+  pending.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<typeof DEADLINE_CUT>((resolve) => {
+    timer = setTimeout(() => resolve(DEADLINE_CUT), Math.max(0, deadline - Date.now()));
+  });
+  try {
+    const page = await Promise.race([pending, expired]);
+    if (page === DEADLINE_CUT) cut.abort(new Error("reconcile scan deadline reached"));
+    return page;
+  } catch (error) {
+    if (Date.now() >= deadline && outer?.aborted !== true) return DEADLINE_CUT;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Bounded digest of identities only; never persist wallet payloads or preimages.

@@ -81,7 +81,7 @@ module OpenReceive
       # durably gated reconcile pass when attempts are pending, so abandoned
       # checkouts settle on any later OpenReceive call with no scheduled job.
       # The openreceive_meta gate row is shared by every Puma worker/process on
-      # the host database (min 2s between real wallet scans, stretched by
+      # the host database (min 3s between real wallet scans, stretched by
       # invoice age). Set false to disable (e.g. when the optional
       # `bin/rails openreceive:notifications` worker owns scanning), or a Hash
       # with min_interval_seconds to tune.

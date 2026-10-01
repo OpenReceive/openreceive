@@ -379,7 +379,7 @@ test("a pass exceeding the scan timeout is a failed scan and the gate stays clai
   });
   assert.equal(result.reason, "scan_failed");
   assert.equal(warnings.length, 1);
-  assert.match(String(warnings[0]), /exceeded 50ms/);
+  assert.match(String(warnings[0]), /deadline passed before the wallet answered/);
   // claimed_at stays: no stampede while the wallet is broken.
   assert.equal(
     await fix.host.payments.claimReconcileGate({ now: fix.state.now, intervalSeconds: 2 }),
@@ -449,16 +449,16 @@ test("a custom repository without claimReconcileGate fails construction unless d
 
 test("the gate interval stretches with pending-invoice age", () => {
   const attempt = (createdAt) => ({ paymentHash: "ab".repeat(32), createdAt, expiresAt: 99_999 });
-  assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000), 2);
+  assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000), 3);
   assert.equal(reconcileIntervalSeconds([attempt(750)], 1_000), 6);
   assert.equal(reconcileIntervalSeconds([attempt(100)], 1_000), 12);
   // The youngest pending invoice drives the pace.
-  assert.equal(reconcileIntervalSeconds([attempt(100), attempt(990)], 1_000), 2);
-  // A configured floor can only slow it down, never beat the 2s minimum.
+  assert.equal(reconcileIntervalSeconds([attempt(100), attempt(990)], 1_000), 3);
+  // A configured floor can only slow it down, never beat the 3s minimum.
   assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000, 5), 5);
-  assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000, 1), 2);
+  assert.equal(reconcileIntervalSeconds([attempt(990)], 1_000, 1), 3);
   // An empty pending set — the natural input from a host driving the gate —
   // is the floor, never Infinity.
-  assert.equal(reconcileIntervalSeconds([], 1_000), 2);
+  assert.equal(reconcileIntervalSeconds([], 1_000), 3);
   assert.equal(reconcileIntervalSeconds([], 1_000, 5), 5);
 });

@@ -311,3 +311,97 @@ test(spec.vectors[6].name, async () => {
   assert.equal((await host.payments.findByPaymentHash(hash(1))).status, "expired");
   db.close();
 });
+
+test(spec.vectors[8].name, async () => {
+  const scenario = spec.vectors[8];
+  const rows = Array.from({ length: scenario.history_rows }, (_, n) => ({
+    payment_hash: hash(n + 1),
+    created_at: 1000,
+    settled_at: 1050,
+  }));
+  rows[scenario.paid_index].payment_hash = hash(0);
+  const db = memoryPaymentsDb();
+  let now = 2000;
+  const clock = () => now;
+  await createSqlPayments(db, { clock }).commitAttempt(snapshot(0));
+  let answered = 0;
+  const client = {
+    async listTransactions(request, options) {
+      if (++answered > scenario.pages_before_deadline)
+        // Still in flight at the slice deadline; it ends only when aborted.
+        return new Promise((_, reject) =>
+          options.signal.addEventListener("abort", () => reject(options.signal.reason)),
+        );
+      return { transactions: rows.slice(request.offset, request.offset + scenario.page_size) };
+    },
+  };
+  const paid = [];
+  for (let pass = 0; pass < scenario.max_passes; pass++) {
+    answered = 0;
+    const host = createHost({
+      db,
+      clock,
+      amountFor: () => ({ sats: 1 }),
+      onPaid: (event) => paid.push(event.reference),
+    });
+    const result = await maybeReconcilePayments({
+      host,
+      service: service(client, clock),
+      clock,
+      scanTimeoutMs: 200,
+      onError: silent,
+    });
+    assert.equal(result.reason, "ran");
+    assert.ok(answered <= scenario.pages_before_deadline + 1);
+    now += 12;
+  }
+  assert.deepEqual(paid, ["order-0"]);
+  db.close();
+});
+
+test(spec.vectors[9].name, async () => {
+  const scenario = spec.vectors[9];
+  const db = memoryPaymentsDb();
+  let now = scenario.wallet_created_at + 1000;
+  const clock = () => now;
+  const repository = createSqlPayments(db, { clock });
+  await repository.commitAttempt(snapshot(1, scenario.host_created_at, "host"));
+  await repository.commitAttempt(snapshot(2, scenario.wallet_created_at));
+  const client = wallet([
+    {
+      payment_hash: hash(2),
+      created_at: scenario.wallet_created_at,
+      settled_at: scenario.wallet_created_at + 1,
+    },
+  ]);
+  const paid = [];
+  for (let pass = 0; pass < scenario.max_passes; pass++) {
+    const host = createHost({
+      db,
+      clock,
+      amountFor: () => ({ sats: 1 }),
+      onPaid: (event) => paid.push(event.reference),
+    });
+    await maybeReconcilePayments({
+      host,
+      service: service(client, clock),
+      clock,
+      overlapSeconds: scenario.overlap,
+      onError: silent,
+    });
+    if (pass === 0) {
+      assert.deepEqual(
+        [client.calls[0].from, client.calls[0].until],
+        [scenario.wallet_created_at - scenario.overlap, scenario.wallet_created_at + scenario.overlap],
+      );
+      assert.deepEqual(paid, ["order-2"]);
+    }
+    now += 12;
+  }
+  assert.ok(
+    client.calls.some((call) => call.from === 0 && call.until === undefined),
+    "the host-clock attempt still walks full history",
+  );
+  assert.deepEqual(paid, ["order-2"]);
+  db.close();
+});

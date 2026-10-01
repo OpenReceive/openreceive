@@ -10,6 +10,7 @@ from typing import Any
 
 from openreceive import settlement
 from openreceive.nwc.requests import normalize_list_transactions_response
+from openreceive.server.errors import WalletFailureError
 
 
 def new_window(attempts: list[dict[str, Any]], now: int, overlap: int) -> dict[str, Any]:
@@ -56,7 +57,20 @@ def scan_slice(
             request["unpaid"] = True
         # Internal monotonic deadline, consumed by the client before NIP-47 encoding.
         request["_deadline"] = deadline
-        page = normalize_list_transactions_response(service._call_nwc("list_transactions", request))
+        try:
+            reply = service._call_nwc("list_transactions", request)
+        except WalletFailureError:
+            # The client cuts the in-flight page at this deadline. After at least
+            # one answered page, that ends the slice like a page answered late:
+            # the completed pages keep their progress. Failing the pass would
+            # drop the resume offset, and a wallet too slow to finish the walk
+            # in one slice would then re-walk the same first pages on every
+            # pass. A cut first page made no progress, so it still fails the
+            # pass and a wallet that never answers stays visible in the logs.
+            if time.monotonic() < deadline or used == 0:
+                raise
+            return list(results.values()), False, False
+        page = normalize_list_transactions_response(reply)
         used += 1
         if time.monotonic() >= deadline:
             return list(results.values()), False, False

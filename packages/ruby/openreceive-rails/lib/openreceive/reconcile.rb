@@ -6,9 +6,9 @@ require "openreceive/reconcile_scan"
 
 module OpenReceive
   # Floor for the durable reconcile-gate interval (seconds); stretched by
-  # invoice age (2s while any pending invoice is under 2 minutes old, 6s under
+  # invoice age (3s while any pending invoice is under 2 minutes old, 6s under
   # 5 minutes, else 12s). Mirrors the JS OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS.
-  MIN_RECONCILE_INTERVAL_SECONDS = 2
+  MIN_RECONCILE_INTERVAL_SECONDS = 3
   # The deadline reaches the wallet adapter, which bounds only network I/O.
   # Never interrupt the whole pass: it also runs host/database transactions.
   RECONCILE_SCAN_TIMEOUT_SECONDS = 9
@@ -86,7 +86,12 @@ module OpenReceive
           scheduler["cursor"] = candidates.length < Server::RECONCILE_BATCH_SIZE ? nil : last.slice("created_at", "payment_hash")
           queued = windows.flat_map { |w| w.fetch("attempts").map { |a| a.fetch("payment_hash") } }
           cohort = candidates.reject { |a| queued.include?(a.fetch("payment_hash")) }
-          windows << ReconcileScan.new_window(cohort, observed_at, overlap_seconds) unless cohort.empty?
+          # A host-clock attempt's window spans the whole wallet history. It
+          # gets its own window, so it never drags wallet-timed attempts into
+          # that walk; one the cap leaves out returns on cursor wrap.
+          cohort.partition { |a| a["created_at_source"] == "wallet" }.each do |group|
+            windows << ReconcileScan.new_window(group, observed_at, overlap_seconds) unless group.empty? || windows.length >= 2
+          end
         end
       end
       window = windows.shift
@@ -266,7 +271,7 @@ module OpenReceive
       )
     end
 
-    # Info, not debug: passes are durably gated (min 2s apart, and only while
+    # Info, not debug: passes are durably gated (min 3s apart, and only while
     # attempts are pending), so operators can watch settlement discovery and
     # the batched list_transactions window without raising the log level. All
     # pending attempts share one creation-time window walked at most twice —
@@ -296,7 +301,7 @@ module OpenReceive
 
     # The gate interval for the current pending set: the configured floor
     # (config.opportunistic_reconcile min_interval_seconds), stretched by
-    # invoice age — 2s while any pending invoice is under 2 minutes old, 6s
+    # invoice age — 3s while any pending invoice is under 2 minutes old, 6s
     # under 5 minutes, else 12s. Mirrors the JS reconcile gate.
     def reconcile_gate_interval_seconds(attempts, now, setting)
       floor = MIN_RECONCILE_INTERVAL_SECONDS
@@ -307,7 +312,7 @@ module OpenReceive
       age_stretch = attempts.map do |attempt|
         elapsed = [now - Integer(attempt.fetch("created_at")), 0].max
         if elapsed < 120
-          2
+          3
         elsif elapsed < 300
           6
         else

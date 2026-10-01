@@ -264,7 +264,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 125249
+      "bytes": 125637
     },
     {
       "path": "/guides/security",
@@ -444,7 +444,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 125249,
+      "bytes": 125637,
       "alias_of": "/guides/api-reference"
     },
     {
