@@ -38,16 +38,28 @@ def reconciler(repository, clock, wallet, paid):
     )
 
 
+PROGRESS = load_vector("reconcile-progress.json")
+# The deadline-cut vectors run once per clock source, in their own test below.
+DEADLINE_CASES = [
+    (case, source)
+    for case in PROGRESS["vectors"]
+    if "pages_before_deadline" in case
+    for source in case.get("created_at_sources", ["wallet"])
+]
+
+
 @pytest.mark.parametrize(
-    "case", load_vector("reconcile-progress.json")["vectors"], ids=lambda row: row["name"]
+    "case",
+    [case for case in PROGRESS["vectors"] if "pages_before_deadline" not in case],
+    ids=lambda row: row["name"],
 )
-def test_durable_progress_vectors(case, repository, clock, monkeypatch):
+def test_durable_progress_vectors(case, repository, clock):
     now = clock["now"]
-    if "pages_before_deadline" in case:
-        deadline_cut_page_keeps_progress(case, repository, clock, monkeypatch)
-        return
     if "host_created_at" in case:
         host_clock_attempt_gets_its_own_window(case, repository, clock)
+        return
+    if "mixed_clock_sources" in case:
+        mixed_batches_cannot_skip_a_host_timed_attempt(case, repository, clock)
         return
     if "lease_seconds" in case:
         old = repository.claim_reconcile_gate(
@@ -149,14 +161,19 @@ def test_durable_progress_vectors(case, repository, clock, monkeypatch):
     assert "settled_at" not in json.dumps(claim)
 
 
-def deadline_cut_page_keeps_progress(case, repository, clock, monkeypatch):
+@pytest.mark.parametrize(
+    ("case", "source"),
+    DEADLINE_CASES,
+    ids=[f"{case['name']} ({source}-timed)" for case, source in DEADLINE_CASES],
+)
+def test_deadline_cut_vectors(case, source, repository, clock, monkeypatch):
     from openreceive.server import reconcile
 
     # A short real slice: the cut page waits out the deadline like the client.
     monkeypatch.setattr(reconcile, "RECONCILE_SCAN_TIMEOUT_SECONDS", 0.3)
     now = clock["now"]
     saved = checkout("deadline-cut", H1, now, now + 600)
-    saved["created_at_source"] = "wallet"
+    saved["created_at_source"] = source
     repository.commit_attempt(PaymentInsert("deadline-cut", H1, saved))
     rows = [
         {"payment_hash": f"{10000 + i:064x}", "created_at": now, "settled_at": now + 1}
@@ -237,6 +254,52 @@ def host_clock_attempt_gets_its_own_window(case, repository, clock):
         clock["now"] += 12
     assert len(paid) == 1
     assert any(call["from"] == 0 and "until" not in call for call in wallet.calls)
+
+
+def mixed_batches_cannot_skip_a_host_timed_attempt(case, repository, clock):
+    start, count = case["created_at_start"], case["pending_count"]
+    rows = []
+    for i in range(count):
+        h = f"{i + 1:064x}"
+        saved = checkout(f"mixed-{i}", h, start + i, start + i + 100_000)
+        saved["created_at_source"] = "wallet" if i % 2 == 0 else "host"
+        repository.commit_attempt(PaymentInsert(f"mixed-{i}", h, saved))
+        row = {"payment_hash": h, "created_at": start + i}
+        if i == case["paid_index"]:
+            row["settled_at"] = case["settled_at"]
+        rows.append(row)
+    wallet = HistoryWallet(rows, case["page_size"])
+
+    def honors_window(request):
+        wallet.calls.append(dict(request))
+        visible = [
+            row
+            for row in rows
+            if (request.get("unpaid") or "settled_at" in row)
+            and row["created_at"] >= request["from"]
+            and (request.get("until") is None or row["created_at"] <= request["until"])
+        ]
+        offset = request.get("offset", 0)
+        return {"transactions": visible[offset : offset + case["page_size"]]}
+
+    wallet.list_transactions = honors_window
+    paid = []
+    clock["now"] = start + count + 1000
+    for _ in range(case["max_passes"]):
+        # Recreate the reconciler on every slice; only DB state carries progress.
+        before = len(wallet.calls)
+        reconciler(repository, clock, wallet, paid).reconcile()
+        assert len(wallet.calls) - before <= PROGRESS["max_pages"]
+        clock["now"] += case["pass_seconds"]
+    paid_hash = f"{case['paid_index'] + 1:064x}"
+    assert repository.find_by_payment_hash(paid_hash).status == "settled"
+    assert [event.payment_hash for event in paid] == [paid_hash]
+    statuses = [repository.find_by_payment_hash(f"{i + 1:064x}").status for i in range(count)]
+    assert statuses.count("pending") == count - 1
+    claim = repository.claim_reconcile_gate(now=clock["now"], interval_seconds=2)
+    assert claim is not None
+    assert len(claim["scheduler"]["windows"]) <= PROGRESS["max_windows"]
+    assert len(json.dumps(claim).encode()) <= PROGRESS["max_checkpoint_bytes"]
 
 
 @pytest.mark.parametrize(

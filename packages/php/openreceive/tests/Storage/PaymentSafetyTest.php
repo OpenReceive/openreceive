@@ -87,7 +87,7 @@ final class PaymentSafetyTest extends DatabaseCase
         $family = self::vector('reconcile-progress');
         foreach ($family['vectors'] as $vector) {
             // Dedicated tests below drive the deadline-cut and host-clock rules.
-            if (isset($vector['pages_before_deadline']) || isset($vector['host_created_at'])) continue;
+            if (isset($vector['pages_before_deadline']) || isset($vector['host_created_at']) || isset($vector['mixed_clock_sources'])) continue;
             $this->now = 5000;
             $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
             if (isset($vector['lease_seconds'])) {
@@ -155,14 +155,26 @@ final class PaymentSafetyTest extends DatabaseCase
         }
     }
 
-    #[DataProvider('dialects')]
-    public function testPageCutByTheScanDeadlineKeepsTheWalksProgress(string $dialect): void
+    /** Each deadline-cut vector, once per clock source, on every dialect. */
+    public static function deadlineCutCases(): iterable
     {
-        $vector = self::progressVector('pages_before_deadline');
+        foreach (self::dialects() as [$dialect]) {
+            foreach (self::vector('reconcile-progress')['vectors'] as $vector) {
+                if (!isset($vector['pages_before_deadline'])) continue;
+                foreach ($vector['created_at_sources'] ?? ['wallet'] as $source) {
+                    yield "{$dialect}: {$vector['name']} ({$source}-timed)" => [$dialect, $vector, $source];
+                }
+            }
+        }
+    }
+
+    #[DataProvider('deadlineCutCases')]
+    public function testPageCutByTheScanDeadlineKeepsTheWalksProgress(string $dialect, array $vector, string $source): void
+    {
         $this->now = 5000;
         $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
         $target = self::hash('deadline-cut');
-        $this->seed($repo, $target, expiry: 100000);
+        $this->seed($repo, $target, source: $source, expiry: 100000);
         $rows = [];
         for ($i = 0; $i < $vector['history_rows']; $i++) $rows[] = self::paid(self::hash('history-' . $i));
         $rows[$vector['paid_index']] = self::paid($target);
@@ -187,6 +199,48 @@ final class PaymentSafetyTest extends DatabaseCase
         }
         self::assertSame('settled', $repo->findByPaymentHash($target)->status, $vector['name']);
         self::assertSame(1, $this->fulfilled, $vector['name']);
+    }
+
+    #[DataProvider('dialects')]
+    public function testMixedBatchesCannotSkipAHostTimedAttempt(string $dialect): void
+    {
+        $vector = self::progressVector('mixed_clock_sources');
+        $family = self::vector('reconcile-progress');
+        $start = $vector['created_at_start'];
+        $count = $vector['pending_count'];
+        $this->now = $start + $count + 1000;
+        $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
+        $rows = [];
+        for ($i = 0; $i < $count; $i++) {
+            $hash = str_pad(dechex($i + 1), 64, '0', STR_PAD_LEFT);
+            $repo->commitAttempt("mixed-{$i}", $hash, [...self::checkout("mixed-{$i}", $hash, $start + $i, $start + $i + 100000), 'created_at_source' => $i % 2 === 0 ? 'wallet' : 'host']);
+            $rows[] = ['type' => 'incoming', 'payment_hash' => $hash, 'created_at' => $start + $i]
+                + ($i === $vector['paid_index'] ? ['transaction_state' => 'settled', 'settled_at' => $vector['settled_at']] : []);
+        }
+        $calls = 0;
+        $list = static function (array $request) use ($rows, $vector, &$calls): array {
+            $calls++;
+            $visible = array_values(array_filter($rows, static fn (array $row): bool => (($request['unpaid'] ?? false) || isset($row['settled_at']))
+                && $row['created_at'] >= $request['from'] && $row['created_at'] <= ($request['until'] ?? PHP_INT_MAX)));
+            return ['transactions' => array_slice($visible, $request['offset'], $vector['page_size'])];
+        };
+        $key = $dialect === 'mysql' ? '`key`' : 'key';
+        for ($pass = 0; $pass < $vector['max_passes']; $pass++) {
+            $before = $calls;
+            $this->reconciler($repo, $list)->reconcile();
+            self::assertLessThanOrEqual($family['max_pages'], $calls - $before, "pass {$pass}");
+            $checkpoint = $repo->connection()->query("SELECT value FROM openreceive_meta WHERE {$key} = 'transaction_scan_gate'")[0]['value'];
+            self::assertLessThanOrEqual($family['max_checkpoint_bytes'], strlen($checkpoint));
+            self::assertLessThanOrEqual($family['max_windows'], count(json_decode($checkpoint, true)['scheduler']['windows']));
+            $this->now += $vector['pass_seconds'];
+            // A fresh instance each pass proves selection progress is stored in the database.
+            $repo = new SqlPaymentRepository($repo->connection(), fn (): int => $this->now);
+        }
+        $paid = str_pad(dechex($vector['paid_index'] + 1), 64, '0', STR_PAD_LEFT);
+        self::assertSame('settled', $repo->findByPaymentHash($paid)->status, $vector['name']);
+        self::assertSame(1, $this->fulfilled, $vector['name']);
+        $pending = $repo->connection()->query("SELECT COUNT(*) AS n FROM openreceive_payments WHERE status = 'pending'")[0]['n'];
+        self::assertSame($count - 1, (int) $pending);
     }
 
     #[DataProvider('dialects')]

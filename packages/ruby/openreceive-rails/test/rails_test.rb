@@ -1802,10 +1802,10 @@ class PaymentSafetyProgressTest < Minitest::Test
     OpenReceive.const_set(:RECONCILE_SCAN_TIMEOUT_SECONDS, original)
   end
 
-  def run_deadline_cut_vector(vector)
+  def run_deadline_cut_vector(vector, source)
     now = Time.now.to_i
     paid_hash = format("%064x", 1)
-    store_timed(paid_hash, "deadline-cut", now, "wallet")
+    store_timed(paid_hash, "deadline-cut", now, source)
     rows = Array.new(vector.fetch("history_rows")) { |i| { "payment_hash" => format("%064x", 10_000 + i), "created_at" => now, "settled_at" => now + 1 } }
     rows[vector.fetch("paid_index")]["payment_hash"] = paid_hash
     page_size = vector.fetch("page_size")
@@ -1865,6 +1865,45 @@ class PaymentSafetyProgressTest < Minitest::Test
     assert_equal 1, @paid.length
   end
 
+  def run_mixed_clock_sources_vector(vector)
+    start = vector.fetch("created_at_start")
+    count = vector.fetch("pending_count")
+    rows = Array.new(count) do |i|
+      hash = format("%064x", i + 1)
+      created = start + i
+      checkout = build_checkout(reference: "mixed-#{i}", hash: hash, created_at: created, expires_at: created + 100_000)
+      checkout["created_at_source"] = i.even? ? "wallet" : "host"
+      OpenReceivePayment.commit_attempt!(reference: "mixed-#{i}", payment_hash: hash, checkout: checkout)
+      row = { "payment_hash" => hash, "created_at" => created }
+      row["settled_at"] = vector.fetch("settled_at") if i == vector.fetch("paid_index")
+      row
+    end
+    page_size = vector.fetch("page_size")
+    calls = 0
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      calls += 1
+      visible = rows.select do |row|
+        (request["unpaid"] || row.key?("settled_at")) && row.fetch("created_at") >= request.fetch("from", 0) &&
+          (request["until"].nil? || row.fetch("created_at") <= request["until"])
+      end
+      { "transactions" => visible.slice(request.fetch("offset", 0), page_size) || [] }
+    end
+    observed = start + count + 1000
+    vector.fetch("max_passes").times do
+      before = calls
+      OpenReceive.reconcile!(now: observed)
+      assert_operator calls - before, :<=, PROGRESS.fetch("max_pages")
+      gate = OpenReceiveMeta.find_by!(key: OpenReceiveMeta::RECONCILE_GATE_KEY).value
+      assert_operator gate.bytesize, :<=, PROGRESS.fetch("max_checkpoint_bytes")
+      assert_operator JSON.parse(gate).fetch("scheduler").fetch("windows").length, :<=, PROGRESS.fetch("max_windows")
+      observed += vector.fetch("pass_seconds")
+    end
+    paid_hash = format("%064x", vector.fetch("paid_index") + 1)
+    assert_equal "settled", OpenReceivePayment.find_by!(payment_hash: paid_hash).status
+    assert_equal [paid_hash], @paid.map(&:payment_hash)
+    assert_equal count - 1, OpenReceivePayment.where(status: "pending").count
+  end
+
   def test_first_page_cut_by_the_deadline_still_fails_the_pass
     now = Time.now.to_i
     hash = format("%064x", 1)
@@ -1881,9 +1920,15 @@ class PaymentSafetyProgressTest < Minitest::Test
   end
 
   PROGRESS.fetch("vectors").each_with_index do |vector, index|
+    if vector.key?("pages_before_deadline")
+      vector.fetch("created_at_sources", ["wallet"]).each do |source|
+        define_method("test_progress_vector_#{index}_#{source}_timed") { run_deadline_cut_vector(vector, source) }
+      end
+      next
+    end
     define_method("test_progress_vector_#{index}") do
-      next run_deadline_cut_vector(vector) if vector.key?("pages_before_deadline")
       next run_host_clock_cohort_vector(vector) if vector.key?("host_created_at")
+      next run_mixed_clock_sources_vector(vector) if vector.key?("mixed_clock_sources")
 
       now = Time.now.to_i
       if vector.key?("lease_seconds")

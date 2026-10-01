@@ -259,7 +259,9 @@ only answers its questions.
     wallet grants `lookup_invoice`. Otherwise it is walked once with no lower
     time bound. If a page of that walk fails, the next refresh resumes at the
     last page that answered instead of starting over. A walk resumed this way
-    never proves a hash absent.
+    never proves a hash absent. A hash it did not find stays watched and is
+    never closed at its expiry, and the next refresh walks for it again from
+    the start.
   - The memo refreshes every 3, 6 or 12 seconds, depending on the age of the
     newest live invoice. Every caller shares that refresh. A failed walk
     counts too, so a broken wallet is not asked again by every caller. A

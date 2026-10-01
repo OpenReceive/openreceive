@@ -27,6 +27,15 @@ module OpenReceive
       anchor = resumed ? window["anchor_offset"] : nil
       replaying = !anchor.nil?
       previous = window["fingerprint"]
+      # The last answered page was the overlap re-read. A slice that ends here
+      # spends the overlap, so the next slice reads the unseen page first: a
+      # wallet answering one page per slice still advances. The fingerprint
+      # stays, to catch a wallet that ignores offset.
+      overlap_only = false
+      continued = lambda do
+        window["anchor_offset"] = nil if overlap_only
+        [results.values, false, false]
+      end
       max_pages.times do |page_number|
         break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
@@ -47,9 +56,11 @@ module OpenReceive
           # that never answers stays visible.
           raise if page_number.zero? || Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
 
-          return [results.values, false, false]
+          return continued.call
         end
-        return [results.values, false, false] if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+        return continued.call if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        overlap_only = false
 
         rows = page.fetch("transactions")
         physical = rows.length + page.fetch("skipped_rows", 0)
@@ -73,6 +84,7 @@ module OpenReceive
           unless physical.zero?
             window["anchor_offset"] = offset
             window["fingerprint"] = fingerprint
+            overlap_only = true
             next
           end
         end
@@ -100,7 +112,7 @@ module OpenReceive
         previous = fingerprint
         return [results.values, true, false] if expected.all? { |hash| %w[settled expired failed].include?(window.fetch("observations").dig(hash, "status")) }
       end
-      [results.values, false, false]
+      continued.call
     end
   end
 end

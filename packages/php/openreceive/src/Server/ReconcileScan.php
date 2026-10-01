@@ -37,6 +37,11 @@ final class ReconcileScan
         $anchor = $resumed ? $window['anchor_offset'] : null;
         $previous = $window['fingerprint'];
         $replayingAnchor = $anchor !== null;
+        // The last answered page was the overlap re-read. A slice that ends here
+        // spends the overlap, so the next slice reads the unseen page first: a
+        // wallet answering one page per slice still advances. The fingerprint
+        // stays, to catch a wallet that ignores offset.
+        $overlapOnly = false;
         while ($used < $maxPages && hrtime(true) / 1e9 < $deadline) {
             $offset = $replayingAnchor ? $anchor : $window['offset'];
             $request = ['type' => 'incoming', 'limit' => 20, 'offset' => $offset, 'from' => $window['from']];
@@ -55,10 +60,11 @@ final class ReconcileScan
                 // the same first pages on every pass. A cut first page made no
                 // progress and still fails the pass, so a silent wallet stays visible.
                 if (hrtime(true) / 1e9 < $deadline || $used === 0) throw $e;
-                return ['checks' => array_values($results), 'complete' => false, 'stalled' => false];
+                return self::continued($window, $results, $overlapOnly);
             }
-            if (hrtime(true) / 1e9 >= $deadline) return ['checks' => array_values($results), 'complete' => false, 'stalled' => false];
+            if (hrtime(true) / 1e9 >= $deadline) return self::continued($window, $results, $overlapOnly);
             $used++;
+            $overlapOnly = false;
             $rows = $page['transactions'];
             $physical = count($rows) + ($page['skipped_rows'] ?? 0);
             $fingerprint = hash('sha256', json_encode(array_column($rows, 'payment_hash'), JSON_THROW_ON_ERROR));
@@ -85,6 +91,7 @@ final class ReconcileScan
                 if ($physical > 0) {
                     $window['anchor_offset'] = $offset;
                     $window['fingerprint'] = $fingerprint;
+                    $overlapOnly = true;
                     continue;
                 }
             }
@@ -116,6 +123,13 @@ final class ReconcileScan
             $outstanding = array_filter(array_keys($expected), static fn (string $hash): bool => !in_array($window['observations'][$hash]['status'] ?? null, ['settled', 'expired', 'failed'], true));
             if ($outstanding === []) return ['checks' => array_values($results), 'complete' => true, 'stalled' => false];
         }
+        return self::continued($window, $results, $overlapOnly);
+    }
+
+    /** @return array{checks: list<array<string, mixed>>, complete: bool, stalled: bool} */
+    private static function continued(array &$window, array $results, bool $overlapOnly): array
+    {
+        if ($overlapOnly) $window['anchor_offset'] = null;
         return ['checks' => array_values($results), 'complete' => false, 'stalled' => false];
     }
 }

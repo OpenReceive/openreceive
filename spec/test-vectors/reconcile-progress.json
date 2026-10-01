@@ -78,6 +78,28 @@
       "wallet_created_at": 5000,
       "overlap": 60,
       "max_passes": 2
+    },
+    {
+      "name": "mixed batches cannot skip a host-timed attempt",
+      "rule": "pending_count attempts alternate in keyset order: even indexes wallet-timed, odd indexes host-timed, created one second apart from created_at_start, all unexpired. That is more than one batch, so a selection often has one free window slot. Selection advances the cursor only past candidates already queued or admitted to a new window. A candidate whose clock source has no free slot is read again by the next selection, never skipped. The wallet honors from, until, unpaid and offset, and pages page_size rows. Only paid_index is settled (at settled_at). It settles within max_passes, one pass every pass_seconds, and fulfills once; every other attempt stays pending.",
+      "mixed_clock_sources": true,
+      "pending_count": 400,
+      "paid_index": 201,
+      "created_at_start": 1000,
+      "settled_at": 1401,
+      "page_size": 20,
+      "pass_seconds": 12,
+      "max_passes": 20
+    },
+    {
+      "name": "one answered page per slice still advances the walk",
+      "rule": "As the deadline-cut vector, but the wallet answers only one page per pass. A resumed slice spends that page re-reading its overlap page. When a slice answers only the overlap and the next page is cut, the overlap is spent: the next slice reads the unseen page first instead of the same overlap again. The walk reaches paid_index within max_passes, for a wallet-timed and a host-timed attempt alike, and fulfills once.",
+      "history_rows": 60,
+      "paid_index": 50,
+      "page_size": 20,
+      "pages_before_deadline": 1,
+      "created_at_sources": ["wallet", "host"],
+      "max_passes": 5
     }
   ]
 }

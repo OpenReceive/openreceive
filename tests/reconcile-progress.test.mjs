@@ -312,52 +312,53 @@ test(spec.vectors[6].name, async () => {
   db.close();
 });
 
-test(spec.vectors[8].name, async () => {
-  const scenario = spec.vectors[8];
-  const rows = Array.from({ length: scenario.history_rows }, (_, n) => ({
-    payment_hash: hash(n + 1),
-    created_at: 1000,
-    settled_at: 1050,
-  }));
-  rows[scenario.paid_index].payment_hash = hash(0);
-  const db = memoryPaymentsDb();
-  let now = 2000;
-  const clock = () => now;
-  await createSqlPayments(db, { clock }).commitAttempt(snapshot(0));
-  let answered = 0;
-  const client = {
-    async listTransactions(request, options) {
-      if (++answered > scenario.pages_before_deadline)
-        // Still in flight at the slice deadline; it ends only when aborted.
-        return new Promise((_, reject) =>
-          options.signal.addEventListener("abort", () => reject(options.signal.reason)),
-        );
-      return { transactions: rows.slice(request.offset, request.offset + scenario.page_size) };
-    },
-  };
-  const paid = [];
-  for (let pass = 0; pass < scenario.max_passes; pass++) {
-    answered = 0;
-    const host = createHost({
-      db,
-      clock,
-      amountFor: () => ({ sats: 1 }),
-      onPaid: (event) => paid.push(event.reference),
+for (const scenario of spec.vectors.filter((vector) => "pages_before_deadline" in vector))
+  for (const source of scenario.created_at_sources ?? ["wallet"])
+    test(`${scenario.name} (${source}-timed)`, async () => {
+      const rows = Array.from({ length: scenario.history_rows }, (_, n) => ({
+        payment_hash: hash(n + 1),
+        created_at: 1000,
+        settled_at: 1050,
+      }));
+      rows[scenario.paid_index].payment_hash = hash(0);
+      const db = memoryPaymentsDb();
+      let now = 2000;
+      const clock = () => now;
+      await createSqlPayments(db, { clock }).commitAttempt(snapshot(0, 1000, source));
+      let answered = 0;
+      const client = {
+        async listTransactions(request, options) {
+          if (++answered > scenario.pages_before_deadline)
+            // Still in flight at the slice deadline; it ends only when aborted.
+            return new Promise((_, reject) =>
+              options.signal.addEventListener("abort", () => reject(options.signal.reason)),
+            );
+          return { transactions: rows.slice(request.offset, request.offset + scenario.page_size) };
+        },
+      };
+      const paid = [];
+      for (let pass = 0; pass < scenario.max_passes; pass++) {
+        answered = 0;
+        const host = createHost({
+          db,
+          clock,
+          amountFor: () => ({ sats: 1 }),
+          onPaid: (event) => paid.push(event.reference),
+        });
+        const result = await maybeReconcilePayments({
+          host,
+          service: service(client, clock),
+          clock,
+          scanTimeoutMs: 200,
+          onError: silent,
+        });
+        assert.equal(result.reason, "ran");
+        assert.ok(answered <= scenario.pages_before_deadline + 1);
+        now += 12;
+      }
+      assert.deepEqual(paid, ["order-0"]);
+      db.close();
     });
-    const result = await maybeReconcilePayments({
-      host,
-      service: service(client, clock),
-      clock,
-      scanTimeoutMs: 200,
-      onError: silent,
-    });
-    assert.equal(result.reason, "ran");
-    assert.ok(answered <= scenario.pages_before_deadline + 1);
-    now += 12;
-  }
-  assert.deepEqual(paid, ["order-0"]);
-  db.close();
-});
 
 test(spec.vectors[9].name, async () => {
   const scenario = spec.vectors[9];
@@ -408,3 +409,75 @@ test(spec.vectors[9].name, async () => {
   assert.deepEqual(paid, ["order-2"]);
   db.close();
 });
+
+{
+  const scenario = spec.vectors.find((vector) => vector.mixed_clock_sources);
+  test(scenario.name, async () => {
+    const db = memoryPaymentsDb();
+    let now = scenario.created_at_start + scenario.pending_count + 1000;
+    const clock = () => now;
+    const repository = createSqlPayments(db, { clock });
+    const rows = [];
+    for (let n = 0; n < scenario.pending_count; n++) {
+      const createdAt = scenario.created_at_start + n;
+      const source = n % 2 === 0 ? "wallet" : "host";
+      const attempt = snapshot(n, createdAt, source);
+      attempt.checkout.expiresAt = createdAt + 100_000;
+      await repository.commitAttempt(attempt);
+      rows.push({
+        payment_hash: hash(n),
+        created_at: createdAt,
+        ...(n === scenario.paid_index ? { settled_at: scenario.settled_at } : {}),
+      });
+    }
+    let calls = 0;
+    const client = {
+      async listTransactions(request) {
+        calls++;
+        const visible = rows.filter(
+          (row) =>
+            (request.unpaid === true || row.settled_at !== undefined) &&
+            row.created_at >= request.from &&
+            (request.until === undefined || row.created_at <= request.until),
+        );
+        return {
+          transactions: visible.slice(request.offset, request.offset + scenario.page_size),
+        };
+      },
+    };
+    const paid = [];
+    for (let pass = 0; pass < scenario.max_passes; pass++) {
+      // Reconstructed every pass: only the database carries selection progress.
+      const host = createHost({
+        db,
+        clock,
+        amountFor: () => ({ sats: 1 }),
+        onPaid: (event) => paid.push(event.reference),
+      });
+      const before = calls;
+      await maybeReconcilePayments({
+        host,
+        service: service(client, clock),
+        clock,
+        onError: silent,
+      });
+      assert.ok(calls - before <= spec.max_pages);
+      const progress = db
+        .prepare("SELECT value FROM openreceive_meta WHERE key = 'transaction_scan_gate'")
+        .get().value;
+      assert.ok(Buffer.byteLength(progress) <= spec.max_checkpoint_bytes);
+      assert.ok(JSON.parse(progress).scheduler.windows.length <= spec.max_windows);
+      now += scenario.pass_seconds;
+    }
+    assert.deepEqual(paid, [`order-${scenario.paid_index}`]);
+    const statuses = db
+      .prepare("SELECT status, COUNT(*) AS n FROM openreceive_payments GROUP BY status")
+      .all()
+      .map((row) => [row.status, row.n]);
+    assert.deepEqual(Object.fromEntries(statuses), {
+      pending: scenario.pending_count - 1,
+      settled: 1,
+    });
+    db.close();
+  });
+}

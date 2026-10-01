@@ -158,26 +158,39 @@ class Reconciler:
                     scheduler["cursor"] = None
                     candidates = self.repository.list_reconcilable_attempts()
                 if candidates:
-                    last = candidates[-1]
+                    queued = {a["payment_hash"] for w in windows for a in w["attempts"]}
+                    # A host-clock attempt's window spans the whole wallet
+                    # history. It gets its own window, so it never drags
+                    # wallet-timed attempts into that walk. Candidates are taken
+                    # in keyset order, and the cursor moves only past those
+                    # already queued or admitted: one whose clock source has no
+                    # free slot stops the selection and is read again next
+                    # time, never skipped.
+                    cohorts: dict[bool, list[dict[str, Any]]] = {}
+                    taken = 0
+                    for candidate in candidates:
+                        if candidate.payment_hash not in queued:
+                            entry = candidate.as_dict()
+                            wallet = entry.get("created_at_source") == "wallet"
+                            if wallet not in cohorts and len(windows) + len(cohorts) >= 2:
+                                break
+                            cohorts.setdefault(wallet, []).append(entry)
+                        taken += 1
+                    last = candidates[taken - 1]
+                    # A short batch taken whole already reached the ledger's tail: wrap now.
                     scheduler["cursor"] = (
                         None
-                        if len(candidates) < RECONCILE_BATCH_SIZE
+                        if taken == len(candidates) and len(candidates) < RECONCILE_BATCH_SIZE
                         else {
                             "created_at": last.created_at,
                             "payment_hash": last.payment_hash,
                         }
                     )
-                    queued = {a["payment_hash"] for w in windows for a in w["attempts"]}
-                    cohort = [a.as_dict() for a in candidates if a.payment_hash not in queued]
-                    # A host-clock attempt's window spans the whole wallet
-                    # history. It gets its own window, so it never drags
-                    # wallet-timed attempts into that walk; one the cap leaves
-                    # out returns on cursor wrap.
-                    wallet_timed = [a for a in cohort if a.get("created_at_source") == "wallet"]
-                    host_timed = [a for a in cohort if a.get("created_at_source") != "wallet"]
-                    for group in (wallet_timed, host_timed):
-                        if group and len(windows) < 2:
-                            windows.append(new_window(group, observed_at, overlap_seconds))
+                    for wallet in (True, False):
+                        if wallet in cohorts:
+                            windows.append(
+                                new_window(cohorts[wallet], observed_at, overlap_seconds)
+                            )
             # Remove durably before I/O: failures/crashes cannot occupy every slot.
             # Pending rows return on keyset wrap; successful slices save progress.
             window = windows.pop(0) if windows else None

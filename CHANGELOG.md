@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.14 - Unreleased
+
+- Fix a 0.4.13 regression in every engine (JS, Ruby, Python, PHP): a
+  host-clock attempt could be skipped by reconciliation indefinitely. When one
+  of the two scan-window slots was taken, the next selection moved its cursor
+  past the whole batch, gave the free slot to the batch's wallet-timed
+  attempts, and dropped its host-clock attempts. Those were read again only on
+  the next lap, which could drop them the same way. With more than one batch
+  of mixed pending attempts, a paid host-clock attempt could stay pending
+  indefinitely. Selection now moves the cursor only past attempts it has
+  queued, and an attempt with no free slot is read again by the next selection.
+- Let a wallet that answers only one history page per 9 s slice make progress,
+  in every engine. A resumed slice first re-reads its last page as an overlap.
+  When that was the only page answered before the deadline, the next slice
+  re-read the same overlap again, forever. An overlap answered alone is now
+  spent, and the next slice reads the unseen page first. Slices that answer
+  more pages behave as before.
+- Two new `spec/test-vectors/reconcile-progress.json` vectors pin both fixes
+  for every engine: mixed wallet- and host-timed batches, and one answered
+  page per slice (run with a wallet-timed and a host-timed attempt).
+- BTCPay Server plugin source 0.4.13 fixes a 0.4.12 regression in its scan
+  memo. An unbounded walk resumed after a failed page, and ending without
+  finding a host-clock invoice, counted as a complete refresh. Past expiry plus
+  grace, the memo then stopped watching that invoice and invoice recovery could
+  close it as unpaid, even if it was paid while the walk was down. Such a hash
+  now stays watched, counts as unreached, and gets a fresh unbounded walk on
+  the next refresh. See `packages/dotnet/CHANGELOG.md`.
+
 ## 0.4.13 - 2026-10-01
 
 - Fix a reconciliation livelock on slow wallets, in every engine (JS, Ruby,

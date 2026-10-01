@@ -78,6 +78,15 @@ export async function scanPaymentSlice(input: {
   // ignoring offset must not consume the same entire budget on every pass.
   let verifyingAnchor = resumed && maxPages > 1 && window.anchor_offset !== undefined;
   let previous = window.anchor;
+  // The last answered page was the overlap re-read. A slice that ends here
+  // spends the overlap, so the next slice reads the unseen page first: a
+  // wallet answering one page per slice still advances. The fingerprint stays,
+  // to catch a wallet that ignores offset.
+  let overlapOnly = false;
+  const continued = (): PaymentScanSlice => {
+    if (overlapOnly) delete window.anchor_offset;
+    return { checks: [...checks.values()], outcome: "continued", window };
+  };
   for (let pageNumber = 0; pageNumber < maxPages; pageNumber += 1) {
     if (input.signal?.aborted || (input.deadline !== undefined && Date.now() >= input.deadline))
       break;
@@ -108,8 +117,9 @@ export async function scanPaymentSlice(input: {
     if (page === DEADLINE_CUT) {
       if (pageNumber === 0)
         throw new Error("Reconcile scan deadline passed before the wallet answered a page.");
-      return { checks: [...checks.values()], outcome: "continued", window };
+      return continued();
     }
+    overlapOnly = false;
     const physicalRows = page.transactions.length + (page.skippedRows ?? 0);
     if (physicalRows > 0 && page.transactions.length === 0)
       throw new TypeError("list_transactions returned no usable rows");
@@ -141,7 +151,10 @@ export async function scanPaymentSlice(input: {
     }
     if (verifyingAnchor) {
       verifyingAnchor = false;
-      if (fingerprint === window.anchor) continue;
+      if (fingerprint === window.anchor) {
+        overlapOnly = true;
+        continue;
+      }
       window.absence_safe = false;
       // Continue from the overlap when insertions/deletions shifted the page.
     } else if (physicalRows > 0 && fingerprint === previous) {
@@ -212,7 +225,7 @@ export async function scanPaymentSlice(input: {
       return { checks: [...checks.values()], outcome: "complete", window };
     }
   }
-  return { checks: [...checks.values()], outcome: "continued", window };
+  return continued();
 }
 
 const DEADLINE_CUT = Symbol("deadline cut");

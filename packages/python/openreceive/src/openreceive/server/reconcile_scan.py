@@ -48,6 +48,17 @@ def scan_slice(
     anchor = window.get("anchor_offset") if resumed else None
     previous = window.get("fingerprint")
     replaying_anchor = anchor is not None
+    # The last answered page was the overlap re-read. A slice that ends here
+    # spends the overlap, so the next slice reads the unseen page first: a
+    # wallet answering one page per slice still advances. The fingerprint
+    # stays, to catch a wallet that ignores offset.
+    overlap_only = False
+
+    def continued() -> tuple[list[dict[str, Any]], bool, bool]:
+        if overlap_only:
+            window["anchor_offset"] = None
+        return list(results.values()), False, False
+
     while used < max_pages and time.monotonic() < deadline:
         offset = int(anchor) if replaying_anchor and anchor is not None else int(window["offset"])
         request = {"type": "incoming", "limit": 20, "offset": offset, "from": window["from"]}
@@ -69,11 +80,12 @@ def scan_slice(
             # pass and a wallet that never answers stays visible in the logs.
             if time.monotonic() < deadline or used == 0:
                 raise
-            return list(results.values()), False, False
+            return continued()
         page = normalize_list_transactions_response(reply)
         used += 1
         if time.monotonic() >= deadline:
-            return list(results.values()), False, False
+            return continued()
+        overlap_only = False
         rows = page["transactions"]
         physical = len(rows) + page.get("skipped_rows", 0)
         fingerprint = hashlib.sha256(
@@ -103,6 +115,7 @@ def scan_slice(
             if physical:
                 window["anchor_offset"] = offset
                 window["fingerprint"] = fingerprint
+                overlap_only = True
                 continue
         if physical == 0:
             if window["view"] == "default":
@@ -138,4 +151,4 @@ def scan_slice(
             for h in expected
         ):
             return list(results.values()), True, False
-    return list(results.values()), False, False
+    return continued()

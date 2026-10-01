@@ -692,11 +692,127 @@ public sealed class ScanMemoTests
         await memo.RefreshAsync(force: true, CancellationToken.None); // resumes at offset 20 and finishes
 
         // Offsets over a history that can change between refreshes may skip a row, so the hash
-        // stays watched (an uninterrupted walk would have dropped it), and its one unbounded walk is spent.
+        // stays watched (an uninterrupted walk would have dropped it) and unreached, and its
+        // unbounded walk is not spent.
         Assert.True(memo.IsWatched(Hash(1)));
+        Assert.False(memo.Complete);
+        Assert.Equal(1, memo.Unreached);
+
+        // The next refresh walks from offset 0 again; uninterrupted, that walk proves it absent.
         wallet.Requests.Clear();
         await memo.RefreshAsync(force: true, CancellationToken.None);
-        Assert.DoesNotContain(wallet.Requests, r => r.From is null);
+        Assert.Contains(wallet.Requests, r => r.From is null && r.Offset == 0);
+        Assert.False(memo.IsWatched(Hash(1)));
+        Assert.True(memo.Complete);
+    }
+
+    /// <summary>
+    /// A host-clock invoice (its stored row has no wallet created_at; the wallet has it at
+    /// T0 - 120, expiring at T0 + 60) behind 60 unrelated payments, with a second live invoice
+    /// holding the window at T0 - 60, after it. Its unbounded walk finishes the settled view
+    /// while it is still pending; the inclusive view fails at offset 40, after 0 and 20
+    /// answered. While the relay is down the invoice is paid and the 60 rows ahead of it leave
+    /// the wallet's history, so the walk resumed at offset 20 runs past it.
+    /// </summary>
+    private static async Task<(ScanMemo Memo, ScriptedWallet Wallet)> HostClockInvoicePaidWhileItsWalkWasDown(Func<long> clock)
+    {
+        var (memo, wallet) = NewMemo(clock);
+        var invoice = Pending(Hash(1), createdAt: T0 - 120) with { ExpiresAt = T0 + 60 };
+        Mint(memo, invoice with { CreatedAt = null });
+        Mint(memo, Pending(Hash(2)));
+        wallet.Rows.Add(Pending(Hash(2)));
+        for (var n = 0; n < 60; n++) wallet.Rows.Add(Settled(Hash(1_000 + n), settledAt: T0 - 80, createdAt: T0 - 90));
+        wallet.Rows.Add(invoice);
+        var failed = false;
+        wallet.FailWhen = request => request.From is null && request.Unpaid is true && request.Offset == 40 && !failed && (failed = true);
+
+        await Assert.ThrowsAsync<NwcTransportException>(() => memo.RefreshAsync(force: true, CancellationToken.None));
+        Assert.Contains(wallet.Requests, r => r.From is null && r.Unpaid is null && r.Offset == 60); // the settled view reached its end
+
+        wallet.Rows.Clear();
+        wallet.Rows.Add(Pending(Hash(2)));
+        wallet.Rows.Add(Settled(Hash(1), settledAt: T0 + 30, createdAt: T0 - 120) with { ExpiresAt = T0 + 60 });
+        return (memo, wallet);
+    }
+
+    [Fact]
+    public async Task A_host_clock_invoice_a_resumed_walk_missed_is_not_closed_at_expiry_plus_grace()
+    {
+        var now = T0;
+        var (memo, wallet) = await HostClockInvoicePaidWhileItsWalkWasDown(() => now);
+
+        now = T0 + 1_000; // past its expiry plus grace
+        await memo.RefreshAsync(force: true, CancellationToken.None); // resumes at offset 20, past the invoice
+
+        // The resumed walk proved nothing, so the refresh is incomplete: the invoice stays
+        // watched and unreached instead of closing on the clock.
+        Assert.True(memo.IsWatched(Hash(1)));
+        Assert.False(memo.Complete);
+        Assert.Equal(1, memo.Unreached);
+        Assert.Empty(memo.DrainNewlySettled());
+
+        // The next refresh walks for it again from offset 0 and finds the payment.
+        now = T0 + 1_003;
+        wallet.Requests.Clear();
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.Contains(wallet.Requests, r => r.From is null && r.Offset == 0);
+        Assert.True(Settlement.IsSettled(memo.Lookup(Hash(1))!));
+        Assert.Equal(Hash(1), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
+        Assert.False(memo.IsWatched(Hash(1)));
+        Assert.True(memo.Complete);
+
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.Empty(memo.DrainNewlySettled()); // announced exactly once
+    }
+
+    [Fact]
+    public async Task A_host_clock_invoice_a_resumed_walk_missed_is_walked_for_again()
+    {
+        var now = T0;
+        var (memo, _) = await HostClockInvoicePaidWhileItsWalkWasDown(() => now);
+
+        now = T0 + 100; // before its expiry plus grace: watched either way
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.True(memo.IsWatched(Hash(1)));
+
+        // The resumed walk did not spend its unbounded walk: the next refresh starts a fresh one.
+        now = T0 + 103;
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.True(Settlement.IsSettled(memo.Lookup(Hash(1))!));
+        Assert.Equal(Hash(1), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
+    }
+
+    [Fact]
+    public async Task A_host_clock_invoice_waiting_behind_a_resumed_walk_is_not_closed_before_its_own()
+    {
+        var now = T0;
+        var (memo, wallet) = NewMemo(() => now);
+        Mint(memo, Pending(Hash(2))); // holds the window at T0 - 60
+        wallet.Rows.Add(Pending(Hash(2)));
+        var old = T0 - 3 * 86_400;
+        for (var n = 0; n < 60; n++) wallet.Rows.Add(Settled(Hash(1_000 + n), settledAt: old + 30, createdAt: old));
+        wallet.Rows.Add(Settled(Hash(1), settledAt: old + 30, createdAt: old));
+        memo.Watch(Hash(1)); // unknown age, and no lookup_invoice
+        var failed = false;
+        wallet.FailWhen = request => request.From is null && request.Offset == 40 && !failed && (failed = true);
+        await Assert.ThrowsAsync<NwcTransportException>(() => memo.RefreshAsync(force: true, CancellationToken.None));
+
+        // A host-clock invoice restored while that walk is interrupted, paid, and newer than
+        // the offset the walk resumes at: the resumed walk does not pass it.
+        Mint(memo, Pending(Hash(3), createdAt: T0 - 120) with { CreatedAt = null, ExpiresAt = T0 + 60 });
+        wallet.Rows.Insert(1, Settled(Hash(3), settledAt: T0 + 30, createdAt: T0 - 120) with { ExpiresAt = T0 + 60 });
+
+        now = T0 + 1_000; // past its expiry plus grace
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.Equal(Hash(1), Assert.Single(memo.DrainNewlySettled()).PaymentHash); // the resumed walk's own hash
+        Assert.True(memo.IsWatched(Hash(3))); // not walked for yet: unreached, not closed
+        Assert.False(memo.Complete);
+        Assert.Equal(1, memo.Unreached);
+
+        now = T0 + 1_003;
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.Equal(Hash(3), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
+        Assert.True(memo.Complete);
     }
 
     // ---- Failures ----

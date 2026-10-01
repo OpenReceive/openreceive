@@ -82,15 +82,29 @@ module OpenReceive
           candidates = OpenReceivePayment.reconcilable_attempts
         end
         unless candidates.empty?
-          last = candidates.last
-          scheduler["cursor"] = candidates.length < Server::RECONCILE_BATCH_SIZE ? nil : last.slice("created_at", "payment_hash")
           queued = windows.flat_map { |w| w.fetch("attempts").map { |a| a.fetch("payment_hash") } }
-          cohort = candidates.reject { |a| queued.include?(a.fetch("payment_hash")) }
           # A host-clock attempt's window spans the whole wallet history. It
           # gets its own window, so it never drags wallet-timed attempts into
-          # that walk; one the cap leaves out returns on cursor wrap.
-          cohort.partition { |a| a["created_at_source"] == "wallet" }.each do |group|
-            windows << ReconcileScan.new_window(group, observed_at, overlap_seconds) unless group.empty? || windows.length >= 2
+          # that walk. Candidates are taken in keyset order, and the cursor
+          # moves only past those already queued or admitted: one whose clock
+          # source has no free slot stops the selection and is read again next
+          # time, never skipped.
+          cohorts = {}
+          taken = 0
+          candidates.each do |attempt|
+            unless queued.include?(attempt.fetch("payment_hash"))
+              wallet = attempt["created_at_source"] == "wallet"
+              break if !cohorts.key?(wallet) && windows.length + cohorts.length >= 2
+
+              (cohorts[wallet] ||= []) << attempt
+            end
+            taken += 1
+          end
+          # A short batch taken whole already reached the ledger's tail: wrap now.
+          tail = taken == candidates.length && candidates.length < Server::RECONCILE_BATCH_SIZE
+          scheduler["cursor"] = tail ? nil : candidates[taken - 1].slice("created_at", "payment_hash")
+          [true, false].each do |wallet|
+            windows << ReconcileScan.new_window(cohorts[wallet], observed_at, overlap_seconds) if cohorts.key?(wallet)
           end
         end
       end

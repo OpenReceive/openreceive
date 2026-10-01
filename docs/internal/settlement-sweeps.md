@@ -52,7 +52,12 @@ Rules for this progress:
 - Creation times that come from the wallet allow bounded windows and splits. Legacy rows and
   rows timed by the host clock use the wide fallback: the whole wallet history, from 0. They
   get their own cohort, so that walk never widens the window of wallet-timed attempts.
+- The cursor moves only past attempts already queued or admitted to a cohort. An attempt whose
+  clock source has no free cohort slot is read again by the next selection, never skipped.
 - Resumed offsets never prove that a payment is absent, because wallet history is mutable.
+- A resumed slice re-reads its last page first, as an overlap. When that overlap is the only
+  page the slice answers, it is spent, and the next slice reads the unseen page first. A
+  wallet that answers one page per slice still advances.
 - Only a fresh, complete scan that covers the attempt's time range can close an attempt by the
   clock.
 - Positive finality can be committed before a later page fails. Fulfillment still uses the

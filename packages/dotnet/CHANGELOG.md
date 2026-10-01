@@ -1,5 +1,24 @@
 # BTCPay Server plugin changelog
 
+## 0.4.13 — 2026-10-01
+
+- **A resumed walk no longer lets expiry cleanup drop an invoice it never
+  covered.** Since 0.4.12 an unbounded walk that fails partway resumes at the
+  last page that answered, and a resumed walk never proves a hash absent. But
+  when it ended without finding a hash, the refresh still counted as complete.
+  Its offsets can skip a row when the wallet's history changes between
+  refreshes, so it could run past a host-clock invoice that was paid in the
+  meantime. Once that invoice was past its expiry plus 900 seconds, the memo
+  stopped watching it and reported a complete walk, which lets the plugin's
+  invoice recovery close it as unpaid. Before that point it stayed watched, but
+  its one unbounded walk was spent, so only `lookup_invoice` or another
+  invoice's walk window could still find it. Now such a hash stays watched and
+  counts as unreached, so the refresh is incomplete and nothing closes it, and
+  the next refresh gives it a fresh unbounded walk from offset 0. The same holds
+  after a walk cut short by the page cap, and for a hash of unknown age first
+  watched while another walk was being resumed: it waits for its own walk
+  instead of being closed.
+
 ## 0.4.12 — 2026-10-01
 
 - **A long or failing wallet walk can no longer starve settlement.** The same

@@ -104,18 +104,30 @@ final class Reconciler
                     $candidates = $this->repository->reconcilableAttempts();
                 }
                 if ($candidates !== []) {
-                    $last = $candidates[count($candidates) - 1];
-                    $scheduler['cursor'] = count($candidates) < SqlPaymentRepository::RECONCILE_BATCH_SIZE
-                        ? null : ['created_at' => $last['created_at'], 'payment_hash' => $last['payment_hash']];
                     $queued = [];
                     foreach ($windows as $queuedWindow) foreach ($queuedWindow['attempts'] as $attempt) $queued[$attempt['payment_hash']] = true;
-                    $cohort = array_values(array_filter($candidates, static fn (array $attempt): bool => !isset($queued[$attempt['payment_hash']])));
                     // A host-clock attempt's window spans the whole wallet history. It
                     // gets its own window, so it never drags wallet-timed attempts into
-                    // that walk; one the cap leaves out returns on cursor wrap.
-                    foreach ([true, false] as $walletTimed) {
-                        $group = array_values(array_filter($cohort, static fn (array $attempt): bool => (($attempt['created_at_source'] ?? 'host') === 'wallet') === $walletTimed));
-                        if ($group !== [] && count($windows) < 2) $windows[] = ReconcileScan::newWindow($group, $observedAt, $overlapSeconds);
+                    // that walk. Candidates are taken in keyset order, and the cursor
+                    // moves only past those already queued or admitted: one whose clock
+                    // source has no free slot stops the selection and is read again next
+                    // time, never skipped.
+                    $cohorts = [];
+                    $taken = 0;
+                    foreach ($candidates as $attempt) {
+                        if (!isset($queued[$attempt['payment_hash']])) {
+                            $source = ($attempt['created_at_source'] ?? 'host') === 'wallet' ? 'wallet' : 'host';
+                            if (!isset($cohorts[$source]) && count($windows) + count($cohorts) >= 2) break;
+                            $cohorts[$source][] = $attempt;
+                        }
+                        $taken++;
+                    }
+                    $last = $candidates[$taken - 1];
+                    // A short batch taken whole already reached the ledger's tail: wrap now.
+                    $scheduler['cursor'] = $taken === count($candidates) && count($candidates) < SqlPaymentRepository::RECONCILE_BATCH_SIZE
+                        ? null : ['created_at' => $last['created_at'], 'payment_hash' => $last['payment_hash']];
+                    foreach (['wallet', 'host'] as $source) {
+                        if (isset($cohorts[$source])) $windows[] = ReconcileScan::newWindow($cohorts[$source], $observedAt, $overlapSeconds);
                     }
                 }
             }

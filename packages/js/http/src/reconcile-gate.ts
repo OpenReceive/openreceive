@@ -1,4 +1,9 @@
-import { createPaymentScanWindow, unixSeconds, type PaymentScanWindow } from "@openreceive/core";
+import {
+  createPaymentScanWindow,
+  type PaymentScanWindow,
+  type ScanAttempt,
+  unixSeconds,
+} from "@openreceive/core";
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
 import { type Host, warnFailure } from "./host-payments.ts";
 import type { ReconcilableAttempt, ReconcileScheduler } from "./payment-repository.ts";
@@ -155,29 +160,42 @@ export async function maybeReconcilePayments(
       let candidates = await input.host.payments.listReconcilableAttempts(scheduler.cursor);
       if (candidates.length === 0 && scheduler.cursor !== null)
         candidates = await input.host.payments.listReconcilableAttempts(null);
-      const last = candidates.at(-1);
+      // A host-clock attempt's window spans the whole wallet history. It gets
+      // its own window, so it never drags wallet-timed attempts into that walk.
+      // Candidates are taken in keyset order, and the cursor moves only past
+      // those already queued or admitted: one whose clock source has no free
+      // slot stops the selection and is read again next time, never skipped.
+      const cohorts = new Map<boolean, ScanAttempt[]>();
+      let taken = 0;
+      for (const attempt of candidates) {
+        if (!queued.has(attempt.paymentHash)) {
+          const wallet = attempt.createdAtSource === "wallet";
+          let cohort = cohorts.get(wallet);
+          if (cohort === undefined) {
+            if (scheduler.windows.length + cohorts.size >= 2) break;
+            cohort = [];
+            cohorts.set(wallet, cohort);
+          }
+          cohort.push({
+            payment_hash: attempt.paymentHash,
+            created_at: attempt.createdAt,
+            expires_at: attempt.expiresAt,
+            created_at_source: attempt.createdAtSource ?? "host",
+          });
+        }
+        taken += 1;
+      }
+      const last = candidates[taken - 1];
+      // A short batch taken whole already reached the ledger's tail. Wrap now:
+      // waiting for an empty next query lets continuous arrivals starve old retries.
       scheduler.cursor =
-        last === undefined || candidates.length < OPENRECEIVE_RECONCILE_BATCH_SIZE
+        last === undefined ||
+        (taken === candidates.length && candidates.length < OPENRECEIVE_RECONCILE_BATCH_SIZE)
           ? null
           : { created_at: last.createdAt, payment_hash: last.paymentHash };
-      // A short batch already reached the ledger's tail. Wrap now: waiting
-      // for an empty next query lets continuous arrivals starve old retries.
-      const fresh = candidates
-        .filter((attempt) => !queued.has(attempt.paymentHash))
-        .map((attempt) => ({
-          payment_hash: attempt.paymentHash,
-          created_at: attempt.createdAt,
-          expires_at: attempt.expiresAt,
-          created_at_source: attempt.createdAtSource ?? "host",
-        }));
-      // A host-clock attempt's window spans the whole wallet history. It gets
-      // its own window, so it never drags wallet-timed attempts into that
-      // walk; one the cap leaves out returns on cursor wrap.
       for (const wallet of [true, false]) {
-        const cohort = fresh.filter(
-          (attempt) => (attempt.created_at_source === "wallet") === wallet,
-        );
-        if (cohort.length > 0 && scheduler.windows.length < 2)
+        const cohort = cohorts.get(wallet);
+        if (cohort !== undefined)
           scheduler.windows.push(createPaymentScanWindow(cohort, now, input.overlapSeconds));
       }
     }

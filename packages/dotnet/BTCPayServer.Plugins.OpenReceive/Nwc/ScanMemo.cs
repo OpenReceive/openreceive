@@ -56,6 +56,8 @@ public delegate Task<LookupResult> LookupInvoiceFallback(string paymentHash, Can
 /// creation time (the host clock is not a window bound), is of unknown age: it never widens
 /// the walk, and is looked up or given one unbounded walk instead. That walk resumes where a
 /// failed page left it rather than starting over, so a long history cannot keep it from finishing.
+/// A resumed walk proves nothing absent: a hash it did not find stays watched and unreached, and
+/// the next refresh walks for it again from the start.
 /// </summary>
 public sealed class ScanMemo
 {
@@ -76,7 +78,10 @@ public sealed class ScanMemo
     private sealed class WatchEntry
     {
         public long WatchedAt;
-        /// <summary>The one unbounded walk an unknown hash gets when lookup_invoice is unavailable.</summary>
+        /// <summary>
+        /// The one unbounded walk an unknown hash gets when lookup_invoice is unavailable: spent
+        /// when a walk finds the hash or runs uninterrupted to the end of the history.
+        /// </summary>
         public bool DeepWalked;
     }
 
@@ -443,17 +448,27 @@ public sealed class ScanMemo
                 deepTruncated |= walk.Truncated;
                 targets.ExceptWith(cursor.Seen);
             }
+            // Proven absent from the whole history only by one uninterrupted walk. A walk resumed
+            // or cut short proves nothing about a hash it did not find: that hash stays watched
+            // and unreached (so no expiry closes it), and keeps its walk for a fresh one next refresh.
+            var proven = !deepTruncated && !cursor.Resumed;
             // Spent only now: a walk the relay failed threw above, and the next refresh resumes it.
             lock (_gate)
             {
-                foreach (var hash in cursor.Hashes) if (_watched.TryGetValue(hash, out var watch)) watch.DeepWalked = true;
+                foreach (var hash in cursor.Hashes)
+                {
+                    if (!proven && targets.Contains(hash)) continue;
+                    if (_watched.TryGetValue(hash, out var watch)) watch.DeepWalked = true;
+                }
                 _deep = null;
             }
             missing.ExceptWith(cursor.Hashes);
-            // Proven absent from the whole history only by one uninterrupted walk.
-            if (!deepTruncated && !cursor.Resumed) absent.UnionWith(targets);
+            if (proven) absent.UnionWith(targets);
             else missing.UnionWith(targets);
-            truncated |= deepTruncated;
+            truncated |= deepTruncated || (!proven && targets.Count > 0);
+            // A hash that joined after a carried-over cursor started was not walked for at all:
+            // it waits for its own walk next refresh, unreached until then.
+            truncated |= deep.Any(hash => !cursor.Hashes.Contains(hash));
         }
 
         // What is still missing was either proven absent from the window by a complete walk (a
