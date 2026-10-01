@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0e8906e6082e4373c0c28df7067375b0",
+    "content-hash": "41baf69c0e657da6438498044889bb9a",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -1636,16 +1636,16 @@
         },
         {
             "name": "league/commonmark",
-            "version": "2.10.0",
+            "version": "2.10.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thephpleague/commonmark.git",
-                "reference": "d2d1aa8b35e072966c89bc0c66cf926e56767dc4"
+                "reference": "6efbd9c472b91db0a3350fcd601c8332c2382e1f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thephpleague/commonmark/zipball/d2d1aa8b35e072966c89bc0c66cf926e56767dc4",
-                "reference": "d2d1aa8b35e072966c89bc0c66cf926e56767dc4",
+                "url": "https://api.github.com/repos/thephpleague/commonmark/zipball/6efbd9c472b91db0a3350fcd601c8332c2382e1f",
+                "reference": "6efbd9c472b91db0a3350fcd601c8332c2382e1f",
                 "shasum": ""
             },
             "require": {
@@ -1739,7 +1739,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-11T16:06:25+00:00"
+            "time": "2026-09-21T13:07:34+00:00"
         },
         {
             "name": "league/config",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/laravel",
-            "version": "0.4.3",
+            "version": "0.4.12",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/laravel",
-                "reference": "a0bc00618f89101f451622df8b29b5abbbc94800"
+                "reference": "e14c363327b9a5d7eeb870f46c0b8783659e44eb"
             },
             "require": {
                 "illuminate/console": "^11.0 || ^12.0",
@@ -2740,7 +2740,7 @@
                 "illuminate/routing": "^11.0 || ^12.0",
                 "illuminate/support": "^11.0 || ^12.0",
                 "nyholm/psr7": "^1.8",
-                "openreceive/openreceive": "~0.4.3",
+                "openreceive/openreceive": "~0.4.12",
                 "php": "^8.2",
                 "symfony/psr-http-message-bridge": "^7.0"
             },
@@ -2778,7 +2778,7 @@
             "license": [
                 "MIT"
             ],
-            "description": "OpenReceive for Laravel: the service provider, routes, install command and artisan workers over the openreceive/openreceive engine — receive-only Lightning (NWC) checkout inside your own Laravel application and database.",
+            "description": "Accept Bitcoin Lightning payments in Laravel with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
             "homepage": "https://openreceive.org",
             "keywords": [
                 "bitcoin",
@@ -2800,11 +2800,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.3",
+            "version": "0.4.12",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/openreceive",
-                "reference": "af55a649253da9995d99500c6f8319e078634789"
+                "reference": "7a108c4d7a86f3e29d2e57efdd9aebedcd518a22"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20",
@@ -2854,7 +2854,7 @@
             "license": [
                 "MIT"
             ],
-            "description": "OpenReceive engine for PHP: receive-only Lightning (NWC) checkout, exact money, settlement reconciliation, swaps and a PSR-15 mount over the host's own database.",
+            "description": "Accept Bitcoin Lightning payments in PHP with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
             "homepage": "https://openreceive.org",
             "keywords": [
                 "bitcoin",

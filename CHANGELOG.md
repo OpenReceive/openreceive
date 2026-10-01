@@ -23,7 +23,16 @@
   in every engine). This cuts settlement-scan volume by about a third, at the
   cost of at most one extra second before a payment is seen.
 - Two new `spec/test-vectors/reconcile-progress.json` vectors pin both fixes
-  for every engine.
+  for every engine. PHP's `Reconciler` takes an optional scan timeout in
+  seconds, mirroring JS `scanTimeoutMs`, so tests can drive a short deadline.
+- Security updates in the lockfiles: next 16.3.8, fastify 5.12.5, devalue
+  5.9.4, brace-expansion 5.0.12, piscina 5.3.2 and fast-uri 3.1.8 (npm);
+  urllib3 2.8.0 (Django demo); league/commonmark 2.10.3 (`openreceive/laravel`
+  and the Laravel demo). The Laravel demo's path packages had stayed pinned at
+  0.4.3, so no `composer update` could resolve there; `release:prepare` now
+  moves them with every release. rubyzip stays at 2.4.1: rbsecp256k1 6.0.0, the
+  latest release, pins `~> 2.3`, and it runs rubyzip only at gem install, on a
+  SHA-256-verified archive (already on the Rails demo's bundler-audit ignore list).
 - BTCPay Server plugin source 0.4.12 closes the same exposure in its scan
   memo. A failed wallet walk resumes instead of restarting at offset 0. A
   host-clock invoice no longer forces a full-history walk on every refresh. A

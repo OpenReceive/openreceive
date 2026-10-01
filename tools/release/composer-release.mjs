@@ -190,6 +190,42 @@ export function updatePhpVersions(root, targetVersion) {
       }
     }
   }
+  // The Laravel demo installs both packages from their monorepo paths. Their
+  // declared versions move with the release: left behind, the laravel package
+  // requires an engine version no path declares, and no `composer update` in
+  // the demo resolves, not even a security patch to an unrelated package.
+  const demoDir = "examples/buttons/server/laravel";
+  const demoFile = path.join(root, demoDir, "composer.json");
+  if (existsSync(demoFile)) {
+    const source = readFileSync(demoFile, "utf8");
+    const manifest = JSON.parse(source);
+    manifest.require["openreceive/laravel"] = composerConstraint(targetVersion);
+    for (const repo of manifest.repositories ?? []) {
+      for (const name of Object.keys(repo?.options?.versions ?? {})) {
+        repo.options.versions[name] = targetVersion;
+      }
+    }
+    const updated = `${JSON.stringify(manifest, null, 2)}\n`;
+    if (updated !== source) {
+      writeFileSync(demoFile, updated);
+      execFileSync("npx", ["biome", "format", "--write", demoFile], { cwd: root, stdio: "ignore" });
+      changed.push(`${demoDir}/composer.json`);
+      if (existsSync(path.join(root, demoDir, "composer.lock"))) {
+        execFileSync(
+          "composer",
+          [
+            "update",
+            "openreceive/openreceive",
+            "openreceive/laravel",
+            "--no-install",
+            "--no-interaction",
+          ],
+          { cwd: path.join(root, demoDir), stdio: "inherit" },
+        );
+        changed.push(`${demoDir}/composer.lock`);
+      }
+    }
+  }
   return changed;
 }
 
