@@ -37,6 +37,12 @@ public sealed record TestkitWalletOptions
     /// <summary>Seconds added to the requested make_invoice expiry, to provoke a client's expiry check.</summary>
     public int? ExpirySecondsDelta { get; init; }
 
+    /// <summary>
+    /// Leave created_at out of the make_invoice reply (list_transactions rows keep it), so the
+    /// client knows the invoice's creation time only from its own clock.
+    /// </summary>
+    public bool OmitMintCreatedAt { get; init; }
+
     /// <summary>Every method a connection may call: the served ones plus the never-executed grants.</summary>
     public IReadOnlyList<string> GrantedMethods => Methods.Concat(ExtraGrantedMethods).Distinct().ToList();
 }

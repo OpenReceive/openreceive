@@ -24,6 +24,11 @@
   cost of at most one extra second before a payment is seen.
 - Two new `spec/test-vectors/reconcile-progress.json` vectors pin both fixes
   for every engine.
+- BTCPay Server plugin source 0.4.12 closes the same exposure in its scan
+  memo. A failed wallet walk resumes instead of restarting at offset 0. A
+  host-clock invoice no longer forces a full-history walk on every refresh. A
+  failed walk counts toward the cadence. The fastest cadence is 3 s. See
+  `packages/dotnet/CHANGELOG.md`.
 
 ## 0.4.12 - 2026-10-01
 

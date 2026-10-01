@@ -137,11 +137,11 @@ public sealed class ScanMemoTests
         await memo.RefreshAsync(force: false, CancellationToken.None);
         Assert.Equal(2, wallet.Calls);
 
-        now = T0 + 1;
+        now = T0 + 2;
         await memo.RefreshAsync(force: false, CancellationToken.None);
         Assert.Equal(2, wallet.Calls);
 
-        now = T0 + 2;
+        now = T0 + 3;
         await memo.RefreshAsync(force: false, CancellationToken.None);
         Assert.Equal(4, wallet.Calls);
     }
@@ -238,7 +238,7 @@ public sealed class ScanMemoTests
 
         await memo.RefreshAsync(force: true, CancellationToken.None);
 
-        Assert.Equal(TimeSpan.FromSeconds(2), memo.CurrentInterval);
+        Assert.Equal(TimeSpan.FromSeconds(3), memo.CurrentInterval);
 
         // A pending row older than the freshness window (a stale, unpaid invoice) does not count.
         var (cold, coldWallet) = NewMemo(() => T0);
@@ -257,7 +257,7 @@ public sealed class ScanMemoTests
         Assert.Equal(TimeSpan.FromSeconds(12), memo.CurrentInterval); // nothing minted yet
 
         memo.NoteInvoiceMinted(now);
-        Assert.Equal(TimeSpan.FromSeconds(2), memo.CurrentInterval);
+        Assert.Equal(TimeSpan.FromSeconds(3), memo.CurrentInterval);
 
         now = T0 + 3 * 60;
         Assert.Equal(TimeSpan.FromSeconds(6), memo.CurrentInterval);
@@ -269,7 +269,7 @@ public sealed class ScanMemoTests
         memo.NoteInvoiceMinted(T0 - 3600);
         Assert.Equal(TimeSpan.FromSeconds(12), memo.CurrentInterval);
         memo.NoteInvoiceMinted(now);
-        Assert.Equal(TimeSpan.FromSeconds(2), memo.CurrentInterval);
+        Assert.Equal(TimeSpan.FromSeconds(3), memo.CurrentInterval);
     }
 
     // ---- Rows: settled facts, announcements, merging ----
@@ -586,6 +586,117 @@ public sealed class ScanMemoTests
 
         Assert.True(Settlement.IsSettled(memo.Lookup(Hash(1))!)); // the failed walk did not spend the hash's one unbounded walk
         Assert.Equal(Hash(1), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
+    }
+
+    [Fact]
+    public async Task A_failed_walk_spends_the_cadence_so_callers_do_not_retry_at_once()
+    {
+        var now = T0;
+        var (memo, wallet) = NewMemo(() => now);
+        Mint(memo, Pending(Hash(1)));
+        memo.NoteInvoiceMinted(T0);
+        wallet.Rows.Add(Pending(Hash(1)));
+
+        wallet.FailWhen = _ => true;
+        await Assert.ThrowsAsync<NwcTransportException>(() => memo.RefreshAsync(force: false, CancellationToken.None));
+        Assert.Equal(1, wallet.Calls);
+
+        // Every caller inside the interval shares the failure instead of asking a broken wallet again.
+        Assert.False(await memo.RefreshAsync(force: false, CancellationToken.None));
+        Assert.Equal(1, wallet.Calls);
+        Assert.Null(memo.RefreshedAt);
+
+        wallet.FailWhen = null;
+        now = T0 + 3;
+        Assert.True(await memo.RefreshAsync(force: false, CancellationToken.None));
+        Assert.Equal(3, wallet.Calls); // the settled view, then the unpaid view that finds the row
+        Assert.Equal(T0 + 3, memo.RefreshedAt);
+    }
+
+    // ---- Unknown age: host-clock rows and interrupted unbounded walks ----
+
+    [Fact]
+    public async Task A_host_clock_row_never_drags_the_walk_to_the_start_of_history()
+    {
+        var (memo, wallet) = NewMemo(() => T0);
+        Mint(memo, Pending(Hash(1)));
+        Mint(memo, Pending(Hash(2)) with { CreatedAt = null }); // the wallet gave no created_at: only the host clock knew
+        wallet.Rows.Add(Pending(Hash(1)));
+        wallet.Rows.Add(Pending(Hash(2), createdAt: T0 - 120)); // where the wallet really has it
+
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+
+        // The window comes from the wallet-timed row (settled view, unpaid view to its empty
+        // end); the host-clock row, not in it, gets one unbounded walk.
+        Assert.Equal(new long?[] { T0 - 60, T0 - 60, T0 - 60, null, null }, wallet.Requests.Select(r => r.From));
+        Assert.Equal(T0 - 120, memo.Lookup(Hash(2))!.CreatedAt); // the wallet's own time places it from now on
+
+        wallet.Requests.Clear();
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.Equal(new long?[] { T0 - 180, T0 - 180 }, wallet.Requests.Select(r => r.From));
+    }
+
+    [Fact]
+    public async Task A_host_clock_row_is_looked_up_when_granted()
+    {
+        var (memo, wallet) = NewMemo(() => T0, withLookup: true);
+        Mint(memo, Pending(Hash(2)) with { CreatedAt = null });
+        wallet.LookupScript = hash => new LookupResult(LookupOutcome.Found, Pending(hash, createdAt: T0 - 120));
+
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+
+        Assert.Equal(new[] { Hash(2) }, wallet.Lookups);
+        Assert.Equal(new long?[] { T0 - 180, T0 - 180 }, wallet.Requests.Select(r => r.From));
+        Assert.Equal(T0 - 120, memo.Lookup(Hash(2))!.CreatedAt);
+    }
+
+    [Fact]
+    public async Task An_unbounded_walk_cut_short_on_every_refresh_still_finishes()
+    {
+        // A long history the wallet cuts short on every refresh (a page limit, a relay that
+        // drops). Restarting at offset 0 each time, the walk would never reach the payment.
+        var (memo, wallet) = NewMemo(() => T0);
+        var old = T0 - 3 * 86_400; // far outside the fallback window
+        for (var n = 0; n < 199; n++) wallet.Rows.Add(Settled(Hash(1_000 + n), settledAt: old + 30, createdAt: old));
+        wallet.Rows.Add(Settled(Hash(1), settledAt: old + 30, createdAt: old)); // the last of 200 rows
+        memo.Watch(Hash(1)); // unknown age, and no lookup_invoice
+        var answered = 0;
+        wallet.FailWhen = request => request.From is null && ++answered > 3; // three history pages per refresh
+
+        var refreshes = 0;
+        while (memo.IsWatched(Hash(1)) && refreshes < 10)
+        {
+            refreshes += 1;
+            answered = 0;
+            try { await memo.RefreshAsync(force: true, CancellationToken.None); }
+            catch (NwcTransportException) { }
+        }
+
+        // Each refresh resumes at its last answered page: 0-59, 40-99, 80-139, 120-179, 160-199.
+        Assert.Equal(5, refreshes);
+        Assert.True(Settlement.IsSettled(memo.Lookup(Hash(1))!));
+        Assert.Equal(Hash(1), Assert.Single(memo.DrainNewlySettled()).PaymentHash);
+    }
+
+    [Fact]
+    public async Task A_resumed_unbounded_walk_proves_nothing_absent()
+    {
+        var (memo, wallet) = NewMemo(() => T0);
+        var old = T0 - 3 * 86_400;
+        for (var n = 0; n < 60; n++) wallet.Rows.Add(Settled(Hash(1_000 + n), settledAt: old + 30, createdAt: old));
+        memo.Watch(Hash(1)); // not in the wallet at all
+        var failed = false;
+        wallet.FailWhen = request => request.From is null && request.Offset == 40 && !failed && (failed = true);
+
+        await Assert.ThrowsAsync<NwcTransportException>(() => memo.RefreshAsync(force: true, CancellationToken.None));
+        await memo.RefreshAsync(force: true, CancellationToken.None); // resumes at offset 20 and finishes
+
+        // Offsets over a history that can change between refreshes may skip a row, so the hash
+        // stays watched (an uninterrupted walk would have dropped it), and its one unbounded walk is spent.
+        Assert.True(memo.IsWatched(Hash(1)));
+        wallet.Requests.Clear();
+        await memo.RefreshAsync(force: true, CancellationToken.None);
+        Assert.DoesNotContain(wallet.Requests, r => r.From is null);
     }
 
     // ---- Failures ----

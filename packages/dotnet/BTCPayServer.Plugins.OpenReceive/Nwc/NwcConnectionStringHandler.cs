@@ -95,7 +95,7 @@ public sealed class NwcConnectionState
             Invoice = stored.Bolt11,
             PaymentHash = stored.PaymentHash,
             AmountMsats = stored.AmountMsats,
-            CreatedAt = stored.CreatedAtAuthoritative ? stored.CreatedAt : 0,
+            CreatedAt = stored.CreatedAtAuthoritative ? stored.CreatedAt : null, // host clock: unknown age, never a window bound
             ExpiresAt = stored.ExpiresAt,
             TransactionState = "pending",
         });

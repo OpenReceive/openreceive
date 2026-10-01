@@ -248,7 +248,9 @@ public sealed class ReceiveOnlyNwcClient : IExtendedLightningClient
             Invoice = result.Invoice,
             PaymentHash = result.PaymentHash.ToLowerInvariant(),
             AmountMsats = result.AmountMsats,
-            CreatedAt = createdAt,
+            // Only the wallet's own creation time places a row in its history; the host clock
+            // is no window bound, so a reply without one leaves the row of unknown age.
+            CreatedAt = result.CreatedAt,
             ExpiresAt = result.ExpiresAt ?? expectedExpiry,
             TransactionState = "pending",
             Description = request.Description,

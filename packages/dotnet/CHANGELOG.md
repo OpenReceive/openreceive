@@ -1,7 +1,30 @@
 # BTCPay Server plugin changelog
 
-## Unreleased
+## 0.4.12 — 2026-10-01
 
+- **A long or failing wallet walk can no longer starve settlement.** The same
+  failure took down the SDK engines' reconcile pass this week: a wallet-history
+  walk that fails partway, on a timed-out page or `RATE_LIMITED`, started over
+  at offset 0 on the next refresh. It then failed at the same point again, so it
+  never reached the payment and kept spending the wallet's request budget. The
+  scan memo's unbounded walk, for a hash of unknown age, now resumes at the last
+  page that answered. Its upper bound is pinned, so newer invoices cannot shift
+  the offsets under it. A resumed walk never proves a hash absent.
+- **A host-clock invoice no longer forces full-history walks.** When the
+  wallet's `make_invoice` reply has no `created_at`, the stored row was restored
+  after a restart as created at 0. Every refresh then walked the wallet's whole
+  history for as long as that invoice was watched. Such a row is now of unknown
+  age, like a hash with no stored row. It never bounds the walk window, and is
+  resolved by `lookup_invoice` when granted, or else by one unbounded walk. In
+  the live process the host clock no longer stands in for the wallet's creation
+  time either.
+- **A failed walk counts toward the refresh cadence.** Every caller used to
+  retry a failed walk at once. Now they share the failure until the next
+  interval, the same way the SDK engines' gate keeps a broken wallet from being
+  stampeded.
+- **The fastest refresh cadence is 3 s instead of 2 s** (3 s / 6 s / 12 s by
+  the age of the newest live invoice). That is about a third fewer scans of the
+  wallet while a checkout is fresh.
 - Drop “Pay with one method only — if you already sent …, do not also pay the
   Lightning invoice.” from the swap deposit warning. The banner now only covers
   the exact amount and the network, matching the JS checkout.

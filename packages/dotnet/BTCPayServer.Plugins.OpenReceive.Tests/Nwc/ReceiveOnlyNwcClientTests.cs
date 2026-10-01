@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Nodes;
 using BTCPayServer.Lightning;
 using BTCPayServer.Payments;
 using BTCPayServer.Plugins.OpenReceive.Data;
@@ -196,7 +197,7 @@ public sealed class ReceiveOnlyNwcClientTests
         Assert.NotNull(row);
         Assert.Equal("pending", row.TransactionState);
         Assert.Equal(1_000_000, row.AmountMsats);
-        Assert.Equal(TimeSpan.FromSeconds(2), h.State.Memo.CurrentInterval);
+        Assert.Equal(TimeSpan.FromSeconds(3), h.State.Memo.CurrentInterval);
         Assert.Equal(1, h.Transport.Count("make_invoice"));
 
         var stored = await h.Backend.LookupAsync(invoice.Id, null, CancellationToken.None);
@@ -540,19 +541,50 @@ public sealed class ReceiveOnlyNwcClientTests
         public void Dispose() => Release.Dispose();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_host_clock_invoice_never_drags_walks_to_the_start_of_history(bool lookupGranted)
+    {
+        var methods = lookupGranted
+            ? TestkitWalletOptions.DefaultMethods
+            : TestkitWalletOptions.DefaultMethods.Where(m => m != "lookup_invoice").ToList();
+        await using var h = new Harness(new TestkitWalletOptions { OmitMintCreatedAt = true, Methods = methods });
+        var invoice = await h.Mint();
+        Assert.Null(h.State.Memo.Lookup(invoice.Id)!.CreatedAt); // only the host clock knew when it was minted
+
+        // BTCPay restarts and polls the invoice: the stored row is of unknown age, not "created at 0".
+        var (_, restarted) = h.Restart();
+        for (var poll = 0; poll < 3; poll++)
+        {
+            Assert.Equal(LightningInvoiceStatus.Unpaid, (await restarted.GetInvoice(invoice.Id, Bounded())).Status);
+            h.ClockOffsetSeconds += 12; // past every cadence: each poll walks
+        }
+        await h.Backend.SettleAsync(invoice.Id);
+        Assert.Equal(LightningInvoiceStatus.Paid, (await restarted.GetInvoice(invoice.Id, Bounded())).Status);
+
+        static long? From(JsonObject request) => request["from"] is { } from ? long.Parse(from.ToJsonString()) : null;
+        var walks = h.Transport.Requests("list_transactions");
+        Assert.DoesNotContain(walks, request => From(request) == 0);
+        // Its age is learned from lookup_invoice when granted, else from the fallback window
+        // that found it: no unbounded walk was needed.
+        Assert.DoesNotContain(walks, request => From(request) is null);
+        Assert.Equal(lookupGranted, h.Transport.Count("lookup_invoice") > 0);
+    }
+
     [Fact]
     public async Task Listen_polls_the_memo_when_the_wallet_has_no_notifications()
     {
         await using var h = new Harness(new TestkitWalletOptions { Notifications = false });
         await h.Client.Validate();
         Assert.Empty(h.State.Capabilities!.Notifications);
-        var invoice = await h.Mint(sats: 1_000); // minted first: the poll cadence is 2 s while it is fresh
+        var invoice = await h.Mint(sats: 1_000); // minted first: the poll cadence is 3 s while it is fresh
 
         using var listener = await h.Client.Listen(Bounded());
         Assert.IsType<NwcPollListener>(listener);
 
         // Let the first tick's walk see the invoice still pending before settling, so the
-        // settlement is found by the 2 s cadence, not the first walk. Only the memo's state is
+        // settlement is found by the 3 s cadence, not the first walk. Only the memo's state is
         // pinned, not a request count: on a slow runner the first walk can straddle a second
         // tick, and the exact number of pages is the memo's business (ScanMemoTests).
         var deadline = DateTime.UtcNow.AddSeconds(10);

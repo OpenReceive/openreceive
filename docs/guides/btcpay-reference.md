@@ -251,15 +251,20 @@ only answers its questions.
     plugin first restores it from `openreceive_invoices`: its creation and
     expiry time, BOLT11 and amount. It is then walked for and closed exactly
     as before the restart.
-  - Only a hash with no stored row has an unknown age. That is one minted
-    before the plugin kept these rows, or one minted by another wallet. It is
-    looked up first when the wallet grants `lookup_invoice`. Otherwise it is
-    walked once with no lower time bound. If the relay fails a walk, the next
-    refresh repeats it.
-  - The memo refreshes every 2, 6 or 12 seconds, depending on the age of the
-    newest live invoice. Every caller shares that refresh. A caller that gives
-    up, such as an aborted checkout request, stops waiting but does not cancel
-    the shared walk.
+  - A hash has an unknown age when it has no stored row, or when the wallet's
+    `make_invoice` reply gave no `created_at`. A hash with no stored row was
+    minted before the plugin kept these rows, or by another wallet. The host
+    clock never bounds a walk, so an unknown-age hash never pulls the window
+    back to the start of the wallet's history. It is looked up first when the
+    wallet grants `lookup_invoice`. Otherwise it is walked once with no lower
+    time bound. If a page of that walk fails, the next refresh resumes at the
+    last page that answered instead of starting over. A walk resumed this way
+    never proves a hash absent.
+  - The memo refreshes every 3, 6 or 12 seconds, depending on the age of the
+    newest live invoice. Every caller shares that refresh. A failed walk
+    counts too, so a broken wallet is not asked again by every caller. A
+    caller that gives up, such as an aborted checkout request, stops waiting
+    but does not cancel the shared walk.
   - A hash is Paid when the settlement rule says settled: `settled_at > 0`, or
     `state` / `transaction_state` equal to `settled`. A preimage alone never
     counts. It is Expired only when the wallet's own row says expired or
@@ -328,7 +333,7 @@ button shows the same probes right on the page. The page is titled
   invoice, which is minted for at most a day. Saving the wallet lowers the
   store setting. The doctor flags the setting if someone raises it afterwards.
 - **Payments settle slowly**. The wallet pushes no `payment_received`
-  notifications, so settlement waits for the periodic scan (2–12 s). The
+  notifications, so settlement waits for the periodic scan (3–12 s). The
   doctor shows the notification probe and the last scan time.
 
 ## Log events

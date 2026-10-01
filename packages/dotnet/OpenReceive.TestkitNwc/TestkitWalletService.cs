@@ -166,7 +166,9 @@ public sealed class TestkitWalletService
         var metadata = p["metadata"] as JsonObject;
         if (metadata is not null)
             lock (_gate) _metadataByHash[invoice.PaymentHash] = metadata.DeepClone().AsObject();
-        return Nip47Json.Result("make_invoice", Transaction(invoice));
+        var minted = Transaction(invoice);
+        if (Options.OmitMintCreatedAt) minted.Remove("created_at");
+        return Nip47Json.Result("make_invoice", minted);
     }
 
     private async Task<JsonObject> LookupInvoiceAsync(JsonObject p, CancellationToken ct)

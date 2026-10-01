@@ -103,6 +103,9 @@ public static class WalletScan
     /// Walk incoming rows in the window, <see cref="OpenReceiveTables.TransactionPageLimit"/> at a
     /// time. With <paramref name="expected"/> the walk stops once every hash is seen; with null it
     /// runs until the wallet runs out of rows or the page cap (the plugin's scan memo uses this).
+    /// <paramref name="startOffset"/> resumes an interrupted walk; <paramref name="onPage"/>
+    /// receives each answered page's rows and the offset that page was requested at, so a
+    /// caller can keep what a walk saw before a later page fails.
     /// </summary>
     public static async Task<WalletWalk> WalkAsync(
         ListTransactionsPage list,
@@ -111,13 +114,15 @@ public static class WalletScan
         bool includeUnpaid,
         IReadOnlySet<string>? expected,
         int? maxPages,
-        CancellationToken ct)
+        CancellationToken ct,
+        int startOffset = 0,
+        Action<IReadOnlyList<NwcTransaction>, int>? onPage = null)
     {
         var pageCap = maxPages ?? DefaultMaxPages;
         if (pageCap <= 0) throw new ArgumentOutOfRangeException(nameof(maxPages), "maxPages must be a positive integer");
         var byPaymentHash = new Dictionary<string, NwcTransaction>();
         var outstanding = expected is null ? null : new HashSet<string>(expected);
-        var offset = 0;
+        var offset = startOffset;
         string? previousPage = null;
         // Proven false the moment the wallet runs out of rows or every expected hash is accounted
         // for; otherwise the walk hit its cap with rows still to come.
@@ -137,15 +142,19 @@ public static class WalletScan
             };
             var page = await list(request, ct);
             pages += 1;
+            var seen = new List<NwcTransaction>(page.Transactions.Count);
             foreach (var transaction in page.Transactions)
             {
                 if (transaction.Type is not null && transaction.Type != "incoming") continue;
                 var hash = NormalizedTransactionHash(transaction);
                 if (hash is null) continue;
+                var row = transaction with { PaymentHash = hash };
+                seen.Add(row);
                 if (!byPaymentHash.TryGetValue(hash, out var existing) || !Settlement.IsSettled(existing))
-                    byPaymentHash[hash] = transaction with { PaymentHash = hash };
+                    byPaymentHash[hash] = row;
                 outstanding?.Remove(hash);
             }
+            onPage?.Invoke(seen, offset);
             if (outstanding is { Count: 0 })
             {
                 truncated = false;

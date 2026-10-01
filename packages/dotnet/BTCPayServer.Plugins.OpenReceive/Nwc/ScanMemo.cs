@@ -47,12 +47,15 @@ public delegate Task<LookupResult> LookupInvoiceFallback(string paymentHash, Can
 /// when the wallet grants <c>lookup_invoice</c>, and stays pending otherwise.
 /// One walk serves every concurrent caller (BTCPay's GetInvoice on creation, on startup for
 /// each pending invoice, the listeners' sweeps); the refresh cadence stretches with the age
-/// of the newest live invoice (2 s / 6 s / 12 s) and IS the NWC scan budget for the
-/// connection. It is a cache of wallet truth, not state: two BTCPay workers each hold one.
+/// of the newest live invoice (3 s / 6 s / 12 s) and IS the NWC scan budget for the
+/// connection; a failed walk spends it too, so a broken wallet is not retried by every caller. It is a cache of wallet truth, not state: two BTCPay workers each hold one.
 /// What must outlive the process — each minted invoice's hash, creation and expiry time —
 /// is a row in <c>openreceive_invoices</c>; the client records it back here before it
 /// watches a hash this memo has forgotten, so a restart changes nothing about how that
-/// invoice is walked for or closed. Only a hash with no stored row is of unknown age.
+/// invoice is walked for or closed. A hash with no stored row, or one whose wallet gave no
+/// creation time (the host clock is not a window bound), is of unknown age: it never widens
+/// the walk, and is looked up or given one unbounded walk instead. That walk resumes where a
+/// failed page left it rather than starting over, so a long history cannot keep it from finishing.
 /// </summary>
 public sealed class ScanMemo
 {
@@ -77,6 +80,22 @@ public sealed class ScanMemo
         public bool DeepWalked;
     }
 
+    /// <summary>
+    /// An unbounded walk in progress: the hashes it walks for, its pinned upper bound (so
+    /// newer rows cannot shift the offsets under it), and the view and page it reached.
+    /// It survives a failed page; the next refresh resumes at that page instead of offset 0.
+    /// </summary>
+    private sealed class DeepCursor
+    {
+        public required HashSet<string> Hashes;
+        public required long Until;
+        public readonly HashSet<string> Seen = new(StringComparer.Ordinal);
+        public bool Unpaid;
+        public int Offset;
+        /// <summary>Continued after a failure: offsets over mutable history can skip a row, so it proves nothing absent.</summary>
+        public bool Resumed;
+    }
+
     private readonly ListTransactionsPage _list;
     private readonly LookupInvoiceFallback? _lookup;
     private readonly Func<long> _clock;
@@ -89,6 +108,8 @@ public sealed class ScanMemo
     private readonly Queue<NwcTransaction> _newlySettled = new();
     private Task? _inflight;
     private long _refreshedAt = long.MinValue;
+    private long _walkedAt = long.MinValue;
+    private DeepCursor? _deep;
     private bool _complete = true;
     private int _unreached;
     private long? _newestMintedAt;
@@ -148,7 +169,7 @@ public sealed class ScanMemo
     }
 
     /// <summary>
-    /// The refresh interval: 2 s while the newest live invoice is under two minutes old,
+    /// The refresh interval: 3 s while the newest live invoice is under two minutes old,
     /// 6 s under five minutes, else 12 s (settlement-sweeps.md numbers; a cadence
     /// heuristic, never a correctness input).
     /// </summary>
@@ -160,7 +181,7 @@ public sealed class ScanMemo
             lock (_gate) minted = _newestMintedAt;
             if (minted is null) return TimeSpan.FromSeconds(12);
             var age = _clock() - minted.Value;
-            if (age < 120) return TimeSpan.FromSeconds(2);
+            if (age < 120) return TimeSpan.FromSeconds(3);
             if (age < 300) return TimeSpan.FromSeconds(6);
             return TimeSpan.FromSeconds(12);
         }
@@ -186,7 +207,8 @@ public sealed class ScanMemo
     }
 
     /// <summary>
-    /// Refreshes when stale (older than <see cref="CurrentInterval"/>) or forced, and says
+    /// Refreshes when stale (the last walk, finished or failed, is older than
+    /// <see cref="CurrentInterval"/>) or forced, and says
     /// whether a walk ran for this call; concurrent
     /// callers share one walk, and a forced refresh that arrives during a walk runs its own
     /// after it (so a hash watched a moment ago is covered). The walk runs on its own
@@ -205,7 +227,7 @@ public sealed class ScanMemo
             }
             else
             {
-                var stale = _refreshedAt == long.MinValue || _clock() - _refreshedAt >= (long)CurrentInterval.TotalSeconds;
+                var stale = _walkedAt == long.MinValue || _clock() - _walkedAt >= (long)CurrentInterval.TotalSeconds;
                 if (!force && !stale) return Task.FromResult(false);
                 work = _inflight = WalkAsync();
             }
@@ -246,15 +268,27 @@ public sealed class ScanMemo
 
     private async Task WalkAsync()
     {
+        try
+        {
+            await WalkOnceAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_gate) _walkedAt = _clock();
+        }
+    }
+
+    private async Task WalkOnceAsync()
+    {
         var now = _clock();
         var lookups = 0;
         var absent = new HashSet<string>(StringComparer.Ordinal);
         var lookedUp = new HashSet<string>(StringComparer.Ordinal);
 
-        // A hash of unknown age (BTCPay asked about it and the plugin stored no row) is asked of the wallet's
-        // single-hash path first when it is granted: one request, instead of a window walk.
+        // A hash of unknown age (no stored row, or no creation time from the wallet) is asked of the
+        // wallet's single-hash path first when it is granted: one request, instead of a window walk.
         List<string> unknownNow;
-        lock (_gate) unknownNow = _watched.Keys.Where(hash => !_rows.ContainsKey(hash)).ToList();
+        lock (_gate) unknownNow = _watched.Keys.Where(hash => !_rows.TryGetValue(hash, out var row) || IsUnknownAge(row)).ToList();
         if (unknownNow.Count > 0 && _lookup is not null)
         {
             foreach (var hash in unknownNow)
@@ -286,15 +320,18 @@ public sealed class ScanMemo
             foreach (var (hash, watch) in _watched)
             {
                 if (absent.Contains(hash)) continue; // the wallet says it is not there: leaves the set below
-                if (_rows.TryGetValue(hash, out var row))
+                var known = _rows.TryGetValue(hash, out var row);
+                if (known && IsTerminal(row!)) continue; // leaves the set at the end of this walk
+                if (known && row!.CreatedAt is { } createdAt)
                 {
-                    if (IsTerminal(row)) continue; // leaves the set at the end of this walk
-                    if (row.CreatedAt is { } createdAt) oldest = oldest is { } o ? Math.Min(o, createdAt) : createdAt;
+                    oldest = oldest is { } o ? Math.Min(o, createdAt) : createdAt;
                 }
                 else
                 {
+                    // Never a window bound: one such row would otherwise drag every walk back
+                    // to the start of the wallet's history.
                     unknown.Add(hash);
-                    if (!watch.DeepWalked) deep.Add(hash);
+                    if (!watch.DeepWalked && !lookedUp.Contains(hash)) deep.Add(hash);
                 }
                 expected.Add(hash);
             }
@@ -356,26 +393,66 @@ public sealed class ScanMemo
             }
         }
         deep.IntersectWith(missing);
-        if (deep.Count > 0)
+        DeepCursor? cursor;
+        lock (_gate)
         {
-            var deepSettled = await WalletScan.WalkAsync(_list, null, until, includeUnpaid: false, deep, MaxPagesPerView, CancellationToken.None).ConfigureAwait(false);
-            var deepMissing = deep.Where(hash => !deepSettled.ByPaymentHash.ContainsKey(hash)).ToHashSet(StringComparer.Ordinal);
-            var deepTruncated = deepSettled.Truncated;
-            pages += deepSettled.Pages;
-            lock (_gate) foreach (var row in deepSettled.ByPaymentHash.Values) Upsert(row);
-            if (deepMissing.Count > 0)
+            // A cursor whose hashes all turned up since (or left the set) is spent; one with
+            // work left resumes, and hashes that joined after it started wait for their own.
+            if (_deep is { } saved && !saved.Hashes.Overlaps(missing)) _deep = null;
+            if (_deep is { } resumed && (resumed.Offset > 0 || resumed.Unpaid)) resumed.Resumed = true;
+            if (_deep is null && deep.Count > 0) _deep = new DeepCursor { Hashes = new HashSet<string>(deep, StringComparer.Ordinal), Until = until };
+            cursor = _deep;
+        }
+        if (cursor is not null)
+        {
+            var targets = cursor.Hashes.Where(hash => missing.Contains(hash) && !cursor.Seen.Contains(hash)).ToHashSet(StringComparer.Ordinal);
+            var deepTruncated = false;
+            // Each answered page is kept as it arrives, with the cursor on that page: a later
+            // failure resumes there (re-reading one page) instead of walking the history again.
+            void Keep(IReadOnlyList<NwcTransaction> rows, int pageStart, bool unpaidView)
             {
-                var deepUnpaid = await WalletScan.WalkAsync(_list, null, until, includeUnpaid: true, deepMissing, MaxPagesPerView, CancellationToken.None).ConfigureAwait(false);
-                deepMissing.ExceptWith(deepUnpaid.ByPaymentHash.Keys);
-                deepTruncated |= deepUnpaid.Truncated;
-                pages += deepUnpaid.Pages;
-                lock (_gate) foreach (var row in deepUnpaid.ByPaymentHash.Values) Learn(row, now);
+                lock (_gate)
+                {
+                    foreach (var row in rows)
+                    {
+                        if (unpaidView) Learn(row, now);
+                        else Upsert(row);
+                        if (cursor.Hashes.Contains(row.PaymentHash!)) cursor.Seen.Add(row.PaymentHash!);
+                    }
+                    cursor.Offset = pageStart;
+                }
             }
-            // Spent only now: a walk the relay failed threw above, and the next refresh walks again.
-            lock (_gate) foreach (var hash in deep) if (_watched.TryGetValue(hash, out var watch)) watch.DeepWalked = true;
-            missing.ExceptWith(deep);
-            if (!deepTruncated) absent.UnionWith(deepMissing); // proven absent from the whole history
-            else missing.UnionWith(deepMissing);
+            if (!cursor.Unpaid && targets.Count > 0)
+            {
+                var walk = await WalletScan.WalkAsync(_list, null, cursor.Until, includeUnpaid: false, targets, MaxPagesPerView, CancellationToken.None,
+                    cursor.Offset, (rows, pageStart) => Keep(rows, pageStart, unpaidView: false)).ConfigureAwait(false);
+                pages += walk.Pages;
+                deepTruncated |= walk.Truncated;
+                lock (_gate)
+                {
+                    cursor.Unpaid = true;
+                    cursor.Offset = 0;
+                }
+                targets.ExceptWith(cursor.Seen);
+            }
+            if (targets.Count > 0)
+            {
+                var walk = await WalletScan.WalkAsync(_list, null, cursor.Until, includeUnpaid: true, targets, MaxPagesPerView, CancellationToken.None,
+                    cursor.Offset, (rows, pageStart) => Keep(rows, pageStart, unpaidView: true)).ConfigureAwait(false);
+                pages += walk.Pages;
+                deepTruncated |= walk.Truncated;
+                targets.ExceptWith(cursor.Seen);
+            }
+            // Spent only now: a walk the relay failed threw above, and the next refresh resumes it.
+            lock (_gate)
+            {
+                foreach (var hash in cursor.Hashes) if (_watched.TryGetValue(hash, out var watch)) watch.DeepWalked = true;
+                _deep = null;
+            }
+            missing.ExceptWith(cursor.Hashes);
+            // Proven absent from the whole history only by one uninterrupted walk.
+            if (!deepTruncated && !cursor.Resumed) absent.UnionWith(targets);
+            else missing.UnionWith(targets);
             truncated |= deepTruncated;
         }
 
@@ -454,6 +531,9 @@ public sealed class ScanMemo
 
     private static bool IsTerminal(NwcTransaction row) =>
         Settlement.IsSettled(row) || Settlement.IsExpired(row) || Settlement.IsFailed(row);
+
+    /// <summary>A live row with no wallet creation time: where it sits in the history is unknown.</summary>
+    private static bool IsUnknownAge(NwcTransaction row) => row.CreatedAt is null && !IsTerminal(row);
 
     private void NoteMinted(long createdAt)
     {
