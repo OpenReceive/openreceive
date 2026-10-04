@@ -410,7 +410,13 @@ async function listPresentTables(input: {
       `no SQLite database at ${sqlitePath}. Pass the file your app opens, or a postgres:// / mysql:// URL.`,
     );
   }
-  const { DatabaseSync } = await import("node:sqlite");
+  const { DatabaseSync } = await import("node:sqlite").catch((error: unknown) => {
+    // Node 22.5–22.12 ship node:sqlite behind a flag.
+    if ((error as { code?: string }).code !== "ERR_UNKNOWN_BUILTIN_MODULE") throw error;
+    throw new Error(
+      `Node ${process.version} keeps node:sqlite behind a flag. Rerun as \`NODE_OPTIONS=--experimental-sqlite npx openreceive doctor …\`, or upgrade to Node 22.13 or newer.`,
+    );
+  });
   const database = new DatabaseSync(sqlitePath, { readOnly: true });
   try {
     const rows = database

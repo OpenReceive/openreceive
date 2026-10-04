@@ -1575,11 +1575,17 @@ From `@openreceive/elements`. The custom element behind the non-React wrappers.
   `poll-interval-ms` sets the interval.
 - `csrf-header` names the header used to send the `csrf-token` meta value.
   Default `X-CSRF-Token`. Django uses `X-CSRFToken`, WordPress REST uses `X-WP-Nonce`.
+- The way back to a refund: `sync-url`, `resume-path-prefix`,
+  `route-reference`, `resumable` and `resume-payment-hash`. They behave like
+  the React props of the same names, above. See
+  [Frontend checkout → The way back to a refund](frontend-checkout.md#the-way-back-to-a-refund).
 
 There is no asset attribute. Everything the element draws ships inside its
 JavaScript. It fires seven events: `openreceive-copy`,
 `openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`,
 `openreceive-provider-copy`, `openreceive-start-over`, `openreceive-error`.
+`openreceive-state` and `openreceive-settled` carry the checkout snapshot at
+`event.detail.state`.
 
 ## CLI
 

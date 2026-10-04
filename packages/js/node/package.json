@@ -40,7 +40,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean --target es2022 --out-dir dist",
+    "build": "tsup",
     "prepack": "npm run build"
   },
   "license": "MIT",

@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 13389
+      "bytes": 13511
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 14404
+      "bytes": 14526
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -63,7 +63,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 16314
+      "bytes": 16436
     },
     {
       "path": "/guides/quickstart-rails",
@@ -154,7 +154,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 11934
+      "bytes": 13959
     },
     {
       "path": "/guides/checkout-ux",
@@ -194,7 +194,7 @@
       "slug": "swap-refunds",
       "title": "Swap Refunds",
       "category": "guide",
-      "bytes": 6954
+      "bytes": 7475
     },
     {
       "path": "/guides/lightning-swap-connect",
@@ -264,7 +264,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 125637
+      "bytes": 126022
     },
     {
       "path": "/guides/security",
@@ -334,7 +334,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 31405
+      "bytes": 31807
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -344,7 +344,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 32907
+      "bytes": 33309
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -354,7 +354,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 34075
+      "bytes": 34355
     },
     {
       "path": "/guides/agent-directions-django",
@@ -364,7 +364,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 40577
+      "bytes": 40857
     },
     {
       "path": "/guides/agent-directions-next",
@@ -374,7 +374,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 35236
+      "bytes": 35638
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -384,7 +384,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 37080
+      "bytes": 37360
     },
     {
       "path": "/guides/agent-directions-php",
@@ -394,7 +394,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 35926
+      "bytes": 36059
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -404,7 +404,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 39141
+      "bytes": 39421
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -444,7 +444,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 125637,
+      "bytes": 126022,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -499,7 +499,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 31405,
+      "bytes": 31807,
       "copy_button": true,
       "self_contained": true
     },
@@ -509,7 +509,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 32907,
+      "bytes": 33309,
       "copy_button": true,
       "self_contained": true
     },
@@ -519,7 +519,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35236,
+      "bytes": 35638,
       "copy_button": true,
       "self_contained": true
     },
@@ -529,7 +529,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34075,
+      "bytes": 34355,
       "copy_button": true,
       "self_contained": true
     },
@@ -539,7 +539,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40577,
+      "bytes": 40857,
       "copy_button": true,
       "self_contained": true
     },
@@ -549,7 +549,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37080,
+      "bytes": 37360,
       "copy_button": true,
       "self_contained": true
     },
@@ -559,7 +559,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35926,
+      "bytes": 36059,
       "copy_button": true,
       "self_contained": true
     },
@@ -569,7 +569,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39141,
+      "bytes": 39421,
       "copy_button": true,
       "self_contained": true
     },

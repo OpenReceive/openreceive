@@ -131,6 +131,8 @@ function writeImportSmoke(installDir, packages) {
     `import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import postcss from "postcss";
 import * as browserHeadless from "@openreceive/browser/headless";
 import * as browserMain from "@openreceive/browser";
@@ -235,6 +237,26 @@ for (const packageName of ["elements", "react"]) {
       compiled.includes(".btn") &&
       !compiled.includes('@import "@openreceive/browser/styles.css"'),
     \`@openreceive/\${packageName}: styles.css must be the self-contained compiled sheet\`
+  );
+}
+// The no-bundler checkout ships inside the elements tarball, at the path the
+// docs and the ./standalone/* export promise. elements' build ends with the
+// standalone step because its own \`tsup --clean\` empties dist/ first.
+{
+  const standaloneDir = "node_modules/@openreceive/elements/dist/standalone";
+  for (const file of ["openreceive-checkout.js", "openreceive-checkout.js.map", "openreceive-checkout.css", "MANIFEST.json"]) {
+    assert(existsSync(\`\${standaloneDir}/\${file}\`), \`@openreceive/elements: dist/standalone/\${file} must be packaged\`);
+  }
+  assert(
+    import.meta.resolve("@openreceive/elements/standalone/openreceive-checkout.js").endsWith(
+      "/@openreceive/elements/dist/standalone/openreceive-checkout.js",
+    ),
+    "@openreceive/elements: the ./standalone/* export must resolve to the packaged file"
+  );
+  assert.equal(
+    JSON.parse(readFileSync(\`\${standaloneDir}/MANIFEST.json\`, "utf8")).version,
+    JSON.parse(readFileSync("node_modules/@openreceive/elements/package.json", "utf8")).version,
+    "@openreceive/elements: the packaged standalone build must be this version's"
   );
 }
 // The shipped FILE sheets are inert outside OpenReceive-rendered subtrees:
@@ -398,6 +420,24 @@ assert(
   ),
   "openreceive: CLI bin must advertise scaffold payments"
 );
+// \`doctor --db\` from the PUBLISHED bundle: tsup once rewrote node:sqlite to a
+// bare "sqlite" import, which only the bundle (not the source tests) could show.
+{
+  const { paymentsSchemaSql } = await import("@openreceive/http");
+  const dbPath = path.resolve("doctor.sqlite");
+  const database = new DatabaseSync(dbPath);
+  database.exec(paymentsSchemaSql("sqlite"));
+  database.close();
+  const nwc = \`nostr+walletconnect://\${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=\${"b".repeat(64)}\`;
+  assert.match(
+    execFileSync(process.execPath, [nodeCliPath, "doctor", "--offline", "--db", dbPath], {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH, NWC_URI: nwc },
+    }),
+    /database: openreceive_payments and openreceive_meta present/,
+    "openreceive: the packaged doctor --db must read a migrated SQLite file"
+  );
+}
 
 console.log(\`Imported \${checks.length} OpenReceive package tarballs.\`);
 `,

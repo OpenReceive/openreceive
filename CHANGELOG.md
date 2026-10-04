@@ -27,6 +27,35 @@
   close it as unpaid, even if it was paid while the walk was down. Such a hash
   now stays watched, counts as unreached, and gets a fresh unbounded walk on
   the next refresh. See `packages/dotnet/CHANGELOG.md`.
+- Ship the standalone checkout in the `@openreceive/elements` npm package.
+  `dist/standalone/` (the no-build-step `openreceive-checkout.js` and `.css`
+  for plain-HTML pages) was missing from every published version since 0.4.10.
+  The release packs each package right after its own `build`, and the elements
+  build's `tsup --clean` emptied the directory that the standalone step had
+  filled earlier. The standalone step is now the last step of the elements
+  build, and the package smoke test fails if the tarball lacks it.
+- Fix `npx openreceive doctor --db <sqlite file>`, which crashed with "Cannot
+  find package 'sqlite'". The build dropped the `node:` prefix from
+  `node:sqlite`, a module that exists only under the prefix. On Node 22.5 to
+  22.12, where `node:sqlite` needs `--experimental-sqlite`, the database line
+  now says so and gives the fix instead of failing. The package smoke test runs
+  the packaged `doctor --db` against a migrated SQLite file.
+- Document the plain-HTML way back to a swap refund. `<openreceive-checkout>`
+  takes `sync-url`, `resume-path-prefix`, `route-reference`, `resumable` and
+  `resume-payment-hash`, and reports the swap's payment hash in the
+  `openreceive-state` event at `event.detail.state`. Frontend checkout, Swap
+  refunds, the API reference and every framework's agent directions now show
+  them beside the React props.
+- The Buy a Button demos' Vue, Svelte and Angular tabs and the plain-HTML client
+  read the state event's `detail` as the checkout state, so they never kept the
+  swap's payment hash and a reload lost the way back to a refund. They now read
+  `detail.state`, and a new e2e test reloads mid-swap and expects the deposit
+  screen back without a click.
+- The swap deposit screen said "Send exactly the amount shown below." while the
+  amount sits above it. It now says "Send exactly the amount shown."
+- The Node quickstarts now say to install `@openreceive/http` before importing
+  `paymentsSchemaSql` from it on the no-ORM path, rather than relying on npm
+  hoisting the adapter's dependency.
 
 ## 0.4.13 - 2026-10-01
 

@@ -128,16 +128,25 @@ expect(
   "package.json: missing check:release script",
 );
 // No package allowlist: the runner discovers every JS workspace and builds
-// its dependency graph before the standalone bundle consumes the output.
+// its dependency graph, so elements' own build (which ends in the standalone
+// bundle) runs after every package it inlines.
 expect(
-  rootPackage.scripts?.["build:packages"] ===
-    "node tools/package/build-workspaces.mjs && node tools/package/build-standalone-elements.mjs",
-  "package.json: build:packages must build all workspaces before the standalone checkout",
+  rootPackage.scripts?.["build:packages"] === "node tools/package/build-workspaces.mjs",
+  "package.json: build:packages must build every workspace in dependency order",
 );
 expect(
   rootPackage.scripts?.["build:standalone"] ===
-    "node tools/package/build-workspaces.mjs @openreceive/elements && node tools/package/build-standalone-elements.mjs",
+    "node tools/package/build-workspaces.mjs @openreceive/elements",
   "package.json: build:standalone must build the elements dependency closure",
+);
+// The standalone checkout ships IN the elements npm tarball. The release packs
+// right after `npm run build -w @openreceive/elements`, whose `tsup --clean`
+// empties dist/, so the standalone step has to be the end of that same script.
+expect(
+  readJson("packages/js/elements/package.json").scripts?.build?.endsWith(
+    "&& node ../../../tools/package/build-standalone-elements.mjs",
+  ),
+  "packages/js/elements/package.json: build must end with the standalone checkout step",
 );
 
 expect(

@@ -85,8 +85,9 @@ There are three layers. Each one is useless without the one above it.
 A checkout with no per-order path loses the order id when the tab closes.
 
 Give the order its own URL. The drop-ins take `syncUrl`, `resumePathPrefix`,
-and `routeReference`. If you own routing, push it with
-`enterCheckoutResumePath` from `@openreceive/browser/headless`.
+and `routeReference`. On `<openreceive-checkout>` these are the `sync-url`,
+`resume-path-prefix` and `route-reference` attributes. If you own routing, push
+it with `enterCheckoutResumePath` from `@openreceive/browser/headless`.
 
 Then tell the display model what you built:
 
@@ -132,6 +133,12 @@ On a drop-in, that is one prop:
 This works in create mode only. If the server will not serve the hash, the
 checkout ignores it. Get the hash from `onState`.
 
+On the plain-HTML element, it is the `resume-payment-hash` attribute, plus
+`resumable` when your server already serves a per-order page. The hash comes
+from the `openreceive-state` event, at `event.detail.state.payment_hash` when
+`event.detail.state.rail` is `"swap"`. A full example is in
+[Frontend checkout → The way back to a refund](frontend-checkout.md#the-way-back-to-a-refund).
+
 On a custom UI:
 
 ```ts
@@ -156,7 +163,7 @@ want the `404` instead, use `requestSwapStatus`.
 | Nothing | Loses the order id and the deposit | — |
 | Per-order URL + order restore | Back on the method grid | Back on the method grid |
 | … + re-select the coin | Back on the deposit or refund screen | Gets a new deposit address, and the refund is off-screen |
-| … + `resumePaymentHash` / `resumeSwapAttempt` | Back on the refund screen | Back on the refund screen |
+| … + `resumePaymentHash` (`resume-payment-hash`) / `resumeSwapAttempt` | Back on the refund screen | Back on the refund screen |
 
 ## When a payer cannot self-serve
 

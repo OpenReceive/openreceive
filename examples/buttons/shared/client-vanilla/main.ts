@@ -549,8 +549,9 @@ const renderCheckout = (): DocumentFragment => {
   // Where the hash comes from: the element reports every attempt it watches,
   // and a swap attempt names its own payment hash.
   checkout.addEventListener(CHECKOUT_EVENTS.state, (event) => {
-    const state = (event as CustomEvent<{ rail?: string; payment_hash?: string }>).detail;
-    if (state?.rail === "swap" && state.payment_hash) {
+    const { state } = (event as CustomEvent<{ state: { rail: string; payment_hash: string } }>)
+      .detail;
+    if (state.rail === "swap" && state.payment_hash) {
       rememberSwapAttempt(order.reference, state.payment_hash);
     }
   });

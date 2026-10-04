@@ -58,6 +58,8 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
 - `resumePaymentHash`: after prepare, reopen that attempt instead of showing
   the method grid. `/checkouts/prepare` returns no attempts. If the server will
   not serve the hash, the checkout ignores it. See [Swap refunds](swap-refunds.md).
+  The custom element takes these as attributes; see
+  [The way back to a refund](#the-way-back-to-a-refund).
 - `theme`, `themeToggle`, `defaultTheme`, `children`, `components`,
   `classNames`: the look around the payment UI. See [Theme](#theme) below.
   `children` and `components` / `classNames` are React-only. Vue, Svelte, and
@@ -123,6 +125,48 @@ The build is reproducible. Running `npm run build:packages` in the
 directory from the same commit, using
 `tools/package/build-standalone-elements.mjs`. `npm run check:standalone`
 checks a copy against its manifest.
+
+### The way back to a refund
+
+With swaps on, a payer may have to come back to this page for a refund. See
+[Swap refunds](swap-refunds.md) for why. The element has the same controls as
+React's `<Checkout>`, as attributes and one event:
+
+| React prop | `<openreceive-checkout>` |
+| --- | --- |
+| `syncUrl`, `resumePathPrefix`, `routeReference` | `sync-url`, `resume-path-prefix`, `route-reference` |
+| `resumable` | `resumable` |
+| `resumePaymentHash` | `resume-payment-hash` |
+| `onState` | the `openreceive-state` event, with the snapshot at `event.detail.state` |
+
+A server-rendered app usually serves the checkout at a per-order URL already,
+such as `/checkout/ord_123`. Say so with `resumable`. Then keep the swap's
+payment hash, and hand it back on the next visit:
+
+```html
+<openreceive-checkout id="checkout" reference="ord_123" prefix="/openreceive" resumable>
+</openreceive-checkout>
+<script>
+  const checkout = document.getElementById("checkout");
+  const key = `openreceive.swap.${checkout.getAttribute("reference")}`;
+  // Reopen the swap this order already has, instead of the method grid.
+  const saved = localStorage.getItem(key);
+  if (saved) checkout.setAttribute("resume-payment-hash", saved);
+  checkout.addEventListener("openreceive-state", (event) => {
+    const { state } = event.detail;
+    if (state.rail === "swap" && state.payment_hash) localStorage.setItem(key, state.payment_hash);
+  });
+</script>
+```
+
+`localStorage` brings back only the payer's own browser. To survive a change of
+device, post the hash to your own order route and render it into
+`resume-payment-hash` from the server. The checkout ignores a hash the server
+will not serve, so a stale one does no harm.
+
+If the page has no per-order URL, add `sync-url`. The element then pushes
+`{resume-path-prefix}/{reference}` (default `/checkout/ord_123`) into the
+address bar, and your server has to serve the checkout at that path.
 
 ## Theme
 

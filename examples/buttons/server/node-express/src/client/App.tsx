@@ -297,11 +297,12 @@ const EmbeddedCheckout: React.FC<{
       // and says so at the top — so every framework is pinned to light.
       themeToggle: false as const,
       onSettled: () => onSettled(),
-      // The three element wrappers deliver state as a DOM CustomEvent rather
-      // than a typed callback; the detail is the same CheckoutState React gets.
+      // The three element wrappers deliver state as the element's DOM
+      // CustomEvent rather than a typed callback; `detail.state` is the same
+      // CheckoutState React gets.
       onState: (event: Event) => {
-        const state = (event as CustomEvent<CheckoutState>).detail;
-        if (state) onSwapAttempt(state);
+        const { state } = (event as CustomEvent<{ readonly state: CheckoutState }>).detail;
+        onSwapAttempt(state);
       },
     };
     const resumeProps = resumePaymentHash.length === 0 ? {} : { resumePaymentHash };

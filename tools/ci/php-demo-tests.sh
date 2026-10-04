@@ -27,5 +27,5 @@ if [ "$ready" != true ]; then
   docker logs "$container"
   exit 1
 fi
-npx playwright test --config tests/e2e lightning.spec.ts plain-layout.spec.ts \
-  --grep '@smoke|plain checkout'
+npx playwright test --config tests/e2e lightning.spec.ts plain-layout.spec.ts swap.spec.ts \
+  --grep '@smoke|plain checkout|a reload reopens'

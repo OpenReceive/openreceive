@@ -27,9 +27,12 @@
 //                                so a copied tree can be checked for staleness
 //
 // and dist/standalone-checkout-<version>.tar.gz at the repo root (gitignored)
-// for the GitHub release upload. Runs LAST in root `build:packages`, so every
-// package dist it reads already exists. tools/validate/check-standalone-
-// elements.mjs re-verifies the output and imports the constants below.
+// for the GitHub release upload. Runs as the last step of @openreceive/elements'
+// own `build` script: the npm tarball is packed right after that script, and its
+// `tsup --clean` would wipe a standalone tree built any earlier. build-workspaces
+// builds elements after every package it depends on, so each dist this reads
+// already exists. tools/validate/check-standalone-elements.mjs re-verifies the
+// output and imports the constants below.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";

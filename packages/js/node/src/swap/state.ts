@@ -52,7 +52,7 @@ const SWAP_STATE_COPY: Readonly<
   },
   awaiting_deposit: {
     label: "Waiting for your payment",
-    detail: "Send exactly the amount shown below.",
+    detail: "Send exactly the amount shown.",
   },
   confirming: {
     label: "Confirming payment",

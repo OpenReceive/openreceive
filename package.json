@@ -34,7 +34,7 @@
     "check:workflows": "node tools/validate/check-workflows.mjs",
     "check:public-api": "node tools/validate/check-public-api.mjs",
     "check:dead-exports": "knip",
-    "build:packages": "node tools/package/build-workspaces.mjs && node tools/package/build-standalone-elements.mjs",
+    "build:packages": "node tools/package/build-workspaces.mjs",
     "release:plan": "node tools/release/npm-release.mjs plan",
     "release:prepare": "node tools/release/npm-release.mjs prepare",
     "release:stamp": "node tools/release/npm-release.mjs stamp",
@@ -93,7 +93,7 @@
     "test:wordpress": "bash tools/ci/wordpress-tests.sh",
     "check:wordpress": "node tools/validate/check-wordpress-plugin.mjs",
     "test:ci:artifacts": "npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs",
-    "build:standalone": "node tools/package/build-workspaces.mjs @openreceive/elements && node tools/package/build-standalone-elements.mjs",
+    "build:standalone": "node tools/package/build-workspaces.mjs @openreceive/elements",
     "test:btcpay:latest": "node tools/dotnet/test-latest.mjs"
   },
   "engines": {

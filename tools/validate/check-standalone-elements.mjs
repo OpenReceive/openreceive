@@ -46,7 +46,7 @@ const relativeOutDir = path.relative(root, outDir);
 if (!existsSync(outDir) || !statSync(outDir).isDirectory()) {
   console.error(
     `check:standalone: ${relativeOutDir} is missing. Run \`npm run build:packages\` first ` +
-      "(its last step is tools/package/build-standalone-elements.mjs).",
+      "(the @openreceive/elements build ends with tools/package/build-standalone-elements.mjs).",
   );
   process.exit(1);
 }

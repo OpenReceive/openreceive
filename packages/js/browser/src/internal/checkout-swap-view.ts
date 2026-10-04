@@ -425,7 +425,7 @@ function getSwapProviderStateDetail(
 ): string {
   const { networkLabel, assetLabel } = getSwapAssetDisplay(payInAsset);
   if (state === "creating_provider_order") return "Creating a payment address.";
-  if (state === "awaiting_deposit") return "Send exactly the amount shown below.";
+  if (state === "awaiting_deposit") return "Send exactly the amount shown.";
   if (state === "confirming") {
     return `Your payment was detected on ${networkLabel}. ${getSwapConfirmationWaitHint(payInAsset)}`;
   }

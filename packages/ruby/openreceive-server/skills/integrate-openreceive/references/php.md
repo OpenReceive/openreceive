@@ -171,7 +171,9 @@ itself, and they hold for every integration.
   and the shadow invoice behind a swap lasts about half an hour, after which the
   same click mints a NEW deposit address and the refund is off-screen. Keep the
   `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
-  such window. https://openreceive.org/guides/swap-refunds.md
+  such window. On the element: the `resume-payment-hash` attribute, fed from
+  the `openreceive-state` event (`event.detail.state.payment_hash`).
+  https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amountFor` and the drop-in renders it above the amount.
   Without it the checkout is a QR and "$1.00" with no sign of what the dollar

@@ -1,8 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
   addButtonToCart,
+  type CheckoutFramework,
   expectPaidReceipt,
   expectWizardCurrencies,
+  hasFrameworkTabs,
   type MintedAttempt,
   mintAttempt,
   openShop,
@@ -28,11 +30,19 @@ const VALID_TRON_REFUND_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
  * Walk shop → order → wizard → USDT → Tron network → Continue, and return the
  * swap attempt minted through POST /openreceive/swaps.
  */
-async function startUsdtTronSwap(page: Page): Promise<MintedAttempt> {
+async function startUsdtTronSwap(
+  page: Page,
+  framework: CheckoutFramework = "react",
+): Promise<MintedAttempt> {
   await openShop(page);
   await addButtonToCart(page);
   await startCheckout(page);
-  await selectFrameworkTab(page, "react");
+  // The tab strip appears with the checkout stage; only node-express has one.
+  test.skip(
+    framework !== "react" && !(await hasFrameworkTabs(page)),
+    "this host has no wrapper tabs",
+  );
+  await selectFrameworkTab(page, framework);
   await expectWizardCurrencies(page);
 
   await page.getByRole("button", { name: /USDT/ }).click();
@@ -123,3 +133,22 @@ test("USDT on Tron refund path: refund_required → validated address → confir
     expect.objectContaining({ refundAddress: VALID_TRON_REFUND_ADDRESS }),
   );
 });
+
+// The way back to a refund: the shop keeps the swap's payment hash from the
+// checkout's state reports and hands it back as `resumePaymentHash` /
+// `resume-payment-hash`, so a reload opens on the deposit instead of the method
+// grid. React's `onState` gets the state itself; the element wrappers and the
+// plain-HTML client get a DOM event with the state at `detail.state`, which the
+// demos once misread as the state and so never kept the hash.
+for (const framework of ["react", "vue"] as const) {
+  test(`${framework}: a reload reopens the order's swap without a click`, async ({ page }) => {
+    const attempt = await startUsdtTronSwap(page, framework);
+    await expect(page.getByText(USDT_DEPOSIT_INSTRUCTION)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText(USDT_DEPOSIT_INSTRUCTION)).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Address", exact: true })).toHaveValue(
+      attempt.depositAddress as string,
+    );
+  });
+}

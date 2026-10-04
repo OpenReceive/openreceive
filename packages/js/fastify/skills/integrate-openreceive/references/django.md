@@ -167,15 +167,19 @@ itself, and they hold for every integration.
   late becomes `refund_required`, and the payer claims it on a SECOND VISIT,
   after leaving your page to fetch an address from another wallet. Three things
   must exist or that money is unreachable through your UI: a per-order URL your
-  server serves (`/checkout/:reference` — `syncUrl` on the drop-ins), your own
-  order-summary route to restore the order from, and the ATTEMPT.
+  server serves (`/checkout/:reference` — `syncUrl` on `<Checkout>`, `sync-url`
+  or `resumable` on `<openreceive-checkout>`), your own order-summary route to
+  restore the order from, and the ATTEMPT.
   `/checkouts/prepare` returns no attempts, so a checkout rebuilt from the
   reference alone opens on the method grid. Re-picking the same coin
   (`POST /swaps`) re-serves the committed attempt — but only while it is live,
   and the shadow invoice behind a swap lasts about half an hour, after which the
   same click mints a NEW deposit address and the refund is off-screen. Keep the
   `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
-  such window. https://openreceive.org/guides/swap-refunds.md
+  such window. On the drop-ins: `resumePaymentHash`, fed from `onState`, on
+  `<Checkout>`; the `resume-payment-hash` attribute, fed from the
+  `openreceive-state` event (`event.detail.state.payment_hash`), on
+  `<openreceive-checkout>`. https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amount_for` and both drop-ins render it above the
   amount. Without it the checkout is a QR and "$1.00" with no sign of what the
