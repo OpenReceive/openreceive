@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.14 - 2026-10-04
+
+Fixes two 0.4.13 reconciliation regressions. A host-clock attempt could be
+skipped indefinitely: with one scan-window slot taken, selection moved its
+cursor past the whole batch and dropped the batch's host-clock attempts. The
+cursor now moves only past attempts it has queued. And a wallet that answers
+only one history page per slice re-read the same overlap page forever; an
+overlap answered alone is now spent, and the next slice reads the unseen page
+first. Both are pinned by new `reconcile-progress.json` vectors. The bundled
+integration skill also documents the plain-HTML checkout's way back to a swap
+refund (`resume-payment-hash`, `resumable`, the `openreceive-state` event).
+
 ## 0.4.13 - 2026-10-01
 
 Reconciliation no longer livelocks on a slow wallet. A wallet-history page

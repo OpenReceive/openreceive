@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.14 - 2026-10-04
+
+Release in lockstep with the 0.4.14 reconciliation fixes (in
+`openreceive-rails`) and the plain-HTML refund documentation in the bundled
+integration skill. No change to this gem's API.
+
 ## 0.4.13 - 2026-10-01
 
 Release in lockstep with the 0.4.13 reconciliation fixes (in

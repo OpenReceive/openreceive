@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.14 - Unreleased
+## 0.4.14 - 2026-10-04
 
 - Fix a 0.4.13 regression in every engine (JS, Ruby, Python, PHP): a
   host-clock attempt could be skipped by reconciliation indefinitely. When one
