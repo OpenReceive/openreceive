@@ -56,6 +56,42 @@
       }
     },
     {
+      "name": "relay failure before the request was written (nwc-ruby NotSentError)",
+      "raw_error": {
+        "name": "NotSentError",
+        "message": "not sent: relay relay.example failed before the request was written (timed out)"
+      },
+      "expected": {
+        "code": "WALLET_UNAVAILABLE",
+        "message": "not sent: relay relay.example failed before the request was written (timed out)",
+        "retryable": true
+      }
+    },
+    {
+      "name": "relay connection lost after the request was written (nwc-ruby TransportError)",
+      "raw_error": {
+        "name": "TransportError",
+        "message": "relay closed the connection before the wallet responded"
+      },
+      "expected": {
+        "code": "WALLET_UNAVAILABLE",
+        "message": "relay closed the connection before the wallet responded",
+        "retryable": true
+      }
+    },
+    {
+      "name": "relay holds no wallet info event (nwc-ruby InfoUnavailableError)",
+      "raw_error": {
+        "name": "InfoUnavailableError",
+        "message": "wallet service published no info event (kind 13194) on relay relay.example"
+      },
+      "expected": {
+        "code": "WALLET_UNAVAILABLE",
+        "message": "wallet service published no info event (kind 13194) on relay relay.example",
+        "retryable": true
+      }
+    },
+    {
       "name": "a wallet's own FORBIDDEN is a wallet restriction, never the host's FORBIDDEN",
       "raw_error": {
         "code": "FORBIDDEN",

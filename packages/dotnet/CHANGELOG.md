@@ -1,5 +1,11 @@
 # BTCPay Server plugin changelog
 
+## Unreleased
+
+- Wallet error normalization maps `NOT_SENT_ERROR`, `TRANSPORT_ERROR` and
+  `INFO_UNAVAILABLE_ERROR` to `WALLET_UNAVAILABLE`, keeping parity with the
+  shared `error-normalization` vectors.
+
 ## 0.4.13 — 2026-10-01
 
 - **A resumed walk no longer lets expiry cleanup drop an invoice it never

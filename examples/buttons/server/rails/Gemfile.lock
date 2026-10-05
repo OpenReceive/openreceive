@@ -2,7 +2,7 @@ PATH
   remote: ../../../../packages/ruby/openreceive-rails
   specs:
     openreceive-rails (0.4.14)
-      nwc-ruby (~> 0.2, >= 0.2.4)
+      nwc-ruby (~> 0.3)
       openreceive (= 0.4.14)
       openreceive-server (= 0.4.14)
       rails (>= 8.0)
@@ -204,7 +204,7 @@ GEM
       racc (~> 1.4)
     nokogiri (1.19.4-x86_64-linux-musl)
       racc (~> 1.4)
-    nwc-ruby (0.2.4)
+    nwc-ruby (0.3.0)
       async (~> 2.10)
       async-http (~> 0.70)
       async-websocket (~> 0.26)

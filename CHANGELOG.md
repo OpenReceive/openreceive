@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- `openreceive-rails` now requires `nwc-ruby ~> 0.3`. With 0.2.x, a silent
+  relay or an offline wallet behind a live relay could block `make_invoice`
+  (checkout create) and the boot preflight indefinitely: 0.2.x checked its
+  deadline only when a message arrived. 0.3 bounds the whole call, including
+  connect and the info fetch, by `request_timeout`, retries failures that
+  happen before the request is written, and falls through to the next relay
+  in the connection string.
+- Relay transport failures now normalize to `WALLET_UNAVAILABLE` (retryable,
+  HTTP 503) in every engine instead of `OTHER` (HTTP 502). New aliases cover
+  nwc-ruby 0.3's `NotSentError`, `TransportError` and `InfoUnavailableError`
+  names; three new `spec/test-vectors/error-normalization.json` cases pin them.
+  This matches how the JS NWC client's network errors were already reported.
+
 ## 0.4.14 - 2026-10-04
 
 - Fix a 0.4.13 regression in every engine (JS, Ruby, Python, PHP): a
@@ -446,7 +461,7 @@ done before either engine exists.
 - **The FixedFloat status mapping is data.** `spec/data/swap-state-table.json`
   is the one hand-edited decision table for status + emergency block +
   refund-tx presence → swap state and attention/refund reasons. `npm run
-  generate:models` renders it beside the kernel tables into JS, Ruby and C#,
+generate:models` renders it beside the kernel tables into JS, Ruby and C#,
   and each engine's production normalizer is now a short interpreter of the
   rendering instead of a hand-written copy. `npm run validate` checks the
   table against the kernel vocabularies and replays every `swap-state` vector
@@ -511,7 +526,7 @@ done before either engine exists.
   and `openreceive_lifespan(host, engine=…, lazy=False)` (the fail-closed wallet preflight at
   startup). The console script grew its verbs: `doctor` / `debug-report` (with `--app module:attr`,
   `--db`, `--url`, `--offline`), `reconcile`, `notifications`, and `scaffold payments --sql
-  --dialect postgres|sqlite|mysql` / `--alembic` (a frozen Alembic revision). Buy a Button on
+--dialect postgres|sqlite|mysql` / `--alembic` (a frozen Alembic revision). Buy a Button on
   FastAPI (`examples/buttons/server/fastapi`, :3007): the minimal Python host — SQLite, the
   packaged React `<Checkout>`, `/__testkit` on `openreceive.testing`, Vite as the dev front door
   spawning `uv run uvicorn`; `OPENRECEIVE_E2E_STACK=fastapi` runs the shared Playwright suite
@@ -551,6 +566,7 @@ done before either engine exists.
   E2E stack `django` (`npm run test:e2e:smoke:django`). Docs: `quickstart-django`
   (`fulfill-once` shared with Rails, `credentials`/`next` with the Node and FastAPI pages), the
   Django agent-directions payload, deploying/storage notes; CI `django-example` + demos `buttons-django`.
+
 ### Plain PHP: the example, the quickstart, the Composer release
 
 The PHP engine gets its framework-free host, its documentation and its release
@@ -591,7 +607,7 @@ path.
   (`web`: session + CSRF, `X-CSRF-TOKEN` from the meta tag), and hands
   `authorize` the Illuminate request through the engine's new
   `RequestHandler::HOST_REQUEST_ATTRIBUTE` seam. `php artisan
-  openreceive:install` writes the config, `app/OpenReceive/Host.php` (the two
+openreceive:install` writes the config, `app/OpenReceive/Host.php` (the two
   placeholder traits wired, the fulfillment note as comments) and one
   migration calling `PaymentsSchema::statements()`; `openreceive:doctor`
   (set/unset only), `openreceive:reconcile` and `openreceive:notifications`
@@ -613,7 +629,7 @@ path.
   `OPENRECEIVE_E2E_STACK=laravel` on the shared Playwright smoke, `bin/ci` and
   a per-push `laravel-example` job.
 - **Composer release tooling.** `tools/release/composer-release.mjs
-  plan|build|publish` (`release:composer:*`): `git subtree split` of
+plan|build|publish` (`release:composer:*`): `git subtree split` of
   `packages/php/openreceive` and `packages/php/laravel` into per-package
   branches, a fix-up commit that strips the Laravel package's monorepo `path`
   repository and pins the engine to `~X.Y.Z`, a force-push to the read-only

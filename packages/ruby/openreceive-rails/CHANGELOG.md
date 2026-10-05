@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Requires `nwc-ruby ~> 0.3`. On 0.2.x a silent relay, or an offline wallet
+behind a live relay, could block a checkout's `make_invoice` and the boot
+preflight indefinitely, holding a web thread. 0.3 bounds every call by
+`request_timeout`, retries only failures from before the request is written,
+and tries each relay in the connection string. Relay failures now answer 503
+`WALLET_UNAVAILABLE` (retryable) instead of 502 `OTHER`.
+
 ## 0.4.14 - 2026-10-04
 
 Fixes two 0.4.13 reconciliation regressions. A host-clock attempt could be

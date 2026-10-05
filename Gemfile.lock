@@ -162,7 +162,7 @@ GEM
       racc (~> 1.4)
     nokogiri (1.19.4-x86_64-linux-gnu)
       racc (~> 1.4)
-    nwc-ruby (0.2.4)
+    nwc-ruby (0.3.0)
       async (~> 2.10)
       async-http (~> 0.70)
       async-websocket (~> 0.26)
@@ -270,7 +270,7 @@ PLATFORMS
 
 DEPENDENCIES
   minitest (>= 5.0)
-  nwc-ruby (~> 0.2, >= 0.2.4)
+  nwc-ruby (~> 0.3)
   rails (>= 8.0)
   sqlite3 (>= 2.1)
 

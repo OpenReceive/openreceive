@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+`OpenReceive::Nwc.normalize_wallet_error` maps nwc-ruby 0.3's
+`NotSentError`, `TransportError` and `InfoUnavailableError` to
+`WALLET_UNAVAILABLE` (retryable) instead of `OTHER`, matching the shared
+`error-normalization` vectors.
+
 ## 0.4.14 - 2026-10-04
 
 Release in lockstep with the 0.4.14 reconciliation fixes (in

@@ -45,7 +45,8 @@ Gem::Specification.new do |spec|
   # config.nwc_client, so it is a hard dependency HERE even though it is
   # deliberately not one of openreceive-server (framework-agnostic Rack, host
   # injects its own client). config.nwc_client remains the supported override.
-  spec.add_dependency "nwc-ruby", "~> 0.2", ">= 0.2.4"
+  # 0.3 bounds every call (connect, info fetch, make_invoice) by request_timeout.
+  spec.add_dependency "nwc-ruby", "~> 0.3"
 
   # Test-only: the engine-owned model tests run against in-memory SQLite.
   spec.add_development_dependency "sqlite3", ">= 2.1"
