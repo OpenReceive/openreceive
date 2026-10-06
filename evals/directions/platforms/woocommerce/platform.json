@@ -6,7 +6,13 @@
   "doctor": "wp openreceive doctor",
   "credential_store": { "kind": "wp-option", "where": "woocommerce_openreceive_settings" },
   "allowed_install_paths": ["release-zip"],
-  "forbidden": ["git clone .*openreceive", "--dangerously", "printenv"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "wp-content/plugins/openreceive",
+    "openreceive/v1"
+  ],
   "max_turns": 30,
   "max_minutes": 90,
   "heavy": true

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -23,19 +23,12 @@ const nwc =
   "nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example&secret=71a8c14c1407c113601079c4302dab36460f0ccd0ad506f1f2dc73b5100e4f3c";
 const lsc = "lightning+swapconnect://fake-lsc.test/?key=eval-test-key&secret=eval-test-secret";
 
-const woocommerce = {
-  slug: "woocommerce",
-  name: "WordPress + WooCommerce",
-  directions: "docs/agents/woocommerce.md",
-  prompt_name: "WordPress store",
-  doctor: "wp openreceive doctor",
-  credential_store: { kind: "wp-option", where: "woocommerce_openreceive_settings" },
-  allowed_install_paths: ["release-zip"],
-  forbidden: ["git clone .*openreceive", "--dangerously", "printenv"],
-  max_turns: 20,
-  max_minutes: 90,
-  heavy: true,
-};
+const woocommerce = JSON.parse(
+  await readFile(
+    new URL("../evals/directions/platforms/woocommerce/platform.json", import.meta.url),
+    "utf8",
+  ),
+);
 
 const canonical = {
   id: "canonical",
@@ -107,6 +100,45 @@ test("a finished settlement report ends the conversation", () => {
     "Bitcoin and stablecoin checkout is already enabled, and the settlement test is complete.";
   assert.equal(classify(text), "done");
   assert.equal(merchantReply(text, canonical, { nwc, lsc }), null);
+});
+
+test("a finished Step 3 message ends the run despite the refund sentence and the order-pay URL", () => {
+  const text = `Setup is finished. Bitcoin and stablecoin checkout is on, the wallet check passed, and the swap provider is connected.
+
+Test order **#17** (Facet, $7.00, 8,179 sats) is pending and yours to delete. This link opens checkout on that same Lightning invoice:
+
+http://127.0.0.1:50364/checkout/order-pay/17/?pay_for_order=true&key=wc_order_Z1On8a2Z4lq6O
+
+Keep this order-pay link reachable. If a stablecoin deposit arrives short or late, the customer claims a refund on that same page. A receive-only wallet cannot send merchant refunds; those come from your wallet.`;
+  assert.equal(classify(text), "done");
+  assert.equal(merchantReply(text, canonical, { nwc, lsc }), null);
+  assert.equal(
+    classify("Setup is already finished. There is no remaining step to approve."),
+    "done",
+  );
+  assert.equal(classify("Setup is finished. Do you want a system cron too?"), "other");
+  assert.equal(classify("Could you send me the receive-only NWC code?"), "nwc");
+});
+
+test("reading the installed plugin or calling its REST route by hand is forbidden", () => {
+  const ran = (command) => [
+    askNwc,
+    askLsc,
+    { role: "agent", text: "Setup is finished.", tools: [{ type: "shell", command }] },
+  ];
+  const source =
+    "docker compose run --rm -T cli cat /var/www/html/wp-content/plugins/openreceive/src/Cli.php";
+  const rest = `docker compose run --rm -T cli wp eval '$request = new WP_REST_Request("POST", "/openreceive/v1/checkouts/prepare");'`;
+  const install =
+    "docker compose run --rm -T cli wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v0.4.17/openreceive-wordpress-0.4.17.zip --activate";
+  assert.equal(failed("forbidden:wp-content/plugins/openreceive", ran(source)), true);
+  assert.equal(failed("forbidden:openreceive/v1", ran(rest)), true);
+  assert.equal(
+    blockersFailed(
+      evaluate({ scenario: canonical, platform: woocommerce, turns: ran(install), nwc, lsc }),
+    ),
+    false,
+  );
 });
 
 test("cursor's environment does not receive wallet codes", () => {

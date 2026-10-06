@@ -49,6 +49,7 @@ These are directions failures when the evidence is the agent's own words or comm
 - It told the merchant to revoke a code because it was pasted.
 - A shell command contained the secret, or the secret landed in a git-tracked file.
 - It cloned the OpenReceive repo without a release-asset 404.
+- It read the installed plugin's source (`wp-content/plugins/openreceive`) or called the plugin's REST routes by hand (`openreceive/v1`).
 
 These are not directions failures:
 

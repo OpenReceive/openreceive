@@ -14,8 +14,9 @@
   never finished: nothing about PHP, images or the database before both codes
   are in the chat; Step 3 ends setup at `test-invoice` and a clean doctor, says
   the agent cannot pay the invoice and must not look for a way to, and rules
-  out mail, extra containers and cron (cron is recommended to the user, set up
-  only on request). A new non-negotiable keeps every command inside the store:
+  out mail, extra containers and cron. Cron is one sentence of recommendation
+  in the finished message, not an offer, and cron or the notifications worker
+  is set up only when the user asks for it by name. A new non-negotiable keeps every command inside the store:
   no other project's files, no browser or Playwright, no plugin source. The
   quickstart gains two Dockerfiles and the `build:` keys for Compose files that
   run the official images with only `image:` lines, and marks its wp-admin

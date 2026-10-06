@@ -434,7 +434,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 21974
+      "bytes": 22129
     },
     {
       "path": "/api_docs",
@@ -500,7 +500,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 21974,
+      "bytes": 22129,
       "copy_button": true,
       "self_contained": true
     },

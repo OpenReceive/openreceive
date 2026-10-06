@@ -23,14 +23,20 @@ function delegateRequest(text: string): boolean {
 }
 
 const DONE =
-  /setup is complete|you(?:'re| are) all set|integration is complete|payments are enabled|nothing else to do|settlement test is complete/i;
+  /setup is (?:already )?(?:complete|finished)|you(?:'re| are) all set|integration is complete|payments are enabled|nothing else to do|settlement test is complete/i;
+
+/** A `?` inside a URL ("?pay_for_order=true") is not a question. */
+function withoutUrls(text: string): string {
+  return text.replace(/\bhttps?:\/\/\S+/gi, "<url>");
+}
 
 /**
  * "copy" only counts as a request ("copy the code"), not narration ("this copy").
+ * "send" only counts with an object ("send me the code"), not "cannot send refunds".
  * A bare question mark still counts after the code is named.
  */
 const NWC_ASK =
-  /(?:\bpaste\b|\bsend\b|\bshare\b|\bneed\b|\bcopy(?=\s+(?:the|your|it|a)\b)).{0,240}(?:\bnwc\b|nostr wallet connect|receive-only)|(?:\bnwc\b|nostr wallet connect|receive-only).{0,240}(?:\bpaste\b|\bsend\b|\bshare\b|\?)/is;
+  /(?:\bpaste\b|\bsend(?=\s+(?:me|it|the|that|this|your|over)\b)|\bshare\b|\bneed\b|\bcopy(?=\s+(?:the|your|it|a)\b)).{0,240}(?:\bnwc\b|nostr wallet connect|receive-only)|(?:\bnwc\b|nostr wallet connect|receive-only).{0,240}(?:\bpaste\b|\bsend(?=\s+(?:me|it|the|that|this|your|over)\b)|\bshare\b|\?)/is;
 
 const LSC_ASK =
   /(?:\bpaste\b|\bsend\b|\bshare\b|\bneed\b|\bcopy(?=\s+(?:the|your|it|a)\b)).{0,240}(?:\blsc\b|lightning swap connect|swap provider|lightning-swap\.com|lightning\+swapconnect)|(?:\blsc\b|lightning swap connect|swap provider|lightning-swap\.com).{0,240}(?:\bpaste\b|\bsend\b|\bshare\b|\bcopy(?=\s+(?:the|your|it|a)\b)|\?)/is;
@@ -72,13 +78,13 @@ export function classify(text: string): Intent {
   if (asksPrimaryLsc(message)) return "lsc";
   if (asksBackup(message)) return "lsc_backup";
   if (CHOICE.test(message)) return "bitcoin_choice";
-  if (message.includes("?") === false && DONE.test(message)) return "done";
+  if (withoutUrls(message).includes("?") === false && DONE.test(message)) return "done";
   return "other";
 }
 
 /** The request and the code name have to be in the same sentence. */
 export function asksNwc(text: string): boolean {
-  return sentences(text).some((sentence) => NWC_ASK.test(sentence));
+  return sentences(withoutUrls(text)).some((sentence) => NWC_ASK.test(sentence));
 }
 
 export function asksLsc(text: string): boolean {

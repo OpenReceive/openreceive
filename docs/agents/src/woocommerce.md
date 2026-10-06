@@ -147,8 +147,10 @@ longer `pending`.
 Setup ends here. Once doctor is clean and the user has the link, say that setup
 is finished, in one message. Do not install mail software, add containers or
 services, or set up cron. If doctor's "Reconcile scheduled" check fails, fix
-that. On a store with little traffic, tell the user once that a system cron for
-WordPress scheduled work settles orders sooner; set it up only if they ask.
+that. On a store with little traffic, add one sentence to that message: a
+system cron for WordPress scheduled work settles orders sooner, and this setup
+does not add one. State it as a recommendation. Do not offer to set it up or
+end the message on a question.
 
 ## Non-negotiables
 
@@ -177,7 +179,8 @@ WordPress scheduled work settles orders sooner; set it up only if they ask.
 - Settlement runs on checkout requests and an every-minute scheduled job. A
   system cron for WordPress scheduled work helps a low-traffic store, and
   `wp openreceive notifications` is an optional long-running worker: recommend
-  them, and set them up only if the user asks.
+  them, and set one up only when the user asks for it by name. "Go ahead" is
+  not that request.
 
 ## Further reading
 
