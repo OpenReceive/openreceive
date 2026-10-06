@@ -23,7 +23,7 @@ npm run eval:directions -- --platform <slug> --runs 1 --parallel 1
 - The codes are one live wallet. `--parallel` must be 1. Do not start a second eval while one is running.
 - WooCommerce allows 30 turns. A `did_not_finish` while the agent is still on checkout is the cap, not a directions bug.
 
-Only `woocommerce` is wired today. If another slug is requested, say so and do not invent a fixture.
+Only `woocommerce` and `node` are wired. If another slug is requested, say so and do not invent a fixture.
 
 A run spends model tokens and takes several minutes. `agent status` must show a login. Exit 0 means every blocker passed, 1 means a directions check failed, 2 means Docker, the Cursor CLI, or a missing code failed. An exit 2 is infrastructure. Do not describe it as a directions bug.
 

@@ -77,7 +77,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
   request.registerStop?.(stop);
 
   try {
-    sandbox = await startShop(directory, seed);
+    sandbox = await startShop(directory, seed, platform);
     const wallet = request.codes;
     const uris = [wallet.nwc, wallet.lsc, wallet.lscBackup].filter(
       (value): value is string => typeof value === "string" && value.length > 0,
@@ -92,7 +92,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       sandbox.id,
     );
 
-    const pre = shopChecks(await inspectShop(directory));
+    const pre = shopChecks(await inspectShop(directory, platform));
     const plain = pre.filter((check) => check.severity === "blocker" && check.pass === false);
     if (plain.length > 0) {
       const message = `plain shop failed: ${plain.map((check) => check.id).join(", ")}`;

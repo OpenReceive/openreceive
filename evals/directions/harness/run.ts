@@ -23,7 +23,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 }
 
 function help(): void {
-  console.log(`Usage: npm run eval:directions -- --platform woocommerce [--smoke] [--runs 1] [--parallel 1] [--keep]
+  console.log(`Usage: npm run eval:directions -- --platform woocommerce|node [--smoke] [--runs 1] [--parallel 1] [--keep]
        [--directions-url <url> | --serve-directions] [--model <id>]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,
@@ -81,9 +81,9 @@ async function smokeOne(platform: Platform, keep: boolean): Promise<void> {
   const fixture = path.join(evalRoot, "platforms", platform.slug, "fixture");
   const seed = path.join(evalRoot, "platforms", platform.slug, "seed");
   const directory = await prepareShop(fixture, platform.slug);
-  const sandbox = await startShop(directory, seed);
+  const sandbox = await startShop(directory, seed, platform);
   try {
-    const evidence = await inspectShop(directory);
+    const evidence = await inspectShop(directory, platform);
     const checks = shopChecks(evidence);
     await writeReport(platform.slug, sandbox.id, sandbox.baseUrl, checks);
     const failed = checks.filter((item) => item.severity === "blocker" && item.pass === false);

@@ -31,10 +31,12 @@ npm run eval:directions -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead:
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. `node` is a plain Express shop with server-rendered HTML:
 
 ```sh
 npm run eval:directions -- --platform woocommerce --serve-directions
+npm run eval:directions -- --platform node --smoke
+npm run eval:directions -- --platform node --serve-directions
 ```
 
 The default URL is the live `https://openreceive.org/agent-directions/<slug>.md`. The agent is Cursor (`agent status` must show a login). It runs on the host with its workspace set to the shop copy, because the directions tell it to run `docker compose`.
@@ -44,3 +46,11 @@ The default URL is the live `https://openreceive.org/agent-directions/<slug>.md`
 Exit 0 when every blocker passed, 1 when a directions check failed, 2 when Docker, the Cursor CLI, or a missing code failed.
 
 Reports land in `evals/directions/reports/` and are not committed. `summary.md` lists blockers with the quoted line. `transcript.md` has the codes replaced by `<NWC>` and `<LSC>`.
+
+## Passed
+
+A platform is listed here after one live run exits 0. The report itself stays gitignored.
+
+| Platform | Date | Release |
+| --- | --- | --- |
+| WooCommerce | 2026-10-06 | 0.4.18 |

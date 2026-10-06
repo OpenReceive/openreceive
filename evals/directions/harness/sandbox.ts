@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { compose, InfraError } from "./docker.ts";
-import type { Check } from "./types.ts";
+import type { Check, Platform } from "./types.ts";
 
 const UP_TIMEOUT_MS = 6 * 60 * 1000;
 const SEED_TIMEOUT_MS = 15 * 60 * 1000;
@@ -19,9 +19,18 @@ export interface Sandbox {
 export interface ShopEvidence {
   readonly baseUrl: string;
   readonly productCount: number;
-  readonly gmp: boolean;
+  /** Absent on shops that are not PHP. */
+  readonly gmp?: boolean;
   readonly openreceive: boolean;
   readonly nwcInEnv: boolean;
+}
+
+function serviceOf(platform: Platform): string {
+  return platform.service ?? "wordpress";
+}
+
+function containerPortOf(platform: Platform): number {
+  return platform.container_port ?? 80;
 }
 
 function run(command: string, args: readonly string[], cwd: string): Promise<void> {
@@ -35,7 +44,7 @@ function run(command: string, args: readonly string[], cwd: string): Promise<voi
   });
 }
 
-const FIXTURE_PORT = "127.0.0.1:8080:80";
+const FIXTURE_PORT = "127.0.0.1:8080:";
 
 /** A port nothing on 127.0.0.1 is listening on right now. */
 function freePort(): Promise<number> {
@@ -56,8 +65,8 @@ function freePort(): Promise<number> {
 /**
  * Copy the fixture to a unique directory. Its basename is the Compose project name.
  * The copy gets its own fixed host port: a random one ("127.0.0.1::80") changes
- * when the agent recreates the container after adding GMP, and the order-pay
- * links WordPress prints then point at the old port.
+ * when the agent recreates the container, and links the shop prints then point
+ * at the old port. The container port after the marker stays as the fixture wrote it.
  */
 export async function prepareShop(fixtureDir: string, slug: string): Promise<string> {
   const id = Math.random().toString(16).slice(2, 10);
@@ -67,9 +76,9 @@ export async function prepareShop(fixtureDir: string, slug: string): Promise<str
   const fixture = await readFile(composeFile, "utf8");
   if (!fixture.includes(FIXTURE_PORT))
     throw new InfraError(`${composeFile} does not publish ${FIXTURE_PORT}.`);
-  await writeFile(composeFile, fixture.replace(FIXTURE_PORT, `127.0.0.1:${await freePort()}:80`));
+  await writeFile(composeFile, fixture.replace(FIXTURE_PORT, `127.0.0.1:${await freePort()}:`));
   await run("git", ["init", "-b", "master"], directory);
-  await run("git", ["add", "README.md", "compose.yml"], directory);
+  await run("git", ["add", "-A"], directory);
   await run(
     "git",
     [
@@ -95,11 +104,30 @@ async function removeShop(directory: string): Promise<void> {
   await rm(directory, { recursive: true, force: true });
 }
 
-export async function startShop(directory: string, seedDir: string): Promise<Sandbox> {
+export async function startShop(
+  directory: string,
+  seedDir: string,
+  platform: Platform,
+): Promise<Sandbox> {
   const id = path.basename(directory);
+  const service = serviceOf(platform);
   try {
     await compose(directory, ["up", "-d", "--wait", "--wait-timeout", "300"], UP_TIMEOUT_MS);
-    const baseUrl = `http://127.0.0.1:${await publishedPort(directory)}`;
+    const baseUrl = `http://127.0.0.1:${await publishedPort(directory, service, containerPortOf(platform))}`;
+    if (platform.seed === false) {
+      return {
+        id,
+        directory,
+        baseUrl,
+        stop: async (keep: boolean) => {
+          if (keep) {
+            console.log(`Kept ${id} at ${baseUrl} (${directory})`);
+            return;
+          }
+          await removeShop(directory);
+        },
+      };
+    }
     await compose(
       directory,
       [
@@ -144,16 +172,22 @@ export async function startShop(directory: string, seedDir: string): Promise<San
   }
 }
 
-async function publishedPort(directory: string): Promise<string> {
-  const published = await compose(directory, ["port", "wordpress", "80"], 30_000);
+async function publishedPort(
+  directory: string,
+  service: string,
+  containerPort: number,
+): Promise<string> {
+  const published = await compose(directory, ["port", service, String(containerPort)], 30_000);
   const host = published.stdout.trim().split("\n").filter(Boolean).at(-1) ?? "";
   const port = host.match(/:(\d+)\s*$/)?.[1];
-  if (port === undefined) throw new InfraError(`WordPress did not publish a port (${host}).`);
+  if (port === undefined) throw new InfraError(`${service} did not publish a port (${host}).`);
   return port;
 }
 
-export async function inspectShop(directory: string): Promise<ShopEvidence> {
-  const port = await publishedPort(directory);
+export async function inspectShop(directory: string, platform: Platform): Promise<ShopEvidence> {
+  const service = serviceOf(platform);
+  const port = await publishedPort(directory, service, containerPortOf(platform));
+  if (service !== "wordpress") return inspectNodeShop(directory, service, port);
   // The same command the directions tell an agent to run.
   const count = await compose(
     directory,
@@ -195,6 +229,31 @@ export async function inspectShop(directory: string): Promise<ShopEvidence> {
   };
 }
 
+async function inspectNodeShop(
+  directory: string,
+  service: string,
+  port: string,
+): Promise<ShopEvidence> {
+  const count = await compose(
+    directory,
+    ["exec", "-T", service, "node", "bin/product-count.js"],
+    60_000,
+  );
+  const installed = await compose(
+    directory,
+    ["exec", "-T", service, "node", "bin/openreceive-installed.js"],
+    30_000,
+  );
+  const env = await compose(directory, ["exec", "-T", service, "printenv"], 30_000);
+  const lastLine = count.stdout.trim().split("\n").filter(Boolean).at(-1);
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    productCount: Number(lastLine),
+    openreceive: installed.stdout.trim() === "yes",
+    nwcInEnv: /^(?:NWC_URI|LSC_URI_)/m.test(env.stdout),
+  };
+}
+
 export function shopChecks(evidence: ShopEvidence): Check[] {
   return [
     {
@@ -211,13 +270,17 @@ export function shopChecks(evidence: ShopEvidence): Check[] {
       summary: "The shop has five products and no OpenReceive code.",
       evidence: `${evidence.productCount} products`,
     },
-    {
-      id: "gmp_absent",
-      severity: "blocker",
-      pass: evidence.gmp === false,
-      summary: "The stock WordPress image does not have GMP.",
-      evidence: evidence.gmp ? "gmp is loaded" : "gmp is absent",
-    },
+    ...(evidence.gmp === undefined
+      ? []
+      : [
+          {
+            id: "gmp_absent",
+            severity: "blocker" as const,
+            pass: evidence.gmp === false,
+            summary: "The stock WordPress image does not have GMP.",
+            evidence: evidence.gmp ? "gmp is loaded" : "gmp is absent",
+          },
+        ]),
     {
       id: "openreceive_absent",
       severity: "blocker",

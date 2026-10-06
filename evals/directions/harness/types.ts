@@ -41,6 +41,12 @@ export interface Platform {
   readonly max_minutes: number;
   /** WordPress and BTCPay each need a database server. At most two of these run at once. */
   readonly heavy: boolean;
+  /** Compose service that publishes the shop. WordPress when omitted. */
+  readonly service?: string;
+  /** Port inside that service. 80 when omitted. */
+  readonly container_port?: number;
+  /** Run the platform seed script after the stack is up. WordPress does; Node boots seeded. */
+  readonly seed?: boolean;
 }
 
 export type Severity = "blocker" | "polish";
