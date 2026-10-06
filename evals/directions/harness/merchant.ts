@@ -33,10 +33,11 @@ const NWC_ASK =
   /(?:\bpaste\b|\bsend\b|\bshare\b|\bneed\b|\bcopy(?=\s+(?:the|your|it|a)\b)).{0,240}(?:\bnwc\b|nostr wallet connect|receive-only)|(?:\bnwc\b|nostr wallet connect|receive-only).{0,240}(?:\bpaste\b|\bsend\b|\bshare\b|\?)/is;
 
 const LSC_ASK =
-  /(?:\bpaste\b|\bsend\b|\bshare\b|\bneed\b|\bcopy(?=\s+(?:the|your|it|a)\b)).{0,240}(?:\blsc\b|lightning swap connect|swap provider|lightning-swap\.com|lightning\+swapconnect)|(?:\blsc\b|lightning swap connect|swap provider|lightning-swap\.com).{0,240}(?:\bpaste\b|\bsend\b|\bshare\b|\?)/is;
+  /(?:\bpaste\b|\bsend\b|\bshare\b|\bneed\b|\bcopy(?=\s+(?:the|your|it|a)\b)).{0,240}(?:\blsc\b|lightning swap connect|swap provider|lightning-swap\.com|lightning\+swapconnect)|(?:\blsc\b|lightning swap connect|swap provider|lightning-swap\.com).{0,240}(?:\bpaste\b|\bsend\b|\bshare\b|\bcopy(?=\s+(?:the|your|it|a)\b)|\?)/is;
 
+/** A period inside a URL ("lightning-swap.com") does not end a sentence. */
 function sentences(text: string): string[] {
-  return text.split(/(?<=[.!?\n])/);
+  return text.split(/(?<=[.!?])(?=\s)|(?<=\n)/);
 }
 
 /** A sentence that asks for a backup swap code, not the primary walkthrough. */
@@ -53,7 +54,9 @@ function asksPrimaryLsc(text: string): boolean {
   if (!asksLsc(text)) return false;
   if (/lightning-swap\.com/i.test(text)) return true;
   if (!asksBackup(text)) return true;
-  return sentences(text).some((sentence) => !/\bbackup\b/i.test(sentence) && LSC_ASK.test(sentence));
+  return sentences(text).some(
+    (sentence) => !/\bbackup\b/i.test(sentence) && LSC_ASK.test(sentence),
+  );
 }
 
 const CHOICE =
@@ -92,7 +95,11 @@ function withCode(code: string | undefined): string | undefined {
   return `I'd rather not run commands or edit files. Can you do it? Here is the code if you need it: ${code}`;
 }
 
-export function merchantReply(text: string, scenario: Scenario, codes: MerchantCodes): string | null {
+export function merchantReply(
+  text: string,
+  scenario: Scenario,
+  codes: MerchantCodes,
+): string | null {
   const intent = classify(text);
   if (intent === "done") return null;
   if (intent === "delegate") {

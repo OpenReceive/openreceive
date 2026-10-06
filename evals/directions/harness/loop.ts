@@ -1,11 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  blockersFailed,
-  containsSecret,
-  evaluate,
-  scopeViolation,
-} from "./checks.ts";
+import { blockersFailed, containsSecret, evaluate, scopeViolation } from "./checks.ts";
 import type { MerchantCodes } from "./codes.ts";
 import { agentTurn, cursorEnv, type SeenWrite } from "./cursor.ts";
 import { InfraError } from "./docker.ts";
@@ -82,22 +77,22 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
   request.registerStop?.(stop);
 
   try {
-  sandbox = await startShop(directory, seed);
-  const wallet = request.codes;
-  const uris = [wallet.nwc, wallet.lsc, wallet.lscBackup].filter(
-    (value): value is string => typeof value === "string" && value.length > 0,
-  );
-  const day = new Date().toISOString().slice(0, 10);
-  const reportDir = path.join(
-    evalRoot,
-    "reports",
-    `${day}-${request.mode}`,
-    platform.slug,
-    "cursor",
-    sandbox.id,
-  );
+    sandbox = await startShop(directory, seed);
+    const wallet = request.codes;
+    const uris = [wallet.nwc, wallet.lsc, wallet.lscBackup].filter(
+      (value): value is string => typeof value === "string" && value.length > 0,
+    );
+    const day = new Date().toISOString().slice(0, 10);
+    const reportDir = path.join(
+      evalRoot,
+      "reports",
+      `${day}-${request.mode}`,
+      platform.slug,
+      "cursor",
+      sandbox.id,
+    );
 
-  const pre = shopChecks(await inspectShop(directory));
+    const pre = shopChecks(await inspectShop(directory));
     const plain = pre.filter((check) => check.severity === "blocker" && check.pass === false);
     if (plain.length > 0) {
       const message = `plain shop failed: ${plain.map((check) => check.id).join(", ")}`;
@@ -198,9 +193,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       nwc: wallet.nwc,
       lsc: wallet.lsc,
       lscBackup: wallet.lscBackup,
-    }).map(
-      (check) => (check.id === "secret_not_tracked" ? secret : check),
-    );
+    }).map((check) => (check.id === "secret_not_tracked" ? secret : check));
     checks.push(stayedInShop(turns, repoRoot), finishedCheck(done, reason));
     const redacted = checks.map((check) => ({
       ...check,

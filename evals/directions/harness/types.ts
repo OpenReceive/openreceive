@@ -10,7 +10,14 @@ export type ToolEvent =
   | { readonly type: "write"; readonly path: string; readonly tracked: boolean }
   | { readonly type: "fetch"; readonly url: string; readonly status?: number };
 
-export type Intent = "nwc" | "lsc" | "lsc_backup" | "bitcoin_choice" | "delegate" | "done" | "other";
+export type Intent =
+  | "nwc"
+  | "lsc"
+  | "lsc_backup"
+  | "bitcoin_choice"
+  | "delegate"
+  | "done"
+  | "other";
 
 export interface Scenario {
   readonly id: string;

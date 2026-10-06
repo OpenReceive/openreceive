@@ -156,7 +156,8 @@ async function main(): Promise<void> {
         explicitUrl ??
         served?.fileUrl(`${platform.slug}.md`) ??
         `https://openreceive.org/agent-directions/${platform.slug}.md`;
-      const mode = served === undefined && !directionsUrl.includes("127.0.0.1") ? "released" : "candidate";
+      const mode =
+        served === undefined && !directionsUrl.includes("127.0.0.1") ? "released" : "candidate";
       for (let index = 0; index < runs; index += 1) {
         jobs.push({
           heavy: platform.heavy,
@@ -188,7 +189,10 @@ async function main(): Promise<void> {
     } finally {
       if (!smoke && results.length > 0) {
         const day = new Date().toISOString().slice(0, 10);
-        const mode = served === undefined && explicitUrl?.includes("127.0.0.1") !== true ? "released" : "candidate";
+        const mode =
+          served === undefined && explicitUrl?.includes("127.0.0.1") !== true
+            ? "released"
+            : "candidate";
         const directory = path.join(evalRoot, "reports", `${day}-${mode}`);
         await mkdir(directory, { recursive: true });
         await writeFile(

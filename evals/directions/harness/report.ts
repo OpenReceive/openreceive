@@ -58,7 +58,10 @@ export async function writeRunReport(input: ReportInput): Promise<void> {
         .filter((tool) => tool.type === "shell")
         .map((tool) => (tool.type === "shell" ? tool.command : ""))
         .filter((command) => command.length > 0);
-      const body = [hide(turn.text, input.uris), ...commands.map((command) => hide(command, input.uris))];
+      const body = [
+        hide(turn.text, input.uris),
+        ...commands.map((command) => hide(command, input.uris)),
+      ];
       return `## ${turn.role}\n\n${body.join("\n\n")}`;
     })
     .join("\n\n");
@@ -79,7 +82,9 @@ export function summaryMarkdown(
   runs: readonly { readonly id: string; readonly checks: readonly Check[] }[],
 ): string {
   const blocks = runs.map((run) => {
-    const blockers = run.checks.filter((check) => check.severity === "blocker" && check.pass === false);
+    const blockers = run.checks.filter(
+      (check) => check.severity === "blocker" && check.pass === false,
+    );
     const passed = run.checks.filter((check) => check.pass);
     const lines = [`## ${run.id}`, ""];
     if (blockers.length === 0) lines.push("No blockers.", "");
