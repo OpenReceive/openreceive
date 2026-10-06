@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.18 - 2026-10-06
 
 - WordPress: `wp openreceive doctor` asks each configured swap provider for its
   asset list and fails on a named line ("Swap provider <name>") when one does
@@ -46,7 +46,7 @@
   stylesheet from 225 KB to 303 KB with component variants the checkout never
   uses. The stylesheet stays byte-identical to 0.4.17. Dependabot now ignores
   the better-sqlite3, webpack-cli and mobx-react majors until the migrations
-  that unblock them.
+  that unblock them. The root `Gemfile.lock` moves to Rails 8.1.4.
 - Agent directions survive a summarizing fetch. Claude Code's web tool handed
   an agent 1.6 KB of the 17 KB WooCommerce payload, with Step 0 gone: it kept
   code blocks and short bullets and dropped the prose. Every payload now opens,

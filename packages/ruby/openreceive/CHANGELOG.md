@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.18 - 2026-10-06
+
+Release with the complete 0.4.18 package family. The bundled agent skills carry
+the revised WooCommerce directions and the cover-page split of every agent
+directions file. No Ruby runtime changes from 0.4.17.
+
 ## 0.4.17 - 2026-10-06
 
 Release with the complete 0.4.17 package family. The bundled agent skills carry
