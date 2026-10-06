@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.16 - 2026-10-06
+
+Release with the complete 0.4.16 package family and corrected shared agent
+directions. No Ruby runtime changes from 0.4.15.
+
 ## 0.4.15 - 2026-10-06
 
 - Install agent skills with `bin/rails openreceive:skills` (optional

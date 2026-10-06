@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.16 - 2026-10-06
 
 - Normalize Python examples in the bundled Django directions. The local Python
   test command now includes the same Ruff formatting/lint and mypy checks as
