@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Refresh vulnerable dependencies in the workspace and demo lockfiles: Vue
+  3.5.43, sharp 0.35.5, proxy-addr 2.0.8, compression 1.8.2,
+  source-map-js 1.2.2, shell-quote 1.12.0, smol-toml 1.9.0,
+  postcss-selector-parser 7.1.6, Werkzeug 3.1.9 and Mako 1.4.3.
+  These are repository build/test and demo dependency updates; published package
+  dependency constraints are unchanged. The two rubyzip alerts remain blocked
+  by rbsecp256k1's `~> 2.3` constraint, with the existing verified-archive
+  install-time mitigation. npm audit also still reports development-tool
+  dependencies on braces and deepmerge-ts; this update does not claim a clean audit.
+
 ## 0.4.16 - 2026-10-06
 
 - Normalize Python examples in the bundled Django directions. The local Python
