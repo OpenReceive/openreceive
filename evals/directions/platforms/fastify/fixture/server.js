@@ -91,7 +91,7 @@ app.get("/health", async (_req, reply) => {
   return "ok\n";
 });
 
-app.get("/", async () => {
+app.get("/", async (_req, reply) => {
   const products = db.prepare("SELECT id, name, price FROM products ORDER BY id").all();
   const items = products
     .map(
@@ -104,6 +104,7 @@ app.get("/", async () => {
       </li>`,
     )
     .join("");
+  reply.type("text/html");
   return page("Widget Shop", `<ul>${items}</ul>`);
 });
 
