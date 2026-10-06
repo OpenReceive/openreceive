@@ -10,6 +10,7 @@ use OpenReceive\Server\RequestHandler;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\PaymentsSchema;
 use OpenReceive\Storage\SqlPaymentRepository;
+use OpenReceive\Swap\SwapProvider;
 
 final class Plugin
 {
@@ -202,6 +203,19 @@ final class Plugin
 
     public static function diagnostics(): array { return self::diagnosticReport()['lines']; }
 
+    /** Doctor's swap check: the provider must answer with at least one asset checkout can offer. */
+    public static function swapProviderStatus(SwapProvider $provider): string
+    {
+        try {
+            $catalog = $provider->payInAssetCatalog();
+        } catch (\Throwable $error) {
+            throw new \RuntimeException('did not answer (' . esc_html(Configuration::errorMessage($error)) . '). Checkout offers no swaps through it; check its LSC code.');
+        }
+        $offered = array_filter($catalog, static fn (array $row): bool => ($row['available'] ?? true) !== false);
+        if ($offered === []) { throw new \RuntimeException('answered with no available assets. Checkout offers no swaps through it.'); }
+        return sprintf('answered, %d of %d assets available', count($offered), count($catalog));
+    }
+
     public static function diagnosticReport(): array
     {
         global $wpdb;
@@ -243,6 +257,10 @@ final class Plugin
             $check('Wallet preflight', static function () use (&$service): string { $service = self::service(); return 'passed'; });
             if ($service !== null) {
                 $check('Price feed', static function () use ($service): string { $currency = get_woocommerce_currency(); $service->listRates(['currencies' => [$currency]]); return 'available for ' . $currency; });
+                // A set LSC code proves nothing about the provider, so ask each one for the catalog checkout lists.
+                foreach ($service->swapProviders() as $provider) {
+                    $check('Swap provider ' . $provider->name(), static fn (): string => self::swapProviderStatus($provider));
+                }
             } else { $lines[] = 'Price feed: not checked because wallet configuration failed'; }
             $check('Reconcile scheduled', static function (): string {
                 if (!function_exists('as_has_scheduled_action') || !as_has_scheduled_action('openreceive_reconcile', [], 'openreceive')) { throw new \RuntimeException('No reconcile action is scheduled. Load WordPress with WooCommerce active.'); }

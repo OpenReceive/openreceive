@@ -30,8 +30,9 @@ for again; if both are set, skip to `wp openreceive configure --enable` at
 the end of Step 2.
 
 Otherwise your next action is a question to the user. Do not install the
-plugin, edit Docker files or search anywhere else before asking it. Do not
-read wp-config.php, deploy config, container environments or other projects
+plugin, edit Docker files or search anywhere else before asking it. PHP
+extensions, Docker images and the database wait until both codes are in this
+chat, or the user said "Bitcoin only"; Step 1 covers them. Do not read wp-config.php, deploy config, container environments or other projects
 looking for a code: a new store has neither code yet.
 
 The user never runs a command and never edits a file. They paste each code
@@ -83,7 +84,9 @@ It needs WooCommerce active, and PHP 8.2+ with GMP and sodium in BOTH the web
 PHP and the WP-CLI PHP. On the official `wordpress` and `wordpress:cli` Docker
 images, activation fails with "OpenReceive requires the PHP sodium and GMP
 extensions": add GMP to both images as "Enable GMP in both PHP runtimes" below
-says, rebuild both, then install again. If the URL answers 404, build the same
+says, rebuild both, then install again. If the Compose file has only `image:`
+lines, use the two Dockerfiles and `build:` keys under "Compose files with only
+`image:` lines" below, and add no other service. If the URL answers 404, build the same
 tag as "Get the installable archive" below says.
 
 ## Step 2 — store the codes, then enable the gateway
@@ -111,7 +114,7 @@ secret workflow.
 Then run `wp openreceive configure --enable` and `wp openreceive doctor`.
 Doctor names any failed check and exits nonzero; fix it before going on.
 
-## Step 3 — mint a test invoice
+## Step 3 — mint a test invoice, then stop
 
 Create a pending test order that pays with OpenReceive, then mint its
 Lightning invoice from the terminal:
@@ -123,10 +126,26 @@ wp openreceive test-invoice <order id>
 ```
 
 `test-invoice` goes through the same checkout route as the order-pay page. It
-prints the amount in sats, the BOLT11 invoice and the order-pay link. Give the
-user that link: it opens the checkout with the configured methods and resumes
-this same invoice. Ask them to pay only if they want a real settlement test,
-and tell them the test order is theirs to delete.
+prints the amount in sats, the BOLT11 invoice, the order-pay link and the
+methods that page offers, each swap asset marked available or not. If a swap
+method shows unavailable, run `wp openreceive doctor`: its "Swap provider" line
+names the problem. `test-invoice` and `doctor` are the whole checkout check.
+
+Give the user the order-pay link, which opens the checkout on this same
+invoice, and the list of methods. Tell them the test order is theirs to delete.
+
+You cannot pay the invoice: the code is receive-only. Do not pay, settle or
+mark the order paid, and do not look for a way to (a wallet control port, a
+test endpoint, another wallet). If the user wants a real settlement test, they
+pay on the order-pay link from their own wallet; afterwards
+`wp wc shop_order get <order id> --user=<admin user id> --field=status` is no
+longer `pending`.
+
+Setup ends here. Once doctor is clean and the user has the link, say that setup
+is finished, in one message. Do not install mail software, add containers or
+services, or set up cron. If doctor's "Reconcile scheduled" check fails, fix
+that. On a store with little traffic, tell the user once that a system cron for
+WordPress scheduled work settles orders sooner; set it up only if they ask.
 
 ## Non-negotiables
 
@@ -135,6 +154,11 @@ and tell them the test order is theirs to delete.
   set/unset is all you report.
 - Do not suggest rotating, revoking or replacing a code because it was pasted
   into this chat; that is the supported path.
+- Work only in this store. Never read or run anything from another project or
+  directory on this machine (its `node_modules`, tools or source), for any
+  reason. A browser, Playwright, hand-made calls to the checkout's REST routes
+  and reading the plugin's source are not part of setup: when doctor or
+  `test-invoice` fails, report its output.
 - Receive-only NWC is required. Never turn on the spend-capable override to
   get past the preflight.
 - The plugin owns only its payment-attempt tables in the WordPress database.
@@ -147,9 +171,10 @@ and tell them the test order is theirs to delete.
   refund. https://openreceive.org/guides/swap-refunds.md
 - A receive-only wallet cannot send merchant refunds. Refund a settled
   payment manually from the wallet.
-- Settlement runs on checkout requests and an every-minute scheduled job. On a
-  low-traffic store, run WordPress scheduled work from a system cron;
-  `wp openreceive notifications` is an optional long-running worker.
+- Settlement runs on checkout requests and an every-minute scheduled job. A
+  system cron for WordPress scheduled work helps a low-traffic store, and
+  `wp openreceive notifications` is an optional long-running worker: recommend
+  them, and set them up only if the user asks.
 
 ## Further reading
 

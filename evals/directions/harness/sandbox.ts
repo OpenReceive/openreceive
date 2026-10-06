@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { compose, InfraError } from "./docker.ts";
@@ -34,11 +35,39 @@ function run(command: string, args: readonly string[], cwd: string): Promise<voi
   });
 }
 
-/** Copy the fixture to a unique directory. Its basename is the Compose project name. */
+const FIXTURE_PORT = "127.0.0.1:8080:80";
+
+/** A port nothing on 127.0.0.1 is listening on right now. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() =>
+        typeof address === "object" && address !== null
+          ? resolve(address.port)
+          : reject(new InfraError("No free port on 127.0.0.1.")),
+      );
+    });
+  });
+}
+
+/**
+ * Copy the fixture to a unique directory. Its basename is the Compose project name.
+ * The copy gets its own fixed host port: a random one ("127.0.0.1::80") changes
+ * when the agent recreates the container after adding GMP, and the order-pay
+ * links WordPress prints then point at the old port.
+ */
 export async function prepareShop(fixtureDir: string, slug: string): Promise<string> {
   const id = Math.random().toString(16).slice(2, 10);
   const directory = await mkdtemp(path.join(tmpdir(), `oreval-${slug}-${id}-`));
   await cp(fixtureDir, directory, { recursive: true });
+  const composeFile = path.join(directory, "compose.yml");
+  const fixture = await readFile(composeFile, "utf8");
+  if (!fixture.includes(FIXTURE_PORT))
+    throw new InfraError(`${composeFile} does not publish ${FIXTURE_PORT}.`);
+  await writeFile(composeFile, fixture.replace(FIXTURE_PORT, `127.0.0.1:${await freePort()}:80`));
   await run("git", ["init", "-b", "master"], directory);
   await run("git", ["add", "README.md", "compose.yml"], directory);
   await run(

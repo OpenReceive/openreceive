@@ -8,8 +8,8 @@ A small WooCommerce store. Five products, orders in WooCommerce, customers sign 
 docker compose up
 ```
 
-Compose publishes port 80 of the `wordpress` service on a host port chosen when the
-stack starts. Print that address with:
+Compose publishes port 80 of the `wordpress` service on the host port set in
+`compose.yml`. Print that address with:
 
 ```sh
 docker compose port wordpress 80

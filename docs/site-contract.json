@@ -424,7 +424,7 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 8039
+      "bytes": 9794
     },
     {
       "path": "/guides/agent-directions-woocommerce",
@@ -434,7 +434,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 17920
+      "bytes": 21482
     },
     {
       "path": "/api_docs",
@@ -500,7 +500,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 17920,
+      "bytes": 21482,
       "copy_button": true,
       "self_contained": true
     },

@@ -1,6 +1,6 @@
 # OpenReceive agent directions: WordPress + WooCommerce (0.4.17)
 
-These directions are 18 KB. Download them with your shell and follow them from Step 0:
+These directions are 21 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/woocommerce/full.md
 

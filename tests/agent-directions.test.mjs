@@ -166,3 +166,24 @@ test("the WooCommerce payload names the pinned install, configure and test-invoi
   assert.match(step, /do not tell them to revoke or replace a\s+code because it was pasted here/);
   assert.match(text, /file-editing tool, not a shell command/);
 });
+
+// The 0.4.16 eval agent (evals/directions) audited the stack before asking,
+// read Playwright from another checkout, settled the test invoice through the
+// fake wallet's control port, then installed mail and added a cron service.
+test("the WooCommerce payload ends at test-invoice and keeps the agent in the store", () => {
+  const text = payloads.find(({ stack }) => stack === "woocommerce").text;
+  const step = stepZero(text);
+  const stepThree = text.match(/^## Step 3\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+  assert.match(step, /PHP\s+extensions, Docker images and the database wait until both codes/);
+  assert.match(stepThree, /You cannot pay the invoice/);
+  assert.match(stepThree, /Setup ends here\./);
+  assert.match(stepThree, /Do not install mail software/);
+  assert.match(text, /Never read or run anything from another project/);
+  assert.match(text, /A browser, Playwright/);
+  assert.doesNotMatch(text, /run WordPress scheduled work from a system cron/);
+  // Image-only Compose files get Dockerfiles and build: keys, not invented services.
+  assert.match(text, /Compose files with only `image:` lines/);
+  assert.match(text, /FROM wordpress:cli-php8\.2\nUSER root[\s\S]*?USER www-data/);
+  // The inlined quickstart's wp-admin screens are not a second procedure.
+  assert.match(text, /its wp-admin screens are only for a store with no WP-CLI/);
+});

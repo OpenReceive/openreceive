@@ -37,8 +37,12 @@ if [[ "$output" != *"WooCommerce: FAILED"* ]]; then
 fi
 
 # The doctor a merchant runs prints no Node instructions.
-if [[ "$(wp openreceive doctor)" == *npx* ]]; then
+output="$(wp openreceive doctor)"
+if [[ "$output" == *npx* ]]; then
   echo "doctor printed a Node command" >&2; exit 1
+fi
+if [[ "$output" != *"Swap provider fixedfloat: answered"* ]]; then
+  echo "doctor did not check the swap provider: $output" >&2; exit 1
 fi
 
 # test-invoice mints through the order-pay route, for the order an agent creates
@@ -49,6 +53,9 @@ order="$(wp wc shop_order create --user=demo --payment_method=openreceive \
 output="$(wp openreceive test-invoice "$order")"
 if [[ "$output" != *"Invoice: ln"* || "$output" != *" sats for "* || "$output" != *order-pay*"$order"* ]]; then
   echo "test-invoice did not print the invoice: $output" >&2; exit 1
+fi
+if [[ "$output" != *"Checkout methods on the order-pay page:"* || "$output" != *"USDC on Solana: available"* ]]; then
+  echo "test-invoice did not list the checkout methods: $output" >&2; exit 1
 fi
 wp eval "if (count(OpenReceive\WP\Plugin::repository()->listForReference('$order')) !== 1) { exit(1); }"
 if output="$(wp openreceive test-invoice 999999999 2>&1)"; then

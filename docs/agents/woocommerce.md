@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (WordPress + WooCommerce)
 
 ```sh
-# READ THIS FIRST: this file is 18 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 21 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/woocommerce/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -49,8 +49,9 @@ for again; if both are set, skip to `wp openreceive configure --enable` at
 the end of Step 2.
 
 Otherwise your next action is a question to the user. Do not install the
-plugin, edit Docker files or search anywhere else before asking it. Do not
-read wp-config.php, deploy config, container environments or other projects
+plugin, edit Docker files or search anywhere else before asking it. PHP
+extensions, Docker images and the database wait until both codes are in this
+chat, or the user said "Bitcoin only"; Step 1 covers them. Do not read wp-config.php, deploy config, container environments or other projects
 looking for a code: a new store has neither code yet.
 
 The user never runs a command and never edits a file. They paste each code
@@ -102,7 +103,9 @@ It needs WooCommerce active, and PHP 8.2+ with GMP and sodium in BOTH the web
 PHP and the WP-CLI PHP. On the official `wordpress` and `wordpress:cli` Docker
 images, activation fails with "OpenReceive requires the PHP sodium and GMP
 extensions": add GMP to both images as "Enable GMP in both PHP runtimes" below
-says, rebuild both, then install again. If the URL answers 404, build the same
+says, rebuild both, then install again. If the Compose file has only `image:`
+lines, use the two Dockerfiles and `build:` keys under "Compose files with only
+`image:` lines" below, and add no other service. If the URL answers 404, build the same
 tag as "Get the installable archive" below says.
 
 ## Step 2 — store the codes, then enable the gateway
@@ -130,7 +133,7 @@ secret workflow.
 Then run `wp openreceive configure --enable` and `wp openreceive doctor`.
 Doctor names any failed check and exits nonzero; fix it before going on.
 
-## Step 3 — mint a test invoice
+## Step 3 — mint a test invoice, then stop
 
 Create a pending test order that pays with OpenReceive, then mint its
 Lightning invoice from the terminal:
@@ -142,10 +145,26 @@ wp openreceive test-invoice <order id>
 ```
 
 `test-invoice` goes through the same checkout route as the order-pay page. It
-prints the amount in sats, the BOLT11 invoice and the order-pay link. Give the
-user that link: it opens the checkout with the configured methods and resumes
-this same invoice. Ask them to pay only if they want a real settlement test,
-and tell them the test order is theirs to delete.
+prints the amount in sats, the BOLT11 invoice, the order-pay link and the
+methods that page offers, each swap asset marked available or not. If a swap
+method shows unavailable, run `wp openreceive doctor`: its "Swap provider" line
+names the problem. `test-invoice` and `doctor` are the whole checkout check.
+
+Give the user the order-pay link, which opens the checkout on this same
+invoice, and the list of methods. Tell them the test order is theirs to delete.
+
+You cannot pay the invoice: the code is receive-only. Do not pay, settle or
+mark the order paid, and do not look for a way to (a wallet control port, a
+test endpoint, another wallet). If the user wants a real settlement test, they
+pay on the order-pay link from their own wallet; afterwards
+`wp wc shop_order get <order id> --user=<admin user id> --field=status` is no
+longer `pending`.
+
+Setup ends here. Once doctor is clean and the user has the link, say that setup
+is finished, in one message. Do not install mail software, add containers or
+services, or set up cron. If doctor's "Reconcile scheduled" check fails, fix
+that. On a store with little traffic, tell the user once that a system cron for
+WordPress scheduled work settles orders sooner; set it up only if they ask.
 
 ## Non-negotiables
 
@@ -154,6 +173,11 @@ and tell them the test order is theirs to delete.
   set/unset is all you report.
 - Do not suggest rotating, revoking or replacing a code because it was pasted
   into this chat; that is the supported path.
+- Work only in this store. Never read or run anything from another project or
+  directory on this machine (its `node_modules`, tools or source), for any
+  reason. A browser, Playwright, hand-made calls to the checkout's REST routes
+  and reading the plugin's source are not part of setup: when doctor or
+  `test-invoice` fails, report its output.
 - Receive-only NWC is required. Never turn on the spend-capable override to
   get past the preflight.
 - The plugin owns only its payment-attempt tables in the WordPress database.
@@ -166,9 +190,10 @@ and tell them the test order is theirs to delete.
   refund. https://openreceive.org/guides/swap-refunds.md
 - A receive-only wallet cannot send merchant refunds. Refund a settled
   payment manually from the wallet.
-- Settlement runs on checkout requests and an every-minute scheduled job. On a
-  low-traffic store, run WordPress scheduled work from a system cron;
-  `wp openreceive notifications` is an optional long-running worker.
+- Settlement runs on checkout requests and an every-minute scheduled job. A
+  system cron for WordPress scheduled work helps a low-traffic store, and
+  `wp openreceive notifications` is an optional long-running worker: recommend
+  them, and set them up only if the user asks.
 
 ## Further reading
 
@@ -184,8 +209,8 @@ and tell them the test order is theirs to delete.
 
 ## The quickstart, in full
 
-Inlined verbatim so this file needs no network access — follow it once Step 0
-passes. The page it comes from is https://openreceive.org/guides/quickstart-woocommerce.
+Inlined verbatim so this file needs no network access. Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its wp-admin screens are only for a store with no WP-CLI.
+The page it comes from is https://openreceive.org/guides/quickstart-woocommerce.
 
 ## WordPress + WooCommerce quickstart
 
@@ -260,7 +285,52 @@ On managed WordPress hosting, ask the host to enable GMP and sodium in both
 runtimes; if they cannot, this plugin cannot run there. Do not use Composer's
 `--ignore-platform-reqs` to bypass the requirements.
 
+#### Compose files with only `image:` lines
+
+Many stores run the official images straight from Compose, for example
+`image: wordpress:php8.2-apache` and `image: wordpress:cli-php8.2`, with no
+Dockerfile. Add two Dockerfiles next to `compose.yml`, keeping the tags your
+`image:` lines had. The web image is Debian and runs as root:
+
+```dockerfile
+# wordpress.Dockerfile
+FROM wordpress:php8.2-apache
+RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev \
+    && docker-php-ext-install gmp \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+The CLI image is Alpine and runs as `www-data`:
+
+```dockerfile
+# wp-cli.Dockerfile
+FROM wordpress:cli-php8.2
+USER root
+RUN apk add --no-cache gmp \
+    && apk add --no-cache --virtual .gmp-build $PHPIZE_DEPS gmp-dev \
+    && docker-php-ext-install gmp \
+    && apk del .gmp-build
+USER www-data
+```
+
+In `compose.yml`, replace each of those two `image:` lines with a `build:` key
+and leave the rest of both services as they are:
+
+```yaml
+services:
+  wordpress:
+    build: { context: ., dockerfile: wordpress.Dockerfile }
+  cli:
+    build: { context: ., dockerfile: wp-cli.Dockerfile }
+```
+
+Then run `docker compose build wordpress cli` and `docker compose up -d wordpress`.
+Use your own service names. Do not add any other service for this.
+
 ### Configure the wallet
+
+On managed hosting with no shell or WP-CLI, use these admin screens. With WP-CLI,
+use [Configure through WP-CLI](#configure-through-wp-cli) below instead.
 
 1. Open **WooCommerce → Settings → Payments → OpenReceive**.
 2. Enter a receive-only NWC code and save.
@@ -296,7 +366,8 @@ backup. These commands share admin preflight and encrypted storage. Credential
 flags accept only `-`; blank input leaves settings intact. Generic WooCommerce
 REST and `wp wc payment_gateway` credential updates are rejected. `doctor`
 reports the failed check with credentials redacted and exits nonzero on failure.
-The default payment title becomes “Bitcoin & stablecoins (OpenReceive)” with swaps;
+It also asks each configured swap provider for its asset list, and fails when a
+provider does not answer or offers no assets. The default payment title becomes “Bitcoin & stablecoins (OpenReceive)” with swaps;
 a customized title is preserved.
 
 To check checkout from the terminal, mint an invoice for an unpaid order whose
@@ -310,7 +381,9 @@ wp openreceive test-invoice <order id>
 
 `test-invoice` uses the same checkout route as the order-pay page. It prints the
 amount in sats, the Lightning invoice and the order-pay link, which opens the
-checkout on that invoice. Delete the test order when you are done.
+checkout on that invoice. It then lists the methods that page offers: Bitcoin
+Lightning, plus each swap asset with its network and whether it is available
+for this amount. Delete the test order when you are done.
 
 ### Checkout and settlement
 
@@ -347,9 +420,9 @@ wp openreceive notifications
 ```
 
 The notifications command runs as a separate process. The Doctor panel in the
-gateway settings reports on the schema, whether credentials are present,
-scheduling, and orders that need attention. If the store currency has no usable
-price feed, the gateway is unavailable.
+gateway settings reports on the schema, whether credentials are present, whether
+each swap provider answers, scheduling, and orders that need attention. If the
+store currency has no usable price feed, the gateway is unavailable.
 
 ### Refunds and removal
 

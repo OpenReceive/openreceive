@@ -71,7 +71,52 @@ On managed WordPress hosting, ask the host to enable GMP and sodium in both
 runtimes; if they cannot, this plugin cannot run there. Do not use Composer's
 `--ignore-platform-reqs` to bypass the requirements.
 
+### Compose files with only `image:` lines
+
+Many stores run the official images straight from Compose, for example
+`image: wordpress:php8.2-apache` and `image: wordpress:cli-php8.2`, with no
+Dockerfile. Add two Dockerfiles next to `compose.yml`, keeping the tags your
+`image:` lines had. The web image is Debian and runs as root:
+
+```dockerfile
+# wordpress.Dockerfile
+FROM wordpress:php8.2-apache
+RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev \
+    && docker-php-ext-install gmp \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+The CLI image is Alpine and runs as `www-data`:
+
+```dockerfile
+# wp-cli.Dockerfile
+FROM wordpress:cli-php8.2
+USER root
+RUN apk add --no-cache gmp \
+    && apk add --no-cache --virtual .gmp-build $PHPIZE_DEPS gmp-dev \
+    && docker-php-ext-install gmp \
+    && apk del .gmp-build
+USER www-data
+```
+
+In `compose.yml`, replace each of those two `image:` lines with a `build:` key
+and leave the rest of both services as they are:
+
+```yaml
+services:
+  wordpress:
+    build: { context: ., dockerfile: wordpress.Dockerfile }
+  cli:
+    build: { context: ., dockerfile: wp-cli.Dockerfile }
+```
+
+Then run `docker compose build wordpress cli` and `docker compose up -d wordpress`.
+Use your own service names. Do not add any other service for this.
+
 ## Configure the wallet
+
+On managed hosting with no shell or WP-CLI, use these admin screens. With WP-CLI,
+use [Configure through WP-CLI](#configure-through-wp-cli) below instead.
 
 1. Open **WooCommerce → Settings → Payments → OpenReceive**.
 2. Enter a receive-only NWC code and save.
@@ -107,7 +152,8 @@ backup. These commands share admin preflight and encrypted storage. Credential
 flags accept only `-`; blank input leaves settings intact. Generic WooCommerce
 REST and `wp wc payment_gateway` credential updates are rejected. `doctor`
 reports the failed check with credentials redacted and exits nonzero on failure.
-The default payment title becomes “Bitcoin & stablecoins (OpenReceive)” with swaps;
+It also asks each configured swap provider for its asset list, and fails when a
+provider does not answer or offers no assets. The default payment title becomes “Bitcoin & stablecoins (OpenReceive)” with swaps;
 a customized title is preserved.
 
 To check checkout from the terminal, mint an invoice for an unpaid order whose
@@ -121,7 +167,9 @@ wp openreceive test-invoice <order id>
 
 `test-invoice` uses the same checkout route as the order-pay page. It prints the
 amount in sats, the Lightning invoice and the order-pay link, which opens the
-checkout on that invoice. Delete the test order when you are done.
+checkout on that invoice. It then lists the methods that page offers: Bitcoin
+Lightning, plus each swap asset with its network and whether it is available
+for this amount. Delete the test order when you are done.
 
 ## Checkout and settlement
 
@@ -158,9 +206,9 @@ wp openreceive notifications
 ```
 
 The notifications command runs as a separate process. The Doctor panel in the
-gateway settings reports on the schema, whether credentials are present,
-scheduling, and orders that need attention. If the store currency has no usable
-price feed, the gateway is unavailable.
+gateway settings reports on the schema, whether credentials are present, whether
+each swap provider answers, scheduling, and orders that need attention. If the
+store currency has no usable price feed, the gateway is unavailable.
 
 ## Refunds and removal
 

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- WordPress: `wp openreceive doctor` asks each configured swap provider for its
+  asset list and fails on a named line ("Swap provider <name>") when one does
+  not answer or offers no assets. A set LSC code alone used to pass, so an
+  agent facing a dead provider read the plugin source instead. The gateway's
+  Doctor panel shows the same line.
+- WordPress: `wp openreceive test-invoice` also lists the methods the
+  order-pay page offers for that invoice: Bitcoin Lightning, then each swap
+  asset with its network, available or with the reason it is not.
+- WooCommerce agent directions, from an eval run of the 0.4.16 directions that
+  never finished: nothing about PHP, images or the database before both codes
+  are in the chat; Step 3 ends setup at `test-invoice` and a clean doctor, says
+  the agent cannot pay the invoice and must not look for a way to, and rules
+  out mail, extra containers and cron (cron is recommended to the user, set up
+  only on request). A new non-negotiable keeps every command inside the store:
+  no other project's files, no browser or Playwright, no plugin source. The
+  quickstart gains two Dockerfiles and the `build:` keys for Compose files that
+  run the official images with only `image:` lines, and marks its wp-admin
+  screens as the path for hosting without WP-CLI.
 - WordPress: with a swap provider configured, the default payment title is now
   “Bitcoin & stablecoins (OpenReceive)”, matching the site's wording. A store
   that saved the earlier default, “Bitcoin & crypto (OpenReceive)”, follows

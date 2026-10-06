@@ -83,7 +83,25 @@ final class Cli
         \WP_CLI::line('Invoice: ' . $checkout['bolt11']);
         \WP_CLI::line('Payment hash: ' . $checkout['payment_hash']);
         \WP_CLI::line('Order-pay link (opens the checkout on this invoice): ' . $order->get_checkout_payment_url());
+        foreach (self::methodLines($body['payment_methods'] ?? []) as $line) { \WP_CLI::line($line); }
         \WP_CLI::success(sprintf('Order #%s: %s sats for %s %s, expires %s UTC.', $order->get_order_number(),
             number_format(intdiv((int) $checkout['amount_msats'], 1000)), $order->get_total(), $order->get_currency(), gmdate('Y-m-d H:i', (int) $checkout['expires_at'])));
+    }
+
+    /**
+     * The methods the order-pay page offers for this invoice, from the same create response.
+     *
+     * @param list<array<string, mixed>> $methods
+     * @return list<string>
+     */
+    public static function methodLines(array $methods): array
+    {
+        if ($methods === []) { return ['Checkout methods: Bitcoin Lightning only (no swap provider configured).']; }
+        $lines = ['Checkout methods on the order-pay page:', '  Bitcoin Lightning: available'];
+        foreach ($methods as $method) {
+            $lines[] = sprintf('  %s on %s: %s', $method['label'], $method['network_label'],
+                $method['available'] ? 'available' : 'unavailable — ' . ($method['unavailable_message'] ?? $method['unavailable_reason']));
+        }
+        return $lines;
     }
 }

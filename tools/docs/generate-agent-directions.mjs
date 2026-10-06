@@ -103,6 +103,10 @@ const STACKS = [
     source: "docs/agents/src/woocommerce.md",
     quickstart: "docs/guides/quickstart-woocommerce.md",
     brief: WOOCOMMERCE_BRIEF,
+    // Steps 1–3 already run the WP-CLI half of the quickstart; its wp-admin
+    // screens read as a second procedure unless the payload says what they are for.
+    quickstartRole:
+      "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its wp-admin screens are only for a store with no WP-CLI.",
   },
   {
     stack: "node",
@@ -357,7 +361,16 @@ const COVER = (stack, name, kilobytes) =>
     "",
   ].join("\n");
 
-function render(stack, brief, directions, quickstart, quickstartSlug, publicSlugs, kilobytes) {
+function render(
+  stack,
+  brief,
+  directions,
+  quickstart,
+  quickstartSlug,
+  publicSlugs,
+  role,
+  kilobytes,
+) {
   const top = [
     HEADER(stack, kilobytes),
     "",
@@ -380,8 +393,15 @@ function render(stack, brief, directions, quickstart, quickstartSlug, publicSlug
     "",
     "## The quickstart, in full",
     "",
-    "Inlined verbatim so this file needs no network access — follow it once Step 0",
-    `passes. The page it comes from is ${GUIDE_URL(quickstartSlug)}.`,
+    ...(role === undefined
+      ? [
+          "Inlined verbatim so this file needs no network access — follow it once Step 0",
+          `passes. The page it comes from is ${GUIDE_URL(quickstartSlug)}.`,
+        ]
+      : [
+          `Inlined verbatim so this file needs no network access. ${role}`,
+          `The page it comes from is ${GUIDE_URL(quickstartSlug)}.`,
+        ]),
     "",
     inlineGuide(quickstart, publicSlugs),
     "",
@@ -459,7 +479,7 @@ function sync(target, content) {
   }
 }
 
-for (const { stack, source, quickstart, brief } of STACKS) {
+for (const { stack, source, quickstart, brief, quickstartRole } of STACKS) {
   const target = `docs/agents/${stack}.md`;
   const coverTarget = `docs/agents/cover/${stack}.md`;
   const quickstartSlug = path.basename(quickstart, ".md");
@@ -476,6 +496,7 @@ for (const { stack, source, quickstart, brief } of STACKS) {
     readFileSync(path.join(root, quickstart), "utf8"),
     quickstartSlug,
     publicSlugs,
+    quickstartRole,
   );
   const cover = COVER(stack, name, kilobytes);
 

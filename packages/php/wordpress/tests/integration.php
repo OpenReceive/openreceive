@@ -1,11 +1,13 @@
 <?php
 // Run with wp eval-file inside the disposable Docker testkit shop.
+use OpenReceive\WP\Cli;
 use OpenReceive\WP\Configuration;
 use OpenReceive\WP\Gateway;
 use OpenReceive\WP\OrderHost;
 use OpenReceive\WP\Plugin;
 use OpenReceive\WP\Secrets;
 use OpenReceive\WP\Vendor\OpenReceive\Server\AuthorizeContext;
+use OpenReceive\WP\Vendor\OpenReceive\Swap\Swap;
 
 if (!defined('OPENRECEIVE_DEMO_WALLET') || OPENRECEIVE_DEMO_WALLET !== 'testkit') { throw new RuntimeException('Requires a disposable testkit shop.'); }
 $checks = 0;
@@ -62,6 +64,10 @@ foreach (['nwc_uri', 'lsc_uri_primary', 'lsc_uri_backup'] as $field) {
 $check(get_option('woocommerce_openreceive_settings', []) === $settingsBefore, 'rejected updates preserve settings');
 $report = Plugin::diagnosticReport();
 $check($report['ok'], 'doctor succeeds on configured testkit shop: ' . implode('; ', $report['lines']));
+$check(in_array('Swap provider fixedfloat: answered, 7 of 7 assets available', $report['lines'], true), 'doctor asks the swap provider for its catalog');
+$dead = Swap::providersFromEnvironment(['LSC_URI_PRIMARY' => 'lightning+swapconnect://unreachable.invalid/?key=k&secret=s'])[0];
+try { Plugin::swapProviderStatus($dead); $deadReported = false; } catch (RuntimeException $error) { $deadReported = str_contains($error->getMessage(), 'did not answer'); }
+$check($deadReported, 'doctor names an unreachable swap provider');
 as_unschedule_all_actions('openreceive_reconcile', [], 'openreceive');
 $check(!Plugin::diagnosticReport()['ok'], 'doctor fails when reconciliation is not scheduled');
 as_schedule_recurring_action(time() + 60, 60, 'openreceive_reconcile', [], 'openreceive');
@@ -95,6 +101,9 @@ $check($prepared->get_status() === 200, 'prepare route: ' . wp_json_encode($prep
 $created = $dispatch('/checkouts', ['reference' => $reference]);
 $check($created->get_status() === 201, 'create route: ' . wp_json_encode($created->get_data()));
 $hash = $created->get_data()['checkout']['payment_hash'];
+$methods = Cli::methodLines($created->get_data()['payment_methods']);
+$check(in_array('  USDT on Tron: available', $methods, true) && $methods[1] === '  Bitcoin Lightning: available', 'test-invoice lists the checkout methods: ' . implode(' | ', $methods));
+$check(Cli::methodLines([]) === ['Checkout methods: Bitcoin Lightning only (no swap provider configured).'], 'test-invoice says when checkout is Lightning only');
 $check(count($repo->listForReference($reference)) === 1, 'attempt persisted before response');
 ob_start(); (new Gateway())->receipt_page($order->get_id()); $lightningMarkup = ob_get_clean();
 $check(str_contains($lightningMarkup, 'resume-payment-rail="lightning"') && str_contains($lightningMarkup, $hash), 'Lightning receipt resumes on its own rail');

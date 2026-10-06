@@ -1,6 +1,9 @@
 # Stock WordPress and WordPress CLI images, on purpose: no GMP, no OpenReceive.
 # The Compose project name is the directory name. Each eval run copies this
 # file into its own directory so two runs do not share a network or a volume.
+# Like a real shop's, the host port is fixed: rebuilding a container for GMP
+# keeps the address WordPress was installed with. The harness swaps 8080 for a
+# free port per run (sandbox.ts).
 services:
   wordpress:
     image: wordpress:php8.2-apache
@@ -10,7 +13,7 @@ services:
       WORDPRESS_DB_USER: wordpress
       WORDPRESS_DB_PASSWORD: wordpress-local
     ports:
-      - "127.0.0.1::80"
+      - "127.0.0.1:8080:80"
     volumes:
       - wp:/var/www/html
     depends_on:
