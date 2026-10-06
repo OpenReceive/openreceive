@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.19 - Unreleased
+
+- Fastify: with the documented mount, `register(openReceiveFastify, { prefix:
+  "/openreceive" })`, an unknown path under the prefix got Fastify's own 404
+  instead of OpenReceive's JSON 404. `openreceive doctor --url` probes for
+  that 404, so its routes check failed on a working install, and an eval
+  agent wrote a fake OpenReceive 404 to pass it. The register scope is now
+  the mount, and the router answers every path inside it.
+- Agent directions for every library stack (Node, Fastify, Next, FastAPI,
+  Django, Rails, PHP, Laravel) end the way WooCommerce Step 3 does: doctor is
+  clean, the user gets the checkout link, the quickstart's browser check is
+  theirs, the agent cannot pay the invoice, and one message says "Setup is
+  finished" with no offer or question. A new non-negotiable keeps the agent
+  in the application: no other project's files, no browser or Playwright.
+  Eval runs on Node and Fastify ended on "checkout is live", took "Yes, go
+  ahead" as a request for the browser check, and loaded Playwright from
+  another checkout. BTCPay's directions end on a clean health check the
+  same way.
+
 ## 0.4.18 - 2026-10-06
 
 - WordPress: `wp openreceive doctor` asks each configured swap provider for its

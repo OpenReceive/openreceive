@@ -1,6 +1,6 @@
 # OpenReceive agent directions: Django (0.4.18)
 
-These directions are 42 KB. Download them with your shell and follow them from Step 0:
+These directions are 43 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/django/full.md
 

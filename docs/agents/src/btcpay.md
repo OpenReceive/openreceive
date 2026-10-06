@@ -106,6 +106,9 @@ needing attention. On a regtest machine, `packages/dotnet/docker/up.sh` then
 `e2e.sh` in the OpenReceive repository proves the whole path end to end, and
 that is the only situation where cloning the repository is the right move.
 
+Setup ends when the health check is clean. Say "Setup is finished" in one
+message. Do not offer more work or end the message on a question.
+
 ## More documentation
 
 Fetch one when the moment comes. Each is raw markdown, so a plain GET is

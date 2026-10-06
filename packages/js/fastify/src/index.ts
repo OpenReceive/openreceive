@@ -116,6 +116,10 @@ export function openReceiveFastify(
       ...createProxyRateLimitingConfig(handlerOptions.rateLimiting, trustProxyIpHeader),
     });
   }
+  // A register() prefix is the mount itself, so every path inside the scope is
+  // OpenReceive's: an unknown one gets the router's JSON 404, which is what
+  // `openreceive doctor --url` probes for.
+  const ownsScope = effectivePrefix.prefix === "/";
   fastify.all("/*", async (request, reply) => {
     // The catch-all binds under the instance's register prefix (the application
     // root when there is none); matching happens on the path inside that mount,
@@ -123,7 +127,11 @@ export function openReceiveFastify(
     // they get the app's own not-found handling instead of an OpenReceive JSON 404.
     const relativeUrl = stripInstancePrefix(request.raw.url ?? "/", instancePrefix);
     const pathname = relativeUrl.split("?")[0] as string;
-    if (!isUnderPrefix(pathname, handler.prefix) && reply.callNotFound !== undefined) {
+    if (
+      !ownsScope &&
+      !isUnderPrefix(pathname, handler.prefix) &&
+      reply.callNotFound !== undefined
+    ) {
       return reply.callNotFound();
     }
     const response = await respond(handler, request, relativeUrl);

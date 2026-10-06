@@ -344,7 +344,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 34416
+      "bytes": 35555
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -354,7 +354,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 35462
+      "bytes": 36598
     },
     {
       "path": "/guides/agent-directions-django",
@@ -364,7 +364,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 41912
+      "bytes": 43053
     },
     {
       "path": "/guides/agent-directions-next",
@@ -374,7 +374,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 36754
+      "bytes": 37893
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -384,7 +384,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 38465
+      "bytes": 39581
     },
     {
       "path": "/guides/agent-directions-php",
@@ -394,7 +394,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 37162
+      "bytes": 38260
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -404,7 +404,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 40528
+      "bytes": 41645
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -414,7 +414,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 12050
+      "bytes": 12191
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -542,7 +542,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34416,
+      "bytes": 35555,
       "copy_button": true,
       "self_contained": true
     },
@@ -563,7 +563,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36754,
+      "bytes": 37893,
       "copy_button": true,
       "self_contained": true
     },
@@ -584,7 +584,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35462,
+      "bytes": 36598,
       "copy_button": true,
       "self_contained": true
     },
@@ -605,7 +605,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41912,
+      "bytes": 43053,
       "copy_button": true,
       "self_contained": true
     },
@@ -626,7 +626,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38465,
+      "bytes": 39581,
       "copy_button": true,
       "self_contained": true
     },
@@ -647,7 +647,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37162,
+      "bytes": 38260,
       "copy_button": true,
       "self_contained": true
     },
@@ -668,7 +668,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40528,
+      "bytes": 41645,
       "copy_button": true,
       "self_contained": true
     },
@@ -689,7 +689,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 12050,
+      "bytes": 12191,
       "copy_button": true,
       "self_contained": true
     }

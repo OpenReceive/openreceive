@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Rails)
 
 ```sh
-# READ THIS FIRST: this file is 38 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 40 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/rails/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -139,6 +139,24 @@ is undone by the next `compose up`.
 
 Only then start the quickstart.
 
+## After the quickstart — hand over, then stop
+
+The quickstart is done when `bin/rails openreceive:doctor` is clean and this
+app serves the checkout page for one of its orders. Doctor names any failed
+check; fix it before going on.
+
+Give the user that checkout link. The browser check in the quickstart's
+"Render the checkout" section (payment-method icons, wallet logos, a pay
+tutorial) is theirs: tell them what to look at, and do not run it yourself.
+
+You cannot pay the invoice: the code is receive-only. Do not pay, settle or
+mark an order paid, and do not look for a way to (a wallet control port, a
+test endpoint, another wallet). If the user wants a real settlement test, they
+pay on that link from their own wallet, and `on_paid` marks the order paid.
+
+Setup ends here. Say "Setup is finished" in one message, with the link and
+what to check. Do not offer more work or end the message on a question.
+
 ## Non-negotiables
 
 The quickstart below has the code. These are the rules it cannot state for
@@ -151,6 +169,9 @@ itself, and they hold for every integration.
   logs, or assets.
 - Do not suggest rotating, revoking or replacing a code because it was pasted
   into this chat; that is the supported path.
+- Work only in this application. Never read or run anything from another
+  project on this machine (its `node_modules`, tools or source), for any
+  reason. A browser and Playwright are not part of setup.
 - The host owns the price. `config.amount_for` reads it from your own data;
   reject payer-supplied amounts.
 - `config.authorize` runs on every request, and the `resource` it receives is a

@@ -451,6 +451,17 @@ test("fastify register { prefix } serves the routes at the mount root", async ()
   );
   assert.equal(served.state.statusCode, 201);
   assert.equal(JSON.parse(served.state.body).checkout.reference, "order-mount-root");
+
+  // The scope is the mount, so an unknown path in it is OpenReceive's 404 (the
+  // doctor's route probe), not the app's not-found page.
+  const probe = fakeFastifyReply();
+  await route(
+    { method: "GET", headers: { host: "shop.example" }, raw: { url: "/api/__doctor-probe__" } },
+    probe,
+  );
+  assert.equal(probe.state.notFound, 0);
+  assert.equal(probe.state.statusCode, 404);
+  assert.match(JSON.parse(probe.state.body).message, /^No OpenReceive route matched/);
 });
 
 test("fastify prefix that disagrees with the register scope fails registration", async () => {
