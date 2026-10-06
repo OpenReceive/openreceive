@@ -83,3 +83,14 @@ Source images live under `src/assets/` as pre-compressed WebP;
 `src/generated/` under byte budgets, so adding a wallet means adding one
 ≤ 72 px `.webp`
 ([Provider registry → Assets](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/provider-registry.md#assets)).
+
+## Agent skills
+
+Run `npx openreceive skills install` from your application after installing an
+OpenReceive server adapter. The offline copy ships in `@openreceive/node`, a
+server-adapter dependency. For a frontend-only project, use
+`npx skills add OpenReceive/openreceive`.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

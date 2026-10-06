@@ -53,16 +53,20 @@ import {
 import type { PaymentWizardProps, SwapOptionDisplay, SwapOptionsResult } from "./types.ts";
 import { joinClassNames } from "./utils.ts";
 
-export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
+type ResumableWizardProps = PaymentWizardProps & { readonly resumeLightning?: boolean };
+
+export function PaymentWizard(props: ResumableWizardProps): React.ReactElement {
   return React.createElement(PaymentWizardSession, {
     ...props,
     key: JSON.stringify([props.checkout?.reference, props.prefix?.replace(/\/+$/, "")]),
   });
 }
 
-function PaymentWizardSession(props: PaymentWizardProps): React.ReactElement {
+function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
   const [selection, setSelection] = React.useState<PaymentWizardSelection>(() =>
-    createPaymentWizardController().getSelection(),
+    props.resumeLightning
+      ? createPaymentWizardController().selectMethod("bitcoin")
+      : createPaymentWizardController().getSelection(),
   );
   const [activeTutorial, setActiveTutorial] = React.useState<{
     readonly providerId: string;

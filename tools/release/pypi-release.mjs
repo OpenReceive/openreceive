@@ -170,6 +170,9 @@ export function requiredWheelEntries() {
     "openreceive/fastapi/lifespan.py",
     "openreceive/storage/sql/ddl.py",
     "openreceive/testing/fake_wallet.py",
+    "openreceive/skills/integrate-openreceive/SKILL.md",
+    "openreceive/skills/integrate-openreceive/references/fastapi.md",
+    "openreceive/skills/debug-openreceive-payment/SKILL.md",
   ];
   // The Django migrations and the standalone checkout build are required, not
   // optional: the static tree is copied in by hatch_build.py from the JS build

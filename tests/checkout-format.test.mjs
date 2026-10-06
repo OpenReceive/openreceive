@@ -58,3 +58,38 @@ test("formatAmountCaption names the dollar with its ISO code", () => {
   assert.equal(formatAmountCaption({ amountLabel: "1 sat" }), "1 sat");
   assert.equal(formatAmountCaption({}), undefined);
 });
+
+test("swap limits retain fiat after minting and group the sats fallback", async () => {
+  const { requestCheckout } = await import(
+    "../packages/js/browser/src/internal/checkout-transport.ts"
+  );
+  const { formatSwapLimit } = await import(
+    "../packages/js/browser/src/internal/checkout-format.ts"
+  );
+  const previous = {
+    checkout_id: "prepare",
+    reference: "order",
+    status: "open",
+    amount_msats: 1000000,
+    invoices: [],
+    fiat: { currency: "USD", value: "1.00" },
+  };
+  const snapshot = await requestCheckout({
+    prefix: "/openreceive",
+    reference: "order",
+    previous,
+    fetch: async () =>
+      Response.json({
+        checkout: {
+          reference: "order",
+          payment_hash: "a".repeat(64),
+          amount_msats: 1000000,
+          bolt11: "lnbc-test",
+          expires_at: 2000000000,
+        },
+      }),
+  });
+  assert.equal(formatSwapLimit(previous, 25000000), "$25.00");
+  assert.equal(formatSwapLimit(snapshot, 25000000), "$25.00");
+  assert.equal(formatSwapLimit({ amount_msats: 1000000 }, 25000000), "25,000 sats");
+});

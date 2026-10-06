@@ -187,6 +187,14 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         this.syncResumePath(reference);
       },
       resumePaymentHash: () => this.resumePaymentHash(),
+      resumePaymentRail: () =>
+        this.getAttribute("resume-payment-rail") === "lightning" ? "lightning" : "swap",
+      focusLightning: () => {
+        this.selection = updatePaymentWizardSelection(this.selection, {
+          type: "select_method",
+          method: "bitcoin",
+        });
+      },
       resolvePollPrefix: (reference) => this.resolvePollPrefix(reference),
       dispatchError: (error) => {
         this.dispatchError(error);
@@ -216,6 +224,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeReference,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentHash,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentRail,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumable,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,

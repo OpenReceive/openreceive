@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Install agent skills with `bin/rails openreceive:skills` (optional
+  `--dir .claude/skills`). The core `openreceive` gem owns the one offline
+  bundle; Rails/server gems no longer duplicate it. Other Ruby hosts can use
+  `npx skills add OpenReceive/openreceive`.
+
 `OpenReceive::Nwc.normalize_wallet_error` maps nwc-ruby 0.3's
 `NotSentError`, `TransportError` and `InfoUnavailableError` to
 `WALLET_UNAVAILABLE` (retryable) instead of `OTHER`, matching the shared

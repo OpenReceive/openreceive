@@ -137,6 +137,7 @@ React's `<Checkout>`, as attributes and one event:
 | `syncUrl`, `resumePathPrefix`, `routeReference` | `sync-url`, `resume-path-prefix`, `route-reference` |
 | `resumable` | `resumable` |
 | `resumePaymentHash` | `resume-payment-hash` |
+| `resumePaymentRail` | `resume-payment-rail` |
 | `onState` | the `openreceive-state` event, with the snapshot at `event.detail.state` |
 
 A server-rendered app usually serves the checkout at a per-order URL already,
@@ -331,3 +332,9 @@ deposit txid. `@openreceive/elements` offers the same panel as
 The drop-in already follows the rules for what payers see. If you replace it,
 following those rules is your job. [Checkout UX](checkout-ux.md) is the short
 list, and [Headless checkout](headless-checkout.md) is the API.
+
+Use `resumePaymentRail="lightning"` (HTML: `resume-payment-rail="lightning"`)
+with a host-selected pending Lightning hash to reopen its invoice through the
+normal serialized create/reuse path. Omit the rail for existing swap recovery.
+Near expiry the create policy may replace a Lightning invoice; swap recovery
+continues to load the exact historical attempt for refunds.

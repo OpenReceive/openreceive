@@ -31,7 +31,7 @@ import {
   OPENRECEIVE_DEFAULT_PREFIX,
   prepareCheckout,
   requestCheckout,
-  resumeSwapAttempt,
+  resumeCheckoutAttempt,
   type SwapSelection,
 } from "@openreceive/browser/headless";
 
@@ -52,6 +52,8 @@ export interface ElementCheckoutSessionHost {
   syncResumePath(reference: string): void;
   /** The payment hash of a swap attempt the host says this order already has. */
   resumePaymentHash(): string | undefined;
+  resumePaymentRail(): "lightning" | "swap";
+  focusLightning(): void;
   /** The mount every server route is derived from, or undefined when there is no order. */
   resolvePollPrefix(reference?: string): string | undefined;
   dispatchError(error: unknown): void;
@@ -243,19 +245,20 @@ export function createElementCheckoutSession(
       // Prepare returns NO attempts, so a checkout rebuilt from a reference
       // alone opens on the method grid — the wrong screen for a payer who was
       // told to bookmark a refund. A host that remembered the attempt names it;
-      // `resumeSwapAttempt` swallows a stale hash, leaving the method grid.
+      // `resumeCheckoutAttempt` swallows a stale hash, leaving the method grid.
       if (!action.isCurrent()) return;
       const resumeHash = host.resumePaymentHash();
       const checkout =
         resumeHash === undefined
           ? prepared
-          : await resumeSwapAttempt({
+          : await resumeCheckoutAttempt({
               signal: action.signal,
               fetch: globalThis.fetch,
               prefix,
               ...(csrfHeader === undefined ? {} : { csrfHeader }),
               reference,
               paymentHash: resumeHash,
+              rail: host.resumePaymentRail(),
               snapshot: prepared,
             });
       // The host may have re-pointed reference/prefix while this was in flight;
@@ -267,6 +270,10 @@ export function createElementCheckoutSession(
         host.swapSelection.setDismissedInvoiceId(null);
       }
       host.handleControllerSnapshot(checkout);
+      if (resumeHash !== undefined && host.resumePaymentRail() === "lightning") {
+        host.focusLightning();
+        await session.ensureLightning();
+      }
       // Apply routing attrs only (no invoice) so render stays in deferred wizard mode.
       // Preserve the host theme attribute so shadow data-theme cannot fall through.
       applyOwnAttributes(

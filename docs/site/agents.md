@@ -13,8 +13,10 @@ the full quickstart), or paste the one-prompt agent directions:
   `/plugin install openreceive`
 - Skills CLI (Codex, Cursor, and other SKILL.md-compatible tools):
   `npx skills add OpenReceive/openreceive`
-- GitHub Copilot discovers the same skills from the repository's
-  `.agents/skills/` directory automatically.
+- For GitHub Copilot and other agents, install into **your application's**
+  `.agents/skills/` with `npx skills add OpenReceive/openreceive` or the
+  package command below. The OpenReceive repository's own `.agents/skills/`
+  is only discovered when that repository is the workspace.
 - No installer? Copy the agent directions for your stack and paste them into
   your agent: [Node (Express)](https://openreceive.org/agent-directions/node.md) ·
   [Fastify](https://openreceive.org/agent-directions/fastify.md) ·
@@ -28,9 +30,24 @@ the full quickstart), or paste the one-prompt agent directions:
   [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md). Each
   is self-contained, quickstart included.
 
-Every `@openreceive/*` npm package and OpenReceive gem also ships the skills in
-its own `skills/` directory, so an agent working in a project that already
-installed OpenReceive finds them without the network.
+One package per ecosystem bundles an offline copy: `@openreceive/node`, the
+core `openreceive` gem, Python's `openreceive`, and Composer's
+`openreceive/openreceive`. From your application's directory, install that copy
+where your agent can discover it:
+
+| Stack | Install bundled skills |
+| --- | --- |
+| Node | `npx openreceive skills install` |
+| Python (Django or FastAPI) | `openreceive skills install` |
+| Rails | `bin/rails openreceive:skills` |
+| Laravel | `php artisan openreceive:skills` |
+
+These commands write both skills to `.agents/skills/`; add
+`--dir .claude/skills` for Claude Code. Re-running replaces only the two
+OpenReceive skill folders, removing obsolete files and leaving other skills
+alone. Plain PHP, non-Rails Ruby, and WordPress projects can use
+`npx skills add OpenReceive/openreceive`. Installing a library alone does not
+make its bundled skills discoverable.
 
 A **debug-openreceive-payment** skill ships alongside: boot failures, 403/404/
 409 semantics, settlement timing, swap refunds, each with its fix.

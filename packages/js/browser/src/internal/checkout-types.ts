@@ -423,6 +423,7 @@ export interface CheckoutElementAttributeOptions {
    * the server will not serve is ignored.
    */
   readonly resumePaymentHash?: string;
+  readonly resumePaymentRail?: "lightning" | "swap";
   /**
    * Does a payer who closes this tab have a URL that brings them back? Emitted
    * in every mode, because the refund screen it governs shows in every mode.

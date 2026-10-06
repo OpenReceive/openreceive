@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 namespace :openreceive do
+  desc "Install agent skills (optional directory: openreceive:skills[path])"
+  task :skills, [:dir] do |_task, args|
+    require "openreceive/skills"
+    OpenReceive::Skills.install(directory: args[:dir] || ".agents/skills")
+  end
+
   # Step 0 of the agent directions, as one command.
   #
   # "Look for NWC_URI in this app's server environment" is a SEARCH, and it has
@@ -18,6 +24,7 @@ namespace :openreceive do
     set = ->(name) { ENV[name].to_s.strip.empty? ? "unset" : "set" }
     lines = [
       "openreceive:doctor",
+      "Agent skills: run `bin/rails openreceive:skills`",
       "  NWC_URI:          #{set.call('NWC_URI')}",
       "  LSC_URI_PRIMARY:  #{set.call('LSC_URI_PRIMARY')}",
       "  LSC_URI_BACKUP:   #{set.call('LSC_URI_BACKUP')}"

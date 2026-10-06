@@ -11,11 +11,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-
-import {
-  createWrapperCheckoutShellBinding,
-  validateCheckoutProps,
-} from "../packages/js/elements/src/wrapper-shared.ts";
 import {
   checkoutLabels,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
@@ -25,6 +20,10 @@ import {
 import { checkoutRoutes } from "../packages/js/browser/src/internal/checkout.ts";
 import { createSwapUnavailableModel } from "../packages/js/browser/src/internal/wizard.ts";
 import { renderPaymentWizardHtml } from "../packages/js/elements/src/render-wizard.ts";
+import {
+  createWrapperCheckoutShellBinding,
+  validateCheckoutProps,
+} from "../packages/js/elements/src/wrapper-shared.ts";
 import { Checkout } from "../packages/js/react/src/index.ts";
 
 const PARITY_DOC = "docs/internal/wrapper-parity.md";
@@ -63,6 +62,7 @@ const SHARED_PROPS = [
   "resumePathPrefix",
   "routeReference",
   "resumePaymentHash",
+  "resumePaymentRail",
   "resumable",
 ];
 

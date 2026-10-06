@@ -1,5 +1,6 @@
 <?php
 // Run with wp eval-file inside the disposable Docker testkit shop.
+use OpenReceive\WP\Configuration;
 use OpenReceive\WP\Gateway;
 use OpenReceive\WP\OrderHost;
 use OpenReceive\WP\Plugin;
@@ -45,6 +46,24 @@ $dispatch = static function (string $route, array $body, string $method = 'POST'
 Plugin::activate();
 $repo = Plugin::repository();
 $check($repo->meta()->storedSchemaVersion() === 1, 'activation schema marker');
+$settingsBefore = get_option('woocommerce_openreceive_settings', []);
+$configured = Configuration::withSecret($settingsBefore, 'lsc_uri_primary', 'opaque-test-value');
+$check(Secrets::decrypt($configured['lsc_uri_primary']) === 'opaque-test-value', 'configuration encrypts before saving');
+$check(Configuration::title($configured) === 'Bitcoin & crypto (OpenReceive)', 'swap-aware default title');
+$check(Configuration::title([...$configured, 'title' => 'My checkout']) === 'My checkout', 'custom title preserved');
+$check(!str_contains(Configuration::errorMessage(new RuntimeException('Failed opaque-test-value'), ['opaque-test-value']), 'opaque-test-value'), 'configuration errors redact supplied secret');
+foreach (['nwc_uri', 'lsc_uri_primary', 'lsc_uri_backup'] as $field) {
+    $request = new WP_REST_Request('PUT', '/wc/v3/payment_gateways/openreceive');
+    $request->set_param('settings', [$field => 'opaque-test-value']);
+    $result = apply_filters('rest_pre_dispatch', null, rest_get_server(), $request);
+    $check(is_wp_error($result) && $result->get_error_data()['status'] === 400, 'generic credential update rejected');
+}
+$check(get_option('woocommerce_openreceive_settings', []) === $settingsBefore, 'rejected updates preserve settings');
+$report = Plugin::diagnosticReport();
+$check($report['ok'], 'doctor succeeds on configured testkit shop: ' . implode('; ', $report['lines']));
+as_unschedule_all_actions('openreceive_reconcile', [], 'openreceive');
+$check(!Plugin::diagnosticReport()['ok'], 'doctor fails when reconciliation is not scheduled');
+as_schedule_recurring_action(time() + 60, 60, 'openreceive_reconcile', [], 'openreceive');
 $order = $makeOrder();
 $other = $makeOrder();
 $reference = (string) $order->get_id();
@@ -76,6 +95,8 @@ $created = $dispatch('/checkouts', ['reference' => $reference]);
 $check($created->get_status() === 201, 'create route: ' . wp_json_encode($created->get_data()));
 $hash = $created->get_data()['checkout']['payment_hash'];
 $check(count($repo->listForReference($reference)) === 1, 'attempt persisted before response');
+ob_start(); (new Gateway())->receipt_page($order->get_id()); $lightningMarkup = ob_get_clean();
+$check(str_contains($lightningMarkup, 'resume-payment-rail="lightning"') && str_contains($lightningMarkup, $hash), 'Lightning receipt resumes on its own rail');
 $retry = $dispatch('/checkouts', ['reference' => $reference]);
 $check($retry->get_data()['checkout']['payment_hash'] === $hash, 'retry reuses attempt');
 $check($dispatch('/payments/check', ['reference' => $reference, 'payment_hash' => $hash])->get_status() === 200, 'check route');
@@ -98,6 +119,7 @@ $gateway = new Gateway();
 $check($gateway->is_available(), 'gateway available for USD');
 ob_start(); $gateway->receipt_page($order->get_id()); $markup = ob_get_clean();
 $check(str_contains($markup, 'csrf-header="X-WP-Nonce"') && str_contains($markup, 'resume-payment-hash='), 'receipt nonce and resume attributes');
+$check(str_contains($markup, 'resume-payment-rail="swap"'), 'swap receipt retains historical recovery');
 $cipher = Secrets::encrypt('opaque-test-value');
 $gateway->settings['nwc_uri'] = $cipher;
 $html = $gateway->generate_password_html('nwc_uri', $gateway->form_fields['nwc_uri']);

@@ -39,6 +39,7 @@ final class Doctor
         }
         $lines[] = '  engine mounted:   ' . ($mountedAt === null ? 'unknown — the host mounts Psr15Handler' : "at {$mountedAt}");
         $lines[] = '  wallet preflight: ' . self::walletReport($walletCheck);
+        $lines[] = 'Agent skills: run `npx skills add OpenReceive/openreceive` in your project';
         return $lines;
     }
 

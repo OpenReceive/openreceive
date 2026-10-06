@@ -51,7 +51,27 @@ final class Plugin
 
     public static function boot(): void
     {
-        if (!class_exists('WC_Payment_Gateway')) { return; }
+        if (defined('WP_CLI') && WP_CLI) {
+            \WP_CLI::add_command('openreceive configure', [new Cli(), 'configure']);
+            \WP_CLI::add_command('openreceive doctor', [new Cli(), 'doctor']);
+        }
+        if (!class_exists('WC_Payment_Gateway')) {
+            add_action('admin_notices', static function (): void {
+                if (current_user_can('activate_plugins')) { echo '<div class="notice notice-error"><p>' . esc_html__('OpenReceive needs WooCommerce installed and active.', 'openreceive') . '</p></div>'; }
+            });
+            return;
+        }
+        // Reject unsupported secret writes before WooCommerce mutates any settings.
+        add_filter('rest_pre_dispatch', static function ($result, $server, $request) {
+            if (in_array($request->get_method(), ['POST', 'PUT', 'PATCH'], true)
+                && preg_match('#^/wc/v[0-9]+/payment_gateways/openreceive/?$#', $request->get_route())) {
+                $settings = $request->get_param('settings');
+                if (is_array($settings) && array_intersect(array_keys($settings), array_keys(Secrets::FIELDS)) !== []) {
+                    return new \WP_Error('openreceive_credentials_cli_required', 'Use wp openreceive configure with stdin, or the OpenReceive admin settings form, to change encrypted credentials.', ['status' => 400]);
+                }
+            }
+            return $result;
+        }, 10, 3);
         add_filter('woocommerce_payment_gateways', static function (array $gateways): array { $gateways[] = Gateway::class; return $gateways; });
         add_action('rest_api_init', [self::class, 'routes']);
         add_action('admin_notices', static function (): void {
@@ -81,12 +101,11 @@ final class Plugin
         }, 20);
         if (defined('WP_CLI') && WP_CLI) {
             \WP_CLI::add_command('openreceive reconcile', static function (): void { self::reconcile(); \WP_CLI::success('Reconciliation complete.'); });
-            \WP_CLI::add_command('openreceive doctor', static function (): void {
-                foreach (self::diagnostics() as $line) { \WP_CLI::line($line); }
-            });
             \WP_CLI::add_command('openreceive notifications', static function (): void { self::engine()->notificationsWorker()->run(); });
         }
     }
+
+    public static function resetEngine(): void { self::$engine = null; }
 
     public static function repository(): SqlPaymentRepository
     {
@@ -158,28 +177,56 @@ final class Plugin
         }
     }
 
-    public static function diagnostics(): array
+    public static function diagnostics(): array { return self::diagnosticReport()['lines']; }
+
+    public static function diagnosticReport(): array
     {
         global $wpdb;
         $lines = [];
-        try {
-            foreach (Secrets::environment() as $name => $value) {
-                if (str_ends_with($name, '_URI') || str_starts_with($name, 'LSC_')) { $lines[] = $name . ': ' . ($value === '' ? 'unset' : 'set'); }
+        $ok = true;
+        $check = static function (string $name, callable $probe) use (&$lines, &$ok): void {
+            try { $lines[] = $name . ': ' . $probe(); }
+            catch (\Throwable $error) { $ok = false; $lines[] = $name . ': FAILED — ' . Configuration::errorMessage($error); }
+        };
+        $check('WooCommerce', static function (): string {
+            if (!class_exists('WC_Payment_Gateway')) { throw new \RuntimeException('Install and activate WooCommerce.'); }
+            return 'active';
+        });
+        $check('PHP extensions', static function (): string {
+            foreach (['gmp', 'sodium'] as $extension) {
+                if (!extension_loaded($extension)) { throw new \RuntimeException('Enable PHP ' . esc_html($extension) . ' in both web and WP-CLI runtimes.'); }
             }
+            return 'GMP and sodium available';
+        });
+        $check('Credentials', static function () use (&$lines): string {
+            foreach (Secrets::environment() as $name => $value) {
+                if ($name === 'NWC_URI' || str_starts_with($name, 'LSC_')) { $lines[] = $name . ': ' . ($value === '' ? 'unset' : 'set'); }
+            }
+            if (Secrets::environment()['NWC_URI'] === '' && !(defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit')) { throw new \RuntimeException('NWC_URI is not set. Run wp openreceive configure --nwc-uri=- with the code on stdin.'); }
+            return 'readable';
+        });
+        $check('Schema', static function () use ($wpdb, &$lines): string {
             $repo = self::repository();
-            $lines[] = 'Schema: ' . $repo->meta()->storedSchemaVersion();
+            $version = $repo->meta()->storedSchemaVersion();
             $attention = $repo->connection()->query("SELECT reference FROM {$wpdb->prefix}openreceive_payments WHERE status = ? ORDER BY id LIMIT 50", ['attention']);
             $lines[] = 'Attention orders (first 50): ' . implode(', ', array_column($attention, 'reference'));
             $gate = $repo->connection()->query("SELECT value FROM {$wpdb->prefix}openreceive_meta WHERE `key` = ?", ['transaction_scan_gate']);
             $claimed = json_decode($gate[0]['value'] ?? '{}', true)['claimed_at'] ?? null;
             $lines[] = 'Last scan claim: ' . ($claimed ? gmdate('c', (int) $claimed) : 'none');
-            $service = self::service();
-            $lines[] = 'Wallet preflight: passed';
-            $service->listRates(['currencies' => [get_woocommerce_currency()]]);
-            $lines[] = 'Price feed: available for ' . get_woocommerce_currency();
-        } catch (\Throwable) { $lines[] = 'Configuration check failed. Verify credentials, PHP extensions, database schema, wallet receive permissions and the store currency price feed.'; }
-        $lines[] = 'Reconcile scheduled: ' . (function_exists('as_has_scheduled_action') && as_has_scheduled_action('openreceive_reconcile', [], 'openreceive') ? 'yes' : 'no');
+            return (string) $version;
+        });
+        if (class_exists('WC_Payment_Gateway')) {
+            $service = null;
+            $check('Wallet preflight', static function () use (&$service): string { $service = self::service(); return 'passed'; });
+            if ($service !== null) {
+                $check('Price feed', static function () use ($service): string { $currency = get_woocommerce_currency(); $service->listRates(['currencies' => [$currency]]); return 'available for ' . $currency; });
+            } else { $lines[] = 'Price feed: not checked because wallet configuration failed'; }
+            $check('Reconcile scheduled', static function (): string {
+                if (!function_exists('as_has_scheduled_action') || !as_has_scheduled_action('openreceive_reconcile', [], 'openreceive')) { throw new \RuntimeException('No reconcile action is scheduled. Load WordPress with WooCommerce active.'); }
+                return 'yes';
+            });
+        }
         $lines[] = 'Settled orders awaiting completion are retried on checkout requests and scheduled reconciliation.';
-        return $lines;
+        return ['ok' => $ok, 'lines' => $lines];
     }
 }

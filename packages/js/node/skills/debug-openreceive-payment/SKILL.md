@@ -19,6 +19,12 @@ URL below is raw markdown — fetch it when the step needs it.
 npx openreceive doctor                     # Node version, NWC_URI, swap config, wallet probe
 npx openreceive doctor --db <db>           # + are openreceive_payments/openreceive_meta migrated?
 npx openreceive doctor --url http://localhost:3000   # + are the routes actually mounted?
+bin/rails openreceive:doctor               # Rails
+manage.py openreceive_doctor               # Django
+openreceive doctor --app main:app           # FastAPI
+php artisan openreceive:doctor             # Laravel
+wp openreceive doctor                      # WordPress
+php bin/doctor                             # plain PHP: host script calling $engine->doctor()
 ```
 
 Each failing line states its own fix. `npx openreceive debug-report` prints the
@@ -32,7 +38,7 @@ same diagnostics redacted, always exit 0 — safe to share.
 | `INVALID_NWC` / "not a valid NWC code" | The value is malformed (must be `nostr+walletconnect://` with 64-hex pubkey and secret, ≥1 `wss` relay). Re-copy it from the wallet. |
 | "NOT receive-only" / spend methods advertised | The wallet minted a spend-capable code; OpenReceive fails closed because a leak would drain the wallet. Mint a receive-only code. Overriding (`allowSpendCapableWallet` / `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC`) is a last resort. |
 | Wallet preflight failed (methods/encryption) | The wallet must advertise `make_invoice` + `list_transactions` and NIP-04 or NIP-44 v2. Use a compatible wallet. |
-| "The openreceive_meta table does not exist" / raw `no such table: openreceive_payments` | The migration was never applied. Node: `npx openreceive scaffold payments --orm <yours>`, then run the emitted migration through the app's normal workflow. Rails: `bin/rails generate openreceive:install`, then `bin/rails db:migrate`. https://openreceive.org/guides/storage.md |
+| "The openreceive_meta table does not exist" / raw `no such table: openreceive_payments` | The migration was never applied. Node: `npx openreceive scaffold payments --orm <yours>`, then run the emitted migration through the app's normal workflow. Rails: `bin/rails generate openreceive:install`, then `bin/rails db:migrate`. Django: `manage.py openreceive_install <app> && manage.py migrate`. FastAPI: `openreceive scaffold payments --alembic --dialect <db>` (or `--sql`), then apply through the host workflow. Laravel: `php artisan openreceive:install && php artisan migrate`. Plain PHP: apply `OpenReceive\Storage\PaymentsSchema::statements($dialect)` through the host workflow. WordPress: check plugin activation/upgrades applied the tables. https://openreceive.org/guides/storage.md |
 | "requires amountFor / onPaid / authorize / host" | The factory is missing a required hook — see the host contract in https://openreceive.org/guides/api-reference.md |
 
 ## 3. Request-time errors from the routes
@@ -51,7 +57,12 @@ same diagnostics redacted, always exit 0 — safe to share.
 - Settlement is opportunistic: any OpenReceive request runs one reconcile pass
   through a durable gate (min 3s between wallet scans, stretched by invoice
   age). A quiet server settles on the next request — or run the optional
-  notification worker. No timer is missing; that is the design.
+  notifications worker: Rails `bin/rails openreceive:notifications`, Django
+  `manage.py openreceive_notifications`, FastAPI
+  `openreceive notifications --app main:app`, Laravel
+  `php artisan openreceive:notifications`, WordPress `wp openreceive notifications`,
+  or plain PHP's host script `php bin/notifications`. Node hosts run their
+  separate worker using the notifications API. No web-process timer is missing.
 - An unpaid attempt closes only after a successful wallet scan at/after expiry
   plus a 900s grace constant — a local clock alone never closes one. `expired`
   arriving "late" is correct.
@@ -83,8 +94,13 @@ same diagnostics redacted, always exit 0 — safe to share.
 
 - The components require `prefix` — the exact base path the routes are mounted
   at (`"/openreceive"` unless you changed it).
-- Import the stylesheet (`@openreceive/react/styles.css` or the elements
-  sheet).
+- Import `@openreceive/react/styles.css` or `@openreceive/elements/styles.css`
+  alongside the component registration. For standalone Django/Laravel/PHP,
+  serve both `openreceive-checkout.js` (as a module) and
+  `openreceive-checkout.css`. Django serves them from `static/openreceive/`
+  via `collectstatic`; Laravel/PHP serve the unpacked standalone assets from
+  the public directory. Check that both requests succeed and the custom
+  element is registered. Do not process the compiled stylesheet with Tailwind.
 - "invoice must not be an NWC connection string" means a server secret leaked
   into a browser payload — stop and fix the server response; never render it.
   https://openreceive.org/guides/frontend-checkout.md

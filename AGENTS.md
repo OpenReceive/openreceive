@@ -155,3 +155,10 @@ empty-looking scan at expiry+grace closes unpaid attempts.
 
 Do not add private openreceive.org application code, infrastructure inventory, host IPs,
 deployment credentials, analytics, landing pages, or business logic to this public repo.
+
+Specify openreceive.org changes here through the generated `docs/site-contract.json`
+and `docs/internal/site-build.md`. Update the canonical docs, agent directions, or
+contract generator, then regenerate the docs bundle. The private Rails app consumes
+that revision through its docs sync and applies the requirements. Use this one-way
+workflow for site routes and redirects too; a specification change here does not
+require locating or editing the private site repository.

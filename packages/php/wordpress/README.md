@@ -60,3 +60,10 @@ refunded orders require merchant review and are never reopened automatically.
 Merchant refunds are manual because the wallet is receive-only. Payer swap
 refunds remain available through the authorized order-pay link. Deactivation
 retains attempts. Uninstall removes them only when explicitly configured.
+
+## Agent skills
+
+For development, run `npx skills add OpenReceive/openreceive` in your project.
+The merchant plugin archive does not bundle agent skills. See
+[agent setup](https://openreceive.org/agents) for project installation and
+Claude Code setup.

@@ -158,6 +158,7 @@ Run from the repo root on a clean, current `master`.
    - the Laravel package's `~X.Y.Z` constraint on the engine
    - the root and per-gem changelog headings (`## <x.y.z> - Unreleased`)
    - the path-gem `Gemfile.lock` of the Rails example
+   - the WordPress plugin version, Composer constraint/lock and pinned quickstart ZIP URL
    - the version references in this document
    - the package lock
 
@@ -285,38 +286,65 @@ Run from the repo root on a clean, current `master`.
    on a machine whose npm account still has a TOTP authenticator. The
    OpenReceive account uses a bypass-2FA token instead.
 
-9. Cut the GitHub release with the notes and the exact artifacts. Take the gems
-   from RubyGems, because CI built them and a local build has different bytes:
+9. Assemble **all platforms**, even when the motivating fix was WordPress or
+   one SDK. The general family releases in lockstep. Fetch published gems and
+   Python distributions so GitHub carries the registry bytes, build the matching
+   WordPress ZIP, and retain npm/standalone/docs artifacts from this commit:
 
    ```sh
-   mkdir -p .release/gems/<x.y.z>/published && (cd .release/gems/<x.y.z>/published &&
-     for g in openreceive openreceive-server openreceive-rails; do gem fetch "$g" -v <x.y.z>; done)
-   gh release create v<x.y.z> --title "OpenReceive v<x.y.z>" \
-     --notes-file <(awk '/^## <x.y.z> - /{f=1;next}/^## /{f=0}f' CHANGELOG.md) \
-     .release/npm/<x.y.z>/tarballs/*.tgz .release/gems/<x.y.z>/published/*.gem \
-     dist/standalone-checkout-<x.y.z>.tar.gz
+   mkdir -p .release/gems/<x.y.z>/published
+   (cd .release/gems/<x.y.z>/published &&
+     for g in openreceive openreceive-server openreceive-rails; do gem fetch "$g" -v <gem-version>; done)
+   mkdir -p .release/pypi/<x.y.z>
+   uvx --from pip pip download --no-deps --only-binary=:all: --dest .release/pypi/<x.y.z> openreceive==<pep440-version>
+   uvx --from pip pip download --no-deps --no-binary=:all: --dest .release/pypi/<x.y.z> openreceive==<pep440-version>
+   composer install --working-dir=packages/php/wordpress
+   npm run release:wordpress:build
+   npm run build:docs
+   npm run release:artifacts -- check
+   npm run release:artifacts -- draft /path/to/release-notes.md
+   npm run release:artifacts -- github
    ```
 
-   `dist/standalone-checkout-<x.y.z>.tar.gz` is the checkout build for hosts
-   without a bundler (`@openreceive/elements/dist/standalone`).
-   `npm run build:packages` writes it and `npm run check:standalone` gates it.
-   WordPress, Django and plain PHP hosts download it, so a release without it
-   is incomplete.
+   The artifact tool derives filenames from the public npm and gem lists and
+   registry version conversions. It refuses to create the draft when any of the
+   22 required assets is missing: 14 npm tarballs, 3 gems, Python wheel and sdist,
+   standalone checkout, WordPress ZIP, and docs bundle. It never substitutes an
+   older WordPress ZIP. The source-tag build is the documented fallback for
+   historical releases with a missing ZIP. WordPress builds require PHP GMP,
+   sodium, Composer and WP-CLI, in addition to the completed standalone build.
 
-   `gem fetch` can lag the push by a minute while the index catches up. Retry
-   rather than fall back to a local build.
+   Review the draft and publish only after its asset check passes:
 
-10. Verify from outside the workspace:
+   ```sh
+   gh release edit v<x.y.z> --repo OpenReceive/openreceive --draft=false
+   npm run release:artifacts -- github
+   ```
+
+   Registry indexes can lag; retry missing downloads rather than substituting
+   a different version or a locally rebuilt registry artifact.
+
+10. Verify every platform outside the workspace, including both Composer splits:
 
     ```sh
     cd "$(mktemp -d)"
     npm view @openreceive/core version
     gem list -r -e openreceive -e openreceive-server -e openreceive-rails
     pip index versions openreceive
-    gh release view v<x.y.z>     # 18 assets: 14 tarballs + 3 gems + the standalone checkout
+    composer show -a openreceive/openreceive
+    composer show -a openreceive/laravel
+    gh release view v<x.y.z> --repo OpenReceive/openreceive
     ```
 
-11. Redeploy openreceive.org with this release's docs bundle. In the site repo,
+    Run `npm run release:artifacts -- github` from the release checkout. Download
+    the exact WordPress ZIP from the release and smoke-test install, configure,
+    doctor and checkout in the disposable Docker shop. Registry version presence
+    alone does not prove the WordPress artifact was attached.
+
+11. Redeploy openreceive.org with this release's docs bundle. Apply the imported
+    `site_redirects[]` requirements, including the 301 from
+    `/integrations/wordpress` to `/integrations/woocommerce`, and verify them
+    against `docs/internal/site-build.md`. In the site repo,
     run `bin/rails docs:sync`, then the JS build, then deploy. Until then the
     public site serves the previous release's guides and footer version.
 
@@ -399,16 +427,42 @@ Neither Composer package contains the checkout UI (D2 in the frameworks plan).
 Plain-PHP hosts unpack `dist/standalone-checkout-<x.y.z>.tar.gz` from the
 GitHub release. Laravel hosts install `@openreceive/elements` from npm.
 
+## Platform coverage and release scope
+
+| Platform | General release deliverable | Verification |
+| --- | --- | --- |
+| npm (all public JS packages) | Registry versions and exact tarballs | Package smoke, npm publish verification |
+| Ruby (core, server, Rails) | RubyGems versions and exact gems | Ruby tests and gem checksums |
+| Python (FastAPI, Django) | PyPI wheel and sdist | Python tests, wheel contents, Twine |
+| PHP and Laravel | Composer split tags indexed by Packagist | PHP tests and both package versions |
+| WordPress/WooCommerce | Matching installable ZIP on GitHub | Docker integration, browser checkout, plugin audit |
+| Standalone checkout | Versioned tar.gz on GitHub | Standalone parity and artifact smoke |
+| Docs and skills | Docs bundle, GitHub skill source, ecosystem bundles | Generated-doc checks and packaged skill checks |
+| BTCPay Server | Independent plugin version and release | Compatibility tests; publish only on explicit BTCPay release request |
+
+Documentation-only changes can be pushed without publishing packages. Changes
+to shipped code, packaged skills or assets require the next package release for
+registry/archive users to receive them. Before release, review shared engine and
+checkout changes against every adapter above. A general release updates the
+whole versioned family; it does not authorize WordPress.org submission or a
+BTCPay Plugin Builder submission. The private website deployment remains a
+separate step and stays outside this public repository.
+
 ## Release checklist
 
 The release owner checks, before tagging:
 
 - `npm run test:ci` is green on the release commit.
 - Changelog updated.
+- `npm run release:artifacts -- check` passes before creating the GitHub draft;
+  `npm run release:artifacts -- github` passes before and after publication.
+- WordPress ZIP matches the release version and passes Docker integration, browser tests and plugin audit.
 - Agent skills describe the current public API. A release that changes the
   public API updates `skills/*/SKILL.md` in the same change. Run
-  `npm run generate:skills` so the `.agents/skills/` twin and every package and
-  gem copy match. `npm run check:docs` enforces the sync, not the prose.
+  `npm run generate:skills` so `.agents/skills/` and the four ecosystem bundles
+  (`@openreceive/node`, the core gem, Python, and PHP) match. Verify their
+  project install commands; `npm run check:docs` enforces mirror and reference-link
+  consistency, not the prose.
 - Public package manifests are public while testkit stays private.
 - Package versions match the intended tag.
 - Ruby gem versions match the workspace version and `npm run release:gem:build` passes.

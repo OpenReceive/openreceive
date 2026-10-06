@@ -256,6 +256,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * grid. A hash the server will not serve is ignored.
    */
   resumePaymentHash: "resume-payment-hash",
+  resumePaymentRail: "resume-payment-rail",
   /**
    * Does a payer who closes this tab have a URL that brings them back to this
    * checkout? Only the refund screen's copy depends on it — see

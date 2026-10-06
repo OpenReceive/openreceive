@@ -12,7 +12,7 @@ import {
   orClasses,
   prepareCheckout,
   requestCheckout,
-  resumeSwapAttempt,
+  resumeCheckoutAttempt,
   validateCheckoutProps,
 } from "@openreceive/browser/headless";
 import * as React from "react";
@@ -60,6 +60,7 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
     resumePathPrefix: props.resumePathPrefix,
     routeReference: props.routeReference,
     resumePaymentHash: props.resumePaymentHash,
+    resumePaymentRail: props.resumePaymentRail,
   });
   const { checkout } = props;
   if (checkout !== undefined) {
@@ -136,6 +137,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     resumePathPrefix = "/checkout",
     routeReference,
     resumePaymentHash,
+    resumePaymentRail,
     theme: lockedTheme,
     defaultTheme,
     storageKey,
@@ -215,18 +217,19 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     })
       // A host that remembered this order's swap attempt gets it back on the
       // screen; prepare returns none, so without this a bookmarked refund opens
-      // on the method grid. `resumeSwapAttempt` swallows a stale hash, so the
+      // on the method grid. `resumeCheckoutAttempt` swallows a stale hash, so the
       // failure mode is the checkout the payer would have had anyway.
       .then((checkout) =>
         cancelled || !action.isCurrent() || resumePaymentHash === undefined
           ? checkout
-          : resumeSwapAttempt({
+          : resumeCheckoutAttempt({
               signal: action.signal,
               fetch: createFetchRef.current ?? globalThis.fetch,
               prefix: resolvedPrefix,
               ...(csrfHeader === undefined ? {} : { csrfHeader }),
               reference,
               paymentHash: resumePaymentHash,
+              ...(resumePaymentRail === undefined ? {} : { rail: resumePaymentRail }),
               snapshot: checkout,
             }),
       )
@@ -247,7 +250,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       cancelled = true;
       session.reset();
     };
-  }, [reference, resolvedPrefix, csrfHeader, resumePaymentHash, attempt]);
+  }, [reference, resolvedPrefix, csrfHeader, resumePaymentHash, resumePaymentRail, attempt]);
 
   const onSwapStarted = React.useCallback(
     (invoice: CheckoutInvoiceSnapshot) => {
@@ -368,6 +371,7 @@ function CheckoutView(
     // Consumed by CheckoutCreate before the view exists; destructured out here
     // so it never reaches the rendered <section> as an attribute.
     resumePaymentHash: _resumePaymentHash,
+    resumePaymentRail: _resumePaymentRail,
     resumable,
     onRequestLightning,
     onSwapStarted,
@@ -425,7 +429,8 @@ function CheckoutView(
   const [swapFocused, setSwapFocused] = React.useState(() =>
     checkout.invoices.some((invoice) => invoice.rail === "swap" && invoice.swap !== undefined),
   );
-  const [lightningFocused, setLightningFocused] = React.useState(false);
+  const resumeLightning = _resumePaymentRail === "lightning" && !!props.resumePaymentHash;
+  const [lightningFocused, setLightningFocused] = React.useState(resumeLightning);
   const QRCodeComponent = components?.QRCode ?? QRCode;
   const InvoiceSummaryComponent = components?.InvoiceSummary ?? InvoiceSummary;
   const CopyButton = components?.CopyButton ?? CopyInvoiceButton;
@@ -694,6 +699,7 @@ function CheckoutView(
           checkoutModel.checkout?.invoices.some((invoice) => invoice.swap !== undefined))
           ? React.createElement(PaymentWizard, {
               key: "wizard",
+              resumeLightning,
               // Only pass invoice when it's a real bolt11 (non-empty, non-deferred).
               invoice: checkoutModel.invoice || undefined,
               checkout: checkoutModel.checkout,

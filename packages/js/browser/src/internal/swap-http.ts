@@ -1,7 +1,7 @@
 import { nonEmptyString, recordOrEmpty } from "@openreceive/core";
 import { mergeAttemptIntoSnapshot } from "./checkout-merge.ts";
 import { optionalSafeInteger } from "./checkout-read.ts";
-import { readJsonResponse } from "./checkout-transport.ts";
+import { readJsonResponse, requestCheckout } from "./checkout-transport.ts";
 import { resolveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
 import { requestHeaders } from "./request-headers.ts";
 import { checkoutRoutes, type Routes } from "./routes.ts";
@@ -199,6 +199,22 @@ export async function resumeSwapAttempt(
   } catch {
     return options.snapshot;
   }
+}
+
+/** Resume the host-selected rail; old callers continue to use swap recovery. */
+export async function resumeCheckoutAttempt(
+  options: SwapRequestOptions & {
+    readonly reference: string;
+    readonly paymentHash: string;
+    readonly rail?: "lightning" | "swap";
+    readonly snapshot: CheckoutSnapshot;
+  },
+): Promise<CheckoutSnapshot> {
+  if (options.rail !== "lightning") return resumeSwapAttempt(options);
+  if (options.paymentHash.length === 0) return options.snapshot;
+  // The host only supplies a pending, unexpired Lightning attempt. The normal
+  // serialized create path reuses it and preserves the prepared method catalog.
+  return requestCheckout({ ...options, previous: options.snapshot });
 }
 
 /**

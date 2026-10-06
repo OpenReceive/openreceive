@@ -27,7 +27,7 @@ final class Gateway extends \WC_Payment_Gateway
                 'description' => $field === 'nwc_uri' ? __('Receive-only NWC code. Stored encrypted; never displayed.', 'openreceive') : __('Optional LSC code. Keep order-pay links available for payer swap refunds.', 'openreceive')];
         }
         $this->init_settings();
-        $this->title = $this->get_option('title');
+        $this->title = Configuration::title($this->settings);
         $this->description = $this->get_option('description');
         $this->enabled = $this->get_option('enabled', 'no');
         add_action('woocommerce_update_options_payment_gateways_openreceive', [$this, 'process_admin_options']);
@@ -57,13 +57,13 @@ final class Gateway extends \WC_Payment_Gateway
         $next = $original;
         try {
             foreach ($this->form_fields as $key => $field) { $next[$key] = $this->get_field_value($key, $field, $this->get_post_data()); }
-            if (($next['enabled'] ?? 'no') === 'yes' || Secrets::environment($next)['NWC_URI'] !== '') { Plugin::service($next); }
+            Configuration::save($next);
         } catch (\Throwable) {
             \WC_Admin_Settings::add_error(__('OpenReceive settings were not saved. Check the receive-only NWC code, relay access and optional LSC codes. Spend-capable wallets require the explicit override.', 'openreceive'));
             return false;
         }
         $this->settings = $next;
-        return update_option($this->get_option_key(), $next, false);
+        return true;
     }
 
     public function is_available()
@@ -111,13 +111,18 @@ final class Gateway extends \WC_Payment_Gateway
         $order = OrderHost::order((string) $order_id);
         if (!$order) { return; }
         $hash = '';
+        $rail = 'swap';
         try {
             $attempts = Plugin::repository()->listForReference((string) $order_id);
-            $hash = $attempts[0]->paymentHash ?? '';
+            $attempt = $attempts[0] ?? null;
+            if ($attempt !== null && ($attempt->isSwap() || ($attempt->status === 'pending' && $attempt->expiresAt > time()))) {
+                $hash = $attempt->paymentHash;
+                $rail = $attempt->isSwap() ? 'swap' : 'lightning';
+            }
         } catch (\Throwable) { /* The checkout displays the service error. */ }
         echo '<meta name="csrf-token" content="' . esc_attr(wp_create_nonce('wp_rest')) . '">';
         echo '<openreceive-checkout resumable="true" reference="' . esc_attr((string) $order_id) . '" prefix="' . esc_url(untrailingslashit(rest_url('openreceive/v1'))) . '" csrf-header="X-WP-Nonce"';
-        if ($hash !== '') { echo ' resume-payment-hash="' . esc_attr($hash) . '"'; }
+        if ($hash !== '') { echo ' resume-payment-hash="' . esc_attr($hash) . '" resume-payment-rail="' . esc_attr($rail) . '"'; }
         echo ' data-thank-you="' . esc_url($order->get_checkout_order_received_url()) . '"></openreceive-checkout>';
     }
 

@@ -55,12 +55,23 @@ if (command === "plan") {
   // The path dependency sits next to the staged plugin; it is never in the zip.
   cpSync(path.join(root, "packages/php/openreceive"), path.join(staging, "engine"), {
     recursive: true,
-    filter: (file) => !file.split(path.sep).includes("vendor"),
+    filter: (file) => !file.split(path.sep).some((part) => part === "vendor" || part === "skills"),
   });
   const manifest = JSON.parse(readFileSync(path.join(plugin, "composer.json"), "utf8"));
   manifest.repositories[0].url = "../engine";
   writeFileSync(path.join(plugin, "composer.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   const lock = JSON.parse(readFileSync(path.join(plugin, "composer.lock"), "utf8"));
+  // Staging changes a repository URL, which participates in Composer's hash.
+  lock["content-hash"] = execFileSync(
+    "php",
+    [
+      "-r",
+      "require $argv[1]; echo \\Composer\\Package\\Locker::getContentHash(file_get_contents($argv[2]));",
+      path.join(source, "vendor/autoload.php"),
+      path.join(plugin, "composer.json"),
+    ],
+    { encoding: "utf8" },
+  ).trim();
   for (const pkg of lock.packages) {
     if (pkg.name === "openreceive/openreceive") pkg.dist.url = "../engine";
     assert(

@@ -141,3 +141,12 @@ call `on_paid` repeatedly, so the host owns the conditional write/outbox. A raw
 infrastructure failures return retryable 503. Public error projections omit
 internal details; FixedFloat diagnostic hooks expose metadata and presence flags,
 never raw request bodies or provider responses.
+
+## Agent skills
+
+Run `openreceive skills install` from your application to install the offline
+skills bundled in the `openreceive` package.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

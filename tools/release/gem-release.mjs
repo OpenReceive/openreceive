@@ -134,7 +134,7 @@ function outDirFor(root, version, args) {
 // what broke `release:gem:build` for every prerelease.
 const gemVersionCache = new Map();
 
-function toGemVersion(root, version) {
+export function toGemVersion(root, version) {
   const cached = gemVersionCache.get(version);
   if (cached !== undefined) return cached;
   const normalized = run(

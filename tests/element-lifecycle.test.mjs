@@ -1349,3 +1349,29 @@ for (const delayed of ["quote", "create"])
       element.remove();
     }
   });
+
+test("a remembered Lightning attempt opens its invoice without a swap-status request", async () => {
+  const hash = "d".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-lightning-return", 21000),
+    "/checkouts": () => checkoutBody("order-lightning-return", 21000, hash),
+    "/payments/check": () => ({ payment_hash: hash, status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({
+    reference: "order-lightning-return",
+    prefix: "/openreceive",
+    "resume-payment-hash": hash,
+    "resume-payment-rail": "lightning",
+  });
+  try {
+    await untilLocal(() => element.shadowRoot?.textContent.includes("Switch payment method"), {
+      label: "resumed Lightning invoice",
+    });
+    assert.equal(fetchStub.pathCount("/swaps/status"), 0);
+    assert.equal(fetchStub.pathCount("/checkouts"), 1);
+    assert.match(element.shadowRoot.textContent, /Switch payment method/);
+  } finally {
+    element.remove();
+  }
+});

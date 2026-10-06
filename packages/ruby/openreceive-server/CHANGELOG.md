@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Install agent skills with `bin/rails openreceive:skills` (optional
+  `--dir .claude/skills`). The core `openreceive` gem owns the one offline
+  bundle; Rails/server gems no longer duplicate it. Other Ruby hosts can use
+  `npx skills add OpenReceive/openreceive`.
+
 ## 0.4.14 - 2026-10-04
 
 Release in lockstep with the 0.4.14 reconciliation fixes (in
@@ -123,7 +130,8 @@ and the handler's required-hook `ArgumentError`s say how to fix themselves.
 
 ### The gem carries the agent skills
 
-`skills/` ships in the gem — the integrate and debug playbooks for coding
+At this release, `skills/` shipped in this gem (now supplied by the core
+`openreceive` dependency; see Unreleased) — the integrate and debug playbooks for coding
 agents, kept byte-identical to the repository tree by
 `npm run generate:skills`.
 

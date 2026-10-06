@@ -267,7 +267,11 @@ command.
 
 Integrating with a coding agent? OpenReceive ships installable
 [agent skills](skills/) — `npx skills add OpenReceive/openreceive`, or
-`/plugin marketplace add OpenReceive/openreceive` in Claude Code — plus
+`/plugin marketplace add OpenReceive/openreceive` in Claude Code. Already using
+the Node package? Run `npx openreceive skills install` in your app to copy the
+bundled skills into `.agents/skills/` (`--dir .claude/skills` for Claude Code).
+[Other package install commands](https://openreceive.org/agents) cover Python,
+Rails, and Laravel. OpenReceive also publishes
 self-contained per-stack agent directions, `/llms.txt`, and the OpenAPI
 contract at [openreceive.org/agents](https://openreceive.org/agents). Working
 on OpenReceive itself? That is [AGENTS.md](AGENTS.md).

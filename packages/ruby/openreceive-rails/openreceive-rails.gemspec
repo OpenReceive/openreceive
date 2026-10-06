@@ -29,10 +29,9 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = ">= 3.2"
 
-  # skills/ is the agent-skills copy kept in sync by `npm run generate:skills`.
   spec.files = Dir[
     "lib/**/*.rb", "lib/**/*.rake", "app/**/*.rb", "config/**/*.rb",
-    "skills/**/*.md", "README.md", "CHANGELOG.md", "LICENSE"
+    "README.md", "CHANGELOG.md", "LICENSE"
   ]
   spec.require_paths = ["lib"]
 

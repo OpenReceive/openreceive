@@ -1,6 +1,6 @@
 import { isReusableLightningInvoice, selectCheckoutDisplayInvoice } from "./checkout-state.ts";
-import type { UnixSeconds } from "./unix-seconds.ts";
 import type { CheckoutInvoiceSnapshot, CheckoutSnapshot } from "./ui.ts";
+import type { UnixSeconds } from "./unix-seconds.ts";
 
 /**
  * The Lightning invoice a deferred-mint checkout can reuse instead of minting a
@@ -91,5 +91,6 @@ export function mergeMintedCheckout(
     // Prepare answered with it and create echoes it, but a host that only
     // returns it from one of the two must not lose it at the mint.
     description: checkout.description ?? previous.description,
+    fiat: checkout.fiat ?? previous.fiat,
   });
 }

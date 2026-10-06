@@ -31,6 +31,7 @@ element cannot: component slots, class-name slots, and render-prop children.
 | `resumePathPrefix` | `/checkout` | yes | yes | **create only** |
 | `routeReference` | – | yes | yes | **create only** |
 | `resumePaymentHash` | – | yes | yes | **create only** |
+| `resumePaymentRail` | `swap` | yes | yes | **create only** |
 | `resumable` | inferred from `syncUrl` / `routeReference` | yes | yes | both |
 | `polling` / `pollIntervalMs` | on / engine default | yes | via `options` | both |
 | `createFetch` | `globalThis.fetch` | yes | element-owned | create |

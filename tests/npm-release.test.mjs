@@ -22,6 +22,12 @@ test("general release preparation preserves the independent BTCPay version", (t)
   mkdirSync(path.dirname(plugin), { recursive: true });
   const source = "<Project><PropertyGroup><Version>0.4.7</Version></PropertyGroup></Project>\n";
   writeFileSync(plugin, source);
+  const quickstart = path.join(root, "docs/guides/quickstart-woocommerce.md");
+  mkdirSync(path.dirname(quickstart), { recursive: true });
+  writeFileSync(
+    quickstart,
+    "https://github.com/OpenReceive/openreceive/releases/download/v1.2.3/openreceive-wordpress-1.2.3.zip\ngit checkout v1.2.3\n",
+  );
   const run = (...extra) =>
     execFileSync(
       process.execPath,
@@ -32,4 +38,9 @@ test("general release preparation preserves the independent BTCPay version", (t)
   run();
   assert.equal(JSON.parse(readFileSync(path.join(root, "package.json"))).version, "1.2.4");
   assert.equal(readFileSync(plugin, "utf8"), source);
+  assert.match(
+    readFileSync(quickstart, "utf8"),
+    /download\/v1\.2\.4\/openreceive-wordpress-1\.2\.4\.zip/,
+  );
+  assert.match(readFileSync(quickstart, "utf8"), /git checkout v1\.2\.4/);
 });

@@ -83,6 +83,7 @@ packages = ["src/openreceive"]
 include = [
   "src/openreceive/**/*.py",
   "src/openreceive/django/static/**",
+  "src/openreceive/skills/**",
   "src/openreceive/django/migrations/**",
 ]
 

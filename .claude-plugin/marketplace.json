@@ -1,7 +1,7 @@
 {
   "name": "openreceive",
   "metadata": {
-    "description": "Agent skills for OpenReceive: integrate inbound Bitcoin Lightning payments into a Node.js or Rails application, and debug a failing integration."
+    "description": "Agent skills to integrate and debug OpenReceive Bitcoin Lightning checkout in Node.js, Rails, Python/Django/FastAPI, PHP/Laravel, WordPress/WooCommerce, and BTCPay Server. Optional USDT, USDC, SOL, and ETH swaps are converted by a configured provider to BTC over Lightning in the merchant's connected wallet; asset and network availability depends on the provider."
   },
   "owner": {
     "name": "OpenReceive",
@@ -11,7 +11,7 @@
     {
       "name": "openreceive",
       "source": "./",
-      "description": "Integrate OpenReceive inbound Bitcoin Lightning payments into an application, and debug a failing integration. Ships the integrate-openreceive and debug-openreceive-payment skills."
+      "description": "Agent skills to integrate and debug OpenReceive Bitcoin Lightning checkout in Node.js, Rails, Python/Django/FastAPI, PHP/Laravel, WordPress/WooCommerce, and BTCPay Server. Optional USDT, USDC, SOL, and ETH swaps are converted by a configured provider to BTC over Lightning in the merchant's connected wallet; asset and network availability depends on the provider."
     }
   ]
 }

@@ -216,6 +216,7 @@
         "requestSwapStatus",
         "resolveTransactionDetailRows",
         "resolveWizardSelection",
+        "resumeCheckoutAttempt",
         "resumeSwapAttempt",
         "selectCheckoutDisplayInvoice",
         "selectCurrentSwapInvoice",

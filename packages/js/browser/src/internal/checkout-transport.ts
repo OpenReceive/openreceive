@@ -442,6 +442,14 @@ function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
     amount_msats: amountMsats,
     active: invoice,
     invoices: [invoice],
+    ...(invoice.fiat_quote?.fiat === undefined
+      ? {}
+      : {
+          fiat: {
+            currency: requiredString(invoice.fiat_quote.fiat.currency, "fiat.currency"),
+            value: requiredString(invoice.fiat_quote.fiat.value, "fiat.value"),
+          },
+        }),
   };
 }
 

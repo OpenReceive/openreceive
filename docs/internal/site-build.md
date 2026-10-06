@@ -162,9 +162,48 @@ something new.
     `/wordpress` overview and screenshot. BTCPay uses `/btcpay` and its video.
     Keep every framework row, including FastAPI, Django, PHP, Laravel and
     WooCommerce. Do not maintain a smaller site-side list.
-11. Confirm every path in `site_owned[]` still resolves. Most of them are yours.
+11. Import every `site_redirects[]` entry into the Rails routing layer. A direct
+    request to `from` must return its `status` and a `Location` resolving to `to`,
+    before any SPA fallback. Follow the target and require a successful page.
+    See the WordPress alias requirement below.
+12. Confirm every path in `site_owned[]` still resolves. Most of them are yours.
     The agent-discovery trio (`/llms.txt`, `/openapi.yaml`, `/agents`) is listed
     there as must-exist, but it comes from this repo as described above.
+
+## Site redirects and the WordPress integration alias
+
+Website requirements start in this OpenReceive repository. Update the contract
+and docs here, regenerate the import bundle, then have the openreceive.org Rails
+app read that revision through its existing `bin/rails docs:sync` workflow.
+The site applies the imported requirements, verifies them, builds and deploys.
+Do not maintain a second redirect list or edit copied agent directions there.
+Private Rails implementation and deployment configuration stay in the site repo.
+
+`site_redirects[]` uses the existing contract v6 field. Each row has `from`, `to`,
+`status` and `must_exist`. The WordPress alias is required:
+
+```json
+{
+  "from": "/integrations/wordpress",
+  "to": "/integrations/woocommerce",
+  "status": 301,
+  "must_exist": true
+}
+```
+
+The target renders the existing `frameworks[]` row with `id: "woocommerce"`
+and its `/agent-directions/woocommerce.md` copy payload. WordPress is an alias,
+so it adds no second framework row, quickstart, or agent payload. The `/wordpress`
+plugin overview and `/wordpress.md` raw README retain their existing routes.
+
+The Rails sync must consume this row and enforce it in its publication checks.
+If its importer does not yet apply `site_redirects[]`, implement that support in
+the site as part of consuming this revision; do not silently discard the row.
+Check an unauthenticated GET and HEAD of `/integrations/wordpress` for a 301,
+verify the Location points to `/integrations/woocommerce`, and require that page
+and its copy payload to succeed. A client-side navigation redirect or an HTML
+shell with status 200 does not satisfy the contract. The generator rejects
+redirects that shadow pages, duplicate paths, or target an undeclared page.
 
 ## Import bundle and publication checks
 
@@ -221,7 +260,8 @@ contract:
 - Framework pages use every `frameworks[]` row, with the supplied install text,
   requirements, example link and payload. Null videos render no empty player.
 - Intra-doc links and plugin images resolve after source-path rewriting.
-  `site_owned[]` paths and `site_redirects[]` remain available.
+  `site_owned[]` paths remain available. Every `site_redirects[]` entry returns
+  its exact HTTP status and target; following it reaches the declared page.
 - The site footer/docs version matches `release_version`.
 - Before presenting an install flow as available, the package versions and
   downloadable artifacts it needs exist: npm, RubyGems, PyPI, Packagist, the
@@ -238,6 +278,7 @@ contract:
 | `api-docs` | `/api_docs` | Alias of `/guides/api-reference`. Kept because the directions and the site have always linked it. |
 | `agent-directions` | `/guides/agent-directions-<stack>` for every payload stack | The payload as a normal page, for people reading it. |
 | `agent-directions-payload` | `/agent-directions/<stack>.md` for every payload stack | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
+| permanent redirect | `/integrations/wordpress` | `site_redirects[]`: HTTP 301 to `/integrations/woocommerce`, applied before the SPA fallback. |
 | framework page | `/integrations/<id>` | `frameworks[]` (contract v5; `php` and `python` families since v6). Not a `publish[]` entry, because the page is the site's own template rendered from the row. The row names which `publish[]` pages it links. |
 | `agents-page` | `/agents` | The entry point for coding agents (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
 | `plugin-readme` | `/wordpress`, `/btcpay` | Render the plugin README and its markdown twin. WordPress has a screenshot and no video. BTCPay carries a `video` field: play `video.path` inline at the top of the page, with `video.poster` as its poster (both are `assets[]` entries), in place of the README's GitHub-only attachment URL. `/btcpay` is the BTCPay Server home: the plugin README (`packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md`) rendered and twinned like a guide, with its screenshots from `assets[]`. Link it from the site navigation as the BTCPay entry point. The guides (`/guides/quickstart-btcpay`, `/guides/btcpay-reference`, and the swap guides) are the full documentation behind it. |
@@ -245,8 +286,9 @@ contract:
 | `llms-index` | `/llms.txt` | `agent_discovery.artifacts[]`: the verbatim bytes of `docs/site/llms.txt`. |
 | `openapi` | `/openapi.yaml` | `agent_discovery.artifacts[]`: the verbatim bytes of the normative OpenAPI file. |
 
-Every route above except the payloads also carries a `markdown_path`. The
-payloads are already markdown. The `markdown_path` is always the `path` with
+Every rendered `publish[]` page also carries a `markdown_path`; framework
+landing pages and redirects do not. Payloads and discovery files are already
+raw artifacts. The `markdown_path` is always the `path` with
 `.md` appended:
 
 | `path` | `markdown_path` |

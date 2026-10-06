@@ -53,3 +53,14 @@ framework-native events: pass them as props (`onSettled={handler}`), not with
 `on:settled`. Each receives the DOM `CustomEvent` the element dispatches.
 
 Part of [OpenReceive](https://openreceive.org). Start with the [Node quickstart](https://github.com/openreceive/openreceive/blob/master/docs/guides/quickstart-node.md); the full API is in the [API reference](https://github.com/openreceive/openreceive/blob/master/docs/guides/api-reference.md).
+
+## Agent skills
+
+Run `npx openreceive skills install` from your application after installing an
+OpenReceive server adapter. The offline copy ships in `@openreceive/node`, a
+server-adapter dependency. For a frontend-only project, use
+`npx skills add OpenReceive/openreceive`.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

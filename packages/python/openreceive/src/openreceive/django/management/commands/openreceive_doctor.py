@@ -59,7 +59,7 @@ class Command(BaseCommand):
             offline=bool(options["offline"]),
             command="openreceive_doctor",
         )
-        lines = list(report.lines)
+        lines = [*report.lines, "Agent skills: run `openreceive skills install`"]
         ok = report.ok
         if host_error is not None:
             lines.append(f"host: {sanitize_failure_message(ImproperlyConfigured(host_error))}")

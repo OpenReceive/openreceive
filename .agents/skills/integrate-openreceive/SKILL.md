@@ -1,12 +1,13 @@
 ---
 name: integrate-openreceive
 description: >
-  Integrate OpenReceive inbound Bitcoin Lightning payments into an application.
-  Use when adding Bitcoin, Lightning, or crypto checkout to a Node.js, Express,
-  Fastify, Next.js, Rails, React, Vue, Svelte, Angular, or plain-HTML
-  application with OpenReceive (the @openreceive/* npm packages or the
-  openreceive-rails gem), or when connecting a BTCPay Server store to a
-  receive-only NWC wallet with the OpenReceive plugin.
+  Integrate OpenReceive Bitcoin Lightning checkout and optional USDT, USDC,
+  SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, Rails,
+  Python, Django, FastAPI, Laravel, plain PHP, WordPress/WooCommerce,
+  React, Vue, Svelte, Angular, or plain HTML applications, or connecting
+  BTCPay Server to a receive-only NWC wallet. A configured swap provider
+  converts these payments to BTC over Lightning in the merchant's connected
+  wallet; asset and network availability depends on the provider.
 license: MIT
 ---
 
@@ -19,6 +20,10 @@ settles. There is no OpenReceive account and no API key; funds land directly in
 the merchant's wallet. The one required credential is a **receive-only NWC
 code** (`NWC_URI`).
 
+Optional swaps let customers pay with USDT, USDC, SOL, and ETH. A configured
+swap provider converts these payments to BTC over Lightning in the merchant's
+connected wallet; asset and network availability depends on the provider.
+
 ## Pick the stack, then follow its directions
 
 1. Identify the server stack of the application you are in.
@@ -28,6 +33,8 @@ code** (`NWC_URI`).
    - Node, Fastify: [references/fastify.md](references/fastify.md)
    - Node, Next.js App Router: [references/next.md](references/next.md)
    - Rails: [references/rails.md](references/rails.md)
+   - Python, FastAPI: [references/fastapi.md](references/fastapi.md)
+   - Plain PHP: [references/php.md](references/php.md)
    - Django: [references/django.md](references/django.md)
    - Laravel: [references/laravel.md](references/laravel.md)
    - WordPress + WooCommerce: [references/woocommerce.md](references/woocommerce.md) — the packaged gateway and merchant settings.
@@ -44,6 +51,9 @@ Fastify: `npm install @openreceive/fastify @openreceive/react`; Next.js:
 `npm install @openreceive/next @openreceive/react`. Swap the UI package (`vue`,
 `svelte`, `angular`, `elements`) for the frontend the app already has. Install
 (Rails): `bundle add openreceive-rails`.
+Django: `pip install "openreceive[django]"`; FastAPI:
+`pip install "openreceive[fastapi]"`; Laravel: `composer require openreceive/laravel`;
+plain PHP: `composer require openreceive/openreceive nyholm/psr7 nyholm/psr7-server`.
 
 ## The three server objects
 
@@ -108,25 +118,36 @@ overriding.
 
 ## Database tables
 
-```sh
-npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequelize | knex
-```
+Generate the two tables in the host's existing database:
 
-emits the `openreceive_payments` + `openreceive_meta` migration for THIS app's
-database (Rails: `bin/rails generate openreceive:install`); run it through the
-app's normal migration workflow. The tables sit beside your models — no
-relations to them, no separate database, no Redis.
+| Stack | Generate and apply |
+| --- | --- |
+| Node | `npx openreceive scaffold payments --orm <orm>`, then the app's normal migration command |
+| Rails | `bin/rails generate openreceive:install && bin/rails db:migrate` |
+| Django | `manage.py openreceive_install <app> && manage.py migrate` |
+| FastAPI | `openreceive scaffold payments --alembic --dialect <db>` (or `--sql`), then apply through the app's migration workflow |
+| Laravel | `php artisan openreceive:install && php artisan migrate` |
+| Plain PHP | Use `OpenReceive\Storage\PaymentsSchema::statements($dialect)` in the host's migration workflow, as in the PHP reference |
+
+These emit `openreceive_payments` + `openreceive_meta`. The tables sit beside
+your models — no relations to them, no separate database, no Redis. WordPress
+and BTCPay manage installation through their plugins; follow their references.
 
 ## Verify, and test without a real wallet
 
-`npx openreceive doctor` checks the configuration and says what to fix.
+| Stack | Doctor | Test seam |
+| --- | --- | --- |
+| Node | `npx openreceive doctor` | `client` on `createOpenReceive` (`preflight`, `makeInvoice`, `listTransactions`), plus `StaticPriceProvider` |
+| Rails | `bin/rails openreceive:doctor` | `config.nwc_client`, `config.swap_providers`, `config.price_provider` |
+| Django | `manage.py openreceive_doctor` | `OPENRECEIVE["SERVICE"]`, a factory returning a `Service` built on `openreceive.testing` fakes |
+| FastAPI | `openreceive doctor --app main:app` | `nwc_client`, `price_provider`, `swap_providers` on `openreceive_router`, using `openreceive.testing` fakes |
+| Laravel | `php artisan openreceive:doctor` | Bind `ReceiveNwcClient`, `PriceProvider`, and `OpenReceiveServiceProvider::SWAP_PROVIDERS` in the container |
+| Plain PHP | `php bin/doctor` (host script calling `$engine->doctor()`) | Build `Service` with `OpenReceive\Testing\FakeWallet`, `FakeSwapProvider`, and `OpenReceive\Rates\StaticPriceProvider` |
+| WordPress | `wp openreceive doctor` | Repository development: the documented Docker `compose.testkit.yml` override |
+| BTCPay | Follow the plugin reference's connection and checkout checks | Use the plugin's Docker test setup in its reference |
 
-For tests, inject a fake wallet at the stable seams — `client` on
-`createOpenReceive` (any object with `preflight`, `makeInvoice`,
-`listTransactions`) or `config.nwc_client` in Rails — plus
-`StaticPriceProvider` for fiat pricing without a network. Your routes,
-persistence, reconcile, and `onPaid` then run the production code paths.
-Details: https://openreceive.org/guides/host-testing.md
+The routes, persistence, reconciliation, and fulfillment hooks then run the
+production paths. Details: https://openreceive.org/guides/host-testing.md
 
 ## Deeper documentation
 

@@ -131,3 +131,13 @@ Storage-free `openreceive-server` handlers can call `on_paid` on every settled
 poll, so advanced hosts own the conditional write/outbox. A raw create hook
 refusal returns 409 with instructions withheld; repository infrastructure failures
 remain retryable 503.
+
+## Agent skills
+
+In Rails, run `bin/rails openreceive:skills` from your application. The offline
+skills ship once in the core `openreceive` gem. Non-Rails projects can use
+`npx skills add OpenReceive/openreceive`.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

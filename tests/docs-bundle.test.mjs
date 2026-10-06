@@ -53,6 +53,14 @@ function fixture(t) {
   write("spec/openapi.yaml", "openapi: 3.1.0\n");
   write("docs/manifest.json", JSON.stringify({ version: "1", docs }));
   const contract = {
+    site_redirects: [
+      {
+        from: "/integrations/wordpress",
+        to: "/integrations/woocommerce",
+        status: 301,
+        must_exist: true,
+      },
+    ],
     contract_version: 6,
     release_version: "0.4.5",
     publish: [
@@ -86,13 +94,19 @@ function fixture(t) {
 }
 
 test("docs archive contains every public source byte and a public-only search index", (t) => {
-  const { root, run } = fixture(t);
+  const { root, contract, run } = fixture(t);
   const result = run();
   assert.equal(result.status, 0, result.stderr);
   const archive = path.join(root, "dist/openreceive-docs-0.4.5.tar.gz");
   const extracted = path.join(root, "extracted");
   mkdirSync(extracted);
   execFileSync("tar", ["-xzf", archive, "-C", extracted]);
+  const importedContract = JSON.parse(readFileSync(path.join(extracted, "site-contract.json")));
+  assert.deepEqual(
+    importedContract.site_redirects,
+    contract.site_redirects,
+    "the Rails import bundle must preserve redirect obligations",
+  );
   const metadata = JSON.parse(readFileSync(path.join(extracted, "bundle.json")));
   assert.equal(metadata.bundle_version, 1);
   assert.equal(metadata.release_version, "0.4.5");

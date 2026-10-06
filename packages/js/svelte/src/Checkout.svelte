@@ -35,6 +35,7 @@ export let syncUrl: boolean | undefined = undefined;
 export let resumePathPrefix: string | undefined = undefined;
 export let routeReference: string | undefined = undefined;
 export let resumePaymentHash: string | undefined = undefined;
+export let resumePaymentRail: "lightning" | "swap" | undefined = undefined;
 export let resumable: boolean | undefined = undefined;
 export let onCopy: ((event: Event) => void) | undefined = undefined;
 export let onOpenWallet: ((event: Event) => void) | undefined = undefined;
@@ -63,6 +64,7 @@ $: validateCheckoutProps({
   resumePathPrefix,
   routeReference,
   resumePaymentHash,
+  resumePaymentRail,
 });
 
 $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
@@ -81,6 +83,7 @@ $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...(resumePathPrefix === undefined ? {} : { resumePathPrefix }),
   ...(routeReference === undefined ? {} : { routeReference }),
   ...(resumePaymentHash === undefined ? {} : { resumePaymentHash }),
+  ...(resumePaymentRail === undefined ? {} : { resumePaymentRail }),
   ...(resumable === undefined ? {} : { resumable }),
   ...(onCopy === undefined ? {} : { onCopy }),
   ...(onOpenWallet === undefined ? {} : { onOpenWallet }),

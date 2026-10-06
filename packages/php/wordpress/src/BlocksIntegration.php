@@ -20,7 +20,7 @@ final class BlocksIntegration extends \Automattic\WooCommerce\Blocks\Payments\In
     }
     public function get_payment_method_data()
     {
-        return ['title' => $this->get_setting('title', 'Bitcoin Lightning (OpenReceive)'),
+        return ['title' => Configuration::title($this->settings),
             'description' => $this->get_setting('description', ''), 'supports' => ['products']];
     }
 }

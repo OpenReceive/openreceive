@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- The website contract requires `/integrations/wordpress` to redirect permanently
+  to `/integrations/woocommerce`. The Rails site consumes this requirement through
+  its docs sync, sharing the existing WooCommerce guide and agent payload.
+
+- WordPress: configure encrypted wallet/swap credentials through stdin with
+  `wp openreceive configure`; admin and CLI share preflight, and generic
+  WooCommerce credential writes are rejected. Doctor names failed checks,
+  redacts credentials and exits nonzero on failure.
+- WooCommerce order-pay returns reopen live Lightning invoices on their own
+  rail. Checkout method switches retain fiat swap minimums; sats limits use
+  grouping. Default gateway titles reflect configured swaps, and missing
+  WooCommerce gets an actionable notice.
+- WordPress directions collect wallet and swap codes sequentially, document
+  GMP in web and CLI runtimes, and pin ZIP downloads with a same-tag source
+  fallback. Staged Composer builds refresh the lock content hash.
+- Release directions cover every platform. GitHub draft creation now checks
+  the complete 22-artifact set, including the matching WordPress ZIP, Python
+  distributions and docs bundle; the dry run verifies WordPress packaging.
+
+- Agent skills now cover every supported stack, including FastAPI and plain PHP,
+  with installation, migration, diagnostics, testing seams, and optional swaps.
+- Install the bundled skills into your project with `npx openreceive skills install`,
+  `openreceive skills install` (Python), `bin/rails openreceive:skills`, or
+  `php artisan openreceive:skills`. The default is `.agents/skills`; use
+  `--dir .claude/skills` for Claude Code. Only OpenReceive's two skill folders
+  are replaced, including obsolete files.
+- Ship one offline skills bundle per ecosystem: `@openreceive/node`, the core
+  `openreceive` gem, PyPI `openreceive`, and Composer `openreceive/openreceive`.
+  Other npm packages and the Rails/server gems rely on that copy; the WordPress
+  merchant archive excludes it. Doctors point agents to the install command.
+- Validate that every integration reference is linked from the skill router.
+- The new install commands, doctor hints, and bundled-package changes require
+  the next npm, RubyGems, PyPI, and Composer releases. GitHub-installed skills
+  can be updated independently; pushing these changes does not add the new
+  commands to packages already published.
 - `openreceive-rails` now requires `nwc-ruby ~> 0.3`. With 0.2.x, a silent
   relay or an offline wallet behind a live relay could block `make_invoice`
   (checkout create) and the boot preflight indefinitely: 0.2.x checked its

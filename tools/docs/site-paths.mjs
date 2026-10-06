@@ -24,11 +24,11 @@ export const SITE_OWNED_PATHS = [
   "/wordpress",
 ];
 
-// Paths the site serves as permanent redirects, not pages. Empty today:
-// /agents.md used to 301 to /llms.txt as the older agent-index convention,
-// but it is now the markdown twin of the /agents page — a tool probing the
-// old name gets the agent index as content instead of a redirect to it.
-export const SITE_REDIRECTS = [];
+// Integration aliases share the canonical framework row and agent payload.
+// The Rails site imports these obligations from docs/site-contract.json.
+export const SITE_REDIRECTS = [
+  { from: "/integrations/wordpress", to: "/integrations/woocommerce", status: 301 },
+];
 
 // Every page the site renders from a source in THIS repo is also served as raw
 // markdown at the same URL with `.md` appended.
@@ -78,6 +78,7 @@ export const AGENT_PAYLOAD_PATHS = [
  */
 export function isServablePath(pathname, publicSlugs) {
   if (SITE_OWNED_PATHS.includes(pathname)) return true;
+  if (SITE_REDIRECTS.some((redirect) => redirect.from === pathname)) return true;
   if (AGENT_PAYLOAD_PATHS.includes(pathname)) return true;
   const isTwin = pathname.endsWith(MARKDOWN_SUFFIX);
   const page = isTwin ? pathname.slice(0, -MARKDOWN_SUFFIX.length) : pathname;

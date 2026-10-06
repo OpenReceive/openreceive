@@ -63,6 +63,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() resumePathPrefix?: string;
   @Input() routeReference?: string;
   @Input() resumePaymentHash?: string;
+  @Input() resumePaymentRail?: "lightning" | "swap";
   @Input() resumable?: boolean;
   @Input() onCopy?: (event: Event) => void;
   @Input() onOpenWallet?: (event: Event) => void;
@@ -131,6 +132,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       resumePathPrefix: this.resumePathPrefix,
       routeReference: this.routeReference,
       resumePaymentHash: this.resumePaymentHash,
+      resumePaymentRail: this.resumePaymentRail,
     });
     const options: WrapperCheckoutShellOptions = {
       ...this.options,
@@ -152,6 +154,9 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
       ...(this.resumePaymentHash === undefined
         ? {}
         : { resumePaymentHash: this.resumePaymentHash }),
+      ...(this.resumePaymentRail === undefined
+        ? {}
+        : { resumePaymentRail: this.resumePaymentRail }),
       ...(this.resumable === undefined ? {} : { resumable: this.resumable }),
       ...(this.onCopy === undefined ? {} : { onCopy: this.onCopy }),
       ...(this.onOpenWallet === undefined ? {} : { onOpenWallet: this.onOpenWallet }),

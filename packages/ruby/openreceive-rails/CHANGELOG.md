@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Install agent skills with `bin/rails openreceive:skills` (optional
+  `--dir .claude/skills`). The core `openreceive` gem owns the one offline
+  bundle; Rails/server gems no longer duplicate it. Other Ruby hosts can use
+  `npx skills add OpenReceive/openreceive`.
+
 Requires `nwc-ruby ~> 0.3`. On 0.2.x a silent relay, or an offline wallet
 behind a live relay, could block a checkout's `make_invoice` and the boot
 preflight indefinitely, holding a web thread. 0.3 bounds every call by
@@ -171,7 +176,8 @@ warning links the rate-limiting guide.
 
 ### The gem carries the agent skills
 
-`skills/` ships in the gem — the integrate and debug playbooks for coding
+At this release, `skills/` shipped in this gem (now supplied by the core
+`openreceive` dependency; see Unreleased) — the integrate and debug playbooks for coding
 agents, kept byte-identical to the repository tree by
 `npm run generate:skills`.
 

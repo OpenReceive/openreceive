@@ -14,10 +14,8 @@
 //   2. .agents/skills/ mirrors the whole tree for tools that discover repo
 //      skills at that conventional path (GitHub Copilot, Codex); the Claude
 //      Code plugin marketplace reads skills/ itself.
-//   3. Each publishable npm package and gem carries its own skills/ copy,
-//      because `npm pack` and `gem build` cannot reach outside the package
-//      directory — an agent working in a project that installed OpenReceive
-//      finds the skills without the network.
+//   3. One package per ecosystem carries an offline copy. Its install command
+//      copies the skills into the host project's discoverable skills directory.
 //
 // Every openreceive.org URL in a skill must be a page the site serves, checked
 // against the same servability rule as the agent directions. `--check` fails
@@ -60,18 +58,13 @@ const GENERATED_REFERENCES = [
 ];
 
 function mirrorRoots() {
-  const mirrors = [".agents/skills"];
-  for (const dir of readdirSync(path.join(root, "packages/js")).sort()) {
-    if (existsSync(path.join(root, "packages/js", dir, "package.json"))) {
-      mirrors.push(`packages/js/${dir}/skills`);
-    }
-  }
-  for (const dir of readdirSync(path.join(root, "packages/ruby")).sort()) {
-    if (existsSync(path.join(root, "packages/ruby", dir, `${dir}.gemspec`))) {
-      mirrors.push(`packages/ruby/${dir}/skills`);
-    }
-  }
-  return mirrors;
+  return [
+    ".agents/skills",
+    "packages/js/node/skills",
+    "packages/ruby/openreceive/skills",
+    "packages/python/openreceive/src/openreceive/skills",
+    "packages/php/openreceive/skills",
+  ];
 }
 
 /** All file paths under `dir`, relative to it, sorted. */
@@ -142,7 +135,19 @@ for (const skill of skillDirs) {
   }
 }
 
-const canonicalFiles = walk(canonicalDir);
+const canonicalFiles = walk(canonicalDir).filter((file) => path.basename(file) !== ".DS_Store");
+const integrationRouter = readFileSync(
+  path.join(canonicalDir, "integrate-openreceive/SKILL.md"),
+  "utf8",
+);
+const linkedReferences = new Set(
+  [...integrationRouter.matchAll(/\]\((references\/[^)\s]+)\)/g)].map((match) => match[1]),
+);
+for (const file of walk(path.join(canonicalDir, "integrate-openreceive/references"))) {
+  if (!linkedReferences.has(`references/${file}`)) {
+    problems.push(`integrate-openreceive/SKILL.md does not link references/${file}.`);
+  }
+}
 for (const file of canonicalFiles) {
   if (!file.endsWith(".md")) continue;
   const content = readFileSync(path.join(canonicalDir, file), "utf8");

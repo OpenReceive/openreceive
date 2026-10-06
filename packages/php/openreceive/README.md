@@ -42,3 +42,13 @@ For coordinated upgrades and reviewed existing-attempt repair, see the
 
 Source, issues and the full documentation:
 https://github.com/OpenReceive/openreceive. MIT License.
+
+## Agent skills
+
+Run `npx skills add OpenReceive/openreceive` in your application, or
+`php artisan openreceive:skills` when using the Laravel adapter. This package
+bundles the offline skills consumed by the Laravel command.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

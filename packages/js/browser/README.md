@@ -68,3 +68,14 @@ Content-Security-Policy has a strict `img-src`, allow `data:`.
   `@openreceive/provider-data`; `/headless` re-exports
   `loadPayTutorialImages` / `payTutorialImage` for the lazy tutorial chunk.
   See [docs/guides/provider-registry.md](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/provider-registry.md#assets).
+
+## Agent skills
+
+Run `npx openreceive skills install` from your application after installing an
+OpenReceive server adapter. The offline copy ships in `@openreceive/node`, a
+server-adapter dependency. For a frontend-only project, use
+`npx skills add OpenReceive/openreceive`.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

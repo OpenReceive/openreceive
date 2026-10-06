@@ -1047,3 +1047,46 @@ test("React reference and endpoint changes discard stale mint successes and fail
     handle.unmount();
   }
 });
+
+test("create-mode reopens a host-selected Lightning invoice on its own rail", async () => {
+  const hash = "d".repeat(64);
+  const calls = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/checkouts/prepare"))
+      return Response.json({ reference: "return", amount_msats: 21000, payment_methods: [] });
+    if (url.endsWith("/checkouts"))
+      return Response.json({
+        checkout: {
+          reference: "return",
+          payment_hash: hash,
+          amount_msats: 21000,
+          bolt11: "lnbc-return",
+          expires_at: Math.floor(Date.now() / 1000) + 900,
+        },
+      });
+    if (url.endsWith("/payments/check"))
+      return Response.json({ payment_hash: hash, status: "pending" });
+    throw new Error(`Unexpected request ${url}`);
+  };
+  const handle = mount(
+    React.createElement(Checkout, {
+      reference: "return",
+      prefix: "/openreceive",
+      resumePaymentHash: hash,
+      resumePaymentRail: "lightning",
+      polling: false,
+    }),
+  );
+  try {
+    await until(() => handle.text().includes("Switch payment method"), {
+      label: "resumed Lightning panel",
+    });
+    assert(handle.text().includes("Copy"));
+    assert.equal(calls.filter((url) => url.endsWith("/checkouts")).length, 1);
+    assert(!calls.some((url) => url.endsWith("/swaps/status")));
+  } finally {
+    handle.unmount();
+  }
+});

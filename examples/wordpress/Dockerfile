@@ -43,6 +43,7 @@ RUN curl -fsSL "https://downloads.wordpress.org/plugin/woocommerce.${WOOCOMMERCE
     && unzip -q /tmp/woocommerce.zip -d /usr/src/wordpress/wp-content/plugins \
     && rm /tmp/woocommerce.zip
 COPY --from=plugin /build/dist/wordpress-build/openreceive /usr/src/wordpress/wp-content/plugins/openreceive
+COPY --from=plugin /build/dist/openreceive-wordpress-*.zip /opt/demo/
 COPY examples/wordpress/seed.php examples/wordpress/entrypoint.sh /opt/demo/
 COPY examples/buttons/shared/shop-catalog.json /opt/demo/shop-catalog.json
 COPY examples/buttons/images /opt/demo/images

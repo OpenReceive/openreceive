@@ -179,7 +179,7 @@ export function formatSwapLimit(
     }
   }
   const sats = rounding === "floor" ? Math.floor(limitMsats / 1000) : Math.ceil(limitMsats / 1000);
-  return `${sats} ${sats === 1 ? "sat" : "sats"}`;
+  return `${sats.toLocaleString("en-US")} ${sats === 1 ? "sat" : "sats"}`;
 }
 
 /**

@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import importlib.resources
 import json
 import os
 import re
+import shutil
 import sys
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -60,6 +62,8 @@ Commands:
                       {RECONCILE_INTERVAL_ENV} sets the interval (default {DEFAULT_RECONCILE_INTERVAL_SECONDS} s).
   scaffold payments   Emit the openreceive_payments + openreceive_meta migration:
                       --sql prints the DDL, --alembic writes a revision file.
+  skills install      Copy bundled agent skills into .agents/skills.
+                      --dir <path> selects another directory (e.g. .claude/skills).
 
 Options:
   -h, --help          Show this help.
@@ -131,6 +135,8 @@ def run(
             return run_notifications(args, environ, io)
         if command == "scaffold":
             return run_scaffold(args, io, cwd or Path.cwd())
+        if command == "skills":
+            return run_skills(args, io, cwd or Path.cwd())
         raise UsageError(f"Unknown OpenReceive command: {command}")
     except UsageError as error:
         io.stderr.write(f"{error}\n\n{USAGE}")
@@ -141,6 +147,46 @@ def run(
     except ConfigurationError as error:
         io.stderr.write(f"{redact_secrets(str(error))}\n")
         return 1
+
+
+def run_skills(args: list[str], io: CliIo, cwd: Path) -> int:
+    parser = argparse.ArgumentParser(prog="openreceive skills", add_help=False)
+    parser.add_argument("action", choices=["install"])
+    parser.add_argument("--dir", default=".agents/skills")
+    options = _parse(parser, args)
+    target = (cwd / options.dir).resolve()
+    source = importlib.resources.files("openreceive").joinpath("skills")
+    names = ("integrate-openreceive", "debug-openreceive-payment")
+    for name in names:
+        if not source.joinpath(name).joinpath("SKILL.md").is_file():
+            raise CliError(f"Bundled skill missing: {name}. Reinstall openreceive.")
+
+    def copy_tree(resource: Any, destination: Path) -> None:
+        destination.mkdir(parents=True, exist_ok=True)
+        for child in resource.iterdir():
+            output = destination / child.name
+            if child.is_dir():
+                copy_tree(child, output)
+            else:
+                output.write_bytes(child.read_bytes())
+
+    if isinstance(source, Path) and (
+        target == source.resolve() or source.resolve() in target.parents
+    ):
+        raise CliError("Choose a skills directory outside the installed package's bundle.")
+    try:
+        for name in names:
+            destination = target / name
+            if destination.is_symlink() or destination.is_file():
+                destination.unlink()
+            elif destination.exists():
+                shutil.rmtree(destination)
+            copy_tree(source.joinpath(name), destination)
+            io.stdout.write(f"Wrote {destination}\n")
+    except OSError as error:
+        raise CliError(str(error)) from error
+    io.stdout.write("For Claude Code: openreceive skills install --dir .claude/skills\n")
+    return 0
 
 
 # ------------------------------------------------------------------- parsing
@@ -332,7 +378,7 @@ def run_doctor(
         offline=options.offline,
         command=command,
     )
-    lines = list(report.lines)
+    lines = [*report.lines, "Agent skills: run `openreceive skills install`"]
     ok = report.ok
     if notes:
         lines.extend(notes)

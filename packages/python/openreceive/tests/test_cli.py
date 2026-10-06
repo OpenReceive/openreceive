@@ -271,3 +271,31 @@ def test_help_exits_0() -> None:
     code, out, _ = cli(["--help"])
     assert code == 0 and "scaffold payments" in out
     assert os.environ.get("NWC_URI", "") not in out or not os.environ.get("NWC_URI")
+
+
+def test_skills_install_replaces_only_our_skills_and_respects_dir(tmp_path: Path) -> None:
+    for directory in (".agents/skills", ".claude/skills", str(tmp_path / "absolute skills")):
+        target = tmp_path / directory
+        unrelated = target / "other/SKILL.md"
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text("keep")
+        args = ["skills", "install"]
+        if directory != ".agents/skills":
+            args += ["--dir", directory]
+        code, out, err = cli(args, cwd=tmp_path)
+        assert code == 0 and err == ""
+        for name in ("integrate-openreceive", "debug-openreceive-payment"):
+            installed = target / name / "SKILL.md"
+            original = installed.read_text()
+            assert f"name: {name}" in original
+            assert str(target / name) in out
+            (target / name / "obsolete.md").write_text("old")
+            installed.write_text("old")
+        code, out, err = cli(args, cwd=tmp_path)
+        assert code == 0 and err == ""
+        for name in ("integrate-openreceive", "debug-openreceive-payment"):
+            assert not (target / name / "obsolete.md").exists()
+            assert f"name: {name}" in (target / name / "SKILL.md").read_text()
+        assert (target / "integrate-openreceive/references/php.md").is_file()
+        assert unrelated.read_text() == "keep"
+        assert "--dir .claude/skills" in out

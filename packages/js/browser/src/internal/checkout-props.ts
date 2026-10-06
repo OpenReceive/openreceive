@@ -78,6 +78,8 @@ export interface CheckoutComponentProps {
    * attempt only until it expires. See docs/guides/swap-refunds.md.
    */
   readonly resumePaymentHash?: string;
+  /** Rail of the remembered attempt; defaults to swap for existing integrations. */
+  readonly resumePaymentRail?: "lightning" | "swap";
   /**
    * Does a payer who closes this tab have a URL that brings them back to this
    * checkout? It decides ONE thing: which of the two refund-return warnings the
@@ -99,6 +101,7 @@ const CREATE_MODE_ONLY_PROPS = [
   "resumePathPrefix",
   "routeReference",
   "resumePaymentHash",
+  "resumePaymentRail",
 ] as const;
 
 type CreateModeOnlyProp = (typeof CREATE_MODE_ONLY_PROPS)[number];

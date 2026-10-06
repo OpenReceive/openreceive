@@ -94,7 +94,8 @@
     "check:wordpress": "node tools/validate/check-wordpress-plugin.mjs",
     "test:ci:artifacts": "npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs",
     "build:standalone": "node tools/package/build-workspaces.mjs @openreceive/elements",
-    "test:btcpay:latest": "node tools/dotnet/test-latest.mjs"
+    "test:btcpay:latest": "node tools/dotnet/test-latest.mjs",
+    "release:artifacts": "node tools/release/github-artifacts.mjs"
   },
   "engines": {
     "node": ">=22"

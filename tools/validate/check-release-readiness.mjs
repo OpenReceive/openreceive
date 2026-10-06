@@ -91,6 +91,10 @@ const packages = workspacePackages();
 const changelog = read("CHANGELOG.md");
 const releaseDocsPath = "docs/internal/release-process.md";
 const releaseDocs = read(releaseDocsPath);
+expect(
+  rootPackage.scripts?.["release:artifacts"] === "node tools/release/github-artifacts.mjs",
+  "package.json: missing complete GitHub artifact gate",
+);
 const publicPackages = new Set(OPENRECEIVE_PUBLIC_PACKAGE_NAMES);
 const releaseVersion = rootPackage.version;
 
@@ -218,10 +222,9 @@ for (const { relativePath, manifest } of packages) {
     for (const requiredFile of [
       "README.md",
       "LICENSE",
-      // The agent-skills copy every package ships; `npm run generate:skills`
-      // materializes it and `npm run check:docs` keeps it in sync.
-      "skills/integrate-openreceive/SKILL.md",
-      "skills/debug-openreceive-payment/SKILL.md",
+      ...(manifest.name === "@openreceive/node"
+        ? ["skills/integrate-openreceive/SKILL.md", "skills/debug-openreceive-payment/SKILL.md"]
+        : []),
     ]) {
       expect(
         existsSync(path.join(root, packageDir, requiredFile)),
@@ -263,8 +266,9 @@ for (const gemName of GEM_NAMES) {
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "skills/integrate-openreceive/SKILL.md",
-    "skills/debug-openreceive-payment/SKILL.md",
+    ...(gemName === "openreceive"
+      ? ["skills/integrate-openreceive/SKILL.md", "skills/debug-openreceive-payment/SKILL.md"]
+      : []),
   ]) {
     expect(existsSync(path.join(gemRoot, requiredFile)), `${gemPath}: missing ${requiredFile}`);
   }
@@ -289,7 +293,14 @@ for (const gemName of GEM_NAMES) {
     pythonVersion === pep440Version(releaseVersion),
     `${PYTHON_VERSION_FILE}: __version__ ${pythonVersion} must be ${pep440Version(releaseVersion)} (run npm run release:prepare)`,
   );
-  for (const requiredFile of ["pyproject.toml", "uv.lock", "README.md", "LICENSE"]) {
+  for (const requiredFile of [
+    "pyproject.toml",
+    "uv.lock",
+    "README.md",
+    "LICENSE",
+    "src/openreceive/skills/integrate-openreceive/SKILL.md",
+    "src/openreceive/skills/debug-openreceive-payment/SKILL.md",
+  ]) {
     expect(
       existsSync(path.join(root, PYTHON_PACKAGE_DIR, requiredFile)),
       `${PYTHON_PACKAGE_DIR}: missing ${requiredFile}`,
@@ -339,7 +350,13 @@ for (const gemName of GEM_NAMES) {
     engineManifest.version === undefined,
     `${PHP_ENGINE_DIR}/composer.json: must not carry a version field (Packagist versions from tags)`,
   );
-  for (const requiredFile of ["composer.json", "README.md", "LICENSE"]) {
+  for (const requiredFile of [
+    "composer.json",
+    "README.md",
+    "LICENSE",
+    "skills/integrate-openreceive/SKILL.md",
+    "skills/debug-openreceive-payment/SKILL.md",
+  ]) {
     expect(
       existsSync(path.join(root, PHP_ENGINE_DIR, requiredFile)),
       `${PHP_ENGINE_DIR}: missing ${requiredFile}`,
@@ -385,6 +402,8 @@ for (const { manifest } of packages) {
 }
 for (const phrase of [
   "npm run test:ci",
+  "npm run release:artifacts -- check",
+  "npm run release:artifacts -- github",
   "Changelog updated.",
   "Agent skills describe the current public API.",
   "npm run generate:skills",

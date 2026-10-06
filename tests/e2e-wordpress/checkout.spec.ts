@@ -101,6 +101,20 @@ for (const mode of ["blocks", "classic", "plain-permalinks", "swap-refund"] as c
     const {
       checkout: { payment_hash: hash },
     } = await (await invoiceResponse).json();
+    const swapStatusCalls: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/swaps/status")) swapStatusCalls.push(request.url());
+    });
+    const resumedResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/openreceive/v1/checkouts") && response.status() === 201,
+    );
+    await page.reload();
+    await expect(checkout).toHaveAttribute("resume-payment-rail", "lightning");
+    const resumed = await (await resumedResponse).json();
+    expect(resumed.checkout.payment_hash).toBe(hash);
+    await expect(checkout.getByRole("button", { name: /Copy invoice/i })).toBeVisible();
+    expect(swapStatusCalls).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath("checkout.png"), fullPage: true });
     const settled = await page.request.post("/?rest_route=/openreceive/testkit/settle", {
       data: { payment_hash: hash },

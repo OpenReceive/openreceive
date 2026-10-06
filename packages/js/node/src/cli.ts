@@ -1,7 +1,7 @@
-import { existsSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   formatInvalidNwcMessage,
   NwcUriParseError,
@@ -57,6 +57,8 @@ Commands:
   debug-report        Print the same diagnostics as a redacted support report
                       (alias of doctor; always exits 0).
   scaffold payments   Emit the openreceive_payments + openreceive_meta migration and wiring guide for your ORM.
+  skills install      Copy bundled agent skills into .agents/skills.
+                      --dir <path> selects another directory (e.g. .claude/skills).
 
 Options:
   -h, --help           Show this help.
@@ -93,6 +95,39 @@ export async function runCli(options: CliOptions): Promise<number> {
         stdout,
         walletClientFactory: options.walletClientFactory,
       });
+    }
+    if (command === "skills") {
+      if (
+        args[0] !== "install" ||
+        !(
+          args.length === 1 ||
+          (args.length === 3 && args[1] === "--dir" && args[2] && !args[2].startsWith("--"))
+        )
+      ) {
+        throw new Error("Usage: openreceive skills install [--dir <path>]");
+      }
+      const source = realpathSync(fileURLToPath(new URL("../skills/", import.meta.url)));
+      let target = path.resolve(cwd, args[2] ?? ".agents/skills");
+      const names = ["integrate-openreceive", "debug-openreceive-payment"];
+      // Check the bundle before replacing any installed skill.
+      for (const name of names) {
+        if (!existsSync(path.join(source, name, "SKILL.md"))) {
+          throw new Error(`Bundled skill missing: ${name}. Reinstall @openreceive/node.`);
+        }
+      }
+      mkdirSync(target, { recursive: true });
+      target = realpathSync(target);
+      if (target === source || target.startsWith(`${source}${path.sep}`)) {
+        throw new Error("Choose a skills directory outside the installed package's bundle.");
+      }
+      for (const name of names) {
+        const destination = path.join(target, name);
+        rmSync(destination, { recursive: true, force: true });
+        cpSync(path.join(source, name), destination, { recursive: true });
+        stdout.write(`Wrote ${destination}\n`);
+      }
+      stdout.write("For Claude Code: openreceive skills install --dir .claude/skills\n");
+      return 0;
     }
     if (command === "scaffold") {
       const [target = "help", ...scaffoldArgs] = args;
@@ -200,6 +235,7 @@ async function runDiagnostics(input: {
 
   const lines = [
     `OpenReceive ${input.command}`,
+    "Agent skills: run `npx openreceive skills install`",
     `node: ${process.version}`,
     `cwd: ${input.cwd}`,
     "storage: payment-attempt rows live in the host database (no separate store)",

@@ -20,6 +20,12 @@ jobs:
       - uses: ./.github/actions/setup-playwright
       - name: Start isolated WordPress and MySQL
         run: docker compose -p openreceive-wp-test -f examples/wordpress/compose.yml -f examples/wordpress/compose.override.yml.example -f examples/wordpress/compose.testkit.yml up --build -d --wait
+      - name: Verify matching release ZIP exists
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          mkdir -p dist
+          docker cp "openreceive-wp-test-wordpress-1:/opt/demo/openreceive-wordpress-${version}.zip" dist/
+          unzip -t "dist/openreceive-wordpress-${version}.zip"
       - name: Verify native WooCommerce integration
         run: npm run test:wordpress
       - name: Audit the packaged plugin

@@ -90,3 +90,13 @@ ships only with the Rails engine.
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 MIT license.
+
+## Agent skills
+
+In Rails, run `bin/rails openreceive:skills` from your application. The offline
+skills ship once in the core `openreceive` gem. Non-Rails projects can use
+`npx skills add OpenReceive/openreceive`.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

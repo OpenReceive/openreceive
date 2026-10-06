@@ -105,3 +105,12 @@ lockstep `~X.Y.Z` of the same release.
 - [Frontend checkout](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/frontend-checkout.md)
 - [Optional swaps](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/automated-swaps.md)
 - [Host testing](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/host-testing.md)
+
+## Agent skills
+
+Run `php artisan openreceive:skills` from your application to install the
+offline skills bundled in the `openreceive/openreceive` dependency.
+See [agent setup](https://openreceive.org/agents). The bundled installers write
+to `.agents/skills/`; use `--dir .claude/skills` for Claude Code. They replace
+only `integrate-openreceive` and `debug-openreceive-payment`, preserving
+unrelated skills.

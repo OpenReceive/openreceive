@@ -524,6 +524,28 @@ const copyButton = AGENT_PAYLOADS.map(({ path: urlPath, source, stack }) => ({
   self_contained: true,
 }));
 
+// Redirects must land directly on a declared page and cannot shadow content.
+const pagePaths = new Set([
+  ...publish.flatMap((entry) => [entry.path, entry.markdown_path]),
+  ...copyButton.map((entry) => entry.path),
+  ...SITE_OWNED_PATHS,
+  ...frameworks.map((entry) => `/integrations/${entry.id}`),
+]);
+const redirectPaths = new Set();
+for (const redirect of SITE_REDIRECTS) {
+  if (
+    !redirect.from.startsWith("/") ||
+    redirect.from.startsWith("//") ||
+    pagePaths.has(redirect.from) ||
+    redirectPaths.has(redirect.from) ||
+    !pagePaths.has(redirect.to) ||
+    redirect.status !== 301
+  ) {
+    throw new Error(`${TARGET}: invalid permanent redirect ${JSON.stringify(redirect)}`);
+  }
+  redirectPaths.add(redirect.from);
+}
+
 const contract = {
   // v2 added `markdown_path` to every entry rendered from a source here: the
   // site must serve the raw markdown at that URL, because the agent directions
@@ -569,8 +591,8 @@ const contract = {
   // so removing or renaming one breaks a payload that is already pasted into
   // other people's editors and cannot be recalled.
   site_owned: SITE_OWNED_PATHS.map((urlPath) => ({ path: urlPath, must_exist: true })),
-  // Permanent redirects the site must keep serving (an additive field:
-  // contract v2 consumers that predate it ignore it safely).
+  // Permanent redirects imported by the site alongside the framework routes.
+  // The existing v6 shape is unchanged; each must_exist obligation is required.
   site_redirects: SITE_REDIRECTS.map((redirect) => ({ ...redirect, must_exist: true })),
   // Machine-discovery surface for coding agents (contract v3). `artifacts` are
   // served verbatim — the named source's exact bytes at `path`, with

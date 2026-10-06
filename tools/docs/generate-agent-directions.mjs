@@ -160,6 +160,26 @@ const UNLISTED_GUIDES = {
  * payloads keep linking every one of these.
  */
 const UNLISTED_GUIDES_BY_STACK = {
+  woocommerce: Object.fromEntries(
+    [
+      "authorization",
+      "storage",
+      "frontend-checkout",
+      "checkout-ux",
+      "headless-checkout",
+      "custom-checkout-route",
+      "provider-registry",
+      "host-testing",
+      "rate-limiting",
+      "environment-variables",
+      "deploying",
+      "api-reference",
+      "react-material-ui-recipe",
+    ].map((slug) => [
+      slug,
+      "WooCommerce plugin supplies these internals; its quickstart documents the merchant setup",
+    ]),
+  ),
   btcpay: {
     authorization:
       "BTCPay's store permissions and invoice ids authorize; there is no authorize hook",

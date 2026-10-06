@@ -377,6 +377,19 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     }
   }
 
+  const quickstart = "docs/guides/quickstart-woocommerce.md";
+  const quickstartPath = path.join(root, quickstart);
+  if (existsSync(quickstartPath)) {
+    const source = readFileSync(quickstartPath, "utf8");
+    const updated = source
+      .replaceAll(`v${currentVersion}`, `v${targetVersion}`)
+      .replaceAll(`wordpress-${currentVersion}.zip`, `wordpress-${targetVersion}.zip`);
+    if (updated !== source) {
+      writeFileSync(quickstartPath, updated);
+      changed.push(quickstart);
+    }
+  }
+
   return changed;
 }
 
@@ -458,6 +471,7 @@ function dryRunPrepare(root, targetVersion) {
       "packages/php/wordpress/readme.txt",
       "CHANGELOG.md",
       "docs/internal/release-process.md",
+      "docs/guides/quickstart-woocommerce.md",
       "package-lock.json",
     ]
       .filter((file, index, all) => all.indexOf(file) === index)

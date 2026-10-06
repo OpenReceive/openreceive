@@ -154,7 +154,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 13959
+      "bytes": 14380
     },
     {
       "path": "/guides/checkout-ux",
@@ -174,7 +174,7 @@
       "slug": "headless-checkout",
       "title": "Headless Checkout",
       "category": "guide",
-      "bytes": 19672
+      "bytes": 19698
     },
     {
       "path": "/guides/automated-swaps",
@@ -424,7 +424,7 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 4892
+      "bytes": 7496
     },
     {
       "path": "/guides/agent-directions-woocommerce",
@@ -434,7 +434,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 10061
+      "bytes": 11741
     },
     {
       "path": "/api_docs",
@@ -455,7 +455,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 2811
+      "bytes": 3665
     },
     {
       "path": "/wordpress",
@@ -465,7 +465,7 @@
       "slug": "wordpress",
       "title": "OpenReceive for WordPress + WooCommerce",
       "category": "woocommerce",
-      "bytes": 3029,
+      "bytes": 3282,
       "assets_base": "/assets/"
     },
     {
@@ -489,7 +489,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 10061,
+      "bytes": 11741,
       "copy_button": true,
       "self_contained": true
     },
@@ -963,7 +963,14 @@
       "must_exist": true
     }
   ],
-  "site_redirects": [],
+  "site_redirects": [
+    {
+      "from": "/integrations/wordpress",
+      "to": "/integrations/woocommerce",
+      "status": 301,
+      "must_exist": true
+    }
+  ],
   "agent_discovery": {
     "artifacts": [
       {

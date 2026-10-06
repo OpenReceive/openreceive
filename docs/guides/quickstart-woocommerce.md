@@ -1,5 +1,9 @@
 # WordPress + WooCommerce quickstart
 
+The [WordPress integration entry point](https://openreceive.org/integrations/wordpress)
+redirects to the WooCommerce integration, which uses this same guide and agent
+directions. OpenReceive checkout on WordPress requires WooCommerce.
+
 Activate WooCommerce first. Then install the built OpenReceive plugin zip
 through **Plugins → Add New → Upload Plugin**. You cannot upload the source
 directory as-is. It needs a build first. The plugin is not yet submitted to
@@ -12,15 +16,16 @@ database or application.
 
 ## Get the installable archive
 
-If the [OpenReceive GitHub release](https://github.com/OpenReceive/openreceive/releases)
-you picked lists `openreceive-wordpress-<version>.zip`, use that file. The GitHub
-source-code zip is not the plugin archive. If the release has no built zip yet,
-build one on a development machine with Node 22+, PHP 8.2+, Composer and WP-CLI:
+Download [openreceive-wordpress-0.4.14.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.14/openreceive-wordpress-0.4.14.zip)
+from the matching release. Historical releases may lack this asset. If that exact
+URL returns 404, build the same tag below; never silently install an older ZIP.
+The GitHub source-code ZIP is not an installable plugin. On a development machine
+with Node 22+, PHP 8.2+ with GMP/sodium, Composer and WP-CLI:
 
 ```sh
 git clone https://github.com/OpenReceive/openreceive.git
 cd openreceive
-git checkout <release-tag>
+git checkout v0.4.14
 npm ci
 npm run build:packages
 composer install --working-dir=packages/php/wordpress
@@ -31,6 +36,40 @@ Upload the resulting `dist/openreceive-wordpress-<version>.zip`. The build
 needs WP-CLI on `PATH`. Otherwise, set `OPENRECEIVE_WP_CLI` to the absolute path
 of its phar. Your WordPress server needs neither Node nor Composer. The built
 plugin already bundles its dependencies and checkout assets.
+
+## Enable GMP in both PHP runtimes
+
+GMP is required by the bundled elliptic-curve dependency. Enable it for both
+web PHP (Apache/FPM) and the PHP executable running WP-CLI. Installing it in
+only the WordPress container does not update a separate CLI container.
+
+For Debian-based official PHP/WordPress images, add to **each** Dockerfile:
+
+```dockerfile
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev \
+    && docker-php-ext-install gmp \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+For Alpine-based PHP/CLI images:
+
+```dockerfile
+USER root
+RUN apk add --no-cache gmp \
+    && apk add --no-cache --virtual .gmp-build $PHPIZE_DEPS gmp-dev \
+    && docker-php-ext-install gmp \
+    && apk del .gmp-build
+```
+
+Restore the base image's original runtime user after installing extensions.
+Rebuild and recreate both containers. On Debian/Ubuntu hosts, install the GMP
+package matching the active PHP version (for example `php8.2-gmp` for PHP 8.2),
+then restart that version's web PHP service. Verify `php --ri gmp` and
+`wp openreceive doctor` for CLI, and the gateway Doctor panel for web PHP.
+On managed WordPress hosting, ask the host to enable GMP and sodium in both
+runtimes; if they cannot, this plugin cannot run there. Do not use Composer's
+`--ignore-platform-reqs` to bypass the requirements.
 
 ## Configure the wallet
 
@@ -49,6 +88,27 @@ server's secret environment. It overrides the settings field. To configure swap
 providers, you can also set the `OPENRECEIVE_LSC_URI_PRIMARY` and
 `OPENRECEIVE_LSC_URI_BACKUP` constants. Never put these values in browser code
 or logs.
+
+### Configure through WP-CLI
+
+`wp openreceive configure` accepts one credential at a time from stdin. Feed
+stdin through your secret manager or an existing protected file, never a code
+literal in the command line:
+
+```sh
+wp openreceive configure --nwc-uri=- < /secure/path/wallet-code
+wp openreceive configure --lsc-uri-primary=- < /secure/path/swap-code
+wp openreceive configure --enable
+wp openreceive doctor
+```
+
+Omit the swap command for Bitcoin-only checkout. `--lsc-uri-backup=-` adds a
+backup. These commands share admin preflight and encrypted storage. Credential
+flags accept only `-`; blank input leaves settings intact. Generic WooCommerce
+REST and `wp wc payment_gateway` credential updates are rejected. `doctor`
+reports the failed check with credentials redacted and exits nonzero on failure.
+The default payment title becomes “Bitcoin & crypto (OpenReceive)” with swaps;
+a customized title is preserved.
 
 ## Checkout and settlement
 

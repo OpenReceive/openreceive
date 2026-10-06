@@ -49,6 +49,10 @@ function createModeAttributes(options: CheckoutElementAttributeOptions): Checkou
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentHash] =
       options.resumePaymentHash;
   }
+  if (options.resumePaymentRail !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentRail] =
+      options.resumePaymentRail;
+  }
   return attributes;
 }
 

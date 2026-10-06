@@ -17,6 +17,7 @@ use OpenReceive\Laravel\Console\DoctorCommand;
 use OpenReceive\Laravel\Console\InstallCommand;
 use OpenReceive\Laravel\Console\NotificationsCommand;
 use OpenReceive\Laravel\Console\ReconcileCommand;
+use OpenReceive\Laravel\Console\SkillsCommand;
 use OpenReceive\Laravel\Http\OpenReceiveController;
 use OpenReceive\Laravel\Wallet\CachedWalletInfo;
 use OpenReceive\Nwc\NostrPhpNwcReceiveClient;
@@ -90,7 +91,7 @@ final class OpenReceiveServiceProvider extends ServiceProvider
             );
         });
 
-        $this->commands([InstallCommand::class, DoctorCommand::class, ReconcileCommand::class, NotificationsCommand::class]);
+        $this->commands([InstallCommand::class, DoctorCommand::class, ReconcileCommand::class, NotificationsCommand::class, SkillsCommand::class]);
     }
 
     public function boot(): void

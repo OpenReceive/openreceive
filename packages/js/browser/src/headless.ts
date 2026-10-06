@@ -153,6 +153,7 @@ export {
   requestSwapRefund,
   requestSwapStatus,
   resumeSwapAttempt,
+  resumeCheckoutAttempt,
   startSwapRequest,
 } from "./internal/swap-http.ts";
 // Theme: preference storage, the resolved-theme models the wrappers bind, and
