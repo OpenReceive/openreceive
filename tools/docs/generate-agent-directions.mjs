@@ -260,8 +260,7 @@ export function inlineGuide(markdown, publicSlugs) {
       // once the file has been pasted somewhere else, and cloning is not the
       // shape of this integration. Keep the name, drop the link.
       .replace(/\[([^\]]+)\]\(\.{1,2}\/[^)]+\)/g, "$1")
-      // Removing an <img> line leaves the blank line that framed it.
-      .replace(/\n{3,}/g, "\n\n")
+      // Preserve blank lines inside code examples (including Python class spacing).
       .trim()
   );
 }

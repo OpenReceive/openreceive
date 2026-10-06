@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Normalize Python examples in the bundled Django directions. The local Python
+  test command now includes the same Ruff formatting/lint and mypy checks as
+  the CI matrix, so these failures stop release preparation before tagging.
+- Completes the cross-platform release following the partially published
+  v0.4.15; its changes and WordPress fixes are included below.
+
 ## 0.4.15 - 2026-10-06
 
 - The website contract requires `/integrations/wordpress` to redirect permanently

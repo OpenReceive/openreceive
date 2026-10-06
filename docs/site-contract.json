@@ -53,7 +53,7 @@
       "slug": "quickstart-django",
       "title": "Django Quickstart",
       "category": "quickstart",
-      "bytes": 20339
+      "bytes": 20287
     },
     {
       "path": "/guides/quickstart-next",
@@ -364,7 +364,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 40857
+      "bytes": 40806
     },
     {
       "path": "/guides/agent-directions-next",
@@ -414,7 +414,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 11012
+      "bytes": 11016
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -539,7 +539,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40857,
+      "bytes": 40806,
       "copy_button": true,
       "self_contained": true
     },
@@ -579,7 +579,7 @@
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 11012,
+      "bytes": 11016,
       "copy_button": true,
       "self_contained": true
     }

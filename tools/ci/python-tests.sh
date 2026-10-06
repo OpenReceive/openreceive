@@ -49,3 +49,8 @@ uv run --project "$PACKAGE" --frozen --no-sync pytest "$PACKAGE/tests" -q
 
 # The cross-language conformance harness always runs last.
 uv run --project "$PACKAGE" --frozen --no-sync python tools/conformance/python-crosslang.py
+
+# Keep local release verification identical to the Python CI matrix.
+uv run --project "$PACKAGE" --frozen --no-sync ruff check
+uv run --project "$PACKAGE" --frozen --no-sync ruff format --check
+(cd "$PACKAGE" && uv run --frozen --no-sync mypy)

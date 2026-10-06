@@ -21,17 +21,18 @@ Then add the app, point it at a host class, and mount the routes:
 INSTALLED_APPS += ["openreceive.django"]
 
 OPENRECEIVE = {
-    "HOST": "shop.openreceive_host.Host",   # the class with the three hooks (generated below)
+    "HOST": "shop.openreceive_host.Host",  # the class with the three hooks (generated below)
     "PRICE_CURRENCIES": ["USD"],
-    "RATE_LIMITING": False,                 # True for public web shops (see below)
-    "OPPORTUNISTIC_RECONCILE": True,        # or {"min_interval_seconds": …}; False only with your own worker
-    "DATABASE": "default",                  # the DATABASES alias that holds the two engine tables
+    "RATE_LIMITING": False,  # True for public web shops (see below)
+    "OPPORTUNISTIC_RECONCILE": True,  # or {"min_interval_seconds": …}; False only with your own worker
+    "DATABASE": "default",  # the DATABASES alias that holds the two engine tables
 }
 ```
 
 ```python
 # urls.py
 from django.urls import include, path
+
 urlpatterns += [path("openreceive/", include("openreceive.django.urls"))]
 ```
 
@@ -77,9 +78,9 @@ The generated host module explains this and shows the guarded transition:
 
 ```python
 def on_paid(self, settlement: PaymentSettlement) -> None:
-    claimed = Order.objects.filter(
-        pk=settlement.reference, state="awaiting_payment"
-    ).update(state="paid", paid_at=datetime.fromtimestamp(settlement.paid_at, tz=UTC))
+    claimed = Order.objects.filter(pk=settlement.reference, state="awaiting_payment").update(
+        state="paid", paid_at=datetime.fromtimestamp(settlement.paid_at, tz=UTC)
+    )
     if claimed == 0:
         return  # someone else already fulfilled it
 
@@ -107,7 +108,9 @@ instead:
 
 ```python
 def on_paid(self, settlement: PaymentSettlement) -> None:
-    order = Order.objects.select_for_update().filter(pk=settlement.reference).first()  # SELECT … FOR UPDATE
+    order = (
+        Order.objects.select_for_update().filter(pk=settlement.reference).first()
+    )  # SELECT … FOR UPDATE
     if order is None or order.state != "awaiting_payment":
         return
     order.state = "paid"
@@ -192,8 +195,8 @@ from openreceive.server import HookContext
 from openreceive.storage import PaymentSettlement
 
 from shop.models import Order  # YOUR model — it could be named anything. OpenReceive
-                               # never sees it or touches its table; these hooks are the
-                               # only bridge between the engine and your data.
+# never sees it or touches its table; these hooks are the
+# only bridge between the engine and your data.
 
 
 class Host:
@@ -224,8 +227,11 @@ class Host:
         order = Order.objects.filter(pk=reference).first()
         if order is None:
             return None
-        return {"currency": "USD", "value": str(order.total),
-                "description": f"{order.items.count()} items"}
+        return {
+            "currency": "USD",
+            "value": str(order.total),
+            "description": f"{order.items.count()} items",
+        }
 
     # Runs inside the settlement transaction, only for the order's first settled
     # attempt. The WHERE clause is the lock: a second fulfillment path of yours

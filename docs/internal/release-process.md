@@ -76,8 +76,7 @@ create accounts or enforce environment reviewer settings.
   name the real repository, not a fork.
 - On GitHub, the `rubygems` environment has a required reviewer. It does not
   let administrators bypass the review, and it admits only `v*` tags. That
-  approval click is the only thing between "someone pushed a tag" and "gems
-  published". Any edit to `publish-gems.yml` changes that trust boundary.
+  required approval gates publication after the tag is pushed. Any edit to `publish-gems.yml` changes that trust boundary.
 - Every gemspec sets `rubygems_mfa_required`. The RubyGems account keeps MFA at
   "UI and API". A trusted-publisher key satisfies both, so CI needs no change
   there.
@@ -202,10 +201,12 @@ Run from the repo root on a clean, current `master`.
    `Publish Gems`, `Publish PyPI` and `Publish Composer` on the tag. If the tag
    does not match `package.json`, `Release Dry Run` fails first.
 
-   **Hand over the approval URLs right now**, before anything else. All three
-   publish workflows stop at their environment until a human approves them. The
-   release is stalled until that click. Print the URLs and give them to the
-   maintainer as a release step, not a footnote:
+   Inspect all three protected publishing runs immediately. Submit their normal
+   environment approvals only when publication is authorized and GitHub reports
+   `current_user_can_approve: true` for the authenticated release identity.
+   Otherwise give the maintainer the run URLs and request an authorized review;
+   continue independent artifact preparation while waiting. Never remove reviewer
+   protection or use an administrator bypass to make a release proceed.
 
    ```sh
    gh run list --workflow publish-gems.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
@@ -213,12 +214,14 @@ Run from the repo root on a clean, current `master`.
    gh run list --workflow publish-composer.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
    ```
 
-7. Approve the gem publish. `Publish Gems` stops at the `rubygems` environment
-   until a required reviewer approves it in the browser. The approval cannot be
-   scripted from this machine. Print the run's URL and hand it to the
-   maintainer straight away. The gems wait on that click, and so does the
-   GitHub release, which needs the published gems. Whoever runs the release,
-   person or agent, reports this URL as a release step, not as a footnote:
+7. Approve the gem publish through the protected `rubygems` environment.
+   Check `GET /repos/OpenReceive/openreceive/actions/runs/<id>/pending_deployments`.
+   An authorized release reviewer may use GitHub's normal deployment-review API
+   (`POST` to that endpoint with `environment_ids`, `state: approved`, and a
+   release-specific comment), or use the browser steps below. Verify the run's
+   commit is the release commit before approving. If the current identity cannot
+   approve, hand the run URL to a required reviewer. The gems and the GitHub
+   release assets wait for that approval.
 
    ```sh
    gh run list --workflow publish-gems.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'

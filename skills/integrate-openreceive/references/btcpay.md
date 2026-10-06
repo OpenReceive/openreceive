@@ -164,12 +164,16 @@ them to install the plugin for you.
 
 **1. Open the Plugins menu.** It is the plug icon in the top-right corner.
 
+
 **2. Click Plugin Directory.**
+
 
 **3. Search for `openreceive`** and click the **OpenReceive** result.
 
+
 **4. Click Install in BTCPay Server.** Confirm when prompted, then click
 **Restart now** and wait for BTCPay to come back.
+
 
 At startup, BTCPay creates the plugin's two tables in its own Postgres
 database: `openreceive_invoices` and `openreceive_swaps`, in the schema
