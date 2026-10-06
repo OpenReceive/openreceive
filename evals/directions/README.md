@@ -31,12 +31,13 @@ npm run eval:directions -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. `node` is a plain Express shop with server-rendered HTML:
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. `node` is a plain Express shop and `fastify` is a plain Fastify shop. Both serve HTML and have no OpenReceive code.
 
 ```sh
 npm run eval:directions -- --platform woocommerce --serve-directions
 npm run eval:directions -- --platform node --smoke
-npm run eval:directions -- --platform node --serve-directions
+npm run eval:directions -- --platform fastify --smoke
+npm run eval:directions -- --platform fastify --serve-directions
 ```
 
 The default URL is the live `https://openreceive.org/agent-directions/<slug>.md`. The agent is Cursor (`agent status` must show a login). It runs on the host with its workspace set to the shop copy, because the directions tell it to run `docker compose`.
@@ -54,3 +55,4 @@ A platform is listed here after one live run exits 0. The report itself stays gi
 | Platform | Date | Release |
 | --- | --- | --- |
 | WooCommerce | 2026-10-06 | 0.4.18 |
+| Node | 2026-10-06 | 0.4.18 |
