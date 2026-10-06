@@ -143,7 +143,7 @@ and BTCPay manage installation through their plugins; follow their references.
 | FastAPI | `openreceive doctor --app main:app` | `nwc_client`, `price_provider`, `swap_providers` on `openreceive_router`, using `openreceive.testing` fakes |
 | Laravel | `php artisan openreceive:doctor` | Bind `ReceiveNwcClient`, `PriceProvider`, and `OpenReceiveServiceProvider::SWAP_PROVIDERS` in the container |
 | Plain PHP | `php bin/doctor` (host script calling `$engine->doctor()`) | Build `Service` with `OpenReceive\Testing\FakeWallet`, `FakeSwapProvider`, and `OpenReceive\Rates\StaticPriceProvider` |
-| WordPress | `wp openreceive doctor` | Repository development: the documented Docker `compose.testkit.yml` override |
+| WordPress | `wp openreceive doctor`, then `wp openreceive test-invoice <order id>` for a real invoice | Repository development: the documented Docker `compose.testkit.yml` override |
 | BTCPay | Follow the plugin reference's connection and checkout checks | Use the plugin's Docker test setup in its reference |
 
 The routes, persistence, reconciliation, and fulfillment hooks then run the

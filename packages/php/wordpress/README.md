@@ -44,8 +44,10 @@ standalone checkout assets; it loads no browser CDN dependencies.
 
 ## Operate your store
 
-Run `wp openreceive doctor` for configuration and schema checks, and
-`wp openreceive reconcile` for a gated reconciliation pass. The optional
+Run `wp openreceive doctor` for configuration and schema checks,
+`wp openreceive test-invoice <order-id>` to mint a real invoice for an unpaid
+OpenReceive order, and `wp openreceive reconcile` for a gated reconciliation
+pass. The optional
 `wp openreceive notifications` command runs as a separate process. Action
 Scheduler provides the default background safety net. A real cron runner is
 needed if the store receives no visits; the web process starts no timer.

@@ -35,3 +35,23 @@ fi
 if [[ "$output" != *"WooCommerce: FAILED"* ]]; then
   echo "doctor did not identify the failed dependency" >&2; exit 1
 fi
+
+# The doctor a merchant runs prints no Node instructions.
+if [[ "$(wp openreceive doctor)" == *npx* ]]; then
+  echo "doctor printed a Node command" >&2; exit 1
+fi
+
+# test-invoice mints through the order-pay route, for the order an agent creates
+# with the documented WooCommerce CLI command, and refuses an order it cannot charge.
+product="$(wp eval 'echo wc_get_product_id_by_sku("safety-orange");')"
+order="$(wp wc shop_order create --user=demo --payment_method=openreceive \
+  --line_items="[{\"product_id\":${product},\"quantity\":1}]" --porcelain)"
+output="$(wp openreceive test-invoice "$order")"
+if [[ "$output" != *"Invoice: ln"* || "$output" != *" sats for "* || "$output" != *order-pay*"$order"* ]]; then
+  echo "test-invoice did not print the invoice: $output" >&2; exit 1
+fi
+wp eval "if (count(OpenReceive\WP\Plugin::repository()->listForReference('$order')) !== 1) { exit(1); }"
+if output="$(wp openreceive test-invoice 999999999 2>&1)"; then
+  echo "test-invoice accepted a missing order" >&2; exit 1
+fi
+wp wc shop_order delete "$order" --force=true --user=demo >/dev/null

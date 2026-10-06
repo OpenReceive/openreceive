@@ -1,6 +1,6 @@
 # OpenReceive agent directions (BTCPay Server)
 
-These directions describe OpenReceive 0.4.16.
+These directions describe OpenReceive 0.4.16. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/btcpay.md`), not through a summarizing tool: a summary drops steps.
 
 Connect a BTCPay Server store to a receive-only NWC wallet with the OpenReceive
 plugin, and optionally let payers pay BTCPay invoices with USDT, USDC, ETH or

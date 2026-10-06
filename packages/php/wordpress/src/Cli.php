@@ -51,7 +51,39 @@ final class Cli
     {
         $report = Plugin::diagnosticReport();
         foreach ($report['lines'] as $line) { \WP_CLI::line($line); }
-        \WP_CLI::line('Agent skills: run `npx skills add OpenReceive/openreceive` in your project');
         if (!$report['ok']) { \WP_CLI::halt(1); }
+    }
+
+    /**
+     * Mint a Lightning invoice for an unpaid order through the checkout route its order-pay page uses.
+     *
+     * ## OPTIONS
+     *
+     * <order-id>
+     * : An unpaid order whose payment method is openreceive.
+     */
+    public function test_invoice(array $args): void
+    {
+        $id = (string) ($args[0] ?? '');
+        $order = OrderHost::order($id);
+        if (!$order || !$order->needs_payment()) {
+            \WP_CLI::error("Order {$id} is not an unpaid order with payment method openreceive. Create one with: wp wc shop_order create --user=<admin user id> --payment_method=openreceive --line_items='[{\"product_id\":<product id>,\"quantity\":1}]' --porcelain");
+        }
+        // The order-pay page issues this cookie once it has verified the order key; the CLI reads that key itself.
+        $_COOKIE['openreceive_pay_' . $order->get_id()] = OrderHost::cookie($order, time() + HOUR_IN_SECONDS);
+        $request = new \WP_REST_Request('POST', '/openreceive/v1/checkouts');
+        $request->set_header('Content-Type', 'application/json');
+        $request->set_body((string) wp_json_encode(['reference' => (string) $order->get_id()]));
+        $response = Plugin::dispatch($request);
+        $body = (array) $response->get_data();
+        if ($response->get_status() !== 201) {
+            \WP_CLI::error(sprintf('%s (HTTP %d, request_id %s)', $body['message'] ?? 'Checkout failed.', $response->get_status(), $body['request_id'] ?? 'none'));
+        }
+        $checkout = $body['checkout'];
+        \WP_CLI::line('Invoice: ' . $checkout['bolt11']);
+        \WP_CLI::line('Payment hash: ' . $checkout['payment_hash']);
+        \WP_CLI::line('Order-pay link (opens the checkout on this invoice): ' . $order->get_checkout_payment_url());
+        \WP_CLI::success(sprintf('Order #%s: %s sats for %s %s, expires %s UTC.', $order->get_order_number(),
+            number_format(intdiv((int) $checkout['amount_msats'], 1000)), $order->get_total(), $order->get_currency(), gmdate('Y-m-d H:i', (int) $checkout['expires_at'])));
     }
 }

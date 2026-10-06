@@ -11,6 +11,25 @@
   by rbsecp256k1's `~> 2.3` constraint, with the existing verified-archive
   install-time mitigation. npm audit also still reports development-tool
   dependencies on braces and deepmerge-ts; this update does not claim a clean audit.
+- WooCommerce agent directions: Step 0 now makes the first message a question
+  for the receive-only NWC code, and a request for stablecoins makes the second
+  one the LSC walkthrough. Setup is not reported complete until both codes are
+  saved, or the user says "Bitcoin only". The user pastes codes into the chat.
+  The agent writes each code to a temporary file with its file-editing tool,
+  feeds it to `wp openreceive configure` on stdin and deletes the file. The
+  version-pinned `wp plugin install` line now sits in Step 1. A test checks every
+  payload's Step 0. Every payload opens with a line asking the agent to fetch
+  it raw, because a summarizing fetch dropped the install step.
+- WordPress: `wp openreceive test-invoice <order-id>` mints a Lightning invoice
+  for an unpaid OpenReceive order, through the same checkout route as its
+  order-pay page. It prints the amount in sats, the invoice and the order-pay
+  link. `wp openreceive doctor` no longer prints the Node skills command.
+- WordPress: requests reuse the wallet's receive-only preflight answer for ten
+  minutes, as Laravel already does. Before, every REST call and every checkout
+  page render made a relay round trip, which a slow relay turned into
+  multi-second checkouts and occasional 503s. Saving settings and doctor still
+  preflight live. A 503 from the plugin's routes now logs its redacted reason
+  and request id to the WooCommerce `openreceive` log.
 
 ## 0.4.16 - 2026-10-06
 

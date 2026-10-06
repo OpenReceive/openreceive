@@ -265,11 +265,24 @@ export function inlineGuide(markdown, publicSlugs) {
   );
 }
 
-function render(directions, quickstart, quickstartSlug, publicSlugs) {
+// A summarizing fetch tool hands the agent a digest, and a digest drops the
+// steps it judged incidental: the WooCommerce run lost its install line that
+// way. The line rides at the top, where a digest is least likely to cut it. It
+// is conditional because the skills mirror this file byte for byte, and an
+// agent reading the skill from disk already has it raw.
+const RAW_FETCH = (stack) =>
+  `If you fetched this file, fetch it raw (\`curl -fsSL https://openreceive.org/agent-directions/${stack}.md\`), not through a summarizing tool: a summary drops steps.`;
+
+function render(stack, directions, quickstart, quickstartSlug, publicSlugs) {
   return [
     directions
       .trim()
-      .replace(/^# (.*)$/m, `# $1\n\nThese directions describe OpenReceive ${RELEASE}.`),
+      .replace(
+        /^# (.*)$/m,
+        `# $1\n\nThese directions describe OpenReceive ${RELEASE}. ${RAW_FETCH(stack)}`,
+      )
+      // A pinned download (the WordPress plugin ZIP) names the release it describes.
+      .replaceAll("{{release}}", RELEASE),
     "",
     "---",
     "",
@@ -329,6 +342,7 @@ for (const { stack, source, quickstart } of STACKS) {
   const target = `docs/agents/${stack}.md`;
   const quickstartSlug = path.basename(quickstart, ".md");
   const payload = render(
+    stack,
     readFileSync(path.join(root, source), "utf8"),
     readFileSync(path.join(root, quickstart), "utf8"),
     quickstartSlug,

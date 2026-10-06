@@ -110,6 +110,19 @@ reports the failed check with credentials redacted and exits nonzero on failure.
 The default payment title becomes “Bitcoin & crypto (OpenReceive)” with swaps;
 a customized title is preserved.
 
+To check checkout from the terminal, mint an invoice for an unpaid order whose
+payment method is OpenReceive:
+
+```sh
+wp wc shop_order create --user=<admin user id> --payment_method=openreceive \
+  --line_items='[{"product_id":<product id>,"quantity":1}]' --porcelain
+wp openreceive test-invoice <order id>
+```
+
+`test-invoice` uses the same checkout route as the order-pay page. It prints the
+amount in sats, the Lightning invoice and the order-pay link, which opens the
+checkout on that invoice. Delete the test order when you are done.
+
 ## Checkout and settlement
 
 Both WooCommerce checkout blocks and classic checkout send the customer to the

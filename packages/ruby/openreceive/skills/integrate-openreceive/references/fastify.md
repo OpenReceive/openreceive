@@ -1,6 +1,6 @@
 # OpenReceive agent directions (Fastify)
 
-These directions describe OpenReceive 0.4.16.
+These directions describe OpenReceive 0.4.16. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/fastify.md`), not through a summarizing tool: a summary drops steps.
 
 Add OpenReceive to a Fastify application — the app you are already working in.
 You do not need a copy of the OpenReceive source: the packages are on npm, and

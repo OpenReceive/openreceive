@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace OpenReceive\WP;
 
 use Nyholm\Psr7\ServerRequest;
+use OpenReceive\Nwc\NostrPhpNwcReceiveClient;
 use OpenReceive\Server\Engine;
 use OpenReceive\Server\Psr15Handler;
 use OpenReceive\Server\RequestHandler;
@@ -102,6 +103,7 @@ final class Plugin
         if (defined('WP_CLI') && WP_CLI) {
             \WP_CLI::add_command('openreceive reconcile', static function (): void { self::reconcile(); \WP_CLI::success('Reconciliation complete.'); });
             \WP_CLI::add_command('openreceive notifications', static function (): void { self::engine()->notificationsWorker()->run(); });
+            \WP_CLI::add_command('openreceive test-invoice', [new Cli(), 'test_invoice']);
         }
     }
 
@@ -117,17 +119,35 @@ final class Plugin
         return $repo;
     }
 
-    public static function service(?array $settings = null): Service
+    /**
+     * PHP builds the service on every request, and its receive-only preflight
+     * is a relay round trip (`get_info`), so requests reuse the last live
+     * answer for ten minutes (Laravel's CachedWalletInfo does the same).
+     * Saving settings and doctor pass $live and always ask the wallet. The
+     * entry is keyed to the code, so a new code is never served stale info.
+     */
+    public static function service(?array $settings = null, bool $live = true): Service
     {
         if (defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit') { return DemoWallet::service(); }
-        return Service::fromEnvironment(Secrets::environment($settings), [get_woocommerce_currency()], http: new WpHttpTransport());
+        $env = Secrets::environment($settings);
+        $currencies = [get_woocommerce_currency()];
+        $key = static fn (): string => hash_hmac('sha256', trim($env['NWC_URI']), wp_salt('auth'));
+        $cached = $live ? false : get_transient('openreceive_wallet_info');
+        if (is_array($cached) && ($cached['key'] ?? null) === $key()) {
+            $client = new NostrPhpNwcReceiveClient(trim($env['NWC_URI']));
+            $client->primeInfo($cached['info']);
+            return new Service($client, priceCurrencies: $currencies, env: $env, http: new WpHttpTransport());
+        }
+        $service = Service::fromEnvironment($env, $currencies, http: new WpHttpTransport());
+        set_transient('openreceive_wallet_info', ['key' => $key(), 'info' => $service->nwcClient()->preflight()], 10 * MINUTE_IN_SECONDS);
+        return $service;
     }
 
     public static function engine(): Engine
     {
         if (self::$engine === null) {
             $settings = get_option('woocommerce_openreceive_settings', []);
-            self::$engine = new Engine(new OrderHost(), self::repository(), self::service(),
+            self::$engine = new Engine(new OrderHost(), self::repository(), self::service(live: false),
                 rateLimiting: ($settings['rate_limiting'] ?? 'no') === 'yes',
                 clientIp: static fn (): ?string => isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : null,
                 prefix: '/openreceive/v1');
@@ -172,8 +192,11 @@ final class Plugin
             foreach ($response->getHeaders() as $key => $values) { $result->header($key, implode(', ', $values)); }
             $result->header('Cache-Control', 'no-store');
             return $result;
-        } catch (\Throwable) {
-            return new \WP_REST_Response(['code' => 'UNAVAILABLE', 'message' => 'Payment service is unavailable. Ask the merchant to check OpenReceive settings.', 'request_id' => 'req_' . wp_generate_uuid4()], 503, ['Cache-Control' => 'no-store']);
+        } catch (\Throwable $error) {
+            $requestId = 'req_' . wp_generate_uuid4();
+            // The payer gets a generic 503; the merchant finds the redacted reason under WooCommerce → Status → Logs.
+            wc_get_logger()->error($requestId . ' ' . $request->get_route() . ' unavailable: ' . (new \ReflectionClass($error))->getShortName() . ': ' . Configuration::errorMessage($error), ['source' => 'openreceive']);
+            return new \WP_REST_Response(['code' => 'UNAVAILABLE', 'message' => 'Payment service is unavailable. Ask the merchant to check OpenReceive settings.', 'request_id' => $requestId], 503, ['Cache-Control' => 'no-store']);
         }
     }
 

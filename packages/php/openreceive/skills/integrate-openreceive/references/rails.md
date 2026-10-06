@@ -1,6 +1,6 @@
 # OpenReceive agent directions (Rails)
 
-These directions describe OpenReceive 0.4.16.
+These directions describe OpenReceive 0.4.16. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/rails.md`), not through a summarizing tool: a summary drops steps.
 
 Add OpenReceive to a Rails application — the app you are already working in. You
 do not need a copy of the OpenReceive source: the gem is on RubyGems, the
