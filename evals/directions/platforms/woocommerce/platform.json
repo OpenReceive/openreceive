@@ -1,0 +1,13 @@
+{
+  "slug": "woocommerce",
+  "name": "WordPress + WooCommerce",
+  "directions": "docs/agents/woocommerce.md",
+  "prompt_name": "WordPress store",
+  "doctor": "wp openreceive doctor",
+  "credential_store": { "kind": "wp-option", "where": "woocommerce_openreceive_settings" },
+  "allowed_install_paths": ["release-zip"],
+  "forbidden": ["git clone .*openreceive", "--dangerously", "printenv"],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true
+}

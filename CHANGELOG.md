@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- WordPress: with a swap provider configured, the default payment title is now
+  “Bitcoin & stablecoins (OpenReceive)”, matching the site's wording. A store
+  that saved the earlier default, “Bitcoin & crypto (OpenReceive)”, follows
+  the new default; a custom title is preserved.
+- Refresh development tooling and Angular: Dependabot's dev-tooling group
+  (Biome 2.5.15, Playwright 1.63.0 with the matching CI browser image, Prisma
+  7.10.0, ng-packagr 22.2.4, webpack 5.111.1 and others) and Angular 22.2.1,
+  with the overrides moved together. npm regenerated the lockfile, because
+  Dependabot's copy left the Rails demo's `@swc/core` unresolved and `npm ci`
+  failed. These are repository and demo updates only; published package
+  constraints are unchanged. The checkout CSS toolchain (Tailwind 4.3.2,
+  daisyUI 5.6.16) is held back: daisyUI 5.7 grew the shipped checkout
+  stylesheet from 225 KB to 303 KB with component variants the checkout never
+  uses. The stylesheet stays byte-identical to 0.4.17. Dependabot now ignores
+  the better-sqlite3, webpack-cli and mobx-react majors until the migrations
+  that unblock them.
 - Agent directions survive a summarizing fetch. Claude Code's web tool handed
   an agent 1.6 KB of the 17 KB WooCommerce payload, with Step 0 gone: it kept
   code blocks and short bullets and dropped the prose. Every payload now opens,

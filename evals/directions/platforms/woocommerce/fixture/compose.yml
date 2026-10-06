@@ -1,0 +1,57 @@
+# Stock WordPress and WordPress CLI images, on purpose: no GMP, no OpenReceive.
+# The Compose project name is the directory name. Each eval run copies this
+# file into its own directory so two runs do not share a network or a volume.
+services:
+  wordpress:
+    image: wordpress:php8.2-apache
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress-local
+    ports:
+      - "127.0.0.1::80"
+    volumes:
+      - wp:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 80) ? 0 : 1);"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 40s
+  db:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress-local
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  cli:
+    image: wordpress:cli-php8.2
+    profiles: ["tools"]
+    user: "33:33"
+    working_dir: /var/www/html
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress-local
+    volumes:
+      - wp:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  wp:
+  db:

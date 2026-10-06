@@ -62,6 +62,9 @@ tools/live-nwc-test/expected_capabilities.json
 # Playwright artifacts
 tests/e2e/test-results/
 
+# Directions-eval output. A transcript can contain a pasted wallet code.
+evals/directions/reports/
+
 # Prisma client for the test:orms lane; `npm run test:orms` regenerates it.
 tests/orms/generated/
 

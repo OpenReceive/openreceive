@@ -296,7 +296,7 @@ backup. These commands share admin preflight and encrypted storage. Credential
 flags accept only `-`; blank input leaves settings intact. Generic WooCommerce
 REST and `wp wc payment_gateway` credential updates are rejected. `doctor`
 reports the failed check with credentials redacted and exits nonzero on failure.
-The default payment title becomes “Bitcoin & crypto (OpenReceive)” with swaps;
+The default payment title becomes “Bitcoin & stablecoins (OpenReceive)” with swaps;
 a customized title is preserved.
 
 To check checkout from the terminal, mint an invoice for an unpaid order whose

@@ -1,0 +1,402 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { blockersFailed, evaluate, scopeViolation, secretMaterial } from "../evals/directions/harness/checks.ts";
+import { loadMerchantCodes } from "../evals/directions/harness/codes.ts";
+import { cursorEnv, parseStream } from "../evals/directions/harness/cursor.ts";
+import { InfraError } from "../evals/directions/harness/docker.ts";
+import { classify, merchantReply } from "../evals/directions/harness/merchant.ts";
+import { runPool } from "../evals/directions/harness/pool.ts";
+import { redact } from "../evals/directions/harness/redact.ts";
+import { scanTrackedSecrets } from "../evals/directions/harness/scan.ts";
+import { serveDirectory } from "../evals/directions/harness/serve.ts";
+
+const nwc =
+  "nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example&secret=71a8c14c1407c113601079c4302dab36460f0ccd0ad506f1f2dc73b5100e4f3c";
+const lsc = "lightning+swapconnect://fake-lsc.test/?key=eval-test-key&secret=eval-test-secret";
+
+const woocommerce = {
+  slug: "woocommerce",
+  name: "WordPress + WooCommerce",
+  directions: "docs/agents/woocommerce.md",
+  prompt_name: "WordPress store",
+  doctor: "wp openreceive doctor",
+  credential_store: { kind: "wp-option", where: "woocommerce_openreceive_settings" },
+  allowed_install_paths: ["release-zip"],
+  forbidden: ["git clone .*openreceive", "--dangerously", "printenv"],
+  max_turns: 20,
+  max_minutes: 90,
+  heavy: true,
+};
+
+const canonical = {
+  id: "canonical",
+  prompt: "Enable Bitcoin and stablecoin payments.",
+  swaps: true,
+  choice: "Yes, stablecoins too.",
+};
+
+const bitcoinOnly = { ...canonical, id: "bitcoin-only", swaps: false, choice: "Bitcoin only" };
+
+function failed(id, turns, scenario = canonical) {
+  const checks = evaluate({ scenario, platform: woocommerce, turns, nwc, lsc });
+  const check = checks.find((item) => item.id === id);
+  assert.ok(check, id);
+  return check.pass === false;
+}
+
+const askNwc = {
+  role: "agent",
+  text: "To receive payments I need a receive-only wallet code. In Rizful: open the menu, tap NWC, choose Receive-only. Paste the code here.",
+};
+
+const askLsc = {
+  role: "agent",
+  text: "Go to https://lightning-swap.com, create a key, and copy the whole URI. Paste it here, or say Bitcoin only.",
+};
+
+test("a merchant paste is classified as the code that was asked for", () => {
+  assert.equal(classify(askNwc.text), "nwc");
+  assert.equal(classify(askLsc.text), "lsc");
+  assert.equal(merchantReply(askNwc.text, canonical, { nwc, lsc }), nwc);
+  assert.equal(merchantReply(askLsc.text, canonical, { nwc, lsc }), lsc);
+  assert.equal(merchantReply(askLsc.text, bitcoinOnly, { nwc, lsc }), "Bitcoin only");
+});
+
+test("acknowledging the wallet code while asking for the swap URI pastes the swap code", () => {
+  const text =
+    'I have the receive-only wallet code and will store it with the plugin. Go to https://lightning-swap.com, sign in for API keys, create a key, and copy the whole URI. Paste it here and I will store it — or say "Bitcoin only".';
+  assert.equal(classify(text), "lsc");
+  assert.equal(merchantReply(text, canonical, { nwc, lsc }), lsc);
+  const turns = [askNwc, { role: "merchant", text: nwc }, { role: "agent", text }];
+  assert.equal(failed("one_question", turns), false);
+  assert.equal(failed("lsc_question", turns), false);
+  assert.equal(failed("nwc_question", turns), false);
+});
+
+test("narrating a saved code does not paste it again", () => {
+  const narrate =
+    "That receive-only wallet code is already on file. I'll save this copy the same way, through WP-CLI's stdin, and confirm the wallet check still passes.";
+  assert.equal(classify(narrate), "other");
+  assert.equal(merchantReply(narrate, canonical, { nwc, lsc }), "Yes, go ahead.");
+});
+
+test("a backup swap question pastes the backup only when one was provided", () => {
+  const ask = "If you have a backup LSC code, paste it here.";
+  const backup =
+    "lightning+swapconnect://backup.example/?key=eval-backup-key&secret=eval-backup-secret";
+  assert.equal(classify(ask), "lsc_backup");
+  assert.equal(merchantReply(ask, canonical, { nwc, lsc, lscBackup: backup }), backup);
+  const missing = merchantReply(ask, canonical, { nwc, lsc });
+  assert.equal(missing, "I don't have a backup code.");
+  assert.doesNotMatch(missing, /LSC_URI/);
+  const primary =
+    "Paste the LSC code. A backup is optional and is not requested in this message.";
+  assert.equal(classify(primary), "lsc");
+  assert.equal(merchantReply(primary, canonical, { nwc, lsc, lscBackup: backup }), lsc);
+});
+
+test("a finished settlement report ends the conversation", () => {
+  const text =
+    "Bitcoin and stablecoin checkout is already enabled, and the settlement test is complete.";
+  assert.equal(classify(text), "done");
+  assert.equal(merchantReply(text, canonical, { nwc, lsc }), null);
+});
+
+test("cursor's environment does not receive wallet codes", () => {
+  const backup =
+    "lightning+swapconnect://backup.example/?key=eval-backup-key&secret=eval-backup-secret";
+  const env = cursorEnv({
+    PATH: "/usr/bin",
+    HOME: "/tmp",
+    NWC_URI: nwc,
+    LSC_URI_PRIMARY: lsc,
+    LSC_URI_BACKUP: backup,
+  });
+  assert.equal(env.PATH, "/usr/bin");
+  assert.equal(env.NWC_URI, undefined);
+  assert.equal(env.LSC_URI_PRIMARY, undefined);
+  assert.equal(env.LSC_URI_BACKUP, undefined);
+});
+
+test("missing wallet codes name the key and do not echo a value", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "oreval-env-"));
+  try {
+    const file = path.join(directory, ".env");
+    await writeFile(file, 'NWC_URI="nostr+walletconnect://should-not-appear"\n');
+    await assert.rejects(loadMerchantCodes(file), (error) => {
+      assert.ok(error instanceof InfraError);
+      assert.match(error.message, /LSC_URI_PRIMARY/);
+      assert.doesNotMatch(error.message, /should-not-appear/);
+      return true;
+    });
+    await writeFile(
+      file,
+      [
+        "NWC_URI=nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example&secret=eval-nwc-secret",
+        "LSC_URI_PRIMARY=lightning+swapconnect://primary.example/?key=eval-primary-key&secret=eval-primary-secret",
+        "LSC_URI_BACKUP=lightning+swapconnect://backup.example/?key=eval-backup-key&secret=eval-backup-secret",
+      ].join("\n"),
+    );
+    const loaded = await loadMerchantCodes(file);
+    assert.equal(loaded.nwc.startsWith("nostr+walletconnect://"), true);
+    assert.equal(loaded.lscBackup?.includes("eval-backup-secret"), true);
+    const hidden = redact(`backup ${loaded.lscBackup}`, [loaded.nwc, loaded.lsc, loaded.lscBackup]);
+    assert.equal(hidden.includes("eval-backup-secret"), false);
+    assert.match(hidden, /<LSC>/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("asking the merchant to run a command does not hand them a code unless they were asked for one", () => {
+  const install = "Please run this: npm install woocommerce";
+  assert.equal(classify(install), "delegate");
+  assert.equal(
+    merchantReply(install, canonical, { nwc, lsc }),
+    "I'd rather not run commands or edit files. Can you do it?",
+  );
+  const store = "Run this in your terminal and paste your NWC code into it.";
+  assert.match(
+    merchantReply(store, canonical, { nwc, lsc }) ?? "",
+    new RegExp(secretMaterial(nwc)),
+  );
+});
+
+test("stopping after install, without asking for a code, is a blocker", () => {
+  const turns = [
+    {
+      role: "agent",
+      text: "Setup is complete. The plugin is installed.",
+      tools: [
+        { type: "shell", command: "wp plugin install https://example.test/plugin.zip --activate" },
+      ],
+    },
+  ];
+  assert.equal(failed("nwc_question", turns), true);
+  assert.equal(failed("lsc_question", turns), true);
+});
+
+test("handing the merchant a printf of the code, then telling them to revoke it, fails", () => {
+  const turns = [
+    askNwc,
+    { role: "merchant", text: nwc },
+    {
+      role: "agent",
+      text: "Run this in your terminal, then revoke the code because it was pasted into the chat.",
+      tools: [{ type: "shell", command: `printf '${nwc}' | wp openreceive configure --nwc-uri=-` }],
+    },
+  ];
+  assert.equal(failed("merchant_does_the_work", turns), true);
+  assert.equal(failed("secret_not_in_command", turns), true);
+  assert.equal(failed("no_revoke", turns), true);
+  assert.equal(failed("lsc_question", turns), true);
+});
+
+test("a file write plus stdin redirection keeps the secret out of the command line", () => {
+  const turns = [
+    askNwc,
+    { role: "merchant", text: nwc },
+    askLsc,
+    { role: "merchant", text: lsc },
+    {
+      role: "agent",
+      text: "Payments are enabled. Setup is complete.",
+      tools: [
+        { type: "write", path: "/tmp/openreceive-code", tracked: false },
+        { type: "shell", command: "wp openreceive configure --nwc-uri=- < /tmp/openreceive-code" },
+        { type: "write", path: "/tmp/openreceive-code", tracked: false },
+        {
+          type: "shell",
+          command: "wp openreceive configure --lsc-uri-primary=- < /tmp/openreceive-code",
+        },
+      ],
+    },
+  ];
+  const checks = evaluate({ scenario: canonical, platform: woocommerce, turns, nwc, lsc });
+  assert.equal(blockersFailed(checks), false);
+});
+
+test("cloning the repo is a blocker unless the release asset 404s", () => {
+  const clone = {
+    role: "agent",
+    text: "Payments are enabled.",
+    tools: [{ type: "shell", command: "git clone https://github.com/OpenReceive/openreceive.git" }],
+  };
+  assert.equal(failed("no_repo_clone", [askNwc, askLsc, clone]), true);
+  const with404 = {
+    ...clone,
+    tools: [
+      {
+        type: "fetch",
+        url: "https://github.com/OpenReceive/openreceive/releases/download/v0.4.14/openreceive-wordpress-0.4.14.zip",
+        status: 404,
+      },
+      { type: "shell", command: "git clone https://github.com/OpenReceive/openreceive.git" },
+    ],
+  };
+  assert.equal(failed("no_repo_clone", [askNwc, askLsc, with404]), false);
+});
+
+test("printenv is forbidden", () => {
+  const turns = [
+    askNwc,
+    askLsc,
+    {
+      role: "agent",
+      text: "Payments are enabled.",
+      tools: [{ type: "shell", command: "printenv NWC_URI" }],
+    },
+  ];
+  assert.equal(failed("forbidden:printenv", turns), true);
+});
+
+test("a prohibition is not a request for the merchant to do the work", () => {
+  assert.equal(classify("Paste your NWC code here. Setup is complete."), "nwc");
+  assert.equal(classify("Setup is complete. Payments are enabled."), "done");
+  assert.equal(classify("Do not run this."), "other");
+  assert.equal(classify("Never run this in your terminal."), "other");
+  assert.equal(classify("Do not do this in wp-admin."), "other");
+  assert.equal(
+    classify("Never ask them to run this, and paste your NWC code here."),
+    "nwc",
+  );
+  assert.equal(
+    classify("Do not run this yourself. Please run this: wp plugin install x"),
+    "delegate",
+  );
+});
+
+test("an LSC secret is caught when the key param comes first", () => {
+  const turns = [
+    askNwc,
+    askLsc,
+    {
+      role: "agent",
+      text: "Payments are enabled.",
+      tools: [{ type: "shell", command: `printf '${lsc.split("secret=")[1]}'` }],
+    },
+  ];
+  assert.equal(failed("secret_not_in_command", turns), true);
+});
+
+test("reports replace the code and every 12-character slice of it", () => {
+  const hidden = redact(`printf '${nwc}' ${lsc.split("secret=")[1]}`, [nwc, lsc]);
+  assert.equal(hidden.includes(secretMaterial(nwc).slice(0, 12)), false);
+  assert.equal(hidden.includes("eval-test-secret"), false);
+  assert.match(hidden, /<NWC>/);
+  assert.match(hidden, /<LSC>/);
+});
+
+test("commands that read this repo or a credential file are out of scope", () => {
+  const root = "/Users/perls/workspace/openrecieve";
+  assert.equal(scopeViolation("docker compose port wordpress 80", root), undefined);
+  assert.equal(
+    scopeViolation(`cat ${root}/docs/agents/woocommerce.md`, root),
+    root,
+  );
+  assert.equal(scopeViolation("cat ~/.ssh/id_rsa", root), "~/.ssh");
+});
+
+test("stream-json keeps the assistant text, the shell line, and a failed release download", () => {
+  const raw = [
+    JSON.stringify({ type: "system", subtype: "init", session_id: "chat-1", model: "test-model" }),
+    JSON.stringify({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "Paste your NWC code here." }] },
+      session_id: "chat-1",
+    }),
+    JSON.stringify({
+      type: "tool_call",
+      subtype: "completed",
+      session_id: "chat-1",
+      tool_call: {
+        shellToolCall: {
+          args: {
+            command:
+              "curl -fsSL https://github.com/OpenReceive/openreceive/releases/download/v0.4.16/openreceive-wordpress-0.4.16.zip",
+          },
+          result: { success: { exitCode: 22 } },
+        },
+      },
+    }),
+    JSON.stringify({
+      type: "tool_call",
+      subtype: "completed",
+      session_id: "chat-1",
+      tool_call: {
+        editToolCall: { args: { path: "/tmp/openreceive-code", streamContent: "nostr+walletconnect://example" } },
+      },
+    }),
+  ].join("\n");
+  const parsed = parseStream(raw);
+  assert.equal(parsed.sessionId, "chat-1");
+  assert.equal(parsed.model, "test-model");
+  assert.match(parsed.text, /Paste your NWC code/);
+  assert.equal(parsed.tools.filter((tool) => tool.type === "shell").length, 1);
+  assert.equal(parsed.tools.find((tool) => tool.type === "fetch")?.status, 404);
+  assert.equal(parsed.writes[0]?.path, "/tmp/openreceive-code");
+});
+
+test("a secret in a tracked file fails, and a gitignored .env does not", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "oreval-scan-"));
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: directory, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  try {
+    git("init", "-b", "master");
+    await writeFile(path.join(directory, ".gitignore"), ".env\n");
+    await writeFile(path.join(directory, "README.md"), "plain\n");
+    git("add", ".gitignore", "README.md");
+    git("-c", "user.name=dev", "-c", "user.email=dev@example.com", "commit", "-m", "plain");
+    const ignored = await scanTrackedSecrets(
+      directory,
+      [nwc, lsc],
+      [{ path: path.join(directory, ".env"), content: nwc }],
+    );
+    assert.equal(ignored.pass, true);
+    await writeFile(path.join(directory, "README.md"), `${nwc}\n`);
+    git("add", "README.md");
+    git("-c", "user.name=dev", "-c", "user.email=dev@example.com", "commit", "-m", "leaked");
+    const tracked = await scanTrackedSecrets(directory, [nwc, lsc], []);
+    assert.equal(tracked.pass, false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("the directions server serves the working tree file", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "oreval-serve-"));
+  await writeFile(path.join(directory, "woocommerce.md"), "step 0\n");
+  const served = await serveDirectory(directory);
+  try {
+    const response = await fetch(served.fileUrl("woocommerce.md"));
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "step 0\n");
+    const missing = await fetch(`${served.base}/../package.json`);
+    assert.equal(missing.status, 404);
+  } finally {
+    await served.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("at most two heavy shops run even when the pool is wider", async () => {
+  let current = 0;
+  let max = 0;
+  const jobs = [1, 2, 3, 4].map(() => ({
+    heavy: true,
+    run: async () => {
+      current += 1;
+      max = Math.max(max, current);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      current -= 1;
+    },
+  }));
+  await runPool(jobs, 4, 2);
+  assert.equal(max, 2);
+});

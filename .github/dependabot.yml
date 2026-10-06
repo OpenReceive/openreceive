@@ -28,6 +28,18 @@ updates:
         update-types:
           - minor
           - patch
+    # Majors held back by their dependents, so each PR could only fail:
+    # better-sqlite3 13 (typeorm and @prisma/adapter-better-sqlite3 accept
+    # ^12), webpack-cli 7 (shakapacker 9 accepts up to ^6; it comes with the
+    # shakapacker 10 migration) and mobx-react 10 (needs mobx 7). Lift a rule
+    # in the change that does the migration unblocking it.
+    ignore:
+      - dependency-name: better-sqlite3
+        update-types: ["version-update:semver-major"]
+      - dependency-name: webpack-cli
+        update-types: ["version-update:semver-major"]
+      - dependency-name: mobx-react
+        update-types: ["version-update:semver-major"]
 
   # The root Gemfile alone: the Ruby engine's test dependencies and the
   # cross-language conformance harness. The per-gem Gemfiles under

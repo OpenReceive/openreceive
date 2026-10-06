@@ -51,7 +51,8 @@
     "examples/buttons/server/laravel/vite/**/*.ts",
     "tests/e2e/**/*.ts",
     "tests/e2e-btcpay/**/*.ts",
-    "tests/e2e-wordpress/**/*.ts"
+    "tests/e2e-wordpress/**/*.ts",
+    "evals/directions/**/*.ts"
   ],
   "exclude": ["**/node_modules/**", "packages/js/*/dist/**"]
 }

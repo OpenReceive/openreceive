@@ -49,7 +49,8 @@ $check($repo->meta()->storedSchemaVersion() === 1, 'activation schema marker');
 $settingsBefore = get_option('woocommerce_openreceive_settings', []);
 $configured = Configuration::withSecret($settingsBefore, 'lsc_uri_primary', 'opaque-test-value');
 $check(Secrets::decrypt($configured['lsc_uri_primary']) === 'opaque-test-value', 'configuration encrypts before saving');
-$check(Configuration::title($configured) === 'Bitcoin & crypto (OpenReceive)', 'swap-aware default title');
+$check(Configuration::title($configured) === 'Bitcoin & stablecoins (OpenReceive)', 'swap-aware default title');
+$check(Configuration::title([...$configured, 'title' => 'Bitcoin & crypto (OpenReceive)']) === 'Bitcoin & stablecoins (OpenReceive)', 'earlier saved default follows the new default');
 $check(Configuration::title([...$configured, 'title' => 'My checkout']) === 'My checkout', 'custom title preserved');
 $check(!str_contains(Configuration::errorMessage(new RuntimeException('Failed opaque-test-value'), ['opaque-test-value']), 'opaque-test-value'), 'configuration errors redact supplied secret');
 foreach (['nwc_uri', 'lsc_uri_primary', 'lsc_uri_backup'] as $field) {
