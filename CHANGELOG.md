@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.17 - 2026-10-06
 
 - Refresh vulnerable dependencies in the workspace and demo lockfiles: Vue
   3.5.43, sharp 0.35.5, proxy-addr 2.0.8, compression 1.8.2,

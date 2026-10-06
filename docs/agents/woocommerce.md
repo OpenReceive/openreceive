@@ -1,6 +1,6 @@
 # OpenReceive agent directions (WordPress + WooCommerce)
 
-These directions describe OpenReceive 0.4.16. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/woocommerce.md`), not through a summarizing tool: a summary drops steps.
+These directions describe OpenReceive 0.4.17. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/woocommerce.md`), not through a summarizing tool: a summary drops steps.
 
 Install and configure the OpenReceive payment gateway in the WooCommerce store
 you are working in. Preserve its theme, checkout, customer accounts, order
@@ -78,7 +78,7 @@ Install the plugin built for this release. Never install the GitHub
 source-code ZIP or a ZIP from an older release:
 
 ```sh
-wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v0.4.16/openreceive-wordpress-0.4.16.zip --activate
+wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v0.4.17/openreceive-wordpress-0.4.17.zip --activate
 ```
 
 It needs WooCommerce active, and PHP 8.2+ with GMP and sodium in BOTH the web
@@ -186,7 +186,7 @@ database or application.
 
 ### Get the installable archive
 
-Download [openreceive-wordpress-0.4.16.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.16/openreceive-wordpress-0.4.16.zip)
+Download [openreceive-wordpress-0.4.17.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.17/openreceive-wordpress-0.4.17.zip)
 from the matching release. Historical releases may lack this asset. If that exact
 URL returns 404, build the same tag below; never silently install an older ZIP.
 The GitHub source-code ZIP is not an installable plugin. On a development machine
@@ -195,7 +195,7 @@ with Node 22+, PHP 8.2+ with GMP/sodium, Composer and WP-CLI:
 ```sh
 git clone https://github.com/OpenReceive/openreceive.git
 cd openreceive
-git checkout v0.4.16
+git checkout v0.4.17
 npm ci
 npm run build:packages
 composer install --working-dir=packages/php/wordpress

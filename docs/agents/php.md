@@ -1,6 +1,6 @@
 # OpenReceive agent directions (PHP)
 
-These directions describe OpenReceive 0.4.16. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/php.md`), not through a summarizing tool: a summary drops steps.
+These directions describe OpenReceive 0.4.17. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/php.md`), not through a summarizing tool: a summary drops steps.
 
 Add OpenReceive to a PHP application — the app you are already working in. You
 do not need a copy of the OpenReceive source: the engine is on Packagist

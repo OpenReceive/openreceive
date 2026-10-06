@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.17 - 2026-10-06
+
+Release with the complete 0.4.17 package family. The bundled agent skills carry
+the revised WooCommerce directions, and every payload now asks to be fetched
+raw. No Ruby runtime changes from 0.4.16.
+
 ## 0.4.16 - 2026-10-06
 
 Release with the complete 0.4.16 package family and corrected shared agent

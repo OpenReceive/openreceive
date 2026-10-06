@@ -7,8 +7,9 @@ import test from "node:test";
 // for the codes, never mentioned swaps, and could not store a code without a
 // shell argument), checked on the generated files an agent actually receives.
 
-const release = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
-  .version;
+const release = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 const dir = new URL("../docs/agents/", import.meta.url);
 const payloads = readdirSync(dir)
   .filter((name) => name.endsWith(".md"))
