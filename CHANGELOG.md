@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.15 - 2026-10-06
 
 - The website contract requires `/integrations/wordpress` to redirect permanently
   to `/integrations/woocommerce`. The Rails site consumes this requirement through
@@ -33,10 +33,6 @@
   Other npm packages and the Rails/server gems rely on that copy; the WordPress
   merchant archive excludes it. Doctors point agents to the install command.
 - Validate that every integration reference is linked from the skill router.
-- The new install commands, doctor hints, and bundled-package changes require
-  the next npm, RubyGems, PyPI, and Composer releases. GitHub-installed skills
-  can be updated independently; pushing these changes does not add the new
-  commands to packages already published.
 - `openreceive-rails` now requires `nwc-ruby ~> 0.3`. With 0.2.x, a silent
   relay or an offline wallet behind a live relay could block `make_invoice`
   (checkout create) and the boot preflight indefinitely: 0.2.x checked its

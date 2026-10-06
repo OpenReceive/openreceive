@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.15 - 2026-10-06
 
 - Install agent skills with `bin/rails openreceive:skills` (optional
   `--dir .claude/skills`). The core `openreceive` gem owns the one offline

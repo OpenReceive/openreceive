@@ -5,6 +5,6 @@ module OpenReceive
   # top-level `::Rails` framework constant — engine code always references the framework as
   # `::Rails` to avoid shadowing.
   module Rails
-    VERSION = "0.4.14"
+    VERSION = "0.4.15"
   end
 end
