@@ -334,7 +334,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 32911
+      "bytes": 34050
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -521,7 +521,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 32911,
+      "bytes": 34050,
       "copy_button": true,
       "self_contained": true
     },

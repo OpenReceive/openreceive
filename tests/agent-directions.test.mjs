@@ -187,3 +187,17 @@ test("the WooCommerce payload ends at test-invoice and keeps the agent in the st
   // The inlined quickstart's wp-admin screens are not a second procedure.
   assert.match(text, /its wp-admin screens are only for a store with no WP-CLI/);
 });
+
+// The 0.4.18 Node eval agent ended on "checkout is live", took the reply
+// "Yes, go ahead" as a request for the quickstart's browser check, and ran it
+// with Playwright from another checkout.
+test("the Node payload ends with setup finished and keeps the agent in the app", () => {
+  const text = payloads.find(({ stack }) => stack === "node").text;
+  const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+  assert.match(ending, /browser check in the quickstart's\s+step 6[\s\S]*?is theirs/);
+  assert.match(ending, /You cannot pay the invoice/);
+  assert.match(ending, /Say "Setup is finished" in one message/);
+  assert.match(ending, /Do not offer more work or end the message on a question/);
+  assert.match(text, /Never read or run anything from another\s+project/);
+  assert.match(text, /A browser and Playwright are not part of setup/);
+});
