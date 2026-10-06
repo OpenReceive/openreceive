@@ -18,17 +18,19 @@ the full quickstart), or paste the one-prompt agent directions:
   package command below. The OpenReceive repository's own `.agents/skills/`
   is only discovered when that repository is the workspace.
 - No installer? Copy the agent directions for your stack and paste them into
-  your agent: [Node (Express)](https://openreceive.org/agent-directions/node.md) ·
-  [Fastify](https://openreceive.org/agent-directions/fastify.md) ·
-  [Next.js](https://openreceive.org/agent-directions/next.md) ·
-  [Rails](https://openreceive.org/agent-directions/rails.md) ·
-  [PHP](https://openreceive.org/agent-directions/php.md) ·
-  [Laravel](https://openreceive.org/agent-directions/laravel.md) ·
-  [Django](https://openreceive.org/agent-directions/django.md) ·
-  [FastAPI](https://openreceive.org/agent-directions/fastapi.md) ·
-  [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce.md) ·
-  [BTCPay Server](https://openreceive.org/agent-directions/btcpay.md). Each
-  is self-contained, quickstart included.
+  your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.md) ·
+  [Fastify](https://openreceive.org/agent-directions/fastify/full.md) ·
+  [Next.js](https://openreceive.org/agent-directions/next/full.md) ·
+  [Rails](https://openreceive.org/agent-directions/rails/full.md) ·
+  [PHP](https://openreceive.org/agent-directions/php/full.md) ·
+  [Laravel](https://openreceive.org/agent-directions/laravel/full.md) ·
+  [Django](https://openreceive.org/agent-directions/django/full.md) ·
+  [FastAPI](https://openreceive.org/agent-directions/fastapi/full.md) ·
+  [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) ·
+  [BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md). Each
+  is self-contained, quickstart included. To hand an agent a link instead, drop
+  `/full` from the URL: that short page tells it to download the full file with
+  its shell.
 
 One package per ecosystem bundles an offline copy: `@openreceive/node`, the
 core `openreceive` gem, Python's `openreceive`, and Composer's

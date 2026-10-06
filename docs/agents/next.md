@@ -1,8 +1,10 @@
+This is the full file; follow it from Step 0.
+
 # OpenReceive agent directions (Next.js)
 
 ```sh
 # READ THIS FIRST: this file is 37 KB and a summary drops required steps. Download it whole:
-curl -fsSL https://openreceive.org/agent-directions/next.md
+curl -fsSL https://openreceive.org/agent-directions/next/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
 

@@ -22,16 +22,16 @@ markdown.
 - [Laravel Quickstart](https://openreceive.org/guides/quickstart-laravel.md)
 - [BTCPay Server Quickstart](https://openreceive.org/guides/quickstart-btcpay.md)
 - [WordPress + WooCommerce Quickstart](https://openreceive.org/guides/quickstart-woocommerce.md)
-- [Agent Directions: Node.js](https://openreceive.org/agent-directions/node.md): self-contained agent directions, quickstart included
-- [Agent Directions: Fastify](https://openreceive.org/agent-directions/fastify.md): self-contained agent directions, quickstart included
-- [Agent Directions: Next.js](https://openreceive.org/agent-directions/next.md): self-contained agent directions, quickstart included
-- [Agent Directions: FastAPI](https://openreceive.org/agent-directions/fastapi.md): self-contained agent directions, quickstart included
-- [Agent Directions: Django](https://openreceive.org/agent-directions/django.md): self-contained agent directions, quickstart included
-- [Agent Directions: Rails](https://openreceive.org/agent-directions/rails.md): self-contained agent directions, quickstart included
-- [Agent Directions: PHP](https://openreceive.org/agent-directions/php.md): self-contained agent directions, quickstart included
-- [Agent Directions: Laravel](https://openreceive.org/agent-directions/laravel.md): self-contained agent directions, quickstart included
-- [Agent Directions: BTCPay Server](https://openreceive.org/agent-directions/btcpay.md): self-contained agent directions, quickstart included
-- [Agent directions (WordPress + WooCommerce)](https://openreceive.org/agent-directions/woocommerce.md): self-contained agent directions, quickstart included
+- [Agent Directions: Node.js](https://openreceive.org/agent-directions/node/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Fastify](https://openreceive.org/agent-directions/fastify/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Next.js](https://openreceive.org/agent-directions/next/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: FastAPI](https://openreceive.org/agent-directions/fastapi/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Django](https://openreceive.org/agent-directions/django/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Rails](https://openreceive.org/agent-directions/rails/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: PHP](https://openreceive.org/agent-directions/php/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Laravel](https://openreceive.org/agent-directions/laravel/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md): self-contained agent directions, quickstart included
+- [Agent directions (WordPress + WooCommerce)](https://openreceive.org/agent-directions/woocommerce/full.md): self-contained agent directions, quickstart included
 
 ## Guides
 

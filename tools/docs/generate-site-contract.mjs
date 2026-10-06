@@ -24,6 +24,7 @@ import path from "node:path";
 import { OPENRECEIVE_DEMOS } from "../shared/demo-catalog.mjs";
 import {
   AGENT_PAYLOAD_PATHS,
+  agentFullPath,
   markdownTwin,
   SITE_OWNED_PATHS,
   SITE_REDIRECTS,
@@ -331,9 +332,10 @@ const manifest = JSON.parse(readFileSync(path.join(root, "docs/manifest.json"), 
 const release = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
 const bySlug = new Map(manifest.docs.map((doc) => [doc.slug, doc]));
 const agentsPage = readFileSync(path.join(root, "docs/site/agents.md"), "utf8");
-for (const payloadPath of AGENT_PAYLOAD_PATHS) {
-  if (!agentsPage.includes(`https://openreceive.org${payloadPath}`)) {
-    throw new Error(`docs/site/agents.md must link every agent payload: missing ${payloadPath}`);
+// The page offers the payloads to copy and paste, so it links the full files.
+for (const fullPath of AGENT_PAYLOAD_PATHS.map(agentFullPath)) {
+  if (!agentsPage.includes(`https://openreceive.org${fullPath}`)) {
+    throw new Error(`docs/site/agents.md must link every agent payload: missing ${fullPath}`);
   }
 }
 
@@ -499,6 +501,7 @@ const frameworks = FRAMEWORKS.map((framework) => {
     quickstart_title: quickstart.title,
     agent_stack: row.agent_stack,
     agent_payload_path: payloadPath,
+    agent_full_path: agentFullPath(payloadPath),
     adapter_package: row.adapter_package,
     install: row.install,
     requires: row.requires,
@@ -510,19 +513,38 @@ const frameworks = FRAMEWORKS.map((framework) => {
   };
 });
 
-// The copy-button payloads are served as raw markdown as well as copied, so an
-// agent that CAN fetch has one URL to fetch and everyone else pastes the same
-// bytes.
-const copyButton = AGENT_PAYLOADS.map(({ path: urlPath, source, stack }) => ({
-  path: urlPath,
-  source,
-  kind: "agent-directions-payload",
-  stack,
-  content_type: "text/markdown; charset=utf-8",
-  bytes: statSync(path.join(root, source)).size,
-  copy_button: true,
-  self_contained: true,
-}));
+// Each stack publishes two raw-markdown files (contract v7). The URL people
+// paste, `/agent-directions/<stack>.md`, is a cover a few hundred bytes long
+// whose one instruction is to download the full directions with the shell; the
+// full directions are at `full_path`. The copy button copies the full file, so
+// a paste is still complete with no network at all.
+const copyButton = AGENT_PAYLOADS.flatMap(({ path: urlPath, source, stack }) => {
+  const fullPath = agentFullPath(urlPath);
+  const cover = `docs/agents/cover/${stack}.md`;
+  return [
+    {
+      path: urlPath,
+      source: cover,
+      kind: "agent-directions-cover",
+      stack,
+      content_type: "text/markdown; charset=utf-8",
+      bytes: statSync(path.join(root, cover)).size,
+      copy_button: false,
+      self_contained: false,
+      full_path: fullPath,
+    },
+    {
+      path: fullPath,
+      source,
+      kind: "agent-directions-payload",
+      stack,
+      content_type: "text/markdown; charset=utf-8",
+      bytes: statSync(path.join(root, source)).size,
+      copy_button: true,
+      self_contained: true,
+    },
+  ];
+});
 
 // Redirects must land directly on a declared page and cannot shadow content.
 const pagePaths = new Set([
@@ -565,8 +587,14 @@ const contract = {
   // demo catalog and the filesystem. A bump because the site's landing
   // template reads the table instead of a hand-kept list: a site on v4 has
   // no framework pages, and one that half-read v5 would render a page for a
-  // framework whose payload it does not serve.
-  contract_version: 6,
+  // framework whose payload it does not serve. v7 turns each
+  // /agent-directions/<stack>.md into a cover (kind `agent-directions-cover`)
+  // and moves the full directions to /agent-directions/<stack>/full.md
+  // (`full_path`, and `agent_full_path` on each framework row), which is what
+  // the copy button copies. A bump because a site on v6 would serve no full
+  // file, leaving every cover's curl line a 404, and its copy button would
+  // copy the cover.
+  contract_version: 7,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.
@@ -576,7 +604,8 @@ const contract = {
   how_to_update: "docs/internal/site-build.md",
   publish: [...publish, ...copyButton],
   // The framework landing pages (contract v5). Render one page per row at
-  // /integrations/<id>; the copy button copies `agent_payload_path`, the
+  // /integrations/<id>; the copy button copies `agent_full_path`, a link for
+  // an agent to follow is `agent_payload_path` (the cover), the
   // "read the guide" link is `quickstart_path`, the "finished example" link
   // is `example_url`. `video` is null until a speed-run exists (hide the
   // slot), an absolute URL, or an `assets[]` path to serve. When
@@ -643,5 +672,5 @@ if (!check && current !== serialized) writeFileSync(absolute, serialized);
 
 console.log(
   `${check ? "Checked" : "Wrote"} ${TARGET}: ${publish.length} routes, ` +
-    `${copyButton.length} copy payloads, ${frameworks.length} frameworks, ${servedAssets.length} assets, ${contract.never_publish.length} never-publish.`,
+    `${copyButton.filter((entry) => entry.copy_button).length} copy payloads, ${copyButton.filter((entry) => !entry.copy_button).length} covers, ${frameworks.length} frameworks, ${servedAssets.length} assets, ${contract.never_publish.length} never-publish.`,
 );

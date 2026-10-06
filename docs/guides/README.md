@@ -45,18 +45,20 @@ Recipes: [React + Material UI](../recipes/react-material-ui.md),
 
 Building this with a coding agent? Give it one of the agent-directions
 payloads instead of a reading list:
-[Node (Express)](https://openreceive.org/agent-directions/node.md),
-[Fastify](https://openreceive.org/agent-directions/fastify.md),
-[Next.js](https://openreceive.org/agent-directions/next.md),
-[FastAPI](https://openreceive.org/agent-directions/fastapi.md),
-[Django](https://openreceive.org/agent-directions/django.md),
-[Rails](https://openreceive.org/agent-directions/rails.md),
-[PHP](https://openreceive.org/agent-directions/php.md),
-[Laravel](https://openreceive.org/agent-directions/laravel.md),
-[WooCommerce](https://openreceive.org/agent-directions/woocommerce.md) or
-[BTCPay Server](https://openreceive.org/agent-directions/btcpay.md).
+[Node (Express)](https://openreceive.org/agent-directions/node/full.md),
+[Fastify](https://openreceive.org/agent-directions/fastify/full.md),
+[Next.js](https://openreceive.org/agent-directions/next/full.md),
+[FastAPI](https://openreceive.org/agent-directions/fastapi/full.md),
+[Django](https://openreceive.org/agent-directions/django/full.md),
+[Rails](https://openreceive.org/agent-directions/rails/full.md),
+[PHP](https://openreceive.org/agent-directions/php/full.md),
+[Laravel](https://openreceive.org/agent-directions/laravel/full.md),
+[WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) or
+[BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md).
 These are the exact files the site's copy button copies. In this repo they live
 in `docs/agents/`. Each payload contains Step 0 (the rules that no API call can
 state for itself) and the full matching quickstart. It works pasted into an
 editor with no network access. All payloads are generated. To change one, edit
-`docs/agents/src/<stack>.md` and run `npm run build:docs`.
+`docs/agents/src/<stack>.md` and run `npm run build:docs`. To hand an
+agent a link instead, drop `/full` from the URL: that short page tells it to
+download the full file with its shell.

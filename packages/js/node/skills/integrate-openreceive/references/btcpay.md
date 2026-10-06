@@ -1,8 +1,10 @@
+This is the full file; follow it from Step 0.
+
 # OpenReceive agent directions (BTCPay Server)
 
 ```sh
 # READ THIS FIRST: this file is 12 KB and a summary drops required steps. Download it whole:
-curl -fsSL https://openreceive.org/agent-directions/btcpay.md
+curl -fsSL https://openreceive.org/agent-directions/btcpay/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
 

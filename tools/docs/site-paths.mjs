@@ -55,8 +55,12 @@ export const MARKDOWN_TWINNED_SITE_PAGES = [
   "/wordpress",
 ];
 
-// The copy-button payload URLs. generate-site-contract.mjs owns their sources;
-// this list only makes them servable to the link check below.
+// The agent-directions URLs people paste and the videos show. Since contract
+// v7 each is a cover page a few hundred bytes long whose one instruction is to
+// download the full directions at agentFullPath() with the shell: a web-fetch
+// tool hands the agent another model's rewrite of a page, and a rewrite of a
+// long page drops the steps that matter. generate-site-contract.mjs owns the
+// sources; these lists only make the paths servable to the link check below.
 export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/node.md",
   "/agent-directions/fastify.md",
@@ -70,16 +74,20 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/woocommerce.md",
 ];
 
+/** The full directions behind a cover: what the copy button copies and the cover's curl fetches. */
+export const agentFullPath = (payloadPath) => payloadPath.replace(/\.md$/, "/full.md");
+export const AGENT_FULL_PATHS = AGENT_PAYLOAD_PATHS.map(agentFullPath);
+
 /**
  * Whether openreceive.org serves this pathname: a site-owned path, an agent
- * payload, a `/guides/<slug>` page for a public manifest slug, or the `.md`
+ * cover or full payload, a `/guides/<slug>` page for a public manifest slug, or the `.md`
  * markdown twin of either. Shared by every generator that emits an
  * openreceive.org URL, so a link that would 404 fails the build in one place.
  */
 export function isServablePath(pathname, publicSlugs) {
   if (SITE_OWNED_PATHS.includes(pathname)) return true;
   if (SITE_REDIRECTS.some((redirect) => redirect.from === pathname)) return true;
-  if (AGENT_PAYLOAD_PATHS.includes(pathname)) return true;
+  if (AGENT_PAYLOAD_PATHS.includes(pathname) || AGENT_FULL_PATHS.includes(pathname)) return true;
   const isTwin = pathname.endsWith(MARKDOWN_SUFFIX);
   const page = isTwin ? pathname.slice(0, -MARKDOWN_SUFFIX.length) : pathname;
   if (isTwin && MARKDOWN_TWINNED_SITE_PAGES.includes(page)) return true;

@@ -13,7 +13,12 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { AGENT_PAYLOAD_PATHS, isServablePath, MARKDOWN_SUFFIX } from "./site-paths.mjs";
+import {
+  AGENT_PAYLOAD_PATHS,
+  agentFullPath,
+  isServablePath,
+  MARKDOWN_SUFFIX,
+} from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -33,7 +38,8 @@ const payloads = AGENT_PAYLOAD_PATHS.map((urlPath) => {
     (entry) => entry.public && entry.source_path === `docs/agents/${stack}.md`,
   );
   if (!doc) throw new Error(`Missing public agent directions for ${stack}`);
-  return { ...doc, urlPath };
+  // The full file, not the cover: an agent reading this index fetches what it links.
+  return { ...doc, urlPath: agentFullPath(urlPath) };
 });
 const LISTED_ELSEWHERE = new Set([
   "guides",

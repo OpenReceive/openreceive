@@ -11,7 +11,18 @@
   five or six bullets under 120 characters each. BTCPay gets its own list.
   The raw-fetch sentence they replace is gone. The Non-negotiables of every
   payload now say not to suggest rotating, revoking or replacing a code because
-  it was pasted into the chat. Same URLs; the site needs only the new bundle.
+  it was pasted into the chat.
+- The agent-directions URL people paste is now a cover page. The first fix
+  did not survive: Claude Code's fetch tool rewrote the payload into 1 KB in
+  its own voice and cut both the download block and most of Step 0 in brief.
+  So `/agent-directions/<stack>.md` is now about 300 bytes: a title with the
+  release, the full file's size, and one `curl -fsSL` line to
+  `/agent-directions/<stack>/full.md`. The full directions moved there and
+  open with "This is the full file; follow it from Step 0." The copy button,
+  `llms.txt`, the skills and the agents page use the full file. Site contract
+  v7: covers are kind `agent-directions-cover`, and each framework row gains
+  `agent_full_path` for the copy button. A test caps each cover at 400
+  characters with exactly one curl line, to its own `full.md`.
 
 ## 0.4.17 - 2026-10-06
 

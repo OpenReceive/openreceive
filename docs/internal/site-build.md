@@ -95,6 +95,22 @@ contract is how a payload ends up linking a page nobody serves.
   `adapter_package`. The WordPress plugin overview is `/wordpress` (raw twin
   `/wordpress.md`), with its screenshot in `assets[]`. These WordPress rows use
   the existing v6 shape, so they are not a new contract version.
+- **v7**: each `/agent-directions/<stack>.md` becomes a **cover** (kind
+  `agent-directions-cover`, about 300 bytes), and the full directions move to
+  `/agent-directions/<stack>/full.md` (kind `agent-directions-payload`, named
+  by the cover's `full_path` and by each framework row's new
+  `agent_full_path`). The cover holds a title with the release, the full
+  file's size, one `curl -fsSL` line to `full_path`, and one sentence saying
+  to do that first. The reason is the bare-link prompt ("Follow these
+  directions: https://openreceive.org/agent-directions/woocommerce.md"). A
+  web-fetch tool such as Claude Code's returns another model's rewrite of the
+  page, not the page. A rewrite of the 18 KB file dropped Step 0, and even a
+  download block at its top. A rewrite of a page with one instruction keeps
+  it. The pasted URL is unchanged, so links already in prompts, videos and
+  editors keep working. The copy button now copies `agent_full_path`, so a
+  paste is still complete without a network. The version bumps because a site
+  on v6 would serve no `full.md`, which turns every cover's one instruction
+  into a 404, and its copy button would copy the cover.
 
 `release_version` changes with every library release and says nothing about the
 shape of this file. `contract_version` changes only when the site has to do
@@ -123,8 +139,12 @@ something new.
    `text/markdown; charset=utf-8`, no chrome. This is required. The directions
    link it, so a site that publishes only `path` ships a reading list that
    resolves to blank pages.
-5. Serve every `agent-directions-payload` entry as **raw markdown**. Use the
-   same bytes behind the copy button.
+5. Serve every `agent-directions-payload` entry (`/agent-directions/<stack>/full.md`)
+   and every `agent-directions-cover` entry (`/agent-directions/<stack>.md`)
+   as **raw markdown**: the source's exact bytes, `text/markdown`, no chrome.
+   The copy button copies the payload. Never copy a cover, and never add
+   anything to one: every extra line competes with its curl line when a
+   fetch tool rewrites it.
 6. Serve every `agent_discovery.artifacts[]` entry **verbatim**: the named
    `source` file's exact bytes at `path`, with the given `content_type`. Do not
    render it or add chrome. Today there are two:
@@ -150,7 +170,9 @@ something new.
    keys, unreleased internals, forbidden-change lists.
 10. Render one landing page per `frameworks[]` row at `/integrations/<id>`:
     - the hero from `heading`
-    - the copy button on `agent_payload_path`
+    - the copy button on `agent_full_path`. Where the page shows a link or a
+      prompt for the user to give an agent ("Follow these directions: …"),
+      use `agent_payload_path`, the cover
     - the guide link on `quickstart_path`
     - the install line and `requires`
     - the example link on `example_url`
@@ -192,7 +214,7 @@ Private Rails implementation and deployment configuration stay in the site repo.
 ```
 
 The target renders the existing `frameworks[]` row with `id: "woocommerce"`
-and its `/agent-directions/woocommerce.md` copy payload. WordPress is an alias,
+and its `/agent-directions/woocommerce/full.md` copy payload. WordPress is an alias,
 so it adds no second framework row, quickstart, or agent payload. The `/wordpress`
 plugin overview and `/wordpress.md` raw README retain their existing routes.
 
@@ -253,6 +275,9 @@ contract:
 - Every copy-button payload matches its bundled source byte for byte and fits
   its recorded `bytes`. Copy buttons exist on every matching quickstart and
   `/integrations/<id>` page.
+- `curl -fsSL` of every cover returns its bundled source byte for byte (no
+  redirect to a page, no application shell), and `curl -fsSL` of its
+  `full_path` returns the payload.
 - Discovery artifacts and media match their source bytes and `content_type`.
   Each rendered page has the specified discovery and markdown alternate links.
 - Public search includes every page in `public-search-index.json` and no
@@ -277,7 +302,8 @@ contract:
 | `guide` | `/guides/<slug>` | Every public doc. `/guides` itself is the index (`docs/guides/README.md`). |
 | `api-docs` | `/api_docs` | Alias of `/guides/api-reference`. Kept because the directions and the site have always linked it. |
 | `agent-directions` | `/guides/agent-directions-<stack>` for every payload stack | The payload as a normal page, for people reading it. |
-| `agent-directions-payload` | `/agent-directions/<stack>.md` for every payload stack | The same bytes as `text/markdown`, for an agent told to fetch one URL. |
+| `agent-directions-cover` | `/agent-directions/<stack>.md` for every payload stack | The URL people paste. About 300 bytes of `text/markdown` whose one instruction is to `curl` the `full_path` (contract v7). |
+| `agent-directions-payload` | `/agent-directions/<stack>/full.md` for every payload stack | The full directions as `text/markdown`: the bytes the copy button copies and the cover's curl fetches. |
 | permanent redirect | `/integrations/wordpress` | `site_redirects[]`: HTTP 301 to `/integrations/woocommerce`, applied before the SPA fallback. |
 | framework page | `/integrations/<id>` | `frameworks[]` (contract v5; `php` and `python` families since v6). Not a `publish[]` entry, because the page is the site's own template rendered from the row. The row names which `publish[]` pages it links. |
 | `agents-page` | `/agents` | The entry point for coding agents (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
@@ -334,8 +360,9 @@ and already points at a `.md`, which is the point of them.
   `bytes` in the contract is what the button will copy. If a payload ever
   exceeds the budget, CI here fails before it reaches you.
 - Put the button on the matching quickstart page and on the framework landing
-  page (`frameworks[].agent_payload_path`). Label what it is: directions for a
-  coding agent, including the quickstart itself.
+  page (`frameworks[].agent_full_path`). Label what it is: directions for a
+  coding agent, including the quickstart itself. The cover at
+  `agent_payload_path` is for links, never for the button.
 
 ## `/llms.txt`, and the recommended `/llms-full.txt`
 
@@ -363,6 +390,9 @@ pasted:
   So it is the path most likely to go quietly missing, and its absence is the
   hardest to notice from a browser.
 - the `/api_docs` alias
+- an `/agent-directions/<stack>.md` cover or its `/agent-directions/<stack>/full.md`.
+  The covers are in prompts and videos; the full files are what each cover's
+  curl line fetches.
 - the `/btcpay` page and its `/btcpay.md` twin, and any `/assets/` path the
   README embeds. People also read the README on GitHub, so the site is not its
   only reader. But BTCPay's plugin directory links the page as the plugin's

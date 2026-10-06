@@ -14,6 +14,14 @@ const dir = new URL("../docs/agents/", import.meta.url);
 const payloads = readdirSync(dir)
   .filter((name) => name.endsWith(".md"))
   .map((name) => ({ stack: name.slice(0, -3), text: readFileSync(new URL(name, dir), "utf8") }));
+const coverDir = new URL("cover/", dir);
+const covers = readdirSync(coverDir)
+  .filter((name) => name.endsWith(".md"))
+  .map((name) => ({
+    stack: name.slice(0, -3),
+    text: readFileSync(new URL(name, coverDir), "utf8"),
+  }));
+const fullUrl = (stack) => `https://openreceive.org/agent-directions/${stack}/full.md`;
 
 function stepZero(text) {
   const match = text.match(/^## Step 0\b[^\n]*\n([\s\S]*?)(?=^## )/m);
@@ -21,11 +29,12 @@ function stepZero(text) {
 }
 
 // Claude Code's web tool summarized a 17 KB payload to 1.6 KB, keeping code
-// blocks and short bullets and dropping the prose that held Step 0. So the
-// download line has to be the first thing after the title, inside a code
-// block, and Step 0 has to be restated as bullets short enough to be quoted.
+// blocks and short bullets and dropping the prose that held Step 0. So the full
+// file names itself as such, then puts the download line first after the title,
+// inside a code block, and restates Step 0 as bullets short enough to be quoted.
 function opening(text) {
-  const [title, ...rest] = text.split("\n");
+  const [first, blank, title, ...rest] = text.split("\n");
+  assert.equal(`${first}|${blank}`, "This is the full file; follow it from Step 0.|");
   const body = rest.join("\n").trimStart();
   const block = body.match(/^```sh\n([\s\S]*?)\n```\n/)?.[1] ?? "";
   const brief = body.match(/^\*\*Step 0 in brief\*\*[^\n]*\n\n((?:- [^\n]*\n)+)/m)?.[1] ?? "";
@@ -54,7 +63,7 @@ test("every payload opens with the download block, then Step 0 in brief", () => 
     const { title, block, brief } = opening(text);
     assert.match(title, /^# OpenReceive agent directions/, stack);
     assert.ok(
-      block.includes(`\ncurl -fsSL https://openreceive.org/agent-directions/${stack}.md\n`),
+      block.includes(`\ncurl -fsSL ${fullUrl(stack)}\n`),
       `${stack}: the first block after the title is not the download of this file`,
     );
     const stated = Number(block.match(/this file is (\d+) KB/)?.[1]);
@@ -82,6 +91,38 @@ test("every payload opens with the download block, then Step 0 in brief", () => 
     assert.ok(
       text.indexOf("**Step 0 in brief**") < text.indexOf("These directions describe OpenReceive"),
       `${stack}: prose before the brief`,
+    );
+  }
+});
+
+// A rewrite of the full file kept "two codes, one per message" and cut the curl
+// block. The URL people paste is therefore a cover with nothing to choose from
+// but the curl line to the full file.
+test("every payload has a cover: one curl line to its full.md and nothing else to rewrite", () => {
+  assert.deepEqual(
+    covers.map(({ stack }) => stack).sort(),
+    payloads.map(({ stack }) => stack).sort(),
+    "one cover per payload",
+  );
+  for (const { stack, text } of covers) {
+    assert.ok(text.length <= 400, `${stack}: cover is ${text.length} characters`);
+    const curls = text.split("\n").filter((line) => line.includes("curl -fsSL"));
+    assert.equal(curls.length, 1, `${stack}: ${curls.length} curl lines`);
+    assert.equal(curls[0].trim(), `curl -fsSL ${fullUrl(stack)}`, stack);
+    assert.doesNotMatch(text, /^\s*[-*] /m, `${stack}: cover has a bullet`);
+    const full = payloads.find((payload) => payload.stack === stack).text;
+    const fullRelease = full.match(/These directions describe OpenReceive (\S+)\./)?.[1];
+    assert.equal(fullRelease, release, `${stack}: full file release`);
+    assert.match(
+      text,
+      new RegExp(`^# OpenReceive agent directions: .+ \\(${fullRelease}\\)\n`),
+      stack,
+    );
+    const stated = Number(text.match(/These directions are (\d+) KB\./)?.[1]);
+    assert.equal(
+      stated,
+      Math.round(Buffer.byteLength(full, "utf8") / 1000),
+      `${stack}: stated size`,
     );
   }
 });

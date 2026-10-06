@@ -1,5 +1,5 @@
 {
-  "contract_version": 6,
+  "contract_version": 7,
   "release_version": "0.4.17",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 3360
+      "bytes": 3537
     },
     {
       "path": "/guides/quickstart-node",
@@ -334,7 +334,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 32859
+      "bytes": 32911
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -344,7 +344,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 34364
+      "bytes": 34416
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -354,7 +354,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 35410
+      "bytes": 35462
     },
     {
       "path": "/guides/agent-directions-django",
@@ -364,7 +364,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 41860
+      "bytes": 41912
     },
     {
       "path": "/guides/agent-directions-next",
@@ -374,7 +374,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 36702
+      "bytes": 36754
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -384,7 +384,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 38413
+      "bytes": 38465
     },
     {
       "path": "/guides/agent-directions-php",
@@ -394,7 +394,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 37110
+      "bytes": 37162
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -404,7 +404,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 40476
+      "bytes": 40528
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -414,7 +414,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "category": "quickstart",
-      "bytes": 11998
+      "bytes": 12050
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -434,7 +434,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 17863
+      "bytes": 17915
     },
     {
       "path": "/api_docs",
@@ -455,7 +455,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 3665
+      "bytes": 3846
     },
     {
       "path": "/wordpress",
@@ -485,101 +485,211 @@
     },
     {
       "path": "/agent-directions/woocommerce.md",
+      "source": "docs/agents/cover/woocommerce.md",
+      "kind": "agent-directions-cover",
+      "stack": "woocommerce",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 311,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/woocommerce/full.md"
+    },
+    {
+      "path": "/agent-directions/woocommerce/full.md",
       "source": "docs/agents/woocommerce.md",
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 17863,
+      "bytes": 17915,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/node.md",
+      "source": "docs/agents/cover/node.md",
+      "kind": "agent-directions-cover",
+      "stack": "node",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 288,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/node/full.md"
+    },
+    {
+      "path": "/agent-directions/node/full.md",
       "source": "docs/agents/node.md",
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 32859,
+      "bytes": 32911,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/fastify.md",
+      "source": "docs/agents/cover/fastify.md",
+      "kind": "agent-directions-cover",
+      "stack": "fastify",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 291,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/fastify/full.md"
+    },
+    {
+      "path": "/agent-directions/fastify/full.md",
       "source": "docs/agents/fastify.md",
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34364,
+      "bytes": 34416,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/next.md",
+      "source": "docs/agents/cover/next.md",
+      "kind": "agent-directions-cover",
+      "stack": "next",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 288,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/next/full.md"
+    },
+    {
+      "path": "/agent-directions/next/full.md",
       "source": "docs/agents/next.md",
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36702,
+      "bytes": 36754,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/fastapi.md",
+      "source": "docs/agents/cover/fastapi.md",
+      "kind": "agent-directions-cover",
+      "stack": "fastapi",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 291,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/fastapi/full.md"
+    },
+    {
+      "path": "/agent-directions/fastapi/full.md",
       "source": "docs/agents/fastapi.md",
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35410,
+      "bytes": 35462,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/django.md",
+      "source": "docs/agents/cover/django.md",
+      "kind": "agent-directions-cover",
+      "stack": "django",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 289,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/django/full.md"
+    },
+    {
+      "path": "/agent-directions/django/full.md",
       "source": "docs/agents/django.md",
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41860,
+      "bytes": 41912,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/rails.md",
+      "source": "docs/agents/cover/rails.md",
+      "kind": "agent-directions-cover",
+      "stack": "rails",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 287,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/rails/full.md"
+    },
+    {
+      "path": "/agent-directions/rails/full.md",
       "source": "docs/agents/rails.md",
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38413,
+      "bytes": 38465,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/php.md",
+      "source": "docs/agents/cover/php.md",
+      "kind": "agent-directions-cover",
+      "stack": "php",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 283,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/php/full.md"
+    },
+    {
+      "path": "/agent-directions/php/full.md",
       "source": "docs/agents/php.md",
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37110,
+      "bytes": 37162,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/laravel.md",
+      "source": "docs/agents/cover/laravel.md",
+      "kind": "agent-directions-cover",
+      "stack": "laravel",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 291,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/laravel/full.md"
+    },
+    {
+      "path": "/agent-directions/laravel/full.md",
       "source": "docs/agents/laravel.md",
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40476,
+      "bytes": 40528,
       "copy_button": true,
       "self_contained": true
     },
     {
       "path": "/agent-directions/btcpay.md",
+      "source": "docs/agents/cover/btcpay.md",
+      "kind": "agent-directions-cover",
+      "stack": "btcpay",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 296,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/btcpay/full.md"
+    },
+    {
+      "path": "/agent-directions/btcpay/full.md",
       "source": "docs/agents/btcpay.md",
       "kind": "agent-directions-payload",
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 11998,
+      "bytes": 12050,
       "copy_button": true,
       "self_contained": true
     }
@@ -595,6 +705,7 @@
       "quickstart_title": "WordPress + WooCommerce Quickstart",
       "agent_stack": "woocommerce",
       "agent_payload_path": "/agent-directions/woocommerce.md",
+      "agent_full_path": "/agent-directions/woocommerce/full.md",
       "adapter_package": "openreceive/wordpress",
       "install": "Plugins → Add New → Upload Plugin",
       "requires": "WordPress ≥ 6.6, WooCommerce ≥ 9, PHP ≥ 8.2, GMP and sodium",
@@ -614,6 +725,7 @@
       "quickstart_title": "Express Quickstart (Node)",
       "agent_stack": "node",
       "agent_payload_path": "/agent-directions/node.md",
+      "agent_full_path": "/agent-directions/node/full.md",
       "adapter_package": "@openreceive/express",
       "install": "npm install @openreceive/express @openreceive/react",
       "requires": "Node ≥ 22",
@@ -633,6 +745,7 @@
       "quickstart_title": "Fastify Quickstart",
       "agent_stack": "fastify",
       "agent_payload_path": "/agent-directions/fastify.md",
+      "agent_full_path": "/agent-directions/fastify/full.md",
       "adapter_package": "@openreceive/fastify",
       "install": "npm install @openreceive/fastify @openreceive/react",
       "requires": "Node ≥ 22",
@@ -652,6 +765,7 @@
       "quickstart_title": "Next.js Quickstart",
       "agent_stack": "next",
       "agent_payload_path": "/agent-directions/next.md",
+      "agent_full_path": "/agent-directions/next/full.md",
       "adapter_package": "@openreceive/next",
       "install": "npm install @openreceive/next @openreceive/react",
       "requires": "Node ≥ 22, Next.js ≥ 15 (App Router)",
@@ -671,6 +785,7 @@
       "quickstart_title": "Rails Quickstart",
       "agent_stack": "rails",
       "agent_payload_path": "/agent-directions/rails.md",
+      "agent_full_path": "/agent-directions/rails/full.md",
       "adapter_package": "openreceive-rails",
       "install": "bundle add openreceive-rails",
       "requires": "Ruby ≥ 3.2, Rails ≥ 8.0",
@@ -690,6 +805,7 @@
       "quickstart_title": "BTCPay Server Quickstart",
       "agent_stack": "btcpay",
       "agent_payload_path": "/agent-directions/btcpay.md",
+      "agent_full_path": "/agent-directions/btcpay/full.md",
       "adapter_package": "BTCPayServer.Plugins.OpenReceive",
       "install": "Plugins (the plug icon, top right) → Plugin Directory → search \"openreceive\" → Install",
       "requires": "BTCPay Server ≥ 2.4.4",
@@ -709,6 +825,7 @@
       "quickstart_title": "Django Quickstart",
       "agent_stack": "django",
       "agent_payload_path": "/agent-directions/django.md",
+      "agent_full_path": "/agent-directions/django/full.md",
       "adapter_package": "openreceive[django]",
       "install": "pip install \"openreceive[django]\"",
       "requires": "Python ≥ 3.10, Django ≥ 5.2",
@@ -728,6 +845,7 @@
       "quickstart_title": "FastAPI Quickstart",
       "agent_stack": "fastapi",
       "agent_payload_path": "/agent-directions/fastapi.md",
+      "agent_full_path": "/agent-directions/fastapi/full.md",
       "adapter_package": "openreceive[fastapi]",
       "install": "pip install \"openreceive[fastapi]\"",
       "requires": "Python ≥ 3.10, FastAPI ≥ 0.115",
@@ -747,6 +865,7 @@
       "quickstart_title": "Laravel Quickstart",
       "agent_stack": "laravel",
       "agent_payload_path": "/agent-directions/laravel.md",
+      "agent_full_path": "/agent-directions/laravel/full.md",
       "adapter_package": "openreceive/laravel",
       "install": "composer require openreceive/laravel",
       "requires": "PHP ≥ 8.2 (64-bit), Laravel 11 or 12, ext-gmp",
@@ -766,6 +885,7 @@
       "quickstart_title": "PHP Quickstart (plain PHP)",
       "agent_stack": "php",
       "agent_payload_path": "/agent-directions/php.md",
+      "agent_full_path": "/agent-directions/php/full.md",
       "adapter_package": "openreceive/openreceive",
       "install": "composer require openreceive/openreceive nyholm/psr7 nyholm/psr7-server",
       "requires": "PHP ≥ 8.2 (64-bit), ext-gmp",
@@ -978,7 +1098,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5211
+        "bytes": 5261
       },
       {
         "path": "/openapi.yaml",

@@ -27,9 +27,9 @@
 // `--check` fails the gate when a committed payload is stale, oversized, or
 // links somewhere the site does not publish.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { isServablePath, MARKDOWN_SUFFIX, markdownTwin } from "./site-paths.mjs";
+import { agentFullPath, isServablePath, MARKDOWN_SUFFIX, markdownTwin } from "./site-paths.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -317,21 +317,44 @@ export function inlineGuide(markdown, publicSlugs) {
   );
 }
 
-// A summarizing fetch tool hands the agent a digest, not the file. Claude
-// Code's web tool turned the 17 KB WooCommerce payload into 1.6 KB: every code
-// block verbatim and the short bullets kept, the prose and blockquotes gone,
-// Step 0 with them. So the payload opens with what a digest keeps: a code block
-// saying to download the file whole, then Step 0 in brief. The stated size lets
-// an agent holding a digest see that it is one. The skip line is there because
-// the same bytes are pasted by the site's copy button and mirrored into the
-// skills, and those readers already have the whole file.
+// A web-fetch tool hands the agent another model's rewrite of a page, not the
+// page. Claude Code's turned the 17 KB WooCommerce payload into 1.6 KB with
+// Step 0 gone; with a download block and Step 0 in brief at the top, the next
+// rewrite (1 KB, in Claude Code's own voice) cut both. The more a page says,
+// the more the rewrite picks and chooses. So the URL people paste,
+// /agent-directions/<stack>.md, serves COVER below: a title, the size, and one
+// curl line to the full file. A rewrite of a page that short has nothing else
+// to keep. The full file opens with FULL_FILE_LINE so an agent that lands on it
+// does not go looking for a fuller one, and keeps the download block (pointed
+// at itself, for an agent that web-fetched it anyway) and Step 0 in brief. The
+// block's skip line is there because the same bytes are pasted by the site's
+// copy button and mirrored into the skills, whose readers have the whole file.
+const fullUrl = (stack) =>
+  `https://openreceive.org${agentFullPath(`/agent-directions/${stack}.md`)}`;
+
+const FULL_FILE_LINE = "This is the full file; follow it from Step 0.";
+
 const HEADER = (stack, kilobytes) =>
   [
     "```sh",
     `# READ THIS FIRST: this file is ${kilobytes} KB and a summary drops required steps. Download it whole:`,
-    `curl -fsSL https://openreceive.org/agent-directions/${stack}.md`,
+    `curl -fsSL ${fullUrl(stack)}`,
     "# Skip the download only if you already have all of it: pasted, read from disk or fetched raw.",
     "```",
+  ].join("\n");
+
+// Every line here competes with the curl line in a rewrite: add nothing.
+// tests/agent-directions.test.mjs holds it under 400 characters.
+const COVER = (stack, name, kilobytes) =>
+  [
+    `# OpenReceive agent directions: ${name} (${RELEASE})`,
+    "",
+    `These directions are ${kilobytes} KB. Download them with your shell and follow them from Step 0:`,
+    "",
+    `    curl -fsSL ${fullUrl(stack)}`,
+    "",
+    "Do this before anything else. A web-fetch summary of them drops required steps.",
+    "",
   ].join("\n");
 
 function render(stack, brief, directions, quickstart, quickstartSlug, publicSlugs, kilobytes) {
@@ -345,6 +368,8 @@ function render(stack, brief, directions, quickstart, quickstartSlug, publicSlug
     `These directions describe OpenReceive ${RELEASE}.`,
   ].join("\n");
   return [
+    FULL_FILE_LINE,
+    "",
     directions
       .trim()
       .replace(/^# (.*)$/m, (title) => `${title}\n\n${top}`)
@@ -369,7 +394,7 @@ function renderSized(...args) {
   for (;;) {
     const payload = render(...args, kilobytes);
     const actual = Math.round(Buffer.byteLength(payload, "utf8") / 1000);
-    if (actual === kilobytes) return payload;
+    if (actual === kilobytes) return { payload, kilobytes };
     kilobytes = actual;
   }
 }
@@ -416,17 +441,43 @@ const { publicSlugs } = readManifestSlugs();
 const problems = [];
 const built = [];
 
+/** Writes `content` to `target`, or under --check reports it stale. */
+function sync(target, content) {
+  const absolute = path.join(root, target);
+  const current = (() => {
+    try {
+      return readFileSync(absolute, "utf8");
+    } catch {
+      return null;
+    }
+  })();
+  if (current === content) return;
+  if (check) problems.push(`${target} is stale. Run \`npm run generate:agent-directions\`.`);
+  else {
+    mkdirSync(path.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, content);
+  }
+}
+
 for (const { stack, source, quickstart, brief } of STACKS) {
   const target = `docs/agents/${stack}.md`;
+  const coverTarget = `docs/agents/cover/${stack}.md`;
   const quickstartSlug = path.basename(quickstart, ".md");
-  const payload = renderSized(
+  const directions = readFileSync(path.join(root, source), "utf8");
+  const name = directions.match(/^# OpenReceive agent directions \((.+)\)$/m)?.[1];
+  if (name === undefined) {
+    problems.push(`${source}: the title must read "# OpenReceive agent directions (<platform>)".`);
+    continue;
+  }
+  const { payload, kilobytes } = renderSized(
     stack,
     brief,
-    readFileSync(path.join(root, source), "utf8"),
+    directions,
     readFileSync(path.join(root, quickstart), "utf8"),
     quickstartSlug,
     publicSlugs,
   );
+  const cover = COVER(stack, name, kilobytes);
 
   const bytes = Buffer.byteLength(payload, "utf8");
   if (bytes > BUDGET_BYTES) {
@@ -456,7 +507,7 @@ for (const { stack, source, quickstart, brief } of STACKS) {
     );
   }
 
-  const unserved = unservedUrls(payload, publicSlugs);
+  const unserved = unservedUrls(payload + cover, publicSlugs);
   if (unserved.length > 0) {
     problems.push(
       `${target}: links to openreceive.org ${unserved.join(", ")}, which is neither a public ` +
@@ -464,23 +515,9 @@ for (const { stack, source, quickstart, brief } of STACKS) {
     );
   }
 
-  const absolute = path.join(root, target);
-  const current = (() => {
-    try {
-      return readFileSync(absolute, "utf8");
-    } catch {
-      return null;
-    }
-  })();
-
-  if (check) {
-    if (current !== payload) {
-      problems.push(`${target} is stale. Run \`npm run generate:agent-directions\`.`);
-    }
-  } else if (current !== payload) {
-    writeFileSync(absolute, payload);
-  }
-  built.push({ target, bytes, source, quickstart });
+  sync(target, payload);
+  sync(coverTarget, cover);
+  built.push({ target, bytes, source, quickstart, coverTarget, coverBytes: cover.length });
 }
 
 if (problems.length > 0) {
@@ -488,9 +525,9 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-for (const { target, bytes } of built) {
+for (const { target, bytes, coverTarget, coverBytes } of built) {
   const percent = Math.round((bytes / BUDGET_BYTES) * 100);
   console.log(
-    `${check ? "Checked" : "Wrote"} ${target}: ${bytes} bytes (${percent}% of budget, ~${Math.round(bytes / 4000)}k tokens)`,
+    `${check ? "Checked" : "Wrote"} ${target}: ${bytes} bytes (${percent}% of budget, ~${Math.round(bytes / 4000)}k tokens) + ${coverTarget}: ${coverBytes} bytes`,
   );
 }

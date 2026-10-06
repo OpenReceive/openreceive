@@ -168,7 +168,10 @@ writeJson("dist/docs/search-index.json", {
 
 // The legacy index includes contributor docs. A site imports only this public
 // index, which also covers the agents page and both plugin README pages.
-const publicPages = contract.publish.filter((entry) => !entry.copy_button && !entry.alias_of);
+// Agent-directions covers are a curl line for an agent, not a page to find.
+const publicPages = contract.publish.filter(
+  (entry) => !entry.copy_button && !entry.alias_of && entry.kind !== "agent-directions-cover",
+);
 writeJson("dist/docs/public-search-index.json", {
   version: manifest.version,
   release_version: contract.release_version,
