@@ -99,6 +99,23 @@ version is independent of the npm/gem release version. A source version bump
 does not authorize submitting a Plugin Builder build or publishing the plugin;
 do either only when the user explicitly requests a BTCPay release.
 
+ALWAYS GIVE THE MAINTAINER THE APPROVAL LINKS. Pushing a release tag starts
+`Publish Gems`, `Publish PyPI` and `Publish Composer`, and each waits for a
+maintainer's click in the browser. Gems, PyPI, Packagist and the GitHub
+release all stall until then. As soon as the runs exist, list all three
+labelled run URLs (`https://github.com/OpenReceive/openreceive/actions/runs/<id>`)
+from:
+
+```sh
+gh run list --repo OpenReceive/openreceive --branch v<x.y.z> --json workflowName,status,url
+```
+
+Put them in the LAST message of the turn that pushed the tag. Text between tool
+calls does not count, because the maintainer may never see it. Repeat them at
+the end of every later release message until each run is approved, and name
+any stale run from an older tag that must not be approved. This step has been
+missed before; it is part of the release, not a courtesy.
+
 ## Testing
 
 Run demo application servers and their backing services in Docker. Builds,

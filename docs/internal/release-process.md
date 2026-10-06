@@ -209,10 +209,16 @@ Run from the repo root on a clean, current `master`.
    protection or use an administrator bypass to make a release proceed.
 
    ```sh
-   gh run list --workflow publish-gems.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
-   gh run list --workflow publish-pypi.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
-   gh run list --workflow publish-composer.yml -L 1 --json url,status --jq '.[0] | "\(.status) \(.url)"'
+   gh run list --repo OpenReceive/openreceive --branch v<x.y.z> --json workflowName,status,url
    ```
+
+   **Always hand the maintainer all three approval links.** This has been
+   missed before. An agent cutting the release lists the labelled URLs
+   (Gems / `rubygems`, PyPI / `pypi`, Composer / `packagist`) in the final
+   message of the turn that pushed the tag. A line between tool calls does not
+   count. It repeats them at the end of every later release message until each
+   run is approved, and names any stale run from an older tag that must not be
+   approved. `AGENTS.md` carries the same rule.
 
 7. Approve the gem publish through the protected `rubygems` environment.
    Check `GET /repos/OpenReceive/openreceive/actions/runs/<id>/pending_deployments`.
