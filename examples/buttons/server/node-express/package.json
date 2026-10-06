@@ -37,7 +37,7 @@
     "react-dom": "^19.2.7",
     "svelte": "^5.39.6",
     "vite": "^6.4.3",
-    "vue": "^3.5.22"
+    "vue": "^3.5.43"
   },
   "devDependencies": {
     "@openreceive/testkit": "0.4.15",
