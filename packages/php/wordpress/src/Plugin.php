@@ -209,7 +209,8 @@ final class Plugin
         try {
             $catalog = $provider->payInAssetCatalog();
         } catch (\Throwable $error) {
-            throw new \RuntimeException('did not answer (' . esc_html(Configuration::errorMessage($error)) . '). Checkout offers no swaps through it; check its LSC code.');
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Doctor text is plain for WP-CLI; the Doctor panel escapes each line when it prints HTML.
+            throw new \RuntimeException('did not answer (' . Configuration::errorMessage($error) . '). Checkout offers no swaps through it; check its LSC code.');
         }
         $offered = array_filter($catalog, static fn (array $row): bool => ($row['available'] ?? true) !== false);
         if ($offered === []) { throw new \RuntimeException('answered with no available assets. Checkout offers no swaps through it.'); }
@@ -230,9 +231,8 @@ final class Plugin
             return 'active';
         });
         $check('PHP extensions', static function (): string {
-            foreach (['gmp', 'sodium'] as $extension) {
-                if (!extension_loaded($extension)) { throw new \RuntimeException('Enable PHP ' . esc_html($extension) . ' in both web and WP-CLI runtimes.'); }
-            }
+            if (!extension_loaded('gmp')) { throw new \RuntimeException('Enable PHP gmp in both web and WP-CLI runtimes.'); }
+            if (!extension_loaded('sodium')) { throw new \RuntimeException('Enable PHP sodium in both web and WP-CLI runtimes.'); }
             return 'GMP and sodium available';
         });
         $check('Credentials', static function () use (&$lines): string {

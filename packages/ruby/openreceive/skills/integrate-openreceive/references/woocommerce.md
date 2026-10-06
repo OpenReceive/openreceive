@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (WordPress + WooCommerce)
 
 ```sh
-# READ THIS FIRST: this file is 21 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 22 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/woocommerce/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -146,9 +146,12 @@ wp openreceive test-invoice <order id>
 
 `test-invoice` goes through the same checkout route as the order-pay page. It
 prints the amount in sats, the BOLT11 invoice, the order-pay link and the
-methods that page offers, each swap asset marked available or not. If a swap
-method shows unavailable, run `wp openreceive doctor`: its "Swap provider" line
-names the problem. `test-invoice` and `doctor` are the whole checkout check.
+methods that page offers, each swap asset marked available or followed by the
+reason it is not. That reason is the answer; report it. "Below the provider
+minimum" or "above the provider maximum" is about this order's amount, not a
+fault: a small test order is often under a swap minimum. Only when the reason
+says the provider is unreachable does doctor's "Swap provider" line have more
+detail. `test-invoice` and `doctor` are the whole checkout check.
 
 Give the user the order-pay link, which opens the checkout on this same
 invoice, and the list of methods. Tell them the test order is theirs to delete.
@@ -383,7 +386,9 @@ wp openreceive test-invoice <order id>
 amount in sats, the Lightning invoice and the order-pay link, which opens the
 checkout on that invoice. It then lists the methods that page offers: Bitcoin
 Lightning, plus each swap asset with its network and whether it is available
-for this amount. Delete the test order when you are done.
+for this amount, with the reason when it is not. A small test order is often
+below a provider's minimum; that is the order's amount, not a fault. Delete the
+test order when you are done.
 
 ### Checkout and settlement
 
@@ -409,20 +414,20 @@ use that marker to finish it.
 While the checkout polls for status, it also asks the PHP engine to check the
 wallet for payments. The engine's shared database gate keeps these checks from
 running too often. Action Scheduler adds a safety net that runs every minute.
-On stores with little traffic, set up a system cron to run WordPress scheduled
-work. WP-Cron only runs on page visits, so on its own it cannot guarantee
-prompt settlement. You can also run these commands under a process manager:
+WP-Cron only runs on page visits, so on a store with little traffic that safety
+net waits for the next visitor. A system cron that runs WordPress scheduled
+work settles those orders sooner. It is a recommendation for the store owner,
+not a setup step.
 
-```sh
-wp openreceive doctor
-wp openreceive reconcile
-wp openreceive notifications
-```
+`wp openreceive reconcile` runs one settlement pass and exits.
+`wp openreceive notifications` is an optional long-running worker that settles
+a payment as soon as the wallet reports it; run it under a process manager only
+if you want that. Setup needs neither.
 
-The notifications command runs as a separate process. The Doctor panel in the
-gateway settings reports on the schema, whether credentials are present, whether
-each swap provider answers, scheduling, and orders that need attention. If the
-store currency has no usable price feed, the gateway is unavailable.
+The Doctor panel in the gateway settings reports on the schema, whether
+credentials are present, whether each swap provider answers, scheduling, and
+orders that need attention. If the store currency has no usable price feed, the
+gateway is unavailable.
 
 ### Refunds and removal
 

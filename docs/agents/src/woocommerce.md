@@ -127,9 +127,12 @@ wp openreceive test-invoice <order id>
 
 `test-invoice` goes through the same checkout route as the order-pay page. It
 prints the amount in sats, the BOLT11 invoice, the order-pay link and the
-methods that page offers, each swap asset marked available or not. If a swap
-method shows unavailable, run `wp openreceive doctor`: its "Swap provider" line
-names the problem. `test-invoice` and `doctor` are the whole checkout check.
+methods that page offers, each swap asset marked available or followed by the
+reason it is not. That reason is the answer; report it. "Below the provider
+minimum" or "above the provider maximum" is about this order's amount, not a
+fault: a small test order is often under a swap minimum. Only when the reason
+says the provider is unreachable does doctor's "Swap provider" line have more
+detail. `test-invoice` and `doctor` are the whole checkout check.
 
 Give the user the order-pay link, which opens the checkout on this same
 invoice, and the list of methods. Tell them the test order is theirs to delete.

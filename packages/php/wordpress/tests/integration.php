@@ -8,6 +8,7 @@ use OpenReceive\WP\Plugin;
 use OpenReceive\WP\Secrets;
 use OpenReceive\WP\Vendor\OpenReceive\Server\AuthorizeContext;
 use OpenReceive\WP\Vendor\OpenReceive\Swap\Swap;
+use OpenReceive\WP\Vendor\OpenReceive\Swap\SwapProvider;
 
 if (!defined('OPENRECEIVE_DEMO_WALLET') || OPENRECEIVE_DEMO_WALLET !== 'testkit') { throw new RuntimeException('Requires a disposable testkit shop.'); }
 $checks = 0;
@@ -68,6 +69,18 @@ $check(in_array('Swap provider fixedfloat: answered, 7 of 7 assets available', $
 $dead = Swap::providersFromEnvironment(['LSC_URI_PRIMARY' => 'lightning+swapconnect://unreachable.invalid/?key=k&secret=s'])[0];
 try { Plugin::swapProviderStatus($dead); $deadReported = false; } catch (RuntimeException $error) { $deadReported = str_contains($error->getMessage(), 'did not answer'); }
 $check($deadReported, 'doctor names an unreachable swap provider');
+$gateway502 = new class implements SwapProvider {
+    public function name(): string { return 'stub'; }
+    public function supportedPayInAssets(): array { return []; }
+    public function payInAssetCatalog(): array { throw new RuntimeException('HTTP 502 <html>Bad & Gateway</html>'); }
+    public function invoiceExpirySeconds(?string $payInAsset = null): int { return 0; }
+    public function quote(string $payInAsset, int $invoiceAmountMsats): array { return []; }
+    public function createSwap(string $payInAsset, string $bolt11, int $invoiceAmountMsats): array { return []; }
+    public function getStatus(array $order): array { return []; }
+    public function requestRefund(array $order, string $refundAddress): void {}
+};
+try { Plugin::swapProviderStatus($gateway502); $plainText = false; } catch (RuntimeException $error) { $plainText = str_contains($error->getMessage(), '<html>Bad & Gateway</html>'); }
+$check($plainText, 'doctor keeps provider error text plain; the Doctor panel escapes it once');
 as_unschedule_all_actions('openreceive_reconcile', [], 'openreceive');
 $check(!Plugin::diagnosticReport()['ok'], 'doctor fails when reconciliation is not scheduled');
 as_schedule_recurring_action(time() + 60, 60, 'openreceive_reconcile', [], 'openreceive');

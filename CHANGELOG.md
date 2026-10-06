@@ -20,6 +20,16 @@
   quickstart gains two Dockerfiles and the `build:` keys for Compose files that
   run the official images with only `image:` lines, and marks its wp-admin
   screens as the path for hosting without WP-CLI.
+- WooCommerce quickstart and agent directions agree on settlement: a system
+  cron is a recommendation for low-traffic stores, `wp openreceive
+  notifications` an optional worker, and setup needs neither. The quickstart
+  no longer lists doctor and reconcile, both one-shot commands, as process
+  manager material. An unavailable swap method's `test-invoice` reason is the
+  answer: "below the provider minimum" is the test order's amount, and only an
+  unreachable provider sends the agent to doctor.
+- WordPress: doctor's "Swap provider" line no longer HTML-escapes the
+  provider's error, which the Doctor panel then escaped again; a `&` or `<`
+  now reads as itself on the CLI and in wp-admin.
 - WordPress: with a swap provider configured, the default payment title is now
   “Bitcoin & stablecoins (OpenReceive)”, matching the site's wording. A store
   that saved the earlier default, “Bitcoin & crypto (OpenReceive)”, follows
