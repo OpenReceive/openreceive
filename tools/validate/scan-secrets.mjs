@@ -118,6 +118,10 @@ function filesToScan() {
   return [...files.values()];
 }
 
+// An absolute path into a home folder publishes a contributor's account name on
+// GitHub. Tracked files only: gitignored local notes may keep absolute paths.
+const HOME_FOLDER_PATH = /(?<![\w.-])(?:\/Users\/|\/home\/|[A-Za-z]:\\Users\\)[\w.-]+/;
+
 const findings = [];
 
 for (const file of trackedFiles()) {
@@ -125,6 +129,16 @@ for (const file of trackedFiles()) {
   if (!existsSync(file)) continue;
   if (isEnvFile(relativePath)) {
     findings.push(`${relativePath}: tracked env file is forbidden`);
+  }
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    continue;
+  }
+  const homePath = text.match(HOME_FOLDER_PATH);
+  if (homePath !== null) {
+    findings.push(`${relativePath}: home folder path ${homePath[0]} (use a repo-relative path)`);
   }
 }
 

@@ -173,6 +173,10 @@ empty-looking scan at expiry+grace closes unpaid attempts.
 Do not add private openreceive.org application code, infrastructure inventory, host IPs,
 deployment credentials, analytics, landing pages, or business logic to this public repo.
 
+Never commit an absolute path into a contributor's home folder (`/Users/<name>/…`,
+`/home/<name>/…`); it publishes their account name. Write repo-relative paths, or `~/`
+for tool locations. `npm run scan:secrets` fails on them.
+
 Specify openreceive.org changes here through the generated `docs/site-contract.json`
 and `docs/internal/site-build.md`. Update the canonical docs, agent directions, or
 contract generator, then regenerate the docs bundle. The private Rails app consumes

@@ -323,7 +323,7 @@ test("reports replace the code and every 12-character slice of it", () => {
 });
 
 test("commands that read this repo or a credential file are out of scope", () => {
-  const root = "/Users/perls/workspace/openrecieve";
+  const root = "/work/openreceive";
   assert.equal(scopeViolation("docker compose port wordpress 80", root), undefined);
   assert.equal(scopeViolation(`cat ${root}/docs/agents/woocommerce.md`, root), root);
   assert.equal(scopeViolation("cat ~/.ssh/id_rsa", root), "~/.ssh");
