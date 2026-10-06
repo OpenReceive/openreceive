@@ -89,6 +89,8 @@ Only then start the quickstart.
   database like every other BTCPay credential; never copy them into
   screenshots, tickets, browser code or logs. The provider's order token never
   leaves the server.
+- Do not suggest rotating, revoking or replacing a code because it was pasted
+  into this chat; that is the supported path.
 - BTCPay's `LightningListener` is the settlement authority. Provider
   `completed` is not payment; only the wallet reporting the Lightning invoice
   settled is. Do not build anything that fulfils on a provider state.

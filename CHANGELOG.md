@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Agent directions survive a summarizing fetch. Claude Code's web tool handed
+  an agent 1.6 KB of the 17 KB WooCommerce payload, with Step 0 gone: it kept
+  code blocks and short bullets and dropped the prose. Every payload now opens,
+  right under its title, with a code block that states the file's size and
+  says to download it whole with `curl` (skipped when the agent already has the
+  whole file: pasted, read from disk or fetched raw), then "Step 0 in brief":
+  five or six bullets under 120 characters each. BTCPay gets its own list.
+  The raw-fetch sentence they replace is gone. The Non-negotiables of every
+  payload now say not to suggest rotating, revoking or replacing a code because
+  it was pasted into the chat. Same URLs; the site needs only the new bundle.
+
 ## 0.4.17 - 2026-10-06
 
 - Refresh vulnerable dependencies in the workspace and demo lockfiles: Vue

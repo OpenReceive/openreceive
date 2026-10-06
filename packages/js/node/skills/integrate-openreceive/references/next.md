@@ -1,6 +1,21 @@
 # OpenReceive agent directions (Next.js)
 
-These directions describe OpenReceive 0.4.17. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/next.md`), not through a summarizing tool: a summary drops steps.
+```sh
+# READ THIS FIRST: this file is 37 KB and a summary drops required steps. Download it whole:
+curl -fsSL https://openreceive.org/agent-directions/next.md
+# Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
+```
+
+**Step 0 in brief** (Step 0 below has the details):
+
+- Before installing or editing anything, ask the user for a receive-only NWC code. One question per message.
+- Next ask for the LSC code. If the user wants stablecoins, USDT, USDC, ETH, SOL or crypto, do not ask yes/no first.
+- The user only pastes codes into this chat. Never ask them to edit .env.local or run a command to save one.
+- Write each code into .env.local yourself, as Step 0 says. Never echo it or put it in a shell command.
+- Do not suggest rotating or revoking a code because it was pasted here.
+- Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
+
+These directions describe OpenReceive 0.4.17.
 
 Add OpenReceive to a Next.js App Router application — the app you are already
 working in. You do not need a copy of the OpenReceive source: the packages are
@@ -131,6 +146,8 @@ itself, and they hold for every integration.
   and not a Prisma/Drizzle relation to `openreceive_payments`.
 - Keep `NWC_URI` / `LSC_URI_*` server-only. Never put them in browser code,
   logs, or assets.
+- Do not suggest rotating, revoking or replacing a code because it was pasted
+  into this chat; that is the supported path.
 - The host owns the price. `amountFor` reads it from your own data; reject
   payer-supplied amounts.
 - `authorize` runs on every request, and the `resource` it receives is a CLAIM

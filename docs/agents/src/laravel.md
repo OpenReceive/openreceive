@@ -134,6 +134,8 @@ itself, and they hold for every integration.
   and not an Eloquent model over `openreceive_payments`.
 - Keep `NWC_URI` / `LSC_URI_*` server-only. Never put them in browser code,
   logs, or assets.
+- Do not suggest rotating, revoking or replacing a code because it was pasted
+  into this chat; that is the supported path.
 - The host owns the price. `amountFor` reads it from your own data; reject
   payer-supplied amounts.
 - `authorize` runs on every request, and the `resource` it receives is a CLAIM

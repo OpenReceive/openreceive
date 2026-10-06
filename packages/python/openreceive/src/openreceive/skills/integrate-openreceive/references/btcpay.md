@@ -1,6 +1,21 @@
 # OpenReceive agent directions (BTCPay Server)
 
-These directions describe OpenReceive 0.4.17. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/btcpay.md`), not through a summarizing tool: a summary drops steps.
+```sh
+# READ THIS FIRST: this file is 12 KB and a summary drops required steps. Download it whole:
+curl -fsSL https://openreceive.org/agent-directions/btcpay.md
+# Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
+```
+
+**Step 0 in brief** (Step 0 below has the details):
+
+- Check first: BTCPay Server 2.4.4 or later, and the plugin installed from Plugins → Plugin Directory.
+- Unless the store already uses OpenReceive, stop and ask the user for a receive-only NWC code.
+- Save it via Store → OpenReceive or the Greenfield API, never BTCPay's Lightning node screen. Never echo it.
+- If the user wants USDT, USDC, ETH or SOL, ask for an LSC code too, but do not wait for it.
+- Never tick the spend-capable override to make a save succeed.
+- Do not suggest rotating or revoking a code because it was pasted here.
+
+These directions describe OpenReceive 0.4.17.
 
 Connect a BTCPay Server store to a receive-only NWC wallet with the OpenReceive
 plugin, and optionally let payers pay BTCPay invoices with USDT, USDC, ETH or
@@ -91,6 +106,8 @@ Only then start the quickstart.
   database like every other BTCPay credential; never copy them into
   screenshots, tickets, browser code or logs. The provider's order token never
   leaves the server.
+- Do not suggest rotating, revoking or replacing a code because it was pasted
+  into this chat; that is the supported path.
 - BTCPay's `LightningListener` is the settlement authority. Provider
   `completed` is not payment; only the wallet reporting the Lightning invoice
   settled is. Do not build anything that fulfils on a provider state.

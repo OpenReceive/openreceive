@@ -55,56 +55,108 @@ const RELEASE = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")
 // only applies to a custom UI.
 const BUDGET_BYTES = 52_000;
 
+// Step 0 in brief: the rules an agent breaks first when it never sees Step 0.
+// They ride at the top of every payload as bullets, because a summarizing
+// fetch tool keeps short bullets and drops prose (see HEADER below). Each one
+// stays under 120 characters, short enough to be quoted rather than
+// paraphrased; tests/agent-directions.test.mjs holds that line. The full Step 0
+// in each source still governs: change it there first, then here.
+const NO_ROTATION = "Do not suggest rotating or revoking a code because it was pasted here.";
+const ASK_NWC_FIRST =
+  "Before installing or editing anything, ask the user for a receive-only NWC code. One question per message.";
+const ASK_LSC_NEXT =
+  "Next ask for the LSC code. If the user wants stablecoins, USDT, USDC, ETH, SOL or crypto, do not ask yes/no first.";
+
+const WOOCOMMERCE_BRIEF = [
+  ASK_NWC_FIRST,
+  ASK_LSC_NEXT,
+  "The user only pastes codes into this chat. Never ask them to run a command, edit a file or use an admin page.",
+  "Store each code yourself as Step 2 says. Never put a code in a shell command.",
+  NO_ROTATION,
+  'Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
+];
+
+/** The library stacks: the agent writes both codes into the app's env file. */
+const libraryBrief = (envFile) => [
+  ASK_NWC_FIRST,
+  ASK_LSC_NEXT,
+  `The user only pastes codes into this chat. Never ask them to edit ${envFile} or run a command to save one.`,
+  `Write each code into ${envFile} yourself, as Step 0 says. Never echo it or put it in a shell command.`,
+  NO_ROTATION,
+  'Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
+];
+
+// BTCPay checks the deployment first, and its own store page is a supported
+// place to save a code, so it gets its own list.
+const BTCPAY_BRIEF = [
+  "Check first: BTCPay Server 2.4.4 or later, and the plugin installed from Plugins → Plugin Directory.",
+  "Unless the store already uses OpenReceive, stop and ask the user for a receive-only NWC code.",
+  "Save it via Store → OpenReceive or the Greenfield API, never BTCPay's Lightning node screen. Never echo it.",
+  "If the user wants USDT, USDC, ETH or SOL, ask for an LSC code too, but do not wait for it.",
+  "Never tick the spend-capable override to make a save succeed.",
+  NO_ROTATION,
+];
+
 const STACKS = [
   {
     stack: "woocommerce",
     source: "docs/agents/src/woocommerce.md",
     quickstart: "docs/guides/quickstart-woocommerce.md",
+    brief: WOOCOMMERCE_BRIEF,
   },
   {
     stack: "node",
     source: "docs/agents/src/node.md",
     quickstart: "docs/guides/quickstart-node.md",
+    brief: libraryBrief(".env"),
   },
   {
     stack: "fastify",
     source: "docs/agents/src/fastify.md",
     quickstart: "docs/guides/quickstart-fastify.md",
+    brief: libraryBrief(".env"),
   },
   {
     stack: "next",
     source: "docs/agents/src/next.md",
     quickstart: "docs/guides/quickstart-next.md",
+    brief: libraryBrief(".env.local"),
   },
   {
     stack: "fastapi",
     source: "docs/agents/src/fastapi.md",
     quickstart: "docs/guides/quickstart-fastapi.md",
+    brief: libraryBrief(".env"),
   },
   {
     stack: "django",
     source: "docs/agents/src/django.md",
     quickstart: "docs/guides/quickstart-django.md",
+    brief: libraryBrief(".env"),
   },
   {
     stack: "rails",
     source: "docs/agents/src/rails.md",
     quickstart: "docs/guides/quickstart-rails.md",
+    brief: libraryBrief(".env"),
   },
   {
     stack: "php",
     source: "docs/agents/src/php.md",
     quickstart: "docs/guides/quickstart-php.md",
+    brief: libraryBrief(".env"),
   },
   {
     stack: "laravel",
     source: "docs/agents/src/laravel.md",
     quickstart: "docs/guides/quickstart-laravel.md",
+    brief: libraryBrief(".env"),
   },
   {
     stack: "btcpay",
     source: "docs/agents/src/btcpay.md",
     quickstart: "docs/guides/quickstart-btcpay.md",
+    brief: BTCPAY_BRIEF,
   },
 ];
 
@@ -265,22 +317,37 @@ export function inlineGuide(markdown, publicSlugs) {
   );
 }
 
-// A summarizing fetch tool hands the agent a digest, and a digest drops the
-// steps it judged incidental: the WooCommerce run lost its install line that
-// way. The line rides at the top, where a digest is least likely to cut it. It
-// is conditional because the skills mirror this file byte for byte, and an
-// agent reading the skill from disk already has it raw.
-const RAW_FETCH = (stack) =>
-  `If you fetched this file, fetch it raw (\`curl -fsSL https://openreceive.org/agent-directions/${stack}.md\`), not through a summarizing tool: a summary drops steps.`;
+// A summarizing fetch tool hands the agent a digest, not the file. Claude
+// Code's web tool turned the 17 KB WooCommerce payload into 1.6 KB: every code
+// block verbatim and the short bullets kept, the prose and blockquotes gone,
+// Step 0 with them. So the payload opens with what a digest keeps: a code block
+// saying to download the file whole, then Step 0 in brief. The stated size lets
+// an agent holding a digest see that it is one. The skip line is there because
+// the same bytes are pasted by the site's copy button and mirrored into the
+// skills, and those readers already have the whole file.
+const HEADER = (stack, kilobytes) =>
+  [
+    "```sh",
+    `# READ THIS FIRST: this file is ${kilobytes} KB and a summary drops required steps. Download it whole:`,
+    `curl -fsSL https://openreceive.org/agent-directions/${stack}.md`,
+    "# Skip the download only if you already have all of it: pasted, read from disk or fetched raw.",
+    "```",
+  ].join("\n");
 
-function render(stack, directions, quickstart, quickstartSlug, publicSlugs) {
+function render(stack, brief, directions, quickstart, quickstartSlug, publicSlugs, kilobytes) {
+  const top = [
+    HEADER(stack, kilobytes),
+    "",
+    "**Step 0 in brief** (Step 0 below has the details):",
+    "",
+    ...brief.map((rule) => `- ${rule}`),
+    "",
+    `These directions describe OpenReceive ${RELEASE}.`,
+  ].join("\n");
   return [
     directions
       .trim()
-      .replace(
-        /^# (.*)$/m,
-        `# $1\n\nThese directions describe OpenReceive ${RELEASE}. ${RAW_FETCH(stack)}`,
-      )
+      .replace(/^# (.*)$/m, (title) => `${title}\n\n${top}`)
       // A pinned download (the WordPress plugin ZIP) names the release it describes.
       .replaceAll("{{release}}", RELEASE),
     "",
@@ -294,6 +361,17 @@ function render(stack, directions, quickstart, quickstartSlug, publicSlugs) {
     inlineGuide(quickstart, publicSlugs),
     "",
   ].join("\n");
+}
+
+/** Renders until the size the header states is the size of the file it is in. */
+function renderSized(...args) {
+  let kilobytes = 0;
+  for (;;) {
+    const payload = render(...args, kilobytes);
+    const actual = Math.round(Buffer.byteLength(payload, "utf8") / 1000);
+    if (actual === kilobytes) return payload;
+    kilobytes = actual;
+  }
 }
 
 /** Every openreceive.org URL in the payload has to be a page the site serves. */
@@ -338,11 +416,12 @@ const { publicSlugs } = readManifestSlugs();
 const problems = [];
 const built = [];
 
-for (const { stack, source, quickstart } of STACKS) {
+for (const { stack, source, quickstart, brief } of STACKS) {
   const target = `docs/agents/${stack}.md`;
   const quickstartSlug = path.basename(quickstart, ".md");
-  const payload = render(
+  const payload = renderSized(
     stack,
+    brief,
     readFileSync(path.join(root, source), "utf8"),
     readFileSync(path.join(root, quickstart), "utf8"),
     quickstartSlug,

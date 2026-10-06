@@ -1,6 +1,21 @@
 # OpenReceive agent directions (WordPress + WooCommerce)
 
-These directions describe OpenReceive 0.4.17. If you fetched this file, fetch it raw (`curl -fsSL https://openreceive.org/agent-directions/woocommerce.md`), not through a summarizing tool: a summary drops steps.
+```sh
+# READ THIS FIRST: this file is 18 KB and a summary drops required steps. Download it whole:
+curl -fsSL https://openreceive.org/agent-directions/woocommerce.md
+# Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
+```
+
+**Step 0 in brief** (Step 0 below has the details):
+
+- Before installing or editing anything, ask the user for a receive-only NWC code. One question per message.
+- Next ask for the LSC code. If the user wants stablecoins, USDT, USDC, ETH, SOL or crypto, do not ask yes/no first.
+- The user only pastes codes into this chat. Never ask them to run a command, edit a file or use an admin page.
+- Store each code yourself as Step 2 says. Never put a code in a shell command.
+- Do not suggest rotating or revoking a code because it was pasted here.
+- Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
+
+These directions describe OpenReceive 0.4.17.
 
 Install and configure the OpenReceive payment gateway in the WooCommerce store
 you are working in. Preserve its theme, checkout, customer accounts, order
@@ -135,6 +150,8 @@ and tell them the test order is theirs to delete.
 - Never print, log or commit a code, never put one in a shell argument, and
   never write one into source files, wp-config.php or browser code. Doctor's
   set/unset is all you report.
+- Do not suggest rotating, revoking or replacing a code because it was pasted
+  into this chat; that is the supported path.
 - Receive-only NWC is required. Never turn on the spend-capable override to
   get past the preflight.
 - The plugin owns only its payment-attempt tables in the WordPress database.

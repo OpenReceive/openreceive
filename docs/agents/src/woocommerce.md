@@ -133,6 +133,8 @@ and tell them the test order is theirs to delete.
 - Never print, log or commit a code, never put one in a shell argument, and
   never write one into source files, wp-config.php or browser code. Doctor's
   set/unset is all you report.
+- Do not suggest rotating, revoking or replacing a code because it was pasted
+  into this chat; that is the supported path.
 - Receive-only NWC is required. Never turn on the spend-capable override to
   get past the preflight.
 - The plugin owns only its payment-attempt tables in the WordPress database.
