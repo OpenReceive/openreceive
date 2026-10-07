@@ -47,6 +47,11 @@ export interface Platform {
   readonly container_port?: number;
   /** Run the platform seed script after the stack is up. WordPress does; Node boots seeded. */
   readonly seed?: boolean;
+  /** Commands that print the product count and whether OpenReceive is installed. Node scripts when omitted. */
+  readonly probes?: {
+    readonly products: readonly string[];
+    readonly openreceive: readonly string[];
+  };
 }
 
 export type Severity = "blocker" | "polish";

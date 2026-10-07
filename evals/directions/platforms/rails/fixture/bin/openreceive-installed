@@ -1,0 +1,3 @@
+#!/usr/bin/env ruby
+text = File.read("/app/Gemfile")
+puts(/openreceive/i.match?(text) ? "yes" : "no")

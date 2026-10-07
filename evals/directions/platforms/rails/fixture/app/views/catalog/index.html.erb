@@ -1,0 +1,12 @@
+<h1>Widget Shop</h1>
+<ul>
+  <% @products.each do |product| %>
+    <li>
+      <%= product.name %> — $<%= product.price %>
+      <%= form_with url: orders_path, method: :post do %>
+        <%= hidden_field_tag :product_id, product.id %>
+        <%= submit_tag "Buy" %>
+      <% end %>
+    </li>
+  <% end %>
+</ul>

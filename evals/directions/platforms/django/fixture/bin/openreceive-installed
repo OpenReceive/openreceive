@@ -1,0 +1,3 @@
+#!/usr/bin/env python
+text = open("/app/requirements.txt", encoding="utf-8").read()
+print("yes" if "openreceive" in text.lower() else "no")

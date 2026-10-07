@@ -1,0 +1,20 @@
+{
+  "slug": "django",
+  "name": "Django",
+  "directions": "docs/agents/django.md",
+  "prompt_name": "Django app",
+  "doctor": "python manage.py openreceive_doctor",
+  "credential_store": { "kind": "dotenv", "where": ".env" },
+  "allowed_install_paths": ["pip"],
+  "forbidden": ["git clone .*openreceive", "--dangerously", "printenv"],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false,
+  "probes": {
+    "products": ["exec", "-T", "web", "bin/product-count"],
+    "openreceive": ["exec", "-T", "web", "bin/openreceive-installed"]
+  }
+}

@@ -187,7 +187,7 @@ async function publishedPort(
 export async function inspectShop(directory: string, platform: Platform): Promise<ShopEvidence> {
   const service = serviceOf(platform);
   const port = await publishedPort(directory, service, containerPortOf(platform));
-  if (service !== "wordpress") return inspectNodeShop(directory, service, port);
+  if (service !== "wordpress") return inspectContainerShop(directory, service, port, platform);
   // The same command the directions tell an agent to run.
   const count = await compose(
     directory,
@@ -229,19 +229,20 @@ export async function inspectShop(directory: string, platform: Platform): Promis
   };
 }
 
-async function inspectNodeShop(
+async function inspectContainerShop(
   directory: string,
   service: string,
   port: string,
+  platform: Platform,
 ): Promise<ShopEvidence> {
   const count = await compose(
     directory,
-    ["exec", "-T", service, "node", "bin/product-count.js"],
+    platform.probes?.products ?? ["exec", "-T", service, "node", "bin/product-count.js"],
     60_000,
   );
   const installed = await compose(
     directory,
-    ["exec", "-T", service, "node", "bin/openreceive-installed.js"],
+    platform.probes?.openreceive ?? ["exec", "-T", service, "node", "bin/openreceive-installed.js"],
     30_000,
   );
   const env = await compose(directory, ["exec", "-T", service, "printenv"], 30_000);

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Order {{ order.id }}</title>
+</head>
+<body>
+  <main>
+    <h1>Order {{ order.id }}</h1>
+    <p>{{ order.product_name }} — ${{ order.amount }} {{ order.currency }}</p>
+    <p>Awaiting payment. Online payments are not set up yet.</p>
+  </main>
+</body>
+</html>
