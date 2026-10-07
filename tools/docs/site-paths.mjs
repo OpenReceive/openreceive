@@ -22,6 +22,9 @@ export const SITE_OWNED_PATHS = [
   // with its screenshots served from the contract's `assets[]`.
   "/btcpay",
   "/wordpress",
+  // The terms and privacy policy for the price mirror. The WordPress.org
+  // plugin readme must link one for every external service the plugin calls.
+  "/privacy",
 ];
 
 // Integration aliases share the canonical framework row and agent payload.

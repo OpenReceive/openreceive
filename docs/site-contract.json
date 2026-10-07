@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 3537
+      "bytes": 3640
     },
     {
       "path": "/guides/quickstart-node",
@@ -424,7 +424,17 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 10067
+      "bytes": 10180
+    },
+    {
+      "path": "/guides/wordpress-hosting",
+      "markdown_path": "/guides/wordpress-hosting.md",
+      "source": "docs/guides/wordpress-hosting.md",
+      "kind": "guide",
+      "slug": "wordpress-hosting",
+      "title": "WordPress Hosting Requirements",
+      "category": "guide",
+      "bytes": 4797
     },
     {
       "path": "/guides/agent-directions-woocommerce",
@@ -434,7 +444,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 22129
+      "bytes": 22273
     },
     {
       "path": "/api_docs",
@@ -465,7 +475,7 @@
       "slug": "wordpress",
       "title": "OpenReceive for WordPress + WooCommerce",
       "category": "woocommerce",
-      "bytes": 3379,
+      "bytes": 3522,
       "assets_base": "/assets/"
     },
     {
@@ -500,7 +510,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22129,
+      "bytes": 22273,
       "copy_button": true,
       "self_contained": true
     },
@@ -1081,6 +1091,10 @@
     {
       "path": "/wordpress",
       "must_exist": true
+    },
+    {
+      "path": "/privacy",
+      "must_exist": true
     }
   ],
   "site_redirects": [
@@ -1098,7 +1112,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5261
+        "bytes": 5349
       },
       {
         "path": "/openapi.yaml",

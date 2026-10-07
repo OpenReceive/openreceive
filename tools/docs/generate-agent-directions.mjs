@@ -181,6 +181,7 @@ const STACKS = [
 const UNLISTED_GUIDES = {
   "agent-directions-woocommerce": "this payload’s own page",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
+  "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
   "agent-directions-node": "this payload's own page",
   "agent-directions-fastify": "this payload's own page",
   "agent-directions-next": "this payload's own page",

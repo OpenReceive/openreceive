@@ -18,6 +18,25 @@
   ahead" as a request for the browser check, and loaded Playwright from
   another checkout. BTCPay's directions end on a clean health check the
   same way.
+- WordPress, ready for WordPress.org review: the plugin zip no longer ships
+  the engine's PHPStan cache, test suites, examples or tool configs from
+  bundled dependencies, or a `.DS_Store`. The 0.4.18 zip was 28 MB unpacked
+  in 2,742 files; it is now about 10 MB in 1,100. The build fails if a
+  generated autoloader still points at a pruned test file. The zip now
+  carries `composer.json` so reviewers can see the dependencies.
+- WordPress: the plugin is named "OpenReceive" in its header and readme, so
+  the WordPress.org slug becomes `openreceive`. The directory derives the
+  slug from the header and the name it showed would have produced
+  `openreceive-bitcoin-lightning-payments-for-woocommerce`. Every PHP file
+  exits when loaded outside WordPress. Activation also refuses 32-bit PHP,
+  and `wp openreceive doctor` reports it.
+- WordPress: readme.txt is rewritten as the directory listing, with a full
+  external-services section (wallet relay, price feeds, swap provider). The
+  price mirror's terms and privacy policy live at the new site-owned path
+  `/privacy`.
+- New guide: [WordPress hosting requirements](docs/guides/wordpress-hosting.md),
+  covering GMP and sodium availability on common hosts and how to check a
+  site. WordPress's Site Health screen cannot detect a missing GMP.
 
 ## 0.4.18 - 2026-10-06
 

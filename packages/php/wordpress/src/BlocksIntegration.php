@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace OpenReceive\WP;
+defined('ABSPATH') || exit;
 
 final class BlocksIntegration extends \Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType
 {

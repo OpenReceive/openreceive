@@ -68,7 +68,9 @@ package matching the active PHP version (for example `php8.2-gmp` for PHP 8.2),
 then restart that version's web PHP service. Verify `php --ri gmp` and
 `wp openreceive doctor` for CLI, and the gateway Doctor panel for web PHP.
 On managed WordPress hosting, ask the host to enable GMP and sodium in both
-runtimes; if they cannot, this plugin cannot run there. Do not use Composer's
+runtimes; if they cannot, this plugin cannot run there.
+[WordPress hosting requirements](wordpress-hosting.md) lists what common hosts
+offer and how to check your site. Do not use Composer's
 `--ignore-platform-reqs` to bypass the requirements.
 
 ### Compose files with only `image:` lines

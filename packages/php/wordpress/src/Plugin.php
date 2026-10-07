@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace OpenReceive\WP;
+defined('ABSPATH') || exit;
 
 use Nyholm\Psr7\ServerRequest;
 use OpenReceive\Nwc\NostrPhpNwcReceiveClient;
@@ -30,7 +31,7 @@ final class Plugin
     {
         global $wpdb;
         if (!$wpdb->is_mysql) { wp_die(esc_html__('OpenReceive requires MySQL or MariaDB; SQLite WordPress is not supported.', 'openreceive')); }
-        if (!extension_loaded('sodium') || !extension_loaded('gmp')) { wp_die(esc_html__('OpenReceive requires the PHP sodium and GMP extensions.', 'openreceive')); }
+        if (!extension_loaded('sodium') || !extension_loaded('gmp') || PHP_INT_SIZE < 8) { wp_die(esc_html__('OpenReceive requires 64-bit PHP with the sodium and GMP extensions. Your host can enable them; see https://openreceive.org/guides/wordpress-hosting', 'openreceive')); }
         $db = new WpdbConnection($wpdb);
         foreach (PaymentsSchema::statements('mysql', $wpdb->prefix . 'openreceive_payments', $wpdb->prefix . 'openreceive_meta') as $sql) {
             // MySQL's server default may be MyISAM; settlement needs transactions.
@@ -233,6 +234,7 @@ final class Plugin
         $check('PHP extensions', static function (): string {
             if (!extension_loaded('gmp')) { throw new \RuntimeException('Enable PHP gmp in both web and WP-CLI runtimes.'); }
             if (!extension_loaded('sodium')) { throw new \RuntimeException('Enable PHP sodium in both web and WP-CLI runtimes.'); }
+            if (PHP_INT_SIZE < 8) { throw new \RuntimeException('Switch to 64-bit PHP.'); }
             return 'GMP and sodium available';
         });
         $check('Credentials', static function () use (&$lines): string {

@@ -399,7 +399,10 @@ pasted:
   documentation.
 - any path in `site_owned[]`. Today those are `/contact`,
   `/get_a_nwc_code_to_receive_payments`, `/set_up_swap_provider`, `/guides`,
-  `/`, and the agent-discovery trio `/llms.txt`, `/openapi.yaml`, `/agents`.
+  `/`, `/privacy`, and the agent-discovery trio `/llms.txt`, `/openapi.yaml`,
+  `/agents`. `/privacy` holds the terms and privacy policy for the price
+  mirror (`/api/v3/simple/price`); the WordPress.org plugin readme links it,
+  and the plugin directory requires that link for every external service.
   The shipped agent skills link all three of the trio. Skills travel inside
   published npm packages and gems, so they cannot be recalled at all.
 

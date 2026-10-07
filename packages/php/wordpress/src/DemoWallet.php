@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace OpenReceive\WP;
+defined('ABSPATH') || exit;
 
 use OpenReceive\Rates\StaticPriceProvider;
 use OpenReceive\Server\Service;

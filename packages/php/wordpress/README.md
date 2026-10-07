@@ -13,7 +13,9 @@ assets and networks depend on the provider; swaps are optional.
 ## Install
 
 Requires WordPress 6.6+, WooCommerce 9+, PHP 8.2+ (64-bit), GMP, sodium and
-MySQL 8 or MariaDB 10.5+. SQLite WordPress is not supported.
+MySQL 8 or MariaDB 10.5+. SQLite WordPress is not supported. Many hosts leave
+GMP off; [WordPress hosting requirements](https://openreceive.org/guides/wordpress-hosting)
+shows how to check and enable it.
 
 Install a built `openreceive-wordpress-<version>.zip` through **Plugins → Add
 New → Upload Plugin**, then configure **WooCommerce → Settings → Payments →

@@ -498,6 +498,14 @@
       "public": true
     },
     {
+      "slug": "wordpress-hosting",
+      "title": "WordPress Hosting Requirements",
+      "source_path": "docs/guides/wordpress-hosting.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "source_path": "docs/agents/woocommerce.md",

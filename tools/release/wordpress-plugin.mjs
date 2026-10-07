@@ -53,10 +53,13 @@ if (command === "plan") {
     recursive: true,
   });
   // The path dependency sits next to the staged plugin; it is never in the zip.
-  cpSync(path.join(root, "packages/php/openreceive"), path.join(staging, "engine"), {
-    recursive: true,
-    filter: (file) => !file.split(path.sep).some((part) => part === "vendor" || part === "skills"),
-  });
+  // Copy only what Composer installs: a working checkout also holds test and
+  // analysis caches that would otherwise ship inside the plugin.
+  for (const name of ["src", "composer.json", "LICENSE", "README.md"]) {
+    cpSync(path.join(root, "packages/php/openreceive", name), path.join(staging, "engine", name), {
+      recursive: true,
+    });
+  }
   const manifest = JSON.parse(readFileSync(path.join(plugin, "composer.json"), "utf8"));
   manifest.repositories[0].url = "../engine";
   writeFileSync(path.join(plugin, "composer.json"), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -138,7 +141,35 @@ if (command === "plan") {
   assert.equal(assets.version, version, "Standalone assets must match the release.");
   rmSync(path.join(plugin, "vendor"), { recursive: true });
   rmSync(path.join(plugin, "composer.lock"));
-  rmSync(path.join(plugin, "composer.json"));
+  // WordPress.org review reads composer.json to see the bundled dependencies.
+  // Without the monorepo path repository it resolves from Packagist.
+  const review = JSON.parse(readFileSync(path.join(source, "composer.json"), "utf8"));
+  delete review.repositories;
+  writeFileSync(path.join(plugin, "composer.json"), `${JSON.stringify(review, null, 2)}\n`);
+  // Dependency archives carry their own test suites, examples and tool configs,
+  // which the plugin directory review rejects as development files.
+  const devFile =
+    /^(\..+|tests?|examples?|benchmarks?|docs|Makefile|.+\.sh|composer\.lock|maintainers\.yaml|phpbench\.json|(phpunit|phpstan|psalm|phpdoc)\..+)$/i;
+  const prefixed = path.join(plugin, "vendor-prefixed");
+  for (const vendor of readdirSync(prefixed, { withFileTypes: true })) {
+    if (!vendor.isDirectory()) continue;
+    for (const pkg of readdirSync(path.join(prefixed, vendor.name), { withFileTypes: true })) {
+      if (!pkg.isDirectory()) continue;
+      const pkgDir = path.join(prefixed, vendor.name, pkg.name);
+      for (const entry of readdirSync(pkgDir)) {
+        if (devFile.test(entry)) rmSync(path.join(pkgDir, entry), { recursive: true });
+      }
+    }
+  }
+  for (const entry of readdirSync(plugin, { recursive: true })) {
+    if (path.basename(entry) === ".DS_Store") rmSync(path.join(plugin, entry));
+  }
+  for (const map of ["autoload_classmap.php", "autoload_static.php", "autoload_files.php"]) {
+    const file = path.join(prefixed, "composer", map);
+    if (existsSync(file)) {
+      assert(!/\/tests?\//i.test(readFileSync(file, "utf8")), `${map} loads a pruned test file.`);
+    }
+  }
   mkdirSync(path.join(plugin, "languages"), { recursive: true });
   const wpCli = process.env.OPENRECEIVE_WP_CLI;
   run(wpCli ? "php" : "wp", [

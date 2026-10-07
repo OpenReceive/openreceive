@@ -39,6 +39,7 @@ optional. The provider decides which assets and networks are available.
 27. [Price feeds](price-feeds.md)
 28. [Provider registry](provider-registry.md)
 29. [WordPress + WooCommerce quickstart](quickstart-woocommerce.md)
+30. [WordPress hosting requirements](wordpress-hosting.md): which hosts can run the WooCommerce plugin
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
 [Flask](../recipes/flask.md) (the Python engine as a Blueprint)
