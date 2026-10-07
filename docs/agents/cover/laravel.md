@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Laravel (0.4.18)
+# OpenReceive agent directions: Laravel (0.4.19)
 
 These directions are 42 KB. Download them with your shell and follow them from Step 0:
 

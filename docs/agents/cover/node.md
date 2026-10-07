@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Node.js (0.4.18)
+# OpenReceive agent directions: Node.js (0.4.19)
 
 These directions are 34 KB. Download them with your shell and follow them from Step 0:
 

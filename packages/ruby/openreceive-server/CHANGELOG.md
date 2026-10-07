@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.19 - 2026-10-07
+
+Release with the complete 0.4.19 package family. The bundled agent skills link
+the new WordPress hosting guide, and their Next.js and Express directions accept
+wallet codes already set as a hosting platform's environment variables. No Ruby
+runtime changes from 0.4.18.
+
 ## 0.4.18 - 2026-10-06
 
 Release with the complete 0.4.18 package family. The bundled agent skills carry

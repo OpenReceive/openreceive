@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/fastify/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.18.
+These directions describe OpenReceive 0.4.19.
 
 Add OpenReceive to a Fastify application — the app you are already working in.
 You do not need a copy of the OpenReceive source: the packages are on npm, and

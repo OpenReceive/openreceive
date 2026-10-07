@@ -16,7 +16,7 @@ database or application.
 
 ## Get the installable archive
 
-Download [openreceive-wordpress-0.4.18.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.18/openreceive-wordpress-0.4.18.zip)
+Download [openreceive-wordpress-0.4.19.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.19/openreceive-wordpress-0.4.19.zip)
 from the matching release. Historical releases may lack this asset. If that exact
 URL returns 404, build the same tag below; never silently install an older ZIP.
 The GitHub source-code ZIP is not an installable plugin. On a development machine
@@ -25,7 +25,7 @@ with Node 22+, PHP 8.2+ with GMP/sodium, Composer and WP-CLI:
 ```sh
 git clone https://github.com/OpenReceive/openreceive.git
 cd openreceive
-git checkout v0.4.18
+git checkout v0.4.19
 npm ci
 npm run build:packages
 composer install --working-dir=packages/php/wordpress

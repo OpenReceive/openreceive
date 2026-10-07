@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.19 - Unreleased
+## 0.4.19 - 2026-10-07
 
 - New: [`examples/next-postgres-starter`](examples/next-postgres-starter), a
   one-product Next.js shop on Postgres that uses only the published packages.

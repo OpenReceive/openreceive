@@ -1,6 +1,6 @@
 {
   "name": "openreceive-workspace",
-  "version": "0.4.18",
+  "version": "0.4.19",
   "private": true,
   "description": "OpenReceive receive-checkout reference path",
   "license": "MIT",
