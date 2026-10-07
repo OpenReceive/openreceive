@@ -95,6 +95,9 @@ function trackedFiles() {
 
 function isEnvFile(relativePath) {
   if (relativePath === ".env.example") return false;
+  // An eval fixture is a stand-in user app; Laravel ships its stock template.
+  if (/^evals\/directions\/platforms\/[^/]+\/fixture\/\.env\.example$/.test(relativePath))
+    return false;
   const fileName = path.basename(relativePath);
   return (
     fileName === ".env" ||
