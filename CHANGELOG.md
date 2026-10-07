@@ -2,6 +2,17 @@
 
 ## 0.4.19 - Unreleased
 
+- Node: a Next.js 16 production build (Turbopack, the default) could not
+  reach the wallet. The NWC client was loaded through
+  `new Function("return import(...)")` and `require.resolve`; Turbopack
+  rewrites `require.resolve` to a numeric module id, so preflight failed
+  with `The "path" argument must be of type string. Received type number`
+  and every payment route answered 503. The test runs used the fake
+  wallet, so they never loaded the real client. It is now a plain
+  `await import("@getalby/sdk/nwc")`: still lazy, and something any
+  bundler resolves. That also removes the `new Function` call that
+  Cloudflare Workers forbid. Verified with a Next 16 production build
+  against a real wallet.
 - Node: Prisma on PostgreSQL failed every checkout. The per-reference lock
   selected `pg_advisory_xact_lock(...)`, whose `void` result Prisma's raw
   queries cannot read ("Failed to deserialize column of type 'void'"), so

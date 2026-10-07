@@ -4,14 +4,10 @@
  * @getalby/sdk client, and subscription teardown.
  */
 
-import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
 import { recordOrEmpty } from "@openreceive/core";
 import type { NWCClient as AlbySdkClient } from "@getalby/sdk/nwc";
 import { historyRequest } from "./history-request.ts";
 import { WalletPreflightError } from "./errors.ts";
-
-const require = createRequire(import.meta.url);
 
 export interface AlbyNwcCompatibleClient {
   getInfo?: () => Promise<unknown>;
@@ -63,12 +59,9 @@ export async function createDefaultAlbyNwcClient(
   connectionString: string,
 ): Promise<AlbyNwcCompatibleClient> {
   ensureNodeWebSocket();
-  const dynamicImport = new Function("specifier", "return import(specifier)") as (
-    specifier: string,
-  ) => Promise<unknown>;
-  const namespace = recordOrEmpty(
-    await dynamicImport(pathToFileURL(require.resolve("@getalby/sdk/nwc")).href),
-  );
+  // A plain dynamic import keeps the SDK lazy and lets bundlers (Next.js
+  // Turbopack, Cloudflare Workers) resolve it like any other dependency.
+  const namespace = recordOrEmpty(await import("@getalby/sdk/nwc"));
   const Constructor = namespace.NWCClient as unknown;
 
   if (typeof Constructor !== "function") {
