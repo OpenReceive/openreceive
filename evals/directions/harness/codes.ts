@@ -6,6 +6,8 @@ export interface MerchantCodes {
   readonly nwc: string;
   readonly lsc: string;
   readonly lscBackup?: string;
+  /** NWC_URI_VERCEL: a separate receive-only code that the Vercel eval stores in Vercel. */
+  readonly nwcVercel?: string;
 }
 
 const REQUIRED = [
@@ -73,10 +75,17 @@ export async function loadMerchantCodes(envFile: string): Promise<MerchantCodes>
       "LSC_URI_BACKUP in the repo-root .env does not start with lightning+swapconnect://",
     );
   }
+  const vercel = values.NWC_URI_VERCEL ?? "";
+  if (vercel.length > 0 && !vercel.startsWith("nostr+walletconnect://")) {
+    throw new InfraError(
+      "NWC_URI_VERCEL in the repo-root .env does not start with nostr+walletconnect://",
+    );
+  }
   return {
     nwc: values.NWC_URI ?? "",
     lsc: values.LSC_URI_PRIMARY ?? "",
     lscBackup: backup.length > 0 ? backup : undefined,
+    nwcVercel: vercel.length > 0 ? vercel : undefined,
   };
 }
 

@@ -101,13 +101,23 @@ function withCode(code: string | undefined): string | undefined {
   return `I'd rather not run commands or edit files. Can you do it? Here is the code if you need it: ${code}`;
 }
 
+/** What a v0 or Vercel merchant says when asked for a code the platform already holds. */
+export const PLATFORM_CODES_REPLY =
+  "Both codes are already set as this project's environment variables on Vercel. I won't paste them here.";
+
 export function merchantReply(
   text: string,
   scenario: Scenario,
   codes: MerchantCodes,
+  platformCodes = false,
 ): string | null {
   const intent = classify(text);
   if (intent === "done") return null;
+  if (platformCodes) {
+    if (intent === "nwc" || intent === "lsc" || intent === "lsc_backup")
+      return PLATFORM_CODES_REPLY;
+    if (intent === "delegate") return "I'd rather not run commands or edit files. Can you do it?";
+  }
   if (intent === "delegate") {
     const handed =
       (asksNwc(text) ? codes.nwc : undefined) ??

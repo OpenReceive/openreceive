@@ -31,7 +31,7 @@ npm run eval:directions -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Express (`node`), Fastify, Next.js, Rails, Django, FastAPI, plain PHP, and Laravel. None of them include OpenReceive.
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Express (`node`), Fastify, Next.js, Vercel (Next.js on Neon), Rails, Django, FastAPI, plain PHP, and Laravel. None of them include OpenReceive.
 
 ```sh
 npm run eval:directions -- --platform php --smoke
@@ -46,6 +46,42 @@ The default URL is the live `https://openreceive.org/agent-directions/<slug>.md`
 Exit 0 when every blocker passed, 1 when a directions check failed, 2 when Docker, the Cursor CLI, or a missing code failed.
 
 Reports land in `evals/directions/reports/` and are not committed. `summary.md` lists blockers with the quoted line. `transcript.md` has the codes replaced by `<NWC>` and `<LSC>`.
+
+## Vercel
+
+`--platform vercel` tests what a v0 or Vercel user gets. The shop is a Next.js
+store on Postgres, and the opening message is the prompt from
+`docs/guides/v0.md`. The codes are already the project's environment
+variables, so the merchant never pastes one: asking for a code, or repeating
+one, fails the run. Locally the shop runs behind PgBouncer in transaction mode,
+like Neon's pooler, and Compose gives the web service the project's variables
+from a file outside the shop directory.
+
+When the agent finishes, the harness deploys the shop to the `openreceive-eval`
+project in the OpenReceive Vercel team. It wipes that project's Neon database
+first and sets `NWC_URI` and `LSC_URI_PRIMARY` there. Then it checks the live
+site:
+
+- the payment route is not on the Edge runtime;
+- no cron job or notifications worker was added;
+- the deploy built and `/health` answers;
+- an order gets a real Lightning invoice;
+- a stranger's checkout for that order is refused.
+
+It needs these in the repo-root `.env`, besides the usual codes:
+
+- `VERCEL_TOKEN`, scoped to the team;
+- `VERCEL_TEAM_ID`;
+- `NWC_URI_VERCEL`, a separate receive-only code. Vercel stores it, so it can be
+  revoked without touching `NWC_URI`.
+
+One-time setup: create the `openreceive-eval` project and connect a Neon database
+to it. Accepting Neon's Marketplace terms needs a person in the browser.
+
+```sh
+npm run eval:directions -- --platform vercel --smoke
+npm run eval:directions -- --platform vercel --serve-directions
+```
 
 ## Passed
 

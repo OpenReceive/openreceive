@@ -34,7 +34,20 @@ export interface Platform {
   readonly directions: string;
   readonly prompt_name: string;
   readonly doctor: string;
+  /**
+   * Where the codes live. `platform` means the hosting platform already holds
+   * them as project environment variables (v0, Vercel), so the agent must not
+   * ask for them and the merchant never pastes one.
+   */
   readonly credential_store: { readonly kind: string; readonly where: string };
+  /** The directions file to follow when the platform reuses another stack's. */
+  readonly directions_slug?: string;
+  /** The merchant's first message; `{{directions_url}}` is filled in. */
+  readonly opening?: string;
+  /** Variables the platform gives the shop's web service, before any code. */
+  readonly platform_env?: Readonly<Record<string, string>>;
+  /** After the agent finishes, deploy the shop here and check it live. */
+  readonly deploy?: "vercel";
   readonly allowed_install_paths: readonly string[];
   readonly forbidden: readonly string[];
   readonly max_turns: number;

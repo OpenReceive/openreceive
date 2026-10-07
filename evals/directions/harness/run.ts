@@ -23,7 +23,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 }
 
 function help(): void {
-  console.log(`Usage: npm run eval:directions -- --platform woocommerce|node|fastify|next|rails|django|fastapi|php|laravel [--smoke] [--runs 1] [--parallel 1] [--keep]
+  console.log(`Usage: npm run eval:directions -- --platform woocommerce|node|fastify|next|vercel|rails|django|fastapi|php|laravel [--smoke] [--runs 1] [--parallel 1] [--keep]
        [--directions-url <url> | --serve-directions] [--model <id>]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,
@@ -80,7 +80,7 @@ async function writeReport(
 async function smokeOne(platform: Platform, keep: boolean): Promise<void> {
   const fixture = path.join(evalRoot, "platforms", platform.slug, "fixture");
   const seed = path.join(evalRoot, "platforms", platform.slug, "seed");
-  const directory = await prepareShop(fixture, platform.slug);
+  const directory = await prepareShop(fixture, platform.slug, platform.platform_env);
   const sandbox = await startShop(directory, seed, platform);
   try {
     const evidence = await inspectShop(directory, platform);
@@ -152,10 +152,11 @@ async function main(): Promise<void> {
     if (!smoke) agentVersion = await preflight();
 
     for (const platform of selected) {
+      const directionsSlug = platform.directions_slug ?? platform.slug;
       const directionsUrl =
         explicitUrl ??
-        served?.fileUrl(`${platform.slug}.md`) ??
-        `https://openreceive.org/agent-directions/${platform.slug}.md`;
+        served?.fileUrl(`${directionsSlug}.md`) ??
+        `https://openreceive.org/agent-directions/${directionsSlug}.md`;
       const mode =
         served === undefined && !directionsUrl.includes("127.0.0.1") ? "released" : "candidate";
       for (let index = 0; index < runs; index += 1) {

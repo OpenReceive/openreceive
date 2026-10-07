@@ -1,0 +1,14 @@
+{
+  "name": "widget-shop",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/migrate.mjs && next build",
+    "start": "next start -H 0.0.0.0 -p 3000"
+  },
+  "dependencies": {
+    "next": "^16.4.0",
+    "pg": "^8.23.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  }
+}

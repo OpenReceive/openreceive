@@ -45,6 +45,12 @@ function run(command: string, args: readonly string[], cwd: string): Promise<voi
 }
 
 const FIXTURE_PORT = "127.0.0.1:8080:";
+const PLATFORM_ENV_MARKER = "__PLATFORM_ENV__";
+
+/** Beside the shop, never inside it: the agent's `git add -A` must not pick it up. */
+function platformEnvFile(directory: string): string {
+  return `${directory}.platform.env`;
+}
 
 /** A port nothing on 127.0.0.1 is listening on right now. */
 function freePort(): Promise<number> {
@@ -68,15 +74,27 @@ function freePort(): Promise<number> {
  * when the agent recreates the container, and links the shop prints then point
  * at the old port. The container port after the marker stays as the fixture wrote it.
  */
-export async function prepareShop(fixtureDir: string, slug: string): Promise<string> {
+export async function prepareShop(
+  fixtureDir: string,
+  slug: string,
+  platformEnv?: Readonly<Record<string, string>>,
+): Promise<string> {
   const id = Math.random().toString(16).slice(2, 10);
   const directory = await mkdtemp(path.join(tmpdir(), `oreval-${slug}-${id}-`));
   await cp(fixtureDir, directory, { recursive: true });
   const composeFile = path.join(directory, "compose.yml");
-  const fixture = await readFile(composeFile, "utf8");
+  let fixture = await readFile(composeFile, "utf8");
   if (!fixture.includes(FIXTURE_PORT))
     throw new InfraError(`${composeFile} does not publish ${FIXTURE_PORT}.`);
-  await writeFile(composeFile, fixture.replace(FIXTURE_PORT, `127.0.0.1:${await freePort()}:`));
+  fixture = fixture.replace(FIXTURE_PORT, `127.0.0.1:${await freePort()}:`);
+  // A hosting platform's project variables: the web service gets them the way
+  // a Vercel deployment does, and they never enter the agent's environment.
+  if (fixture.includes(PLATFORM_ENV_MARKER)) {
+    const lines = Object.entries(platformEnv ?? {}).map(([key, value]) => `${key}=${value}`);
+    await writeFile(platformEnvFile(directory), `${lines.join("\n")}\n`, { mode: 0o600 });
+    fixture = fixture.replace(PLATFORM_ENV_MARKER, platformEnvFile(directory));
+  }
+  await writeFile(composeFile, fixture);
   await run("git", ["init", "-b", "master"], directory);
   await run("git", ["add", "-A"], directory);
   await run(
@@ -102,6 +120,7 @@ async function removeShop(directory: string): Promise<void> {
     console.error(`Failed to remove ${id}: ${message}`);
   });
   await rm(directory, { recursive: true, force: true });
+  await rm(platformEnvFile(directory), { force: true });
 }
 
 export async function startShop(
@@ -255,7 +274,8 @@ async function inspectContainerShop(
   };
 }
 
-export function shopChecks(evidence: ShopEvidence): Check[] {
+/** `platformCodes`: the platform hands the shop its codes, so they should be there. */
+export function shopChecks(evidence: ShopEvidence, platformCodes = false): Check[] {
   return [
     {
       id: "shop_started",
@@ -288,11 +308,18 @@ export function shopChecks(evidence: ShopEvidence): Check[] {
       pass: evidence.openreceive === false,
       summary: "OpenReceive is not installed.",
     },
-    {
-      id: "codes_absent",
-      severity: "blocker",
-      pass: evidence.nwcInEnv === false,
-      summary: "The container environment has no NWC or LSC code.",
-    },
+    platformCodes
+      ? {
+          id: "platform_codes_present",
+          severity: "blocker",
+          pass: evidence.nwcInEnv,
+          summary: "The platform gave the web service its NWC and LSC codes.",
+        }
+      : {
+          id: "codes_absent",
+          severity: "blocker",
+          pass: evidence.nwcInEnv === false,
+          summary: "The container environment has no NWC or LSC code.",
+        },
   ];
 }

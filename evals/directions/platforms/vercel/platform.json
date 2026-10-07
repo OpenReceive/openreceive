@@ -1,0 +1,32 @@
+{
+  "slug": "vercel",
+  "name": "Vercel (Next.js on Neon)",
+  "directions": "docs/agents/next.md",
+  "directions_slug": "next",
+  "prompt_name": "Next.js shop on Vercel",
+  "opening": "This is a Next.js shop deployed on Vercel, with a Neon Postgres database. Add Bitcoin Lightning checkout to this app with OpenReceive. Download the directions with your terminal and follow them exactly:\n\ncurl -fsSL {{directions_url}}\n\nNWC_URI and LSC_URI_PRIMARY are already set as this project's environment variables, so do not ask me for them. Store payments in the Neon database: a pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create the tables. Use @openreceive packages 0.4.19 or newer.",
+  "doctor": "npx openreceive doctor",
+  "credential_store": {
+    "kind": "platform",
+    "where": "Vercel project environment variables"
+  },
+  "platform_env": {
+    "DATABASE_URL": "postgresql://shop:shop@pgbouncer:6432/shop",
+    "DATABASE_URL_UNPOOLED": "postgresql://shop:shop@postgres:5432/shop"
+  },
+  "deploy": "vercel",
+  "allowed_install_paths": ["npm"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "platform\\.env",
+    "vercel env pull"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false
+}

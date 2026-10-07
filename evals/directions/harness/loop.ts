@@ -5,11 +5,12 @@ import type { MerchantCodes } from "./codes.ts";
 import { agentTurn, cursorEnv, type SeenWrite } from "./cursor.ts";
 import { InfraError } from "./docker.ts";
 import { classify, merchantReply } from "./merchant.ts";
-import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { redact } from "./redact.ts";
-import { scanTrackedSecrets } from "./scan.ts";
+import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { inspectShop, prepareShop, shopChecks, startShop } from "./sandbox.ts";
+import { scanTrackedSecrets } from "./scan.ts";
 import type { Check, Platform, Scenario, Turn } from "./types.ts";
+import { loadVercelConfig, vercelChecks } from "./vercel.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const evalRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -66,7 +67,17 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
   const { platform } = request;
   const fixture = path.join(evalRoot, "platforms", platform.slug, "fixture");
   const seed = path.join(evalRoot, "platforms", platform.slug, "seed");
-  const directory = await prepareShop(fixture, platform.slug);
+  const platformCodes = platform.credential_store.kind === "platform";
+  // On a hosting platform the codes are project variables, so the shop has them from the start.
+  const shopNwc = platformCodes
+    ? (request.codes.nwcVercel ?? request.codes.nwc)
+    : request.codes.nwc;
+  const vercel =
+    platform.deploy === "vercel" ? await loadVercelConfig(path.join(repoRoot, ".env")) : undefined;
+  const directory = await prepareShop(fixture, platform.slug, {
+    ...platform.platform_env,
+    ...(platformCodes ? { NWC_URI: shopNwc, LSC_URI_PRIMARY: request.codes.lsc } : {}),
+  });
   let sandbox: Awaited<ReturnType<typeof startShop>> | undefined;
   let stopped = false;
   const stop = async (): Promise<void> => {
@@ -79,7 +90,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
   try {
     sandbox = await startShop(directory, seed, platform);
     const wallet = request.codes;
-    const uris = [wallet.nwc, wallet.lsc, wallet.lscBackup].filter(
+    const uris = [wallet.nwc, wallet.lsc, wallet.lscBackup, wallet.nwcVercel].filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
     const day = new Date().toISOString().slice(0, 10);
@@ -92,7 +103,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       sandbox.id,
     );
 
-    const pre = shopChecks(await inspectShop(directory, platform));
+    const pre = shopChecks(await inspectShop(directory, platform), platformCodes);
     const plain = pre.filter((check) => check.severity === "blocker" && check.pass === false);
     if (plain.length > 0) {
       const message = `plain shop failed: ${plain.map((check) => check.id).join(", ")}`;
@@ -120,7 +131,9 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       swaps: true,
       choice: "Yes, stablecoins too.",
     };
-    const opening = `This is a ${platform.prompt_name}. Enable Bitcoin and stablecoin payments with OpenReceive. Follow these directions: ${request.directionsUrl}`;
+    const opening =
+      platform.opening?.replaceAll("{{directions_url}}", request.directionsUrl) ??
+      `This is a ${platform.prompt_name}. Enable Bitcoin and stablecoin payments with OpenReceive. Follow these directions: ${request.directionsUrl}`;
     console.log(`${sandbox.id} ${sandbox.baseUrl}`);
     console.log(`${sandbox.id} directions ${request.directionsUrl}`);
 
@@ -171,7 +184,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
         reason = "a turn timed out";
         break;
       }
-      const reply = merchantReply(response.text, scenario, wallet);
+      const reply = merchantReply(response.text, scenario, wallet, platformCodes);
       if (reply === null) {
         done = true;
         break;
@@ -190,11 +203,18 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       scenario,
       platform,
       turns,
-      nwc: wallet.nwc,
+      nwc: shopNwc,
       lsc: wallet.lsc,
       lscBackup: wallet.lscBackup,
     }).map((check) => (check.id === "secret_not_tracked" ? secret : check));
     checks.push(stayedInShop(turns, repoRoot), finishedCheck(done, reason));
+    if (vercel !== undefined && done) {
+      checks.push(
+        ...(await vercelChecks(directory, vercel, { nwc: shopNwc, lsc: wallet.lsc }, (line) =>
+          console.log(`${sandbox?.id} ${hide(line, uris)}`),
+        )),
+      );
+    }
     const redacted = checks.map((check) => ({
       ...check,
       evidence: check.evidence === undefined ? undefined : hide(check.evidence, uris),
