@@ -1,0 +1,20 @@
+{
+  "slug": "fastapi",
+  "name": "FastAPI",
+  "directions": "docs/agents/fastapi.md",
+  "prompt_name": "FastAPI app",
+  "doctor": "openreceive doctor --app main:app",
+  "credential_store": { "kind": "dotenv", "where": ".env" },
+  "allowed_install_paths": ["pip"],
+  "forbidden": ["git clone .*openreceive", "--dangerously", "printenv"],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false,
+  "probes": {
+    "products": ["exec", "-T", "web", "bin/product-count"],
+    "openreceive": ["exec", "-T", "web", "bin/openreceive-installed"]
+  }
+}

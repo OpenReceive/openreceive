@@ -23,7 +23,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 }
 
 function help(): void {
-  console.log(`Usage: npm run eval:directions -- --platform woocommerce|node|fastify|next|rails|django [--smoke] [--runs 1] [--parallel 1] [--keep]
+  console.log(`Usage: npm run eval:directions -- --platform woocommerce|node|fastify|next|rails|django|fastapi [--smoke] [--runs 1] [--parallel 1] [--keep]
        [--directions-url <url> | --serve-directions] [--model <id>]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,

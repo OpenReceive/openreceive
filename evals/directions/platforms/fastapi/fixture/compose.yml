@@ -1,0 +1,20 @@
+# A plain FastAPI shop, on purpose: no OpenReceive, no wallet codes.
+# The Compose project name is the directory name. Each eval run copies this
+# file into its own directory so two runs do not share a network or a volume.
+# The host port is fixed: the harness swaps 8080 for a free port per run
+# (sandbox.ts) and that address stays across a rebuild.
+services:
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:8080:3000"
+    volumes:
+      - shop:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+volumes:
+  shop:
