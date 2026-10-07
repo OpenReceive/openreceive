@@ -510,7 +510,7 @@ test("pg adapter converts placeholders and serializes commits behind the advisor
   assert.equal(released, 2);
   const sqls = clientQueries.map((entry) => entry.sql);
   assert.equal(sqls[0], "BEGIN");
-  assert.equal(sqls[1], "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))");
+  assert.equal(sqls[1], "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1, $2))");
   assert.deepEqual(clientQueries[1].params, ["order-pg", 8_210_223]);
   assert.equal(sqls.at(-1), "COMMIT");
 

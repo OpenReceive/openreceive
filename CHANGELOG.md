@@ -2,6 +2,19 @@
 
 ## 0.4.19 - Unreleased
 
+- Node: Prisma on PostgreSQL failed every checkout. The per-reference lock
+  selected `pg_advisory_xact_lock(...)`, whose `void` result Prisma's raw
+  queries cannot read ("Failed to deserialize column of type 'void'"), so
+  each create threw before an invoice existed. The lock now selects a
+  constant from the function. `pg`, Knex and TypeORM were not affected, and
+  the Ruby, Python and PHP engines read the `void` column fine. The ORM
+  lanes had covered Prisma only on SQLite.
+- New CI lane: the payments contract (concurrent retries, rollback,
+  write-once settlement, the reconcile gate) runs through PgBouncer in
+  transaction mode with prepared statements off, for `pg`, Knex, Prisma
+  (`@prisma/adapter-pg`) and TypeORM. That is the connection serverless
+  hosts get from Supabase's port 6543 and Neon's pooler. All four pass.
+  Run it locally with `tests/orms/pooler/compose.yml`.
 - Fastify: with the documented mount, `register(openReceiveFastify, { prefix:
   "/openreceive" })`, an unknown path under the prefix got Fastify's own 404
   instead of OpenReceive's JSON 404. `openreceive doctor --url` probes for

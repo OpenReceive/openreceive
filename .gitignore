@@ -67,6 +67,7 @@ evals/directions/reports/
 
 # Prisma client for the test:orms lane; `npm run test:orms` regenerates it.
 tests/orms/generated/
+tests/orms/pooler/generated/
 
 # The Node stacks' SQLite databases and cookie secrets. The shop SURVIVES a
 # restart, so unlike a disposable checkout demo these are real local state.

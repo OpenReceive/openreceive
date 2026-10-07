@@ -1,30 +1,30 @@
 import { randomUUID } from "node:crypto";
 import {
-  OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
-  paymentsDdlStatements,
-  unixSeconds,
-  type PaymentDetails,
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
+  OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
+  type PaymentDetails,
+  paymentsDdlStatements,
   redactSecrets,
+  unixSeconds,
 } from "@openreceive/core";
 import type { Checkout, SwapData } from "@openreceive/node";
 import { hostError } from "./errors.ts";
 import type { CheckoutCreatedInput } from "./handler.ts";
 import {
-  liveAttemptCommitDecision,
   type AttemptStatus,
+  liveAttemptCommitDecision,
   type PaymentRecord,
   type PaymentRepository,
-  type ReconcileScheduler,
-  type ReconcilableAttempt,
-  type ReconciliationTransition,
   paymentInsert,
+  type ReconcilableAttempt,
+  type ReconcileScheduler,
+  type ReconciliationTransition,
 } from "./payment-repository.ts";
 import {
+  resolveSqlAdapter,
   type SqlClient,
   type SqlDatabase,
   type SqlQuery,
-  resolveSqlAdapter,
   toPgPlaceholders,
 } from "./sql-adapters.ts";
 
@@ -211,10 +211,12 @@ export function createSqlPayments(
     // SQLite transactions are single-writer (BEGIN IMMEDIATE); postgres needs a
     // per-reference serialization boundary.
     if (adapter.dialect === "postgres") {
-      await tx.query(statement("SELECT pg_advisory_xact_lock(hashtextextended(?, ?))"), [
-        reference,
-        ADVISORY_LOCK_SEED,
-      ]);
+      // The lock function returns void, a column type Prisma's raw queries
+      // cannot read, so select a constant from it instead.
+      await tx.query(
+        statement("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(?, ?))"),
+        [reference, ADVISORY_LOCK_SEED],
+      );
     }
   };
 

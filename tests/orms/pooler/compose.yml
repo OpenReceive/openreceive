@@ -1,0 +1,39 @@
+# PostgreSQL behind PgBouncer in transaction mode, for the pooler lane of
+# `npm run test:orms`. CI and local runs use this same file:
+#
+#   docker compose -f tests/orms/pooler/compose.yml up -d --wait
+#   OPENRECEIVE_TEST_POOLER_URL=postgresql://openreceive:openreceive@127.0.0.1:56432/openreceive_test \
+#   OPENRECEIVE_TEST_POSTGRES_URL=postgresql://openreceive:openreceive@127.0.0.1:55432/openreceive_test \
+#     npm run test:orms
+#   docker compose -f tests/orms/pooler/compose.yml down -v
+name: openreceive-pooler-test
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: openreceive
+      POSTGRES_PASSWORD: openreceive
+      POSTGRES_DB: openreceive_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "openreceive", "-d", "openreceive_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.0-p0
+    entrypoint: ["pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
+    volumes:
+      - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "127.0.0.1:56432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z 127.0.0.1 6432"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
