@@ -44,6 +44,13 @@ export interface Platform {
   readonly directions_slug?: string;
   /** The merchant's first message; `{{directions_url}}` is filled in. */
   readonly opening?: string;
+  /**
+   * Or: the platform-prompt block of this guide, the prompt openreceive.org
+   * tells people to paste, after `opening_context`. A served or explicit
+   * directions URL replaces the published one in it.
+   */
+  readonly opening_guide?: string;
+  readonly opening_context?: string;
   /** Variables the platform gives the shop's web service, before any code. */
   readonly platform_env?: Readonly<Record<string, string>>;
   /** After the agent finishes, deploy the shop here and check it live. */

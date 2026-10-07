@@ -51,7 +51,7 @@ Reports land in `evals/directions/reports/` and are not committed. `summary.md` 
 
 `--platform vercel` tests what a v0 or Vercel user gets. The shop is a Next.js
 store on Postgres, and the opening message is the prompt from
-`docs/guides/v0.md`. The codes are already the project's environment
+`docs/guides/vercel.md`. The codes are already the project's environment
 variables, so the merchant never pastes one: asking for a code, or repeating
 one, fails the run. Locally the shop runs behind PgBouncer in transaction mode,
 like Neon's pooler, and Compose gives the web service the project's variables
@@ -85,17 +85,7 @@ npm run eval:directions -- --platform vercel --serve-directions
 
 ## Passed
 
-A platform is listed here after one live run exits 0. The report itself stays gitignored.
-
-| Platform | Date | Release |
-| --- | --- | --- |
-| WooCommerce | 2026-10-06 | 0.4.18 |
-| Node | 2026-10-06 | 0.4.18 |
-| Fastify | 2026-10-06 | 0.4.18 |
-| Next.js | 2026-10-06 | 0.4.18 |
-| Rails | 2026-10-06 | 0.4.18 |
-| Django | 2026-10-06 | 0.4.18 |
-| FastAPI | 2026-10-06 | 0.4.18 |
-| PHP | 2026-10-06 | 0.4.18 |
-| Laravel | 2026-10-07 | 0.4.18 |
-| Vercel (Next.js on Neon) | 2026-10-07 | 0.4.19 |
+A platform counts as passed after one live run exits 0. The reports stay
+gitignored. [`passed.json`](passed.json) is the public record: one entry per eval
+with the date and release of its latest passing run. openreceive.org shows those
+entries as Tested badges. Update the entry after each passing run.

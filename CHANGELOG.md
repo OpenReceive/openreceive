@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.20 - Unreleased
+
+- Site contract v8: platform pages and Tested badges. `docs/site/platforms.json`
+  lists where people build and host apps: Vercel and v0 now, with Replit,
+  Lovable and Supabase planned. The contract publishes the rows as
+  `platforms[]` for a `/platforms` index and one `/platforms/<id>` page each.
+  Every framework row gains `tested`: the date and release of its latest
+  passing live eval, from the new `evals/directions/passed.json`. For an AI
+  builder the copied prompt is the guide's platform-prompt block, which the
+  eval also sends, so the published prompt is the tested one.
+  `docs/internal/site-build.md` has the layout.
+- The Vercel and v0 guide moved from `/guides/v0` to `/guides/vercel`, with
+  301 redirects for the page and its markdown twin. New guide:
+  [How we test platforms](docs/guides/how-we-test-platforms.md), what a Tested
+  badge means and what it does not.
+- Directions eval: a `vercel` platform. The shop is Next.js on Postgres, and
+  the codes are project variables the agent must not ask for. After the agent
+  finishes, the harness deploys the result to Vercel and checks the live
+  site: a real invoice for the buyer, a refusal for a stranger. It passed
+  21 of 21 checks on 0.4.19. The harness now refuses a truncated NWC code
+  before it starts a run.
+- Release tooling: the Composer publish pushes both split repositories before
+  it waits for Packagist, and waits up to 20 minutes for each. In 0.4.19
+  Packagist took longer than the old 10-minute wait, so the job failed after
+  publishing.
+
 ## 0.4.19 - 2026-10-07
 
 - New: [`examples/next-postgres-starter`](examples/next-postgres-starter), a

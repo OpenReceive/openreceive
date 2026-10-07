@@ -50,9 +50,17 @@
       "public": true
     },
     {
-      "slug": "v0",
-      "title": "Bitcoin Checkout in v0",
-      "source_path": "docs/guides/v0.md",
+      "slug": "vercel",
+      "title": "Bitcoin Checkout on Vercel and v0",
+      "source_path": "docs/guides/vercel.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "how-we-test-platforms",
+      "title": "How We Test Platforms",
+      "source_path": "docs/guides/how-we-test-platforms.md",
       "category": "guide",
       "audience": "developer",
       "public": true

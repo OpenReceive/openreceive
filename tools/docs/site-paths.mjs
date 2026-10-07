@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 // Pages openreceive.org authors and owns, as opposed to rendering from a source
 // file in this repo. The agent directions link to these by URL, so the list is
 // shared: `generate-agent-directions.mjs` allows a link to one of them, and
@@ -31,7 +33,20 @@ export const SITE_OWNED_PATHS = [
 // The Rails site imports these obligations from docs/site-contract.json.
 export const SITE_REDIRECTS = [
   { from: "/integrations/wordpress", to: "/integrations/woocommerce", status: 301 },
+  // The Vercel and v0 guide was published at /guides/v0 in 0.4.19.
+  { from: "/guides/v0", to: "/guides/vercel", status: 301 },
+  { from: "/guides/v0.md", to: "/guides/vercel.md", status: 301 },
 ];
+
+// The platform pages (contract v8): the /platforms index, and /platforms/<id>
+// with its markdown twin for each platform in docs/site/platforms.json that is
+// not still planned. generate-site-contract.mjs validates the rows.
+export const PLATFORM_INDEX_PATH = "/platforms";
+export const PLATFORM_PATHS = JSON.parse(
+  readFileSync(new URL("../../docs/site/platforms.json", import.meta.url), "utf8"),
+)
+  .platforms.filter((row) => row.planned !== true)
+  .map((row) => `/platforms/${row.id}`);
 
 // Every page the site renders from a source in THIS repo is also served as raw
 // markdown at the same URL with `.md` appended.
@@ -94,6 +109,7 @@ export function isServablePath(pathname, publicSlugs) {
   const isTwin = pathname.endsWith(MARKDOWN_SUFFIX);
   const page = isTwin ? pathname.slice(0, -MARKDOWN_SUFFIX.length) : pathname;
   if (isTwin && MARKDOWN_TWINNED_SITE_PAGES.includes(page)) return true;
+  if (pathname === PLATFORM_INDEX_PATH || PLATFORM_PATHS.includes(page)) return true;
   const guide = page.match(/^\/guides\/([a-z0-9-]+)$/);
   return Boolean(guide) && publicSlugs.has(guide[1]);
 }

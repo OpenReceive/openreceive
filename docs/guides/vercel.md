@@ -1,4 +1,4 @@
-# Bitcoin checkout in v0
+# Bitcoin checkout on Vercel and v0
 
 v0 builds Next.js apps that run on Vercel, and OpenReceive's Next.js package
 runs in them as is. Your app's own server code creates each Lightning invoice,
@@ -53,6 +53,7 @@ is a one-product shop with checkout already wired.
 2. Set `NWC_URI` (and `LSC_URI_PRIMARY`) as above.
 3. Send v0 this prompt:
 
+<!-- platform-prompt:begin -->
 ```text
 Add Bitcoin Lightning checkout to this app with OpenReceive. Download the
 directions with your terminal and follow them exactly:
@@ -64,6 +65,7 @@ variables, so do not ask me for them. Store payments in the Neon database:
 a pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create
 the tables. Use @openreceive packages 0.4.19 or newer.
 ```
+<!-- platform-prompt:end -->
 
 The directions tell v0 how to map the three hooks onto your existing orders
 and how to render the checkout. They also tell it to stop and show you the

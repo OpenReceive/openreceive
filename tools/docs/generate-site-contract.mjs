@@ -26,6 +26,8 @@ import {
   AGENT_PAYLOAD_PATHS,
   agentFullPath,
   markdownTwin,
+  PLATFORM_INDEX_PATH,
+  PLATFORM_PATHS,
   SITE_OWNED_PATHS,
   SITE_REDIRECTS,
 } from "./site-paths.mjs";
@@ -446,6 +448,26 @@ for (const asset of assets) {
   }
 }
 
+// The public record of passing directions evals (evals/directions/passed.json):
+// one entry per eval, the date and release of its latest passing live run. The
+// site shows them as Tested badges, so each must name an eval that exists.
+const passed = new Map(
+  JSON.parse(readFileSync(path.join(root, "evals/directions/passed.json"), "utf8")).passed.map(
+    (entry) => {
+      if (
+        !existsSync(path.join(root, "evals/directions/platforms", entry.eval, "platform.json")) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
+        !/^\d+\.\d+\.\d+$/.test(entry.release)
+      ) {
+        throw new Error(
+          `${TARGET}: invalid evals/directions/passed.json entry ${JSON.stringify(entry)}`,
+        );
+      }
+      return [entry.eval, { date: entry.date, release: entry.release }];
+    },
+  ),
+);
+
 const frameworks = FRAMEWORKS.map((framework) => {
   const { demo: demoKey, ...row } = framework;
   const demo =
@@ -510,8 +532,90 @@ const frameworks = FRAMEWORKS.map((framework) => {
     demo_port: demo ? demo.port : null,
     video,
     shared_checkout_demo: row.shared_checkout_demo,
+    tested: passed.get(row.agent_stack) ?? null,
   };
 });
+
+// The platform pages (contract v8), from docs/site/platforms.json. A platform
+// runs on a framework above; it adds where secrets live, which database URL to
+// use, a starter and, for AI builders, the prompt to paste. The prompt is the
+// block between platform-prompt markers in the platform's guide, the same text
+// the directions eval sends, so the copied prompt is the tested one.
+const PLATFORM_KINDS = ["ai-builder", "host", "database", "store"];
+const PROMPT_BLOCK =
+  /<!-- platform-prompt:begin -->\s*```text\n([\s\S]*?)\n```\s*<!-- platform-prompt:end -->/;
+const platformIds = new Set();
+const platforms = JSON.parse(
+  readFileSync(path.join(root, "docs/site/platforms.json"), "utf8"),
+).platforms.map((row) => {
+  const fail = (message) => {
+    throw new Error(`${TARGET}: platform ${row.id}: ${message} (docs/site/platforms.json)`);
+  };
+  if (!/^[a-z0-9-]+$/.test(row.id ?? "") || platformIds.has(row.id)) fail("needs a unique slug id");
+  platformIds.add(row.id);
+  if (!PLATFORM_KINDS.includes(row.kind)) fail(`kind must be one of ${PLATFORM_KINDS.join(", ")}`);
+  if (typeof row.label !== "string" || typeof row.summary !== "string")
+    fail("needs a label and a summary");
+  if (row.framework !== null && !frameworks.some((entry) => entry.id === row.framework)) {
+    fail(`names framework ${row.framework}, which is not in frameworks[]`);
+  }
+  const base = {
+    id: row.id,
+    label: row.label,
+    kind: row.kind,
+    summary: row.summary,
+    framework: row.framework,
+    framework_path: row.framework === null ? null : `/integrations/${row.framework}`,
+  };
+  if (row.planned === true) return { ...base, status: "planned", path: null };
+  const guide = bySlug.get(row.guide);
+  if (!guide?.public)
+    fail(`names guide ${row.guide}, which is not a public doc in docs/manifest.json`);
+  let prompt = null;
+  if (row.prompt === true) {
+    prompt =
+      readFileSync(path.join(root, guide.source_path), "utf8").match(PROMPT_BLOCK)?.[1] ?? null;
+    if (prompt === null) fail(`${guide.source_path} has no platform-prompt block`);
+  }
+  const starter = row.starter ?? null;
+  if (
+    starter !== null &&
+    !(/^https:\/\//.test(starter.url) && /^https:\/\//.test(starter.source_url))
+  ) {
+    fail("starter needs https url and source_url");
+  }
+  if (!existsSync(path.join(root, "evals/directions/platforms", row.eval, "platform.json"))) {
+    fail(
+      `names eval ${row.eval}, which has no evals/directions/platforms/${row.eval}/platform.json`,
+    );
+  }
+  const tested = passed.get(row.eval) ?? null;
+  return {
+    ...base,
+    status: tested === null ? "guide" : "tested",
+    path: `/platforms/${row.id}`,
+    markdown_path: markdownTwin(`/platforms/${row.id}`),
+    database: row.database,
+    secrets: row.secrets,
+    settlement: row.settlement,
+    guide_slug: row.guide,
+    guide_path: `/guides/${row.guide}`,
+    guide_source: guide.source_path,
+    prompt,
+    starter,
+    eval: row.eval,
+    tested,
+  };
+});
+const platformPagePaths = platforms
+  .filter((entry) => entry.path !== null)
+  .map((entry) => entry.path)
+  .sort();
+if (JSON.stringify(platformPagePaths) !== JSON.stringify([...PLATFORM_PATHS].sort())) {
+  throw new Error(
+    `${TARGET}: PLATFORM_PATHS in tools/docs/site-paths.mjs disagrees with platforms[]`,
+  );
+}
 
 // Each stack publishes two raw-markdown files (contract v7). The URL people
 // paste, `/agent-directions/<stack>.md`, is a cover a few hundred bytes long
@@ -552,6 +656,8 @@ const pagePaths = new Set([
   ...copyButton.map((entry) => entry.path),
   ...SITE_OWNED_PATHS,
   ...frameworks.map((entry) => `/integrations/${entry.id}`),
+  PLATFORM_INDEX_PATH,
+  ...platforms.flatMap((entry) => (entry.path === null ? [] : [entry.path, entry.markdown_path])),
 ]);
 const redirectPaths = new Set();
 for (const redirect of SITE_REDIRECTS) {
@@ -593,8 +699,12 @@ const contract = {
   // (`full_path`, and `agent_full_path` on each framework row), which is what
   // the copy button copies. A bump because a site on v6 would serve no full
   // file, leaving every cover's curl line a 404, and its copy button would
-  // copy the cover.
-  contract_version: 7,
+  // copy the cover. v8 adds `platforms[]` (the /platforms index and one
+  // /platforms/<id> page per row, each a header from the row above its guide)
+  // and `tested` on every framework row, from evals/directions/passed.json. A
+  // bump because the published guides link /platforms: a site on v7 would
+  // 404 them.
+  contract_version: 8,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.
@@ -612,6 +722,15 @@ const contract = {
   // `shared_checkout_demo` is false the page shows the video and screenshots
   // instead of the shared checkout panel.
   frameworks,
+  // Where people build and host (contract v8). Render /platforms as the index
+  // and one page per row whose `path` is not null; docs/internal/site-build.md
+  // has the layout. `status` is "tested" only when `tested` names a passing
+  // live run; "guide" rows are documented, "planned" rows have no page yet.
+  platforms_index: {
+    path: PLATFORM_INDEX_PATH,
+    method_guide_path: "/guides/how-we-test-platforms",
+  },
+  platforms,
   // Images embedded by a publish[] entry (contract v4). Serve `source`'s bytes
   // at `path` with `content_type`; the renderer maps the source's relative
   // <img src> to `path`, in the page and in the markdown twin alike.
@@ -672,5 +791,5 @@ if (!check && current !== serialized) writeFileSync(absolute, serialized);
 
 console.log(
   `${check ? "Checked" : "Wrote"} ${TARGET}: ${publish.length} routes, ` +
-    `${copyButton.filter((entry) => entry.copy_button).length} copy payloads, ${copyButton.filter((entry) => !entry.copy_button).length} covers, ${frameworks.length} frameworks, ${servedAssets.length} assets, ${contract.never_publish.length} never-publish.`,
+    `${copyButton.filter((entry) => entry.copy_button).length} copy payloads, ${copyButton.filter((entry) => !entry.copy_button).length} covers, ${frameworks.length} frameworks, ${platforms.length} platforms, ${servedAssets.length} assets, ${contract.never_publish.length} never-publish.`,
 );

@@ -13,7 +13,7 @@ optional. The provider decides which assets and networks are available.
 1. [Express quickstart (Node)](quickstart-node.md)
 2. [Fastify quickstart](quickstart-fastify.md)
 3. [Next.js quickstart](quickstart-next.md)
-   - [Bitcoin checkout in v0](v0.md): the same Next.js setup, built by v0 and hosted on Vercel
+   - [Bitcoin checkout on Vercel and v0](vercel.md): the same Next.js setup, hosted on Vercel or built by v0
 4. [Node ORM recipes](node-orms.md)
 5. [Rails quickstart](quickstart-rails.md)
 6. [FastAPI quickstart](quickstart-fastapi.md)
@@ -41,6 +41,7 @@ optional. The provider decides which assets and networks are available.
 28. [Provider registry](provider-registry.md)
 29. [WordPress + WooCommerce quickstart](quickstart-woocommerce.md)
 30. [WordPress hosting requirements](wordpress-hosting.md): which hosts can run the WooCommerce plugin
+31. [How we test platforms](how-we-test-platforms.md): what a Tested badge on openreceive.org means
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
 [Flask](../recipes/flask.md) (the Python engine as a Blueprint)

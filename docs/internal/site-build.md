@@ -33,7 +33,7 @@ a `markdown_path` as well as a `path`, and the directions link the
 
 ## `contract_version`
 
-The contract is at **v6**. A site that reads it should refuse to publish a
+The contract is at **v8**. A site that reads it should refuse to publish a
 version it does not understand, rather than publish part of it. A half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -112,6 +112,15 @@ contract is how a payload ends up linking a page nobody serves.
   on v6 would serve no `full.md`, which turns every cover's one instruction
   into a 404, and its copy button would copy the cover.
 
+- **v8**: adds the platform pages and Tested badges. `platforms[]` has one row
+  per place people build or host an app: Vercel, v0, and planned rows for
+  Replit, Lovable and Supabase. `platforms_index` names the `/platforms` page
+  and the guide that explains the badges. Every `frameworks[]` row gains
+  `tested`. The guide at `/guides/v0` moved to `/guides/vercel`, with two
+  `site_redirects[]` entries. The layout is in [Platforms](#platforms-contract-v8)
+  below. The version bumps because published guides now link `/platforms`, so
+  a site on v7 would serve 404s for those links.
+
 `release_version` changes with every library release and says nothing about the
 shape of this file. `contract_version` changes only when the site has to do
 something new.
@@ -188,7 +197,11 @@ something new.
     request to `from` must return its `status` and a `Location` resolving to `to`,
     before any SPA fallback. Follow the target and require a successful page.
     See the WordPress alias requirement below.
-12. Confirm every path in `site_owned[]` still resolves. Most of them are yours.
+12. Render the platform pages from `platforms[]` and `platforms_index`
+    (contract v8), as [Platforms](#platforms-contract-v8) describes. Show the
+    Tested badge on every framework card and framework page whose `tested` is
+    not null.
+13. Confirm every path in `site_owned[]` still resolves. Most of them are yours.
     The agent-discovery trio (`/llms.txt`, `/openapi.yaml`, `/agents`) is listed
     there as must-exist, but it comes from this repo as described above.
 
@@ -306,6 +319,8 @@ contract:
 | `agent-directions-payload` | `/agent-directions/<stack>/full.md` for every payload stack | The full directions as `text/markdown`: the bytes the copy button copies and the cover's curl fetches. |
 | permanent redirect | `/integrations/wordpress` | `site_redirects[]`: HTTP 301 to `/integrations/woocommerce`, applied before the SPA fallback. |
 | framework page | `/integrations/<id>` | `frameworks[]` (contract v5; `php` and `python` families since v6). Not a `publish[]` entry, because the page is the site's own template rendered from the row. The row names which `publish[]` pages it links. |
+| platforms index | `/platforms` | `platforms_index` and `platforms[]` (contract v8). The site's own template: every row, grouped by `kind`. Not a `publish[]` entry. |
+| platform page | `/platforms/<id>` | One page per `platforms[]` row whose `path` is not null: a header rendered from the row, then the guide at `guide_source`, rendered. Its twin `/platforms/<id>.md` serves the guide's raw markdown. |
 | `agents-page` | `/agents` | The entry point for coding agents (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
 | `plugin-readme` | `/wordpress`, `/btcpay` | Render the plugin README and its markdown twin. WordPress has a screenshot and no video. BTCPay carries a `video` field: play `video.path` inline at the top of the page, with `video.poster` as its poster (both are `assets[]` entries), in place of the README's GitHub-only attachment URL. `/btcpay` is the BTCPay Server home: the plugin README (`packages/dotnet/BTCPayServer.Plugins.OpenReceive/README.md`) rendered and twinned like a guide, with its screenshots from `assets[]`. Link it from the site navigation as the BTCPay entry point. The guides (`/guides/quickstart-btcpay`, `/guides/btcpay-reference`, and the swap guides) are the full documentation behind it. |
 | `asset` | `/assets/<path>` | `assets[]`: the verbatim bytes of a file under `docs/assets/` that a `publish[]` entry embeds or links. These are the README's screenshots, its demo video (`video/mp4`) and the poster frame that links to it. Rewrite the link the same way as an image `src`. |
@@ -347,6 +362,95 @@ Leave external URLs as they are.
 
 The agent payloads need none of this. Every link in them is already absolute
 and already points at a `.md`, which is the point of them.
+
+## Platforms (contract v8)
+
+A framework is the code an app is written in, and decides which OpenReceive
+package to install. A platform is where the app is built or hosted. A platform
+has no package and no agent directions of its own. It runs on a framework and
+adds where the secrets live, which database URL to use, a starter, and, for an
+AI builder, the prompt to paste into its chat. The site shows platforms as
+their own section, next to the frameworks, never inside the framework grid.
+
+### The data
+
+Each `platforms[]` row carries:
+
+| Field | Meaning |
+| --- | --- |
+| `id`, `label` | The URL slug and the display name ("Vercel", "v0") |
+| `kind` | `ai-builder`, `host`, `database` or `store`. Group by it. |
+| `summary` | One factual sentence. Use it, or write better marketing copy on the site. |
+| `status` | `tested`, `guide` or `planned` (below) |
+| `path`, `markdown_path` | `/platforms/<id>` and its twin. `null` while planned. |
+| `framework`, `framework_path` | The `frameworks[]` row it runs on, and that page. Null when no framework page exists yet. |
+| `database`, `secrets`, `settlement` | Plain facts for a small "How it runs" list on the page |
+| `guide_path`, `guide_source` | The full guide. The platform page renders `guide_source` below its header. |
+| `prompt` | Text for a Copy prompt button, or null. Copy it verbatim. |
+| `starter` | `{ label, url, source_url }` or null. `url` is a one-click deploy link. |
+| `tested` | `{ date, release }` of the latest passing live run, or null |
+
+Logos are the site's own, like the framework logos. This repo sends facts, not
+artwork or marketing copy.
+
+### Status and the badge
+
+- **`tested`**: show a badge such as "Tested live · Oct 7, 2026 · 0.4.19",
+  built from `tested.date` and `tested.release`. Link it to
+  `platforms_index.method_guide_path`, the "How we test platforms" guide.
+- **`guide`**: documented, not yet tested end to end. Show no badge, or a
+  neutral "Guide" label.
+- **`planned`**: no page and no link. List it as "Coming next" on the index if
+  you want to show momentum. Never show a planned row as available.
+
+Never show Tested without a `tested` value. The badge is a claim that a real
+deploy passed. Framework rows use the same `tested` field, and the badge
+belongs on the framework cards and pages too.
+
+### The home page
+
+Add a Platforms section next to the framework section, in the same style:
+
+- label: PLATFORMS
+- headline: "Where are you building?"
+- subline: "Start from a template, or paste one prompt. Every platform marked
+  Tested has a real deploy behind it."
+- one card per row whose `path` is not null: logo, `label`, `summary`, "Runs
+  on" plus the framework label, the badge, and up to three actions:
+  - Get started, linking `path`
+  - the starter's `label`, linking `starter.url`, when `starter` is set
+  - Copy prompt, copying `prompt`, when `prompt` is set
+- a "See all platforms" link to `/platforms`
+
+While only a few platforms have pages, put this section below the frameworks.
+Once AI builders such as v0, Replit and Lovable are live, move it above them:
+many people who use those tools do not know their framework.
+
+### `/platforms`
+
+The index works as a marketing page and as proof:
+
+- headline: "Tested on the platforms you build with"
+- one paragraph explaining the method, linking `method_guide_path`. An AI
+  coding agent starts from a plain app on the platform and follows the
+  published directions. The result is deployed to the real platform, and the
+  live site must issue a real Lightning invoice and refuse a stranger.
+- every row, grouped by `kind` (AI app builders, Hosting, Databases, Stores),
+  as cards with the badge. Planned rows appear as "Coming next" without a link.
+- a short pointer to the framework section for people who write their own code
+
+### `/platforms/<id>`
+
+- a header from the row: logo, `label`, `summary`, the badge, the starter
+  button and the Copy prompt button
+- a "How it runs" list: "Runs on" (`framework`, linking `framework_path`),
+  `database`, `secrets`, `settlement`
+- below it, the guide at `guide_source`, rendered like any guide, with the same
+  link rewriting
+- the twin `/platforms/<id>.md` serves the raw guide markdown
+
+Two rows can share one guide. `vercel` and `v0` do: the Vercel page leads with
+the deploy button, and the v0 page leads with Copy prompt.
 
 ## The copy button
 

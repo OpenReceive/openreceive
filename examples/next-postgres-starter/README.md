@@ -50,4 +50,4 @@ tested against. Migrations use the direct URL, `DATABASE_URL_UNPOOLED`, when it
 is set.
 
 The full walkthrough is the [Next.js quickstart](https://openreceive.org/guides/quickstart-next).
-To build on this starter in v0, see the [v0 guide](https://openreceive.org/guides/v0).
+To build on this starter in v0, see [Vercel and v0](https://openreceive.org/guides/vercel).

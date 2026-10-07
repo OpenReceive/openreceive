@@ -1,0 +1,55 @@
+{
+  "_comment": "One entry per platform or framework eval whose latest live run exited 0 (npm run eval:directions). Reports stay gitignored; this is the public record openreceive.org shows as Tested badges. Update the entry after each passing run.",
+  "passed": [
+    {
+      "eval": "woocommerce",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "node",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "fastify",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "next",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "rails",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "django",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "fastapi",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "php",
+      "date": "2026-10-06",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "laravel",
+      "date": "2026-10-07",
+      "release": "0.4.18"
+    },
+    {
+      "eval": "vercel",
+      "date": "2026-10-07",
+      "release": "0.4.19"
+    }
+  ]
+}

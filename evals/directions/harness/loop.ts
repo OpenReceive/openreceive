@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { blockersFailed, containsSecret, evaluate, scopeViolation } from "./checks.ts";
@@ -14,6 +15,28 @@ import { loadVercelConfig, vercelChecks } from "./vercel.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const evalRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const PROMPT_BLOCK =
+  /<!-- platform-prompt:begin -->\s*```text\n([\s\S]*?)\n```\s*<!-- platform-prompt:end -->/;
+
+/** The first message: a guide's published prompt, or the platform's own template. */
+export async function openingFor(platform: Platform, directionsUrl: string): Promise<string> {
+  if (platform.opening_guide !== undefined) {
+    const guide = await readFile(path.join(repoRoot, platform.opening_guide), "utf8");
+    const prompt = guide.match(PROMPT_BLOCK)?.[1];
+    if (prompt === undefined)
+      throw new InfraError(`${platform.opening_guide} has no platform-prompt block.`);
+    const published = /https:\/\/openreceive\.org\/agent-directions\/[a-z-]+(?:\/full)?\.md/g;
+    const text = directionsUrl.startsWith("https://openreceive.org/")
+      ? prompt
+      : prompt.replace(published, directionsUrl);
+    return [platform.opening_context, text].filter(Boolean).join(" ");
+  }
+  return (
+    platform.opening?.replaceAll("{{directions_url}}", directionsUrl) ??
+    `This is a ${platform.prompt_name}. Enable Bitcoin and stablecoin payments with OpenReceive. Follow these directions: ${directionsUrl}`
+  );
+}
 
 export interface LoopRequest {
   readonly platform: Platform;
@@ -131,9 +154,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       swaps: true,
       choice: "Yes, stablecoins too.",
     };
-    const opening =
-      platform.opening?.replaceAll("{{directions_url}}", request.directionsUrl) ??
-      `This is a ${platform.prompt_name}. Enable Bitcoin and stablecoin payments with OpenReceive. Follow these directions: ${request.directionsUrl}`;
+    const opening = await openingFor(platform, request.directionsUrl);
     console.log(`${sandbox.id} ${sandbox.baseUrl}`);
     console.log(`${sandbox.id} directions ${request.directionsUrl}`);
 

@@ -1,5 +1,5 @@
 {
-  "contract_version": 7,
+  "contract_version": 8,
   "release_version": "0.4.19",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 3735
+      "bytes": 3849
     },
     {
       "path": "/guides/quickstart-node",
@@ -66,14 +66,24 @@
       "bytes": 16436
     },
     {
-      "path": "/guides/v0",
-      "markdown_path": "/guides/v0.md",
-      "source": "docs/guides/v0.md",
+      "path": "/guides/vercel",
+      "markdown_path": "/guides/vercel.md",
+      "source": "docs/guides/vercel.md",
       "kind": "guide",
-      "slug": "v0",
-      "title": "Bitcoin Checkout in v0",
+      "slug": "vercel",
+      "title": "Bitcoin Checkout on Vercel and v0",
       "category": "guide",
-      "bytes": 4737
+      "bytes": 4808
+    },
+    {
+      "path": "/guides/how-we-test-platforms",
+      "markdown_path": "/guides/how-we-test-platforms.md",
+      "source": "docs/guides/how-we-test-platforms.md",
+      "kind": "guide",
+      "slug": "how-we-test-platforms",
+      "title": "How We Test Platforms",
+      "category": "guide",
+      "bytes": 2892
     },
     {
       "path": "/guides/quickstart-rails",
@@ -733,7 +743,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/wordpress",
       "demo_port": "3009",
       "video": null,
-      "shared_checkout_demo": false
+      "shared_checkout_demo": false,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "express",
@@ -753,7 +767,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/node-express",
       "demo_port": "3000",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "fastify",
@@ -773,7 +791,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/fastify",
       "demo_port": "3004",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "nextjs",
@@ -793,7 +815,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/nextjs-fullstack",
       "demo_port": "3002",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "rails",
@@ -813,7 +839,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/rails",
       "demo_port": "3003",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "btcpay-server",
@@ -833,7 +863,8 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive",
       "demo_port": null,
       "video": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
-      "shared_checkout_demo": false
+      "shared_checkout_demo": false,
+      "tested": null
     },
     {
       "id": "django",
@@ -853,7 +884,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/django",
       "demo_port": "3006",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "fastapi",
@@ -873,7 +908,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/fastapi",
       "demo_port": "3007",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "laravel",
@@ -893,7 +932,11 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/laravel",
       "demo_port": "3005",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-07",
+        "release": "0.4.18"
+      }
     },
     {
       "id": "php",
@@ -913,7 +956,103 @@
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/php-plain",
       "demo_port": "3008",
       "video": null,
-      "shared_checkout_demo": true
+      "shared_checkout_demo": true,
+      "tested": {
+        "date": "2026-10-06",
+        "release": "0.4.18"
+      }
+    }
+  ],
+  "platforms_index": {
+    "path": "/platforms",
+    "method_guide_path": "/guides/how-we-test-platforms"
+  },
+  "platforms": [
+    {
+      "id": "vercel",
+      "label": "Vercel",
+      "kind": "host",
+      "summary": "Next.js on Vercel with a Neon database. Deploy the starter, or add checkout to your own app.",
+      "framework": "nextjs",
+      "framework_path": "/integrations/nextjs",
+      "status": "tested",
+      "path": "/platforms/vercel",
+      "markdown_path": "/platforms/vercel.md",
+      "database": "Neon Postgres, through its pooled URL",
+      "secrets": "Vercel project environment variables",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide_slug": "vercel",
+      "guide_path": "/guides/vercel",
+      "guide_source": "docs/guides/vercel.md",
+      "prompt": null,
+      "starter": {
+        "label": "Deploy to Vercel",
+        "url": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenReceive%2Fopenreceive%2Ftree%2Fmaster%2Fexamples%2Fnext-postgres-starter&project-name=openreceive-starter&repository-name=openreceive-starter&env=NWC_URI&envDescription=A%20receive-only%20NWC%20code%20from%20your%20Lightning%20wallet&envLink=https%3A%2F%2Fopenreceive.org%2Fget_a_nwc_code_to_receive_payments&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D",
+        "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/next-postgres-starter"
+      },
+      "eval": "vercel",
+      "tested": {
+        "date": "2026-10-07",
+        "release": "0.4.19"
+      }
+    },
+    {
+      "id": "v0",
+      "label": "v0",
+      "kind": "ai-builder",
+      "summary": "v0 builds Next.js apps on Vercel. Paste one prompt and v0 adds checkout to your app.",
+      "framework": "nextjs",
+      "framework_path": "/integrations/nextjs",
+      "status": "tested",
+      "path": "/platforms/v0",
+      "markdown_path": "/platforms/v0.md",
+      "database": "Neon Postgres, connected from v0's Integrations",
+      "secrets": "Vercel project environment variables, set in v0's project settings",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide_slug": "vercel",
+      "guide_path": "/guides/vercel",
+      "guide_source": "docs/guides/vercel.md",
+      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Download the\ndirections with your terminal and follow them exactly:\n\ncurl -fsSL https://openreceive.org/agent-directions/next/full.md\n\nNWC_URI and LSC_URI_PRIMARY are already set as this project's environment\nvariables, so do not ask me for them. Store payments in the Neon database:\na pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create\nthe tables. Use @openreceive packages 0.4.19 or newer.",
+      "starter": {
+        "label": "Deploy to Vercel",
+        "url": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenReceive%2Fopenreceive%2Ftree%2Fmaster%2Fexamples%2Fnext-postgres-starter&project-name=openreceive-starter&repository-name=openreceive-starter&env=NWC_URI&envDescription=A%20receive-only%20NWC%20code%20from%20your%20Lightning%20wallet&envLink=https%3A%2F%2Fopenreceive.org%2Fget_a_nwc_code_to_receive_payments&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D",
+        "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/next-postgres-starter"
+      },
+      "eval": "vercel",
+      "tested": {
+        "date": "2026-10-07",
+        "release": "0.4.19"
+      }
+    },
+    {
+      "id": "replit",
+      "label": "Replit",
+      "kind": "ai-builder",
+      "summary": "Replit Agent builds Express apps with a built-in Postgres database.",
+      "framework": "express",
+      "framework_path": "/integrations/express",
+      "status": "planned",
+      "path": null
+    },
+    {
+      "id": "lovable",
+      "label": "Lovable",
+      "kind": "ai-builder",
+      "summary": "Lovable builds TanStack Start apps on Cloudflare Workers, with Supabase.",
+      "framework": null,
+      "framework_path": null,
+      "status": "planned",
+      "path": null
+    },
+    {
+      "id": "supabase",
+      "label": "Supabase",
+      "kind": "database",
+      "summary": "Store payments in your Supabase Postgres, through its pooled connection.",
+      "framework": null,
+      "framework_path": null,
+      "status": "planned",
+      "path": null
     }
   ],
   "assets": [
@@ -1113,6 +1252,18 @@
       "to": "/integrations/woocommerce",
       "status": 301,
       "must_exist": true
+    },
+    {
+      "from": "/guides/v0",
+      "to": "/guides/vercel",
+      "status": 301,
+      "must_exist": true
+    },
+    {
+      "from": "/guides/v0.md",
+      "to": "/guides/vercel.md",
+      "status": 301,
+      "must_exist": true
     }
   ],
   "agent_discovery": {
@@ -1122,7 +1273,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5414
+        "bytes": 5512
       },
       {
         "path": "/openapi.yaml",
