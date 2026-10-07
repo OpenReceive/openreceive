@@ -303,7 +303,7 @@ function usage() {
     "  --dry-run                  Print the git pushes and the Packagist poll without doing them.",
     "  --allow-dirty              Allow publish from a dirty worktree.",
     "  --skip-packagist           Do not wait for packagist.org to list the version.",
-    "  --timeout <seconds>        Packagist poll timeout (default 600).",
+    "  --timeout <seconds>        Packagist poll timeout per package (default 1200).",
     "  --root <dir>               Repository root, useful for tests.",
   ].join("\n");
 }
@@ -632,8 +632,11 @@ async function publishSplits(root, args) {
   }
   const { version, built } = buildSplits(root, args);
   const branch = String(args.branch ?? "main");
-  for (const record of built) {
-    const pkg = COMPOSER_PACKAGES.find((entry) => entry.name === record.name);
+  const packages = built.map((record) => ({
+    record,
+    pkg: COMPOSER_PACKAGES.find((entry) => entry.name === record.name),
+  }));
+  for (const { record, pkg } of packages) {
     const remote = remoteFor(root, pkg, args);
     const pushes = [
       ["push", "--force", remote, `${record.commit}:refs/heads/${branch}`],
@@ -647,12 +650,17 @@ async function publishSplits(root, args) {
       console.error(`git ${pushArgs.join(" ")}`);
       run("git", pushArgs, root, { stdio: "inherit" });
     }
+  }
+  // Every split is pushed before the first wait: Packagist's crawl from the
+  // GitHub hook has taken over ten minutes per package (0.4.19), so waiting
+  // in turn would leave the later packages unpushed when a wait times out.
+  for (const { pkg } of packages) {
     if (args["skip-packagist"] === true) continue;
     if (dryRun) {
       console.log(`dry-run: poll ${packagistMetadataUrl(pkg.name)} for ${version}`);
       continue;
     }
-    const listed = await waitForPackagist(pkg.name, version, Number(args.timeout ?? 600));
+    const listed = await waitForPackagist(pkg.name, version, Number(args.timeout ?? 1200));
     assert(
       listed,
       `${pkg.name} ${version} did not appear on packagist.org in time. Packagist auto-updates from the GitHub hook on ${pkg.splitRepo}; check the package page or trigger an update by hand.`,

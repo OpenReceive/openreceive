@@ -38,7 +38,7 @@ jobs:
   publish-composer:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: packagist
     permissions:
       contents: read
