@@ -177,8 +177,10 @@ async function placeOrder(base: string): Promise<{ id: string; cookie: string }>
     body: new URLSearchParams({ product_id: "1" }),
     redirect: "manual",
   });
+  // The fixture redirects to /orders/<id>; an integration may send the buyer
+  // straight to its checkout page instead. Either way the id ends the path.
   const location = response.headers.get("location") ?? "";
-  const id = location.match(/\/orders\/(\d+)/)?.[1];
+  const id = new URL(location, base).pathname.match(/\/(\d+)\/?$/)?.[1];
   const cookie = (response.headers.get("set-cookie") ?? "").split(";")[0];
   if (id === undefined || !cookie.startsWith("widget_user=")) {
     throw new Error(`POST /orders answered ${response.status} without an order and its cookie`);

@@ -42,6 +42,12 @@ function unquote(value: string): string {
   return value;
 }
 
+/** A run with a truncated code wastes a model session; check the shape before it starts. */
+function wellFormedNwc(uri: string): boolean {
+  const match = uri.match(/^nostr\+walletconnect:\/\/([0-9a-f]{64})\?(.+)$/);
+  return match !== null && /(?:^|&)secret=[0-9a-f]{64}(?:&|$)/.test(match[2] ?? "");
+}
+
 /**
  * Live codes from the repo-root `.env`. Missing keys fail closed.
  * The returned strings must not be written to the Cursor process environment.
@@ -76,10 +82,15 @@ export async function loadMerchantCodes(envFile: string): Promise<MerchantCodes>
     );
   }
   const vercel = values.NWC_URI_VERCEL ?? "";
-  if (vercel.length > 0 && !vercel.startsWith("nostr+walletconnect://")) {
-    throw new InfraError(
-      "NWC_URI_VERCEL in the repo-root .env does not start with nostr+walletconnect://",
-    );
+  for (const [key, value] of [
+    ["NWC_URI", values.NWC_URI ?? ""],
+    ["NWC_URI_VERCEL", vercel],
+  ] as const) {
+    if (value.length > 0 && !wellFormedNwc(value)) {
+      throw new InfraError(
+        `${key} in the repo-root .env is not a complete NWC code: it needs a 64-hex wallet key and a 64-hex secret. A copy of the shortened display form (with "…") fails here.`,
+      );
+    }
   }
   return {
     nwc: values.NWC_URI ?? "",

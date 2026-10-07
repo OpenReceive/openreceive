@@ -170,7 +170,7 @@ test("missing wallet codes name the key and do not echo a value", async () => {
     await writeFile(
       file,
       [
-        "NWC_URI=nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example&secret=eval-nwc-secret",
+        "NWC_URI=nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example&secret=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "LSC_URI_PRIMARY=lightning+swapconnect://primary.example/?key=eval-pk&secret=eval-ps",
         "LSC_URI_BACKUP=lightning+swapconnect://backup.example/?key=eval-bk&secret=eval-bs",
       ].join("\n"),
@@ -476,4 +476,24 @@ test("on a hosting platform, asking for a code or echoing one is a blocker", () 
     finished,
   ]);
   assert.equal(echoed.find((item) => item.id === "secret_not_in_message")?.pass, false);
+});
+
+test("a code copied in its shortened display form stops the run before it starts", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "oreval-codes-"));
+  try {
+    const shortened =
+      "nostr+walletconnect://a1b2c3d4…e5f6a7b8?relay=wss%3A%2F%2Frelay.example&secret=…";
+    const env = path.join(directory, ".env");
+    await writeFile(env, `NWC_URI=${nwc}\nLSC_URI_PRIMARY=${lsc}\nNWC_URI_VERCEL=${shortened}\n`);
+    await assert.rejects(loadMerchantCodes(env), (error) => {
+      assert.ok(error instanceof InfraError);
+      assert.match(error.message, /NWC_URI_VERCEL/);
+      assert.ok(!error.message.includes("a1b2c3d4"));
+      return true;
+    });
+    await writeFile(env, `NWC_URI=${nwc}\nLSC_URI_PRIMARY=${lsc}\nNWC_URI_VERCEL=${nwc}\n`);
+    assert.equal((await loadMerchantCodes(env)).nwcVercel, nwc);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
