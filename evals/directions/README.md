@@ -98,3 +98,4 @@ A platform is listed here after one live run exits 0. The report itself stays gi
 | FastAPI | 2026-10-06 | 0.4.18 |
 | PHP | 2026-10-06 | 0.4.18 |
 | Laravel | 2026-10-07 | 0.4.18 |
+| Vercel (Next.js on Neon) | 2026-10-07 | 0.4.19 |
