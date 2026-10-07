@@ -9,6 +9,11 @@ a configured swap provider. The provider converts the payment to **BTC over
 Lightning**, which settles into the merchant's connected wallet. Available
 assets and networks depend on the provider; swaps are optional.
 
+[`next-postgres-starter/`](next-postgres-starter) is a one-product Next.js shop
+on Postgres, ready to deploy to Vercel with a Neon database or to build on in
+v0. Unlike the demos below, it uses only the published npm packages, so you can
+copy it as the start of your own app.
+
 [`wordpress/`](wordpress) runs a real WordPress + WooCommerce shop, with the
 OpenReceive payment gateway, checkout blocks, MySQL and the shared product
 catalog. Start it with `npm run demo wordpress` (port 3009).

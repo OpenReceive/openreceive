@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 3640
+      "bytes": 3735
     },
     {
       "path": "/guides/quickstart-node",
@@ -64,6 +64,16 @@
       "title": "Next.js Quickstart",
       "category": "quickstart",
       "bytes": 16436
+    },
+    {
+      "path": "/guides/v0",
+      "markdown_path": "/guides/v0.md",
+      "source": "docs/guides/v0.md",
+      "kind": "guide",
+      "slug": "v0",
+      "title": "Bitcoin Checkout in v0",
+      "category": "guide",
+      "bytes": 4737
     },
     {
       "path": "/guides/quickstart-rails",
@@ -334,7 +344,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 34050
+      "bytes": 34388
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -374,7 +384,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 37893
+      "bytes": 38198
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -531,7 +541,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34050,
+      "bytes": 34388,
       "copy_button": true,
       "self_contained": true
     },
@@ -573,7 +583,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37893,
+      "bytes": 38198,
       "copy_button": true,
       "self_contained": true
     },
@@ -1112,7 +1122,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5349
+        "bytes": 5414
       },
       {
         "path": "/openapi.yaml",

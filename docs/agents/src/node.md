@@ -42,6 +42,11 @@ there and non-empty, and never print the values. A code that is already
 set is not asked for again; if both are set, skip to step 5
 (making the server load the file), then the quickstart.
 
+On a hosted builder (v0, Vercel, Replit, Lovable), the user may say instead
+that both codes are already set as the project's environment variables or
+secrets. Believe them: do not ask for the codes, do not write `.env`, and
+do not read or print the variables. Skip step 5's file loading: the platform already puts them in `process.env`.
+
 Otherwise your next action is a question to the user. Do not install packages,
 edit the app, write `.env.example`, or search anywhere else before asking
 it. Do not read deploy config (compose files, platform secrets), Docker containers, or process environments, and never run

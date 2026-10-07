@@ -13,6 +13,7 @@ optional. The provider decides which assets and networks are available.
 1. [Express quickstart (Node)](quickstart-node.md)
 2. [Fastify quickstart](quickstart-fastify.md)
 3. [Next.js quickstart](quickstart-next.md)
+   - [Bitcoin checkout in v0](v0.md): the same Next.js setup, built by v0 and hosted on Vercel
 4. [Node ORM recipes](node-orms.md)
 5. [Rails quickstart](quickstart-rails.md)
 6. [FastAPI quickstart](quickstart-fastapi.md)

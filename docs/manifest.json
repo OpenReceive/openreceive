@@ -50,6 +50,14 @@
       "public": true
     },
     {
+      "slug": "v0",
+      "title": "Bitcoin Checkout in v0",
+      "source_path": "docs/guides/v0.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "source_path": "docs/guides/quickstart-rails.md",

@@ -31,6 +31,7 @@
       "!tests/e2e-btcpay/test-results",
       "!tests/e2e-wordpress/test-results",
       "!tests/orms/generated",
+      "!tests/orms/pooler/generated",
       "!**/tmp",
       "!**/log",
       "!**/storage",

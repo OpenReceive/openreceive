@@ -2,6 +2,21 @@
 
 ## 0.4.19 - Unreleased
 
+- New: [`examples/next-postgres-starter`](examples/next-postgres-starter), a
+  one-product Next.js shop on Postgres that uses only the published packages.
+  Its README has a Vercel Deploy button that creates a Neon database and asks
+  for `NWC_URI`; every build creates the tables. It needs 0.4.19, because of
+  the Turbopack fix below. Checked with a Next 16 production build: through
+  PgBouncer in transaction mode, it minted a real invoice and refused a
+  stranger's browser.
+- New guide: [Bitcoin checkout in v0](docs/guides/v0.md), covering starting
+  from the starter or adding checkout to an existing v0 app (with a prompt
+  that fetches the Next.js directions), environment variables per Vercel
+  environment, and how settlement runs without a worker.
+- Next.js and Express directions: if the user says the two codes are
+  already set as the hosting platform's environment variables or secrets
+  (v0, Vercel, Replit, Lovable), the agent no longer asks for them or writes
+  an env file.
 - Node: a Next.js 16 production build (Turbopack, the default) could not
   reach the wallet. The NWC client was loaded through
   `new Function("return import(...)")` and `require.resolve`; Turbopack

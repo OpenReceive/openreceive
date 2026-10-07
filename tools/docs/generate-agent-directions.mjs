@@ -182,6 +182,7 @@ const UNLISTED_GUIDES = {
   "agent-directions-woocommerce": "this payload’s own page",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
+  v0: "for people who hand these directions to v0; it links them, not the reverse",
   "agent-directions-node": "this payload's own page",
   "agent-directions-fastify": "this payload's own page",
   "agent-directions-next": "this payload's own page",
