@@ -1,0 +1,13 @@
+{
+  "name": "widget-shop",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000"
+  },
+  "dependencies": {
+    "next": "^15.5.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  }
+}

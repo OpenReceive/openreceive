@@ -1,0 +1,16 @@
+{
+  "slug": "next",
+  "name": "Next.js",
+  "directions": "docs/agents/next.md",
+  "prompt_name": "Next.js app",
+  "doctor": "npx openreceive doctor",
+  "credential_store": { "kind": "dotenv", "where": ".env.local" },
+  "allowed_install_paths": ["npm"],
+  "forbidden": ["git clone .*openreceive", "--dangerously", "printenv"],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false
+}
