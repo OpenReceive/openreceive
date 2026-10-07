@@ -39,7 +39,7 @@ final class Cli
                 $settings = Configuration::withSecret($settings, $fields[0], $value);
             }
             if (isset($options['enable'])) { $settings['enabled'] = 'yes'; }
-            if (Secrets::environment($settings)['NWC_URI'] === '' && !(defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit')) { throw new \RuntimeException('Configure the receive-only wallet first with --nwc-uri=-.'); }
+            if (Secrets::environment($settings)['NWC_URI'] === '' && !Plugin::testkit()) { throw new \RuntimeException('Configure the receive-only wallet first with --nwc-uri=-.'); }
             Configuration::save($settings);
             \WP_CLI::success('Settings saved; wallet preflight passed.');
         } catch (\Throwable $error) {

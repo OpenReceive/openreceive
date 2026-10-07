@@ -23,7 +23,12 @@
   bundled dependencies, or a `.DS_Store`. The 0.4.18 zip was 28 MB unpacked
   in 2,742 files; it is now about 10 MB in 1,100. The build fails if a
   generated autoloader still points at a pruned test file. The zip now
-  carries `composer.json` so reviewers can see the dependencies.
+  carries `composer.json` so reviewers can see the dependencies. It also
+  leaves out the fake wallet (`DemoWallet` and the engine's `Testing`
+  classes): defining `OPENRECEIVE_DEMO_WALLET` on a store now enables
+  nothing. The Docker example's staged plugin keeps it for its tests.
+  `paragonie/sodium_compat` is no longer bundled: the plugin requires the
+  sodium extension, and WordPress core already ships that polyfill.
 - WordPress: the plugin is named "OpenReceive" in its header and readme, so
   the WordPress.org slug becomes `openreceive`. The directory derives the
   slug from the header and the name it showed would have produced

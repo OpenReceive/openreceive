@@ -192,7 +192,18 @@ if (command === "plan") {
     "define('ABSPATH', __DIR__); require 'autoload.php'; $key = new OpenReceive\\WP\\Vendor\\swentel\\nostr\\Key\\Key(); if ($key->getPublicKey(str_repeat('0', 63) . '1') !== '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798') exit(1);",
   ]);
   rmSync(archive, { force: true });
-  run("zip", ["-qr", archive, "openreceive"], staging);
+  // The fake wallet stays in the staged directory, which the Docker example
+  // installs for its tests, and never reaches a store through the archive.
+  const testkit = [
+    "openreceive/src/DemoWallet.php",
+    "openreceive/vendor-prefixed/openreceive/openreceive/src/Testing/*",
+  ];
+  run("zip", ["-qr", archive, "openreceive", "-x", ...testkit], staging);
+  const entries = execFileSync("unzip", ["-Z1", archive], { encoding: "utf8" }).split("\n");
+  assert(
+    !entries.some((entry) => entry.endsWith("DemoWallet.php") || entry.includes("/src/Testing/")),
+    "The release archive must not ship the testkit.",
+  );
   console.log(`Built ${archive}`);
 } else {
   throw new Error("Usage: wordpress-plugin.mjs plan|build");

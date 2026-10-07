@@ -16,7 +16,9 @@ final class WpdbConnection implements DatabaseConnection
     private function sql(string $sql, array $params): string
     {
         if ($params === []) { return $sql; }
-        // Engine SQL has positional parameters and no literal question marks.
+        // The engine's SQL is fixed text with positional `?` parameters and no
+        // literal question marks. Every value is bound through $wpdb->prepare;
+        // nothing from a request is ever concatenated into the SQL text.
         $parts = explode('?', $sql);
         if (count($parts) !== count($params) + 1) { throw new \LogicException('SQL parameter count mismatch.'); }
         $result = array_shift($parts);

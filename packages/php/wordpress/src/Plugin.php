@@ -111,6 +111,15 @@ final class Plugin
 
     public static function resetEngine(): void { self::$engine = null; }
 
+    /**
+     * The fake wallet behind the repository's Docker tests. Release archives
+     * omit DemoWallet, so on a store the constant alone enables nothing.
+     */
+    public static function testkit(): bool
+    {
+        return defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit' && class_exists(DemoWallet::class);
+    }
+
     public static function repository(): SqlPaymentRepository
     {
         global $wpdb;
@@ -130,7 +139,7 @@ final class Plugin
      */
     public static function service(?array $settings = null, bool $live = true): Service
     {
-        if (defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit') { return DemoWallet::service(); }
+        if (self::testkit()) { return DemoWallet::service(); }
         $env = Secrets::environment($settings);
         $currencies = [get_woocommerce_currency()];
         $key = static fn (): string => hash_hmac('sha256', trim($env['NWC_URI']), wp_salt('auth'));
@@ -168,13 +177,18 @@ final class Plugin
     public static function routes(): void
     {
         // Register all methods so the canonical handler returns its own 405.
+        // These are the payer's checkout routes, used by guests with no
+        // WordPress account, so the REST permission check is open. The handler
+        // authorizes every request against the order it names, through
+        // OrderHost::authorize: the logged-in customer, the WooCommerce
+        // session, or a signed cookie issued after the order key was verified.
         foreach (Psr15Handler::KNOWN_PATHS as $path) {
             register_rest_route('openreceive/v1', $path . '/?', [
                 'methods' => \WP_REST_Server::ALLMETHODS, 'permission_callback' => '__return_true',
                 'callback' => [self::class, 'dispatch'],
             ]);
         }
-        if (defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit') { DemoWallet::routes(); }
+        if (self::testkit()) { DemoWallet::routes(); }
     }
 
     public static function dispatch(\WP_REST_Request $request): \WP_REST_Response
@@ -241,7 +255,7 @@ final class Plugin
             foreach (Secrets::environment() as $name => $value) {
                 if ($name === 'NWC_URI' || str_starts_with($name, 'LSC_')) { $lines[] = $name . ': ' . ($value === '' ? 'unset' : 'set'); }
             }
-            if (Secrets::environment()['NWC_URI'] === '' && !(defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit')) { throw new \RuntimeException('NWC_URI is not set. Run wp openreceive configure --nwc-uri=- with the code on stdin.'); }
+            if (Secrets::environment()['NWC_URI'] === '' && !self::testkit()) { throw new \RuntimeException('NWC_URI is not set. Run wp openreceive configure --nwc-uri=- with the code on stdin.'); }
             return 'readable';
         });
         $check('Schema', static function () use ($wpdb, &$lines): string {
