@@ -1,0 +1,5 @@
+#!/usr/bin/env php
+<?php
+
+$text = file_get_contents("/app/composer.json");
+echo str_contains($text, "openreceive") ? "yes\n" : "no\n";

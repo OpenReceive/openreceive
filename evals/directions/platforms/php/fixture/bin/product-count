@@ -1,0 +1,5 @@
+#!/usr/bin/env php
+<?php
+
+$pdo = new PDO("sqlite:/data/shop.sqlite");
+echo $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn(), "\n";

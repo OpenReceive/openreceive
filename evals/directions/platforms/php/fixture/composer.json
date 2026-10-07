@@ -1,0 +1,7 @@
+{
+  "name": "widget/shop",
+  "description": "A small PHP store with no OpenReceive code.",
+  "require": {
+    "php": ">=8.2"
+  }
+}

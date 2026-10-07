@@ -1,0 +1,20 @@
+{
+  "slug": "php",
+  "name": "PHP",
+  "directions": "docs/agents/php.md",
+  "prompt_name": "PHP app",
+  "doctor": "php bin/doctor",
+  "credential_store": { "kind": "dotenv", "where": ".env" },
+  "allowed_install_paths": ["composer"],
+  "forbidden": ["git clone .*openreceive", "--dangerously", "printenv"],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false,
+  "probes": {
+    "products": ["exec", "-T", "web", "bin/product-count"],
+    "openreceive": ["exec", "-T", "web", "bin/openreceive-installed"]
+  }
+}
