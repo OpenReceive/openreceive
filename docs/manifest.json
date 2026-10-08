@@ -66,6 +66,14 @@
       "public": true
     },
     {
+      "slug": "supabase",
+      "title": "Bitcoin Checkout with Supabase",
+      "source_path": "docs/guides/supabase.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "source_path": "docs/guides/how-we-test-platforms.md",

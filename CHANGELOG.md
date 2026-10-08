@@ -2,6 +2,20 @@
 
 ## 0.4.20 - Unreleased
 
+- New guide: [Bitcoin checkout with Supabase](docs/guides/supabase.md), for
+  Node and Python servers. It covers the transaction pooler for the app and
+  the session pooler for migrations, and trusting Supabase's own certificate
+  authority. `pg` reads `sslmode=require` as verify-full and fails with
+  "self-signed certificate in certificate chain", and that includes the
+  `POSTGRES_URL` that Vercel's Supabase integration sets. The guide also locks
+  OpenReceive's tables away from the Data API. On Supabase's image, new
+  `public` tables were readable and writable with the anon key until row
+  level security was on and the grants were revoked. Last, Supabase Auth in
+  `authorize`. The Node and Python directions link it. Not yet tested against
+  a live Supabase project.
+- `examples/next-postgres-starter` no longer offers Supabase's
+  `POSTGRES_URL` as a fallback. `pg` refuses it without Supabase's
+  certificate authority, and the Supabase guide shows that setup.
 - CI: a Cloudflare Workers lane (`npm run test:workers`). A Worker runs under
   `wrangler dev` with Node compatibility, the runtime of Lovable's TanStack
   Start apps. It reaches a fake receive-only wallet over a TLS relay, and

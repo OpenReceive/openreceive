@@ -220,26 +220,29 @@ const UNLISTED_GUIDES = {
  * payloads keep linking every one of these.
  */
 const UNLISTED_GUIDES_BY_STACK = {
-  woocommerce: Object.fromEntries(
-    [
-      "authorization",
-      "storage",
-      "frontend-checkout",
-      "checkout-ux",
-      "headless-checkout",
-      "custom-checkout-route",
-      "provider-registry",
-      "host-testing",
-      "rate-limiting",
-      "environment-variables",
-      "deploying",
-      "api-reference",
-      "react-material-ui-recipe",
-    ].map((slug) => [
-      slug,
-      "WooCommerce plugin supplies these internals; its quickstart documents the merchant setup",
-    ]),
-  ),
+  woocommerce: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "frontend-checkout",
+        "checkout-ux",
+        "headless-checkout",
+        "custom-checkout-route",
+        "provider-registry",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "react-material-ui-recipe",
+      ].map((slug) => [
+        slug,
+        "WooCommerce plugin supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    supabase: "WordPress keeps its data in MySQL",
+  },
   btcpay: {
     authorization:
       "BTCPay's store permissions and invoice ids authorize; there is no authorize hook",
@@ -258,7 +261,11 @@ const UNLISTED_GUIDES_BY_STACK = {
     deploying: "BTCPay's own deployment; settlement is BTCPay's LightningListener",
     "api-reference": "documents the library API; the plugin's routes are in the BTCPay quickstart",
     "react-material-ui-recipe": "a custom browser UI recipe; not applicable inside BTCPay",
+    supabase: "BTCPay keeps the plugin's table in its own database",
   },
+  rails: { supabase: "the Supabase guide covers Node and Python servers" },
+  php: { supabase: "the Supabase guide covers Node and Python servers" },
+  laravel: { supabase: "the Supabase guide covers Node and Python servers" },
 };
 
 const GUIDE_URL = (slug) => `https://openreceive.org/guides/${slug}`;

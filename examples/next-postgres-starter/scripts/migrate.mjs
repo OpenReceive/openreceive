@@ -3,14 +3,10 @@
 import { paymentsSchemaSql } from "@openreceive/http";
 import pg from "pg";
 
-const url =
-  process.env.DATABASE_URL_UNPOOLED ??
-  process.env.POSTGRES_URL_NON_POOLING ??
-  process.env.DATABASE_URL ??
-  process.env.POSTGRES_URL;
+const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
 if (!url) {
   console.error(
-    "No database URL. Connect Neon or Supabase to this project, or set DATABASE_URL in .env.local.",
+    "No database URL. Connect Neon to this project, or set DATABASE_URL in .env.local.",
   );
   process.exit(1);
 }

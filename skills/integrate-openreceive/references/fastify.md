@@ -335,6 +335,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/authorization.md — before you write `authorize`
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
+- https://openreceive.org/guides/supabase.md — when the database is Supabase: its pooler, its certificate, and locking the tables away from its Data API
 - https://openreceive.org/guides/node-orms.md — recipes for Prisma, Drizzle, Knex, TypeORM, Sequelize
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
