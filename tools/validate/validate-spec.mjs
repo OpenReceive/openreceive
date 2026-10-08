@@ -265,9 +265,12 @@ function validateStorageFreeTree() {
     );
   }
   const driverPattern = /"(?:pg|sqlite3|better-sqlite3|@types\/pg)"/;
-  // A deployable starter is the host application itself: on a serverless host
-  // it brings the Postgres driver whose handle it passes to OpenReceive.
-  const hostApps = new Set(["examples/next-postgres-starter/package.json"]);
+  // A deployable starter is the host application itself: it brings the
+  // Postgres driver whose handle it passes to OpenReceive.
+  const hostApps = new Set([
+    "examples/next-postgres-starter/package.json",
+    "examples/express-postgres-starter/package.json",
+  ]);
   const manifests = ["packages", "examples"]
     .flatMap((dir) =>
       walkFiles(path.join(root, dir), {

@@ -58,6 +58,14 @@
       "public": true
     },
     {
+      "slug": "replit",
+      "title": "Bitcoin Checkout on Replit",
+      "source_path": "docs/guides/replit.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "source_path": "docs/guides/how-we-test-platforms.md",

@@ -53,8 +53,12 @@ export interface Platform {
   readonly opening_context?: string;
   /** Variables the platform gives the shop's web service, before any code. */
   readonly platform_env?: Readonly<Record<string, string>>;
-  /** After the agent finishes, deploy the shop here and check it live. */
-  readonly deploy?: "vercel";
+  /**
+   * After the agent finishes, deploy the shop and check it live: `vercel`
+   * deploys to the eval project on Vercel; `local` plays a Replit publish on
+   * this machine (an empty production database, a rebuild and a restart).
+   */
+  readonly deploy?: "vercel" | "local";
   readonly allowed_install_paths: readonly string[];
   readonly forbidden: readonly string[];
   readonly max_turns: number;

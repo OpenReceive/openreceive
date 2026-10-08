@@ -14,6 +14,11 @@ on Postgres, ready to deploy to Vercel with a Neon database or to build on in
 v0. Unlike the demos below, it uses only the published npm packages, so you can
 copy it as the start of your own app.
 
+[`express-postgres-starter/`](express-postgres-starter) is the same shop on
+Express and Postgres, set up for Replit: a `.replit` for Autoscale and a
+`replit.md` that tells Replit Agent how the payment code fits together. It has
+no build step and also uses only the published packages.
+
 [`wordpress/`](wordpress) runs a real WordPress + WooCommerce shop, with the
 OpenReceive payment gateway, checkout blocks, MySQL and the shared product
 catalog. Start it with `npm run demo wordpress` (port 3009).

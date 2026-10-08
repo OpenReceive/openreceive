@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 3849
+      "bytes": 3965
     },
     {
       "path": "/guides/quickstart-node",
@@ -76,6 +76,17 @@
       "bytes": 4808
     },
     {
+      "path": "/guides/replit",
+      "markdown_path": "/guides/replit.md",
+      "source": "docs/guides/replit.md",
+      "kind": "guide",
+      "slug": "replit",
+      "title": "Bitcoin Checkout on Replit",
+      "category": "guide",
+      "bytes": 6798,
+      "assets_base": "/assets/"
+    },
+    {
       "path": "/guides/how-we-test-platforms",
       "markdown_path": "/guides/how-we-test-platforms.md",
       "source": "docs/guides/how-we-test-platforms.md",
@@ -83,7 +94,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 2892
+      "bytes": 3065
     },
     {
       "path": "/guides/quickstart-rails",
@@ -1028,11 +1039,29 @@
       "id": "replit",
       "label": "Replit",
       "kind": "ai-builder",
-      "summary": "Replit Agent builds Express apps with a built-in Postgres database.",
+      "summary": "Replit Agent builds Express apps with a built-in Postgres database. Paste one prompt and Agent adds checkout to your app.",
       "framework": "express",
       "framework_path": "/integrations/express",
-      "status": "planned",
-      "path": null
+      "status": "tested",
+      "path": "/platforms/replit",
+      "markdown_path": "/platforms/replit.md",
+      "database": "Replit's built-in Postgres, through DATABASE_URL",
+      "secrets": "Replit Secrets, which publishing links to the published app",
+      "settlement": "On page requests, with no worker or cron job, so Autoscale fits",
+      "guide_slug": "replit",
+      "guide_path": "/guides/replit",
+      "guide_source": "docs/guides/replit.md",
+      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Download the\ndirections with your terminal and follow them exactly:\n\ncurl -fsSL https://openreceive.org/agent-directions/node/full.md\n\nNWC_URI and LSC_URI_PRIMARY are already set as this app's Secrets, and the\nserver reads them from process.env. Do not ask me for them, and do not look\nfor them, check them or print them. Mount the payment routes on the Express\nserver and store payments in this app's Postgres database, through\nDATABASE_URL. Create OpenReceive's tables when the server starts (the schema\nSQL is idempotent), because a published Replit app gets its own production\ndatabase. Use @openreceive packages 0.4.19 or newer.",
+      "starter": {
+        "label": "Get the starter",
+        "url": "https://github.com/OpenReceive/openreceive/tree/master/examples/express-postgres-starter#run-it-on-replit",
+        "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/express-postgres-starter"
+      },
+      "eval": "replit",
+      "tested": {
+        "date": "2026-10-08",
+        "release": "0.4.19"
+      }
     },
     {
       "id": "lovable",
@@ -1056,6 +1085,69 @@
     }
   ],
   "assets": [
+    {
+      "path": "/assets/replit/1-add-secret.webp",
+      "source": "docs/assets/replit/1-add-secret.webp",
+      "content_type": "image/webp",
+      "bytes": 14728,
+      "referenced_by": [
+        "/guides/replit"
+      ]
+    },
+    {
+      "path": "/assets/replit/2-paste-prompt.webp",
+      "source": "docs/assets/replit/2-paste-prompt.webp",
+      "content_type": "image/webp",
+      "bytes": 22188,
+      "referenced_by": [
+        "/guides/replit"
+      ]
+    },
+    {
+      "path": "/assets/replit/3-continue-on-power.webp",
+      "source": "docs/assets/replit/3-continue-on-power.webp",
+      "content_type": "image/webp",
+      "bytes": 10458,
+      "referenced_by": [
+        "/guides/replit"
+      ]
+    },
+    {
+      "path": "/assets/replit/4-preview-checkout.webp",
+      "source": "docs/assets/replit/4-preview-checkout.webp",
+      "content_type": "image/webp",
+      "bytes": 19276,
+      "referenced_by": [
+        "/guides/replit"
+      ]
+    },
+    {
+      "path": "/assets/replit/5-publish-settings.webp",
+      "source": "docs/assets/replit/5-publish-settings.webp",
+      "content_type": "image/webp",
+      "bytes": 26118,
+      "referenced_by": [
+        "/guides/replit"
+      ]
+    },
+    {
+      "path": "/assets/replit/6-project-live.webp",
+      "source": "docs/assets/replit/6-project-live.webp",
+      "content_type": "image/webp",
+      "bytes": 12694,
+      "referenced_by": [
+        "/guides/replit"
+      ]
+    },
+    {
+      "path": "/assets/replit/7-live-invoice.webp",
+      "source": "docs/assets/replit/7-live-invoice.webp",
+      "content_type": "image/webp",
+      "bytes": 33408,
+      "referenced_by": [
+        "/guides/replit"
+      ]
+    },
     {
       "path": "/assets/btcpayserver/1-open-plugins-menu.webp",
       "source": "docs/assets/btcpayserver/1-open-plugins-menu.webp",
@@ -1273,7 +1365,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5512
+        "bytes": 5585
       },
       {
         "path": "/openapi.yaml",

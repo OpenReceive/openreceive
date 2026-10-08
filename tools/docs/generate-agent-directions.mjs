@@ -183,6 +183,7 @@ const UNLISTED_GUIDES = {
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
   vercel: "for people who hand these directions to v0; it links them, not the reverse",
+  replit: "for people who hand these directions to Replit Agent; it links them, not the reverse",
   "how-we-test-platforms": "explains the Tested badges to people; it is not integration guidance",
   "agent-directions-node": "this payload's own page",
   "agent-directions-fastify": "this payload's own page",

@@ -21,7 +21,9 @@ has passed every check below.
    a hosting platform such as Vercel, the codes are already the project's
    environment variables, and the agent must not ask for them.
 4. **A real deploy.** For a hosting platform, the finished app is deployed to
-   that platform and tested on its live URL.
+   that platform and tested on its live URL. On an AI builder that hosts apps,
+   such as Replit, the platform's own agent does the work: we send it the
+   prompt from the guide, word for word, and publish the result.
 
 ## What a pass requires
 

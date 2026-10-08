@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 export class InfraError extends Error {
@@ -13,6 +14,23 @@ interface CommandResult {
   readonly stderr: string;
 }
 
+/** Beside the shop, never in it: a hosting platform's variables for the web service. */
+export function platformOverrideFile(directory: string): string {
+  return `${directory}.platform.yml`;
+}
+
+/**
+ * COMPOSE_FILE for a shop on a hosting platform: its own compose.yml plus the
+ * harness's override beside it. No file in the shop names the override, so the
+ * agent's own `docker compose` merges it without being pointed at the codes.
+ */
+export function shopComposeEnv(directory: string): Record<string, string> {
+  const override = platformOverrideFile(directory);
+  return existsSync(override)
+    ? { COMPOSE_FILE: [path.join(directory, "compose.yml"), override].join(path.delimiter) }
+    : {};
+}
+
 /**
  * docker compose in `cwd`. The project name is the directory basename, so a
  * later `docker compose` from that same directory attaches to this stack.
@@ -24,7 +42,10 @@ export function compose(
 ): Promise<CommandResult> {
   const label = path.basename(cwd);
   return new Promise((resolve, reject) => {
-    const child = spawn("docker", ["compose", ...args], { cwd });
+    const child = spawn("docker", ["compose", ...args], {
+      cwd,
+      env: { ...process.env, ...shopComposeEnv(cwd) },
+    });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);

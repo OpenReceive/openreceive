@@ -2,6 +2,29 @@
 
 ## 0.4.20 - Unreleased
 
+- New guide: [Bitcoin checkout on Replit](docs/guides/replit.md), with
+  screenshots of a real run on Replit: Secrets first, then one prompt for
+  Replit Agent that fetches the Express directions, Power mode (Free mode
+  stops partway), and publishing on Autoscale with the Secrets linked to the
+  published app. Replit moves from planned to Tested on `/platforms/replit`.
+- New: [`examples/express-postgres-starter`](examples/express-postgres-starter),
+  a one-product Express shop on Postgres for Replit, with a `.replit` for
+  Autoscale and a `replit.md` for Replit Agent. No build step: the server sends
+  the standalone checkout straight from `@openreceive/elements`. Checked
+  against Postgres 16 with the published 0.4.19 packages and a real wallet:
+  a buyer's order got an invoice, and a stranger and another visitor were
+  refused.
+- Directions eval: a `replit` platform. The shop is Express on Postgres 16,
+  and the codes are the app's Secrets. Replit has no deploy API, so the
+  harness plays a publish locally: an empty production database, a rebuild,
+  a restart, then the live checks the Vercel eval uses (now shared in
+  `harness/live.ts`). A local pass does not earn a Tested badge.
+- Directions eval, Vercel and Replit: no file in the test shop names the
+  platform's variables any more. In three Replit runs the agent found the
+  codes unset in its own shell, followed `compose.yml` to the variables file
+  and listed it. They now load through a Compose override beside the shop
+  that `COMPOSE_FILE` merges into every `docker compose`, the agent's
+  included. Reading either file still fails the run.
 - Site contract v8: platform pages and Tested badges. `docs/site/platforms.json`
   lists where people build and host apps: Vercel and v0 now, with Replit,
   Lovable and Supabase planned. The contract publishes the rows as

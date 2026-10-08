@@ -38,6 +38,7 @@ markdown.
 The index is [/guides.md](https://openreceive.org/guides.md).
 
 - [Bitcoin Checkout on Vercel and v0](https://openreceive.org/guides/vercel.md)
+- [Bitcoin Checkout on Replit](https://openreceive.org/guides/replit.md)
 - [How We Test Platforms](https://openreceive.org/guides/how-we-test-platforms.md)
 - [BTCPay Plugin Reference](https://openreceive.org/guides/btcpay-reference.md)
 - [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)

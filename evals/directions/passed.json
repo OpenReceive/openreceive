@@ -50,6 +50,11 @@
       "eval": "vercel",
       "date": "2026-10-07",
       "release": "0.4.19"
+    },
+    {
+      "eval": "replit",
+      "date": "2026-10-08",
+      "release": "0.4.19"
     }
   ]
 }

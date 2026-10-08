@@ -1,8 +1,8 @@
 # The Widget Shop as it runs on Vercel: Postgres behind PgBouncer in
-# transaction mode (Neon's pooler), and the project's environment variables
-# handed to the web service the way Vercel hands them to a deployment.
+# transaction mode (Neon's pooler). Vercel hands a deployment the project's
+# environment variables from outside the code; so does this setup.
 # The Compose project name is the directory name. The harness swaps 8080 for a
-# free port per run and points env_file at the project's variables.
+# free port per run.
 services:
   postgres:
     image: postgres:18-alpine
@@ -30,8 +30,6 @@ services:
     build: .
     ports:
       - "127.0.0.1:8080:3000"
-    env_file:
-      - __PLATFORM_ENV__
     depends_on:
       postgres:
         condition: service_healthy

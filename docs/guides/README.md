@@ -11,6 +11,7 @@ Lightning**, and it settles into the merchant's connected wallet. Swaps are
 optional. The provider decides which assets and networks are available.
 
 1. [Express quickstart (Node)](quickstart-node.md)
+   - [Bitcoin checkout on Replit](replit.md): the same Express setup, built by Replit Agent and published on Replit
 2. [Fastify quickstart](quickstart-fastify.md)
 3. [Next.js quickstart](quickstart-next.md)
    - [Bitcoin checkout on Vercel and v0](vercel.md): the same Next.js setup, hosted on Vercel or built by v0

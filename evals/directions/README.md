@@ -31,7 +31,7 @@ npm run eval:directions -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Express (`node`), Fastify, Next.js, Vercel (Next.js on Neon), Rails, Django, FastAPI, plain PHP, and Laravel. None of them include OpenReceive.
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Express (`node`), Fastify, Next.js, Vercel (Next.js on Neon), Replit (Express on Postgres), Rails, Django, FastAPI, plain PHP, and Laravel. None of them include OpenReceive.
 
 ```sh
 npm run eval:directions -- --platform php --smoke
@@ -54,8 +54,17 @@ store on Postgres, and the opening message is the prompt from
 `docs/guides/vercel.md`. The codes are already the project's environment
 variables, so the merchant never pastes one: asking for a code, or repeating
 one, fails the run. Locally the shop runs behind PgBouncer in transaction mode,
-like Neon's pooler, and Compose gives the web service the project's variables
-from a file outside the shop directory.
+like Neon's pooler.
+
+On a hosting platform the variables come from outside the code, so no file in
+the shop names them. The harness writes them, and a Compose override that
+loads them, beside the shop directory. Every `docker compose`, the agent's
+included, merges that override through `COMPOSE_FILE`.
+
+Agents check that the codes exist in their own ways: listing variable names,
+filtering `docker compose config`, testing a file. That is not judged. A run
+fails when a code's value reaches the agent: in a command, a command's output,
+a message or its reasoning (`secret_not_in_output`), or in a tracked file.
 
 When the agent finishes, the harness deploys the shop to the `openreceive-eval`
 project in the OpenReceive Vercel team. It wipes that project's Neon database
@@ -81,6 +90,49 @@ to it. Accepting Neon's Marketplace terms needs a person in the browser.
 ```sh
 npm run eval:directions -- --platform vercel --smoke
 npm run eval:directions -- --platform vercel --serve-directions
+```
+
+## Replit
+
+`--platform replit` tests what a Replit Agent user gets. The shop is an
+Express store on Postgres 16 with a direct connection, as Replit gives an app.
+The opening message is the prompt from `docs/guides/replit.md`. The codes are
+already the app's Secrets, so, as on Vercel, asking for a code or repeating
+one fails the run.
+
+Replit has no deploy API, so the harness plays a publish on this machine
+instead. A published Replit app gets its own empty production database, so
+the harness creates one, points `DATABASE_URL` at it, rebuilds and restarts
+the web service, and checks the shop:
+
+- no notifications worker was added, because Autoscale scales to zero;
+- the shop starts on the empty database, which means the integration creates
+  its tables at start;
+- an order gets a real Lightning invoice;
+- a stranger's checkout for that order is refused.
+
+A pass here is not a Tested badge: nothing ran on Replit. The `replit` entry
+in `passed.json` comes from a run on Replit itself, with Replit Agent as the
+agent:
+
+1. Import this fixture as a ZIP (without the Docker files) into a new Replit
+   app, and let Agent get it running.
+2. Add `NWC_URI` (from `NWC_URI_REPLIT`) and `LSC_URI_PRIMARY` in the app's
+   Secrets, never in the chat.
+3. Send Agent the prompt from `docs/guides/replit.md`, verbatim. Accept Power
+   mode if Agent asks; nothing else is said to it.
+4. Publish on Autoscale, then run the live checks in `harness/live.ts` against
+   the `replit.app` address, and read the code Agent wrote: no worker, tables
+   created at start, codes read only from `process.env`.
+
+The 2026-10-08 run on 0.4.19 passed: Agent finished in 11 minutes on Power
+without asking for or reading a code; the published app answered `/health`,
+issued an invoice for the buyer's order (201) and refused a stranger (403).
+The guide's screenshots come from that run.
+
+```sh
+npm run eval:directions -- --platform replit --smoke
+npm run eval:directions -- --platform replit
 ```
 
 ## Passed

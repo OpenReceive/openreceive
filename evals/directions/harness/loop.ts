@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { blockersFailed, containsSecret, evaluate, scopeViolation } from "./checks.ts";
+import { blockersFailed, containsSecret, evaluate, outputCheck, scopeViolation } from "./checks.ts";
 import type { MerchantCodes } from "./codes.ts";
 import { agentTurn, cursorEnv, type SeenWrite } from "./cursor.ts";
-import { InfraError } from "./docker.ts";
+import { InfraError, shopComposeEnv } from "./docker.ts";
+import { localPublishChecks } from "./local-publish.ts";
 import { classify, merchantReply } from "./merchant.ts";
 import { redact } from "./redact.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
@@ -97,10 +98,15 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     : request.codes.nwc;
   const vercel =
     platform.deploy === "vercel" ? await loadVercelConfig(path.join(repoRoot, ".env")) : undefined;
-  const directory = await prepareShop(fixture, platform.slug, {
-    ...platform.platform_env,
-    ...(platformCodes ? { NWC_URI: shopNwc, LSC_URI_PRIMARY: request.codes.lsc } : {}),
-  });
+  const directory = await prepareShop(
+    fixture,
+    platform.slug,
+    {
+      ...platform.platform_env,
+      ...(platformCodes ? { NWC_URI: shopNwc, LSC_URI_PRIMARY: request.codes.lsc } : {}),
+    },
+    platform.service,
+  );
   let sandbox: Awaited<ReturnType<typeof startShop>> | undefined;
   let stopped = false;
   const stop = async (): Promise<void> => {
@@ -158,7 +164,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     console.log(`${sandbox.id} ${sandbox.baseUrl}`);
     console.log(`${sandbox.id} directions ${request.directionsUrl}`);
 
-    const env = cursorEnv();
+    const env = cursorEnv(process.env, shopComposeEnv(directory));
     const turns: Turn[] = [];
     const rawStreams: string[] = [];
     const writes: SeenWrite[] = [];
@@ -229,9 +235,22 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       lscBackup: wallet.lscBackup,
     }).map((check) => (check.id === "secret_not_tracked" ? secret : check));
     checks.push(stayedInShop(turns, repoRoot), finishedCheck(done, reason));
+    if (platformCodes) {
+      const secrets = [shopNwc, wallet.lsc, wallet.lscBackup].filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      );
+      checks.push(outputCheck(rawStreams, secrets));
+    }
     if (vercel !== undefined && done) {
       checks.push(
         ...(await vercelChecks(directory, vercel, { nwc: shopNwc, lsc: wallet.lsc }, (line) =>
+          console.log(`${sandbox?.id} ${hide(line, uris)}`),
+        )),
+      );
+    }
+    if (platform.deploy === "local" && done) {
+      checks.push(
+        ...(await localPublishChecks(directory, sandbox.baseUrl, (line) =>
           console.log(`${sandbox?.id} ${hide(line, uris)}`),
         )),
       );

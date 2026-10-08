@@ -41,9 +41,19 @@
       "id": "replit",
       "label": "Replit",
       "kind": "ai-builder",
-      "summary": "Replit Agent builds Express apps with a built-in Postgres database.",
+      "summary": "Replit Agent builds Express apps with a built-in Postgres database. Paste one prompt and Agent adds checkout to your app.",
       "framework": "express",
-      "planned": true
+      "database": "Replit's built-in Postgres, through DATABASE_URL",
+      "secrets": "Replit Secrets, which publishing links to the published app",
+      "settlement": "On page requests, with no worker or cron job, so Autoscale fits",
+      "guide": "replit",
+      "prompt": true,
+      "starter": {
+        "label": "Get the starter",
+        "url": "https://github.com/OpenReceive/openreceive/tree/master/examples/express-postgres-starter#run-it-on-replit",
+        "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/express-postgres-starter"
+      },
+      "eval": "replit"
     },
     {
       "id": "lovable",

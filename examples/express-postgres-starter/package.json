@@ -1,0 +1,19 @@
+{
+  "name": "openreceive-express-postgres-starter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --env-file=.env server.js"
+  },
+  "dependencies": {
+    "@openreceive/elements": "^0.4.19",
+    "@openreceive/express": "^0.4.19",
+    "@openreceive/http": "^0.4.19",
+    "express": "^5.1.0",
+    "pg": "^8.23.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

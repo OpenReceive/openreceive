@@ -3,7 +3,7 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { compose, InfraError } from "./docker.ts";
+import { compose, InfraError, platformOverrideFile } from "./docker.ts";
 import type { Check, Platform } from "./types.ts";
 
 const UP_TIMEOUT_MS = 6 * 60 * 1000;
@@ -45,10 +45,9 @@ function run(command: string, args: readonly string[], cwd: string): Promise<voi
 }
 
 const FIXTURE_PORT = "127.0.0.1:8080:";
-const PLATFORM_ENV_MARKER = "__PLATFORM_ENV__";
 
 /** Beside the shop, never inside it: the agent's `git add -A` must not pick it up. */
-function platformEnvFile(directory: string): string {
+export function platformEnvFile(directory: string): string {
   return `${directory}.platform.env`;
 }
 
@@ -78,6 +77,7 @@ export async function prepareShop(
   fixtureDir: string,
   slug: string,
   platformEnv?: Readonly<Record<string, string>>,
+  service = "web",
 ): Promise<string> {
   const id = Math.random().toString(16).slice(2, 10);
   const directory = await mkdtemp(path.join(tmpdir(), `oreval-${slug}-${id}-`));
@@ -87,12 +87,18 @@ export async function prepareShop(
   if (!fixture.includes(FIXTURE_PORT))
     throw new InfraError(`${composeFile} does not publish ${FIXTURE_PORT}.`);
   fixture = fixture.replace(FIXTURE_PORT, `127.0.0.1:${await freePort()}:`);
-  // A hosting platform's project variables: the web service gets them the way
-  // a Vercel deployment does, and they never enter the agent's environment.
-  if (fixture.includes(PLATFORM_ENV_MARKER)) {
-    const lines = Object.entries(platformEnv ?? {}).map(([key, value]) => `${key}=${value}`);
+  // A hosting platform's variables reach the web service the way a Vercel or
+  // Replit deployment gets them: from outside the app. Both files sit beside
+  // the shop and no file in it names them; docker.ts adds the override to
+  // every `docker compose` through COMPOSE_FILE, the agent's included.
+  if (platformEnv !== undefined && Object.keys(platformEnv).length > 0) {
+    const lines = Object.entries(platformEnv).map(([key, value]) => `${key}=${value}`);
     await writeFile(platformEnvFile(directory), `${lines.join("\n")}\n`, { mode: 0o600 });
-    fixture = fixture.replace(PLATFORM_ENV_MARKER, platformEnvFile(directory));
+    await writeFile(
+      platformOverrideFile(directory),
+      `services:\n  ${service}:\n    env_file:\n      - ${platformEnvFile(directory)}\n`,
+      { mode: 0o600 },
+    );
   }
   await writeFile(composeFile, fixture);
   await run("git", ["init", "-b", "master"], directory);
@@ -121,6 +127,7 @@ async function removeShop(directory: string): Promise<void> {
   });
   await rm(directory, { recursive: true, force: true });
   await rm(platformEnvFile(directory), { force: true });
+  await rm(platformOverrideFile(directory), { force: true });
 }
 
 export async function startShop(

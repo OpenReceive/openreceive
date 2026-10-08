@@ -17,13 +17,7 @@
   },
   "deploy": "vercel",
   "allowed_install_paths": ["npm"],
-  "forbidden": [
-    "git clone .*openreceive",
-    "--dangerously",
-    "printenv",
-    "platform\\.env",
-    "vercel env pull"
-  ],
+  "forbidden": ["git clone .*openreceive", "--dangerously", "vercel env pull"],
   "max_turns": 30,
   "max_minutes": 90,
   "heavy": false,

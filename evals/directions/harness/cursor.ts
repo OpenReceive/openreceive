@@ -181,8 +181,14 @@ function agentEnv(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return env;
 }
 
-export function cursorEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return agentEnv(source);
+/** `extra` adds harness variables such as COMPOSE_FILE; a wallet key in it is dropped. */
+export function cursorEnv(
+  source: NodeJS.ProcessEnv = process.env,
+  extra: Readonly<Record<string, string>> = {},
+): NodeJS.ProcessEnv {
+  const env = { ...agentEnv(source), ...extra };
+  for (const key of WALLET_ENV) delete env[key];
+  return env;
 }
 
 function run(args: readonly string[], env: NodeJS.ProcessEnv, timeoutMs: number): Promise<string> {
