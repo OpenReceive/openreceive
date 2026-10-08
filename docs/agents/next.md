@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Next.js)
 
 ```sh
-# READ THIS FIRST: this file is 38 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 39 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/next/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -362,6 +362,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/api-reference.md — every route, option and error code
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
+- https://openreceive.org/guides/tanstack-start-recipe.md — the same handler as a TanStack Start server route, if this app is TanStack Start after all
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:

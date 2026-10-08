@@ -46,7 +46,8 @@ optional. The provider decides which assets and networks are available.
 31. [How we test platforms](how-we-test-platforms.md): what a Tested badge on openreceive.org means
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
-[Flask](../recipes/flask.md) (the Python engine as a Blueprint)
+[Flask](../recipes/flask.md) (the Python engine as a Blueprint),
+[TanStack Start](../recipes/tanstack-start.md) (a server route, on Node or Cloudflare Workers)
 
 Building this with a coding agent? Give it one of the agent-directions
 payloads instead of a reading list:

@@ -2,6 +2,16 @@
 
 ## 0.4.20 - Unreleased
 
+- New recipe: [TanStack Start](docs/recipes/tanstack-start.md). A server route
+  under `/openreceive/` loads a `.server.ts` handler over `createStack`, and the
+  page uses `<Checkout>` from `@openreceive/react`. Because of Cloudflare
+  Workers, each request builds and closes its own pool and stack. Checked
+  with an app built by Lovable's Vite config (`cloudflare-module`, Node
+  compatibility) and run under workerd with a real wallet. The page rendered
+  on the server, and in Chromium the Bitcoin option showed a real invoice.
+  The routes answered: invoice 201, the same invoice on retry, `prepare` and
+  `payments/check` 200, a stranger 403. The Next.js directions link it.
+
 - New guide: [Bitcoin checkout with Supabase](docs/guides/supabase.md), for
   Node and Python servers. It covers the transaction pooler for the app and
   the session pooler for migrations, and trusting Supabase's own certificate

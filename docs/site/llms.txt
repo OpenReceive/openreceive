@@ -62,6 +62,7 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Price Feeds](https://openreceive.org/guides/price-feeds.md)
 - [React Material UI Recipe](https://openreceive.org/guides/react-material-ui-recipe.md)
 - [Flask Recipe](https://openreceive.org/guides/flask-recipe.md)
+- [TanStack Start Recipe](https://openreceive.org/guides/tanstack-start-recipe.md)
 - [Writing Your Own Checkout Route](https://openreceive.org/guides/custom-checkout-route.md)
 - [WordPress Hosting Requirements](https://openreceive.org/guides/wordpress-hosting.md)
 

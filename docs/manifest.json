@@ -282,6 +282,14 @@
       "public": true
     },
     {
+      "slug": "tanstack-start-recipe",
+      "title": "TanStack Start Recipe",
+      "source_path": "docs/recipes/tanstack-start.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "internal",
       "title": "OpenReceive Internal Docs",
       "source_path": "docs/internal/README.md",

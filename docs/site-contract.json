@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 4094
+      "bytes": 4190
     },
     {
       "path": "/guides/quickstart-node",
@@ -359,6 +359,16 @@
       "bytes": 6527
     },
     {
+      "path": "/guides/tanstack-start-recipe",
+      "markdown_path": "/guides/tanstack-start-recipe.md",
+      "source": "docs/recipes/tanstack-start.md",
+      "kind": "guide",
+      "slug": "tanstack-start-recipe",
+      "title": "TanStack Start Recipe",
+      "category": "recipe",
+      "bytes": 5891
+    },
+    {
       "path": "/guides/custom-checkout-route",
       "markdown_path": "/guides/custom-checkout-route.md",
       "source": "docs/guides/custom-checkout-route.md",
@@ -416,7 +426,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 38353
+      "bytes": 38506
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -615,7 +625,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38353,
+      "bytes": 38506,
       "copy_button": true,
       "self_contained": true
     },
@@ -1475,7 +1485,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5664
+        "bytes": 5747
       },
       {
         "path": "/openapi.yaml",

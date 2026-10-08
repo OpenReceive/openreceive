@@ -209,6 +209,8 @@ const UNLISTED_GUIDES = {
   "node-orms": "Node only; the Rails engine owns its tables",
   "flask-recipe":
     "Flask only; the FastAPI payload links it as the Python sibling, the other stacks have no use for it",
+  "tanstack-start-recipe":
+    "TanStack Start only; the Next.js payload links it as the web-standard sibling, the other stacks have no use for it",
 };
 
 /**
