@@ -106,8 +106,6 @@ the tables. Use @openreceive packages 0.4.19 or newer.
 ```
 <!-- platform-prompt:end -->
 
-   <img alt="The prompt pasted into the v0 chat box" width="300" src="../assets/vercel/11-paste-prompt.webp">
-
 The directions tell v0 how to map the three hooks onto your existing orders
 and how to render the checkout. In our test v0 finished in about five
 minutes.

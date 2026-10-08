@@ -73,7 +73,7 @@
       "slug": "vercel",
       "title": "Bitcoin Checkout on Vercel and v0",
       "category": "guide",
-      "bytes": 7713,
+      "bytes": 7602,
       "assets_base": "/assets/"
     },
     {
@@ -84,7 +84,7 @@
       "slug": "replit",
       "title": "Bitcoin Checkout on Replit",
       "category": "guide",
-      "bytes": 6798,
+      "bytes": 6678,
       "assets_base": "/assets/"
     },
     {
@@ -1177,15 +1177,6 @@
       ]
     },
     {
-      "path": "/assets/vercel/11-paste-prompt.webp",
-      "source": "docs/assets/vercel/11-paste-prompt.webp",
-      "content_type": "image/webp",
-      "bytes": 19012,
-      "referenced_by": [
-        "/guides/vercel"
-      ]
-    },
-    {
       "path": "/assets/vercel/12-checkout.webp",
       "source": "docs/assets/vercel/12-checkout.webp",
       "content_type": "image/webp",
@@ -1208,15 +1199,6 @@
       "source": "docs/assets/replit/1-add-secret.webp",
       "content_type": "image/webp",
       "bytes": 14728,
-      "referenced_by": [
-        "/guides/replit"
-      ]
-    },
-    {
-      "path": "/assets/replit/2-paste-prompt.webp",
-      "source": "docs/assets/replit/2-paste-prompt.webp",
-      "content_type": "image/webp",
-      "bytes": 22188,
       "referenced_by": [
         "/guides/replit"
       ]

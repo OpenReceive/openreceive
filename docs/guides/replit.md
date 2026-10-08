@@ -51,8 +51,6 @@ database. Use @openreceive packages 0.4.19 or newer.
 ```
 <!-- platform-prompt:end -->
 
-   <img alt="The prompt pasted into the Replit Agent chat box" width="400" src="../assets/replit/2-paste-prompt.webp">
-
 3. If Agent offers to switch from **Free** to **Power**, choose **Continue on
    Power**. In Free mode Agent stops partway through this setup. On Power it
    took about 11 minutes in our test.
