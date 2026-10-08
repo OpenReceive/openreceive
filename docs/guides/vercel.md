@@ -22,11 +22,10 @@ from a Next.js 16 production build.
 - Optional: a swap provider code, for USDT, USDC, SOL and ETH
   ([set one up](https://openreceive.org/set_up_swap_provider)).
 
-Put both in the project's environment variables, never in the chat. In v0,
-open **Project menu** `...` → **Settings** → **Environment Variables** and add
-`NWC_URI` (and `LSC_URI_PRIMARY`) for **Development**, **Preview** and
-**Production**. The v0 preview only sees Development variables, so a code set
-only for Production leaves the preview's checkout unavailable.
+Put both in the project's environment variables in Vercel, never in the
+chat. Give each one all three environments, **Production**, **Preview** and
+**Development**: the v0 preview only sees Development variables, so a code
+set only for Production leaves the preview's checkout unavailable.
 
 ## Start from the starter
 
@@ -34,23 +33,63 @@ The [Next.js + Postgres starter](https://github.com/OpenReceive/openreceive/tree
 is a one-product shop with checkout already wired.
 
 1. Click **Deploy** in its README. Vercel copies the starter into a new GitHub
-   repository, creates a Neon database and asks for `NWC_URI`. The first build
-   creates the tables.
-2. In v0, start a new chat, open the **+** menu, choose **Import from…** →
-   **Import from GitHub**, and pick the new repository. v0 connects the chat to
-   the Vercel project, so the preview gets the database and the environment
-   variables.
-3. Add `NWC_URI` for **Development** as described above.
-4. Ask v0 for the shop you want: products, pages, design. Keep the payment
+   repository: pick the **Git Scope** and a name, then **Create**.
+
+   <img alt="Vercel's New Project form cloning the starter into a new GitHub repository" width="560" src="../assets/vercel/1-new-project.webp">
+
+   On the Hobby plan, a repository inside a GitHub organization must be
+   public; one under your personal account can stay private. When GitHub asks
+   which repositories Vercel may use, install it only where this project
+   lives, not on every repository you own.
+2. Click **Add** next to Neon, keep the **Free** plan, then **Continue**,
+   **Create** and **Done**.
+
+   <img alt="The Neon dialog: region, and the Free plan with no credit card required" width="500" src="../assets/vercel/2-add-neon.webp">
+
+3. Paste your code into `NWC_URI` and click **Deploy**. Vercel sets it for
+   Production, Preview and Development, and the first build creates the
+   tables.
+
+   <img alt="The Neon database added, and the NWC_URI field above the Deploy button" width="560" src="../assets/vercel/3-nwc-and-deploy.webp">
+
+4. In v0, start a new chat, open the **+** menu, choose **Import from…** →
+   **Import from GitHub**, and pick the new repository.
+
+   <img alt="v0's plus menu with Import from, then Import from GitHub" width="460" src="../assets/vercel/4-import-from-github.webp">
+
+5. v0 sees that the repository already has a Vercel project. Click
+   **Continue** to connect the chat to it, so the preview gets the database
+   and the environment variables.
+
+   <img alt="v0's Connect to Existing Project dialog for the starter repository" width="460" src="../assets/vercel/5-connect-existing-project.webp">
+
+6. Ask v0 for the shop you want: products, pages, design. Keep the payment
    route's three hooks, `authorize`, `amountFor` and `onPaid`, pointed at
    your orders.
 
+   <img alt="The starter's home page after v0 redesigned it as a product card with a Buy button" width="320" src="../assets/vercel/7-starter-redesigned-by-v0.webp">
+
 ## Add checkout to an existing v0 app
 
-1. Connect a database: **Project menu** `...` → **Settings** →
-   **Integrations**, then Neon. It adds `DATABASE_URL`, a pooled URL for the
-   app, and `DATABASE_URL_UNPOOLED`, a direct URL for creating tables.
-2. Set `NWC_URI` (and `LSC_URI_PRIMARY`) as above.
+1. Connect a database. When v0 suggests Neon in the chat, click **Install**.
+   Otherwise open **Project menu** `...` → **Settings** → **Integrations**
+   and add Neon. It adds `DATABASE_URL`, a pooled URL for the app, and
+   `DATABASE_URL_UNPOOLED`, a direct URL for creating tables.
+
+   <img alt="v0 suggesting Neon in the chat, with an Install button" width="280" src="../assets/vercel/8-v0-install-neon.webp">
+
+   <img alt="v0's Settings, Integrations, with Neon installed" width="640" src="../assets/vercel/9-v0-integrations.webp">
+
+2. Add `NWC_URI` (and `LSC_URI_PRIMARY`) in Vercel. v0's **Settings** →
+   **Environment Variables** only lists them: click **Open in Vercel**.
+
+   <img alt="v0's Environment Variables settings: Environment variables live in Vercel, with an Open in Vercel button" width="640" src="../assets/vercel/6-env-vars-live-in-vercel.webp">
+
+   Then click **Add Environment Variable**, keep the type **Secret**, and
+   tick **Production**, **Preview** and **Development**.
+
+   <img alt="Vercel's Add Environment Variable dialog: Secret, key NWC_URI, all three environments" width="560" src="../assets/vercel/10-add-environment-variable.webp">
+
 3. Send v0 this prompt:
 
 <!-- platform-prompt:begin -->
@@ -67,16 +106,29 @@ the tables. Use @openreceive packages 0.4.19 or newer.
 ```
 <!-- platform-prompt:end -->
 
+   <img alt="The prompt pasted into the v0 chat box" width="300" src="../assets/vercel/11-paste-prompt.webp">
+
 The directions tell v0 how to map the three hooks onto your existing orders
-and how to render the checkout. They also tell it to stop and show you the
-checkout link when setup is done.
+and how to render the checkout. In our test v0 finished in about five
+minutes.
 
 ## Check it
 
-In the preview, place an order and open its checkout. You should see the
-payment methods and, after you pick Bitcoin, a Lightning invoice in sats. If
-no invoice appears, check the preview's logs: usually `NWC_URI` is missing
-from the Development environment, or the code is not receive-only.
+Open the preview in its own tab with the arrow button in the preview's
+address bar. Inside v0's preview pane the browser can drop the shop's
+cookie, and the checkout then says "Not authorized".
+
+In the new tab, place an order and open its checkout. You should see the
+payment methods and, after you pick Bitcoin, a Lightning invoice in sats.
+
+<img alt="The OpenReceive checkout in a v0 coffee shop, offering Bitcoin, USDT, USDC and SOL" width="520" src="../assets/vercel/12-checkout.webp">
+
+<img alt="A Lightning invoice with its QR code, in the v0 shop's checkout" width="520" src="../assets/vercel/13-invoice.webp">
+
+If the checkout says "The payment service is not available", the preview
+started before you added `NWC_URI`: restart the preview so it loads the new
+variables. Otherwise check the preview's logs: usually the code is missing
+from the Development environment, or it is not receive-only.
 
 Pay a small order from your wallet to see it settle: the checkout shows the
 payment as received, and `onPaid` marks the order paid.

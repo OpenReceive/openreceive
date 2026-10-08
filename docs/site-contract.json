@@ -73,7 +73,8 @@
       "slug": "vercel",
       "title": "Bitcoin Checkout on Vercel and v0",
       "category": "guide",
-      "bytes": 4808
+      "bytes": 7713,
+      "assets_base": "/assets/"
     },
     {
       "path": "/guides/replit",
@@ -1017,8 +1018,8 @@
       "status": "tested",
       "path": "/platforms/v0",
       "markdown_path": "/platforms/v0.md",
-      "database": "Neon Postgres, connected from v0's Integrations",
-      "secrets": "Vercel project environment variables, set in v0's project settings",
+      "database": "Neon Postgres, installed from the v0 chat or its Integrations",
+      "secrets": "Vercel project environment variables; v0's settings link to them",
       "settlement": "On page requests, with no worker or cron job",
       "guide_slug": "vercel",
       "guide_path": "/guides/vercel",
@@ -1085,6 +1086,123 @@
     }
   ],
   "assets": [
+    {
+      "path": "/assets/vercel/1-new-project.webp",
+      "source": "docs/assets/vercel/1-new-project.webp",
+      "content_type": "image/webp",
+      "bytes": 18804,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/2-add-neon.webp",
+      "source": "docs/assets/vercel/2-add-neon.webp",
+      "content_type": "image/webp",
+      "bytes": 24948,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/3-nwc-and-deploy.webp",
+      "source": "docs/assets/vercel/3-nwc-and-deploy.webp",
+      "content_type": "image/webp",
+      "bytes": 18472,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/4-import-from-github.webp",
+      "source": "docs/assets/vercel/4-import-from-github.webp",
+      "content_type": "image/webp",
+      "bytes": 10640,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/5-connect-existing-project.webp",
+      "source": "docs/assets/vercel/5-connect-existing-project.webp",
+      "content_type": "image/webp",
+      "bytes": 13240,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/7-starter-redesigned-by-v0.webp",
+      "source": "docs/assets/vercel/7-starter-redesigned-by-v0.webp",
+      "content_type": "image/webp",
+      "bytes": 16628,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/8-v0-install-neon.webp",
+      "source": "docs/assets/vercel/8-v0-install-neon.webp",
+      "content_type": "image/webp",
+      "bytes": 15896,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/9-v0-integrations.webp",
+      "source": "docs/assets/vercel/9-v0-integrations.webp",
+      "content_type": "image/webp",
+      "bytes": 13884,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/6-env-vars-live-in-vercel.webp",
+      "source": "docs/assets/vercel/6-env-vars-live-in-vercel.webp",
+      "content_type": "image/webp",
+      "bytes": 17590,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/10-add-environment-variable.webp",
+      "source": "docs/assets/vercel/10-add-environment-variable.webp",
+      "content_type": "image/webp",
+      "bytes": 22304,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/11-paste-prompt.webp",
+      "source": "docs/assets/vercel/11-paste-prompt.webp",
+      "content_type": "image/webp",
+      "bytes": 19012,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/12-checkout.webp",
+      "source": "docs/assets/vercel/12-checkout.webp",
+      "content_type": "image/webp",
+      "bytes": 22398,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
+    {
+      "path": "/assets/vercel/13-invoice.webp",
+      "source": "docs/assets/vercel/13-invoice.webp",
+      "content_type": "image/webp",
+      "bytes": 26608,
+      "referenced_by": [
+        "/guides/vercel"
+      ]
+    },
     {
       "path": "/assets/replit/1-add-secret.webp",
       "source": "docs/assets/replit/1-add-secret.webp",

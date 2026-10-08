@@ -19,6 +19,15 @@
   harness plays a publish locally: an empty production database, a rebuild,
   a restart, then the live checks the Vercel eval uses (now shared in
   `harness/live.ts`). A local pass does not earn a Tested badge.
+- The Vercel and v0 guide has screenshots, from a real run of both paths:
+  the starter's Deploy button (repository, Neon, `NWC_URI`), v0's Import from
+  GitHub and its connection to the existing project, and adding checkout to
+  a plain v0 shop with the guide's prompt (v0 finished in about five
+  minutes; the checkout issued a real invoice). Corrected from the run: v0's
+  Environment Variables panel now only links to Vercel, where the codes are
+  added as Secrets for all three environments; the Deploy button already
+  sets `NWC_URI` for Development; and v0's preview pane can drop the shop's
+  cookie, so the guide tests checkout in a new tab.
 - Directions eval, Vercel and Replit: no file in the test shop names the
   platform's variables any more. In three Replit runs the agent found the
   codes unset in its own shell, followed `compose.yml` to the variables file
