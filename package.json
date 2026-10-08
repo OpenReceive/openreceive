@@ -61,6 +61,7 @@
     "pretest:js": "npm run build -w @openreceive/core -w @openreceive/provider-data -w @openreceive/browser -w @openreceive/elements -w @openreceive/angular",
     "test:js": "node --import tsx --test tests/*.test.mjs",
     "test:e2e": "playwright test --config tests/e2e",
+    "test:workers": "node --test tests/workers/*.test.mjs",
     "test:orms": "prisma generate --schema tests/orms/schema.prisma && prisma generate --schema tests/orms/pooler/schema.prisma && node --import tsx --test tests/orms/*.test.mjs",
     "test:e2e:smoke": "playwright test --config tests/e2e lightning.spec.ts --grep @smoke",
     "test:e2e:smoke:fastify": "OPENRECEIVE_E2E_STACK=fastify playwright test --config tests/e2e lightning.spec.ts --grep @smoke",

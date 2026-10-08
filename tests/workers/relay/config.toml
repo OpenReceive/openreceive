@@ -1,0 +1,14 @@
+[info]
+relay_url = "ws://127.0.0.1:57777/"
+name = "openreceive-workers-test"
+
+[network]
+address = "0.0.0.0"
+port = 8080
+
+[limits]
+messages_per_sec = 0
+max_subscriptions = 256
+
+[verified_users]
+mode = "disabled"

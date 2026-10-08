@@ -2,6 +2,16 @@
 
 ## 0.4.20 - Unreleased
 
+- CI: a Cloudflare Workers lane (`npm run test:workers`). A Worker runs under
+  `wrangler dev` with Node compatibility, the runtime of Lovable's TanStack
+  Start apps. It reaches a fake receive-only wallet over a TLS relay, and
+  PostgreSQL through PgBouncer in transaction mode. It checks four things:
+  an invoice for the buyer, a refusal for a stranger, one live attempt under
+  concurrent creates, and settlement with `onPaid`. On Workers, the database
+  pool and the wallet connection must be built inside each request and
+  closed before it ends. A stack in module scope is refused its wallet check
+  at import, and its sockets hang on a later request.
+
 - New guide: [Bitcoin checkout on Replit](docs/guides/replit.md), with
   screenshots of a real run on Replit: Secrets first, then one prompt for
   Replit Agent that fetches the Express directions, Power mode (Free mode

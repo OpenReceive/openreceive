@@ -1,0 +1,11 @@
+# A nostr relay for the Cloudflare Workers lane of `npm run test:workers`. The
+# lane also needs PostgreSQL behind PgBouncer from tests/orms/pooler/compose.yml;
+# workers.test.mjs has the full commands.
+name: openreceive-workers-test
+services:
+  relay:
+    image: scsibug/nostr-rs-relay:0.9.0
+    volumes:
+      - ./relay/config.toml:/usr/src/app/config.toml:ro
+    ports:
+      - "127.0.0.1:57777:8080"

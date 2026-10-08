@@ -1,0 +1,8 @@
+{
+  "name": "openreceive-workers-test",
+  "private": true,
+  "description": "wrangler for tests/workers, kept out of the root install so other jobs skip workerd.",
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}

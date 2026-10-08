@@ -1,0 +1,8 @@
+// The Worker under test in tests/workers/workers.test.mjs. Lovable builds its
+// TanStack Start apps for Workers with Node compatibility, as here.
+{
+  "name": "openreceive-workers-test",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"]
+}
