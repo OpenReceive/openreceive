@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.21 - Unreleased
+## 0.4.21 - 2026-10-09
 
 - Fixed: `openreceive doctor` read only the process environment, so right
   after a Next.js integration, with both codes in `.env.local`, it reported

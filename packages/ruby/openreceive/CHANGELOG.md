@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.21 - 2026-10-09
+
+Release with the complete 0.4.21 package family. The bundled agent skills'
+directions now end on a closing message of at most five lines that keeps the
+test order and names the payment methods it offers, without calling a coin
+unavailable over a swap minimum. No Ruby runtime changes from 0.4.20.
+
 ## 0.4.20 - 2026-10-09
 
 Release with the complete 0.4.20 package family. The bundled agent skills now

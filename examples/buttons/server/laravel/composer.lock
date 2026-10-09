@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ec1bcc04a8ea44cf1f8999cab936650f",
+    "content-hash": "80fa1a2cf148c54943cb774db94cf33f",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/laravel",
-            "version": "0.4.20",
+            "version": "0.4.21",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/laravel",
-                "reference": "4e22363ced8bb46ea2b0edd78e8ba4ddc6953caa"
+                "reference": "87f9b27cb6eb8b77ae531c9e52fbabce1a11cd69"
             },
             "require": {
                 "illuminate/console": "^11.0 || ^12.0",
@@ -2740,7 +2740,7 @@
                 "illuminate/routing": "^11.0 || ^12.0",
                 "illuminate/support": "^11.0 || ^12.0",
                 "nyholm/psr7": "^1.8",
-                "openreceive/openreceive": "~0.4.20",
+                "openreceive/openreceive": "~0.4.21",
                 "php": "^8.2",
                 "symfony/psr-http-message-bridge": "^7.0"
             },
@@ -2800,11 +2800,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.20",
+            "version": "0.4.21",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/openreceive",
-                "reference": "b54f5834ad4663eac5eb0ed32f5d67a43bbc365e"
+                "reference": "3848147b8ad96b4e7b6b7b956d95286262eff85d"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20",
@@ -9286,7 +9286,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": [],
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
@@ -9294,9 +9294,9 @@
         "ext-gmp": "*",
         "ext-pdo": "*"
     },
-    "platform-dev": {},
+    "platform-dev": [],
     "platform-overrides": {
         "php": "8.2.0"
     },
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

@@ -10,5 +10,5 @@ namespace OpenReceive;
  */
 final class Version
 {
-    public const VERSION = '0.4.20';
+    public const VERSION = '0.4.21';
 }
