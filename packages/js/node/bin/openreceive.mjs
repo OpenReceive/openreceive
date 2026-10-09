@@ -2,15 +2,9 @@
 
 import { runCli } from "../dist/cli.js";
 
-// loadEnvFile exists from Node 20.12; missing .env is fine either way.
-if (typeof process.loadEnvFile === "function") {
-  try {
-    process.loadEnvFile();
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-}
-
+// No process.loadEnvFile() here: doctor reads .env.local, then .env itself and
+// names the files it used. Loading .env first hid it from that report and let
+// it win over .env.local.
 const exitCode = await runCli({
   argv: process.argv.slice(2),
   env: process.env,

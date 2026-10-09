@@ -130,7 +130,7 @@ function writeImportSmoke(installDir, packages) {
     path.join(installDir, "smoke.mjs"),
     `import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import postcss from "postcss";
@@ -437,6 +437,21 @@ assert(
     /database: openreceive_payments and openreceive_meta present/,
     "openreceive: the packaged doctor --db must read a migrated SQLite file"
   );
+}
+// The bin once loaded .env into process.env before doctor ran, so doctor used
+// the file but reported "env files: none used", and .env beat .env.local.
+{
+  const envDir = path.resolve("doctor-env");
+  mkdirSync(envDir, { recursive: true });
+  const nwc = \`nostr+walletconnect://\${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=\${"b".repeat(64)}\`;
+  writeFileSync(path.join(envDir, ".env"), \`NWC_URI=\${nwc}\\n\`);
+  const out = execFileSync(process.execPath, [path.resolve(nodeCliPath), "doctor", "--offline"], {
+    cwd: envDir,
+    encoding: "utf8",
+    env: { PATH: process.env.PATH },
+  });
+  assert.match(out, /env files: \\.env\\n/, "openreceive: the packaged doctor must name the .env it read");
+  assert.match(out, /NWC_URI: present-redacted/, "openreceive: the packaged doctor must read NWC_URI from .env");
 }
 
 console.log(\`Imported \${checks.length} OpenReceive package tarballs.\`);

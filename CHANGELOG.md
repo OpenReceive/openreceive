@@ -9,6 +9,18 @@
   instead of explaining order ownership. It no longer mentions swap minimums,
   which acceptance runs on 0.4.21 kept repeating to the user. Docs only:
   openreceive.org can serve this on 0.4.21.
+- Changed (agent directions, all eight library stacks), from the Fastify
+  acceptance runs on 0.4.21: when the request already names stablecoins (as
+  "Enable Bitcoin and stablecoin payments" does), the second message is the
+  lightning-swap.com walkthrough with no yes/no first, as the WooCommerce
+  directions already said. The agent checks the env file with
+  `grep … | cut -d= -f1`, which prints names only, instead of reading it
+  back after a write. It restarts only the app's own server, by pid and on
+  the app's port, never with `pkill` or `killall` by name. Docs only.
+- Fixed (`openreceive doctor`, npm): the bin loaded `.env` into the
+  environment before doctor read the env files, so doctor used `.env` but
+  printed `env files: none used`, and `.env` won over `.env.local`, the
+  reverse of the documented order. Doctor now reads both files itself.
 
 ## 0.4.21 - 2026-10-09
 

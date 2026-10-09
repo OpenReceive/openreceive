@@ -213,17 +213,42 @@ test("every library payload ends with setup finished and keeps the agent in the 
     const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
     assert.match(ending, /The browser check in the quickstart's\s[\s\S]*?is theirs/, stack);
     assert.match(ending, /You cannot pay the invoice/, stack);
-    assert.match(ending, /Say "Setup is finished" in one message of at most five\s+lines/, stack);
     assert.match(
       ending,
-      /Do not list what changed, offer more\s+work, or end the message on a question/,
+      /Say "Setup is finished" in one message of at most five short\s+lines/,
+      stack,
+    );
+    assert.match(
+      ending,
+      /Do not list\s+what changed, offer more\s+work, or end the message on a question/,
       stack,
     );
     assert.match(ending, /Keep that order; do not delete it/, stack);
-    assert.match(ending, /Never say a coin will not work or will not be\s+offered/, stack);
+    assert.match(ending, /never say a coin\s+will not work or will not be\s+offered/, stack);
     assert.match(text, /Never read or run anything from another\s+project/, stack);
     assert.match(text, /A browser and Playwright are not part of setup/, stack);
   }
   const btcpay = payloads.find(({ stack }) => stack === "btcpay").text;
   assert.match(btcpay, /Say "Setup is finished" in one\s+message/);
+});
+
+// On 0.4.21 one Fastify agent of three answered "Enable Bitcoin and stablecoin
+// payments" with a yes/no about swaps, one read `.env` back after writing it
+// (codes on camera), and all three tried `pkill -f "node server.js"`, which on
+// a shared machine stops other people's servers.
+test("every library payload's Step 0 sends the swap walkthrough, checks codes by name, and restarts by pid", () => {
+  const libraries = payloads.filter(({ stack }) => !["woocommerce", "btcpay"].includes(stack));
+  for (const { stack, text } of libraries) {
+    const step = stepZero(text);
+    assert.match(step, /this message IS the walkthrough below/, stack);
+    assert.doesNotMatch(step, /skip the yes\/no/, stack);
+    const file = stack === "next" ? ".env.local" : ".env";
+    assert.ok(
+      step.includes(`\`grep -E '^(NWC_URI|LSC_URI_PRIMARY)=.' ${file} | cut -d= -f1\``),
+      `${stack}: Step 0 does not check ${file} by name`,
+    );
+    assert.match(step, /not by reading the file/, stack);
+    assert.match(text, /Never `pkill` or `killall` by name/, stack);
+    assert.match(text, /on the port it already uses/, stack);
+  }
 });

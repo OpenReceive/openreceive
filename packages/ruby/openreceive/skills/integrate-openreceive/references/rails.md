@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Rails)
 
 ```sh
-# READ THIS FIRST: this file is 40 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 41 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/rails/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -57,11 +57,12 @@ owns orders, users, prices, or fulfillment.
 
 ## Step 0 — ask for the two codes, one question at a time
 
-Before anything else, look at one file: the project's `.env`, if it exists.
-Read it only far enough to see whether `NWC_URI` and `LSC_URI_PRIMARY` are
-there and non-empty, and never print the values. A code that is already
-set is not asked for again; if both are set, skip to step 5
-(making the server load the file), then the quickstart.
+Before anything else, check one file: the project's `.env`, if it exists.
+`grep -E '^(NWC_URI|LSC_URI_PRIMARY)=.' .env | cut -d= -f1` names the codes
+it sets without printing them. Check with that, here and after each write,
+not by reading the file, and never print the values. A code that is already
+set is not asked for again; if both are set, skip to step 5 (making the
+server load the file), then the quickstart.
 
 Otherwise your next action is a question to the user. Do not install the gem,
 edit the app, write `.env.example`, or search anywhere else before asking
@@ -96,10 +97,11 @@ you store it. Ask one question per message.
    Make sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has
    one). Never echo the value, commit it, or put it in client code. Reply only
    that it is saved, then ask the next question.
-3. **Second message — swaps.** If the user already asked for stablecoins or
-   altcoins, skip the yes/no and go straight to the walkthrough. Otherwise ask
-   whether payers should also be able to pay with USDT, USDC, ETH or SOL. The
-   walkthrough:
+3. **Second message — swaps.** If the user asked for stablecoins, USDT, USDC,
+   ETH, SOL, altcoins or "crypto" (as in "Bitcoin and stablecoin payments"),
+   this message IS the walkthrough below: send it as it is, and do not ask yes
+   or no first. Otherwise ask whether payers should also be able to pay with
+   USDT, USDC, ETH or SOL, then give the walkthrough. The walkthrough:
 
    > Go to https://lightning-swap.com, sign in for API keys, create a key, and
    > copy the whole URI (https://openreceive.org/set_up_swap_provider). Paste
@@ -182,6 +184,10 @@ itself, and they hold for every integration.
 - Work only in this application. Never read or run anything from another
   project on this machine (its `node_modules`, tools or source), for any
   reason. A browser and Playwright are not part of setup.
+- Restart only this app's server, on the port it already uses: stop the
+  process you started, or the one listening on that port, by its pid (or
+  restart its Compose service). Never `pkill` or `killall` by name: that
+  stops other people's servers too.
 - The host owns the price. `config.amount_for` reads it from your own data;
   reject payer-supplied amounts.
 - `config.authorize` runs on every request, and the `resource` it receives is a
