@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.22 - Unreleased
+
+- Changed (agent directions, all eight library stacks): the closing message
+  is at most five short lines. When the app's orders belong to a session or
+  cookie, the agent's test order cannot open in the user's browser, so the
+  agent now hands over the shop's own page ("Open <url> and click Buy")
+  instead of explaining order ownership. It no longer mentions swap minimums,
+  which acceptance runs on 0.4.21 kept repeating to the user. Docs only:
+  openreceive.org can serve this on 0.4.21.
+
 ## 0.4.21 - 2026-10-09
 
 - Fixed: `openreceive doctor` read only the process environment, so right

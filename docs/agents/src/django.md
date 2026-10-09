@@ -148,15 +148,18 @@ mark an order paid, and do not look for a way to (a wallet control port, a
 test endpoint, another wallet). If the user wants a real settlement test, they
 pay on that link from their own wallet, and `on_paid` marks the order paid.
 
-Setup ends here. Say "Setup is finished" in one message of at most five
-lines, with the link and what to check. Do not list what changed, offer more
-work, or end the message on a question.
+Setup ends here. Say "Setup is finished" in one message of at most five short
+lines (about 80 characters each), with the link and what to check. Do not list
+what changed, offer more work, or end the message on a question.
 
 - The link is to a real unpaid order. Keep that order; do not delete it.
+- When this app's orders belong to a session or cookie, the user's browser
+  cannot open the order you made. Then the link is the shop's own page:
+  "Open <shop url> and click Buy: it opens the checkout." Do not explain order
+  ownership or mention your test order.
 - Name the methods it offers: Bitcoin, plus USDT, USDC, ETH and SOL when
-  `LSC_URI_PRIMARY` is saved. Never say a coin will not work or will not be
-  offered. Swap minimums apply per order, and a coin whose minimum is above an
-  order's total says so on its own tile.
+  `LSC_URI_PRIMARY` is saved. Do not mention minimums, and never say a coin
+  will not work or will not be offered.
 
 ## Non-negotiables
 
