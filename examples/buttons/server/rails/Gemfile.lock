@@ -1,22 +1,22 @@
 PATH
   remote: ../../../../packages/ruby/openreceive-rails
   specs:
-    openreceive-rails (0.4.19)
+    openreceive-rails (0.4.20)
       nwc-ruby (~> 0.3)
-      openreceive (= 0.4.19)
-      openreceive-server (= 0.4.19)
+      openreceive (= 0.4.20)
+      openreceive-server (= 0.4.20)
       rails (>= 8.0)
 
 PATH
   remote: ../../../../packages/ruby/openreceive-server
   specs:
-    openreceive-server (0.4.19)
-      openreceive (= 0.4.19)
+    openreceive-server (0.4.20)
+      openreceive (= 0.4.20)
 
 PATH
   remote: ../../../../packages/ruby/openreceive
   specs:
-    openreceive (0.4.19)
+    openreceive (0.4.20)
       bigdecimal
 
 GEM
@@ -367,4 +367,4 @@ DEPENDENCIES
   web-console
 
 BUNDLED WITH
-   2.6.9
+  4.0.20

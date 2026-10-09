@@ -8,7 +8,7 @@
     "ext-gmp": "*",
     "ext-pdo": "*",
     "laravel/framework": "^12.0",
-    "openreceive/laravel": "~0.4.19"
+    "openreceive/laravel": "~0.4.20"
   },
   "require-dev": {
     "mockery/mockery": "^1.6",
@@ -32,7 +32,7 @@
       "options": {
         "symlink": true,
         "versions": {
-          "openreceive/openreceive": "0.4.19"
+          "openreceive/openreceive": "0.4.20"
         }
       }
     },
@@ -42,7 +42,7 @@
       "options": {
         "symlink": true,
         "versions": {
-          "openreceive/laravel": "0.4.19"
+          "openreceive/laravel": "0.4.20"
         }
       }
     }

@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-buttons-rails",
-  "version": "0.4.19",
+  "version": "0.4.20",
   "private": true,
   "scripts": {
     "dev": "bin/shakapacker-dev-server",
@@ -11,9 +11,9 @@
   "dependencies": {
     "@mantine/core": "^9.5.2",
     "@mantine/hooks": "^9.5.2",
-    "@openreceive/browser": "0.4.19",
-    "@openreceive/core": "0.4.19",
-    "@openreceive/provider-data": "0.4.19",
+    "@openreceive/browser": "0.4.20",
+    "@openreceive/core": "0.4.20",
+    "@openreceive/provider-data": "0.4.20",
     "@rails/actioncable": "^8.1.300",
     "@tabler/icons-react": "^3.46.0",
     "mobx": "^6.15.0",

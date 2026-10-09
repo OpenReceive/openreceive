@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.20 - Unreleased
+## 0.4.20 - 2026-10-09
 
 - Fixed: in an app styled with Tailwind v4, the stablecoin network picker
   never opened. The payer clicked USDT or USDC and nothing happened. The

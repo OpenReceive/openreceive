@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.20 - 2026-10-09
+
+Release with the complete 0.4.20 package family. The bundled agent skills now
+describe the checkout stylesheet's rules as low specificity rather than zero:
+inside the checkout they carry one attribute, so a host page's Tailwind
+utilities cannot rearrange it. No Ruby runtime changes from 0.4.19.
+
 ## 0.4.19 - 2026-10-07
 
 Release with the complete 0.4.19 package family. The bundled agent skills link
