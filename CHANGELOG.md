@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.21 - Unreleased
+
+- Fixed: `openreceive doctor` read only the process environment, so right
+  after a Next.js integration, with both codes in `.env.local`, it reported
+  `NWC_URI` missing. One agent then sourced the file into bash. The `&` in
+  each URI split the values and printed pieces of both codes on screen.
+  Doctor (and `debug-report`) now fills `NWC_URI`, `LSC_URI_PRIMARY`,
+  `LSC_URI_BACKUP` and `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC` from
+  `.env.local`, then `.env`, in the working directory. The order is Next's,
+  and a variable the environment already sets wins. A new `env files:` line
+  names the files it used and never prints a value. The Node, Fastify and
+  Next.js directions say doctor reads the file itself and never to source it.
+- Changed: the closing "Setup is finished" message in every library stack's
+  directions is at most five lines and does not list what changed. It keeps
+  the test order, because the link is that order. It names the methods the
+  checkout offers. Agents had been writing 30-line wrap-ups, deleting the
+  order behind the link, and calling stablecoins unavailable on a $1–$7 shop
+  because of one coin's swap minimum. The checkout already shows a minimum on
+  that coin's own tile.
+- The Next.js directions eval shop now runs Next.js 16, which builds with
+  Turbopack, as new apps do. Turbopack is the bundler that broke wallet
+  preflight before 0.4.19.
+
 ## 0.4.20 - 2026-10-09
 
 - Fixed: in an app styled with Tailwind v4, the stablecoin network picker

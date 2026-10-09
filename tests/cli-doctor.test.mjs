@@ -21,7 +21,12 @@ function receiveOnlyWallet() {
   };
 }
 
-async function doctor({ argv = [], env = {}, walletClientFactory, cwd = process.cwd() } = {}) {
+// Doctor reads .env.local and .env from its cwd, and the repo root keeps live
+// codes in .env. Every test runs from an empty directory unless it says otherwise.
+const EMPTY_CWD = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-cwd-"));
+test.after(() => rm(EMPTY_CWD, { recursive: true, force: true }));
+
+async function doctor({ argv = [], env = {}, walletClientFactory, cwd = EMPTY_CWD } = {}) {
   const out = [];
   const err = [];
   const code = await runCli({
@@ -42,6 +47,45 @@ test("doctor --offline passes on a valid NWC_URI and skips the probe", async () 
   assert.match(out, /wallet: probe skipped \(--offline\)/);
   assert.match(out, /database: skipped/);
   assert.match(out, /routes: skipped/);
+});
+
+test("doctor reads .env.local, then .env, without overriding the environment", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-env-"));
+  try {
+    const lsc = "lightning+swapconnect://swap.example.com/v1?key=k&secret=s";
+    const otherNwc = VALID_NWC.replace("a".repeat(64), "c".repeat(64));
+    // Unquoted, with the `&` that splits a value when the file is sourced.
+    await writeFile(path.join(dir, ".env.local"), `NWC_URI=${VALID_NWC}\nOTHER=1\n`);
+    await writeFile(path.join(dir, ".env"), `NWC_URI=${otherNwc}\nLSC_URI_PRIMARY=${lsc}\n`);
+    let probed;
+    const { code, out } = await doctor({
+      cwd: dir,
+      walletClientFactory: (options) => {
+        probed = options.connectionString;
+        return receiveOnlyWallet();
+      },
+    });
+    assert.equal(code, 0);
+    assert.equal(probed, VALID_NWC);
+    assert.match(out, /env files: \.env\.local, \.env\n/);
+    assert.match(out, /NWC_URI: present-redacted/);
+    assert.match(out, /LSC_URI connections: 1/);
+    assert.doesNotMatch(out, /secret=|walletconnect:\/\/|swapconnect:\/\//);
+
+    const fromEnv = await doctor({
+      cwd: dir,
+      env: { NWC_URI: otherNwc, LSC_URI_PRIMARY: "" },
+      walletClientFactory: (options) => {
+        probed = options.connectionString;
+        return receiveOnlyWallet();
+      },
+    });
+    assert.equal(probed, otherNwc);
+    assert.match(fromEnv.out, /LSC_URI connections: 0/);
+    assert.match(fromEnv.out, /env files: none used \(checked \.env\.local, \.env\)/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("doctor probes the wallet and reports receive-only", async () => {
@@ -181,7 +225,7 @@ test("debug-report always exits 0, even with nothing configured", async () => {
   const code = await runCli({
     argv: ["debug-report", "--offline"],
     env: {},
-    cwd: process.cwd(),
+    cwd: EMPTY_CWD,
     stdout: { write: (message) => out.push(message) },
     stderr: { write: () => {} },
   });

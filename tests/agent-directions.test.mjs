@@ -188,9 +188,24 @@ test("the WooCommerce payload ends at test-invoice and keeps the agent in the st
   assert.match(text, /its wp-admin screens are only for a store with no WP-CLI/);
 });
 
+// The 0.4.18 Next.js eval agent could not get doctor to see `.env.local`, ran
+// `set -a; . ./.env.local`, and the `&` in each code printed pieces of both.
+test("the @openreceive/node payloads say doctor reads the env file and never to source it", () => {
+  const envFiles = { node: ".env", fastify: ".env", next: ".env.local" };
+  for (const [stack, file] of Object.entries(envFiles)) {
+    const { text } = payloads.find((payload) => payload.stack === stack);
+    assert.ok(
+      text.includes(`Doctor reads \`${file}\` itself. Never source it into a shell`),
+      stack,
+    );
+  }
+});
+
 // The 0.4.18 Node and Fastify eval agents ended on "checkout is live", took
 // the reply "Yes, go ahead" as a request for the quickstart's browser check,
-// and ran it with Playwright from another checkout.
+// and ran it with Playwright from another checkout. On 0.4.20 the Next.js
+// agents wrote 30-line wrap-ups, one deleted the order behind its link, and
+// both called stablecoins unavailable on a $1–$7 shop over one swap minimum.
 test("every library payload ends with setup finished and keeps the agent in the app", () => {
   const libraries = payloads.filter(({ stack }) => !["woocommerce", "btcpay"].includes(stack));
   assert.equal(libraries.length, 8);
@@ -198,8 +213,14 @@ test("every library payload ends with setup finished and keeps the agent in the 
     const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
     assert.match(ending, /The browser check in the quickstart's\s[\s\S]*?is theirs/, stack);
     assert.match(ending, /You cannot pay the invoice/, stack);
-    assert.match(ending, /Say "Setup is finished" in one message/, stack);
-    assert.match(ending, /Do not offer more work or end the message on a question/, stack);
+    assert.match(ending, /Say "Setup is finished" in one message of at most five\s+lines/, stack);
+    assert.match(
+      ending,
+      /Do not list what changed, offer more\s+work, or end the message on a question/,
+      stack,
+    );
+    assert.match(ending, /Keep that order; do not delete it/, stack);
+    assert.match(ending, /Never say a coin will not work or will not be\s+offered/, stack);
     assert.match(text, /Never read or run anything from another\s+project/, stack);
     assert.match(text, /A browser and Playwright are not part of setup/, stack);
   }

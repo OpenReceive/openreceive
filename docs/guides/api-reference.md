@@ -1645,6 +1645,11 @@ It always checks:
 - whether `NWC_URI` is set and can be parsed (printed with secrets hidden), and
 - the `LSC_URI_*` connections.
 
+A variable the environment does not set is read from `.env.local`, then
+`.env`, in the working directory, the order Next.js uses. The report names the
+files it used and never prints a value. Do not source either file into a
+shell to run doctor: a code contains `&`, which splits the value.
+
 When `NWC_URI` parses, it also probes the wallet over the relay, the same
 preflight that runs at boot. It reports whether the code is receive-only.
 `--offline` skips the probe. No database is touched by default.

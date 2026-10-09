@@ -1,6 +1,6 @@
 # OpenReceive agent directions: PHP (0.4.20)
 
-These directions are 38 KB. Download them with your shell and follow them from Step 0:
+These directions are 39 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/php/full.md
 

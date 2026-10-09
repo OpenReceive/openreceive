@@ -130,6 +130,8 @@ The quickstart is done when
 `npx openreceive doctor --db <file-or-url> --url <app url>` is clean and this
 app serves the checkout page for one of its orders. Doctor names any failed
 check and exits nonzero; fix it before going on.
+Doctor reads `.env.local` itself. Never source it into a shell: the `&` in a
+code splits the value and prints the pieces.
 
 Give the user that checkout link. The browser check in the quickstart's step 6
 (payment-method icons, wallet logos, a pay tutorial) is theirs: tell them what
@@ -140,8 +142,15 @@ mark an order paid, and do not look for a way to (a wallet control port, a
 test endpoint, another wallet). If the user wants a real settlement test, they
 pay on that link from their own wallet, and `onPaid` marks the order paid.
 
-Setup ends here. Say "Setup is finished" in one message, with the link and
-what to check. Do not offer more work or end the message on a question.
+Setup ends here. Say "Setup is finished" in one message of at most five
+lines, with the link and what to check. Do not list what changed, offer more
+work, or end the message on a question.
+
+- The link is to a real unpaid order. Keep that order; do not delete it.
+- Name the methods it offers: Bitcoin, plus USDT, USDC, ETH and SOL when
+  `LSC_URI_PRIMARY` is saved. Never say a coin will not work or will not be
+  offered. Swap minimums apply per order, and a coin whose minimum is above an
+  order's total says so on its own tile.
 
 ## Non-negotiables
 

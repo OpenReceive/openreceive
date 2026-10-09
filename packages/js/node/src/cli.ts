@@ -1,7 +1,8 @@
-import { cpSync, existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseEnv } from "node:util";
 import {
   formatInvalidNwcMessage,
   NwcUriParseError,
@@ -9,7 +10,7 @@ import {
   parseNwcUri,
 } from "@openreceive/core";
 import { createNwcReceiveClient } from "./alby-nwc.ts";
-import { readLscConnectionsFromEnvironment } from "./lsc-uri.ts";
+import { LSC_ENV_NAMES, readLscConnectionsFromEnvironment } from "./lsc-uri.ts";
 import { runScaffoldPayments, SCAFFOLD_PAYMENTS_HELP } from "./scaffold/index.ts";
 import { redactSecrets } from "./service/logging.ts";
 
@@ -53,7 +54,9 @@ Usage: openreceive <command> [options]
 Commands:
   doctor              Validate server configuration: Node, NWC_URI, swap
                       providers, and a receive-only wallet probe over the relay.
-                      --db and --url extend the checks; exits 1 on problems.
+                      Reads .env.local, then .env, for variables the
+                      environment does not set. --db and --url extend the
+                      checks; exits 1 on problems.
   debug-report        Print the same diagnostics as a redacted support report
                       (alias of doctor; always exits 0).
   scaffold payments   Emit the openreceive_payments + openreceive_meta migration and wiring guide for your ORM.
@@ -214,7 +217,8 @@ async function runDiagnostics(input: {
   readonly stdout: CliIo;
   readonly walletClientFactory?: CliOptions["walletClientFactory"];
 }): Promise<number> {
-  const { flags, env } = input;
+  const { flags } = input;
+  const { env, files } = withEnvFiles(input.env, input.cwd);
   const nwc = env.NWC_URI?.trim();
   let nwcError: unknown;
   try {
@@ -238,6 +242,7 @@ async function runDiagnostics(input: {
     "Agent skills: run `npx openreceive skills install`",
     `node: ${process.version}`,
     `cwd: ${input.cwd}`,
+    `env files: ${files.length > 0 ? files.join(", ") : `none used (checked ${ENV_FILES.join(", ")})`}`,
     "storage: payment-attempt rows live in the host database (no separate store)",
     `NWC_URI: ${nwcError === undefined ? (nwc ? "present-redacted" : "missing") : safeErrorMessage(nwcError)}`,
     `LSC_URI connections: ${lscError === undefined ? lscConnections : safeErrorMessage(lscError)}`,
@@ -284,6 +289,41 @@ async function runDiagnostics(input: {
   // always exits 0.
   if (input.command === "debug-report") return 0;
   return failed ? 1 : 0;
+}
+
+/** Next's order: the first file that sets a variable wins. */
+const ENV_FILES = [".env.local", ".env"] as const;
+const DOCTOR_ENV_NAMES = new Set<string>([
+  "NWC_URI",
+  ...LSC_ENV_NAMES,
+  "OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC",
+]);
+
+/**
+ * Fill doctor's variables from the project's env files, the way the app's own
+ * loader does: the environment wins, then `.env.local`, then `.env`. Without
+ * this, an agent has to get the codes into a shell first, and sourcing the file
+ * splits each URI at its `&` and prints the pieces. Only file names are
+ * reported, never values.
+ */
+function withEnvFiles(
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+): { env: NodeJS.ProcessEnv; files: string[] } {
+  const merged = { ...env };
+  const files: string[] = [];
+  for (const name of ENV_FILES) {
+    const file = path.join(cwd, name);
+    if (!existsSync(file)) continue;
+    let used = false;
+    for (const [key, value] of Object.entries(parseEnv(readFileSync(file, "utf8")))) {
+      if (!DOCTOR_ENV_NAMES.has(key) || merged[key] !== undefined) continue;
+      merged[key] = value;
+      used = true;
+    }
+    if (used) files.push(name);
+  }
+  return { env: merged, files };
 }
 
 /**
