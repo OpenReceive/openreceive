@@ -447,6 +447,11 @@ The index works as a marketing page and as proof:
   `database`, `secrets`, `settlement`
 - below it, the guide at `guide_source`, rendered like any guide, with the same
   link rewriting
+- the prompt holds one line per paragraph, so the copied text pastes into a
+  builder's chat without line breaks mid-sentence. Wherever the site shows it
+  (the guide's ```` ```text ```` block between the `platform-prompt` markers,
+  or a preview beside Copy prompt), wrap long lines on screen
+  (`white-space: pre-wrap`) and copy the text unchanged
 - the twin `/platforms/<id>.md` serves the raw guide markdown
 
 Two rows can share one guide. `vercel` and `v0` do: the Vercel page leads with

@@ -27,8 +27,9 @@ code as environment variables, and Replit links them to the published app.
 ## Add checkout to your Replit app
 
 1. Open **Tools** → **Secrets** → **New Secret**. Add `NWC_URI` with your
-   wallet code, then `LSC_URI_PRIMARY` with your swap provider code. Replit
-   already gives every app a Postgres database in `DATABASE_URL`.
+   wallet code, then, for swaps, `LSC_URI_PRIMARY` with your swap provider
+   code. Replit already gives every app a Postgres database in
+   `DATABASE_URL`.
 
    <img alt="The Secrets tool with a new secret named NWC_URI" width="600" src="../assets/replit/1-add-secret.webp">
 
@@ -36,26 +37,23 @@ code as environment variables, and Replit links them to the published app.
 
 <!-- platform-prompt:begin -->
 ```text
-Add Bitcoin Lightning checkout to this app with OpenReceive. Download the
-directions with your terminal and follow them exactly:
+Add Bitcoin Lightning checkout to this app with OpenReceive. Download the directions with your terminal and follow them exactly:
 
 curl -fsSL https://openreceive.org/agent-directions/node/full.md
 
-NWC_URI and LSC_URI_PRIMARY are already set as this app's Secrets, and the
-server reads them from process.env. Do not ask me for them, and do not look
-for them, check them or print them. Mount the payment routes on the Express
-server and store payments in this app's Postgres database, through
-DATABASE_URL. Create OpenReceive's tables when the server starts (the schema
-SQL is idempotent), because a published Replit app gets its own production
-database. Use @openreceive packages 0.4.19 or newer.
+NWC_URI and LSC_URI_PRIMARY are already set as this app's Secrets, and the server reads them from process.env. Do not ask me for them, and do not look for them, check them or print them. Mount the payment routes on the Express server and store payments in this app's Postgres database, through DATABASE_URL. Create OpenReceive's tables when the server starts (the schema SQL is idempotent), because a published Replit app gets its own production database. Use @openreceive packages 0.4.19 or newer.
 ```
 <!-- platform-prompt:end -->
 
-3. If Agent offers to switch from **Free** to **Power**, choose **Continue on
-   Power**. In Free mode Agent stops partway through this setup. On Power it
-   took about 11 minutes in our test.
+Bitcoin only, with no swap provider? Then in the prompt, replace
+`NWC_URI and LSC_URI_PRIMARY are already set` with
+`I want Bitcoin only, with no swaps. NWC_URI is already set`.
 
-   <img alt="Replit Agent recommending Power mode, with a Continue on Power button" width="400" src="../assets/replit/3-continue-on-power.webp">
+If Agent offers to switch from **Free** to **Power**, choose **Continue on
+Power**. Power can use paid credits. In our test, Agent on Free stopped
+partway through this setup, and on Power it finished in about 11 minutes.
+
+<img alt="Replit Agent recommending Power mode, with a Continue on Power button" width="400" src="../assets/replit/3-continue-on-power.webp">
 
 The directions tell Agent how to map the three hooks onto your existing
 orders and how to render the checkout. Agent ends with "Setup is finished"
@@ -71,9 +69,10 @@ instead.
 In Preview, place an order. Its checkout shows the payment methods. Pick
 Bitcoin to see a Lightning invoice in sats. If the app stops at start, read
 the Console: usually `NWC_URI` is missing from Secrets, or the code is not
-receive-only.
+receive-only. Each swap has a minimum amount set by the provider, so on a
+small order some coins are greyed out and show their minimum.
 
-<img alt="The OpenReceive checkout in Replit's Preview, offering Bitcoin, USDT, USDC, SOL and ETH" width="560" src="../assets/replit/4-preview-checkout.webp">
+<img alt="The OpenReceive checkout in Replit's Preview on a $7 order: Bitcoin, USDT, USDC and SOL, and ETH greyed out with a minimum amount of $20.22" width="560" src="../assets/replit/4-preview-checkout.webp">
 
 Pay a small order from your wallet to see it settle: the checkout shows the
 payment as received, and `onPaid` marks the order paid.
@@ -85,7 +84,13 @@ payment as received, and `onPaid` marks the order paid.
    with a link icon: Replit copies your Secrets into the published app. If you
    add a secret after publishing, check this list and republish.
 
-   <img alt="Publishing settings: Autoscale, and deployment secrets NWC_URI and LSC_URI_PRIMARY linked to the app's Secrets" width="500" src="../assets/replit/5-publish-settings.webp">
+   Under **Database settings**, **Set up your production database with your
+   current development data** copies every row, test orders and their
+   payment attempts included. Untick it only if the live shop needs none of
+   that data and the app creates all its tables when it starts, as the
+   starter does.
+
+   <img alt="Publishing settings: Autoscale, deployment secrets NWC_URI and LSC_URI_PRIMARY linked to the app's Secrets, and the database settings" width="500" src="../assets/replit/5-publish-settings.webp">
 
 2. Select **Publish** and wait for "Your project is live", about four
    minutes.
@@ -95,7 +100,7 @@ payment as received, and `onPaid` marks the order paid.
 3. Open the `replit.app` address, place an order and pick Bitcoin. A
    Lightning invoice appears.
 
-   <img alt="The published shop's checkout showing a Lightning invoice with its QR code and wallet list" width="700" src="../assets/replit/7-live-invoice.webp">
+   <img alt="The published shop's checkout showing a Lightning invoice with its QR code" width="700" src="../assets/replit/7-live-invoice.webp">
 
 The published app uses its own production database, separate from the one
 you build with. Replit can start it with a copy of your development data,
@@ -130,7 +135,10 @@ Replit.
   `app.set("trust proxy", 1)`. Replit's proxy sets `x-forwarded-for`, so the
   limit applies per payer.
 - **Keep order pages reachable.** A payer with a swap in progress comes back
-  through the order's own page to claim a refund. See
+  through the order's own page to claim a refund. Keep the swap's payment
+  hash too, and pass it back to the checkout (`resume-payment-hash` on the
+  element, `resumePaymentHash` in React): without it, the page opens on the
+  payment methods instead of the refund. See
   [swap refunds](swap-refunds.md).
 
 More detail: [Express quickstart](quickstart-node.md),

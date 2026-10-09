@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 13511
+      "bytes": 13510
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 14526
+      "bytes": 14525
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -43,7 +43,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 14446
+      "bytes": 14445
     },
     {
       "path": "/guides/quickstart-django",
@@ -53,7 +53,7 @@
       "slug": "quickstart-django",
       "title": "Django Quickstart",
       "category": "quickstart",
-      "bytes": 20287
+      "bytes": 20286
     },
     {
       "path": "/guides/quickstart-next",
@@ -63,7 +63,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 16436
+      "bytes": 16435
     },
     {
       "path": "/guides/vercel",
@@ -73,7 +73,7 @@
       "slug": "vercel",
       "title": "Bitcoin Checkout on Vercel and v0",
       "category": "guide",
-      "bytes": 7602,
+      "bytes": 8911,
       "assets_base": "/assets/"
     },
     {
@@ -84,7 +84,7 @@
       "slug": "replit",
       "title": "Bitcoin Checkout on Replit",
       "category": "guide",
-      "bytes": 6678,
+      "bytes": 7605,
       "assets_base": "/assets/"
     },
     {
@@ -115,7 +115,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 17725
+      "bytes": 17724
     },
     {
       "path": "/guides/quickstart-php",
@@ -125,7 +125,7 @@
       "slug": "quickstart-php",
       "title": "PHP Quickstart (plain PHP)",
       "category": "quickstart",
-      "bytes": 15881
+      "bytes": 15880
     },
     {
       "path": "/guides/quickstart-laravel",
@@ -135,7 +135,7 @@
       "slug": "quickstart-laravel",
       "title": "Laravel Quickstart",
       "category": "quickstart",
-      "bytes": 20103
+      "bytes": 20102
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -196,7 +196,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "category": "quickstart",
-      "bytes": 14380
+      "bytes": 14788
     },
     {
       "path": "/guides/checkout-ux",
@@ -306,7 +306,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 126022
+      "bytes": 126524
     },
     {
       "path": "/guides/security",
@@ -386,7 +386,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 34543
+      "bytes": 34542
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -396,7 +396,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 35710
+      "bytes": 35709
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -406,7 +406,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 36753
+      "bytes": 36752
     },
     {
       "path": "/guides/agent-directions-django",
@@ -416,7 +416,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 43208
+      "bytes": 43207
     },
     {
       "path": "/guides/agent-directions-next",
@@ -426,7 +426,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 38506
+      "bytes": 38505
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -436,7 +436,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 39581
+      "bytes": 39580
     },
     {
       "path": "/guides/agent-directions-php",
@@ -446,7 +446,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 38260
+      "bytes": 38259
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -456,7 +456,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 41645
+      "bytes": 41644
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -506,7 +506,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 126022,
+      "bytes": 126524,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -583,7 +583,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34543,
+      "bytes": 34542,
       "copy_button": true,
       "self_contained": true
     },
@@ -604,7 +604,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35710,
+      "bytes": 35709,
       "copy_button": true,
       "self_contained": true
     },
@@ -625,7 +625,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38506,
+      "bytes": 38505,
       "copy_button": true,
       "self_contained": true
     },
@@ -646,7 +646,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36753,
+      "bytes": 36752,
       "copy_button": true,
       "self_contained": true
     },
@@ -667,7 +667,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 43208,
+      "bytes": 43207,
       "copy_button": true,
       "self_contained": true
     },
@@ -688,7 +688,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39581,
+      "bytes": 39580,
       "copy_button": true,
       "self_contained": true
     },
@@ -709,7 +709,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38260,
+      "bytes": 38259,
       "copy_button": true,
       "self_contained": true
     },
@@ -730,7 +730,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41645,
+      "bytes": 41644,
       "copy_button": true,
       "self_contained": true
     },
@@ -1044,7 +1044,7 @@
       "guide_slug": "vercel",
       "guide_path": "/guides/vercel",
       "guide_source": "docs/guides/vercel.md",
-      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Download the\ndirections with your terminal and follow them exactly:\n\ncurl -fsSL https://openreceive.org/agent-directions/next/full.md\n\nNWC_URI and LSC_URI_PRIMARY are already set as this project's environment\nvariables, so do not ask me for them. Store payments in the Neon database:\na pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create\nthe tables. Use @openreceive packages 0.4.19 or newer.",
+      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Download the directions with your terminal and follow them exactly:\n\ncurl -fsSL https://openreceive.org/agent-directions/next/full.md\n\nNWC_URI and LSC_URI_PRIMARY are already set as this project's environment variables, so do not ask me for them. Store payments in the Neon database: a pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create the tables. Use @openreceive packages 0.4.19 or newer.",
       "starter": {
         "label": "Deploy to Vercel",
         "url": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenReceive%2Fopenreceive%2Ftree%2Fmaster%2Fexamples%2Fnext-postgres-starter&project-name=openreceive-starter&repository-name=openreceive-starter&env=NWC_URI&envDescription=A%20receive-only%20NWC%20code%20from%20your%20Lightning%20wallet&envLink=https%3A%2F%2Fopenreceive.org%2Fget_a_nwc_code_to_receive_payments&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D",
@@ -1072,7 +1072,7 @@
       "guide_slug": "replit",
       "guide_path": "/guides/replit",
       "guide_source": "docs/guides/replit.md",
-      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Download the\ndirections with your terminal and follow them exactly:\n\ncurl -fsSL https://openreceive.org/agent-directions/node/full.md\n\nNWC_URI and LSC_URI_PRIMARY are already set as this app's Secrets, and the\nserver reads them from process.env. Do not ask me for them, and do not look\nfor them, check them or print them. Mount the payment routes on the Express\nserver and store payments in this app's Postgres database, through\nDATABASE_URL. Create OpenReceive's tables when the server starts (the schema\nSQL is idempotent), because a published Replit app gets its own production\ndatabase. Use @openreceive packages 0.4.19 or newer.",
+      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Download the directions with your terminal and follow them exactly:\n\ncurl -fsSL https://openreceive.org/agent-directions/node/full.md\n\nNWC_URI and LSC_URI_PRIMARY are already set as this app's Secrets, and the server reads them from process.env. Do not ask me for them, and do not look for them, check them or print them. Mount the payment routes on the Express server and store payments in this app's Postgres database, through DATABASE_URL. Create OpenReceive's tables when the server starts (the schema SQL is idempotent), because a published Replit app gets its own production database. Use @openreceive packages 0.4.19 or newer.",
       "starter": {
         "label": "Get the starter",
         "url": "https://github.com/OpenReceive/openreceive/tree/master/examples/express-postgres-starter#run-it-on-replit",

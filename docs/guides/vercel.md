@@ -27,6 +27,12 @@ chat. Give each one all three environments, **Production**, **Preview** and
 **Development**: the v0 preview only sees Development variables, so a code
 set only for Production leaves the preview's checkout unavailable.
 
+Vercel's free Hobby plan is fine for a demo. It is for personal,
+non-commercial use only, and taking payments from visitors counts as
+commercial under Vercel's
+[fair use guidelines](https://vercel.com/docs/limits/fair-use-guidelines).
+A shop that sells for real needs a Pro plan.
+
 ## Start from the starter
 
 The [Next.js + Postgres starter](https://github.com/OpenReceive/openreceive/tree/master/examples/next-postgres-starter)
@@ -42,9 +48,10 @@ is a one-product shop with checkout already wired.
    which repositories Vercel may use, install it only where this project
    lives, not on every repository you own.
 2. Click **Add** next to Neon, keep the **Free** plan, then **Continue**,
-   **Create** and **Done**.
+   **Create** and **Done**. The starter does not use Neon's **Auth**, so you
+   can turn it off. Our test left it on.
 
-   <img alt="The Neon dialog: region, and the Free plan with no credit card required" width="500" src="../assets/vercel/2-add-neon.webp">
+   <img alt="The Neon dialog: region, the Auth toggle, and the Free plan with no credit card required" width="500" src="../assets/vercel/2-add-neon.webp">
 
 3. Paste your code into `NWC_URI` and click **Deploy**. Vercel sets it for
    Production, Preview and Development, and the first build creates the
@@ -74,7 +81,9 @@ is a one-product shop with checkout already wired.
 1. Connect a database. When v0 suggests Neon in the chat, click **Install**.
    Otherwise open **Project menu** `...` → **Settings** → **Integrations**
    and add Neon. It adds `DATABASE_URL`, a pooled URL for the app, and
-   `DATABASE_URL_UNPOOLED`, a direct URL for creating tables.
+   `DATABASE_URL_UNPOOLED`, a direct URL for creating tables. These two are
+   the only ones the app uses. Neon adds more, such as
+   `POSTGRES_URL_NON_POOLING` and `NEON_PROJECT_ID`, and you can leave them.
 
    <img alt="v0 suggesting Neon in the chat, with an Install button" width="280" src="../assets/vercel/8-v0-install-neon.webp">
 
@@ -83,7 +92,7 @@ is a one-product shop with checkout already wired.
 2. Add `NWC_URI` (and `LSC_URI_PRIMARY`) in Vercel. v0's **Settings** →
    **Environment Variables** only lists them: click **Open in Vercel**.
 
-   <img alt="v0's Environment Variables settings: Environment variables live in Vercel, with an Open in Vercel button" width="640" src="../assets/vercel/6-env-vars-live-in-vercel.webp">
+   <img alt="v0's Environment Variables settings: Environment variables live in Vercel, with an Open in Vercel button above Neon's variables" width="640" src="../assets/vercel/6-env-vars-live-in-vercel.webp">
 
    Then click **Add Environment Variable**, keep the type **Secret**, and
    tick **Production**, **Preview** and **Development**.
@@ -94,17 +103,20 @@ is a one-product shop with checkout already wired.
 
 <!-- platform-prompt:begin -->
 ```text
-Add Bitcoin Lightning checkout to this app with OpenReceive. Download the
-directions with your terminal and follow them exactly:
+Add Bitcoin Lightning checkout to this app with OpenReceive. Download the directions with your terminal and follow them exactly:
 
 curl -fsSL https://openreceive.org/agent-directions/next/full.md
 
-NWC_URI and LSC_URI_PRIMARY are already set as this project's environment
-variables, so do not ask me for them. Store payments in the Neon database:
-a pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create
-the tables. Use @openreceive packages 0.4.19 or newer.
+NWC_URI and LSC_URI_PRIMARY are already set as this project's environment variables, so do not ask me for them. Store payments in the Neon database: a pg Pool on DATABASE_URL for the app, and DATABASE_URL_UNPOOLED to create the tables. Use @openreceive packages 0.4.19 or newer.
 ```
 <!-- platform-prompt:end -->
+
+Bitcoin only, with no swap provider? Then in the prompt, replace
+`NWC_URI and LSC_URI_PRIMARY are already set` with
+`I want Bitcoin only, with no swaps. NWC_URI is already set`.
+
+If v0 asks you to approve the `curl` command, approve it: that is how v0
+reads the directions.
 
 The directions tell v0 how to map the three hooks onto your existing orders
 and how to render the checkout. In our test v0 finished in about five
@@ -118,15 +130,19 @@ cookie, and the checkout then says "Not authorized".
 
 In the new tab, place an order and open its checkout. You should see the
 payment methods and, after you pick Bitcoin, a Lightning invoice in sats.
+Each swap has a minimum amount set by the provider, so on a small order some
+coins are greyed out and show their minimum.
 
-<img alt="The OpenReceive checkout in a v0 coffee shop, offering Bitcoin, USDT, USDC and SOL" width="520" src="../assets/vercel/12-checkout.webp">
+<img alt="The OpenReceive checkout in a v0 coffee shop on a $20 order: Bitcoin, USDT, USDC and SOL, and below them the top of a greyed-out ETH tile" width="520" src="../assets/vercel/12-checkout.webp">
 
 <img alt="A Lightning invoice with its QR code, in the v0 shop's checkout" width="520" src="../assets/vercel/13-invoice.webp">
 
 If the checkout says "The payment service is not available", the preview
 started before you added `NWC_URI`: restart the preview so it loads the new
 variables. Otherwise check the preview's logs: usually the code is missing
-from the Development environment, or it is not receive-only.
+from the Development environment, or it is not receive-only. v0's own docs
+say sensitive variables do not reach the v0 preview, but in our test a
+**Secret** `NWC_URI` with **Development** ticked worked there.
 
 Pay a small order from your wallet to see it settle: the checkout shows the
 payment as received, and `onPaid` marks the order paid.
@@ -145,7 +161,9 @@ payment as received, and `onPaid` marks the order paid.
 - **Rate limiting.** Keep `rateLimiting: true` with `trustProxyIpHeader: true`.
   Vercel sets `x-forwarded-for`, so the limit applies per payer.
 - **Keep order pages reachable.** A payer with a swap in progress comes back
-  through `/checkout/<order id>` to claim a refund. See
+  through `/checkout/<order id>` to claim a refund. Keep the swap's payment
+  hash too, and pass it back as `resumePaymentHash`: without it, the page
+  opens on the payment methods instead of the refund. See
   [swap refunds](swap-refunds.md).
 
 More detail: [Next.js quickstart](quickstart-next.md),
