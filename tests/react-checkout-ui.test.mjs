@@ -82,6 +82,7 @@ test("React checkout hides payable surfaces after invoice expiry", () => {
         fiat_quote: undefined,
         expires_at: Math.floor(Date.now() / 1000) - 1,
       }),
+      onStartOver: () => {},
     }),
   );
 

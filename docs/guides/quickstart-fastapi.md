@@ -209,7 +209,7 @@ rule applies only inside what OpenReceive renders.
 Serve the compiled `styles.css` without Tailwind processing. Import it from
 JavaScript if your bundler handles CSS, or use a plain
 `<link rel="stylesheet">`. Do not `@import` it into your app's Tailwind entry.
-Its rules have zero specificity, so your page's styles can override checkout
+Its rules have low specificity, so your page's styles can override checkout
 styles. Scoping does not prevent that.
 <!-- shared:end render -->
 

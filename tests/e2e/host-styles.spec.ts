@@ -1,8 +1,16 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "@playwright/test";
-import { addButtonToCart, openShop, selectFrameworkTab, startCheckout } from "./helpers.ts";
+import { expect, type Locator, test } from "@playwright/test";
+import {
+  addButtonToCart,
+  expectWizardCurrencies,
+  openShop,
+  selectFrameworkTab,
+  startCheckout,
+} from "./helpers.ts";
 
 /**
  * The shipped stylesheet must be inert outside OpenReceive-rendered subtrees.
@@ -20,6 +28,7 @@ import { addButtonToCart, openShop, selectFrameworkTab, startCheckout } from "./
 
 const e2eDir = path.dirname(fileURLToPath(import.meta.url));
 const reactSheet = path.resolve(e2eDir, "../../packages/js/react/dist/styles.css");
+const repoRoot = path.resolve(e2eDir, "../..");
 
 /** The Mantine shape that caught this: host styles in a layer, imported first. */
 const HOST_PAGE = `<!doctype html>
@@ -124,4 +133,98 @@ test("the demo's Mantine tab strip keeps its padding while the checkout stays st
   expect(rootStyles.boxSizing).toBe("border-box");
   expect(rootStyles.colorBase100).not.toBe("");
   expect(rootStyles.dataTheme).toMatch(/^(light|dark)$/);
+});
+
+/** Compile tailwind-host.css the way a Tailwind v4 host's build would. */
+function compileTailwindHostSheet(): string {
+  const output = path.join(mkdtempSync(path.join(tmpdir(), "openreceive-tw-host-")), "host.css");
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(repoRoot, "node_modules/@tailwindcss/cli/dist/index.mjs"),
+      "-i",
+      path.join(e2eDir, "tailwind-host.css"),
+      "-o",
+      output,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  if (result.status !== 0) throw new Error(`tailwind host compile failed: ${result.stderr}`);
+  const css = readFileSync(output, "utf8");
+  // The collision this spec is about, present in the host sheet.
+  expect(css).toMatch(/@layer utilities\s*\{[\s\S]*\.hidden\s*\{\s*display:\s*none/);
+  return css;
+}
+
+/** Properties that decide what the payer sees. Widths follow from these (and a ticking countdown). */
+const LAYOUT_PROPERTIES = [
+  "display",
+  "visibility",
+  "position",
+  "gridTemplateColumns",
+  "flexDirection",
+  "rowGap",
+  "columnGap",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "marginTop",
+  "marginLeft",
+  "fontSize",
+  "fontWeight",
+  "lineHeight",
+  "color",
+  "backgroundColor",
+  "borderTopWidth",
+  "borderTopColor",
+  "borderTopLeftRadius",
+  "opacity",
+] as const;
+
+/** Every element of the checkout, by document position, with its layout properties. */
+function layoutSnapshot(root: Locator) {
+  return root.evaluate((element, properties) => {
+    const elements = [element, ...element.querySelectorAll("*")];
+    return elements.map((node) => {
+      const style = getComputedStyle(node);
+      const label = `${node.tagName.toLowerCase()}.${[...node.classList].join(".")}`;
+      return [
+        label,
+        Object.fromEntries(properties.map((property) => [property, style[property]])),
+      ] as const;
+    });
+  }, LAYOUT_PROPERTIES);
+}
+
+test("a Tailwind host's own utilities cannot undo the checkout's layout", async ({ page }) => {
+  // Desktop width: the network picker's wide copy is the one a host `.hidden` hid.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openShop(page);
+  await addButtonToCart(page);
+  await startCheckout(page);
+  await selectFrameworkTab(page, "react");
+  await expectWizardCurrencies(page);
+
+  const root = page.locator("[data-openreceive-root][data-openreceive-checkout]").first();
+  // Mid-tween colours (a tile's `transition-colors` after the last click) are
+  // not a layout change; measure settled values with no pointer over a tile.
+  await page.addStyleTag({ content: "*,*::before,*::after{transition:none!important}" });
+  await page.mouse.move(0, 0);
+  const before = await layoutSnapshot(root);
+  // Appended last, like a host's own CSS bundle after @openreceive/react/styles.css.
+  await page.addStyleTag({ content: compileTailwindHostSheet() });
+  const after = await layoutSnapshot(root);
+  const changed = after.flatMap(([label, style], index) =>
+    Object.entries(style)
+      .filter(([property, value]) => before[index]?.[1][property] !== value)
+      .map(
+        ([property, value]) => `${label} ${property}: ${before[index]?.[1][property]} → ${value}`,
+      ),
+  );
+  expect(changed).toEqual([]);
+
+  // The symptom from the Replit run: the USDT tile pressed, no network step.
+  await page.getByRole("button", { name: /USDT/ }).click();
+  await expect(page.getByRole("heading", { name: /Choose USDT network/ })).toBeVisible();
 });

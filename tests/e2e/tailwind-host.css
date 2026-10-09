@@ -1,0 +1,13 @@
+/*
+ * A Tailwind v4 host page's own stylesheet, compiled by host-styles.spec.ts.
+ *
+ * Replit Agent, v0 and Lovable all build their shops this way. The host's
+ * Tailwind emits its utilities in the same `utilities` cascade layer as the
+ * checkout's sheet and loads after it, so a class name both sheets define
+ * (`.hidden`, `.grid`, `.p-3`) comes from the host. Scanning the checkout's
+ * own class strings is the worst case: the host defines every name the
+ * checkout uses, minus daisyUI and the checkout's container breakpoints.
+ */
+@import "tailwindcss";
+@source "../../packages/js/browser/src/ui-classes.ts";
+@source "../../packages/js/browser/src/internal";

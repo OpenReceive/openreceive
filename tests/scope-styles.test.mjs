@@ -11,65 +11,66 @@ import {
 } from "../tools/package/scope-styles.mjs";
 
 const R = `:where([${STYLE_ROOT_ATTRIBUTE}])`;
+const IN = `[${STYLE_ROOT_ATTRIBUTE}]`;
 
 test("the build-time scope marker is the DOM contract's marker", () => {
   assert.equal(STYLE_ROOT_ATTRIBUTE, OPENRECEIVE_STYLE_ROOT_ATTRIBUTE);
 });
 
-test("plain selectors get a zero-specificity self form and a descendant form", () => {
-  assert.deepEqual(scopeSelectorList("h1"), [`${R}:is(h1)`, `${R} :is(h1)`]);
+test("plain selectors get a zero-specificity self form and a one-attribute descendant form", () => {
+  assert.deepEqual(scopeSelectorList("h1"), [`${R}:is(h1)`, `${IN} :is(h1)`]);
   assert.deepEqual(scopeSelectorList(".btn:hover"), [
     `${R}:is(.btn:hover)`,
-    `${R} :is(.btn:hover)`,
+    `${IN} :is(.btn:hover)`,
   ]);
   // A complex selector rides along inside :is() with its own specificity intact.
   assert.deepEqual(scopeSelectorList(".card > .card-body"), [
     `${R}:is(.card > .card-body)`,
-    `${R} :is(.card > .card-body)`,
+    `${IN} :is(.card > .card-body)`,
   ]);
   // daisyUI stamps [data-theme] ON the root: the self form is what paints it.
   assert.deepEqual(scopeSelectorList("[data-theme=dark]"), [
     `${R}:is([data-theme=dark])`,
-    `${R} :is([data-theme=dark])`,
+    `${IN} :is([data-theme=dark])`,
   ]);
 });
 
 test("the universal reset and bare pseudo-elements keep the pseudo-element outside :is()", () => {
   assert.deepEqual(scopeSelectorList("*,:after,::backdrop"), [
     R,
-    `${R} *`,
+    `${IN} *`,
     `${R}:after`,
-    `${R} *:after`,
+    `${IN} *:after`,
     `${R}::backdrop`,
-    `${R} *::backdrop`,
+    `${IN} *::backdrop`,
   ]);
   assert.deepEqual(scopeSelectorList("input::placeholder"), [
     `${R}:is(input)::placeholder`,
-    `${R} :is(input)::placeholder`,
+    `${IN} :is(input)::placeholder`,
   ]);
   assert.deepEqual(scopeSelectorList("::-webkit-search-decoration"), [
     `${R}::-webkit-search-decoration`,
-    `${R} *::-webkit-search-decoration`,
+    `${IN} *::-webkit-search-decoration`,
   ]);
   // daisyUI's breadcrumb separator: `li+:before` implies `li+*:before`. Splitting
   // the pseudo-element off must spell the `*` out, or the combinator dangles
   // inside :is() and the browser drops the selector (the separator vanished).
   assert.deepEqual(scopeSelectorList(".breadcrumbs>li+:before"), [
     `${R}:is(.breadcrumbs>li+*):before`,
-    `${R} :is(.breadcrumbs>li+*):before`,
+    `${IN} :is(.breadcrumbs>li+*):before`,
   ]);
   assert.deepEqual(scopeSelectorList(".a ::after"), [
     `${R}:is(.a *)::after`,
-    `${R} :is(.a *)::after`,
+    `${IN} :is(.a *)::after`,
   ]);
-  assert.deepEqual(scopeSelectorList(":root>::before"), [`${R}>*::before`]);
+  assert.deepEqual(scopeSelectorList(":root>::before"), [`${IN}>*::before`]);
 });
 
 test("html, body and :root become the root itself — self form only", () => {
   assert.deepEqual(scopeSelectorList("html"), [R]);
   assert.deepEqual(scopeSelectorList("body"), [R]);
   assert.deepEqual(scopeSelectorList(":root,:host"), [R]);
-  assert.deepEqual(scopeSelectorList(":root .prose"), [`${R} .prose`]);
+  assert.deepEqual(scopeSelectorList(":root .prose"), [`${IN} .prose`]);
   assert.deepEqual(scopeSelectorList(":root:has(.modal[open])"), [`${R}:is(:has(.modal[open]))`]);
   assert.deepEqual(scopeSelectorList(":root:not(span)"), [`${R}:is(:not(span))`]);
   // daisyUI wraps the root in a forgiving list. The root entry comes out as the
@@ -78,19 +79,30 @@ test("html, body and :root become the root itself — self form only", () => {
   assert.deepEqual(scopeSelectorList(":where(:root,[data-theme])"), [
     R,
     `${R}:is(:where([data-theme]))`,
-    `${R} :is(:where([data-theme]))`,
+    `${IN} :is(:where([data-theme]))`,
   ]);
   assert.deepEqual(scopeSelectorList(":is(html,.x) .y"), [
-    `${R} .y`,
+    `${IN} .y`,
     `${R}:is(:is(.x) .y)`,
-    `${R} :is(:is(.x) .y)`,
+    `${IN} :is(:is(.x) .y)`,
   ]);
   // Regression guard for the design: a descendant form of the light `:root`
   // palette would override the dark palette a [data-theme=dark] root's
   // children inherit.
   for (const selector of scopeSelectorList(":root,[data-theme=light]")) {
-    assert.ok(!selector.startsWith(`${R} `) || selector.includes("[data-theme=light]"));
+    assert.ok(!selector.startsWith(`${IN} `) || selector.includes("[data-theme=light]"));
   }
+});
+
+// A Tailwind v4 host emits `.hidden{display:none}` into the same `utilities`
+// layer, after this sheet. Our container-query reveal must outrank it inside the
+// checkout, while the root element itself stays restylable by any host selector.
+test("inside the root a rule outranks a host utility of the same name; on the root it adds nothing", () => {
+  const [self, inside] = scopeSelectorList(".\\@min-\\[18rem\\]\\/methods\\:block");
+  assert.ok(self.startsWith(`${R}:is(`), self);
+  assert.ok(inside.startsWith(`${IN} :is(`), inside);
+  // The documented root overrides (padding, --root-bg) keep working.
+  assert.deepEqual(scopeSelectorList(".p-4"), [`${R}:is(.p-4)`, `${IN} :is(.p-4)`]);
 });
 
 test(":host rules are dropped and already-marked selectors pass through", () => {
@@ -108,8 +120,8 @@ test("scopeStyles recurses into at-rules, drops emptied rules, and leaves keyfra
   );
   assert.equal(
     scoped,
-    `@layer base{${R}:is(h1),${R} :is(h1){font-size:inherit}}` +
-      `@media (hover:hover){@supports (color:red){${R}:is(.btn:hover),${R} :is(.btn:hover){color:red}}}` +
+    `@layer base{${R}:is(h1),${IN} :is(h1){font-size:inherit}}` +
+      `@media (hover:hover){@supports (color:red){${R}:is(.btn:hover),${IN} :is(.btn:hover){color:red}}}` +
       "@keyframes spin{from{opacity:0}to{opacity:1}}" +
       "@property --x{syntax:'*';inherits:false}",
   );

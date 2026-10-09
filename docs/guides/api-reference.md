@@ -1493,6 +1493,10 @@ Common props:
 
 - the seven handlers: `onCopy`, `onOpenWallet`, `onState`, `onSettled`,
   `onProviderCopy`, `onStartOver`, `onError`
+- `onStartOver` replaces the built-in **Start over** on an expired invoice.
+  Without it, a create-mode checkout prepares the same `reference` again and
+  shows the payment methods. A snapshot-mode checkout without it shows no
+  Start over button.
 - `polling`, `pollIntervalMs`, `paymentWizard`
 - `theme`: a lock set by your app. It wins over the stored preference and hides
   the toggle.
@@ -1585,7 +1589,10 @@ JavaScript. It fires seven events: `openreceive-copy`,
 `openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`,
 `openreceive-provider-copy`, `openreceive-start-over`, `openreceive-error`.
 `openreceive-state` and `openreceive-settled` carry the checkout snapshot at
-`event.detail.state`.
+`event.detail.state`. `openreceive-start-over` is cancelable: on an element
+that created its checkout from `reference`, Start over prepares the same order
+again unless a listener calls `event.preventDefault()`. The Vue, Svelte and
+Angular `onStartOver` props do that for you.
 
 ## CLI
 

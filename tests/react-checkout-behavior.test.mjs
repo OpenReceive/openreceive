@@ -1090,3 +1090,107 @@ test("create-mode reopens a host-selected Lightning invoice on its own rail", as
     handle.unmount();
   }
 });
+
+/**
+ * An expired Lightning invoice, reopened through the resume props: the shortest
+ * way to put a create-mode checkout on its "Invoice expired" screen.
+ */
+function expiredResumeStub(calls) {
+  const hash = "e".repeat(64);
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/checkouts/prepare"))
+      return Response.json({ reference: "late", amount_msats: 21000, payment_methods: [] });
+    if (url.endsWith("/checkouts"))
+      return Response.json({
+        checkout: {
+          reference: "late",
+          payment_hash: hash,
+          amount_msats: 21000,
+          bolt11: "lnbc-late",
+          expires_at: Math.floor(Date.now() / 1000) - 60,
+        },
+      });
+    if (url.endsWith("/payments/check"))
+      return Response.json({ payment_hash: hash, status: "expired" });
+    throw new Error(`Unexpected request ${url}`);
+  };
+  return hash;
+}
+
+test("Start over with no host handler prepares the same order again", async () => {
+  // A payer who comes back to an expired QR must not be stuck: the button used
+  // to call an optional `onStartOver` and do nothing without one, and no agent
+  // direction told hosts to pass it.
+  const calls = [];
+  const hash = expiredResumeStub(calls);
+  const handle = mount(
+    React.createElement(Checkout, {
+      reference: "late",
+      prefix: "/openreceive",
+      resumePaymentHash: hash,
+      resumePaymentRail: "lightning",
+    }),
+  );
+  try {
+    const startOver = await until(() => handle.button(checkoutLabels.startOver), {
+      label: "expired screen",
+    });
+    const before = calls.filter((url) => url.endsWith("/checkouts/prepare")).length;
+    startOver.click();
+    await until(() => handle.text().includes(checkoutLabels.wizardTitle), {
+      label: "method grid after Start over",
+    });
+    assert.equal(calls.filter((url) => url.endsWith("/checkouts/prepare")).length, before + 1);
+    // A fresh start: the expired attempt the payer walked away from is not reopened.
+    assert.equal(calls.filter((url) => url.endsWith("/checkouts")).length, 1);
+  } finally {
+    handle.unmount();
+  }
+});
+
+test("a host onStartOver replaces the built-in restart", async () => {
+  const calls = [];
+  const hash = expiredResumeStub(calls);
+  let hostCalls = 0;
+  const handle = mount(
+    React.createElement(Checkout, {
+      reference: "late",
+      prefix: "/openreceive",
+      resumePaymentHash: hash,
+      resumePaymentRail: "lightning",
+      onStartOver: () => {
+        hostCalls += 1;
+      },
+    }),
+  );
+  try {
+    const startOver = await until(() => handle.button(checkoutLabels.startOver), {
+      label: "expired screen",
+    });
+    const prepares = calls.filter((url) => url.endsWith("/checkouts/prepare")).length;
+    startOver.click();
+    await flush();
+    assert.equal(hostCalls, 1);
+    assert.equal(calls.filter((url) => url.endsWith("/checkouts/prepare")).length, prepares);
+  } finally {
+    handle.unmount();
+  }
+});
+
+test("a snapshot checkout with no onStartOver shows no dead Start over button", () => {
+  const expired = invoice({
+    invoice_id: "or_inv_expired_snapshot",
+    expires_at: Math.floor(Date.now() / 1000) - 1,
+  });
+  const bare = renderToStaticMarkup(
+    React.createElement(Checkout, { checkout: expired, polling: false }),
+  );
+  assert.match(bare, /Invoice expired/);
+  assert.doesNotMatch(bare, new RegExp(checkoutLabels.startOver));
+  const handled = renderToStaticMarkup(
+    React.createElement(Checkout, { checkout: expired, polling: false, onStartOver: () => {} }),
+  );
+  assert.match(handled, new RegExp(checkoutLabels.startOver));
+});

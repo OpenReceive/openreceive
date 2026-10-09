@@ -2,6 +2,36 @@
 
 ## 0.4.20 - Unreleased
 
+- Fixed: in an app styled with Tailwind v4, the stablecoin network picker
+  never opened. The payer clicked USDT or USDC and nothing happened. The
+  host's own `.hidden{display:none}` sat in the same `utilities` cascade
+  layer as the checkout's sheet, loaded after it, and had the same
+  specificity, so it beat the checkout's container-query rule that shows the
+  picker. Replit Agent, v0 and Lovable all build apps this way; the Express
+  and WordPress shops have no Tailwind. Inside the checkout's root, the
+  shipped `styles.css` now scopes rules with `[data-openreceive-root]`
+  instead of `:where([data-openreceive-root])`: one attribute of
+  specificity, so a host utility of the same name cannot rearrange the
+  checkout. On the root element itself nothing changed, so `--root-bg` and
+  `padding` overrides work as before. The picker also no longer carries a
+  bare `hidden` class, so an unlayered host `.hidden` (Tailwind v3,
+  Bootstrap 3's `!important`) cannot hide it either. A new browser test
+  loads a Tailwind v4 host sheet, compiled from every class the checkout
+  uses, after the checkout's own and expects no layout change and a working
+  USDT network step. Computed styles in the demo shop are unchanged: 0
+  differences across 1.8 million values in 16 states (React and Vue, light
+  and dark, desktop and phone width).
+- Fixed: **Start over** on an expired invoice did nothing unless the host
+  passed `onStartOver`, and no agent direction mentioned it. A payer who came
+  back to an expired QR had to think of reloading the page. Now a checkout
+  created from a `reference` (React `<Checkout>`, `<openreceive-checkout>`,
+  and the Vue, Svelte and Angular wrappers) prepares the same order again by
+  itself. It does not reopen the expired attempt. A host `onStartOver` still
+  replaces the default. On the element, `openreceive-start-over` is now
+  cancelable; a raw listener that wants to replace the default calls
+  `event.preventDefault()`. A React snapshot-mode checkout with no handler no
+  longer shows a dead button.
+
 - New recipe: [TanStack Start](docs/recipes/tanstack-start.md). A server route
   under `/openreceive/` loads a `.server.ts` handler over `createStack`, and the
   page uses `<Checkout>` from `@openreceive/react`. Because of Cloudflare

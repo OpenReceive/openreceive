@@ -135,6 +135,8 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     /** Skip full shadow rebuilds when a poll returns the same payable UI. */
     private lastSnapshotDisplayKey: string | undefined;
     private dismissedSwapInvoiceId: string | null = null;
+    /** Set by Start over: the fresh start must not reopen the expired attempt. */
+    private ignoreResumePaymentHash = false;
     private controller: CheckoutController | undefined;
     private announcedSettledReference: string | undefined;
     /** Last applied state, used to detect countdown-only ticks (partial DOM update). */
@@ -292,38 +294,10 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix ||
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice;
       if (createInputChanged) {
-        const managed = this.latestCheckoutSnapshot !== undefined;
-        this.stopCheckoutController();
-        this.session.forgetCreateKey();
-        this.latestCheckoutSnapshot = undefined;
-        this.lastCheckoutState = undefined;
-        this.lastSnapshotDisplayKey = undefined;
-        this.startedSwapInvoice = undefined;
-        this.dismissedSwapInvoiceId = null;
-        this.selectedSwapAsset = null;
-        this.selectedPickerKey = null;
-        this.selectedSwapAssetByGroup = {};
-        this.selection = createPaymentWizardSelection();
-        this.swapOptions = [];
-        this.swapOptionsLoaded = false;
-        this.clearRefundAddressDraft();
-        if (managed && name !== OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice) {
-          this.session.writeOwnAttributes(() => {
-            for (const key of [
-              "invoice",
-              "invoiceId",
-              "paymentHash",
-              "rail",
-              "amountMsats",
-              "fiatCurrency",
-              "fiatValue",
-              "status",
-              "expiresAt",
-            ] as const) {
-              this.removeAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES[key]);
-            }
-          });
-        }
+        this.ignoreResumePaymentHash = false;
+        this.forgetCheckout({
+          clearOwnAttributes: name !== OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice,
+        });
       }
 
       if (!this.isConnected) return;
@@ -339,6 +313,59 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       this.render();
       this.syncThemeAncestorObserver();
       this.startCheckoutController();
+    }
+
+    /**
+     * Drop everything this element learned about the current checkout, so the
+     * next create starts from the method grid. `clearOwnAttributes` also removes
+     * the snapshot attributes the element wrote itself in create mode.
+     */
+    private forgetCheckout({ clearOwnAttributes }: { clearOwnAttributes: boolean }): void {
+      const managed = this.latestCheckoutSnapshot !== undefined;
+      this.stopCheckoutController();
+      this.session.forgetCreateKey();
+      this.latestCheckoutSnapshot = undefined;
+      this.lastCheckoutState = undefined;
+      this.lastSnapshotDisplayKey = undefined;
+      this.startedSwapInvoice = undefined;
+      this.dismissedSwapInvoiceId = null;
+      this.selectedSwapAsset = null;
+      this.selectedPickerKey = null;
+      this.selectedSwapAssetByGroup = {};
+      this.selection = createPaymentWizardSelection();
+      this.swapOptions = [];
+      this.swapOptionsLoaded = false;
+      this.clearRefundAddressDraft();
+      if (managed && clearOwnAttributes) {
+        this.session.writeOwnAttributes(() => {
+          for (const key of [
+            "invoice",
+            "invoiceId",
+            "paymentHash",
+            "rail",
+            "amountMsats",
+            "fiatCurrency",
+            "fiatValue",
+            "status",
+            "expiresAt",
+          ] as const) {
+            this.removeAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES[key]);
+          }
+        });
+      }
+    }
+
+    /**
+     * Start over's default action: prepare the same order again, the path a
+     * page reload takes. Only for a checkout this element created from its
+     * `reference`; a snapshot host owns creation.
+     */
+    private startOver(): void {
+      if (!this.isConnected || !this.session.created) return;
+      this.ignoreResumePaymentHash = true;
+      this.forgetCheckout({ clearOwnAttributes: true });
+      this.render();
+      void this.session.createCheckout();
     }
 
     disconnectedCallback() {
@@ -435,6 +462,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
      * fetch) sets the attribute late, and the create lifecycle re-runs.
      */
     private resumePaymentHash(): string | undefined {
+      if (this.ignoreResumePaymentHash) return undefined;
       const value = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePaymentHash);
       return value === null || value.length === 0 ? undefined : value;
     }
@@ -622,9 +650,12 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       root
         .querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.startOver)
         ?.addEventListener("click", () => {
-          this.dispatchEvent(
+          // A payer back at an expired QR must not be stuck: unless a host
+          // listener calls preventDefault(), the element starts over itself.
+          const proceed = this.dispatchEvent(
             createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver),
           );
+          if (proceed) this.startOver();
         });
 
       const qrTarget = root.querySelector(OPENRECEIVE_CHECKOUT_DATA_SELECTORS.qr);

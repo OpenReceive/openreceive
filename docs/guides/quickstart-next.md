@@ -278,7 +278,7 @@ scoped: every rule applies only inside what OpenReceive renders. You need no
 
 Serve the compiled `styles.css` without Tailwind processing: import it from
 JavaScript (with a CSS-capable bundler) or use a plain `<link rel="stylesheet">`.
-Do not `@import` it into the host Tailwind entry. Its zero-specificity rules
+Do not `@import` it into the host Tailwind entry. Its low-specificity rules
 allow host styles to override checkout styles; scoping does not prevent that.
 
 <!-- shared:begin render-notes -->

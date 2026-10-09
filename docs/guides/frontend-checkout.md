@@ -240,13 +240,20 @@ rounded corners (`p-4`, `rounded-box`). You can change both on
   set `--root-bg: transparent`.
 - For a tighter or looser inset, override `padding`.
 
-Both work because every rule in the shipped stylesheet is wrapped in `:where()`
-and has **zero specificity**. Any selector of yours, however plain, wins on the
-same property. We promise to keep it that way for compatibility.
+Both work because on the root element every rule in the shipped stylesheet is
+wrapped in `:where()` and adds **zero specificity**. Any selector of yours,
+however plain, wins on the same property. We promise to keep it that way for
+compatibility.
+
+Inside the root, rules carry the `[data-openreceive-root]` attribute, one step
+of specificity. A same-named utility from your page's own Tailwind (`.hidden`,
+`.grid`, `.p-3`) cannot rearrange the checkout. To restyle something inside it,
+write your rule outside any `@layer`. Every rule in the sheet sits in a cascade
+layer, and unlayered CSS beats layered CSS whatever the specificity.
 
 Serve the compiled `styles.css` without Tailwind processing. Import it from
 JavaScript with a CSS-capable bundler, or use a plain `<link rel="stylesheet">`.
-Do not `@import` it into your own Tailwind entry file. Its zero-specificity
+Do not `@import` it into your own Tailwind entry file. Its low-specificity
 rules let your styles override checkout styles. Scoping does not prevent
 that.
 

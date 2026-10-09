@@ -14,15 +14,31 @@
 // (React `<Checkout>` / `<ThemeToggle>`, the Vue/Svelte/Angular shell). It is a
 // postcss AST pass, never a regex over minified CSS, and the rules are:
 //
-//   R := :where([data-openreceive-root])      zero specificity, so a rule's own
-//                                             specificity is all that survives
-//   S (not root-anchored)  → R:is(S), R :is(S)
+//   R  := :where([data-openreceive-root])     on the root element itself: zero
+//                                             specificity, so the host can
+//                                             restyle the root (padding,
+//                                             --root-bg) with any selector
+//   R' := [data-openreceive-root]             on everything inside the root: one
+//                                             attribute, so a host page's own
+//                                             utility of the same name cannot
+//                                             reach in. A Tailwind v4 host emits
+//                                             `.hidden{display:none}` into the
+//                                             same `utilities` layer, after this
+//                                             sheet; at equal specificity it
+//                                             beat our container-query
+//                                             `…/methods:block` and the USDT
+//                                             network picker never opened.
+//                                             Every rule that reaches inside
+//                                             gains the same (0,1,0), so the
+//                                             sheet's own cascade is unchanged.
+//   S (not root-anchored)  → R:is(S), R' :is(S)
 //       self form so a rule aimed at the root element itself still applies
 //       (`*` includes the root; daisyUI's `[data-theme=dark]` is stamped ON
 //       the root), descendant form for everything inside. S's specificity
 //       rides along inside :is(); a trailing pseudo-element stays outside it.
 //   S starting with html / body / :root → R + the rest of S, self form ONLY
-//       the root plays the document element's part. No descendant form: the
+//       the root plays the document element's part (R' when the rest of S
+//       reaches inside, as in `:root .prose`). No descendant form: the
 //       light `:root{--color-*}` dump on every descendant would override the
 //       dark palette a `[data-theme=dark]` root's children inherit.
 //   S starting with :host → dropped
@@ -38,6 +54,7 @@ import selectorParser from "postcss-selector-parser";
 /** Mirrors OPENRECEIVE_STYLE_ROOT_ATTRIBUTE in browser/src/internal/dom-contract.ts (pinned by tests/scope-styles.test.mjs). */
 export const STYLE_ROOT_ATTRIBUTE = "data-openreceive-root";
 const SCOPE = `:where([${STYLE_ROOT_ATTRIBUTE}])`;
+const INSIDE_SCOPE = `[${STYLE_ROOT_ATTRIBUTE}]`;
 const ROOT_TAGS = new Set(["html", "body"]);
 const LEGACY_PSEUDO_ELEMENTS = new Set([":before", ":after", ":first-line", ":first-letter"]);
 
@@ -145,12 +162,13 @@ function scopeComplexSelector(selector) {
     const kept = join(
       firstCompound.filter((node) => !isRootNode(node) && node.type !== "universal"),
     );
-    return [`${SCOPE}${kept === "" ? "" : `:is(${kept})`}${join(rest)}${implicitUniversal}${tail}`];
+    const scope = rest.length === 0 ? SCOPE : INSIDE_SCOPE;
+    return [`${scope}${kept === "" ? "" : `:is(${kept})`}${join(rest)}${implicitUniversal}${tail}`];
   }
 
   const base = `${join(body)}${implicitUniversal}`.trim();
-  if (base === "" || base === "*") return [`${SCOPE}${tail}`, `${SCOPE} *${tail}`];
-  return [`${SCOPE}:is(${base})${tail}`, `${SCOPE} :is(${base})${tail}`];
+  if (base === "" || base === "*") return [`${SCOPE}${tail}`, `${INSIDE_SCOPE} *${tail}`];
+  return [`${SCOPE}:is(${base})${tail}`, `${INSIDE_SCOPE} :is(${base})${tail}`];
 }
 
 function insideKeyframes(rule) {

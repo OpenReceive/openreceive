@@ -613,7 +613,7 @@ HTTP routes and the browser snapshots are snake_case throughout.
 Serve the compiled `styles.css` without Tailwind processing. Either import it
 from JavaScript (with a CSS-capable bundler) or use a plain
 `<link rel="stylesheet">`. Do not `@import` it into your Tailwind entry. Its
-rules have zero specificity, so your own styles can override checkout styles.
+rules have low specificity, so your own styles can override checkout styles.
 Scoping does not prevent that.
 
 Unpack the release's `standalone-checkout-<version>.tar.gz` into a directory

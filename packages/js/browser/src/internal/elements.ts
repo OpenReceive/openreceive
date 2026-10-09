@@ -217,9 +217,16 @@ export function createCheckoutElementListeners(
     ...(handlers.onProviderCopy === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.providerCopy]: handlers.onProviderCopy }),
+    // A wrapper host's `onStartOver` replaces the element's own restart, as it
+    // does in React.
     ...(handlers.onStartOver === undefined
       ? {}
-      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver]: handlers.onStartOver }),
+      : {
+          [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver]: (event: Event) => {
+            event.preventDefault();
+            handlers.onStartOver?.(event);
+          },
+        }),
     ...(handlers.onError === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error]: handlers.onError }),

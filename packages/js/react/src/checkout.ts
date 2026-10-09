@@ -77,12 +77,33 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
     });
   }
   // No snapshot: the validator above already rejected a missing/empty reference.
-  return React.createElement(CheckoutCreate, {
+  return React.createElement(CheckoutCreateMode, {
     ...props,
     key: JSON.stringify([
       props.reference,
       (props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, ""),
     ]),
+  });
+}
+
+/**
+ * Create mode's "Start over" on an expired invoice. A host that passes
+ * `onStartOver` owns it; without one, the checkout prepares the same order
+ * again, the path a page reload takes. The payer who came back to an expired QR
+ * used to be stuck: the button called an optional handler no agent direction
+ * mentioned. A restart remounts CheckoutCreate and drops the resume props, so
+ * the fresh start does not reopen the expired attempt the payer just left.
+ */
+function CheckoutCreateMode(props: CheckoutProps): React.ReactElement {
+  const [restarts, setRestarts] = React.useState(0);
+  const restart = React.useCallback(() => setRestarts((count) => count + 1), []);
+  const { resumePaymentHash, resumePaymentRail, ...createProps } = props;
+  return React.createElement(CheckoutCreate, {
+    ...createProps,
+    ...(restarts > 0 || resumePaymentHash === undefined ? {} : { resumePaymentHash }),
+    ...(restarts > 0 || resumePaymentRail === undefined ? {} : { resumePaymentRail }),
+    onStartOver: props.onStartOver ?? restart,
+    key: restarts,
   });
 }
 
@@ -456,9 +477,6 @@ function CheckoutView(
   const showSummaryMeta = checkoutModel.status === "settled" || checkoutModel.status === "expired";
   const fiatCurrency = checkoutModel.fiat_quote?.fiat?.currency;
   const decodeInvoiceHref = createLightningInvoiceDecodeUrl(checkoutModel.invoice, decodeLinkUrl);
-  const startOver = () => {
-    onStartOver?.();
-  };
 
   const lightningPane =
     hideLightning || expired || settled
@@ -630,23 +648,28 @@ function CheckoutView(
                       onError,
                     })
                   : expired
-                    ? React.createElement(
-                        "div",
-                        {
-                          key: "expired-actions",
-                          className: joinClassNames(orClasses.actions, classNames?.actions),
-                          [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
-                        },
-                        React.createElement(
-                          ButtonComponent ?? "button",
+                    ? // Create mode always has a handler (the dispatcher's
+                      // restart); a snapshot host without one gets no button
+                      // rather than a dead one.
+                      onStartOver === undefined
+                      ? null
+                      : React.createElement(
+                          "div",
                           {
-                            type: "button",
-                            className: orClasses.btn,
-                            onClick: startOver,
+                            key: "expired-actions",
+                            className: joinClassNames(orClasses.actions, classNames?.actions),
+                            [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
                           },
-                          checkoutLabels.startOver,
-                        ),
-                      )
+                          React.createElement(
+                            ButtonComponent ?? "button",
+                            {
+                              type: "button",
+                              className: orClasses.btn,
+                              onClick: onStartOver,
+                            },
+                            checkoutLabels.startOver,
+                          ),
+                        )
                     : React.createElement(
                         "div",
                         {

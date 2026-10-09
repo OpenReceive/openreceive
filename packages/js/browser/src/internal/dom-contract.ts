@@ -176,7 +176,11 @@ export function createCheckoutActionEvent(
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver,
 ): CustomEvent {
-  return new CustomEvent(eventName);
+  // Start over has a default action (create mode prepares the order again); a
+  // host listener that owns it calls `preventDefault()`.
+  return new CustomEvent(eventName, {
+    cancelable: eventName === OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver,
+  });
 }
 
 export function createCheckoutStateEvent(

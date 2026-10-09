@@ -1375,3 +1375,91 @@ test("a remembered Lightning attempt opens its invoice without a swap-status req
     element.remove();
   }
 });
+
+/**
+ * A create-mode element on its "Invoice expired" screen: an expired Lightning
+ * invoice reopened through the resume attributes.
+ */
+async function mountExpiredResume(reference) {
+  const paymentHash = "e".repeat(64);
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => prepareBody(reference, 21_000),
+    "/checkouts": () => ({
+      checkout: {
+        ...checkoutBody(reference, 21_000, paymentHash).checkout,
+        expires_at: Math.floor(Date.now() / 1000) - 60,
+      },
+    }),
+    "/payments/check": () => ({ payment_hash: paymentHash, status: "expired" }),
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({
+    reference,
+    prefix: "/openreceive",
+    "resume-payment-hash": paymentHash,
+    "resume-payment-rail": "lightning",
+  });
+  const startOver = await untilLocal(
+    () => element.shadowRoot?.querySelector('[part="start-over"]'),
+    {
+      label: "expired screen",
+    },
+  );
+  return { element, fetchStub, startOver };
+}
+
+test("Start over with no host listener prepares the same order again", async () => {
+  // The Express starter renders a bare <openreceive-checkout>: a payer back at an
+  // expired QR used to click a button that only dispatched an event nobody heard.
+  const { element, fetchStub, startOver } = await mountExpiredResume("order-late");
+  try {
+    const prepares = fetchStub.pathCount("/checkouts/prepare");
+    const checkouts = fetchStub.pathCount("/checkouts");
+    startOver.click();
+    await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'), {
+      label: "method grid after Start over",
+    });
+    assert.equal(fetchStub.pathCount("/checkouts/prepare"), prepares + 1);
+    // A fresh start: the expired attempt the payer walked away from is not reopened.
+    assert.equal(fetchStub.pathCount("/checkouts"), checkouts);
+    assert.doesNotMatch(element.shadowRoot.innerHTML, /Invoice expired/);
+  } finally {
+    element.remove();
+  }
+});
+
+test("a host listener that calls preventDefault() replaces the built-in restart", async () => {
+  const { element, fetchStub, startOver } = await mountExpiredResume("order-late-host");
+  let heard = 0;
+  element.addEventListener("openreceive-start-over", (event) => {
+    heard += 1;
+    event.preventDefault();
+  });
+  try {
+    const prepares = fetchStub.pathCount("/checkouts/prepare");
+    startOver.click();
+    await flush(6);
+    assert.equal(heard, 1);
+    assert.equal(fetchStub.pathCount("/checkouts/prepare"), prepares);
+    assert.match(element.shadowRoot.innerHTML, /Invoice expired/);
+  } finally {
+    element.remove();
+  }
+});
+
+test("a wrapper's onStartOver cancels the element's own restart", async () => {
+  // Vue, Svelte and Angular hand `onStartOver` to the element as a listener. A
+  // host that passes one replaces the built-in restart, as in React.
+  const { createCheckoutElementListeners } = await import("../packages/js/browser/src/headless.ts");
+  let heard = 0;
+  const listeners = createCheckoutElementListeners({
+    onStartOver: () => {
+      heard += 1;
+    },
+  });
+  const event = new CustomEvent("openreceive-start-over", { cancelable: true });
+  listeners["openreceive-start-over"](event);
+  assert.equal(heard, 1);
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(createCheckoutElementListeners({})["openreceive-start-over"], undefined);
+});

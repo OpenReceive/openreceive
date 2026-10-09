@@ -230,6 +230,13 @@ event.
 
 `onSettled` is a UI hint. Fulfillment runs from the backend settlement hook.
 
+`onStartOver` replaces a default. Without it, a create-mode checkout prepares
+the same `reference` again (React remounts its create path; the element resets
+and prepares, then fires nothing else). The element's `openreceive-start-over`
+event is cancelable, and the Vue, Svelte and Angular wrappers call
+`preventDefault()` before a host `onStartOver`. A React snapshot checkout with
+no handler renders no Start over button.
+
 [^open-wallet]: Fires only from UI the host supplies. No shipped renderer draws
     an open-wallet control. React's is the opt-in `OpenWalletButton` slot, and
     the element has no built-in one. So a host that wants this event renders its

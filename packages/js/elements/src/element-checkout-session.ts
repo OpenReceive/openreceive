@@ -75,6 +75,12 @@ export interface ElementCheckoutSession {
   readonly swapQuotes: Readonly<Record<string, CheckoutPaymentMethod>>;
   /** True while the element is writing attributes it owns. */
   readonly applyingOwnAttributes: boolean;
+  /**
+   * The element prepared this checkout from its `reference` (create mode). Stays
+   * true after the element writes the minted invoice onto itself, which
+   * `isCreateMode()` alone can no longer tell from a host snapshot.
+   */
+  readonly created: boolean;
   createCheckout(): Promise<void>;
   retryCreateCheckout(): void;
   ensureLightning(): Promise<void>;
@@ -343,6 +349,9 @@ export function createElementCheckoutSession(
     },
     get applyingOwnAttributes() {
       return applyingOwnAttributes > 0;
+    },
+    get created() {
+      return createdKey !== undefined;
     },
     createCheckout,
     retryCreateCheckout,

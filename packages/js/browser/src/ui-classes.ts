@@ -90,7 +90,12 @@ export const orClasses = {
   /** Limit / unavailable hint under a payment tile — visible at all breakpoints. */
   methodLimitHint: "block px-1 text-center text-xs leading-snug text-base-content/55",
   methodNetworkReveal: "rounded-box border border-base-content/20 bg-base-100 p-3",
-  methodNetworkRevealDesktop: "hidden @min-[18rem]/methods:block",
+  /**
+   * Hidden only below 18rem, never by a bare `hidden`: a host page's own
+   * `.hidden` (Tailwind v3, Bootstrap 3's `!important`, a theme's plain CSS) is
+   * often unlayered and would beat any rule of ours that reveals it again.
+   */
+  methodNetworkRevealDesktop: "@max-[18rem]/methods:hidden",
   methodNetworkRevealMobile: "border-l border-base-content/30 pl-2 @min-[18rem]/methods:hidden",
   methodNetworkRevealMobileUsdt: "border-l border-success/40 pl-2 @min-[18rem]/methods:hidden",
   methodNetworkRevealMobileUsdc: "border-l border-info/40 pl-2 @min-[18rem]/methods:hidden",
