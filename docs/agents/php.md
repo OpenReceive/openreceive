@@ -133,8 +133,10 @@ again. Never set the spend-capable override to get past it.
 
 Then check the PHP runtime: `php -m` must list `gmp`, `sodium`, `mbstring`,
 `json`, `pdo` and one PDO driver. `ext-gmp` is REQUIRED — the NWC transport
-signs every request with it — and `php:*-cli`/`-fpm` images do not ship it
-(`docker-php-ext-install gmp`). PHP must be ≥ 8.2 and 64-bit.
+signs every request with it — and `php:*-cli`/`-fpm` images do not ship it:
+install `libgmp-dev` first, then `docker-php-ext-install gmp`, in the
+Dockerfile. Never pass `--ignore-platform-req=ext-gmp` to Composer. PHP must
+be ≥ 8.2 and 64-bit.
 
 ### Upgrading an existing install
 

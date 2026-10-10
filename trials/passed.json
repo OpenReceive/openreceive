@@ -1,5 +1,5 @@
 {
-  "_comment": "One entry per platform that passed its agent trials (npm run trial). A harness entry needs three trials in a row that exited 0, copied from that platform's summary.md: date, release, runs, mode and the directions file's hash. A builder entry is one builder trial on the platform itself, by its own agent. Reports stay gitignored; this is the public record openreceive.org shows as Tested badges. Django and Laravel are absent until they pass three trials on the 0.4.22 packages.",
+  "_comment": "One entry per platform that passed its agent trials (npm run trial). A harness entry needs three trials in a row that exited 0, copied from that platform's summary.md: date, release, runs, mode and the directions file's hash. A builder entry is one builder trial on the platform itself, by its own agent. Reports stay gitignored; this is the public record openreceive.org shows as Tested badges.",
   "passed": [
     {
       "trial": "woocommerce",
@@ -63,6 +63,24 @@
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "candidate",
       "directions": "63ea814c2bd0"
+    },
+    {
+      "trial": "django",
+      "date": "2026-10-10",
+      "release": "0.4.22",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "released",
+      "directions": "b4713abe1da4"
+    },
+    {
+      "trial": "laravel",
+      "date": "2026-10-10",
+      "release": "0.4.22",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "b1404e770f24"
     },
     {
       "trial": "vercel",

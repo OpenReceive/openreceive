@@ -135,7 +135,7 @@
       "slug": "quickstart-laravel",
       "title": "Laravel Quickstart",
       "category": "quickstart",
-      "bytes": 20241
+      "bytes": 20999
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -446,7 +446,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 40310
+      "bytes": 40417
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -456,7 +456,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 44377
+      "bytes": 45135
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -709,7 +709,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40310,
+      "bytes": 40417,
       "copy_button": true,
       "self_contained": true
     },
@@ -730,7 +730,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44377,
+      "bytes": 45135,
       "copy_button": true,
       "self_contained": true
     },
@@ -937,7 +937,14 @@
       "demo_port": "3006",
       "video": null,
       "shared_checkout_demo": true,
-      "tested": null
+      "tested": {
+        "date": "2026-10-10",
+        "release": "0.4.22",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "fastapi",
@@ -986,7 +993,14 @@
       "demo_port": "3005",
       "video": null,
       "shared_checkout_demo": true,
-      "tested": null
+      "tested": {
+        "date": "2026-10-10",
+        "release": "0.4.22",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "php",

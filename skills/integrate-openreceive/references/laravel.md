@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Laravel)
 
 ```sh
-# READ THIS FIRST: this file is 44 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 45 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/laravel/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -417,8 +417,24 @@ PHP extensions:
   `pdo_sqlite`).
 
 `php -m` lists what your build has. To add gmp on Debian/Ubuntu, run
-`apt-get install php8.2-gmp`. In the official Docker image, run
-`docker-php-ext-install gmp`.
+`apt-get install php8.2-gmp`. The official `php` Docker images do not ship
+it, and `docker-php-ext-install gmp` alone fails without the GMP headers. Add
+both to the Dockerfile, before the step that installs the app's Composer
+packages, and rebuild the image:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev \
+    && docker-php-ext-install gmp \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+Run `composer require` with a PHP that has gmp. On a machine without one,
+use the rebuilt image with the project mounted, then rebuild again so the
+image installs the new lock:
+`docker compose run --rm --no-deps -v "$PWD":/app web composer require openreceive/laravel -W`.
+Never pass `--ignore-platform-req=ext-gmp` or `--ignore-platform-reqs`:
+Composer then installs a package that fails as soon as it talks to the
+wallet.
 
 Add the Laravel package:
 
