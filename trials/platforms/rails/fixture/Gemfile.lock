@@ -141,7 +141,7 @@ GEM
       prettyprint
     prettyprint (0.2.1)
     prism (1.9.0)
-    puma (6.6.1)
+    puma (7.2.1)
       nio4r (~> 2.0)
     racc (1.8.1)
     rack (3.2.7)
@@ -227,7 +227,7 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
-  puma (~> 6.5)
+  puma (~> 7.2)
   rails (~> 8.1.4)
   sqlite3 (~> 2.1)
 
