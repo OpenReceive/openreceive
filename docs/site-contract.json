@@ -88,6 +88,16 @@
       "assets_base": "/assets/"
     },
     {
+      "path": "/guides/lovable",
+      "markdown_path": "/guides/lovable.md",
+      "source": "docs/guides/lovable.md",
+      "kind": "guide",
+      "slug": "lovable",
+      "title": "Bitcoin Checkout on Lovable",
+      "category": "guide",
+      "bytes": 5772
+    },
+    {
       "path": "/guides/supabase",
       "markdown_path": "/guides/supabase.md",
       "source": "docs/guides/supabase.md",
@@ -95,7 +105,17 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 12634
+      "bytes": 12781
+    },
+    {
+      "path": "/guides/supabase-migration",
+      "markdown_path": "/guides/supabase-migration.md",
+      "source": "docs/guides/supabase-migration.md",
+      "kind": "guide",
+      "slug": "supabase-migration",
+      "title": "Supabase Migration",
+      "category": "reference",
+      "bytes": 11384
     },
     {
       "path": "/guides/how-we-test-platforms",
@@ -469,6 +489,16 @@
       "bytes": 12191
     },
     {
+      "path": "/guides/agent-directions-lovable",
+      "markdown_path": "/guides/agent-directions-lovable.md",
+      "source": "docs/agents/lovable.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-lovable",
+      "title": "Agent Directions: Lovable",
+      "category": "quickstart",
+      "bytes": 25107
+    },
+    {
       "path": "/guides/quickstart-woocommerce",
       "markdown_path": "/guides/quickstart-woocommerce.md",
       "source": "docs/guides/quickstart-woocommerce.md",
@@ -517,7 +547,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 3846
+      "bytes": 3919
     },
     {
       "path": "/wordpress",
@@ -752,6 +782,27 @@
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 12191,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/lovable.md",
+      "source": "docs/agents/cover/lovable.md",
+      "kind": "agent-directions-cover",
+      "stack": "lovable",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 258,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/lovable/full.md"
+    },
+    {
+      "path": "/agent-directions/lovable/full.md",
+      "source": "docs/agents/lovable.md",
+      "kind": "agent-directions-payload",
+      "stack": "lovable",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 25107,
       "copy_button": true,
       "self_contained": true
     }
@@ -1142,7 +1193,7 @@
       "id": "supabase",
       "label": "Supabase",
       "kind": "database",
-      "summary": "Store payments in your Supabase Postgres, through its pooled connection.",
+      "summary": "Store payments in your Supabase Postgres, through its pooled connection or, from Cloudflare Workers, over its HTTPS API.",
       "framework": null,
       "framework_path": null,
       "status": "planned",
@@ -1529,7 +1580,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 5747
+        "bytes": 6041
       },
       {
         "path": "/openapi.yaml",

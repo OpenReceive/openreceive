@@ -55,6 +55,10 @@ const GENERATED_REFERENCES = [
     target: "skills/integrate-openreceive/references/laravel.md",
   },
   { source: "docs/agents/btcpay.md", target: "skills/integrate-openreceive/references/btcpay.md" },
+  {
+    source: "docs/agents/lovable.md",
+    target: "skills/integrate-openreceive/references/lovable.md",
+  },
 ];
 
 function mirrorRoots() {

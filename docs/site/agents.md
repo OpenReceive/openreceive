@@ -27,6 +27,7 @@ the full quickstart), or paste the one-prompt agent directions:
   [Django](https://openreceive.org/agent-directions/django/full.md) ·
   [FastAPI](https://openreceive.org/agent-directions/fastapi/full.md) ·
   [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) ·
+  [Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
   [BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md). Each
   is self-contained, quickstart included. To hand an agent a link instead, drop
   `/full` from the URL: that short page tells it to download the full file with

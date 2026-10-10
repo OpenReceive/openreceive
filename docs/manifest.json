@@ -66,10 +66,26 @@
       "public": true
     },
     {
+      "slug": "lovable",
+      "title": "Bitcoin Checkout on Lovable",
+      "source_path": "docs/guides/lovable.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "source_path": "docs/guides/supabase.md",
       "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "supabase-migration",
+      "title": "Supabase Migration",
+      "source_path": "docs/guides/supabase-migration.md",
+      "category": "reference",
       "audience": "developer",
       "public": true
     },
@@ -525,6 +541,14 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "source_path": "docs/agents/btcpay.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-lovable",
+      "title": "Agent Directions: Lovable",
+      "source_path": "docs/agents/lovable.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true

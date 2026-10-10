@@ -56,6 +56,7 @@ const AGENT_PAYLOADS = [
   { path: "/agent-directions/php.md", source: "docs/agents/php.md", stack: "php" },
   { path: "/agent-directions/laravel.md", source: "docs/agents/laravel.md", stack: "laravel" },
   { path: "/agent-directions/btcpay.md", source: "docs/agents/btcpay.md", stack: "btcpay" },
+  { path: "/agent-directions/lovable.md", source: "docs/agents/lovable.md", stack: "lovable" },
 ];
 
 // Pages served under agent-discovery paths: site-owned names whose content is

@@ -90,6 +90,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/laravel.md",
   "/agent-directions/btcpay.md",
   "/agent-directions/woocommerce.md",
+  "/agent-directions/lovable.md",
 ];
 
 /** The full directions behind a cover: what the copy button copies and the cover's curl fetches. */

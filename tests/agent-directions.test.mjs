@@ -22,6 +22,9 @@ const covers = readdirSync(coverDir)
     text: readFileSync(new URL(name, coverDir), "utf8"),
   }));
 const fullUrl = (stack) => `https://openreceive.org/agent-directions/${stack}/full.md`;
+// Lovable's agent has no shell: its payload and cover name the full file for
+// its fetch tool instead of a curl line, and it keeps codes as Lovable secrets.
+const FETCH_ONLY = new Set(["lovable"]);
 
 function stepZero(text) {
   const match = text.match(/^## Step 0\b[^\n]*\n([\s\S]*?)(?=^## )/m);
@@ -36,7 +39,7 @@ function opening(text) {
   const [first, blank, title, ...rest] = text.split("\n");
   assert.equal(`${first}|${blank}`, "This is the full file; follow it from Step 0.|");
   const body = rest.join("\n").trimStart();
-  const block = body.match(/^```sh\n([\s\S]*?)\n```\n/)?.[1] ?? "";
+  const block = body.match(/^```(?:sh|text)\n([\s\S]*?)\n```\n/)?.[1] ?? "";
   const brief = body.match(/^\*\*Step 0 in brief\*\*[^\n]*\n\n((?:- [^\n]*\n)+)/m)?.[1] ?? "";
   return {
     title,
@@ -63,10 +66,12 @@ test("every payload opens with the download block, then Step 0 in brief", () => 
     const { title, block, brief } = opening(text);
     assert.match(title, /^# OpenReceive agent directions/, stack);
     assert.ok(
-      block.includes(`\ncurl -fsSL ${fullUrl(stack)}\n`),
+      block.includes(
+        FETCH_ONLY.has(stack) ? `\n${fullUrl(stack)}\n` : `\ncurl -fsSL ${fullUrl(stack)}\n`,
+      ),
       `${stack}: the first block after the title is not the download of this file`,
     );
-    const stated = Number(block.match(/this file is (\d+) KB/)?.[1]);
+    const stated = Number(block.match(/this file is (\d+) KB/i)?.[1]);
     assert.equal(
       stated,
       Math.round(Buffer.byteLength(text, "utf8") / 1000),
@@ -107,8 +112,18 @@ test("every payload has a cover: one curl line to its full.md and nothing else t
   for (const { stack, text } of covers) {
     assert.ok(text.length <= 400, `${stack}: cover is ${text.length} characters`);
     const curls = text.split("\n").filter((line) => line.includes("curl -fsSL"));
-    assert.equal(curls.length, 1, `${stack}: ${curls.length} curl lines`);
-    assert.equal(curls[0].trim(), `curl -fsSL ${fullUrl(stack)}`, stack);
+    if (FETCH_ONLY.has(stack)) {
+      assert.equal(curls.length, 0, `${stack}: a cover for an agent with no shell has a curl line`);
+      const urls = text.split("\n").filter((line) => line.includes("https://"));
+      assert.deepEqual(
+        urls.map((line) => line.trim()),
+        [fullUrl(stack)],
+        stack,
+      );
+    } else {
+      assert.equal(curls.length, 1, `${stack}: ${curls.length} curl lines`);
+      assert.equal(curls[0].trim(), `curl -fsSL ${fullUrl(stack)}`, stack);
+    }
     assert.doesNotMatch(text, /^\s*[-*] /m, `${stack}: cover has a bullet`);
     const full = payloads.find((payload) => payload.stack === stack).text;
     const fullRelease = full.match(/These directions describe OpenReceive (\S+)\./)?.[1];
@@ -213,7 +228,9 @@ test("the @openreceive/node payloads say doctor reads the env file and never to 
 // agents wrote 30-line wrap-ups, one deleted the order behind its link, and
 // both called stablecoins unavailable on a $1–$7 shop over one swap minimum.
 test("every library payload ends with setup finished and keeps the agent in the app", () => {
-  const libraries = payloads.filter(({ stack }) => !["woocommerce", "btcpay"].includes(stack));
+  const libraries = payloads.filter(
+    ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
+  );
   assert.equal(libraries.length, 8);
   for (const { stack, text } of libraries) {
     const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
@@ -241,7 +258,9 @@ test("every library payload ends with setup finished and keeps the agent in the 
 // (codes on camera), and all three tried `pkill -f "node server.js"`, which on
 // a shared machine stops other people's servers.
 test("every library payload's Step 0 sends the swap walkthrough, checks codes by name, and restarts by pid", () => {
-  const libraries = payloads.filter(({ stack }) => !["woocommerce", "btcpay"].includes(stack));
+  const libraries = payloads.filter(
+    ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
+  );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
     assert.match(step, /this message IS the walkthrough below/, stack);
@@ -266,7 +285,9 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
 // Fastify agent passed the Web Request to the shop's cookie helper, so every
 // buyer got a 403: the quickstart's own example did the same.
 test("every library payload writes codes with the file tool, and Express and Fastify read the session from native", () => {
-  const libraries = payloads.filter(({ stack }) => !["woocommerce", "btcpay"].includes(stack));
+  const libraries = payloads.filter(
+    ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
+  );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
     assert.match(step, /with your file-editing\s+tool/, stack);
@@ -288,4 +309,24 @@ test("the WooCommerce hand-over is short and never calls a coin unavailable", ()
   assert.match(ending, /starts "Setup is finished" and has at most six short lines/);
   assert.match(ending, /Do not list\s+each coin's availability, mention a minimum/);
   assert.match(ending, /Send nothing\s+after it/);
+});
+
+// Lovable's agent has no terminal and Lovable keeps codes as project secrets:
+// its payload asks through the secret input, never for a file or a command,
+// sends the agent to the published migration, and keeps fulfillment in SQL.
+test("the Lovable payload asks through the secret input and needs no terminal", () => {
+  const text = payloads.find(({ stack }) => stack === "lovable").text;
+  const own = text.slice(0, text.indexOf("## The quickstart, in full"));
+  const step = stepZero(text);
+  assert.match(step, /Lovable's secure secret input/);
+  assert.match(step, /Lovable reserves the\s+`SUPABASE_` prefix/);
+  assert.doesNotMatch(step, /file-editing tool|\.env\.local|grep -E/);
+  assert.match(own, /never put one in `\.env`/);
+  assert.match(own, /https:\/\/openreceive\.org\/guides\/supabase-migration\.md/);
+  assert.match(own, /No `onPaid` and no `db`/);
+  assert.match(own, /buyer_token/);
+  assert.match(own, /Your last message starts "Setup is finished"/);
+  for (const command of [/\bcurl\b/, /\bnpx\b/, /\bdoctor\b/, /docker compose/, /\bpkill\b/]) {
+    assert.doesNotMatch(own, command, `the Lovable steps mention ${command}`);
+  }
 });

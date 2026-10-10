@@ -86,6 +86,17 @@ const libraryBrief = (envFile) => [
   'Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
 ];
 
+// Lovable's agent has no terminal and keeps codes as project secrets, so its
+// list asks through Lovable's secret input and never mentions a file.
+const LOVABLE_BRIEF = [
+  "Before adding packages or editing anything, ask the user for a receive-only NWC code. One question per message.",
+  ASK_LSC_NEXT,
+  "Ask for NWC_URI and LSC_URI_PRIMARY with Lovable's secret input. Never put a code in .env, code or a VITE_ name.",
+  "You have no terminal: never ask the user to run a command. Every step is a file, a package, a migration or a secret.",
+  NO_ROTATION,
+  'Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".',
+];
+
 // BTCPay checks the deployment first, and its own store page is a supported
 // place to save a code, so it gets its own list.
 const BTCPAY_BRIEF = [
@@ -162,6 +173,17 @@ const STACKS = [
     quickstart: "docs/guides/quickstart-btcpay.md",
     brief: BTCPAY_BRIEF,
   },
+  {
+    stack: "lovable",
+    source: "docs/agents/src/lovable.md",
+    quickstart: "docs/recipes/tanstack-start.md",
+    quickstartSlug: "tanstack-start-recipe",
+    brief: LOVABLE_BRIEF,
+    quickstartRole:
+      "Steps 0–6 above are the setup on Lovable and this recipe is their reference: follow its On Supabase (Lovable) section, not its pg pool, and skip its npm commands. Where the two differ, the steps win.",
+    // Lovable's agent reads pages with its fetch tool and has no shell.
+    fetchOnly: true,
+  },
 ];
 
 /**
@@ -183,6 +205,10 @@ const UNLISTED_GUIDES = {
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
   vercel: "for people who hand these directions to v0; it links them, not the reverse",
+  lovable: "for people who build on Lovable; the Lovable payload links it, not the other stacks",
+  "agent-directions-lovable": "this payload's own page",
+  "supabase-migration":
+    "the Supabase over HTTPS migration, for agents with no terminal; the Lovable payload and the Supabase guide link it",
   replit: "for people who hand these directions to Replit Agent; it links them, not the reverse",
   "how-we-test-platforms": "explains the Tested badges to people; it is not integration guidance",
   "agent-directions-node": "this payload's own page",
@@ -264,6 +290,15 @@ const UNLISTED_GUIDES_BY_STACK = {
     "api-reference": "documents the library API; the plugin's routes are in the BTCPay quickstart",
     "react-material-ui-recipe": "a custom browser UI recipe; not applicable inside BTCPay",
     supabase: "BTCPay keeps the plugin's table in its own database",
+  },
+  lovable: {
+    "node-orms": "no ORM: payments go through Supabase's HTTPS API",
+    "headless-checkout": "Lovable apps use the drop-in; the directions forbid a custom checkout UI",
+    "custom-checkout-route": "the recipe's route is the integration",
+    "host-testing": "Lovable's agent has no terminal to run host tests",
+    "payment-safety-upgrade": "a new integration has no existing attempts to upgrade",
+    "react-material-ui-recipe":
+      "Lovable apps use the drop-in; the directions forbid a custom checkout UI",
   },
   rails: { supabase: "the Supabase guide covers Node and Python servers" },
   php: { supabase: "the Supabase guide covers Node and Python servers" },
@@ -351,28 +386,47 @@ const fullUrl = (stack) =>
 
 const FULL_FILE_LINE = "This is the full file; follow it from Step 0.";
 
-const HEADER = (stack, kilobytes) =>
-  [
-    "```sh",
-    `# READ THIS FIRST: this file is ${kilobytes} KB and a summary drops required steps. Download it whole:`,
-    `curl -fsSL ${fullUrl(stack)}`,
-    "# Skip the download only if you already have all of it: pasted, read from disk or fetched raw.",
-    "```",
-  ].join("\n");
+const HEADER = (stack, kilobytes, fetchOnly) =>
+  fetchOnly
+    ? [
+        "```text",
+        `READ THIS FIRST: this file is ${kilobytes} KB and a summary drops required steps. Read all of it:`,
+        fullUrl(stack),
+        "If your fetch tool gave you a summary, fetch that URL again for the full text.",
+        "```",
+      ].join("\n")
+    : [
+        "```sh",
+        `# READ THIS FIRST: this file is ${kilobytes} KB and a summary drops required steps. Download it whole:`,
+        `curl -fsSL ${fullUrl(stack)}`,
+        "# Skip the download only if you already have all of it: pasted, read from disk or fetched raw.",
+        "```",
+      ].join("\n");
 
 // Every line here competes with the curl line in a rewrite: add nothing.
 // tests/agent-directions.test.mjs holds it under 400 characters.
-const COVER = (stack, name, kilobytes) =>
-  [
-    `# OpenReceive agent directions: ${name} (${RELEASE})`,
-    "",
-    `These directions are ${kilobytes} KB. Download them with your shell and follow them from Step 0:`,
-    "",
-    `    curl -fsSL ${fullUrl(stack)}`,
-    "",
-    "Do this before anything else. A web-fetch summary of them drops required steps.",
-    "",
-  ].join("\n");
+const COVER = (stack, name, kilobytes, fetchOnly) =>
+  fetchOnly
+    ? [
+        `# OpenReceive agent directions: ${name} (${RELEASE})`,
+        "",
+        `These directions are ${kilobytes} KB. Fetch the full file and follow it from Step 0:`,
+        "",
+        `    ${fullUrl(stack)}`,
+        "",
+        "Do this before anything else. A summary of them drops required steps.",
+        "",
+      ].join("\n")
+    : [
+        `# OpenReceive agent directions: ${name} (${RELEASE})`,
+        "",
+        `These directions are ${kilobytes} KB. Download them with your shell and follow them from Step 0:`,
+        "",
+        `    curl -fsSL ${fullUrl(stack)}`,
+        "",
+        "Do this before anything else. A web-fetch summary of them drops required steps.",
+        "",
+      ].join("\n");
 
 function render(
   stack,
@@ -382,10 +436,11 @@ function render(
   quickstartSlug,
   publicSlugs,
   role,
+  fetchOnly,
   kilobytes,
 ) {
   const top = [
-    HEADER(stack, kilobytes),
+    HEADER(stack, kilobytes, fetchOnly),
     "",
     "**Step 0 in brief** (Step 0 below has the details):",
     "",
@@ -492,10 +547,10 @@ function sync(target, content) {
   }
 }
 
-for (const { stack, source, quickstart, brief, quickstartRole } of STACKS) {
+for (const { stack, source, quickstart, brief, quickstartRole, fetchOnly, ...entry } of STACKS) {
   const target = `docs/agents/${stack}.md`;
   const coverTarget = `docs/agents/cover/${stack}.md`;
-  const quickstartSlug = path.basename(quickstart, ".md");
+  const quickstartSlug = entry.quickstartSlug ?? path.basename(quickstart, ".md");
   const directions = readFileSync(path.join(root, source), "utf8");
   const name = directions.match(/^# OpenReceive agent directions \((.+)\)$/m)?.[1];
   if (name === undefined) {
@@ -510,8 +565,9 @@ for (const { stack, source, quickstart, brief, quickstartRole } of STACKS) {
     quickstartSlug,
     publicSlugs,
     quickstartRole,
+    fetchOnly === true,
   );
-  const cover = COVER(stack, name, kilobytes);
+  const cover = COVER(stack, name, kilobytes, fetchOnly === true);
 
   const bytes = Buffer.byteLength(payload, "utf8");
   if (bytes > BUDGET_BYTES) {

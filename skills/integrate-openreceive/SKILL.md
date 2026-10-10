@@ -38,6 +38,9 @@ connected wallet; asset and network availability depends on the provider.
    - Django: [references/django.md](references/django.md)
    - Laravel: [references/laravel.md](references/laravel.md)
    - WordPress + WooCommerce: [references/woocommerce.md](references/woocommerce.md) — the packaged gateway and merchant settings.
+   - Lovable (TanStack Start on Cloudflare Workers, with Supabase):
+     [references/lovable.md](references/lovable.md) — no terminal; codes are
+     Lovable secrets and payments go through Supabase's HTTPS API.
    - BTCPay Server: [references/btcpay.md](references/btcpay.md) — a plugin,
      configured in BTCPay's store UI or Greenfield API; no application code,
      no npm packages, no gem. The rest of this file is about the library.

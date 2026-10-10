@@ -67,7 +67,7 @@
       "id": "supabase",
       "label": "Supabase",
       "kind": "database",
-      "summary": "Store payments in your Supabase Postgres, through its pooled connection.",
+      "summary": "Store payments in your Supabase Postgres, through its pooled connection or, from Cloudflare Workers, over its HTTPS API.",
       "framework": null,
       "planned": true
     }

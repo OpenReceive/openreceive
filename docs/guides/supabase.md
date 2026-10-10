@@ -25,7 +25,7 @@ parts to a framework quickstart, so start from yours:
 | --- | --- |
 | Node: Next.js (on Vercel or elsewhere), Express, Fastify | Yes |
 | Python: FastAPI, Django | Yes |
-| Cloudflare Workers, including Lovable's TanStack Start apps | Yes, [over HTTPS](#supabase-over-https) |
+| Cloudflare Workers, including Lovable's TanStack Start apps | Yes, [over HTTPS](#supabase-over-https); on Lovable, see [Lovable](lovable.md) |
 | Supabase Edge Functions (Deno), including Bolt's | Not yet |
 
 Supabase signs its database certificate with its own certificate authority.
@@ -201,7 +201,9 @@ npx openreceive scaffold payments --supabase
 ```
 
 This writes `supabase/migrations/<timestamp>_openreceive.sql` and an
-`OPENRECEIVE_PAYMENTS.md` guide. The migration creates the same two tables,
+`OPENRECEIVE_PAYMENTS.md` guide. Where you cannot run it, as on Lovable,
+copy the same SQL from [Supabase migration](supabase-migration.md). The
+migration creates the same two tables,
 with row level security on and every grant revoked from `anon` and
 `authenticated`. It also creates the functions OpenReceive calls to write
 them, and only your server key may call those. Apply it with

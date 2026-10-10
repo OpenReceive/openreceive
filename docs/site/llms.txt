@@ -32,6 +32,7 @@ markdown.
 - [Agent Directions: Laravel](https://openreceive.org/agent-directions/laravel/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md): self-contained agent directions, quickstart included
 - [Agent directions (WordPress + WooCommerce)](https://openreceive.org/agent-directions/woocommerce/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Lovable](https://openreceive.org/agent-directions/lovable/full.md): self-contained agent directions, quickstart included
 
 ## Guides
 
@@ -39,7 +40,9 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 
 - [Bitcoin Checkout on Vercel and v0](https://openreceive.org/guides/vercel.md)
 - [Bitcoin Checkout on Replit](https://openreceive.org/guides/replit.md)
+- [Bitcoin Checkout on Lovable](https://openreceive.org/guides/lovable.md)
 - [Bitcoin Checkout with Supabase](https://openreceive.org/guides/supabase.md)
+- [Supabase Migration](https://openreceive.org/guides/supabase-migration.md)
 - [How We Test Platforms](https://openreceive.org/guides/how-we-test-platforms.md)
 - [BTCPay Plugin Reference](https://openreceive.org/guides/btcpay-reference.md)
 - [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)

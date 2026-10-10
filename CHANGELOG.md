@@ -22,6 +22,14 @@
   settlements. Guide: /guides/supabase#supabase-over-https.
 - Changed (JS): the SQL repository's reconcile gate and row parsing moved into
   modules shared with the Supabase repository. Behaviour is unchanged.
+- Added (docs): a Lovable guide (/guides/lovable) with the prompt to paste
+  into Lovable, and agent directions for Lovable's agent
+  (/agent-directions/lovable/full.md). Lovable's agent has no terminal, so
+  these directions ask for each code with Lovable's secure secret input,
+  never for a command, and send it to /guides/supabase-migration, a new page
+  that publishes the scaffold's Supabase migration as SQL to copy. The
+  TanStack Start recipe gains its Supabase route, and the skill lists the
+  Lovable directions.
 - Added (release): the WordPress plugin is published to the
   [WordPress.org plugin directory](https://wordpress.org/plugins/openreceive/).
   Publishing a GitHub release starts the new `Publish WordPress.org` workflow.
