@@ -199,7 +199,7 @@ const FRAMEWORKS = [
     quickstart_slug: "quickstart-woocommerce",
     agent_stack: "woocommerce",
     adapter_package: "openreceive/wordpress",
-    install: "Plugins → Add New → Upload Plugin",
+    install: "wp plugin install openreceive --activate",
     requires: "WordPress ≥ 6.6, WooCommerce ≥ 9, PHP ≥ 8.2, GMP and sodium",
     demo: "wordpress",
     video: null,

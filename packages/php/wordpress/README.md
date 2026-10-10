@@ -17,9 +17,12 @@ MySQL 8 or MariaDB 10.5+. SQLite WordPress is not supported. Many hosts leave
 GMP off; [WordPress hosting requirements](https://openreceive.org/guides/wordpress-hosting)
 shows how to check and enable it.
 
-Install a built `openreceive-wordpress-<version>.zip` through **Plugins → Add
-New → Upload Plugin**, then configure **WooCommerce → Settings → Payments →
-OpenReceive**. The source directory is not an installable plugin archive.
+Install OpenReceive from the [WordPress.org plugin directory](https://wordpress.org/plugins/openreceive/):
+search for it under **Plugins → Add New**, or run
+`wp plugin install openreceive --activate`. Then configure **WooCommerce →
+Settings → Payments → OpenReceive**. Each GitHub release also attaches the
+built `openreceive-wordpress-<version>.zip` for **Plugins → Add New → Upload
+Plugin**. The source directory is not an installable plugin archive.
 
 The [WooCommerce quickstart](https://github.com/OpenReceive/openreceive/blob/master/docs/guides/quickstart-woocommerce.md)
 covers credentials, guest recovery, scheduled reconciliation and refunds.

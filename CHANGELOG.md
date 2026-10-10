@@ -9,6 +9,11 @@
   plugin's Subversion trunk and version tag, together with the directory page
   images, and waits until wordpress.org lists the version. Every GitHub release
   still carries the ZIP.
+- Changed (WooCommerce quickstart, agent directions and plugin README): install
+  the plugin from WordPress.org: search for OpenReceive under Plugins → Add
+  New, or run `wp plugin install openreceive --activate`. The directions pin
+  the release with `--version` and fall back to the release ZIP when
+  WordPress.org does not list that version yet.
 
 ## 0.4.22 - 2026-10-10
 

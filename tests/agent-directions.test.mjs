@@ -150,10 +150,14 @@ test("the WooCommerce payload names the pinned install, configure and test-invoi
   const text = payloads.find(({ stack }) => stack === "woocommerce").text;
   const step = stepZero(text);
   assert.ok(
+    text.includes(`wp plugin install openreceive --version=${release} --activate`),
+    "the WordPress.org install line is pinned to this release",
+  );
+  assert.ok(
     text.includes(
       `wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v${release}/openreceive-wordpress-${release}.zip --activate`,
     ),
-    "the install line is pinned to this release",
+    "the release ZIP fallback is pinned to this release",
   );
   assert.doesNotMatch(text, /\{\{release\}\}/);
   assert.match(text, /wp openreceive configure --nwc-uri=- < /);

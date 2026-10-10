@@ -73,7 +73,14 @@ is saved or the user said "Bitcoin only". Never invent a placeholder code.
 
 ## Step 1 — install the plugin
 
-Install the plugin built for this release. Never install the GitHub
+Install this release from the WordPress.org plugin directory:
+
+```sh
+wp plugin install openreceive --version={{release}} --activate
+```
+
+If that fails because WordPress.org does not have this version yet, install
+the ZIP attached to the same GitHub release. Never install the GitHub
 source-code ZIP or a ZIP from an older release:
 
 ```sh
@@ -86,7 +93,7 @@ images, activation warns "OpenReceive is not running: this site needs the PHP
 GMP extension" and the plugin stays idle: add GMP to both images as "Enable GMP in both PHP runtimes" below
 says, rebuild both, then install again. If the Compose file has only `image:`
 lines, use the two Dockerfiles and `build:` keys under "Compose files with only
-`image:` lines" below, and add no other service. If the URL answers 404, build the same
+`image:` lines" below, and add no other service. If the ZIP URL answers 404, build the same
 tag as "Get the installable archive" below says.
 
 ## Step 2 — store the codes, then enable the gateway

@@ -4,10 +4,11 @@ The [WordPress integration entry point](https://openreceive.org/integrations/wor
 redirects to the WooCommerce integration, which uses this same guide and agent
 directions. OpenReceive checkout on WordPress requires WooCommerce.
 
-Activate WooCommerce first. Then install the built OpenReceive plugin zip
-through **Plugins → Add New → Upload Plugin**. You cannot upload the source
-directory as-is. It needs a build first. The plugin is not yet submitted to
-WordPress.org.
+Activate WooCommerce first. Then install OpenReceive from the
+[WordPress.org plugin directory](https://wordpress.org/plugins/openreceive/):
+in **Plugins → Add New**, search for **OpenReceive**, then install and
+activate it. With WP-CLI, run `wp plugin install openreceive --activate`.
+WordPress offers each new release as an ordinary plugin update.
 
 Requirements: WordPress 6.6+, WooCommerce 9+, 64-bit PHP 8.2+ with GMP and sodium,
 and MySQL 8 or MariaDB 10.5+. When you activate the plugin, it creates tables for
@@ -16,11 +17,14 @@ database or application.
 
 ## Get the installable archive
 
+Each GitHub release also attaches the same plugin as a ZIP, for a site that
+cannot reach WordPress.org or when WordPress.org does not list a release yet.
 Download [openreceive-wordpress-0.4.22.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.22/openreceive-wordpress-0.4.22.zip)
-from the matching release. Historical releases may lack this asset. If that exact
-URL returns 404, build the same tag below; never silently install an older ZIP.
-The GitHub source-code ZIP is not an installable plugin. On a development machine
-with Node 22+, PHP 8.2+ with GMP/sodium, Composer and WP-CLI:
+and install it through **Plugins → Add New → Upload Plugin**. Historical
+releases may lack this asset. If that exact URL returns 404, build the same tag
+below; never silently install an older ZIP. The GitHub source-code ZIP is not
+an installable plugin. On a development machine with Node 22+, PHP 8.2+ with
+GMP/sodium, Composer and WP-CLI:
 
 ```sh
 git clone https://github.com/OpenReceive/openreceive.git

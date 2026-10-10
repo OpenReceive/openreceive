@@ -476,7 +476,7 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 10180
+      "bytes": 10479
     },
     {
       "path": "/guides/wordpress-hosting",
@@ -496,7 +496,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 22735
+      "bytes": 23248
     },
     {
       "path": "/api_docs",
@@ -527,7 +527,7 @@
       "slug": "wordpress",
       "title": "OpenReceive for WordPress + WooCommerce",
       "category": "woocommerce",
-      "bytes": 3522,
+      "bytes": 3749,
       "assets_base": "/assets/"
     },
     {
@@ -562,7 +562,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22735,
+      "bytes": 23248,
       "copy_button": true,
       "self_contained": true
     },
@@ -769,7 +769,7 @@
       "agent_payload_path": "/agent-directions/woocommerce.md",
       "agent_full_path": "/agent-directions/woocommerce/full.md",
       "adapter_package": "openreceive/wordpress",
-      "install": "Plugins → Add New → Upload Plugin",
+      "install": "wp plugin install openreceive --activate",
       "requires": "WordPress ≥ 6.6, WooCommerce ≥ 9, PHP ≥ 8.2, GMP and sodium",
       "example_path": "examples/wordpress",
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/wordpress",
