@@ -86,6 +86,14 @@ create accounts or enforce environment reviewer settings.
   `rubygems`: a required reviewer, no administrator bypass, and `v*` tags only.
   Before the first upload exists, create the entry on PyPI as a "pending
   publisher" with the same four values. The first approved run claims the name.
+- WordPress.org hosts the plugin (slug `openreceive`) in Subversion at
+  `https://plugins.svn.wordpress.org/openreceive` and has no upload API. The
+  SVN username is the WordPress.org username `openreceive` (case-sensitive).
+  The SVN password is separate from the account password; set it under
+  [Account & Security](https://profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password).
+  On GitHub, the `wordpress-org` environment is set up like `rubygems`: a
+  required reviewer, no administrator bypass, and `v*` tags only. It stores
+  that password as `WPORG_SVN_PASSWORD`.
 - Packagist has no upload API and cannot read a monorepo. So each Composer
   package lives in its own read-only split repository:
   `OpenReceive/openreceive-php` for `openreceive/openreceive`, and
@@ -330,6 +338,13 @@ Run from the repo root on a clean, current `master`.
    npm run release:artifacts -- github
    ```
 
+   Publishing the release starts **Publish WordPress.org**
+   (`publish-wordpress.yml`). It waits for approval in the `wordpress-org`
+   environment, like the three tag workflows, so give the maintainer its run
+   URL (see the WordPress.org Track). Once approved, it commits the release's
+   WordPress ZIP to the plugin directory and waits until wordpress.org lists
+   the version.
+
    Registry indexes can lag; retry missing downloads rather than substituting
    a different version or a locally rebuilt registry artifact.
 
@@ -343,6 +358,7 @@ Run from the repo root on a clean, current `master`.
     composer show -a openreceive/openreceive
     composer show -a openreceive/laravel
     gh release view v<x.y.z> --repo OpenReceive/openreceive
+    curl -s 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=openreceive' | jq -r .version
     ```
 
     Run `npm run release:artifacts -- github` from the release checkout. Download
@@ -436,6 +452,49 @@ Neither Composer package contains the checkout UI (D2 in the frameworks plan).
 Plain-PHP hosts unpack `dist/standalone-checkout-<x.y.z>.tar.gz` from the
 GitHub release. Laravel hosts install `@openreceive/elements` from npm.
 
+## WordPress.org Track
+
+The directory listing at https://wordpress.org/plugins/openreceive/ is built
+from Subversion. `trunk/` holds the current release, `tags/<x.y.z>/` each
+release, and `assets/` the directory page's banners, icons and screenshot.
+wordpress.org serves the tag that trunk's `readme.txt` names as its Stable tag,
+which `release:prepare` stamps, and offers it to every site that has the
+plugin installed as an update. The readme is also the directory page, so edit
+`packages/php/wordpress/readme.txt` for page text and
+`packages/php/wordpress/wordpress-org/` for its images.
+
+`publish-wordpress.yml` downloads the ZIP attached to the published GitHub
+release, the exact file step 10 smoke-tests, and runs
+`node tools/release/wordpress-plugin.mjs publish`. The publisher:
+
+- checks that the ZIP holds only `openreceive/` and that the plugin's Version
+  equals its Stable tag
+- refuses prereleases and any version older than trunk
+- mirrors the ZIP into `trunk/` and the images into `assets/`, deleting files
+  the release dropped, and copies trunk to `tags/<x.y.z>/`, all in one commit
+- treats an existing tag as already published, so a re-run is a no-op
+- polls the wordpress.org plugin API until it lists the version
+
+`--dry-run` prepares the same commit and prints its size, without committing
+or needing the password.
+
+Get the run URL for the maintainer right after publishing the release:
+
+```sh
+gh run list --repo OpenReceive/openreceive --workflow publish-wordpress.yml --limit 1 --json status,headBranch,url
+```
+
+To re-run a release by hand, dispatch the workflow at its tag:
+`gh workflow run publish-wordpress.yml --ref v<x.y.z> -f tag=v<x.y.z>`.
+A tag created before the workflow existed cannot run it. Dispatch such a
+release from `master` while the `wordpress-org` environment briefly admits
+`master`, then remove that branch rule.
+
+Fallback when the workflow cannot run: on a machine with Subversion, download
+the release ZIP, export `WPORG_SVN_USERNAME=openreceive` and
+`WPORG_SVN_PASSWORD`, and run
+`npm run release:wordpress:publish -- --zip dist/openreceive-wordpress-<x.y.z>.zip`.
+
 ## Platform coverage and release scope
 
 | Platform | General release deliverable | Verification |
@@ -444,7 +503,7 @@ GitHub release. Laravel hosts install `@openreceive/elements` from npm.
 | Ruby (core, server, Rails) | RubyGems versions and exact gems | Ruby tests and gem checksums |
 | Python (FastAPI, Django) | PyPI wheel and sdist | Python tests, wheel contents, Twine |
 | PHP and Laravel | Composer split tags indexed by Packagist | PHP tests and both package versions |
-| WordPress/WooCommerce | Matching installable ZIP on GitHub | Docker integration, browser checkout, plugin audit |
+| WordPress/WooCommerce | WordPress.org plugin directory and the matching ZIP on GitHub | Docker integration, browser checkout, plugin audit, plugin API version |
 | Standalone checkout | Versioned tar.gz on GitHub | Standalone parity and artifact smoke |
 | Docs and skills | Docs bundle, GitHub skill source, ecosystem bundles | Generated-doc checks and packaged skill checks |
 | BTCPay Server | Independent plugin version and release | Compatibility tests; publish only on explicit BTCPay release request |
@@ -453,8 +512,9 @@ Documentation-only changes can be pushed without publishing packages. Changes
 to shipped code, packaged skills or assets require the next package release for
 registry/archive users to receive them. Before release, review shared engine and
 checkout changes against every adapter above. A general release updates the
-whole versioned family; it does not authorize WordPress.org submission or a
-BTCPay Plugin Builder submission. The private website deployment remains a
+whole versioned family, including the WordPress.org listing once its
+publication run is approved. It does not authorize a BTCPay Plugin Builder
+submission. The private website deployment remains a
 separate step and stays outside this public repository.
 
 ## Release checklist
@@ -466,6 +526,8 @@ The release owner checks, before tagging:
 - `npm run release:artifacts -- check` passes before creating the GitHub draft;
   `npm run release:artifacts -- github` passes before and after publication.
 - WordPress ZIP matches the release version and passes Docker integration, browser tests and plugin audit.
+- After the GitHub release is published and Publish WordPress.org is approved,
+  the wordpress.org plugin API lists the release version.
 - Agent skills describe the current public API. A release that changes the
   public API updates `skills/*/SKILL.md` in the same change. Run
   `npm run generate:skills` so `.agents/skills/` and the four ecosystem bundles
@@ -574,6 +636,11 @@ the publisher already does. Do not weaken or skip release coverage.
   `v*` tag through PyPI Trusted Publishing (`uv publish --trusted-publishing
   always`). The `pypi` environment's required approval gates it. It is the
   only workflow allowed to run `uv publish`.
+- `.github/workflows/publish-wordpress.yml` commits the published release's
+  WordPress ZIP to the WordPress.org plugin directory over Subversion. It
+  starts when a GitHub release is published, and the `wordpress-org`
+  environment's required approval gates it. It is the only workflow allowed to
+  run `wordpress-plugin.mjs publish`.
 
 `npm run check:workflows` requires:
 - read-only workflow permissions
@@ -584,6 +651,9 @@ the publisher already does. Do not weaken or skip release coverage.
   environment), and `uv publish` only in the PyPI publish workflow (jobs in the
   `pypi` environment). Each of those jobs has exactly `contents: read` +
   `id-token: write`.
+- `composer-release.mjs publish` only in the Composer publish workflow and
+  `wordpress-plugin.mjs publish` only in the WordPress.org publish workflow,
+  each in its gated environment with exactly `contents: read`.
 
 ## Tagging
 

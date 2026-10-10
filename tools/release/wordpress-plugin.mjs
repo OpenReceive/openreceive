@@ -5,12 +5,15 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { parseArgs } from "node:util";
 import { root } from "../shared/root.mjs";
 
 const version = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
@@ -21,7 +24,7 @@ const archive = path.join(root, `dist/openreceive-wordpress-${version}.zip`);
 const command = process.argv[2] ?? "plan";
 if (command === "plan") {
   console.log(
-    `Build WordPress plugin ${version}: ${archive}\nNo publication. Upload the verified archive to WordPress.org for review separately.`,
+    `Build WordPress plugin ${version}: ${archive}\nPublishing the GitHub release starts Publish WordPress.org, which commits this archive to the plugin directory after approval.`,
   );
 } else if (command === "build") {
   const run = (bin, args, cwd = plugin) => execFileSync(bin, args, { cwd, stdio: "inherit" });
@@ -205,6 +208,162 @@ if (command === "plan") {
     "The release archive must not ship the testkit.",
   );
   console.log(`Built ${archive}`);
+} else if (command === "publish") {
+  // WordPress.org hosts the plugin in Subversion: trunk/ holds the current
+  // code, tags/<version>/ each release, and assets/ the directory page's
+  // banners, icons and screenshots. wordpress.org serves the tag that trunk's
+  // readme names as its Stable tag and offers it to every site as an update.
+  // One commit puts a verified release ZIP into trunk and its tag together.
+  const { values: options } = parseArgs({
+    args: process.argv.slice(3),
+    options: {
+      zip: { type: "string", default: archive },
+      repository: { type: "string", default: "https://plugins.svn.wordpress.org/openreceive" },
+      assets: { type: "string", default: path.join(source, "wordpress-org") },
+      "dry-run": { type: "boolean", default: false },
+      "skip-verify": { type: "boolean", default: false },
+      timeout: { type: "string", default: "900" },
+    },
+  });
+  const dryRun = options["dry-run"];
+  const username = process.env.WPORG_SVN_USERNAME;
+  const password = process.env.WPORG_SVN_PASSWORD;
+  // Subversion reads no password variable. Keep the secret out of every
+  // child's environment and argv; the one commit reads it from stdin.
+  delete process.env.WPORG_SVN_PASSWORD;
+  assert(
+    dryRun || (username && password),
+    "Set WPORG_SVN_USERNAME and WPORG_SVN_PASSWORD (the SVN password from the WordPress.org profile, not the account password).",
+  );
+  const svn = (args, extra = {}) =>
+    execFileSync("svn", ["--non-interactive", ...args], { encoding: "utf8", ...extra });
+  const work = mkdtempSync(path.join(tmpdir(), "openreceive-wporg-"));
+  try {
+    const entries = execFileSync("unzip", ["-Z1", options.zip], { encoding: "utf8" })
+      .split("\n")
+      .filter(Boolean);
+    assert(
+      entries.every((entry) => entry.startsWith("openreceive/")),
+      "The ZIP must hold only the openreceive/ plugin directory.",
+    );
+    execFileSync("unzip", ["-q", options.zip, "-d", path.join(work, "zip")]);
+    const built = path.join(work, "zip/openreceive");
+    const stableTag = (readme) => readme.match(/^Stable tag:\s*(\S+)\s*$/m)?.[1];
+    const release = readFileSync(path.join(built, "openreceive.php"), "utf8").match(
+      /^ \* Version:\s*(\S+)\s*$/m,
+    )?.[1];
+    const stable = stableTag(readFileSync(path.join(built, "readme.txt"), "utf8"));
+    assert(
+      release !== undefined && release === stable,
+      `openreceive.php Version (${release}) and readme.txt Stable tag (${stable}) must match.`,
+    );
+    assert(
+      /^\d+\.\d+\.\d+$/.test(release),
+      `WordPress.org gets stable releases only, not ${release}.`,
+    );
+    const tags = svn(["list", `${options.repository}/tags`])
+      .split("\n")
+      .map((entry) => entry.replace(/\/$/, ""));
+    if (tags.includes(release)) {
+      console.log(`tags/${release} is already on WordPress.org; nothing to commit.`);
+    } else {
+      const checkout = path.join(work, "svn");
+      svn(["checkout", "--quiet", "--depth", "immediates", options.repository, checkout]);
+      svn(["update", "--quiet", "--set-depth", "infinity", "trunk", "assets"], { cwd: checkout });
+      const trunkReadme = path.join(checkout, "trunk/readme.txt");
+      const current = existsSync(trunkReadme)
+        ? stableTag(readFileSync(trunkReadme, "utf8"))
+        : undefined;
+      if (current !== undefined) {
+        const [a, b] = [release, current].map((value) => value.split(".").map(Number));
+        assert(
+          (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) > 0,
+          `trunk already holds ${current}; refusing to move it back to ${release}.`,
+        );
+      }
+      // Replace a directory's contents, so files the new release (or the
+      // committed images) dropped are deleted from Subversion too.
+      const mirror = (from, to) => {
+        const target = path.join(checkout, to);
+        for (const entry of readdirSync(target))
+          rmSync(path.join(target, entry), { recursive: true });
+        cpSync(from, target, { recursive: true });
+        svn(["add", "--quiet", "--force", "--no-ignore", to], { cwd: checkout });
+        const missing = svn(["status", to], { cwd: checkout })
+          .split("\n")
+          .filter((line) => line.startsWith("!"))
+          .map((line) => line.slice(8))
+          .sort();
+        const deleted = missing.filter(
+          (file, index) => !missing.slice(0, index).some((parent) => file.startsWith(`${parent}/`)),
+        );
+        // A trailing @ stops Subversion reading an @ in a file name as a revision.
+        if (deleted.length > 0) {
+          svn(["delete", "--quiet", "--force", ...deleted.map((file) => `${file}@`)], {
+            cwd: checkout,
+          });
+        }
+      };
+      mirror(built, "trunk");
+      mirror(options.assets, "assets");
+      // Without a MIME type, wordpress.org serves the images as downloads.
+      for (const name of readdirSync(path.join(checkout, "assets"))) {
+        const type = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".gif": "image/gif",
+          ".svg": "image/svg+xml",
+        }[path.extname(name)];
+        if (type)
+          svn(["propset", "--quiet", "svn:mime-type", type, `assets/${name}@`], { cwd: checkout });
+      }
+      svn(["copy", "--quiet", "trunk", `tags/${release}`], { cwd: checkout });
+      const changes = svn(["status", "--quiet"], { cwd: checkout }).split("\n").filter(Boolean);
+      const count = (code) => changes.filter((line) => line[0] === code).length;
+      console.log(
+        `WordPress.org ${release}: ${count("A")} added, ${count("M")} modified, ${count("D")} deleted, tags/${release} copied from trunk.`,
+      );
+      if (dryRun) {
+        console.log(`Dry run: nothing committed to ${options.repository}.`);
+      } else {
+        const result = svn(
+          [
+            "commit",
+            "--message",
+            `OpenReceive ${release}`,
+            "--username",
+            username,
+            "--password-from-stdin",
+            "--no-auth-cache",
+          ],
+          { cwd: checkout, input: password },
+        );
+        console.log(result.trim().split("\n").at(-1));
+      }
+    }
+    if (!dryRun && !options["skip-verify"]) {
+      // The plugin API lists a version once wordpress.org has built its ZIP.
+      const deadline = Date.now() + Number(options.timeout) * 1000;
+      const info =
+        "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=openreceive";
+      for (;;) {
+        const listed = await fetch(info)
+          .then((response) => (response.ok ? response.json() : undefined))
+          .then((body) => body?.version)
+          .catch(() => undefined);
+        if (listed === release) break;
+        assert(
+          Date.now() < deadline,
+          `wordpress.org still lists ${listed ?? "no version"} after ${options.timeout}s; the SVN commit itself succeeded.`,
+        );
+        console.error(`waiting for wordpress.org to list openreceive ${release}…`);
+        await new Promise((resolve) => setTimeout(resolve, 15_000));
+      }
+      console.log(`Published https://wordpress.org/plugins/openreceive/ ${release}`);
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 } else {
-  throw new Error("Usage: wordpress-plugin.mjs plan|build");
+  throw new Error("Usage: wordpress-plugin.mjs plan|build|publish");
 }

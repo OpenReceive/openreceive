@@ -116,6 +116,14 @@ the end of every later release message until each run is approved, and name
 any stale run from an older tag that must not be approved. This step has been
 missed before; it is part of the release, not a courtesy.
 
+Publishing the GitHub release starts a fourth gated run, `Publish WordPress.org`,
+which commits the release's WordPress ZIP to the plugin directory. Give its URL
+the same way, in the last message of the turn that published the release:
+
+```sh
+gh run list --repo OpenReceive/openreceive --workflow publish-wordpress.yml --limit 1 --json status,headBranch,url
+```
+
 ## Testing
 
 Run demo application servers and their backing services in Docker. Builds,

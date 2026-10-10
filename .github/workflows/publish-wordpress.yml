@@ -1,0 +1,104 @@
+name: Publish WordPress.org
+
+# Commits the WordPress ZIP attached to a published GitHub release to the
+# plugin's Subversion repository, https://plugins.svn.wordpress.org/openreceive:
+# trunk/ and tags/<version>/ get the ZIP's contents and assets/ the directory
+# page images in packages/php/wordpress/wordpress-org. trunk's readme Stable
+# tag then makes that version the one every WordPress site is offered as an
+# update. It starts when the release is published, not at the tag push,
+# because it ships the exact ZIP the maintainer verified and attached.
+# The SVN password lives in the `wordpress-org` environment. Configure that
+# environment with a required reviewer, no admin bypass, and v* tags only
+# before adding the secret. Treat edits to this file like edits to a signing key.
+#
+# Manual runs name the release tag and run at that tag. A tag older than this
+# file cannot run it: publish such a release from master while the environment
+# briefly admits master too, then remove that branch again.
+#
+# Fallback when this cannot run: the wordpress-plugin.mjs publish command from
+# a maintainer machine with Subversion (see docs/internal/release-process.md,
+# WordPress.org Track).
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag whose WordPress ZIP to publish, e.g. v0.4.22"
+        type: string
+        required: true
+      dry_run:
+        description: "Prepare the SVN commit and report it without committing"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+# One Subversion repository: never let two publications interleave.
+concurrency:
+  group: publish-wordpress
+  cancel-in-progress: false
+
+jobs:
+  publish-wordpress:
+    if: github.event_name == 'workflow_dispatch' || (startsWith(github.ref, 'refs/tags/v') && !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: wordpress-org
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      # The publisher and the assets come from this checkout; a tag that does
+      # not match its version would ship one release's ZIP with another's tool.
+      - name: Assert tag matches package.json version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if [ "${RELEASE_TAG}" != "v${version}" ]; then
+            echo "Tag ${RELEASE_TAG} does not match package.json version v${version}." >&2
+            exit 1
+          fi
+          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
+      - name: Download the release's WordPress ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          state="$(gh release view "v${RELEASE_VERSION}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')"
+          if [ "${state}" != "false false" ]; then
+            echo "v${RELEASE_VERSION} is a draft or a prerelease (isDraft isPrerelease: ${state})." >&2
+            exit 1
+          fi
+          mkdir -p dist
+          gh release download "v${RELEASE_VERSION}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "openreceive-wordpress-${RELEASE_VERSION}.zip" --dir dist
+          unzip -tq "dist/openreceive-wordpress-${RELEASE_VERSION}.zip"
+      - name: Install Subversion
+        run: command -v svn >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends subversion; }
+      - name: Commit trunk and the version tag, then wait for wordpress.org
+        env:
+          WPORG_SVN_USERNAME: openreceive
+          WPORG_SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
+          WPORG_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          publish_args=(--zip "dist/openreceive-wordpress-${RELEASE_VERSION}.zip")
+          if [ "${WPORG_DRY_RUN}" = "true" ]; then
+            publish_args+=(--dry-run)
+          elif [ -z "${WPORG_SVN_PASSWORD:-}" ]; then
+            echo "WPORG_SVN_PASSWORD is not set in the wordpress-org environment." >&2
+            exit 1
+          fi
+          node tools/release/wordpress-plugin.mjs publish "${publish_args[@]}"

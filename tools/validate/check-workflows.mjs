@@ -105,6 +105,14 @@ const requiredWorkflows = {
     "tools/release/composer-release.mjs build",
     "tools/release/composer-release.mjs publish",
   ],
+  // The WordPress.org twin: no registry API — the plugin directory is a
+  // Subversion repository, committed with the SVN password the `wordpress-org`
+  // environment releases. It publishes the ZIP attached to the GitHub release.
+  "publish-wordpress.yml": [
+    "does not match package.json version",
+    "gh release download",
+    "tools/release/wordpress-plugin.mjs publish",
+  ],
 };
 
 // RubyGems.org's three trusted-publisher entries name this file and this
@@ -123,6 +131,11 @@ const pypiPushTexts = ["uv publish", "twine upload"];
 const composerPublishWorkflow = "publish-composer.yml";
 const composerPublishEnvironment = "packagist";
 const composerPushText = "composer-release.mjs publish";
+// The Subversion commit to WordPress.org: the SVN password lives in the
+// `wordpress-org` environment and only this workflow may run the publisher.
+const wordpressPublishWorkflow = "publish-wordpress.yml";
+const wordpressPublishEnvironment = "wordpress-org";
+const wordpressPushText = "wordpress-plugin.mjs publish";
 
 const forbiddenText = [
   "pull_request_target",
@@ -146,6 +159,7 @@ const forbiddenText = [
   "npm run release:gem:publish",
   "npm run release:pypi:publish",
   "npm run release:composer:publish",
+  "npm run release:wordpress:publish",
 ];
 const gemPushText = "gem push";
 
@@ -393,6 +407,51 @@ function checkComposerPublishWorkflow(relativePath, workflow) {
   }
 }
 
+// The WordPress.org contract: the job runs in the gated environment with
+// read-only contents (the SVN password, not GITHUB_TOKEN, is what commits), and
+// it starts when a release is published or by hand. The environment admits
+// only v* tags, so a manual run from a branch waits for no approval: it fails.
+function checkWordpressPublishWorkflow(relativePath, workflow) {
+  const triggers = Object.keys(workflow.on ?? {}).sort();
+  expect(
+    triggers.join(",") === "release,workflow_dispatch" &&
+      workflow.on.release?.types?.length === 1 &&
+      workflow.on.release.types[0] === "published",
+    `${relativePath}: triggers must be exactly a published release and manual dispatch`,
+  );
+  const dryRun = workflow.on?.workflow_dispatch?.inputs?.dry_run;
+  expect(
+    dryRun?.type === "boolean" && dryRun.default === false,
+    `${relativePath}: dry_run must be an opt-in boolean`,
+  );
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    expect(
+      job.environment === wordpressPublishEnvironment,
+      `${relativePath}: ${jobName} must run in the ${wordpressPublishEnvironment} environment`,
+    );
+    const permissions = job.permissions === undefined ? {} : job.permissions;
+    expect(
+      permissions.contents === "read" && Object.keys(permissions).length === 1,
+      `${relativePath}: ${jobName} permissions must be exactly contents: read`,
+    );
+    const publisher = job.steps?.find((step) =>
+      step.run?.includes("tools/release/wordpress-plugin.mjs publish"),
+    );
+    expect(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Literal GitHub Actions expression.
+      publisher?.env?.WPORG_SVN_PASSWORD === "${{ secrets.WPORG_SVN_PASSWORD }}",
+      `${relativePath}: ${jobName} must wire the WPORG_SVN_PASSWORD environment secret`,
+    );
+    expect(
+      publisher?.env?.WPORG_DRY_RUN ===
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Literal GitHub Actions expression.
+        "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
+      `${relativePath}: only an explicit manual dry run may skip the commit`,
+    );
+  }
+}
+
 function checkNodeSetup(relativePath, workflow) {
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
   for (const [jobName, job] of Object.entries(jobs)) {
@@ -493,6 +552,14 @@ for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
     expect(
       !text.includes(composerPushText),
       `${relativePath}: forbidden workflow text ${composerPushText} (only ${composerPublishWorkflow} pushes the Composer splits)`,
+    );
+  }
+  if (fileName === wordpressPublishWorkflow) {
+    checkWordpressPublishWorkflow(relativePath, workflow);
+  } else {
+    expect(
+      !text.includes(wordpressPushText),
+      `${relativePath}: forbidden workflow text ${wordpressPushText} (only ${wordpressPublishWorkflow} commits to WordPress.org)`,
     );
   }
   if (fileName === pypiPublishWorkflow) {

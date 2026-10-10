@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.23 - Unreleased
+
+- Added (release): the WordPress plugin is published to the
+  [WordPress.org plugin directory](https://wordpress.org/plugins/openreceive/).
+  Publishing a GitHub release starts the new `Publish WordPress.org` workflow.
+  Once a maintainer approves it, it commits the release's WordPress ZIP to the
+  plugin's Subversion trunk and version tag, together with the directory page
+  images, and waits until wordpress.org lists the version. Every GitHub release
+  still carries the ZIP.
+
 ## 0.4.22 - 2026-10-10
 
 - Fixed (Python): wallet calls (`make_invoice`, `list_transactions`, the

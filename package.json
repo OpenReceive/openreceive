@@ -90,6 +90,7 @@
     "test:live:nwc": "node tools/live-nwc-test/index.mjs",
     "release:wordpress:plan": "node tools/release/wordpress-plugin.mjs plan",
     "release:wordpress:build": "node tools/release/wordpress-plugin.mjs build",
+    "release:wordpress:publish": "node tools/release/wordpress-plugin.mjs publish",
     "test:e2e:wordpress": "playwright test --config tests/e2e-wordpress/playwright.config.ts",
     "test:wordpress": "bash tools/ci/wordpress-tests.sh",
     "trial": "node --import tsx trials/harness/run.ts",

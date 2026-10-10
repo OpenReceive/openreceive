@@ -305,8 +305,9 @@ contract:
   downloadable artifacts it needs exist: npm, RubyGems, PyPI, Packagist, the
   standalone checkout tarball, and a built WordPress zip when that install path
   is offered. A Composer bootstrap alone does not mean Packagist has discovered
-  the release. WordPress.org listing approval is separate from distributing a
-  verified plugin archive.
+  the release. The WordPress.org install line is right once the wordpress.org
+  plugin API lists the release version; until then the release ZIP is the
+  install path.
 
 ## The routes
 
