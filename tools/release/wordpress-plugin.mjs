@@ -132,12 +132,15 @@ if (command === "plan") {
   );
   // The plugin's namespace is a child of the engine's OpenReceive namespace.
   // Keep its public WordPress entrypoints while isolating all dependency uses.
+  // Strauss also prefixes any quoted string equal to the engine's namespace,
+  // which turned the gateway's 'OpenReceive' name in wp-admin into
+  // 'OpenReceive\WP\Vendor\OpenReceive'. A class name follows every real
+  // reference to the engine, so a bare one is always text.
   for (const name of readdirSync(path.join(plugin, "src"))) {
     const file = path.join(plugin, "src", name);
-    const code = readFileSync(file, "utf8").replace(
-      "namespace OpenReceive\\WP\\Vendor\\OpenReceive\\WP;",
-      "namespace OpenReceive\\WP;",
-    );
+    const code = readFileSync(file, "utf8")
+      .replace("namespace OpenReceive\\WP\\Vendor\\OpenReceive\\WP;", "namespace OpenReceive\\WP;")
+      .replace(/(['"])OpenReceive\\{1,2}WP\\{1,2}Vendor\\{1,2}OpenReceive\1/g, "$1OpenReceive$1");
     writeFileSync(file, code);
   }
   const assets = JSON.parse(readFileSync(path.join(plugin, "assets/MANIFEST.json"), "utf8"));

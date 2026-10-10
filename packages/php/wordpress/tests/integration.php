@@ -143,6 +143,14 @@ $check($gateway->is_available(), 'gateway available for USD');
 ob_start(); $gateway->receipt_page($order->get_id()); $markup = ob_get_clean();
 $check(str_contains($markup, 'csrf-header="X-WP-Nonce"') && str_contains($markup, 'resume-payment-hash='), 'receipt nonce and resume attributes');
 $check(str_contains($markup, 'resume-payment-rail="swap"'), 'swap receipt retains historical recovery');
+// This runs against the built plugin, whose Strauss pass once prefixed the name.
+$check($gateway->method_title === 'OpenReceive', 'gateway is named OpenReceive in wp-admin: ' . $gateway->method_title);
+$titleGateway = new Gateway();
+$titleGateway->settings = [...$configured, 'title' => 'Bitcoin Lightning (OpenReceive)'];
+$titleHtml = $titleGateway->generate_text_html('title', $titleGateway->get_form_fields()['title']);
+$check(str_contains($titleHtml, 'value=""') && str_contains($titleHtml, 'placeholder="Bitcoin &amp; stablecoins (OpenReceive)"'), 'a saved default title shows empty, with the checkout title as placeholder');
+$titleGateway->settings['title'] = 'My checkout';
+$check(str_contains($titleGateway->generate_text_html('title', $titleGateway->get_form_fields()['title']), 'value="My checkout"'), 'a custom title shows as saved');
 $cipher = Secrets::encrypt('opaque-test-value');
 $gateway->settings['nwc_uri'] = $cipher;
 $html = $gateway->generate_password_html('nwc_uri', $gateway->form_fields['nwc_uri']);

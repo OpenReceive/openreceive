@@ -40,11 +40,19 @@ final class Configuration
         return Errors::redactErrorText($message);
     }
 
-    public static function title(array $settings): string
+    /** The merchant's own checkout title, or '' when the setting is empty or holds a default. */
+    public static function customTitle(array $settings): string
     {
         $title = (string) ($settings['title'] ?? '');
-        // A saved earlier default ("Bitcoin & crypto" until 0.4.17) is still a default, not a custom title.
-        if ($title !== '' && !in_array($title, ['Bitcoin Lightning (OpenReceive)', 'Bitcoin & crypto (OpenReceive)', 'Bitcoin & stablecoins (OpenReceive)'], true)) { return $title; }
+        // Until 0.4.23 the Title field was saved with a default ("Bitcoin & crypto"
+        // until 0.4.17); a saved default is still a default, not a custom title.
+        return in_array($title, ['Bitcoin Lightning (OpenReceive)', 'Bitcoin & crypto (OpenReceive)', 'Bitcoin & stablecoins (OpenReceive)'], true) ? '' : $title;
+    }
+
+    public static function title(array $settings): string
+    {
+        $title = self::customTitle($settings);
+        if ($title !== '') { return $title; }
         try {
             $env = Secrets::environment($settings);
             if ($env['LSC_URI_PRIMARY'] !== '' || $env['LSC_URI_BACKUP'] !== '') { return __('Bitcoin & stablecoins (OpenReceive)', 'openreceive'); }

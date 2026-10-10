@@ -14,18 +14,31 @@ final class Gateway extends \WC_Payment_Gateway
         $this->supports = ['products'];
         $this->form_fields = [
             'enabled' => ['title' => __('Enable', 'openreceive'), 'type' => 'checkbox', 'label' => __('Enable OpenReceive', 'openreceive'), 'default' => 'no'],
-            'title' => ['title' => __('Title', 'openreceive'), 'type' => 'text', 'default' => 'Bitcoin Lightning (OpenReceive)'],
+            'title' => ['title' => __('Title', 'openreceive'), 'type' => 'text', 'default' => '', 'description' => __('Leave empty for the default, which names stablecoins once a swap code is saved.', 'openreceive')],
             'description' => ['title' => __('Description', 'openreceive'), 'type' => 'textarea', 'default' => __('Pay directly with Lightning or a supported swap currency.', 'openreceive')],
             'allow_spend' => ['title' => __('Spend-capable wallet override', 'openreceive'), 'type' => 'checkbox', 'default' => 'no', 'description' => __('Danger: a spend-capable code can drain your wallet if this server is compromised. Use a receive-only code instead.', 'openreceive')],
             'rate_limiting' => ['title' => __('Rate limiting', 'openreceive'), 'type' => 'checkbox', 'default' => 'no', 'description' => __('Recommended for public shops. Limits invoice creation per client IP.', 'openreceive')],
             'remove_data' => ['title' => __('Remove data on uninstall', 'openreceive'), 'type' => 'checkbox', 'default' => 'no', 'description' => __('Delete OpenReceive payment attempts when deleting this plugin. WooCommerce orders are retained.', 'openreceive')],
         ];
+        // Merchants know these as codes from their wallet and swap provider; the
+        // variable names stay in wp-config.php constants and Doctor's lines.
+        $codes = [
+            'nwc_uri' => [__('NWC code', 'openreceive'), 'nostr+walletconnect://…',
+                __('Receive-only code from your Lightning wallet. Stored encrypted; never displayed.', 'openreceive'),
+                'https://openreceive.org/get_a_nwc_code_to_receive_payments'],
+            'lsc_uri_primary' => [__('Lightning Swap Connect code', 'openreceive'), 'lightning+swapconnect://…',
+                __('Optional. Lets customers pay with USDT, USDC, SOL or ETH, converted to BTC over Lightning into your wallet; assets depend on the provider. Swap refunds go through the order\'s payment page, so keep it available.', 'openreceive'),
+                'https://openreceive.org/set_up_swap_provider'],
+            'lsc_uri_backup' => [__('Backup Lightning Swap Connect code', 'openreceive'), 'lightning+swapconnect://…',
+                __('Optional. Used only while the first provider is down.', 'openreceive'), null],
+        ];
         foreach (Secrets::FIELDS as $field => $name) {
+            [$title, $scheme, $description, $guide] = $codes[$field];
             $constant = 'OPENRECEIVE_' . $name;
-            $this->form_fields[$field] = ['title' => $name, 'type' => 'password', 'default' => '',
-                'placeholder' => defined($constant) ? __('Set in wp-config.php', 'openreceive') : __('Enter a value to set or replace', 'openreceive'),
+            $this->form_fields[$field] = ['title' => $title, 'type' => 'password', 'default' => '',
+                'placeholder' => defined($constant) ? __('Set in wp-config.php', 'openreceive') : $scheme,
                 'custom_attributes' => ['autocomplete' => 'new-password'] + (defined($constant) ? ['disabled' => 'disabled'] : []),
-                'description' => $field === 'nwc_uri' ? __('Receive-only NWC code. Stored encrypted; never displayed.', 'openreceive') : __('Optional LSC code. Keep order-pay links available for payer swap refunds.', 'openreceive')];
+                'description' => esc_html($description) . ($guide === null ? '' : ' <a href="' . esc_url($guide) . '" target="_blank" rel="noopener">' . esc_html__('How to get one', 'openreceive') . '</a>')];
         }
         $this->init_settings();
         $this->title = Configuration::title($this->settings);
@@ -41,6 +54,17 @@ final class Gateway extends \WC_Payment_Gateway
         $this->settings[$key] = '';
         if ($stored !== '') { $data['placeholder'] = __('Set — enter a new value to replace', 'openreceive'); }
         try { return parent::generate_password_html($key, $data); }
+        finally { $this->settings[$key] = $stored; }
+    }
+
+    /** An empty Title follows the swap setup, so the field shows checkout's title as its placeholder. */
+    public function generate_text_html($key, $data)
+    {
+        if ($key !== 'title') { return parent::generate_text_html($key, $data); }
+        $stored = $this->settings[$key] ?? '';
+        $this->settings[$key] = Configuration::customTitle($this->settings);
+        $data['placeholder'] = Configuration::title($this->settings);
+        try { return parent::generate_text_html($key, $data); }
         finally { $this->settings[$key] = $stored; }
     }
 
@@ -129,6 +153,10 @@ final class Gateway extends \WC_Payment_Gateway
 
     public function admin_options()
     {
+        // WooCommerce's Payments list offers Enable before any code is saved;
+        // checkout leaves the method out until the wallet answers.
+        try { $unset = Secrets::environment($this->settings)['NWC_URI'] === '' && !Plugin::testkit(); } catch (\Throwable) { $unset = false; }
+        if ($unset) { $this->form_fields['enabled']['description'] = __('Enter your NWC code below first. Checkout offers this method once a code is saved.', 'openreceive'); }
         parent::admin_options();
         echo '<h3>' . esc_html__('OpenReceive Doctor', 'openreceive') . '</h3><ul>';
         foreach (Plugin::diagnostics() as $line) { echo '<li>' . esc_html($line) . '</li>'; }

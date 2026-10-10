@@ -40,7 +40,7 @@ Documentation: https://openreceive.org/guides/quickstart-woocommerce
 2. In Plugins > Add New, search for OpenReceive, then install and activate it. To install a release archive instead, use Plugins > Add New > Upload Plugin.
 3. Open WooCommerce > Settings > Payments > OpenReceive.
 4. Paste your receive-only NWC code and save. The plugin checks that the wallet can receive before it saves.
-5. Optional: add a swap provider connection code to accept USDT, USDC, SOL and ETH.
+5. Optional: paste a Lightning Swap Connect code from your swap provider to accept USDT, USDC, SOL and ETH.
 6. Enable the payment method.
 
 Credentials are encrypted with keys derived from your WordPress authentication keys. You can set them as constants in wp-config.php instead (OPENRECEIVE_NWC_URI, OPENRECEIVE_LSC_URI_PRIMARY, OPENRECEIVE_LSC_URI_BACKUP); constants take precedence.
