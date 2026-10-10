@@ -655,6 +655,22 @@ onPaid: async ({ reference, query }) => {
 If your ORM can run statements on a connection you pass it, wrap `query`.
 [Node ORM recipes](node-orms.md) has a recipe for each ORM.
 
+**Supabase over HTTPS.** A server that cannot open a Postgres connection to
+Supabase, such as a Cloudflare Worker, replaces `db` and `onPaid` with
+`supabase`. See [Supabase over HTTPS](supabase.md#supabase-over-https).
+
+**Parameters**
+
+| Name | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `supabase` | `SupabaseStorageOptions` | yes | `{ url, key, fetch? }`: the project URL (`https://<project-ref>.supabase.co`), its secret key (`sb_secret_…`) or legacy `service_role` key, and optionally a `fetch` to use instead of the global one. The key stays on the server. |
+
+There is no `onPaid` in this mode, and passing one throws. Fulfillment is
+your SQL function `public.openreceive_on_paid(p_reference text,
+p_payment_hash text, p_paid_at bigint)`. It runs inside the settlement
+transaction, for the first settled attempt for a reference only. The tables
+and functions come from `openreceive scaffold payments --supabase`.
+
 As an advanced escape hatch, you can replace `db` with a full repository
 implementation.
 
@@ -1333,6 +1349,36 @@ Both must be durable CAS operations. Never use an in-process cooldown, because
 memory cannot coordinate separate workers. Handler construction throws if they
 are missing.
 
+### createSupabasePayments
+
+```ts
+const payments = createSupabasePayments({ url, key, fetch?, clock? }): SupabasePaymentRepository
+```
+
+**Where it fits:** The repository behind `createHost({ supabase })`. Call it
+directly only to hold the repository yourself, for example to list an
+order's attempts in an admin tool.
+
+It reaches Supabase over its HTTPS API. Each write goes through one of the
+SQL functions from `openreceive scaffold payments --supabase`, which takes the
+order's lock, checks that the rows it decided on have not changed, and
+writes, or makes the repository read again. Before its first call, and then
+once a minute, it checks the database and refuses to serve (503) if the
+functions are missing or from another version, `openreceive_on_paid` is
+missing or the placeholder, row level security is off, or `anon` or
+`authenticated` can reach any OpenReceive table or function.
+
+**Returns** `SupabasePaymentRepository`: the `PaymentRepository` methods
+listed under [createSqlPayments](#createsqlpayments), plus:
+
+| Name | Type | Meaning |
+| --- | --- | --- |
+| `recordSettlement` | `({ paymentHash, paidAt, details? }) => Promise<boolean>` | Records a pending attempt's settlement. For the reference's first settled attempt it runs `public.openreceive_on_paid` in the same transaction and resolves `true`. A failure there records nothing. |
+
+`recordSettlementWithFulfillment` throws: this repository takes no JS
+fulfillment. `listRepairCandidates`, `requeueAttempt` and `markPaidOnce` are
+SQL-repository only.
+
 ### paymentsSchemaSql
 
 ```ts
@@ -1618,6 +1664,7 @@ Every generated file includes the note about fulfilling each order exactly once.
 | Flag | Meaning |
 | --- | --- |
 | `--orm <name>` | `prisma \| drizzle \| typeorm \| sequelize \| knex`. |
+| `--supabase` | Instead of an ORM file, write `supabase/migrations/<timestamp>_openreceive.sql`: the tables, locked away from Supabase's Data API, the functions [Supabase over HTTPS](supabase.md#supabase-over-https) calls, and a placeholder `openreceive_on_paid`. Takes no other flag but `--out-dir` and `--force`. |
 | `--dialect <name>` | `postgres \| sqlite` (default `postgres`). |
 | `--table-name <name>` | Payment attempts table (default `openreceive_payments`). |
 | `--meta-table-name <name>` | Reconcile-gate table (default `openreceive_meta`). |

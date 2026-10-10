@@ -95,7 +95,7 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 8071
+      "bytes": 12634
     },
     {
       "path": "/guides/how-we-test-platforms",
@@ -266,7 +266,7 @@
       "slug": "storage",
       "title": "Payment Storage",
       "category": "operations",
-      "bytes": 5970
+      "bytes": 6533
     },
     {
       "path": "/guides/payment-safety-upgrade",
@@ -306,7 +306,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 126815
+      "bytes": 129593
     },
     {
       "path": "/guides/security",
@@ -506,7 +506,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 126815,
+      "bytes": 129593,
       "alias_of": "/guides/api-reference"
     },
     {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,10 +8,11 @@ import {
   parseScaffoldPaymentsArgv,
   renderScaffoldPaymentsFiles,
   runCli,
+  runScaffoldPayments,
 } from "../packages/js/node/src/cli.ts";
 import { OPENRECEIVE_DIALECTS, OPENRECEIVE_ORMS } from "../packages/js/node/src/scaffold/types.ts";
 import { canonicalPaymentsDdlStatements } from "../packages/js/node/src/scaffold/shared.ts";
-import { fulfillmentNote } from "../packages/js/core/src/index.ts";
+import { fulfillmentNote, supabasePaymentsMigrationSql } from "../packages/js/core/src/index.ts";
 import { paymentsSchemaSql } from "../packages/js/http/src/sql-payments.ts";
 
 const SCHEMA_PATHS = {
@@ -522,4 +523,69 @@ test("scaffold refuses to overwrite without --force", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("--supabase writes one Supabase migration and its guide, once", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "openreceive-scaffold-"));
+  const run = (argv, now) => {
+    const out = [];
+    return runScaffoldPayments({
+      argv,
+      cwd: dir,
+      stdout: { write: (message) => out.push(message) },
+      stderr: { write: () => {} },
+      isTTY: false,
+      now: () => now,
+    }).then((code) => ({ code, out: out.join("") }));
+  };
+  try {
+    const first = await run(["--supabase"], new Date("2026-10-10T21:04:05.678Z"));
+    assert.equal(first.code, 0);
+    assert.match(first.out, /wrote supabase\/migrations\/20261010210405_openreceive\.sql/);
+    const migration = await readFile(
+      path.join(dir, "supabase/migrations/20261010210405_openreceive.sql"),
+      "utf8",
+    );
+    assert.equal(migration, supabasePaymentsMigrationSql());
+    for (const required of [
+      "enable row level security",
+      "from public, anon, authenticated",
+      "to service_role",
+      "create or replace function public.openreceive_commit_attempt",
+      "create or replace function public.openreceive_record_settlement",
+      "perform public.openreceive_on_paid(",
+      "OPENRECEIVE_ON_PAID_NOT_IMPLEMENTED",
+    ])
+      assert.ok(migration.includes(required), required);
+    const guide = await readFile(path.join(dir, "OPENRECEIVE_PAYMENTS.md"), "utf8");
+    assert.match(guide, /storage: \{\n\s+supabase: \{ url: env\.SUPABASE_URL/);
+    assert.match(guide, /create or replace function public\.openreceive_on_paid/);
+    assert.match(guide, /Fulfilling exactly once/);
+    assert.doesNotMatch(guide, /onPaid:/);
+
+    // A second run neither duplicates the migration nor overwrites it silently.
+    await assert.rejects(run(["--supabase"], new Date("2026-10-11T00:00:00Z")), /--force/);
+    const forced = await run(["--supabase", "--force"], new Date("2026-10-11T00:00:00Z"));
+    assert.equal(forced.code, 0);
+    assert.deepEqual(await readdir(path.join(dir, "supabase/migrations")), [
+      "20261010210405_openreceive.sql",
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("--supabase takes no ORM, dialect or table names", () => {
+  for (const extra of [
+    ["--orm", "knex"],
+    ["--dialect", "sqlite"],
+    ["--table-name", "payments"],
+    ["--meta-table-name", "meta"],
+    ["--interactive"],
+  ])
+    assert.throws(
+      () => parseScaffoldPaymentsArgv(["--supabase", ...extra]),
+      /--supabase writes Supabase's own migration/,
+    );
+  assert.equal(parseScaffoldPaymentsArgv(["--supabase", "--out-dir", "app"]).supabase, true);
 });

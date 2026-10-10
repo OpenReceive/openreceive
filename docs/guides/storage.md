@@ -84,6 +84,17 @@ unpaid or paid.
 
 One row holds at most one provider swap order. A swap retry creates a new row.
 
+## Supabase over HTTPS
+
+A server that cannot open a Postgres connection to Supabase, such as a
+Cloudflare Worker, keeps the same two tables in Supabase and reaches them
+over Supabase's HTTPS API: pass `supabase: { url, key }` instead of `db`.
+`openreceive scaffold payments --supabase` writes the migration, which also
+holds the SQL functions that lock each reference while they write.
+Fulfillment is your SQL function `openreceive_on_paid`, run inside the
+settlement transaction, instead of `onPaid`. See
+[Supabase over HTTPS](supabase.md#supabase-over-https).
+
 ## Escape hatch
 
 If no supported `db` handle can reach your storage, implement

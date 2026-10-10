@@ -41,7 +41,11 @@ machine (`attention` reads as `pending` on the wire; operators see it only in
 settlement transaction); with a custom repository it receives
 `SettlementEvent<Transaction>` (`reference`, `paymentHash`, `paidAt`, `details`,
 and `transaction`). The repository awaits fulfillment before commit; failure
-rolls back both payment and host writes. Settlement
+rolls back both payment and host writes. On Cloudflare Workers, which cannot
+open a Postgres connection to Supabase, `createHost({ supabase: { url, key },
+amountFor })` keeps the same rows in Supabase over its HTTPS API, and the
+host's SQL function `openreceive_on_paid` fulfills inside the settlement
+transaction ([Supabase over HTTPS](https://github.com/openreceive/openreceive/blob/master/docs/guides/supabase.md#supabase-over-https)). Settlement
 piggybacks on mounted routes by default through the durable `openreceive_meta`
 gate (`opportunisticReconcile: false` disables, `{ minIntervalSeconds }`
 tunes); `startNotificationWorker` is the optional

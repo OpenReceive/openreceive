@@ -1,0 +1,41 @@
+# Supabase's Postgres and PostgREST for the Supabase lane of
+# `npm run test:supabase`: the Data API a Lovable or Workers app reaches over
+# HTTPS. tests/supabase/harness.mjs puts a small stand-in for Supabase's
+# API gateway in front of PostgREST and has the full commands.
+name: openreceive-supabase-test
+services:
+  db:
+    image: supabase/postgres:17.11.0.004
+    environment:
+      POSTGRES_PASSWORD: openreceive
+    volumes:
+      - ./roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-openreceive-test.sql:ro
+    ports:
+      - "127.0.0.1:56532:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "127.0.0.1"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+  rest:
+    image: postgrest/postgrest:v16.4
+    environment:
+      PGRST_DB_URI: postgres://authenticator:openreceive@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public, extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: openreceive-supabase-test-jwt-secret-32
+      PGRST_DB_CHANNEL_ENABLED: "true"
+      PGRST_ADMIN_SERVER_HOST: localhost
+      PGRST_ADMIN_SERVER_PORT: "3001"
+    ports:
+      - "127.0.0.1:56530:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 2s
+      timeout: 5s
+      retries: 60

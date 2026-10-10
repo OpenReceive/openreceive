@@ -30,6 +30,8 @@ const requiredWorkflows = {
     "npm run test:e2e:smoke",
     "npm run test:package-assets",
     "npm run test:orms",
+    // The Supabase repository over PostgREST, the storage Lovable apps use.
+    "npm run test:supabase",
     "tools/ci/ruby-tests.sh",
     "tools/ci/ruby-gem-build.sh",
     // The Python engine (packages/python/openreceive): pytest on 3.10 and 3.13

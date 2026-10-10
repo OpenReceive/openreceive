@@ -12,8 +12,9 @@ provider you configure converts the payment to **BTC over Lightning**, and it
 settles into the same wallet. Available assets and networks depend on the
 provider.
 
-Use OpenReceive 0.4.19 or newer. This guide adds the Supabase parts to a
-framework quickstart, so start from yours:
+Use OpenReceive 0.4.19 or newer, or 0.4.23 or newer for
+[Supabase over HTTPS](#supabase-over-https). This guide adds the Supabase
+parts to a framework quickstart, so start from yours:
 [Next.js](quickstart-next.md), [Express](quickstart-node.md),
 [Fastify](quickstart-fastify.md), [FastAPI](quickstart-fastapi.md) or
 [Django](quickstart-django.md).
@@ -24,13 +25,16 @@ framework quickstart, so start from yours:
 | --- | --- |
 | Node: Next.js (on Vercel or elsewhere), Express, Fastify | Yes |
 | Python: FastAPI, Django | Yes |
-| Cloudflare Workers, including Lovable's TanStack Start apps | Not yet |
+| Cloudflare Workers, including Lovable's TanStack Start apps | Yes, [over HTTPS](#supabase-over-https) |
 | Supabase Edge Functions (Deno), including Bolt's | Not yet |
 
 Supabase signs its database certificate with its own certificate authority.
 A Node or Python server can be told to trust it. A Cloudflare Worker cannot:
 Workers check a database's certificate against public authorities only, so
-the connection fails. OpenReceive's engine has not been tested on Deno.
+the connection fails. A Worker reaches Supabase through its HTTPS API
+instead, which [Supabase over HTTPS](#supabase-over-https) covers. Steps 1
+to 3 below are for servers with a Postgres connection; step 4 applies to
+both. OpenReceive's engine has not been tested on Deno.
 
 ## 1. Get the connection strings
 
@@ -182,15 +186,120 @@ from `@supabase/ssr`. In Python, read the session from your framework's own
 request. More on what `authorize` sees:
 [Authorization and the host](authorization.md).
 
+## Supabase over HTTPS
+
+Use this when your server cannot open a Postgres connection to Supabase: on
+Cloudflare Workers, which includes Lovable's apps. OpenReceive then talks to
+Supabase's HTTPS API (PostgREST) with your project's secret key. This is in
+`@openreceive/http`, for JavaScript servers only; a Python server uses the
+pooler.
+
+### 1. Write the migration
+
+```sh
+npx openreceive scaffold payments --supabase
+```
+
+This writes `supabase/migrations/<timestamp>_openreceive.sql` and an
+`OPENRECEIVE_PAYMENTS.md` guide. The migration creates the same two tables,
+with row level security on and every grant revoked from `anon` and
+`authenticated`. It also creates the functions OpenReceive calls to write
+them, and only your server key may call those. Apply it with
+`supabase db push`, or paste it into the SQL Editor. Applying it again is
+safe.
+
+### 2. Write `openreceive_on_paid`
+
+Fulfillment is a SQL function in your database, not a JS `onPaid`. The
+migration creates `public.openreceive_on_paid` as a placeholder that refuses
+every settlement. Replace it in a migration of your own:
+
+```sql
+create or replace function public.openreceive_on_paid(
+  p_reference text, p_payment_hash text, p_paid_at bigint
+) returns void language plpgsql as $$
+begin
+  update public.orders
+     set status = 'paid'
+   where id = p_reference::uuid   -- or just p_reference, if your ids are text
+     and status = 'pending';
+end
+$$;
+```
+
+It runs inside the transaction that records the payment, for the first
+settled attempt for a reference only. If it raises, nothing is recorded: the
+attempt stays pending and the next pass tries again. A second payment for the
+same order is recorded as `duplicate_settlement` and does not call it again.
+Keep it to database writes, as with `onPaid`.
+
+`create or replace` keeps the function private. If you drop and create it
+instead, run the `revoke` and `grant` lines from the scaffold's migration
+again: whoever can call it can mark an order paid.
+
+### 3. Wire the server
+
+```ts
+import { createStack } from "@openreceive/http";
+
+const stack = createStack({
+  wallet: { nwc: env.NWC_URI },
+  storage: {
+    supabase: { url: env.SUPABASE_URL, key: env.SUPABASE_SERVICE_ROLE_KEY },
+  },
+  amountFor,
+  authorize,
+});
+```
+
+- `url` is the project URL, `https://<project-ref>.supabase.co`.
+- `key` is the project's secret key (`sb_secret_…`) or its legacy
+  `service_role` key, from **Project Settings > API Keys**. It can read and
+  write every table, so keep it on the server: never in a `VITE_` or
+  `NEXT_PUBLIC_` variable, browser code or logs. The publishable key and the
+  anon key are refused.
+- On Cloudflare Workers, build the stack inside the request handler and
+  close it when the response is done, as the
+  [TanStack Start recipe](../recipes/tanstack-start.md) shows.
+
+### What the server checks
+
+Before it serves, the server asks the database for its OpenReceive status.
+It refuses to serve when the functions are missing or from another version,
+when `openreceive_on_paid` is missing or still the placeholder, when row
+level security is off, or when `anon` or `authenticated` can reach any
+OpenReceive table or function. The payment routes then answer 503, and the
+log line names the fix. A check that passes is trusted for a minute.
+
+### How it works
+
+PostgREST runs each HTTPS request as its own transaction, so OpenReceive
+cannot hold a lock across several requests. It reads the order's attempts,
+makes the same decisions as with a Postgres connection, and sends the write
+to a SQL function. The function takes the order's lock, checks that the rows
+have not changed since the read, and writes. If they have changed, it
+refuses, and OpenReceive reads again. The lock is the same one the Postgres
+connection takes, so a Node server on the pooler and a Worker over HTTPS can
+share one database.
+
+Each call is a round trip to Supabase. Creating a checkout takes 4 to 8 of
+them, one after another, and a request that also settles a payment takes
+about 14. Run your Worker near your Supabase region.
+
+There is no repair report over HTTPS (`listRepairCandidates`,
+`requeueAttempt`). Use the SQL Editor for the rare attempt in `attention`.
+
 ## How it runs on Supabase
 
 - **No worker or cron job.** Each request to the payment routes also checks
   the wallet for settled invoices, through a lock in your database. A payer
   who closes the tab is settled on the next request.
-- **One database.** Orders and payment attempts share it, so `onPaid` marks
-  the order paid in the same transaction that records the payment.
-- **No service role key.** OpenReceive talks SQL through the pooler. It never
-  uses the Data API or Supabase's service role key.
+- **One database.** Orders and payment attempts share it, so `onPaid` (or
+  `openreceive_on_paid`, over HTTPS) marks the order paid in the same
+  transaction that records the payment.
+- **A key only over HTTPS.** Through the pooler, OpenReceive talks SQL and
+  never uses the Data API or a secret key. Over HTTPS it uses the secret key,
+  on the server only.
 
 More detail: [Payment storage](storage.md), [Deploying](deploying.md),
 [Security](security.md).

@@ -95,6 +95,13 @@ export {
   paymentsSeedSql,
   paymentsStatusCheckSql,
 } from "./payments-ddl.ts";
+// The Supabase migration (tables plus the locked write functions) that
+// `@openreceive/http`'s HTTPS repository calls and the scaffold CLI emits.
+export {
+  OPENRECEIVE_ON_PAID_STUB_MARKER,
+  OPENRECEIVE_SUPABASE_FUNCTIONS_VERSION,
+  supabasePaymentsMigrationSql,
+} from "./payments-supabase.ts";
 export type {
   CachedPriceFeedOptions,
   BtcFiatRateMapWithSource,

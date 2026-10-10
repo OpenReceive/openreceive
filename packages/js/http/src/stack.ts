@@ -3,7 +3,11 @@ import { createOpenReceive, type OpenReceive } from "@openreceive/node";
 import { createRequestId, errorResponse, HttpError } from "./errors.ts";
 import type { CreateHttpHandlerOptions, HttpHandler } from "./handler.ts";
 import { createHttpHandler } from "./handler.ts";
-import type { CreateHostDbOptions, CreateHostRepositoryOptions } from "./host-payments.ts";
+import type {
+  CreateHostDbOptions,
+  CreateHostRepositoryOptions,
+  CreateHostSupabaseOptions,
+} from "./host-payments.ts";
 import { createHost } from "./host-payments.ts";
 import { normalizePrefix } from "./router.ts";
 
@@ -33,16 +37,23 @@ export type StackWallet =
  * database handle (`db`, the default mode) it is the per-reference
  * `PaymentSettlement`, with `reference` and the transactional `query`;
  * with a custom repository (`payments`, advanced) it includes the resolved
- * reference and the repository transaction handle. The branch carries the hook's type, so the
- * wrong signature is a type error rather than a runtime surprise.
+ * reference and the repository transaction handle. With a Supabase project
+ * reached over HTTPS (`supabase`) there is no `onPaid`: the host's SQL
+ * function `public.openreceive_on_paid` fulfills inside the settlement
+ * transaction. The branch carries the hook's type, so the wrong signature is
+ * a type error rather than a runtime surprise.
  */
 export type StackStorage<Transaction = unknown> =
-  | Pick<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments">
-  | Pick<CreateHostRepositoryOptions<Transaction>, "payments" | "onPaid" | "db" | "tableName">;
+  | Pick<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments" | "supabase">
+  | Pick<CreateHostSupabaseOptions, "supabase" | "onPaid" | "db" | "tableName" | "payments">
+  | Pick<
+      CreateHostRepositoryOptions<Transaction>,
+      "payments" | "onPaid" | "db" | "tableName" | "supabase"
+    >;
 
 export interface CreateStackOptions<Transaction = unknown>
   extends Omit<CreateHttpHandlerOptions, "service" | "host">,
-    Omit<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments"> {
+    Omit<CreateHostDbOptions, "db" | "tableName" | "onPaid" | "payments" | "supabase"> {
   readonly wallet: StackWallet;
   readonly storage: StackStorage<Transaction>;
   /**

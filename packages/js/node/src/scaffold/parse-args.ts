@@ -10,6 +10,8 @@ import {
 export interface ParsedScaffoldArgv {
   readonly help: boolean;
   readonly interactive: boolean;
+  /** Write Supabase's migration (tables plus functions) instead of an ORM schema. */
+  readonly supabase: boolean;
   readonly partial: Partial<ScaffoldPaymentsOptions> & {
     readonly force: boolean;
     readonly outDir: string;
@@ -19,6 +21,7 @@ export interface ParsedScaffoldArgv {
 export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffoldArgv {
   let help = false;
   let interactive = false;
+  let supabase = false;
   let orm: Orm | undefined;
   let dialect: Dialect | undefined;
   let tableName: string | undefined;
@@ -39,6 +42,10 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
     }
     if (arg === "--force") {
       force = true;
+      continue;
+    }
+    if (arg === "--supabase") {
+      supabase = true;
       continue;
     }
     if (arg === "--orm") {
@@ -94,9 +101,23 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
     throw new Error(`Unexpected option: ${arg}`);
   }
 
+  if (
+    supabase &&
+    (orm !== undefined ||
+      dialect !== undefined ||
+      tableName !== undefined ||
+      metaTableName !== undefined ||
+      interactive)
+  ) {
+    throw new Error(
+      "--supabase writes Supabase's own migration: it takes no --orm, --dialect, table names or --interactive.",
+    );
+  }
+
   return {
     help,
     interactive,
+    supabase,
     partial: {
       ...(orm === undefined ? {} : { orm }),
       ...(dialect === undefined ? {} : { dialect }),

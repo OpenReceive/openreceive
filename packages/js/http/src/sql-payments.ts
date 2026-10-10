@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
@@ -7,19 +6,24 @@ import {
   redactSecrets,
   unixSeconds,
 } from "@openreceive/core";
-import type { Checkout, SwapData } from "@openreceive/node";
 import { hostError } from "./errors.ts";
 import type { CheckoutCreatedInput } from "./handler.ts";
+import { checkpointMetaGate, claimMetaGate, type MetaStore } from "./meta-gate.ts";
 import {
-  type AttemptStatus,
   liveAttemptCommitDecision,
   type PaymentRecord,
   type PaymentRepository,
   paymentInsert,
-  type ReconcilableAttempt,
-  type ReconcileScheduler,
   type ReconciliationTransition,
 } from "./payment-repository.ts";
+import {
+  asInteger,
+  asString,
+  OPENRECEIVE_RECONCILE_BATCH_SIZE,
+  reconcilableFromRow,
+  recordFromRow,
+  settlementExpiresAt,
+} from "./payment-rows.ts";
 import {
   resolveSqlAdapter,
   type SqlClient,
@@ -31,27 +35,11 @@ import {
 /** Namespacing seed for the postgres per-reference advisory lock. */
 const ADVISORY_LOCK_SEED = 8_210_223;
 
-/** The one durable reconcile-gate row every worker shares. */
-const RECONCILE_GATE_META_KEY = "transaction_scan_gate";
-/** CAS retries under contention before reporting the gate busy. */
-const RECONCILE_GATE_CAS_RETRIES = 6;
-/**
- * Tolerance when reading a timestamp another worker wrote. Beyond it a claim
- * stamped in the future is a backwards clock step, not a fresh claim: without
- * this clamp the gate would read as busy until wall-clock time caught up.
- */
-const META_CLOCK_SKEW_SECONDS = 60;
 /** The `openreceive_meta` row recording which schema generation is installed. */
 const SCHEMA_VERSION_META_KEY = "schema_version";
 
 export { OPENRECEIVE_PAYMENTS_SCHEMA_VERSION } from "@openreceive/core";
-
-/**
- * Oldest-first page size for one reconciliation pass. A backlog of pending
- * attempts is drained over several passes instead of loading every row (and
- * scanning every invoice's window) in one unbounded query.
- */
-export const OPENRECEIVE_RECONCILE_BATCH_SIZE = 200 as const;
+export { OPENRECEIVE_RECONCILE_BATCH_SIZE } from "./payment-rows.ts";
 
 /**
  * Dialect-aware "that table is absent" sniffing for the schema-version probe.
@@ -66,29 +54,6 @@ function isMissingTableError(error: unknown, dialect: "postgres" | "sqlite"): bo
     return code === "42P01" || /relation .+ does not exist/i.test(message);
   }
   return /no such table/i.test(message);
-}
-
-interface StoredGate {
-  version: number;
-  claimed_at: number;
-  token: string;
-  lease_until: number;
-  interval_seconds: number;
-  scheduler: ReconcileScheduler;
-}
-function parseGate(value: unknown): StoredGate | undefined {
-  let gate: StoredGate;
-  try {
-    gate = JSON.parse(String(value)) as StoredGate;
-  } catch {
-    return undefined;
-  }
-  if (gate.version > 1)
-    throw new TypeError(
-      "A newer reconcile scheduler is installed; upgrade every application and worker together.",
-    );
-  // Derived legacy state can be discarded; payment rows are never altered.
-  return gate.version === 1 ? gate : undefined;
 }
 
 export interface SqlPaymentsOptions {
@@ -274,6 +239,35 @@ export function createSqlPayments(
     return schemaVersionChecked;
   };
 
+  // Drivers report affected rows differently, so the gate reads its writes back.
+  const metaStore: MetaStore = {
+    async read(key) {
+      const rows = await adapter.query(
+        statement(`SELECT value, rev FROM ${metaTable} WHERE key = ? LIMIT 1`),
+        [key],
+      );
+      return rows[0] === undefined ? undefined : { value: rows[0].value, rev: rows[0].rev };
+    },
+    async insertIfAbsent(key, value) {
+      await adapter.query(
+        statement(
+          adapter.dialect === "postgres"
+            ? `INSERT INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0) ON CONFLICT (key) DO NOTHING`
+            : `INSERT OR IGNORE INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0)`,
+        ),
+        [key, value],
+      );
+      return undefined;
+    },
+    async compareAndSet(key, value, rev) {
+      await adapter.query(
+        statement(`UPDATE ${metaTable} SET value = ?, rev = rev + 1 WHERE key = ? AND rev = ?`),
+        [value, key, rev],
+      );
+      return undefined;
+    },
+  };
+
   return {
     async listForReference(reference) {
       await assertSupportedSchema();
@@ -302,14 +296,7 @@ export function createSqlPayments(
           OPENRECEIVE_RECONCILE_BATCH_SIZE,
         ],
       );
-      return rows.map(
-        (row): ReconcilableAttempt => ({
-          paymentHash: asString(row.payment_hash, "payment_hash"),
-          createdAt: asInteger(row.created_at, "created_at"),
-          createdAtSource: savedCheckout(row).createdAtSource ?? "host",
-          expiresAt: settlementExpiresAt(row),
-        }),
-      );
+      return rows.map(reconcilableFromRow);
     },
 
     async findPendingAttempt(paymentHash) {
@@ -322,106 +309,17 @@ export function createSqlPayments(
         ),
         [paymentHash.toLowerCase()],
       );
-      const row = rows[0];
-      if (row === undefined) return undefined;
-      return {
-        paymentHash: asString(row.payment_hash, "payment_hash"),
-        createdAt: asInteger(row.created_at, "created_at"),
-        createdAtSource: savedCheckout(row).createdAtSource ?? "host",
-        expiresAt: settlementExpiresAt(row),
-      };
+      return rows[0] === undefined ? undefined : reconcilableFromRow(rows[0]);
     },
 
-    async claimReconcileGate({ now, intervalSeconds, leaseSeconds = 10 }) {
+    async claimReconcileGate(input) {
       await assertSupportedSchema();
-      const token = randomUUID();
-      const insertIfAbsent =
-        adapter.dialect === "postgres"
-          ? `INSERT INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0) ON CONFLICT (key) DO NOTHING`
-          : `INSERT OR IGNORE INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0)`;
-      for (let attempt = 0; attempt < RECONCILE_GATE_CAS_RETRIES; attempt += 1) {
-        const rows = await adapter.query(
-          statement(`SELECT value, rev FROM ${metaTable} WHERE key = ? LIMIT 1`),
-          [RECONCILE_GATE_META_KEY],
-        );
-        const current = rows[0];
-        const gate = current === undefined ? undefined : parseGate(current.value);
-        if (
-          gate !== undefined &&
-          isFreshTimestamp(
-            now,
-            gate.claimed_at,
-            Math.max(intervalSeconds, gate.interval_seconds ?? 2),
-          )
-        )
-          return null;
-        if (
-          gate !== undefined &&
-          gate.claimed_at <= now + META_CLOCK_SKEW_SECONDS &&
-          gate.lease_until > now
-        )
-          return null;
-        const scheduler = gate?.scheduler ?? { cursor: null, windows: [] };
-        const claimValue = JSON.stringify({
-          version: 1,
-          claimed_at: now,
-          token,
-          lease_until: now + leaseSeconds,
-          interval_seconds: intervalSeconds,
-          scheduler,
-        });
-        if (current === undefined) {
-          await adapter.query(statement(insertIfAbsent), [RECONCILE_GATE_META_KEY, claimValue]);
-        } else {
-          await adapter.query(
-            statement(`UPDATE ${metaTable} SET value = ?, rev = rev + 1 WHERE key = ? AND rev = ?`),
-            [claimValue, RECONCILE_GATE_META_KEY, asInteger(current.rev, "rev")],
-          );
-        }
-        const readback = await adapter.query(
-          statement(`SELECT value FROM ${metaTable} WHERE key = ? LIMIT 1`),
-          [RECONCILE_GATE_META_KEY],
-        );
-        if (readback[0] !== undefined && String(readback[0].value) === claimValue)
-          return { token, scheduler };
-      }
-      return null;
+      return claimMetaGate(metaStore, input);
     },
 
-    async checkpointReconcileGate({ claim, scheduler, now, release = false, intervalSeconds }) {
+    async checkpointReconcileGate(input) {
       await assertSupportedSchema();
-      if (
-        scheduler.windows.length > 2 ||
-        scheduler.windows.some(
-          (window) => window.attempts.length > OPENRECEIVE_RECONCILE_BATCH_SIZE,
-        )
-      )
-        throw new RangeError("Reconcile progress exceeds its cohort bound.");
-      const rows = await adapter.query(
-        statement(`SELECT value, rev FROM ${metaTable} WHERE key = ? LIMIT 1`),
-        [RECONCILE_GATE_META_KEY],
-      );
-      const current = rows[0];
-      if (current === undefined) return false;
-      const gate = parseGate(current.value);
-      if (gate?.token !== claim.token || gate.lease_until <= now) return false;
-      const value = JSON.stringify({
-        ...gate,
-        scheduler,
-        lease_until: release ? 0 : gate.lease_until,
-        interval_seconds: intervalSeconds ?? gate.interval_seconds,
-      });
-      if (new TextEncoder().encode(value).length > 131072)
-        throw new RangeError("Reconcile progress exceeds 128 KiB.");
-      await adapter.query(
-        statement(`UPDATE ${metaTable} SET value = ?, rev = rev + 1 WHERE key = ? AND rev = ?`),
-        [value, RECONCILE_GATE_META_KEY, asInteger(current.rev, "rev")],
-      );
-      const readback = await adapter.query(
-        statement(`SELECT value FROM ${metaTable} WHERE key = ? LIMIT 1`),
-        [RECONCILE_GATE_META_KEY],
-      );
-      return readback[0]?.value === value;
+      return checkpointMetaGate(metaStore, input);
     },
 
     async listRepairCandidates({ after = "", limit = 100 } = {}) {
@@ -640,68 +538,6 @@ export function createSqlPayments(
   }
 }
 
-/** True when `timestamp` is inside `windowSeconds` of `now`, allowing for skew. */
-function isFreshTimestamp(now: number, timestamp: number, windowSeconds: number): boolean {
-  const age = now - timestamp;
-  // A timestamp far in the future is a clock that stepped backwards, not a
-  // fresh write: clamping it to stale keeps a rewound clock from freezing the
-  // gate until wall-clock time catches up.
-  if (age < -META_CLOCK_SKEW_SECONDS) return false;
-  return age < windowSeconds;
-}
-
-function recordFromRow(row: Record<string, unknown>): PaymentRecord {
-  const swapData = row.swap_data;
-  const paymentHash = asString(row.payment_hash, "payment_hash");
-  return {
-    reference: asString(row.reference, "reference"),
-    paymentHash,
-    status: asStatus(row.status),
-    statusReason: row.status_reason === undefined ? null : (row.status_reason as string | null),
-    paidAt:
-      row.paid_at === null || row.paid_at === undefined ? null : asInteger(row.paid_at, "paid_at"),
-    expiresAt: asInteger(row.expires_at, "expires_at"),
-    createdAt: asInteger(row.created_at, "created_at"),
-    checkout: parseRowJson(
-      asString(row.checkout_data, "checkout_data"),
-      "checkout_data",
-      paymentHash,
-    ) as Checkout,
-    swapData:
-      swapData === null || swapData === undefined
-        ? null
-        : (parseRowJson(asString(swapData, "swap_data"), "swap_data", paymentHash) as SwapData),
-  };
-}
-
-/** The saved invoice, rather than the reusable deposit instructions, sets this deadline. */
-function savedCheckout(
-  row: Record<string, unknown>,
-): Pick<Checkout, "expiresAt" | "createdAtSource"> {
-  const hash = asString(row.payment_hash, "payment_hash");
-  const checkout = parseRowJson(
-    asString(row.checkout_data, "checkout_data"),
-    "checkout_data",
-    hash,
-  );
-  if (typeof checkout === "object" && checkout !== null) {
-    const saved = checkout as Record<string, unknown>;
-    const value = saved.expiresAt ?? saved.expires_at;
-    if (typeof value === "number" && Number.isSafeInteger(value) && value > 0)
-      return {
-        expiresAt: value,
-        createdAtSource:
-          (saved.createdAtSource ?? saved.created_at_source) === "wallet" ? "wallet" : "host",
-      };
-  }
-  throw new TypeError(
-    `Invalid checkout_data invoice expiry on openreceive payment attempt ${hash}.`,
-  );
-}
-function settlementExpiresAt(row: Record<string, unknown>): number {
-  return savedCheckout(row).expiresAt;
-}
-
 function repairCandidate(row: Record<string, unknown>): PaymentRepairCandidate | null {
   if (row.status !== "expired" && row.status !== "attention") return null;
   const expires = settlementExpiresAt(row);
@@ -727,65 +563,6 @@ function repairCandidate(row: Record<string, unknown>): PaymentRepairCandidate |
     settlementExpiresAt: expires,
     category: early ? "early_swap_closure" : "attention",
   };
-}
-
-/**
- * Parse a JSON column, naming the row so a corrupt value is a storage problem
- * an operator can locate rather than a bare SyntaxError from somewhere in the
- * payment path. The message carries the column and payment hash only — never
- * the value, which may hold server-only swap credentials.
- */
-function parseRowJson(value: string, column: string, paymentHash: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    throw new TypeError(
-      `Corrupt ${column} JSON on openreceive payment attempt ${paymentHash}; the row cannot be read.`,
-    );
-  }
-}
-
-const ATTEMPT_STATUSES: readonly AttemptStatus[] = [
-  "pending",
-  "settled",
-  "expired",
-  "failed",
-  "attention",
-];
-
-function asStatus(value: unknown): AttemptStatus {
-  if (typeof value === "string" && (ATTEMPT_STATUSES as readonly string[]).includes(value)) {
-    return value as AttemptStatus;
-  }
-  throw new TypeError(`Unexpected openreceive_payments status: ${String(value)}`);
-}
-
-function asString(value: unknown, field: string): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "bigint") return String(value);
-  throw new TypeError(`Expected ${field} to be a string.`);
-}
-
-/**
- * Read an integer column. Every numeric column this repository reads is a
- * count, a revision, or a unix-seconds timestamp, and pg returns BIGINT as a
- * string — so integral strings are accepted while fractions are rejected, and
- * no future reuse of this helper can quietly turn a money column into a binary
- * float.
- */
-function asInteger(value: unknown, field: string): number {
-  if (typeof value === "number" && Number.isSafeInteger(value)) return value;
-  if (typeof value === "bigint") {
-    if (value < BigInt(Number.MIN_SAFE_INTEGER) || value > BigInt(Number.MAX_SAFE_INTEGER)) {
-      throw new TypeError(`Expected ${field} to fit a safe integer.`);
-    }
-    return Number(value);
-  }
-  if (typeof value === "string" && /^\s*-?\d+\s*$/.test(value)) {
-    const parsed = Number(value.trim());
-    if (Number.isSafeInteger(parsed)) return parsed;
-  }
-  throw new TypeError(`Expected ${field} to be an integer.`);
 }
 
 function assertSafeIdentifier(name: string): void {

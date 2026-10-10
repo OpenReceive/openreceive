@@ -1,7 +1,9 @@
+import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as defaultStdin, stdout as defaultStdout } from "node:process";
 import { finalizeScaffoldOptions, parseScaffoldPaymentsArgv } from "./parse-args.ts";
 import { renderScaffoldPaymentsFiles } from "./render.ts";
+import { renderSupabaseFiles, supabaseMigrationPath } from "./supabase.ts";
 import type { ScaffoldPrompt } from "./wizard.ts";
 import { resolveScaffoldPaymentsOptions } from "./wizard.ts";
 import { writeScaffoldFiles } from "./write-files.ts";
@@ -12,13 +14,18 @@ Usage: openreceive scaffold payments [options]
 
 Emits one schema/migration file for your ORM — openreceive_payments and the
 openreceive_meta reconcile gate together — plus an OPENRECEIVE_PAYMENTS.md
-wiring guide, nothing else. OpenReceive owns the
+wiring guide, nothing else. With --supabase it emits a Supabase migration
+instead, for servers that reach Supabase over its HTTPS API (Cloudflare
+Workers, Lovable). OpenReceive owns the
 payment-attempt repository logic (locking, settlement write-once,
 reconciliation) at runtime; the generated files never contain it.
 OpenReceive never opens a database connection or runs migrations.
 
 Options:
   --orm <name>              prisma | drizzle | typeorm | sequelize | knex
+  --supabase                supabase/migrations/<timestamp>_openreceive.sql:
+                            the tables, locked away from the Data API, plus
+                            the functions storage: { supabase } calls
   --dialect <name>          postgres | sqlite (default: postgres)
   --table-name <name>       Payment attempts table (default: openreceive_payments)
   --meta-table-name <name>  Reconcile-gate table (default: openreceive_meta)
@@ -32,6 +39,7 @@ Examples:
   npx openreceive scaffold payments --orm prisma
   npx openreceive scaffold payments --orm knex --dialect sqlite
   npx openreceive scaffold payments --orm drizzle --dialect sqlite --out-dir ./backend
+  npx openreceive scaffold payments --supabase
 `.trim();
 
 export interface RunScaffoldPaymentsInput {
@@ -42,6 +50,8 @@ export interface RunScaffoldPaymentsInput {
   readonly stdin?: NodeJS.ReadableStream;
   readonly isTTY?: boolean;
   readonly prompt?: ScaffoldPrompt;
+  /** The clock that stamps a new Supabase migration's file name. */
+  readonly now?: () => Date;
 }
 
 export async function runScaffoldPayments(input: RunScaffoldPaymentsInput): Promise<number> {
@@ -50,6 +60,7 @@ export async function runScaffoldPayments(input: RunScaffoldPaymentsInput): Prom
     input.stdout.write(`${SCAFFOLD_PAYMENTS_HELP}\n`);
     return 0;
   }
+  if (parsed.supabase) return runSupabaseScaffold(input, parsed.partial);
 
   const canPrompt =
     input.isTTY ??
@@ -80,6 +91,37 @@ export async function runScaffoldPayments(input: RunScaffoldPaymentsInput): Prom
   });
 
   printSummary(input.stdout, options, result);
+  return 0;
+}
+
+async function runSupabaseScaffold(
+  input: RunScaffoldPaymentsInput,
+  options: { readonly outDir: string; readonly force: boolean },
+): Promise<number> {
+  const root = path.resolve(input.cwd, options.outDir);
+  const migration = await supabaseMigrationPath(root, input.now?.() ?? new Date());
+  input.stdout.write("OpenReceive scaffold payments --supabase\n");
+  input.stdout.write(`  out-dir:      ${options.outDir}\n`);
+  input.stdout.write("\nWriting files…\n");
+  const result = await writeScaffoldFiles({
+    cwd: input.cwd,
+    outDir: options.outDir,
+    force: options.force,
+    files: renderSupabaseFiles(migration),
+  });
+  for (const file of result.written) input.stdout.write(`  wrote ${file}\n`);
+  input.stdout.write("\nDone.\n");
+  input.stdout.write("Next:\n");
+  input.stdout.write("  1. Read OPENRECEIVE_PAYMENTS.md\n");
+  input.stdout.write("  2. Apply the migration (supabase db push, or the SQL Editor)\n");
+  input.stdout.write(
+    "  3. Replace public.openreceive_on_paid, in a migration of your own, with the\n" +
+      "     SQL that marks the order paid; until then every settlement is refused\n",
+  );
+  input.stdout.write(
+    "  4. Wire createStack({ storage: { supabase: { url, key } }, ... }) with the\n" +
+      "     project's secret key, kept on the server\n",
+  );
   return 0;
 }
 

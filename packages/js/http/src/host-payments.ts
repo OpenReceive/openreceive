@@ -16,10 +16,15 @@ import {
 } from "./payment-repository.ts";
 import type { SqlDatabase } from "./sql-adapters.ts";
 import { createSqlPayments, type PaymentSettlementHook } from "./sql-payments.ts";
+import {
+  createSupabasePayments,
+  isSupabasePayments,
+  type SupabaseStorageOptions,
+} from "./supabase-payments.ts";
 
-// The mounted-route host integration: turn a host's price hook plus either a
-// database handle or a custom repository into the `Host` the handler
-// talks to. The repository contract and its decisions live in
+// The mounted-route host integration: turn a host's price hook plus a
+// database handle, a Supabase project, or a custom repository into the `Host`
+// the handler talks to. The repository contract and its decisions live in
 // payment-repository.ts; the wallet-scan passes live in reconcile-loop.ts.
 
 /**
@@ -58,6 +63,23 @@ export interface CreateHostDbOptions extends CreateOpenReceiveHostBaseOptions {
   readonly tableName?: string;
   readonly onPaid: PaymentSettlementHook;
   readonly payments?: never;
+  readonly supabase?: never;
+}
+
+/**
+ * Supabase over its HTTPS API, for runtimes that cannot open a Postgres
+ * connection to Supabase (Cloudflare Workers, Lovable). The tables and the
+ * write functions come from `openreceive scaffold payments --supabase`, and
+ * fulfillment is the host's SQL function `public.openreceive_on_paid`, which
+ * runs inside the settlement transaction for the first settled attempt for a
+ * reference only. There is no JS `onPaid` in this mode.
+ */
+export interface CreateHostSupabaseOptions extends CreateOpenReceiveHostBaseOptions {
+  readonly supabase: SupabaseStorageOptions;
+  readonly onPaid?: never;
+  readonly db?: never;
+  readonly tableName?: never;
+  readonly payments?: never;
 }
 
 /** Custom fulfillment receives the resolved reference and its transaction handle. */
@@ -74,10 +96,12 @@ export interface CreateHostRepositoryOptions<Transaction = unknown>
   readonly onPaid: SettlementEventHook<Transaction>;
   readonly db?: never;
   readonly tableName?: never;
+  readonly supabase?: never;
 }
 
 export type CreateHostOptions<Transaction = unknown> =
   | CreateHostDbOptions
+  | CreateHostSupabaseOptions
   | CreateHostRepositoryOptions<Transaction>;
 
 export interface Host {
@@ -89,10 +113,10 @@ export interface Host {
 
 /**
  * Build the mounted-route host integration around the host's price hook and
- * either the host database handle (`db`, default) or a custom payment
- * repository (`payments`, advanced). Attempt selection, commit locking,
- * settlement write-once, and reconciliation transitions are library-owned in
- * `db` mode.
+ * the host database handle (`db`, default), a Supabase project reached over
+ * HTTPS (`supabase`), or a custom payment repository (`payments`, advanced).
+ * Attempt selection, commit locking, settlement write-once, and
+ * reconciliation transitions are library-owned in `db` and `supabase` mode.
  */
 export function createHost<Transaction = unknown>(options: CreateHostOptions<Transaction>): Host {
   if (options?.amountFor === undefined) {
@@ -102,7 +126,19 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
         "null for an unknown reference. https://openreceive.org/guides/api-reference.md#createhost",
     );
   }
-  if (options.onPaid === undefined) {
+  if (options.supabase !== undefined) {
+    if (
+      options.onPaid !== undefined ||
+      options.db !== undefined ||
+      options.payments !== undefined
+    ) {
+      throw new TypeError(
+        "OpenReceive Supabase storage takes no onPaid, db or payments: fulfillment is your SQL " +
+          "function public.openreceive_on_paid, which runs inside the settlement transaction. " +
+          "https://openreceive.org/guides/supabase.md#supabase-over-https",
+      );
+    }
+  } else if (options.onPaid === undefined) {
     throw new TypeError(
       "OpenReceive host requires onPaid (per-reference settlement context in db mode; the raw " +
         "transaction context in custom repository mode). Pass onPaid to write fulfillment atomically " +
@@ -112,18 +148,35 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
 
   let payments: PaymentRepository;
   let onPaid: NodeSettlementActionHook;
-  if (options.db !== undefined) {
+  if (options.supabase !== undefined) {
+    const repository = createSupabasePayments({
+      ...options.supabase,
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
+    });
+    payments = repository;
+    onPaid = async (input) => {
+      await repository.recordSettlement(input);
+      await assertSettlementCommitted(repository, input.paymentHash);
+    };
+  } else if (options.db !== undefined) {
     const repository = createSqlPayments(options.db, {
       ...(options.tableName === undefined ? {} : { tableName: options.tableName }),
       ...(options.clock === undefined ? {} : { clock: options.clock }),
     });
     payments = repository;
-    const fulfill = options.onPaid as PaymentSettlementHook;
+    const fulfill = options.onPaid;
     onPaid = async (input) => {
       await repository.markPaidOnce(input, fulfill);
       await assertSettlementCommitted(repository, input.paymentHash);
     };
   } else {
+    if (isSupabasePayments(options.payments)) {
+      throw new TypeError(
+        "A Supabase repository fulfills in SQL (public.openreceive_on_paid), so it takes no JS " +
+          "onPaid. Pass supabase: { url, key } instead of payments. " +
+          "https://openreceive.org/guides/supabase.md#supabase-over-https",
+      );
+    }
     if (options.payments?.listForReference === undefined) {
       throw new TypeError(
         "OpenReceive host requires db or payments.listForReference. Pass db (your database " +
@@ -165,8 +218,9 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
       );
     payments = options.payments;
     const custom = options.payments;
+    const fulfill = options.onPaid;
     onPaid = async (settlement) => {
-      await custom.recordSettlementWithFulfillment(settlement, options.onPaid);
+      await custom.recordSettlementWithFulfillment(settlement, fulfill);
       await assertSettlementCommitted(custom, settlement.paymentHash);
     };
   }

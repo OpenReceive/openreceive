@@ -2,6 +2,26 @@
 
 ## 0.4.23 - Unreleased
 
+- Added (JS): Supabase storage over Supabase's HTTPS API, for servers that
+  cannot open a Postgres connection to Supabase. A Cloudflare Worker (and so
+  every Lovable app) cannot: Supabase's database certificate comes from a
+  private authority, and a Worker's sockets accept none. Pass
+  `storage: { supabase: { url, key } }` to `createStack`, or `supabase` to
+  `createHost`, with the project's secret key or `service_role` key.
+  `npx openreceive scaffold payments --supabase` writes the Supabase
+  migration: the same two tables, locked away from the Data API, and SQL
+  functions that take the reference lock, check that the rows the library
+  decided on are unchanged, and write. Fulfillment is the host's SQL function
+  `openreceive_on_paid`, which runs inside the settlement transaction for the
+  first settled attempt, so a failure there records nothing. Before serving,
+  the repository checks the database and answers 503 if the functions are
+  missing or another version, `openreceive_on_paid` is missing or still the
+  placeholder, row level security is off, or `anon` or `authenticated` can
+  reach any OpenReceive table or function. A new CI lane runs it against
+  Supabase's Postgres image and PostgREST, including concurrent creates and
+  settlements. Guide: /guides/supabase#supabase-over-https.
+- Changed (JS): the SQL repository's reconcile gate and row parsing moved into
+  modules shared with the Supabase repository. Behaviour is unchanged.
 - Added (release): the WordPress plugin is published to the
   [WordPress.org plugin directory](https://wordpress.org/plugins/openreceive/).
   Publishing a GitHub release starts the new `Publish WordPress.org` workflow.

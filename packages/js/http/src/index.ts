@@ -41,6 +41,7 @@ export type {
   CreateHostDbOptions,
   CreateHostOptions,
   CreateHostRepositoryOptions,
+  CreateHostSupabaseOptions,
   Host,
   HostCheckoutPrice,
   SettlementEvent,
@@ -120,6 +121,11 @@ export {
   OPENRECEIVE_RECONCILE_BATCH_SIZE,
   paymentsSchemaSql,
 } from "./sql-payments.ts";
+export type {
+  SupabasePaymentRepository,
+  SupabaseStorageOptions,
+} from "./supabase-payments.ts";
+export { createSupabasePayments } from "./supabase-payments.ts";
 export type {
   CreateStackOptions,
   Stack,
