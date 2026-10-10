@@ -388,7 +388,7 @@ Each `platforms[]` row carries:
 | `guide_path`, `guide_source` | The full guide. The platform page renders `guide_source` below its header. |
 | `prompt` | Text for a Copy prompt button, or null. Copy it verbatim. |
 | `starter` | `{ label, url, source_url }` or null. `url` is a one-click deploy link. |
-| `tested` | `{ date, release }` of the latest passing live run, or null |
+| `tested` | `{ date, release, agents? }` of the latest passing agent trials, or null. `agents` lists the coding agents and models that ran them, as `agent/model` (`cursor/grok-4.7-medium-fast`, `codex/default`) |
 
 Logos are the site's own, like the framework logos. This repo sends facts, not
 artwork or marketing copy.

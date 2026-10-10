@@ -232,3 +232,20 @@ test("debug-report always exits 0, even with nothing configured", async () => {
   assert.equal(code, 0);
   assert.match(out.join(""), /NWC_URI: missing/);
 });
+
+// Trial agents ran `npx openreceive@0.4.21 doctor --help` to read its usage;
+// it answered "Unexpected option: --help" and exit 1.
+test("doctor --help prints the usage and exits 0", async () => {
+  for (const flag of ["--help", "-h"]) {
+    const out = [];
+    const code = await runCli({
+      argv: ["doctor", "--db", "shop.sqlite", flag],
+      env: {},
+      cwd: EMPTY_CWD,
+      stdout: { write: (message) => out.push(message) },
+      stderr: { write: () => undefined },
+    });
+    assert.equal(code, 0, flag);
+    assert.match(out.join(""), /--offline/, flag);
+  }
+});

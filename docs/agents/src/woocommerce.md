@@ -144,13 +144,19 @@ pay on the order-pay link from their own wallet; afterwards
 `wp wc shop_order get <order id> --user=<admin user id> --field=status` is no
 longer `pending`.
 
-Setup ends here. Once doctor is clean and the user has the link, say that setup
-is finished, in one message. Do not install mail software, add containers or
-services, or set up cron. If doctor's "Reconcile scheduled" check fails, fix
-that. On a store with little traffic, add one sentence to that message: a
-system cron for WordPress scheduled work settles orders sooner, and this setup
-does not add one. State it as a recommendation. Do not offer to set it up or
-end the message on a question.
+Setup ends here. Once doctor is clean and the user has the link, your last
+message starts "Setup is finished" and has at most six short lines: the pay
+link, the methods the checkout offers (Bitcoin, plus USDT, USDC, ETH and SOL
+when the swap code is saved), and one line of what to look at. Do not list
+each coin's availability, mention a minimum, or say a coin will not work: a
+provider minimum depends on the order total, and the user's own orders will
+differ. Do not list what you changed or what doctor checked. Send nothing
+after it. Do not install mail software, add containers or services, or set up
+cron. If doctor's "Reconcile scheduled" check fails, fix that. On a store with
+little traffic, add one sentence to that message: a system cron for WordPress
+scheduled work settles orders sooner, and this setup does not add one. State
+it as a recommendation. Do not offer to set it up or end the message on a
+question.
 
 ## Non-negotiables
 

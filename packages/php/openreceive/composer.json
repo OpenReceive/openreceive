@@ -14,7 +14,7 @@
     "ext-json": "*",
     "ext-mbstring": "*",
     "ext-pdo": "*",
-    "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20",
+    "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
     "dsbaars/nostr-php-nwc": "^0.0.1",
     "psr/http-client": "^1.0",
     "psr/http-factory": "^1.0",

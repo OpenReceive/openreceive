@@ -239,3 +239,19 @@ def test_transport_close_ends_subscription(relay: FakeRelay) -> None:
     subscriber.thread.join(timeout=5)
     assert not subscriber.thread.is_alive()
     assert subscriber.error is not None and subscriber.error.kind == "closed"
+
+
+def test_tls13_session_tickets_never_stall_a_request(
+    monkeypatch: pytest.MonkeyPatch, wallet: FakeWallet
+) -> None:
+    # Regression: websockets' threading client read a TLS 1.3 server's
+    # NewSessionTicket records on its background thread while the caller wrote
+    # the upgrade request on the same connection, which lost the request:
+    # "timed out while waiting for handshake response" on some of these opens
+    # (one in five against relay-nwc.rizful.com). The client stays at TLS 1.2.
+    with FakeRelay(wallet, tls=True) as relay:
+        monkeypatch.setenv("SSL_CERT_FILE", relay.ca_file)
+        transport = _transport(relay, encryption="nip44_v2")
+        for _ in range(40):
+            reply = transport.request("get_info", {}, deadline_seconds=3.0)
+            assert reply["result_type"] == "get_info"

@@ -129,14 +129,18 @@ host = Host(
     ),
 )
 
-app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine))
-app.include_router(
+# The router carries the options. Build it before the lifespan: through
+# 0.4.21 the lifespan bound first and refused the router's options.
+router = openreceive_router(
+    host,
+    engine=engine,
     # Recommended for public web shops: `rate_limiting=True` caps invoice
     # creation at 60 per client IP per hour. Leave it off (the default) for
     # point-of-sale deployments, where many payers share the terminal's IP.
-    openreceive_router(host, engine=engine, rate_limiting=True),
-    prefix="/openreceive",
+    rate_limiting=True,
 )
+app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine))
+app.include_router(router, prefix="/openreceive")
 ```
 
 `authorize` receives the Starlette `Request`. Cookies, headers, and whatever

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from django.core.management import call_command
+from django.core.management import call_command, execute_from_command_line
 
 from openreceive.django import conf
 from openreceive.django.management.commands import openreceive_notifications as worker_command
@@ -54,6 +54,35 @@ def test_install_writes_the_host_module_and_prints_the_wiring(tmp_path: Path) ->
     call_command(
         "openreceive_install", "testapp", path=str(tmp_path), force=True, stdout=StringIO()
     )
+
+
+def test_install_runs_before_the_host_module_exists(
+    tmp_path: Path, settings: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The quickstart order: settings name the module first, then install
+    # writes it. call_command skips system checks, so run the command the way
+    # `manage.py openreceive_install` does.
+    settings.OPENRECEIVE = {"HOST": "testapp.openreceive_host.Host"}
+    execute_from_command_line(
+        ["manage.py", "openreceive_install", "testapp", "--path", str(tmp_path)]
+    )
+    assert (tmp_path / "openreceive_host.py").exists()
+    assert "Wrote " in capsys.readouterr().out
+
+
+def test_doctor_reports_a_missing_host_module(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Any,
+    app: OpenReceiveApp,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("NWC_URI", raising=False)
+    settings.OPENRECEIVE = {"HOST": "testapp.openreceive_host.Host"}
+    with pytest.raises(SystemExit) as exit_info:
+        execute_from_command_line(["manage.py", "openreceive_doctor", "--offline"])
+    assert exit_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "host: " in out and "testapp.openreceive_host" in out
 
 
 def test_install_refuses_an_unknown_app() -> None:

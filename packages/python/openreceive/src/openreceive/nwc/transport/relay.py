@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ssl
 import time
 from typing import Any
 
@@ -12,6 +13,22 @@ from websockets.sync.client import ClientConnection, connect
 from .errors import TransportError
 
 Frame = list[Any]
+
+
+def _tls_context() -> ssl.SSLContext:
+    """Certificate-checked TLS, at most 1.2.
+
+    websockets' threading client reads on a background thread while the caller
+    writes the upgrade request. A TLS 1.3 server sends its session tickets
+    after the handshake, and when the reader takes them in during that write
+    the request is lost: the open then waits out its deadline ("timed out while
+    waiting for handshake response"). TLS 1.2 delivers tickets inside the
+    handshake, so nothing races. Built per connection, so it reads the trust
+    store in effect at the time.
+    """
+    context = ssl.create_default_context()
+    context.maximum_version = ssl.TLSVersion.TLSv1_2
+    return context
 
 
 class RelaySession:
@@ -34,7 +51,13 @@ class RelaySession:
             raise TransportError("deadline", f"deadline passed before connecting to {url}")
         try:
             # Cleanup after an expired scan must not wait for a closing handshake.
-            connection = connect(url, open_timeout=remaining, close_timeout=0, max_size=2**22)
+            connection = connect(
+                url,
+                open_timeout=remaining,
+                close_timeout=0,
+                max_size=2**22,
+                ssl=_tls_context() if url.lower().startswith("wss://") else None,
+            )
         except TimeoutError as exc:
             raise TransportError("deadline", f"connecting to {url} timed out") from exc
         except Exception as exc:  # OSError, InvalidURI, InvalidHandshake, ...

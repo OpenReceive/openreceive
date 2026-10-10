@@ -43,6 +43,11 @@ dependency. A host therefore installs exactly one framework's peer set and nothi
 else. The unscoped `openreceive` package is only the CLI. The library ships as
 the scoped packages.
 
+The Python NWC client stays inside `openreceive` (`openreceive.nwc`), receive
+side only. The Ruby engine uses the separate nwc-ruby gem; a separate Python
+package would mirror that, but it is not worth a second release pipeline until
+something besides OpenReceive needs the client.
+
 Work that is safe to do in parallel:
 
 - Provider-data API/test/doc polish that does not edit canonical provider data.

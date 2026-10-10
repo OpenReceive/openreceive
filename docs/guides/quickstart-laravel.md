@@ -16,10 +16,12 @@ PHP extensions:
 Add the Laravel package:
 
 ```sh
-composer require openreceive/laravel
+composer require openreceive/laravel -W
 ```
 
-That is the whole install. `openreceive/laravel` depends on
+`-W` lets Composer move Guzzle to 7.x: the wallet client's WebSocket
+middleware needs Guzzle 7, and a Laravel 13 app can lock Guzzle 8. That is
+the whole install. `openreceive/laravel` depends on
 `openreceive/openreceive`, the engine. So the default wallet client works with
 nothing else added. It is built from `NWC_URI`. Package discovery registers the
 service provider. If your app brings its own NWC client, bind

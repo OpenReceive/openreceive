@@ -9,7 +9,7 @@ extend = "packages/python/openreceive/pyproject.toml"
 # agent directions align trailing comments by hand; leave them alone.
 extend-exclude = [
   "*.md",
-  # The directions-eval fixtures stand in for users' own apps, as their
+  # The agent trial fixtures stand in for users' own apps, as their
   # frameworks generate them; they keep the frameworks' style, not ours.
-  "evals/directions/platforms/*/fixture",
+  "trials/platforms/*/fixture",
 ]

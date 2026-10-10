@@ -2,15 +2,37 @@
 
 ## 0.4.22 - Unreleased
 
+- Fixed (Python): wallet calls (`make_invoice`, `list_transactions`, the
+  notification subscription) could fail with "timed out while waiting for
+  handshake response", about one call in five against
+  `wss://relay-nwc.rizful.com/v1` in one measurement. websockets' threading
+  client reads on a background thread while the caller writes the WebSocket
+  upgrade request; a TLS 1.3 session ticket arriving during that write lost
+  the request. The relay connection now uses TLS 1.2 at most, which delivers
+  its tickets inside the handshake, with certificate checks unchanged. A new
+  test opens 40 sessions to a local relay that sends TLS 1.3 session tickets;
+  it failed every run before the fix.
+- Fixed (Laravel): `composer require openreceive/laravel` refused Laravel 13
+  because the package allowed only `illuminate/*` 11 and 12 and the core
+  package only brick/math below 1.0. Both now admit Laravel 13 (Symfony 8,
+  `symfony/psr-http-message-bridge` 8, brick/math 1.0), and the suite passes
+  on Laravel 12 and 13. A new Laravel 13 app locks Guzzle 8, which the NWC
+  websocket transport does not support yet, so it installs with
+  `composer require openreceive/laravel -W` (Guzzle drops to 7, which
+  Laravel 13 accepts); the quickstart and README say so. The Laravel
+  directions also say that a Compose variable reaches artisan but not the
+  web server (`php artisan serve` hands requests only `.env`; php-fpm clears
+  the environment), so the agent opens the checkout page as well as running
+  doctor. Two trials passed doctor while every checkout returned 500.
 - Changed (agent directions, all eight library stacks): the closing message
   is at most five short lines. When the app's orders belong to a session or
   cookie, the agent's test order cannot open in the user's browser, so the
   agent now hands over the shop's own page ("Open <url> and click Buy")
   instead of explaining order ownership. It no longer mentions swap minimums,
-  which acceptance runs on 0.4.21 kept repeating to the user. Docs only:
+  which filmed trials on 0.4.21 kept repeating to the user. Docs only:
   openreceive.org can serve this on 0.4.21.
 - Changed (agent directions, all eight library stacks), from the Fastify
-  acceptance runs on 0.4.21: when the request already names stablecoins (as
+  filmed trials on 0.4.21: when the request already names stablecoins (as
   "Enable Bitcoin and stablecoin payments" does), the second message is the
   lightning-swap.com walkthrough with no yes/no first, as the WooCommerce
   directions already said. The agent checks the env file with
@@ -21,7 +43,77 @@
   environment before doctor read the env files, so doctor used `.env` but
   printed `env files: none used`, and `.env` won over `.env.local`, the
   reverse of the documented order. Doctor now reads both files itself.
-
+- Fixed (Django): `manage.py openreceive_install` stopped on
+  `openreceive.E001` ("cannot be imported") when run after adding
+  `settings.OPENRECEIVE`, the quickstart's order, and the same check fires
+  while `HOST` is unset, so the command never ran without `--skip-checks`.
+  `openreceive_install` and `openreceive_doctor` no longer run Django's
+  system checks; doctor reports a missing host module itself. Every agent in
+  the 0.4.21 Django filmed trials hit it.
+- Fixed (Django): a project that runs `django.contrib.admin`, which
+  `startproject` installs, crashed at startup with `TypeError: type
+  'ModelAdmin' is not subscriptable` once `openreceive.django` was installed.
+  Since 0.4.4, the ledger admin subscripted `ModelAdmin`, which is generic
+  only in django-stubs.
+- Changed (agent directions, all eight library stacks), from the Django
+  filmed trials: the last message starts "Setup is finished", names what to
+  look at in one line and sends nothing after it (one agent of three copied
+  the browser checklist out after it). The agent starts the server the way
+  the project already does, on its own port, and when a compose file builds
+  the app it runs the package manager, migrations and doctor inside that
+  service (Laravel trial agents ran them on the host's older PHP and forced
+  past it with `--ignore-platform-reqs`). To check that the app sees the
+  codes, the agent runs doctor, never `printenv`: trial agents in Node, Rails
+  and Laravel ran a names-only `printenv` that the directions forbid without
+  offering another way. Django: fill in
+  `openreceive_host.py` with the file-edit tool, never by line number.
+- Changed (agent directions, WooCommerce): the hand-over is at most six
+  short lines plus the cron sentence: the pay link, the methods, one line of
+  what to look at. It never lists each coin's availability or a minimum. All
+  three trials on 0.4.21 ended on 10 to 14 lines calling USDT and USDC
+  "unavailable — below the provider minimum" for a $3 order. Docs only.
+- Fixed (FastAPI): the quickstart's wiring raised `ConfigurationError` at
+  import. It builds the app with `openreceive_lifespan(host, engine=…)`, then
+  calls `openreceive_router(host, engine=…, rate_limiting=True)`, and the
+  lifespan had already bound the host and engine, so the router's options
+  were refused. The lifespan now finds its binding at startup, so either
+  order works. The quickstart builds the router first, which also works on
+  0.4.21. A trial agent copying the quickstart hit it.
+- Fixed (docs, Express and Fastify): the quickstart's `authorize` example
+  passed `request` to the app's session helper. `request` is a Web Request;
+  the framework's own request is `native`, and a helper that reads
+  `req.headers.cookie` finds nothing on a Web Request, so every payer got a
+  403. A trial agent copied the pattern into a shop whose checkout then
+  refused its own buyers. The quickstarts, the authorization guide and the
+  directions now pass `native`.
+- Changed (agent directions, all eight library stacks): the codes are written
+  with the file-editing tool, never a shell command, which puts the code on
+  the command line. The WooCommerce directions already said so; Cursor wrote
+  the swap code with `python3 -c` in all three Fastify trials.
+- Agent trials, renamed from the directions eval (`npm run trial`, `trials/`;
+  a filmed trial is the same job on camera): a trial now fails when an
+  OpenReceive command fails inside OpenReceive's own code (a traceback through
+  the package, or an `openreceive.E` system check), a flag such as
+  `--skip-checks` forces past a failure, the agent rewrites the installed
+  package (one Django agent patched `admin.py` from its Dockerfile), the last
+  doctor run is not clean, the closing message runs long, asks a question or
+  mentions a minimum, or a command prints a code. Until now the harness never
+  saw a failed command: Cursor files it under `failure`. The eight framework
+  shops get the live checks: the shop's own order form, a real invoice, and a
+  second visitor with their own session refused, with the shop's log when one
+  fails. Trials may run in parallel (`--parallel`); Vercel trials still go one
+  at a time. The fixtures move to current majors: Django 6.1 with the admin
+  `startproject` installs, Express 5, Rails 8.1 (with `Bundler.require`, which
+  the old fixture lacked) and Laravel 13. Trials no longer use a real wallet:
+  a testkit NWC wallet service answers over a real relay and a test swap
+  provider stands in for the real one, and after the buyer's invoice the
+  wallet pays it and the trial checks that the shop's own order turns paid,
+  which fails on the logging-only `onPaid` placeholder. Each trial picks its
+  agent at random from Cursor (Grok 4.7) and Codex by default; `--agent` names
+  one, Claude Code included. Vercel trials check the shop where it runs unless
+  `--deploy` is given. A Tested badge now takes three passing trials in a row,
+  and its `passed.json` entry names the agents and models and the directions
+  file's hash.
 ## 0.4.21 - 2026-10-09
 
 - Fixed: `openreceive doctor` read only the process environment, so right

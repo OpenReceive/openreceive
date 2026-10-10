@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (FastAPI)
 
 ```sh
-# READ THIS FIRST: this file is 38 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 39 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/fastapi/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -97,10 +97,12 @@ you store it. Ask one question per message.
    Do not mention `.env`, exports, or "tell me when it's set".
 2. **When they paste it.** If it does not start with `nostr+walletconnect://`,
    ask them to copy the receive-only code again. Otherwise write
-   `NWC_URI=<paste>` into the project's `.env`, creating the file if needed.
-   Make sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has
-   one). Never echo the value, commit it, or put it in client code. Reply only
-   that it is saved, then ask the next question.
+   `NWC_URI=<paste>` into the project's `.env` with your file-editing tool,
+   creating the file if needed. Never write it with a shell command (`echo`,
+   `printf`, a heredoc, `python -c`): the command line shows the code. Make
+   sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has one).
+   Never echo the value, commit it, or put it in client code. Reply only that
+   it is saved, then ask the next question.
 3. **Second message — swaps.** If the user asked for stablecoins, USDT, USDC,
    ETH, SOL, altcoins or "crypto" (as in "Bitcoin and stablecoin payments"),
    this message IS the walkthrough below: send it as it is, and do not ask yes
@@ -115,10 +117,10 @@ you store it. Ask one question per message.
    Mention FixedFloat only if they already use it.
 4. **When they paste it.** If it does not start with
    `lightning+swapconnect://`, ask them to copy it again. Otherwise add
-   `LSC_URI_PRIMARY=<paste>` to the same `.env`, without echoing it. Swaps
-   are now on, so build the refund route back (the swap non-negotiable below) as
-   part of this integration. If they chose Bitcoin only, leave
-   `LSC_URI_PRIMARY` unset and skip that route.
+   `LSC_URI_PRIMARY=<paste>` to the same `.env` with the file-editing tool,
+   never a shell command. Swaps are now on, so build the refund route back
+   (the swap non-negotiable below) as part of this integration. If they chose
+   Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
 5. **Make the server load the file — yourself.** OpenReceive reads
    `os.environ`, and a `.env` file on disk is not in it. Start the dev server
    with `uvicorn --env-file .env` (update the app's run script or Procfile, not
@@ -155,17 +157,19 @@ serves the checkout page for one of its orders. Doctor names any failed check
 and exits nonzero; fix it before going on.
 
 Give the user that checkout link. The browser check in the quickstart's step 6
-(payment-method icons, wallet logos, a pay tutorial) is theirs: tell them what
-to look at, and do not run it yourself.
+(payment-method icons, wallet logos, a pay tutorial) is theirs: name it in one
+line of your closing message, and do not run it yourself.
 
 You cannot pay the invoice: the code is receive-only. Do not pay, settle or
 mark an order paid, and do not look for a way to (a wallet control port, a
 test endpoint, another wallet). If the user wants a real settlement test, they
 pay on that link from their own wallet, and `on_paid` marks the order paid.
 
-Setup ends here. Say "Setup is finished" in one message of at most five short
-lines (about 80 characters each), with the link and what to check. Do not list
-what changed, offer more work, or end the message on a question.
+Setup ends here. Your last message starts "Setup is finished" and has at most
+five short lines (about 80 characters each): the link, the methods it offers,
+and one line of what to look at. Send nothing after it. Do not list what
+changed, copy out the quickstart's browser checklist, offer more work, or end
+the message on a question.
 
 - The link is to a real unpaid order. Keep that order; do not delete it.
 - When this app's orders belong to a session or cookie, the user's browser
@@ -194,7 +198,18 @@ itself, and they hold for every integration.
 - Restart only this app's server, on the port it already uses: stop the
   process you started, or the one listening on that port, by its pid (or
   restart its Compose service). Never `pkill` or `killall` by name: that
-  stops other people's servers too.
+  stops other people's servers too. Start it the way this project already
+  does (its README, Procfile, compose file or package script), on its own
+  port, not a port you pick.
+- Run commands where the app runs. When a compose file builds it, run its
+  package manager, generators, migrations and doctor inside that service
+  (`docker compose exec` or `run`), and rebuild the image after adding a
+  package. This machine's language version and database path are not the
+  app's.
+- To check that the running app sees the codes, run doctor: it reports each
+  one as present or missing and never prints a value. Never print the
+  environment (`printenv`, `env`, `docker compose config`), even filtered to
+  names.
 - The host owns the price. `amount_for` reads it from your own data; reject
   payer-supplied amounts.
 - `authorize` runs on every request, and the `resource` it receives is a CLAIM
@@ -528,14 +543,18 @@ host = Host(
     ),
 )
 
-app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine))
-app.include_router(
+# The router carries the options. Build it before the lifespan: through
+# 0.4.21 the lifespan bound first and refused the router's options.
+router = openreceive_router(
+    host,
+    engine=engine,
     # Recommended for public web shops: `rate_limiting=True` caps invoice
     # creation at 60 per client IP per hour. Leave it off (the default) for
     # point-of-sale deployments, where many payers share the terminal's IP.
-    openreceive_router(host, engine=engine, rate_limiting=True),
-    prefix="/openreceive",
+    rate_limiting=True,
 )
+app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine))
+app.include_router(router, prefix="/openreceive")
 ```
 
 `authorize` receives the Starlette `Request`. Cookies, headers, and whatever

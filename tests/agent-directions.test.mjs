@@ -167,7 +167,7 @@ test("the WooCommerce payload names the pinned install, configure and test-invoi
   assert.match(text, /file-editing tool, not a shell command/);
 });
 
-// The 0.4.16 eval agent (evals/directions) audited the stack before asking,
+// The 0.4.16 trial agent audited the stack before asking,
 // read Playwright from another checkout, settled the test invoice through the
 // fake wallet's control port, then installed mail and added a cron service.
 test("the WooCommerce payload ends at test-invoice and keeps the agent in the store", () => {
@@ -188,7 +188,7 @@ test("the WooCommerce payload ends at test-invoice and keeps the agent in the st
   assert.match(text, /its wp-admin screens are only for a store with no WP-CLI/);
 });
 
-// The 0.4.18 Next.js eval agent could not get doctor to see `.env.local`, ran
+// The 0.4.18 Next.js trial agent could not get doctor to see `.env.local`, ran
 // `set -a; . ./.env.local`, and the `&` in each code printed pieces of both.
 test("the @openreceive/node payloads say doctor reads the env file and never to source it", () => {
   const envFiles = { node: ".env", fastify: ".env", next: ".env.local" };
@@ -201,7 +201,9 @@ test("the @openreceive/node payloads say doctor reads the env file and never to 
   }
 });
 
-// The 0.4.18 Node and Fastify eval agents ended on "checkout is live", took
+// On 0.4.21 one Django video agent of three copied the quickstart's browser
+// checklist out after "Setup is finished".
+// The 0.4.18 Node and Fastify trial agents ended on "checkout is live", took
 // the reply "Yes, go ahead" as a request for the quickstart's browser check,
 // and ran it with Playwright from another checkout. On 0.4.20 the Next.js
 // agents wrote 30-line wrap-ups, one deleted the order behind its link, and
@@ -215,14 +217,12 @@ test("every library payload ends with setup finished and keeps the agent in the 
     assert.match(ending, /You cannot pay the invoice/, stack);
     assert.match(
       ending,
-      /Say "Setup is finished" in one message of at most five short\s+lines/,
+      /Your last message starts "Setup is finished" and has at most\s+five/,
       stack,
     );
-    assert.match(
-      ending,
-      /Do not list\s+what changed, offer more\s+work, or end the message on a question/,
-      stack,
-    );
+    assert.match(ending, /Send nothing after it\./, stack);
+    assert.match(ending, /copy out the quickstart's browser checklist/, stack);
+    assert.match(ending, /offer more work, or end\s+the message on a question/, stack);
     assert.match(ending, /Keep that order; do not delete it/, stack);
     assert.match(ending, /never say a coin\s+will not work or will not be\s+offered/, stack);
     assert.match(text, /Never read or run anything from another\s+project/, stack);
@@ -250,5 +250,38 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
     assert.match(step, /not by reading the file/, stack);
     assert.match(text, /Never `pkill` or `killall` by name/, stack);
     assert.match(text, /on the port it already uses/, stack);
+    assert.match(text, /Start it the way this project already\s+does/, stack);
+    assert.match(text, /Run commands where the app runs/, stack);
+    assert.match(text, /To check that the running app sees the codes, run doctor/, stack);
   }
+});
+
+// In the 2026-10-09 trials Cursor wrote the swap code into .env with
+// `python3 -c` in all three Fastify runs, putting the code on the command
+// line; only the WooCommerce directions named the file-editing tool. One
+// Fastify agent passed the Web Request to the shop's cookie helper, so every
+// buyer got a 403: the quickstart's own example did the same.
+test("every library payload writes codes with the file tool, and Express and Fastify read the session from native", () => {
+  const libraries = payloads.filter(({ stack }) => !["woocommerce", "btcpay"].includes(stack));
+  for (const { stack, text } of libraries) {
+    const step = stepZero(text);
+    assert.match(step, /with your file-editing\s+tool/, stack);
+    assert.match(step, /Never write it with a shell\s+command/, stack);
+  }
+  for (const stack of ["node", "fastify"]) {
+    const { text } = payloads.find((payload) => payload.stack === stack);
+    assert.doesNotMatch(text, /currentUser\(request\)/, stack);
+    assert.match(text, /sessions\.currentUser\(native\)/, stack);
+  }
+});
+
+// The 2026-10-10 WooCommerce trials ended on 10 to 14 lines that listed
+// each coin as available or "unavailable — below the provider minimum", the
+// wrap-up the library directions already ruled out after the Next.js video.
+test("the WooCommerce hand-over is short and never calls a coin unavailable", () => {
+  const { text } = payloads.find((payload) => payload.stack === "woocommerce");
+  const ending = text.match(/^Setup ends here\.[\s\S]*?question\.\n/m)?.[0] ?? "";
+  assert.match(ending, /starts "Setup is finished" and has at most six short lines/);
+  assert.match(ending, /Do not list\s+each coin's availability, mention a minimum/);
+  assert.match(ending, /Send nothing\s+after it/);
 });

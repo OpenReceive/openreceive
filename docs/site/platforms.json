@@ -1,5 +1,5 @@
 {
-  "_comment": "Where people build and host apps that use OpenReceive. Facts only: the site owns logos and marketing copy. generate-site-contract.mjs validates every row and publishes them as platforms[]. A platform is Tested only when evals/directions/passed.json records a passing live run for its eval.",
+  "_comment": "Where people build and host apps that use OpenReceive. Facts only: the site owns logos and marketing copy. generate-site-contract.mjs validates every row and publishes them as platforms[]. A platform is Tested only when trials/passed.json records passing agent trials for its `trial` platform.",
   "platforms": [
     {
       "id": "vercel",
@@ -17,7 +17,7 @@
         "url": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenReceive%2Fopenreceive%2Ftree%2Fmaster%2Fexamples%2Fnext-postgres-starter&project-name=openreceive-starter&repository-name=openreceive-starter&env=NWC_URI&envDescription=A%20receive-only%20NWC%20code%20from%20your%20Lightning%20wallet&envLink=https%3A%2F%2Fopenreceive.org%2Fget_a_nwc_code_to_receive_payments&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D",
         "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/next-postgres-starter"
       },
-      "eval": "vercel"
+      "trial": "vercel"
     },
     {
       "id": "v0",
@@ -35,7 +35,7 @@
         "url": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenReceive%2Fopenreceive%2Ftree%2Fmaster%2Fexamples%2Fnext-postgres-starter&project-name=openreceive-starter&repository-name=openreceive-starter&env=NWC_URI&envDescription=A%20receive-only%20NWC%20code%20from%20your%20Lightning%20wallet&envLink=https%3A%2F%2Fopenreceive.org%2Fget_a_nwc_code_to_receive_payments&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D",
         "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/next-postgres-starter"
       },
-      "eval": "vercel"
+      "trial": "vercel"
     },
     {
       "id": "replit",
@@ -53,7 +53,7 @@
         "url": "https://github.com/OpenReceive/openreceive/tree/master/examples/express-postgres-starter#run-it-on-replit",
         "source_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/express-postgres-starter"
       },
-      "eval": "replit"
+      "trial": "replit"
     },
     {
       "id": "lovable",

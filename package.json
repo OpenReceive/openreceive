@@ -92,7 +92,7 @@
     "release:wordpress:build": "node tools/release/wordpress-plugin.mjs build",
     "test:e2e:wordpress": "playwright test --config tests/e2e-wordpress/playwright.config.ts",
     "test:wordpress": "bash tools/ci/wordpress-tests.sh",
-    "eval:directions": "node --import tsx evals/directions/harness/run.ts",
+    "trial": "node --import tsx trials/harness/run.ts",
     "check:wordpress": "node tools/validate/check-wordpress-plugin.mjs",
     "test:ci:artifacts": "npm run check:demo-containers && npm run check:release && npm run test -w @openreceive/example-buttons-rails && npm run build:demo && npm run scan:client-bundles && npm run build:docs",
     "build:standalone": "node tools/package/build-workspaces.mjs @openreceive/elements",

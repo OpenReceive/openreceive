@@ -1,0 +1,101 @@
+# The trial wallet: a fake NWC wallet and swap provider for agent trials, so a
+# shop under test gets real-looking codes without the merchant's real wallet.
+#
+#   testkit-nwc  NIP-47 wallet service on Rizful's public NWC relay, so its
+#                code works from any shop, a Vercel deployment included.
+#                Invoices are in memory and nothing can pay them: the harness
+#                marks one paid through the control API. Receive-only grants.
+#   certs        mints a private CA and fake-lsc's certificate (the BTCPay stack's script)
+#   fake-lsc     FixedFloat-compatible swap provider over HTTPS; nothing pays out
+#
+# A shop that uses swaps joins the `openreceive-trial` network as
+# `external: true` to reach fake-lsc, and trusts the private CA.
+# trials/harness/wallet.ts starts this stack and writes both files a shop
+# mounts into trials/wallet/certs/ (gitignored). By hand:
+#
+#   docker compose -f trials/wallet/compose.yml up -d --wait
+#   curl -s http://127.0.0.1:17890/uri          # the NWC code; new on every testkit restart
+#   docker compose -f trials/wallet/compose.yml down -v
+#
+# The .NET sources are the BTCPay plugin stack's (packages/dotnet); after
+# changing them, rebuild with `docker compose -f trials/wallet/compose.yml build`.
+name: openreceive-trial-wallet
+
+networks:
+  default:
+    name: openreceive-trial
+
+services:
+  testkit-nwc:
+    build:
+      context: ../../packages/dotnet
+      dockerfile: OpenReceive.TestkitNwc/Dockerfile
+      network: host
+    restart: unless-stopped
+    # --memory: invoices live in the process and settle only through the
+    # control API. No --grant: the default grants are receive-only.
+    command:
+      - --relay
+      - wss://relay-nwc.rizful.com/v1
+      - --memory
+      - --network
+      - mainnet
+      - --control-port
+      - "7790"
+    ports:
+      - "127.0.0.1:17890:7790"
+    healthcheck:
+      # Healthy once the wallet service holds its relay subscription.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/7790 &&
+          printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          grep -q '"relayConnected":true' <&3
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  certs:
+    image: alpine:3.20
+    # Host networking only for `apk add openssl`: the bridge network times out
+    # on some downloads on some machines.
+    network_mode: host
+    command: ["sh", "/scripts/make-certs.sh", "/certs"]
+    volumes:
+      - certs:/certs
+      - ../../packages/dotnet/docker/certs/make-certs.sh:/scripts/make-certs.sh:ro
+
+  fake-lsc:
+    build:
+      context: ../../packages/dotnet
+      dockerfile: OpenReceive.FakeLsc/Dockerfile
+      network: host
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    # No --payer: a completed swap pays nothing. The harness settles the
+    # wallet invoice through testkit-nwc instead.
+    command:
+      - >-
+        exec dotnet OpenReceive.FakeLsc.dll
+        --port 7788
+        --key 12ae64d832bd60d4de6addce51fb235f
+        --secret a5ebc2cbea2e82b11715f09d2e6cd20441f4d74da192b54d8b27c2914172e497
+        --cert /certs/fake-lsc.pfx --cert-password openreceive
+    volumes:
+      - certs:/certs:ro
+    ports:
+      - "127.0.0.1:17888:7788"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/7788"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+
+volumes:
+  certs:

@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 13510
+      "bytes": 13740
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 14525
+      "bytes": 14706
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -43,7 +43,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 14445
+      "bytes": 14605
     },
     {
       "path": "/guides/quickstart-django",
@@ -105,7 +105,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 3065
+      "bytes": 3884
     },
     {
       "path": "/guides/quickstart-rails",
@@ -135,7 +135,7 @@
       "slug": "quickstart-laravel",
       "title": "Laravel Quickstart",
       "category": "quickstart",
-      "bytes": 20102
+      "bytes": 20241
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -176,7 +176,7 @@
       "slug": "authorization",
       "title": "Authorization",
       "category": "security",
-      "bytes": 13145
+      "bytes": 13257
     },
     {
       "path": "/guides/rate-limiting",
@@ -386,7 +386,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 35727
+      "bytes": 37160
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -396,7 +396,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 36894
+      "bytes": 38278
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -406,7 +406,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 37821
+      "bytes": 38963
     },
     {
       "path": "/guides/agent-directions-django",
@@ -416,7 +416,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 44276
+      "bytes": 45507
     },
     {
       "path": "/guides/agent-directions-next",
@@ -426,7 +426,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 39702
+      "bytes": 40684
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -436,7 +436,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 40649
+      "bytes": 41631
     },
     {
       "path": "/guides/agent-directions-php",
@@ -446,7 +446,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 39328
+      "bytes": 40310
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -456,7 +456,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 42713
+      "bytes": 44377
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -496,7 +496,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 22273
+      "bytes": 22703
     },
     {
       "path": "/api_docs",
@@ -562,7 +562,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22273,
+      "bytes": 22703,
       "copy_button": true,
       "self_contained": true
     },
@@ -583,7 +583,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35727,
+      "bytes": 37160,
       "copy_button": true,
       "self_contained": true
     },
@@ -604,7 +604,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36894,
+      "bytes": 38278,
       "copy_button": true,
       "self_contained": true
     },
@@ -625,7 +625,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39702,
+      "bytes": 40684,
       "copy_button": true,
       "self_contained": true
     },
@@ -646,7 +646,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37821,
+      "bytes": 38963,
       "copy_button": true,
       "self_contained": true
     },
@@ -667,7 +667,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44276,
+      "bytes": 45507,
       "copy_button": true,
       "self_contained": true
     },
@@ -688,7 +688,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40649,
+      "bytes": 41631,
       "copy_button": true,
       "self_contained": true
     },
@@ -709,7 +709,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39328,
+      "bytes": 40310,
       "copy_button": true,
       "self_contained": true
     },
@@ -730,7 +730,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42713,
+      "bytes": 44377,
       "copy_button": true,
       "self_contained": true
     },
@@ -777,8 +777,12 @@
       "video": null,
       "shared_checkout_demo": false,
       "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {
@@ -801,8 +805,12 @@
       "video": null,
       "shared_checkout_demo": true,
       "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {
@@ -825,8 +833,12 @@
       "video": null,
       "shared_checkout_demo": true,
       "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {
@@ -849,8 +861,12 @@
       "video": null,
       "shared_checkout_demo": true,
       "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {
@@ -873,8 +889,12 @@
       "video": null,
       "shared_checkout_demo": true,
       "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {
@@ -917,10 +937,7 @@
       "demo_port": "3006",
       "video": null,
       "shared_checkout_demo": true,
-      "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
-      }
+      "tested": null
     },
     {
       "id": "fastapi",
@@ -942,8 +959,12 @@
       "video": null,
       "shared_checkout_demo": true,
       "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {
@@ -959,16 +980,13 @@
       "agent_full_path": "/agent-directions/laravel/full.md",
       "adapter_package": "openreceive/laravel",
       "install": "composer require openreceive/laravel",
-      "requires": "PHP ≥ 8.2 (64-bit), Laravel 11 or 12, ext-gmp",
+      "requires": "PHP ≥ 8.2 (64-bit), Laravel 11, 12 or 13, ext-gmp",
       "example_path": "examples/buttons/server/laravel",
       "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/buttons/server/laravel",
       "demo_port": "3005",
       "video": null,
       "shared_checkout_demo": true,
-      "tested": {
-        "date": "2026-10-07",
-        "release": "0.4.18"
-      }
+      "tested": null
     },
     {
       "id": "php",
@@ -990,8 +1008,12 @@
       "video": null,
       "shared_checkout_demo": true,
       "tested": {
-        "date": "2026-10-06",
-        "release": "0.4.18"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     }
   ],
@@ -1024,8 +1046,12 @@
       },
       "eval": "vercel",
       "tested": {
-        "date": "2026-10-07",
-        "release": "0.4.19"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {
@@ -1052,8 +1078,12 @@
       },
       "eval": "vercel",
       "tested": {
-        "date": "2026-10-07",
-        "release": "0.4.19"
+        "date": "2026-10-10",
+        "release": "0.4.21",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
       }
     },
     {

@@ -90,6 +90,11 @@ export async function runCli(options: CliOptions): Promise<number> {
       return 0;
     }
     if (command === "doctor" || command === "debug-report") {
+      // Agents check a command's usage before running it; that is not a failure.
+      if (args.some((arg) => arg === "--help" || arg === "-h")) {
+        stdout.write(`${HELP}\n`);
+        return 0;
+      }
       return await runDiagnostics({
         command,
         flags: parseDiagnosticsArgv(args),

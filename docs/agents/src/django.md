@@ -78,10 +78,12 @@ you store it. Ask one question per message.
    Do not mention `.env`, exports, or "tell me when it's set".
 2. **When they paste it.** If it does not start with `nostr+walletconnect://`,
    ask them to copy the receive-only code again. Otherwise write
-   `NWC_URI=<paste>` into the project's `.env`, creating the file if needed.
-   Make sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has
-   one). Never echo the value, commit it, or put it in client code. Reply only
-   that it is saved, then ask the next question.
+   `NWC_URI=<paste>` into the project's `.env` with your file-editing tool,
+   creating the file if needed. Never write it with a shell command (`echo`,
+   `printf`, a heredoc, `python -c`): the command line shows the code. Make
+   sure `.gitignore` covers `.env` (and `.dockerignore`, if the app has one).
+   Never echo the value, commit it, or put it in client code. Reply only that
+   it is saved, then ask the next question.
 3. **Second message — swaps.** If the user asked for stablecoins, USDT, USDC,
    ETH, SOL, altcoins or "crypto" (as in "Bitcoin and stablecoin payments"),
    this message IS the walkthrough below: send it as it is, and do not ask yes
@@ -96,10 +98,10 @@ you store it. Ask one question per message.
    Mention FixedFloat only if they already use it.
 4. **When they paste it.** If it does not start with
    `lightning+swapconnect://`, ask them to copy it again. Otherwise add
-   `LSC_URI_PRIMARY=<paste>` to the same `.env`, without echoing it. Swaps
-   are now on, so build the refund route back (the swap non-negotiable below) as
-   part of this integration. If they chose Bitcoin only, leave
-   `LSC_URI_PRIMARY` unset and skip that route.
+   `LSC_URI_PRIMARY=<paste>` to the same `.env` with the file-editing tool,
+   never a shell command. Swaps are now on, so build the refund route back
+   (the swap non-negotiable below) as part of this integration. If they chose
+   Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
 5. **Make the server load the file — yourself.** Django does not
    read `.env` on its own. If the app already uses `django-environ`, make sure
    it reads this file; otherwise add it and call `environ.Env.read_env()` in
@@ -143,16 +145,19 @@ failed check and exits nonzero; fix it before going on.
 
 Give the user that checkout link. The browser check in the quickstart's
 "Render the checkout" section (payment-method icons, wallet logos, a pay
-tutorial) is theirs: tell them what to look at, and do not run it yourself.
+tutorial) is theirs: name it in one line of your closing message, and do not
+run it yourself.
 
 You cannot pay the invoice: the code is receive-only. Do not pay, settle or
 mark an order paid, and do not look for a way to (a wallet control port, a
 test endpoint, another wallet). If the user wants a real settlement test, they
 pay on that link from their own wallet, and `on_paid` marks the order paid.
 
-Setup ends here. Say "Setup is finished" in one message of at most five short
-lines (about 80 characters each), with the link and what to check. Do not list
-what changed, offer more work, or end the message on a question.
+Setup ends here. Your last message starts "Setup is finished" and has at most
+five short lines (about 80 characters each): the link, the methods it offers,
+and one line of what to look at. Send nothing after it. Do not list what
+changed, copy out the quickstart's browser checklist, offer more work, or end
+the message on a question.
 
 - The link is to a real unpaid order. Keep that order; do not delete it.
 - When this app's orders belong to a session or cookie, the user's browser
@@ -181,7 +186,18 @@ itself, and they hold for every integration.
 - Restart only this app's server, on the port it already uses: stop the
   process you started, or the one listening on that port, by its pid (or
   restart its Compose service). Never `pkill` or `killall` by name: that
-  stops other people's servers too.
+  stops other people's servers too. Start it the way this project already
+  does (its README, Procfile, compose file or package script), on its own
+  port, not a port you pick.
+- Run commands where the app runs. When a compose file builds it, run its
+  package manager, generators, migrations and doctor inside that service
+  (`docker compose exec` or `run`), and rebuild the image after adding a
+  package. This machine's language version and database path are not the
+  app's.
+- To check that the running app sees the codes, run doctor: it reports each
+  one as present or missing and never prints a value. Never print the
+  environment (`printenv`, `env`, `docker compose config`), even filtered to
+  names.
 - The host owns the price. `amount_for` reads it from your own data;
   reject payer-supplied amounts.
 - `authorize` runs on every request, and the `resource` it receives is a
@@ -190,6 +206,10 @@ itself, and they hold for every integration.
   a placeholder that allows everything (`manage.py check` warns
   `openreceive.W002` while it is set) — replace it with this app's real
   ownership check, same as `on_paid`.
+- Fill in `openreceive_host.py` with your file-edit tool: replace each
+  placeholder in place (the `authorize = staticmethod(...)` line, the
+  `amount_for` body, the `on_paid = staticmethod(...)` line). Never edit it
+  by line number from a script.
 - `on_paid` must be idempotent. Its database fulfillment commits once per `reference` — your order
   id, one per thing you fulfill, created before checkout, kept across retries,
   never reused. A fresh id per page load lets one order be paid twice.

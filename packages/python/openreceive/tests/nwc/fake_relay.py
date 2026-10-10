@@ -11,16 +11,27 @@ hands ``(method, params)`` to ``wallet.handler`` and replies with a signed,
 encrypted kind 23195 carrying ``e`` and ``p`` tags. ``push_notification``
 signs a 23197 (nip44_v2) or 23196 (nip04) event and delivers it to every
 connection subscribed to that kind. ``silent=True`` accepts connections and
-never answers anything.
+never answers anything. ``tls=True`` serves ``wss://`` with a throwaway
+self-signed certificate (``relay.ca_file``), TLS 1.2 or 1.3, sending several
+TLS 1.3 session tickets per connection, as public relays do.
 """
 
 from __future__ import annotations
 
+import datetime
+import ipaddress
 import json
+import ssl
+import tempfile
 import threading
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 from websockets.sync.server import Server, ServerConnection, serve
 
 from openreceive.nwc.transport import nip04, nip44
@@ -122,9 +133,14 @@ class FakeWallet:
 class FakeRelay:
     """A websocket relay on 127.0.0.1 with an ephemeral port; ``start()`` before use."""
 
-    def __init__(self, wallet: FakeWallet | None = None, *, silent: bool = False) -> None:
+    def __init__(
+        self, wallet: FakeWallet | None = None, *, silent: bool = False, tls: bool = False
+    ) -> None:
         self.wallet = wallet
         self.silent = silent
+        self.tls = tls
+        self.ca_file = ""
+        self._certs: tempfile.TemporaryDirectory[str] | None = None
         self._server: Server | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -138,9 +154,10 @@ class FakeRelay:
         self.stop()
 
     def start(self) -> FakeRelay:
-        self._server = serve(self._serve_connection, "127.0.0.1", 0)
+        context = self._tls_context() if self.tls else None
+        self._server = serve(self._serve_connection, "127.0.0.1", 0, ssl=context)
         port = self._server.socket.getsockname()[1]
-        self.url = f"ws://127.0.0.1:{port}"
+        self.url = f"{'wss' if self.tls else 'ws'}://127.0.0.1:{port}"
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
         return self
@@ -151,6 +168,19 @@ class FakeRelay:
             self._server.shutdown()
         if self._thread is not None:
             self._thread.join(timeout=5)
+        if self._certs is not None:
+            self._certs.cleanup()
+
+    def _tls_context(self) -> ssl.SSLContext:
+        """TLS 1.2 or 1.3, and session tickets after a 1.3 handshake, like a public relay."""
+        self._certs = tempfile.TemporaryDirectory()
+        cert_file, key_file = _self_signed_certificate(Path(self._certs.name))
+        self.ca_file = str(cert_file)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(cert_file, key_file)
+        context.num_tickets = 8
+        return context
 
     def subscription_count(self, kind: int | None = None) -> int:
         """Live subscriptions, optionally only those asking for ``kind``."""
@@ -246,3 +276,36 @@ def _send(connection: ServerConnection, frame: list[Any]) -> None:
         connection.send(json.dumps(frame))
     except Exception:  # the client already left
         pass
+
+
+def _self_signed_certificate(directory: Path) -> tuple[Path, Path]:
+    """A throwaway certificate for 127.0.0.1 that is its own trust anchor."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "openreceive fake relay")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(minutes=5))
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]),
+            critical=False,
+        )
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    cert_file, key_file = directory / "relay.crt", directory / "relay.key"
+    cert_file.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+    key_file.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return cert_file, key_file

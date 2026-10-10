@@ -1,0 +1,84 @@
+{
+  "_comment": "One entry per platform that passed its agent trials (npm run trial). A harness entry needs three trials in a row that exited 0, copied from that platform's summary.md: date, release, runs, mode and the directions file's hash. A builder entry is one builder trial on the platform itself, by its own agent. Reports stay gitignored; this is the public record openreceive.org shows as Tested badges. Django and Laravel are absent until they pass three trials on the 0.4.22 packages.",
+  "passed": [
+    {
+      "trial": "woocommerce",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "5fa57da8b7f6"
+    },
+    {
+      "trial": "node",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "5c588316bf75"
+    },
+    {
+      "trial": "fastify",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "deb95dc26ee3"
+    },
+    {
+      "trial": "next",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "8bac46517dd1"
+    },
+    {
+      "trial": "rails",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "a6fb5bf5795f"
+    },
+    {
+      "trial": "php",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "8c4c709d417d"
+    },
+    {
+      "trial": "fastapi",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "63ea814c2bd0"
+    },
+    {
+      "trial": "vercel",
+      "date": "2026-10-10",
+      "release": "0.4.21",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "8bac46517dd1"
+    },
+    {
+      "trial": "replit",
+      "date": "2026-10-08",
+      "release": "0.4.19",
+      "runs": 1,
+      "mode": "builder"
+    }
+  ]
+}

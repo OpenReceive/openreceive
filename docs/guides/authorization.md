@@ -39,13 +39,15 @@ async function authorize({ action, request, resource, native }) {
   // action   — which route: checkout.prepare | checkout.create | payment.check
   //            | swap.quote | swap.create | swap.read | swap.refund
   // request  — the Web-standard Request OpenReceive built (headers, URL, cookies)
-  // native   — the Express `req`, when you need middleware-attached state
-  //            (req.session). Omit it from the destructure if you don't.
+  // native   — the Express `req`: what this app's own cookie and session
+  //            helpers take, and where middleware-attached state lives
+  //            (req.session). A helper that reads `req.headers.cookie` finds
+  //            nothing on `request`.
   // resource — { reference?, paymentHash? } copied from the payer's JSON.
   //            A claim, not proof; see below. At runtime `reference` is always
   //            a validated non-empty string (≤200 chars); `paymentHash` is
   //            undefined except on payment.check / swap.read / swap.refund.
-  const user = await sessions.currentUser(request);
+  const user = await sessions.currentUser(native);
   return orders.viewerMay(user, resource.reference, action);
 }
 

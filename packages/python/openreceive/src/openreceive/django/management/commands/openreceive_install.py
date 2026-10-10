@@ -180,6 +180,10 @@ class Command(BaseCommand):
         "Write <app>/openreceive_host.py with the three host hooks and print the settings "
         "and urls lines to add. Edits no settings.py."
     )
+    # The quickstart adds settings.OPENRECEIVE["HOST"] before this runs, so
+    # openreceive.E001 (the module this command writes does not exist yet)
+    # must not stop it.
+    requires_system_checks = []
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("app_label", help="The installed app that will own openreceive_host.py")

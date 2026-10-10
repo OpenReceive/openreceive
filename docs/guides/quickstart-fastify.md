@@ -149,11 +149,14 @@ await app.register(openReceiveFastify, {
   // Your own access check: may this caller do this action to this reference?
   // `resource.reference` is your own order id, sent back by the payer's
   // browser — a claim, not proof — already validated as a non-empty string.
-  // `native` is the untouched Fastify request, so a session decorated by
-  // @fastify/session (or whatever this app uses) is readable here too.
-  authorize: async ({ action, request, resource }) =>
+  // `native` is the untouched Fastify request: pass it to this app's own
+  // cookie and session helpers, and a session decorated by @fastify/session
+  // (or whatever this app uses) is readable on it. `request` is a Web
+  // Request, so a helper that reads `req.headers.cookie` finds nothing on it
+  // and every payer gets a 403.
+  authorize: async ({ action, native, resource }) =>
     orders.viewerMay(
-      await sessions.currentUser(request),
+      await sessions.currentUser(native),
       resource.reference,
       action,
     ),
@@ -169,7 +172,7 @@ await app.register(openReceiveFastify, {
 ```
 
 Register the plugin after whichever plugin gives you sessions or auth
-decorations, because `authorize` sees the same request object. The plugin
+decorations, because `native` is that same request object. The plugin
 handles shutdown for you. It registers an `onClose` hook that closes the
 wallet client together with the app, so you have no `ready`/`close` pair to
 manage. A deploy health check awaits `fastify.ready()` instead.

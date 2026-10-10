@@ -137,9 +137,12 @@ const openreceive = openReceiveExpress({
   // Your own access check: may this caller do this action to this reference?
   // `resource.reference` is your own order id, sent back by the payer's
   // browser — a claim, not proof — already validated as a non-empty string.
-  authorize: async ({ action, request, resource }) =>
+  // `native` is the untouched Express request: pass it to this app's own
+  // cookie and session helpers. `request` is a Web Request, so a helper that
+  // reads `req.headers.cookie` finds nothing on it and every payer gets a 403.
+  authorize: async ({ action, native, resource }) =>
     orders.viewerMay(
-      await sessions.currentUser(request),
+      await sessions.currentUser(native),
       resource.reference,
       action,
     ),

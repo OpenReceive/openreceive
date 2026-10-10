@@ -34,6 +34,9 @@ class Command(BaseCommand):
     help = (
         "Report OpenReceive's install state: credentials (present/missing), wallet, tables, hooks."
     )
+    # Doctor reports a missing or broken HOST itself; openreceive.E001 must
+    # not stop it before it can.
+    requires_system_checks = []
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(

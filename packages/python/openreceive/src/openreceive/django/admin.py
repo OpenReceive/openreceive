@@ -5,16 +5,25 @@ row is editable: the repository owns every write."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin
 from django.http import HttpRequest
 
 from openreceive.django.models import OpenReceiveMeta, OpenReceivePayment
 
+# ModelAdmin is generic only in django-stubs. Subscripting it at runtime raises
+# TypeError, and autodiscover imports this module on every project that runs
+# django.contrib.admin, which `startproject` installs.
+if TYPE_CHECKING:
+    PaymentAdminBase = admin.ModelAdmin[OpenReceivePayment]
+    MetaAdminBase = admin.ModelAdmin[OpenReceiveMeta]
+else:
+    PaymentAdminBase = MetaAdminBase = admin.ModelAdmin
+
 
 @admin.register(OpenReceivePayment)
-class OpenReceivePaymentAdmin(admin.ModelAdmin[OpenReceivePayment]):
+class OpenReceivePaymentAdmin(PaymentAdminBase):
     list_display = ("reference", "payment_hash", "status", "status_reason", "paid_at", "expires_at")
     list_filter = ("status",)
     search_fields = ("reference", "payment_hash")
@@ -45,7 +54,7 @@ class OpenReceivePaymentAdmin(admin.ModelAdmin[OpenReceivePayment]):
 
 
 @admin.register(OpenReceiveMeta)
-class OpenReceiveMetaAdmin(admin.ModelAdmin[OpenReceiveMeta]):
+class OpenReceiveMetaAdmin(MetaAdminBase):
     list_display = ("key", "value", "rev")
     readonly_fields = ("key", "value", "rev")
 

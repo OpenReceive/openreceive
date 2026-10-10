@@ -310,7 +310,7 @@ const FRAMEWORKS = [
     agent_stack: "laravel",
     adapter_package: "openreceive/laravel",
     install: "composer require openreceive/laravel",
-    requires: "PHP ≥ 8.2 (64-bit), Laravel 11 or 12, ext-gmp",
+    requires: "PHP ≥ 8.2 (64-bit), Laravel 11, 12 or 13, ext-gmp",
     demo: "laravel",
     video: null,
     shared_checkout_demo: true,
@@ -448,24 +448,43 @@ for (const asset of assets) {
   }
 }
 
-// The public record of passing directions evals (evals/directions/passed.json):
-// one entry per eval, the date and release of its latest passing live run. The
-// site shows them as Tested badges, so each must name an eval that exists.
+// The public record of passing agent trials (trials/passed.json): one entry
+// per platform, the date and release of its latest passing trials. The site
+// shows them as Tested badges, so each must name a trial platform that exists.
+// `runs`, `mode` and `directions` (the hash the trial's per-platform summary
+// prints) say what was tested. A harness entry needs three trials, the hash,
+// and the `agents` that ran them (`agent/model`), which `tested` carries to
+// the site; a `builder` entry is one trial on the platform itself.
 const passed = new Map(
-  JSON.parse(readFileSync(path.join(root, "evals/directions/passed.json"), "utf8")).passed.map(
-    (entry) => {
-      if (
-        !existsSync(path.join(root, "evals/directions/platforms", entry.eval, "platform.json")) ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
-        !/^\d+\.\d+\.\d+$/.test(entry.release)
-      ) {
-        throw new Error(
-          `${TARGET}: invalid evals/directions/passed.json entry ${JSON.stringify(entry)}`,
-        );
-      }
-      return [entry.eval, { date: entry.date, release: entry.release }];
-    },
-  ),
+  JSON.parse(readFileSync(path.join(root, "trials/passed.json"), "utf8")).passed.map((entry) => {
+    if (
+      !existsSync(path.join(root, "trials/platforms", entry.trial, "platform.json")) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
+      !/^\d+\.\d+\.\d+$/.test(entry.release) ||
+      !["released", "candidate", "builder"].includes(entry.mode) ||
+      !Number.isInteger(entry.runs) ||
+      // A harness badge takes three passing runs in a row and names the
+      // directions file it followed; a builder run is one run on the
+      // platform itself, by the platform's own agent.
+      (entry.mode !== "builder" &&
+        (entry.runs < 3 ||
+          !/^[0-9a-f]{12}$/.test(entry.directions ?? "") ||
+          !Array.isArray(entry.agents) ||
+          entry.agents.length === 0 ||
+          !entry.agents.every((agent) => /^(cursor|codex|claude)\/\S+$/.test(agent)))) ||
+      (entry.mode === "builder" && entry.runs < 1)
+    ) {
+      throw new Error(`${TARGET}: invalid trials/passed.json entry ${JSON.stringify(entry)}`);
+    }
+    return [
+      entry.trial,
+      {
+        date: entry.date,
+        release: entry.release,
+        ...(entry.agents === undefined ? {} : { agents: entry.agents }),
+      },
+    ];
+  }),
 );
 
 const frameworks = FRAMEWORKS.map((framework) => {
@@ -540,7 +559,7 @@ const frameworks = FRAMEWORKS.map((framework) => {
 // runs on a framework above; it adds where secrets live, which database URL to
 // use, a starter and, for AI builders, the prompt to paste. The prompt is the
 // block between platform-prompt markers in the platform's guide, the same text
-// the directions eval sends, so the copied prompt is the tested one.
+// the agent trial sends, so the copied prompt is the tested one.
 const PLATFORM_KINDS = ["ai-builder", "host", "database", "store"];
 const PROMPT_BLOCK =
   /<!-- platform-prompt:begin -->\s*```text\n([\s\S]*?)\n```\s*<!-- platform-prompt:end -->/;
@@ -584,12 +603,10 @@ const platforms = JSON.parse(
   ) {
     fail("starter needs https url and source_url");
   }
-  if (!existsSync(path.join(root, "evals/directions/platforms", row.eval, "platform.json"))) {
-    fail(
-      `names eval ${row.eval}, which has no evals/directions/platforms/${row.eval}/platform.json`,
-    );
+  if (!existsSync(path.join(root, "trials/platforms", row.trial, "platform.json"))) {
+    fail(`names trial ${row.trial}, which has no trials/platforms/${row.trial}/platform.json`);
   }
-  const tested = passed.get(row.eval) ?? null;
+  const tested = passed.get(row.trial) ?? null;
   return {
     ...base,
     status: tested === null ? "guide" : "tested",
@@ -603,7 +620,8 @@ const platforms = JSON.parse(
     guide_source: guide.source_path,
     prompt,
     starter,
-    eval: row.eval,
+    // Published as `eval` since contract v8; the site reads that name.
+    eval: row.trial,
     tested,
   };
 });
@@ -701,7 +719,7 @@ const contract = {
   // file, leaving every cover's curl line a 404, and its copy button would
   // copy the cover. v8 adds `platforms[]` (the /platforms index and one
   // /platforms/<id> page per row, each a header from the row above its guide)
-  // and `tested` on every framework row, from evals/directions/passed.json. A
+  // and `tested` on every framework row, from trials/passed.json. A
   // bump because the published guides link /platforms: a site on v7 would
   // 404 them.
   contract_version: 8,

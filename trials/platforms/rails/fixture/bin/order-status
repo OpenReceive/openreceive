@@ -1,0 +1,5 @@
+#!/usr/bin/env ruby
+require "sqlite3"
+
+db = SQLite3::Database.new("/data/shop.sqlite", readonly: true)
+puts db.get_first_value("SELECT status FROM orders WHERE id = ?", [ARGV[0].to_i]).to_s

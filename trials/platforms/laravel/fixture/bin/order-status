@@ -1,0 +1,7 @@
+#!/usr/bin/env php
+<?php
+
+$pdo = new PDO('sqlite:/data/shop.sqlite');
+$query = $pdo->prepare('SELECT status FROM orders WHERE id = ?');
+$query->execute([(int) ($argv[1] ?? 0)]);
+echo (string) $query->fetchColumn(), "\n";

@@ -74,6 +74,30 @@ def build(
     return app, shop, wallet, engine
 
 
+def test_the_quickstart_order_builds_the_lifespan_before_the_router(tmp_path: Path) -> None:
+    # quickstart-fastapi.md creates the app with the lifespan, THEN calls the
+    # router with its options. Binding at lifespan() time refused those
+    # options with a ConfigurationError at import; a 2026-10-10 eval agent
+    # copying the quickstart hit it.
+    shop = Shop()
+    wallet = FakeWallet()
+    engine = create_engine(f"sqlite:///{tmp_path / 'shop.sqlite3'}")
+    SqlPaymentRepository(engine).create_tables()
+    app = FastAPI(lifespan=openreceive_lifespan(shop.host, engine=engine))
+    router = openreceive_router(
+        shop.host,
+        engine=engine,
+        nwc_client=wallet,
+        price_provider=StaticPriceProvider(),
+        rate_limiting=True,
+    )
+    app.include_router(router, prefix=PREFIX)
+    with TestClient(app) as client:
+        assert app.state.openreceive is router.openreceive  # type: ignore[attr-defined]
+        created = post(alice(client), "/checkouts", {"reference": REFERENCE})
+        assert created.status_code == 201, created.text
+
+
 def post(client: TestClient, path: str, body: dict[str, Any], **kwargs: Any) -> Any:
     return client.post(
         f"{PREFIX}{path}",

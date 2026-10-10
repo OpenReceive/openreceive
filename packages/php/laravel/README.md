@@ -17,10 +17,10 @@ assets and networks depend on the provider; swaps are optional.
 ## Install
 
 Requires PHP 8.2 or later with `ext-gmp`, `sodium`, `mbstring`, and a PDO
-driver, plus Laravel 11 or 12.
+driver, plus Laravel 11, 12 or 13.
 
 ```sh
-composer require openreceive/laravel
+composer require openreceive/laravel -W
 php artisan openreceive:install
 php artisan migrate
 ```

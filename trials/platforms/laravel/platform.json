@@ -1,0 +1,37 @@
+{
+  "slug": "laravel",
+  "name": "Laravel",
+  "directions": "docs/agents/laravel.md",
+  "prompt_name": "Laravel app",
+  "doctor": "php artisan openreceive:doctor",
+  "credential_store": { "kind": "dotenv", "where": ".env" },
+  "allowed_install_paths": ["composer"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b",
+    "\\bsource\\s+\\S*\\.env\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false,
+  "probes": {
+    "products": ["exec", "-T", "web", "bin/product-count"],
+    "openreceive": ["exec", "-T", "web", "bin/openreceive-installed"],
+    "orderStatus": ["exec", "-T", "web", "bin/order-status"]
+  },
+  "live": true,
+  "logs": [
+    "exec",
+    "-T",
+    "web",
+    "sh",
+    "-c",
+    "grep -E '\\.(ERROR|CRITICAL):' storage/logs/laravel.log | tail -n 3 | cut -c1-1500"
+  ]
+}

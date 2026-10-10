@@ -1,0 +1,7 @@
+#!/usr/bin/env python
+import sqlite3
+import sys
+
+db = sqlite3.connect("/data/shop.sqlite")
+row = db.execute("SELECT status FROM shop_order WHERE id = ?", (int(sys.argv[1]),)).fetchone()
+print(row[0] if row else "")

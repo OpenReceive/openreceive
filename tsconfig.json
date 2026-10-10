@@ -52,7 +52,7 @@
     "tests/e2e/**/*.ts",
     "tests/e2e-btcpay/**/*.ts",
     "tests/e2e-wordpress/**/*.ts",
-    "evals/directions/**/*.ts"
+    "trials/**/*.ts"
   ],
   "exclude": ["**/node_modules/**", "packages/js/*/dist/**"]
 }
