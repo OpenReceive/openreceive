@@ -1,0 +1,9 @@
+// The Worker under test in tests/supabase/lovable.test.mjs: the TanStack Start
+// recipe's Supabase route in a plain Worker, with Node compatibility as
+// Lovable builds it.
+{
+  "name": "openreceive-lovable-shape-test",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"]
+}

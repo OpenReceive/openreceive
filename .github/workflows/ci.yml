@@ -133,6 +133,8 @@ jobs:
       OPENRECEIVE_TEST_SUPABASE_DB_URL: postgresql://postgres:openreceive@127.0.0.1:56532/postgres
       OPENRECEIVE_TEST_SUPABASE_REST_URL: http://127.0.0.1:56530
       OPENRECEIVE_TEST_SUPABASE_JWT_SECRET: openreceive-supabase-test-jwt-secret-32
+      # The Lovable-shape Worker's wallet sits on this relay.
+      OPENRECEIVE_TEST_RELAY_URL: ws://127.0.0.1:57777
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -140,6 +142,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: docker compose -f tests/supabase/compose.yml up -d --wait
+      - run: docker compose -f tests/workers/compose.yml up -d --wait
       - run: npm ci
       # wrangler and the built packages, for the repository's run inside workerd.
       - run: npm ci --prefix tests/workers

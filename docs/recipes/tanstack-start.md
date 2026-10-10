@@ -15,7 +15,10 @@ provider.
 This recipe was checked with `@tanstack/react-start` 1.168 and
 `@openreceive/*` 0.4.19. The app was built with Lovable's Vite config for
 Cloudflare Workers and run under workerd: a buyer's checkout showed a real
-Lightning invoice, and a stranger was refused.
+Lightning invoice, and a stranger was refused. The Supabase route below runs
+in OpenReceive's CI as a Worker, against Supabase's own Postgres image and
+API server: a buyer's invoice, a stranger refused, one live attempt under
+concurrent requests, and a payment that `openreceive_on_paid` fulfills once.
 
 ```sh
 npm install @openreceive/http @openreceive/react pg
@@ -26,8 +29,11 @@ npm install @openreceive/http @openreceive/react pg
 - **Node** (the `node-server` preset, or any Node host): any Postgres.
 - **Cloudflare Workers** (the `cloudflare-module` preset, Lovable's default):
   with Node compatibility, and a Postgres whose certificate a public
-  authority signed, such as Neon. Supabase's is not: see
-  [Supabase](../guides/supabase.md#where-your-server-can-run).
+  authority signed, such as Neon.
+- **Cloudflare Workers with Supabase**, which is every Lovable app: a Worker
+  cannot open a Postgres connection to Supabase, whose certificate comes from
+  a private authority. Use [On Supabase](#on-supabase-lovable) below, which
+  stores payments through Supabase's HTTPS API instead.
 
 Workers ties every socket to the request that opened it, and forbids network
 calls at import. So the route builds its database pool and its OpenReceive
@@ -111,6 +117,93 @@ Create OpenReceive's two tables with your migrations, or run
 `paymentsSchemaSql("postgres")` from `@openreceive/http` once. It is
 idempotent. See [Payment storage](../guides/storage.md).
 
+## On Supabase (Lovable)
+
+On Supabase the route keeps payments in your Supabase database through its
+HTTPS API, with the project's secret key. There is no `pg` pool. Use
+`@openreceive/*` 0.4.23 or newer:
+
+```sh
+npm install @openreceive/http @openreceive/react
+```
+
+1. Apply the migration from `npx openreceive scaffold payments --supabase`.
+   It creates OpenReceive's tables, locked away from the browser's Supabase
+   key, and the functions that write them.
+2. Replace its placeholder `openreceive_on_paid` with the SQL that marks your
+   order paid. It runs inside the transaction that records the payment, for
+   the order's first payment only, so a failure there records nothing:
+
+   ```sql
+   create or replace function public.openreceive_on_paid(
+     p_reference text, p_payment_hash text, p_paid_at bigint
+   ) returns void language plpgsql as $$
+   begin
+     update public.orders set status = 'paid'
+      where id = p_reference::uuid and status = 'pending';
+   end
+   $$;
+   ```
+
+3. Write the route's server module:
+
+```ts
+// src/lib/openreceive.server.ts
+import { createStack } from "@openreceive/http";
+import { findOrder, currentBuyer } from "./orders.server"; // your own orders
+
+export async function handleOpenReceive(request: Request): Promise<Response> {
+  // Read process.env inside the handler: on Workers it is empty at import.
+  // Lovable sets SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for server code.
+  const stack = createStack({
+    wallet: { nwc: process.env.NWC_URI ?? "" },
+    storage: {
+      supabase: {
+        url: process.env.SUPABASE_URL ?? "",
+        key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+      },
+    },
+    // The price comes from the order row, never from the request.
+    amountFor: async (reference) => {
+      const order = await findOrder(reference);
+      return order?.status === "pending"
+        ? { currency: order.currency, value: order.total, description: order.title }
+        : null;
+    },
+    // Only the buyer may pay for their order.
+    authorize: async ({ request: incoming, resource }) => {
+      const order = resource.reference ? await findOrder(resource.reference) : null;
+      const buyer = currentBuyer(incoming);
+      return Boolean(order && buyer && order.buyer_token === buyer);
+    },
+    rateLimiting: {
+      ip: ({ request: incoming }) => incoming.headers.get("cf-connecting-ip") ?? undefined,
+    },
+  });
+  try {
+    return await stack.handler(request, { native: request });
+  } finally {
+    await stack.close();
+  }
+}
+```
+
+There is no `onPaid`: `openreceive_on_paid` is the fulfillment. `findOrder`
+reads the order with your server-side Supabase client; in a Lovable app that
+is `supabaseAdmin` from `@/integrations/supabase/client.server`.
+
+The checkout calls the payment routes from the browser with the page's
+cookies, and nothing else. A Lovable app keeps its Supabase sign-in in the
+browser, not in a cookie, so `authorize` cannot see who is signed in. Give
+the buyer a cookie of their own instead: create orders in a server function
+that sets an HttpOnly `buyer` cookie (a random value, kept across orders) and
+stores the same value on the order as `buyer_token`. `currentBuyer` reads it
+back from the request's `cookie` header.
+
+Before it serves, the server checks the database, and the payment routes
+answer 503 until the migration is applied and `openreceive_on_paid` is
+yours; the log names the fix. More: [Supabase over HTTPS](../guides/supabase.md#supabase-over-https).
+
 ## The checkout page
 
 ```tsx
@@ -140,6 +233,8 @@ picks Bitcoin and gets the invoice.
   ([set one up](https://openreceive.org/set_up_swap_provider)).
 - `DATABASE_URL`: your Postgres. On serverless hosts use the pooled URL. The
   storage is tested through a transaction pooler.
+- On Supabase over HTTPS, instead of `DATABASE_URL`: `SUPABASE_URL` and the
+  secret key in `SUPABASE_SERVICE_ROLE_KEY`. Lovable sets both itself.
 
 Set them as server secrets, never with a `VITE_` prefix, which would put them
 in the browser bundle.

@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import net from "node:net";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import tls from "node:tls";
 import { fileURLToPath } from "node:url";
-import { startFakeWallet } from "./fake-wallet.mjs";
+import { startTlsWallet, startWorker } from "./harness.mjs";
 
 // OpenReceive on Cloudflare Workers, the runtime Lovable's TanStack Start apps
 // deploy to. worker/src/index.js runs under `wrangler dev` (workerd, Node
@@ -30,152 +27,31 @@ const skip =
   "Set OPENRECEIVE_TEST_POOLER_URL and OPENRECEIVE_TEST_RELAY_URL (see tests/workers/workers.test.mjs)";
 
 const workerDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "worker");
+let relay;
 let wallet;
 let worker;
-let tlsFront;
 let scratch;
 let base;
-
-async function listen(server) {
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return server.address().port;
-}
-
-async function freePort() {
-  const server = net.createServer();
-  const port = await listen(server);
-  await new Promise((resolve) => server.close(resolve));
-  return port;
-}
-
-/** A CA and a localhost certificate it signed, made fresh with openssl. */
-function makeCertificates(directory) {
-  const file = (name) => path.join(directory, name);
-  const openssl = (...args) => execFileSync("openssl", args, { stdio: "pipe" });
-  const ec = ["-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes"];
-  openssl(
-    "req",
-    "-x509",
-    ...ec,
-    "-days",
-    "1",
-    "-subj",
-    "/CN=OpenReceive workers test CA",
-    "-addext",
-    "basicConstraints=critical,CA:TRUE",
-    "-addext",
-    "keyUsage=critical,keyCertSign",
-    "-keyout",
-    file("ca.key"),
-    "-out",
-    file("ca.pem"),
-  );
-  openssl(
-    "req",
-    ...ec,
-    "-subj",
-    "/CN=localhost",
-    "-keyout",
-    file("relay.key"),
-    "-out",
-    file("relay.csr"),
-  );
-  writeFileSync(
-    file("relay.ext"),
-    "subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\n",
-  );
-  openssl(
-    "x509",
-    "-req",
-    "-in",
-    file("relay.csr"),
-    "-CA",
-    file("ca.pem"),
-    "-CAkey",
-    file("ca.key"),
-    "-CAcreateserial",
-    "-days",
-    "1",
-    "-extfile",
-    file("relay.ext"),
-    "-out",
-    file("relay.pem"),
-  );
-  return {
-    ca: file("ca.pem"),
-    key: readFileSync(file("relay.key")),
-    cert: readFileSync(file("relay.pem")),
-  };
-}
-
-/** wss:// in front of the plain relay: TLS ends here, bytes pass through. */
-async function startTlsFront({ key, cert }, upstream) {
-  const server = tls.createServer({ key, cert }, (socket) => {
-    const relay = net.connect(Number(upstream.port), upstream.hostname);
-    socket.pipe(relay).pipe(socket);
-    socket.on("error", () => relay.destroy());
-    relay.on("error", () => socket.destroy());
-  });
-  return { server, port: await listen(server) };
-}
-
-async function waitForWorker(output) {
-  const deadline = Date.now() + 90_000;
-  while (Date.now() < deadline) {
-    if (worker.exitCode !== null) throw new Error(`wrangler dev exited:\n${output.join("")}`);
-    const up = await fetch(base).then(
-      (response) => response.ok,
-      () => false,
-    );
-    if (up) return;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error(`wrangler dev did not answer within 90 s:\n${output.join("")}`);
-}
 
 before(async () => {
   if (skip) return;
   scratch = mkdtempSync(path.join(tmpdir(), "openreceive-workers-"));
-  const certificates = makeCertificates(scratch);
-  tlsFront = await startTlsFront(certificates, new URL(relayUrl));
-  wallet = await startFakeWallet(relayUrl, {
-    advertisedRelayUrl: `wss://localhost:${tlsFront.port}`,
+  relay = await startTlsWallet(relayUrl, scratch);
+  wallet = relay.wallet;
+  worker = await startWorker({
+    workerDir,
+    vars: { NWC_URI: wallet.nwcUri, DATABASE_URL: poolerUrl },
+    ca: relay.ca,
+    scratch,
   });
-  // Values go through an env file: `--var KEY:VALUE` would split a URL's colons.
-  const varsFile = path.join(scratch, "worker.env");
-  writeFileSync(varsFile, `NWC_URI=${wallet.nwcUri}\nDATABASE_URL=${poolerUrl}\n`);
-  const port = await freePort();
-  base = `http://127.0.0.1:${port}`;
-  const output = [];
-  worker = spawn(
-    path.join(workerDir, "..", "node_modules", ".bin", "wrangler"),
-    ["dev", "--ip", "127.0.0.1", "--port", String(port), "--env-file", varsFile],
-    {
-      cwd: workerDir,
-      env: {
-        ...process.env,
-        // wrangler hands this CA to workerd, which verifies relay certificates.
-        NODE_EXTRA_CA_CERTS: certificates.ca,
-        WRANGLER_SEND_METRICS: "false",
-        CI: "1",
-      },
-    },
-  );
-  worker.stdout.on("data", (chunk) => output.push(String(chunk)));
-  worker.stderr.on("data", (chunk) => output.push(String(chunk)));
-  await waitForWorker(output);
+  base = worker.base;
   const setup = await fetch(`${base}/setup`, { method: "POST" });
-  assert.equal(setup.status, 204, output.join(""));
+  assert.equal(setup.status, 204, worker.output.join(""));
 });
 
 after(async () => {
-  if (worker && worker.exitCode === null) {
-    const exited = new Promise((resolve) => worker.once("exit", resolve));
-    worker.kill("SIGTERM");
-    await exited;
-  }
-  wallet?.close();
-  tlsFront?.server.close();
+  await worker?.stop();
+  relay?.close();
   if (scratch) rmSync(scratch, { recursive: true, force: true });
 });
 

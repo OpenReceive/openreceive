@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import net from "node:net";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { startWorker } from "../workers/harness.mjs";
 import { freshDatabase, SECRET_KEY, skip as databaseSkip, sql, startGateway } from "./harness.mjs";
 
 // The Supabase repository inside workerd, which is why it exists: a Worker
@@ -24,54 +23,21 @@ const skip =
 let gateway;
 let worker;
 let scratch;
-let base;
-
-async function freePort() {
-  const server = net.createServer();
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  return port;
-}
 
 before(async () => {
   if (skip) return;
   gateway = await startGateway();
   await freshDatabase();
   scratch = mkdtempSync(path.join(tmpdir(), "openreceive-supabase-worker-"));
-  const varsFile = path.join(scratch, "worker.env");
-  writeFileSync(varsFile, `SUPABASE_URL=${gateway.url}\nSUPABASE_KEY=${SECRET_KEY}\n`);
-  const port = await freePort();
-  base = `http://127.0.0.1:${port}`;
-  const output = [];
-  worker = spawn(
-    wrangler,
-    ["dev", "--ip", "127.0.0.1", "--port", String(port), "--env-file", varsFile],
-    { cwd: workerDir, env: { ...process.env, WRANGLER_SEND_METRICS: "false", CI: "1" } },
-  );
-  worker.stdout.on("data", (chunk) => output.push(String(chunk)));
-  worker.stderr.on("data", (chunk) => output.push(String(chunk)));
-  const deadline = Date.now() + 90_000;
-  for (;;) {
-    if (worker.exitCode !== null) throw new Error(`wrangler dev exited:\n${output.join("")}`);
-    if (
-      await fetch(base).then(
-        (response) => response.ok,
-        () => false,
-      )
-    )
-      break;
-    if (Date.now() > deadline) throw new Error(`wrangler dev never answered:\n${output.join("")}`);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
+  worker = await startWorker({
+    workerDir,
+    vars: { SUPABASE_URL: gateway.url, SUPABASE_KEY: SECRET_KEY },
+    scratch,
+  });
 });
 
 after(async () => {
-  if (worker && worker.exitCode === null) {
-    const exited = new Promise((resolve) => worker.once("exit", resolve));
-    worker.kill("SIGTERM");
-    await exited;
-  }
+  await worker?.stop();
   await gateway?.close();
   if (scratch) rmSync(scratch, { recursive: true, force: true });
 });
@@ -79,7 +45,7 @@ after(async () => {
 async function runOrder(reference, lightning, swap, now) {
   await sql("insert into shop_orders (id) values ($1)", [reference]);
   const seen = gateway.requests.length;
-  const response = await fetch(base, {
+  const response = await fetch(worker.base, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ reference, lightning, swap, now }),
