@@ -19,7 +19,13 @@ export function demoBtcpayVersion(env = process.env) {
 
 // Stage the directory's package and manifest exactly as BTCPay's plugin download
 // does, then queue its native installer. This never copies a local plugin build.
-export async function stagePublishedPlugin({ root, btcpayVersion, fetchApi = fetch }) {
+// `pluginDir` defaults to the demo's; an agent trial stages into its own.
+export async function stagePublishedPlugin({
+  root,
+  btcpayVersion,
+  fetchApi = fetch,
+  pluginDir = path.join(root, "packages/dotnet/docker/.state/published-plugins"),
+}) {
   const response = await fetchApi(
     `${directoryUrl}?btcpayVersion=${encodeURIComponent(btcpayVersion)}`,
     {
@@ -55,7 +61,6 @@ export async function stagePublishedPlugin({ root, btcpayVersion, fetchApi = fet
     "Plugin package checksum mismatch; the current demo has not been changed.",
   );
 
-  const pluginDir = path.join(root, "packages/dotnet/docker/.state/published-plugins");
   mkdirSync(pluginDir, { recursive: true });
   const archivePath = path.join(pluginDir, `${identifier}.btcpay`);
   writeFileSync(`${archivePath}.download`, archive);

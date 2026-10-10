@@ -1,0 +1,94 @@
+# The trial chain: one pruned mainnet bitcoind and NBXplorer that every BTCPay
+# trial shares, the way a merchant's BTCPay deployment has its own node. Its
+# first sync takes hours; trials need not wait for it. A BTCPay store that
+# takes Lightning from a remote wallet mints invoices while the node syncs,
+# but BTCPay itself expects an NBXplorer to answer: without one,
+# GET /api/v1/server/info fails with a 500.
+#
+#   bitcoind    pruned to 25 GB; RPC and P2P stay on the private chain network
+#   nbxplorer   joins the trial wallet's network (`openreceive-trial`) as
+#               `trial-nbxplorer`, so a BTCPay trial reaches it there
+#
+# Start the trial wallet first: it creates `openreceive-trial`. By hand:
+#
+#   docker compose -f trials/wallet/compose.yml up -d --wait
+#   docker compose -f trials/chain/compose.yml up -d
+#   docker compose -f trials/chain/compose.yml exec bitcoind bitcoin-cli -datadir=/data getblockchaininfo
+#
+# The volumes hold the synced chain; `down` without -v keeps them.
+name: openreceive-trial-chain
+
+networks:
+  chain:
+    name: openreceive-trial-chain
+    # The bridge's default 1500 stalls large downloads on this network path.
+    driver_opts:
+      com.docker.network.driver.mtu: "1380"
+  trial:
+    name: openreceive-trial
+    external: true
+
+services:
+  bitcoind:
+    image: btcpayserver/bitcoin:29.2
+    restart: unless-stopped
+    environment:
+      BITCOIN_NETWORK: mainnet
+      BITCOIN_EXTRA_ARGS: |-
+        rpcuser=openreceive-trial
+        rpcpassword=openreceive-trial-chain
+        rpcport=43782
+        rpcbind=0.0.0.0:43782
+        rpcallowip=0.0.0.0/0
+        port=8333
+        whitelist=0.0.0.0/0
+        prune=25000
+        dbcache=8000
+        maxconnections=24
+    networks:
+      - chain
+    volumes:
+      - bitcoin:/data
+
+  postgres:
+    image: btcpayserver/postgres:18.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks:
+      - chain
+    volumes:
+      - postgres:/var/lib/postgresql
+
+  nbxplorer:
+    image: nicolasdorier/nbxplorer:2.6.10
+    restart: unless-stopped
+    environment:
+      NBXPLORER_NETWORK: mainnet
+      NBXPLORER_CHAINS: btc
+      NBXPLORER_BTCRPCURL: http://bitcoind:43782/
+      NBXPLORER_BTCNODEENDPOINT: bitcoind:8333
+      NBXPLORER_BTCRPCUSER: openreceive-trial
+      NBXPLORER_BTCRPCPASSWORD: openreceive-trial-chain
+      NBXPLORER_BIND: 0.0.0.0:32838
+      NBXPLORER_POSTGRES: User ID=postgres;Include Error Detail=true;Host=postgres;Port=5432;Database=nbxplorer
+      NBXPLORER_NOAUTH: 1
+    networks:
+      chain: {}
+      trial:
+        aliases:
+          - trial-nbxplorer
+    depends_on:
+      bitcoind:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+volumes:
+  bitcoin:
+  postgres:

@@ -92,6 +92,15 @@
       "directions": "8bac46517dd1"
     },
     {
+      "trial": "btcpay",
+      "date": "2026-10-10",
+      "release": "0.4.22",
+      "runs": 3,
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "0da58e8adfc1"
+    },
+    {
       "trial": "replit",
       "date": "2026-10-08",
       "release": "0.4.19",

@@ -1,0 +1,58 @@
+# Our BTCPay Server, on purpose without OpenReceive and without wallet codes.
+# The Compose project name is the directory name. Each trial copies this file
+# into its own directory so two runs do not share a network or a volume.
+# The host port is fixed: the harness swaps 8080 for a free port per run
+# (sandbox.ts) and that address stays across a restart.
+#
+# No bitcoind or NBXplorer: the store takes Lightning only, from a remote
+# wallet, so there is no chain to sync. BTCPay still runs on mainnet, the
+# wallet's network.
+services:
+  postgres:
+    image: btcpayserver/postgres:18.4
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres:/var/lib/postgresql
+
+  btcpayserver:
+    image: btcpayserver/btcpayserver:2.4.5
+    environment:
+      BTCPAY_NETWORK: mainnet
+      BTCPAY_BIND: 0.0.0.0:49392
+      BTCPAY_CHAINS: btc
+      BTCPAY_POSTGRES: User ID=postgres;Host=postgres;Port=5432;Database=btcpayserver
+      BTCPAY_DOCKERDEPLOYMENT: "false"
+      BTCPAY_UPDATEURL: ""
+      BTCPAY_RECOMMENDED-PLUGINS: ""
+    ports:
+      - "127.0.0.1:8080:49392"
+    volumes:
+      - datadir:/datadir
+      - plugins:/root/.btcpayserver/Plugins
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/49392 &&
+          printf 'GET /api/v1/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          head -n 1 <&3 | grep -q ' 200 '
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres:
+  datadir:
+  plugins:

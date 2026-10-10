@@ -1,0 +1,31 @@
+{
+  "slug": "btcpay",
+  "name": "BTCPay Server",
+  "directions": "docs/agents/btcpay.md",
+  "prompt_name": "BTCPay Server",
+  "host": "btcpay",
+  "doctor": "",
+  "credential_store": { "kind": "btcpay", "where": "the store's OpenReceive settings" },
+  "opening": "This folder is our BTCPay Server's Docker Compose deployment; .env has its URL, an admin's Greenfield API key and the Widget Shop store id. Enable Bitcoin and stablecoin payments with OpenReceive. Follow these directions: {{directions_url}}",
+  "platform_env": { "BTCPAY_BTCEXPLORERURL": "http://trial-nbxplorer:32838/" },
+  "allowed_install_paths": ["btcpay-plugin-directory"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b",
+    "plugin-builder\\.btcpayserver\\.org",
+    "btcpaypluginbuilder",
+    "docker (?:compose )?cp\\b[^\\n]*Plugins"
+  ],
+  "max_turns": 30,
+  "max_minutes": 60,
+  "heavy": true,
+  "service": "btcpayserver",
+  "container_port": 49392,
+  "seed": false,
+  "live": true,
+  "wallet_services": ["btcpayserver"],
+  "logs": ["logs", "--no-color", "--tail", "60", "btcpayserver"]
+}

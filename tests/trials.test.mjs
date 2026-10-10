@@ -19,6 +19,7 @@ import {
 import { liveShopChecks, Visitor } from "../trials/harness/live.ts";
 import { loadMerchantCodes } from "../trials/harness/codes.ts";
 import { agentPool, pick } from "../trials/harness/agents.ts";
+import { asksPluginInstall } from "../trials/harness/btcpay.ts";
 import { parseClaudeStream } from "../trials/harness/claude.ts";
 import { parseCodexStream, unwrapShell } from "../trials/harness/codex.ts";
 import { cursorEnv, parseStream } from "../trials/harness/cursor.ts";
@@ -1286,4 +1287,42 @@ test("the live buyer follows an order redirect to a uuid", async () => {
   } finally {
     server.close();
   }
+});
+
+test("the BTCPay merchant installs the plugin when the agent asks, not when it quotes the rule", () => {
+  assert.ok(
+    asksPluginInstall(
+      "BTCPay installs plugins only from its UI. Please open the Plugins menu (the plug icon), click Plugin Directory, search openreceive, then Install and Restart now. Tell me when it is back.",
+    ),
+  );
+  assert.ok(asksPluginInstall("Could you install OpenReceive from the Plugin Directory?"));
+  assert.ok(!asksPluginInstall("OpenReceive is installed: the settings route answered 200."));
+  assert.ok(
+    !asksPluginInstall(
+      "Do not invent an installer command; BTCPay installs from the Plugin Directory.",
+    ),
+  );
+  assert.ok(!asksPluginInstall("Please paste your receive-only NWC code."));
+});
+
+test("the BTCPay platform shares the trial chain and checks its store instead of a doctor command", async () => {
+  const btcpay = JSON.parse(
+    await readFile(new URL("../trials/platforms/btcpay/platform.json", import.meta.url), "utf8"),
+  );
+  assert.equal(btcpay.host, "btcpay");
+  assert.equal(btcpay.doctor, "");
+  assert.equal(btcpay.platform_env.BTCPAY_BTCEXPLORERURL, "http://trial-nbxplorer:32838/");
+  assert.deepEqual(btcpay.wallet_services, ["btcpayserver"]);
+  const chain = parseYaml(
+    await readFile(new URL("../trials/chain/compose.yml", import.meta.url), "utf8"),
+  );
+  assert.ok(chain.services.nbxplorer.networks.trial.aliases.includes("trial-nbxplorer"));
+  assert.equal(chain.networks.trial.name, "openreceive-trial");
+  // The node's own network keeps the MTU that lets large downloads through.
+  assert.equal(chain.networks.chain.driver_opts["com.docker.network.driver.mtu"], "1380");
+  const fixture = await readFile(
+    new URL("../trials/platforms/btcpay/fixture/compose.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(fixture, /127\.0\.0\.1:8080:49392/);
 });

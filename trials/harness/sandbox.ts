@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { inspectBtcpay, removeBtcpayState, setupBtcpay } from "./btcpay.ts";
 import { compose, InfraError, platformOverrideFile, walletOverrideFile } from "./docker.ts";
 import type { Check, Platform } from "./types.ts";
 
@@ -156,6 +157,7 @@ async function removeShop(directory: string): Promise<void> {
   await rm(platformEnvFile(directory), { force: true }).catch(() => undefined);
   await rm(platformOverrideFile(directory), { force: true }).catch(() => undefined);
   await rm(walletOverrideFile(directory), { force: true }).catch(() => undefined);
+  await removeBtcpayState(directory).catch(() => undefined);
 }
 
 export async function startShop(
@@ -168,6 +170,8 @@ export async function startShop(
   try {
     await compose(directory, ["up", "-d", "--wait", "--wait-timeout", "300"], UP_TIMEOUT_MS);
     const baseUrl = `http://127.0.0.1:${await publishedPort(directory, service, containerPortOf(platform))}`;
+    // A BTCPay merchant has an admin, a store and its products before the agent comes.
+    if (platform.host === "btcpay") await setupBtcpay(directory, baseUrl);
     if (platform.seed === false) {
       return {
         id,
@@ -241,6 +245,7 @@ async function publishedPort(
 export async function inspectShop(directory: string, platform: Platform): Promise<ShopEvidence> {
   const service = serviceOf(platform);
   const port = await publishedPort(directory, service, containerPortOf(platform));
+  if (platform.host === "btcpay") return inspectBtcpay(directory, `http://127.0.0.1:${port}`);
   if (service !== "wordpress") return inspectContainerShop(directory, service, port, platform);
   // The same command the directions tell an agent to run.
   const count = await compose(

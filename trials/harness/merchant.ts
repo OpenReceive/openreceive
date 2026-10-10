@@ -101,6 +101,9 @@ function withCode(code: string | undefined): string | undefined {
   return `I'd rather not run commands or edit files. Can you do it? Here is the code if you need it: ${code}`;
 }
 
+/** The merchant's answer to anything that is not a code question. */
+export const GO_AHEAD = "Yes, go ahead.";
+
 /** What a v0 or Vercel merchant says when asked for a code the platform already holds. */
 export const PLATFORM_CODES_REPLY =
   "Both codes are already set as this project's environment variables on Vercel. I won't paste them here.";
@@ -133,5 +136,5 @@ export function merchantReply(
   if (intent === "lsc") return codes.lsc;
   if (intent === "lsc_backup") return codes.lscBackup ?? "I don't have a backup code.";
   if (intent === "bitcoin_choice") return scenario.choice;
-  return "Yes, go ahead.";
+  return GO_AHEAD;
 }

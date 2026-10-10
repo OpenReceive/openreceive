@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (BTCPay Server)
 
 ```sh
-# READ THIS FIRST: this file is 12 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 16 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/btcpay/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -54,31 +54,84 @@ refund path on the same checkout screen.
    BTCPay refuses to load it below.
 2. Check whether the plugin is installed (the Plugins menu — the plug icon in
    the top-right corner — under Installed Plugins, or the store navigation
-   shows an "OpenReceive" entry). If not, install it from the BTCPay plugin
-   directory (the same Plugins menu → Plugin Directory, search "openreceive",
-   then Install and Restart now), as the quickstart says; do not invent an
-   installer command.
+   shows an "OpenReceive" entry; through Greenfield,
+   `GET /api/v1/stores/{storeId}/openreceive/settings` answers 404 until it
+   is). If not, install it from the BTCPay plugin directory (the same Plugins
+   menu → Plugin Directory, search "openreceive", then Install and Restart
+   now), as the quickstart says; do not invent an installer command. BTCPay
+   installs plugins only from its UI. If you cannot use it, ask the user to:
+   name those clicks, and wait until they say it is installed.
 3. Check whether the store already has an OpenReceive connection:
    `GET /api/v1/stores/{storeId}/openreceive/settings` returns
-   `lightningNodeIsOpenReceive`. If true, the wallet step is done — go to
-   swaps only if the user wants them.
-4. If no receive-only NWC code is available, stop and tell the user exactly
-   what to create:
+   `lightningNodeIsOpenReceive` and `lscPrimaryConfigured`. A code that is
+   already saved is not asked for again; if both are, skip to Verifying.
 
-   > OpenReceive cannot mint an invoice without a receive-only NWC code. Get
-   > one at https://openreceive.org/get_a_nwc_code_to_receive_payments and
-   > paste it into Store → OpenReceive → Test connection, or hand it to me and
-   > I will set it through the Greenfield API.
+Otherwise your next action is a question to the user. A store without a
+connection has no code anywhere on this machine. Do not search for one: do not
+read other files, Docker containers, compose files beyond this deployment's,
+or process environments, and never run `printenv`. Hunting for a code burns
+the turn and can leak other secrets into the transcript.
 
-   Never print, log or echo the code; report only whether it is set. Never
-   paste a bare `nostr+walletconnect://` string into BTCPay's Lightning node
-   screen — that form is claimed by the Nostr plugin, without the receive-only
-   guard.
-5. If the user wants altcoin payments, ask for an LSC code from
-   https://openreceive.org/set_up_swap_provider. Do not wait for it: the
-   wallet works without it, and swaps switch on later with one settings change.
+The user never edits BTCPay's settings for you. They paste each code
+into the chat; you save it (Step 1). Ask one question per message:
 
-Only then start the quickstart.
+1. **First message — the NWC code, and nothing else.** Ask for it and walk them
+   through getting it:
+
+   > To receive payments I need a receive-only wallet code. In Rizful: open
+   > the menu, tap NWC, choose Receive-only NWC code, and tap Copy
+   > (https://openreceive.org/get_a_nwc_code_to_receive_payments). If you would
+   > rather run your own wallet, Alby Hub works too: Connections → Add
+   > Connection → Read Only. Paste the code here and I will save it in
+   > BTCPay.
+
+   If the plugin still needs installing, ask for that in the same message.
+2. **When they paste it.** If it does not start with `nostr+walletconnect://`,
+   ask them to copy the receive-only code again. Otherwise save it (Step 1),
+   reply only that it is saved, then ask the next question. Never print, log
+   or echo the code; report only whether it is set. Never paste a bare
+   `nostr+walletconnect://` string into BTCPay's Lightning node screen — that
+   form is claimed by the Nostr plugin, without the receive-only guard.
+3. **Second message — swaps.** If the user asked for stablecoins, USDT, USDC,
+   ETH, SOL, altcoins or "crypto" (as in "Bitcoin and stablecoin payments"),
+   this message IS the walkthrough below: send it as it is, and do not ask yes
+   or no first. Otherwise ask whether payers should also be able to pay with
+   USDT, USDC, ETH or SOL, then give the walkthrough. The walkthrough:
+
+   > Go to https://lightning-swap.com, sign in for API keys, create a key, and
+   > copy the whole URI (https://openreceive.org/set_up_swap_provider). Paste
+   > it here and I will save it — or say "Bitcoin only" and I will continue
+   > without it.
+
+   Mention FixedFloat only if they already use it.
+4. **When they paste it.** If it does not start with
+   `lightning+swapconnect://`, ask them to copy it again. Otherwise save it
+   (Step 1); saving it turns swaps on.
+
+The quickstart below shows the same steps in BTCPay's UI.
+
+## Step 1 — save the codes through the Greenfield API
+
+Use a Greenfield API key the user gives you (Account → API Keys) that can
+modify the store's settings. A swap provider on a local network needs a server
+admin's key. Save each code yourself, one request each, and never in a
+command line:
+
+1. Write the request body with your file-editing tool, not a shell command (no
+   `echo`, `printf` or heredoc), to a new file outside the deployment
+   directory, such as `/tmp/openreceive-settings.json`:
+   `{"nwcUri": "<the NWC code>"}`. For the LSC code the body is
+   `{"lscPrimary": "<the LSC code>"}`; saving it turns swaps on.
+2. Send it, with your server's address, the key and the store id:
+   `curl -fsS -X PUT -H "Authorization: token $BTCPAY_API_KEY" -H "Content-Type: application/json" --data @/tmp/openreceive-settings.json "$BTCPAY_URL/api/v1/stores/$BTCPAY_STORE_ID/openreceive/settings"`.
+3. Delete the file (`rm /tmp/openreceive-settings.json`), whether the request
+   passed or not.
+
+The response never contains a code. `lightningNodeIsOpenReceive: true` means
+the wallet is saved; `swapsEnabled` and `lscPrimaryConfigured` say the same
+for swaps. A refusal answers 422 with a `code` and a `message`: a code that
+can spend is refused on purpose, so ask the user for a receive-only code
+instead of setting the override.
 
 ## Non-negotiables
 
@@ -121,11 +174,16 @@ Only then start the quickstart.
 
 Store → OpenReceive → **Run a health check** (the doctor page) runs every probe now: connection, preflight,
 notifications, last scan, provider reachability, invoice expiration, swaps
-needing attention. On a regtest machine, `packages/dotnet/docker/up.sh` then
+needing attention. Without the UI, check through Greenfield instead:
+`GET /api/v1/stores/{storeId}/openreceive/settings` shows the wallet and
+swaps, `POST /api/v1/stores/{storeId}/openreceive/wallet/test` with `{}`
+runs the wallet preflight again, and a test invoice
+(`POST /api/v1/stores/{storeId}/invoices` with an amount) must list a
+`BTC-LN` payment method whose `destination` is a BOLT11. On a regtest machine, `packages/dotnet/docker/up.sh` then
 `e2e.sh` in the OpenReceive repository proves the whole path end to end, and
 that is the only situation where cloning the repository is the right move.
 
-Setup ends when the health check is clean. Say "Setup is finished" in one
+Setup ends when the health check, or those Greenfield checks, are clean. Say "Setup is finished" in one
 message. Do not offer more work or end the message on a question.
 
 ## More documentation

@@ -102,6 +102,12 @@ export interface Platform {
   readonly max_minutes: number;
   /** WordPress and BTCPay each need a database server. At most two of these run at once. */
   readonly heavy: boolean;
+  /**
+   * A server product rather than an app. `btcpay`: a BTCPay Server that
+   * btcpay.ts sets up, inspects and checks through Greenfield, whose merchant
+   * installs the plugin when asked, and which shares the trial chain's node.
+   */
+  readonly host?: "btcpay";
   /** Compose service that publishes the shop. WordPress when omitted. */
   readonly service?: string;
   /** Port inside that service. 80 when omitted. */

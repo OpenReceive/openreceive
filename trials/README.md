@@ -241,6 +241,41 @@ npm run trial -- --platform lovable --smoke
 npm run trial -- --platform lovable --serve-directions
 ```
 
+## BTCPay Server
+
+`--platform btcpay` tests the BTCPay plugin the way a merchant installs it.
+The shop is a stock BTCPay Server 2.4.5 on mainnet with its own Postgres. The
+harness plays the merchant who set it up: an admin, the Widget Shop store, a
+Point of Sale app with five products, and an admin's Greenfield key in the
+deployment's `.env`. There is no app code, so the agent configures the store
+through Greenfield and installs nothing itself. BTCPay installs plugins only
+from its UI. When the agent asks, the merchant installs OpenReceive from the
+Plugin Directory: the harness stages the published package the way BTCPay's
+Install button does (`tools/dotnet/published-plugin.mjs`) and restarts BTCPay.
+Copying a plugin in or downloading it from the plugin builder is forbidden.
+
+BTCPay's health check is a page in its UI, so `doctor_clean` is not checked.
+The harness reads the store with its own key instead: the wallet must be the
+store's Lightning node without the spend override, and swaps must be on. The
+live checks buy a product through the Point of Sale. The invoice's `BTC-LN`
+method must be the trial wallet's BOLT11. After the wallet settles it, BTCPay's
+checkout and its invoice must both say Settled.
+
+BTCPay expects an NBXplorer, and `GET /api/v1/server/info` fails with a 500
+without one. Every BTCPay trial shares the trial chain (`trials/chain/compose.yml`):
+a pruned mainnet bitcoind and NBXplorer, reached on the trial wallet's network
+as `trial-nbxplorer`. The harness starts it after the wallet. Its first sync
+takes hours, and trials need not wait: a store that takes Lightning from a
+remote wallet mints invoices while the node syncs. Its network keeps an MTU
+of 1380, which lets large downloads through on this machine's network path.
+Stop it with `docker compose -f trials/chain/compose.yml down`. Leave off `-v`
+to keep the synced chain.
+
+```sh
+npm run trial -- --platform btcpay --smoke
+npm run trial -- --platform btcpay --serve-directions
+```
+
 ## Passed
 
 A platform counts as passed after three live runs in a row exit 0

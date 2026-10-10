@@ -42,11 +42,38 @@
   plugin's Subversion trunk and version tag, together with the directory page
   images, and waits until wordpress.org lists the version. Every GitHub release
   still carries the ZIP.
+- Fixed (WordPress): WooCommerce → Settings → Payments named the gateway
+  `OpenReceive\WP\Vendor\OpenReceive`. The release build's dependency
+  prefixing rewrote the quoted name because it equals the engine's namespace;
+  the build now restores it, and the WordPress integration test checks the
+  name in the built plugin.
+- Changed (WordPress): the settings form labels the codes **NWC code**,
+  **Lightning Swap Connect code** and **Backup Lightning Swap Connect code**
+  instead of `NWC_URI`, `LSC_URI_PRIMARY` and `LSC_URI_BACKUP`, says what each
+  one is for, and links to where to get one. The `wp-config.php` constants and
+  Doctor keep the variable names. The Title field is empty by default and shows
+  the title checkout uses as its placeholder, so it no longer reads "Bitcoin
+  Lightning" while checkout says "Bitcoin & stablecoins"; a store that saved
+  the old default sees the field empty. Until an NWC code is saved, the Enable
+  checkbox says to enter one first.
 - Changed (WooCommerce quickstart, agent directions and plugin README): install
   the plugin from WordPress.org: search for OpenReceive under Plugins → Add
   New, or run `wp plugin install openreceive --activate`. The directions pin
   the release with `--version` and fall back to the release ZIP when
   WordPress.org does not list that version yet.
+- Changed (Laravel quickstart, PHP agent directions): adding GMP to an
+  official `php` Docker image takes `libgmp-dev` before
+  `docker-php-ext-install gmp`, which fails alone; the quickstart gives the
+  Dockerfile step and where to run `composer require`, and forbids
+  `--ignore-platform-req=ext-gmp`. Two of three Laravel agent trials had forced
+  past the missing extension that way.
+- Changed (BTCPay agent directions): the first action after the deployment
+  checks is one question, the NWC code, with the wallet walkthrough; the LSC
+  code comes in a later message; and the agent never searches the machine for
+  a code. A new Step 1 saves each code through Greenfield from a request body
+  the agent writes to a file, so no code appears in a command line. An agent
+  that cannot use BTCPay's UI asks the user to install the plugin, and checks
+  the store through Greenfield instead of the health check page.
 
 ## 0.4.22 - 2026-10-10
 

@@ -13,11 +13,12 @@ import {
 } from "./checks.ts";
 import type { MerchantCodes } from "./codes.ts";
 import type { AgentAdapter } from "./agents.ts";
+import { asksPluginInstall, btcpayChecks, installPlugin, liveBtcpayChecks } from "./btcpay.ts";
 import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
-import { classify, merchantReply } from "./merchant.ts";
+import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
 import { redact } from "./redact.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { inspectShop, orderStatus, prepareShop, shopChecks, startShop } from "./sandbox.ts";
@@ -292,10 +293,16 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
         reason = "a turn timed out";
         break;
       }
-      const reply = merchantReply(response.text, scenario, wallet, platformCodes);
+      let reply = merchantReply(response.text, scenario, wallet, platformCodes);
       if (reply === null) {
         done = true;
         break;
+      }
+      // BTCPay installs plugins only from its own UI, so the merchant does it when asked.
+      if (platform.host === "btcpay" && asksPluginInstall(response.text)) {
+        const installed = await installPlugin(directory);
+        console.log(`${sandbox.id} merchant installed the plugin`);
+        reply = reply === GO_AHEAD ? installed : `${installed} ${reply}`;
       }
       if (containsSecret(reply, uris)) {
         console.log(`${sandbox.id} merchant pasted a code`);
@@ -329,6 +336,8 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       ...commandChecks(turns, writes, platform.doctor !== ""),
       ...closingChecks(turns, platform.closing_max_lines ?? 5),
     );
+    // BTCPay's health check is a page in its UI: read the store the agent configured instead.
+    if (platform.host === "btcpay") checks.push(...(await btcpayChecks(directory, scenario.swaps)));
     const secrets = [shopNwc, wallet.lsc, wallet.lscBackup].filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
@@ -345,7 +354,10 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       const prepared = await beforeLive(directory, platform, log);
       if (prepared !== undefined) checks.push(prepared);
       log("live: the shop's own order, a checkout, a stranger");
-      const live = await liveShopChecks(sandbox.baseUrl, { paid });
+      const live =
+        platform.host === "btcpay"
+          ? await liveBtcpayChecks(directory, request.wallet?.settle)
+          : await liveShopChecks(sandbox.baseUrl, { paid });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

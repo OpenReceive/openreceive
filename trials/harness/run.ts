@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireLiveWalletLock, loadMerchantCodes, type MerchantCodes } from "./codes.ts";
 import { agentPool, pick } from "./agents.ts";
+import { startTrialChain } from "./chain.ts";
 import { dockerAvailable, InfraError } from "./docker.ts";
 import type { LoopResult } from "./loop.ts";
 import { renderSummary, runDirections } from "./loop.ts";
@@ -26,7 +27,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 }
 
 function help(): void {
-  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|vercel|replit|lovable|rails|django|fastapi|php|laravel [--smoke] [--runs 1] [--parallel 1] [--keep]
+  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|vercel|replit|lovable|rails|django|fastapi|php|laravel|btcpay [--smoke] [--runs 1] [--parallel 1] [--keep]
        [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,
@@ -165,6 +166,8 @@ async function main(): Promise<void> {
     codes = { nwc: wallet.nwc, lsc: wallet.lsc };
   }
   const selected = await platforms(requested);
+  // BTCPay expects an NBXplorer; every BTCPay trial shares the trial chain's.
+  if (!smoke && selected.some((platform) => platform.host === "btcpay")) await startTrialChain();
   // A Vercel deploy cannot reach the local test swap provider, and WordPress
   // does not trust its private CA: those shops get the real swap code.
   const liveSwap = (platform: Platform): boolean =>

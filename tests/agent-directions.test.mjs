@@ -152,8 +152,8 @@ test("every payload's Non-negotiables call the chat paste the supported path", (
   }
 });
 
-test("every payload except BTCPay makes the first question a hard rule", () => {
-  for (const { stack, text } of payloads.filter(({ stack }) => stack !== "btcpay")) {
+test("every payload makes the first question a hard rule", () => {
+  for (const { stack, text } of payloads) {
     const step = stepZero(text);
     assert.match(step, /your next action is a question to the user/, stack);
     assert.match(step, /paste each code\s+into (the|this) chat/, stack);
