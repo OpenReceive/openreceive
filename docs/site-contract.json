@@ -486,7 +486,7 @@
       "slug": "wordpress-hosting",
       "title": "WordPress Hosting Requirements",
       "category": "guide",
-      "bytes": 4797
+      "bytes": 4847
     },
     {
       "path": "/guides/agent-directions-woocommerce",
@@ -496,7 +496,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 22703
+      "bytes": 22735
     },
     {
       "path": "/api_docs",
@@ -562,7 +562,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22703,
+      "bytes": 22735,
       "copy_button": true,
       "self_contained": true
     },

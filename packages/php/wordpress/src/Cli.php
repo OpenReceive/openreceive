@@ -23,6 +23,8 @@ final class Cli
     {
         $value = '';
         try {
+            $missing = Plugin::missingRequirements();
+            if ($missing !== []) { throw new \RuntimeException(Plugin::requirementsMessage($missing) . ' Run wp openreceive doctor.'); }
             $fields = [];
             foreach (Secrets::FIELDS as $field => $_name) {
                 $flag = str_replace('_', '-', $field);

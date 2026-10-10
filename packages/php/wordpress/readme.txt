@@ -57,8 +57,8 @@ No. The wallet code is receive-only, so merchant refunds are manual: send them f
 = What happens when the customer closes the page? =
 WooCommerce's Action Scheduler checks for payments every minute when WordPress runs scheduled work. On a low-traffic store, use a real cron runner, or run the optional `wp openreceive notifications` worker.
 
-= Activation fails with "requires 64-bit PHP with the sodium and GMP extensions" =
-Your host has not enabled GMP or sodium. Most hosts can enable them in the control panel or on request. See https://openreceive.org/guides/wordpress-hosting .
+= The Plugins screen says "OpenReceive is not running" =
+The plugin activates on any WordPress site, but it only runs with 64-bit PHP, the GMP and sodium extensions, and a MySQL or MariaDB database. The notice names what is missing. Until that is fixed, the plugin adds no payment method and makes no network requests. Most hosts can enable GMP and sodium in the control panel or on request. See https://openreceive.org/guides/wordpress-hosting .
 
 = What happens after rotating WordPress authentication keys? =
 Enter the encrypted payment credentials again. Values configured as constants are unaffected.
@@ -72,6 +72,8 @@ This plugin connects to the following services. It sends no telemetry.
 Your Lightning wallet, over Nostr Wallet Connect. The plugin connects to the relay named in the NWC code you configure, to create an invoice when a customer checks out and to check for incoming payments. It sends invoice amounts and descriptions to your wallet through that relay. The relay and wallet are chosen and operated by you or your wallet provider; their terms and privacy policies apply.
 
 BTC price feeds. To convert the order total to sats, the plugin requests current BTC prices in a fixed list of fiat currencies from CoinGecko, and from the OpenReceive price mirror if CoinGecko does not answer. The request contains only that fixed list of currency codes. No order or customer details are sent. CoinGecko terms: https://www.coingecko.com/en/terms ; privacy policy: https://www.coingecko.com/en/privacy . OpenReceive price mirror (openreceive.org) terms and privacy policy: https://openreceive.org/privacy .
+
+Links shown at checkout. To help customers pay a Lightning invoice, the checkout lists wallets, exchanges and swap services, such as Boltz, Strike and Kraken, with links to their websites or help pages. For swap payments it links transactions and addresses to the public block explorers Etherscan, Solscan and Tronscan. These are ordinary links. The plugin and the checkout never contact these sites and send them no data; a site is visited only if the customer opens a link. All icons and images are bundled with the plugin.
 
 Swap provider, only if you configure one. When a customer chooses USDT, USDC, SOL or ETH, the plugin sends the amount, the Lightning invoice to be paid, and the customer's refund address to the FixedFloat-compatible provider named in your swap connection code, and later checks the swap's status. Review that provider's terms and privacy policy before enabling swaps. FixedFloat terms: https://ff.io/terms-of-service ; privacy policy: https://ff.io/privacy-policy .
 

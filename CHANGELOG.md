@@ -114,6 +114,25 @@
   `--deploy` is given. A Tested badge now takes three passing trials in a row,
   and its `passed.json` entry names the agents and models and the directions
   file's hash.
+- Changed (WordPress): activation no longer stops with `wp_die()` on a site
+  without 64-bit PHP, GMP, sodium or MySQL. The WordPress.org review
+  activates plugins in WordPress Playground, which runs SQLite and has
+  neither extension, and reported the blocked activation as a failure. The
+  plugin now activates and stays idle there: no tables, payment method,
+  schedule or REST routes. The Plugins screen names what is missing,
+  `wp plugin activate` prints it as a warning, and Doctor reports it.
+  The tables are created on the first load once the site qualifies, and
+  again after each plugin update, with WordPress's charset and collation.
+- Changed (WordPress): admin notices appear only on the Plugins screen and
+  WooCommerce settings. The "OpenReceive is unavailable" check ran on every
+  admin page and fetched BTC prices each time.
+- Fixed (WordPress): before a wallet was configured, the every-minute
+  reconcile action failed each run with a configuration error. It now
+  skips the wallet scan until a wallet is configured.
+- The WordPress readme's External services section says that the wallet,
+  exchange and block-explorer links at checkout are plain links the
+  plugin never contacts.
+
 ## 0.4.21 - 2026-10-09
 
 - Fixed: `openreceive doctor` read only the process environment, so right

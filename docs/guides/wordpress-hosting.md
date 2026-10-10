@@ -25,9 +25,10 @@ the polyfill is present.
 
 Use one of these instead:
 
-- **Activate the plugin.** If GMP, sodium or 64-bit PHP is missing, activation
-  stops with "OpenReceive requires 64-bit PHP with the sodium and GMP
-  extensions" and changes nothing.
+- **Activate the plugin.** If GMP, sodium or 64-bit PHP is missing, the
+  Plugins screen says "OpenReceive is not running" and names what is missing.
+  The plugin stays idle, with no payment method and no tables, until it is
+  fixed.
 - **Check the host's PHP info page.** Many control panels show the loaded
   extensions, for example Hostinger's hPanel (**Advanced → PHP Info**). Look
   for `gmp` and `sodium`.

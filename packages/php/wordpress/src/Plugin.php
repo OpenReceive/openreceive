@@ -15,6 +15,9 @@ use OpenReceive\Swap\SwapProvider;
 
 final class Plugin
 {
+    public const INSTALLED_OPTION = 'openreceive_installed_version';
+    private const HOSTING_URL = 'https://openreceive.org/guides/wordpress-hosting';
+
     private static ?Engine $engine = null;
 
     public static function activate(bool $network = false): void
@@ -25,19 +28,78 @@ final class Plugin
                 try { self::install(); } finally { restore_current_blog(); }
             }
         } else { self::install(); }
+        // Activation never blocks. WP-CLI has no Plugins screen to show the notice.
+        if (defined('WP_CLI') && WP_CLI && self::missingRequirements() !== []) {
+            \WP_CLI::warning(self::requirementsMessage(self::missingRequirements()) . ' See ' . self::HOSTING_URL);
+        }
     }
 
+    /**
+     * Creates the tables on activation, and again on the first load after an
+     * update or once a missing requirement is fixed. The statements are
+     * idempotent. A failure leaves the version marker unset, so the next load
+     * retries and Doctor reports the schema.
+     */
     public static function install(): void
     {
         global $wpdb;
-        if (!$wpdb->is_mysql) { wp_die(esc_html__('OpenReceive requires MySQL or MariaDB; SQLite WordPress is not supported.', 'openreceive')); }
-        if (!extension_loaded('sodium') || !extension_loaded('gmp') || PHP_INT_SIZE < 8) { wp_die(esc_html__('OpenReceive requires 64-bit PHP with the sodium and GMP extensions. Your host can enable them; see https://openreceive.org/guides/wordpress-hosting', 'openreceive')); }
-        $db = new WpdbConnection($wpdb);
-        foreach (PaymentsSchema::statements('mysql', $wpdb->prefix . 'openreceive_payments', $wpdb->prefix . 'openreceive_meta') as $sql) {
-            // MySQL's server default may be MyISAM; settlement needs transactions.
-            if (str_starts_with($sql, 'CREATE TABLE')) { $sql .= ' ENGINE=InnoDB'; }
-            $db->execute($sql);
-        }
+        if (self::missingRequirements() !== []) { return; }
+        try {
+            $db = new WpdbConnection($wpdb);
+            foreach (PaymentsSchema::statements('mysql', $wpdb->prefix . 'openreceive_payments', $wpdb->prefix . 'openreceive_meta') as $sql) {
+                // MySQL's server default may be MyISAM; settlement needs transactions.
+                if (str_starts_with($sql, 'CREATE TABLE')) { $sql .= ' ENGINE=InnoDB ' . $wpdb->get_charset_collate(); }
+                $db->execute($sql);
+            }
+            update_option(self::INSTALLED_OPTION, OPENRECEIVE_PLUGIN_VERSION, true);
+        } catch (\Throwable) { /* Doctor reports the missing schema. */ }
+    }
+
+    /**
+     * What this site lacks to run OpenReceive; empty when it can run. Hosts
+     * such as WordPress Playground lack all of it, so the plugin activates,
+     * stays idle and says why instead of failing. Boot calls this before
+     * `init`, so it answers keys and requirementsMessage() translates them.
+     *
+     * @return list<string>
+     */
+    public static function missingRequirements(): array
+    {
+        return array_keys(array_filter([
+            '64-bit' => PHP_INT_SIZE < 8,
+            'gmp' => !extension_loaded('gmp'),
+            'sodium' => !extension_loaded('sodium'),
+            // The SQLite Database Integration drop-in defines DB_ENGINE.
+            'mysql' => defined('DB_ENGINE') && DB_ENGINE === 'sqlite',
+        ]));
+    }
+
+    /** @param list<string> $missing keys from missingRequirements() */
+    public static function requirementsMessage(array $missing): string
+    {
+        $phrases = [
+            '64-bit' => __('64-bit PHP', 'openreceive'),
+            'gmp' => __('the PHP GMP extension', 'openreceive'),
+            'sodium' => __('the PHP sodium extension', 'openreceive'),
+            'mysql' => __('a MySQL or MariaDB database', 'openreceive'),
+        ];
+        /* translators: %s: the missing requirements, such as "the PHP GMP extension and the PHP sodium extension". */
+        return sprintf(__('OpenReceive is not running: this site needs %s.', 'openreceive'), wp_sprintf('%l', array_map(static fn (string $key): string => $phrases[$key], $missing)));
+    }
+
+    /**
+     * Admin notices appear only where a merchant manages OpenReceive: the
+     * Plugins screen and WooCommerce settings. $message returns escaped
+     * HTML, or null when there is nothing to report.
+     */
+    private static function notice(string $capability, callable $message): void
+    {
+        add_action('admin_notices', static function () use ($capability, $message): void {
+            $screen = get_current_screen();
+            if ($screen === null || !in_array($screen->id, ['plugins', 'woocommerce_page_wc-settings'], true) || !current_user_can($capability)) { return; }
+            $html = $message();
+            if ($html !== null) { echo '<div class="notice notice-error"><p>' . wp_kses_post($html) . '</p></div>'; }
+        });
     }
 
     public static function deactivate(bool $network = false): void
@@ -58,10 +120,15 @@ final class Plugin
             \WP_CLI::add_command('openreceive configure', [new Cli(), 'configure']);
             \WP_CLI::add_command('openreceive doctor', [new Cli(), 'doctor']);
         }
+        $missing = self::missingRequirements();
+        if ($missing !== []) {
+            self::notice('activate_plugins', static fn (): string => esc_html(self::requirementsMessage($missing))
+                . ' <a href="' . esc_url(self::HOSTING_URL) . '">' . esc_html__('WordPress hosting requirements', 'openreceive') . '</a>');
+            return;
+        }
+        if (get_option(self::INSTALLED_OPTION) !== OPENRECEIVE_PLUGIN_VERSION) { self::install(); }
         if (!class_exists('WC_Payment_Gateway')) {
-            add_action('admin_notices', static function (): void {
-                if (current_user_can('activate_plugins')) { echo '<div class="notice notice-error"><p>' . esc_html__('OpenReceive needs WooCommerce installed and active.', 'openreceive') . '</p></div>'; }
-            });
+            self::notice('activate_plugins', static fn (): string => esc_html__('OpenReceive needs WooCommerce installed and active.', 'openreceive'));
             return;
         }
         // Reject unsupported secret writes before WooCommerce mutates any settings.
@@ -77,13 +144,14 @@ final class Plugin
         }, 10, 3);
         add_filter('woocommerce_payment_gateways', static function (array $gateways): array { $gateways[] = Gateway::class; return $gateways; });
         add_action('rest_api_init', [self::class, 'routes']);
-        add_action('admin_notices', static function (): void {
-            if (!current_user_can('manage_woocommerce') || (get_option('woocommerce_openreceive_settings', [])['enabled'] ?? 'no') !== 'yes') { return; }
+        self::notice('manage_woocommerce', static function (): ?string {
+            if ((get_option('woocommerce_openreceive_settings', [])['enabled'] ?? 'no') !== 'yes') { return null; }
             try {
                 self::repository();
                 self::engine()->service()->listRates(['currencies' => [get_woocommerce_currency()]]);
+                return null;
             } catch (\Throwable) {
-                echo '<div class="notice notice-error"><p>' . esc_html__('OpenReceive is unavailable. Check its Doctor panel for wallet permissions, database schema and a working price feed for the store currency.', 'openreceive') . '</p></div>';
+                return esc_html__('OpenReceive is unavailable. Check its Doctor panel for wallet permissions, database schema and a working price feed for the store currency.', 'openreceive');
             }
         });
         add_action('template_redirect', [Gateway::class, 'prepareReceipt']);
@@ -126,7 +194,7 @@ final class Plugin
         $repo = new SqlPaymentRepository(new WpdbConnection($wpdb), null, $wpdb->prefix . 'openreceive_payments', $wpdb->prefix . 'openreceive_meta');
         // Fail closed also for missing/corrupt schema markers, not just newer schemas.
         $version = $repo->meta()->storedSchemaVersion();
-        if ($version !== PaymentsSchema::SCHEMA_VERSION) { throw new \RuntimeException('OpenReceive schema is missing or incompatible. Reactivate after installing the matching plugin version.'); }
+        if ($version !== PaymentsSchema::SCHEMA_VERSION) { throw new \RuntimeException('OpenReceive tables are missing or from another plugin version. Check that the WordPress database user can create tables, then reload this page.'); }
         return $repo;
     }
 
@@ -170,6 +238,8 @@ final class Plugin
     {
         // Repair does not need a working wallet connection.
         OrderHost::repair();
+        // Before a wallet is configured there is nothing to scan, and the scheduled run must not fail every minute.
+        if (Secrets::environment()['NWC_URI'] === '' && !self::testkit()) { return; }
         self::engine()->maybeReconcile();
         OrderHost::repair();
     }
@@ -245,11 +315,14 @@ final class Plugin
             if (!class_exists('WC_Payment_Gateway')) { throw new \RuntimeException('Install and activate WooCommerce.'); }
             return 'active';
         });
-        $check('PHP extensions', static function (): string {
-            if (!extension_loaded('gmp')) { throw new \RuntimeException('Enable PHP gmp in both web and WP-CLI runtimes.'); }
-            if (!extension_loaded('sodium')) { throw new \RuntimeException('Enable PHP sodium in both web and WP-CLI runtimes.'); }
-            if (PHP_INT_SIZE < 8) { throw new \RuntimeException('Switch to 64-bit PHP.'); }
-            return 'GMP and sodium available';
+        $check('Requirements', static function (): string {
+            $missing = self::missingRequirements();
+            if ($missing !== []) {
+                $runtimes = array_diff($missing, ['mysql']) !== [] ? ' The web PHP and the WP-CLI PHP both need them.' : '';
+                // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Doctor text is plain for WP-CLI; the Doctor panel escapes each line when it prints HTML.
+                throw new \RuntimeException(self::requirementsMessage($missing) . $runtimes . ' See ' . self::HOSTING_URL);
+            }
+            return '64-bit PHP with GMP and sodium';
         });
         $check('Credentials', static function () use (&$lines): string {
             foreach (Secrets::environment() as $name => $value) {

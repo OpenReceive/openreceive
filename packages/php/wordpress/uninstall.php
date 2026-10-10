@@ -11,6 +11,7 @@ $openreceive_remove_data = static function (): void {
         $db->execute("DROP TABLE IF EXISTS {$table}");
     }
     delete_option('woocommerce_openreceive_settings');
+    delete_option(OpenReceive\WP\Plugin::INSTALLED_OPTION);
 };
 if (is_multisite()) {
     foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $id) {

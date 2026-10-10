@@ -101,8 +101,8 @@ wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v
 
 It needs WooCommerce active, and PHP 8.2+ with GMP and sodium in BOTH the web
 PHP and the WP-CLI PHP. On the official `wordpress` and `wordpress:cli` Docker
-images, activation fails with "OpenReceive requires the PHP sodium and GMP
-extensions": add GMP to both images as "Enable GMP in both PHP runtimes" below
+images, activation warns "OpenReceive is not running: this site needs the PHP
+GMP extension" and the plugin stays idle: add GMP to both images as "Enable GMP in both PHP runtimes" below
 says, rebuild both, then install again. If the Compose file has only `image:`
 lines, use the two Dockerfiles and `build:` keys under "Compose files with only
 `image:` lines" below, and add no other service. If the URL answers 404, build the same
