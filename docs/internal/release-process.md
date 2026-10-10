@@ -358,7 +358,7 @@ Run from the repo root on a clean, current `master`.
     composer show -a openreceive/openreceive
     composer show -a openreceive/laravel
     gh release view v<x.y.z> --repo OpenReceive/openreceive
-    curl -s 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=openreceive' | jq -r .version
+    curl -s 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=openreceive' | jq -r .version
     ```
 
     Run `npm run release:artifacts -- github` from the release checkout. Download
@@ -471,8 +471,14 @@ release, the exact file step 10 smoke-tests, and runs
   equals its Stable tag
 - refuses prereleases and any version older than trunk
 - mirrors the ZIP into `trunk/` and the images into `assets/`, deleting files
-  the release dropped, and copies trunk to `tags/<x.y.z>/`, all in one commit
-- treats an existing tag as already published, so a re-run is a no-op
+  the release dropped, and commits them
+- then creates `tags/<x.y.z>/` as a copy of trunk on the server, which sends
+  no files
+- treats an existing tag as already published, so a re-run is a no-op, and a
+  re-run whose trunk commit landed only adds the tag
+- waits up to an hour for each write, and after a failed write asks the server
+  whether it landed: the first publication, about 4,000 files sent in one
+  commit, outlasted Subversion's default ten-minute wait and still landed
 - polls the wordpress.org plugin API until it lists the version
 
 `--dry-run` prepares the same commit and prints its size, without committing

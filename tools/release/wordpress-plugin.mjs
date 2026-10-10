@@ -235,8 +235,33 @@ if (command === "plan") {
     dryRun || (username && password),
     "Set WPORG_SVN_USERNAME and WPORG_SVN_PASSWORD (the SVN password from the WordPress.org profile, not the account password).",
   );
+  // wordpress.org can take many minutes to answer the last request of a large
+  // commit. Subversion's default ten-minute wait gave up on the first
+  // publication, which had landed.
   const svn = (args, extra = {}) =>
-    execFileSync("svn", ["--non-interactive", ...args], { encoding: "utf8", ...extra });
+    execFileSync(
+      "svn",
+      ["--non-interactive", "--config-option", "servers:global:http-timeout=3600", ...args],
+      { encoding: "utf8", ...extra },
+    );
+  // An authenticated write reads the password from stdin. A failed write may
+  // still have landed, so `landed` asks the server before the failure counts.
+  const write = (args, cwd, landed) => {
+    try {
+      const output = svn(
+        [...args, "--username", username, "--password-from-stdin", "--no-auth-cache"],
+        { cwd, input: password },
+      );
+      console.log(output.trim().split("\n").at(-1));
+    } catch (error) {
+      if (!landed()) throw error;
+      const reason = String(error.stderr ?? error.message)
+        .trim()
+        .split("\n")
+        .at(-1);
+      console.log(`svn ${args[0]} failed (${reason}), but wordpress.org has the change.`);
+    }
+  };
   const work = mkdtempSync(path.join(tmpdir(), "openreceive-wporg-"));
   try {
     const entries = execFileSync("unzip", ["-Z1", options.zip], { encoding: "utf8" })
@@ -261,10 +286,12 @@ if (command === "plan") {
       /^\d+\.\d+\.\d+$/.test(release),
       `WordPress.org gets stable releases only, not ${release}.`,
     );
-    const tags = svn(["list", `${options.repository}/tags`])
-      .split("\n")
-      .map((entry) => entry.replace(/\/$/, ""));
-    if (tags.includes(release)) {
+    const tags = () =>
+      svn(["list", `${options.repository}/tags`])
+        .split("\n")
+        .map((entry) => entry.replace(/\/$/, ""));
+    const trunkStable = () => stableTag(svn(["cat", `${options.repository}/trunk/readme.txt`]));
+    if (tags().includes(release)) {
       console.log(`tags/${release} is already on WordPress.org; nothing to commit.`);
     } else {
       const checkout = path.join(work, "svn");
@@ -276,8 +303,9 @@ if (command === "plan") {
         : undefined;
       if (current !== undefined) {
         const [a, b] = [release, current].map((value) => value.split(".").map(Number));
+        // Equal is a re-run whose trunk commit landed and whose tag did not.
         assert(
-          (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) > 0,
+          (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) >= 0,
           `trunk already holds ${current}; refusing to move it back to ${release}.`,
         );
       }
@@ -317,35 +345,39 @@ if (command === "plan") {
         if (type)
           svn(["propset", "--quiet", "svn:mime-type", type, `assets/${name}@`], { cwd: checkout });
       }
-      svn(["copy", "--quiet", "trunk", `tags/${release}`], { cwd: checkout });
       const changes = svn(["status", "--quiet"], { cwd: checkout }).split("\n").filter(Boolean);
       const count = (code) => changes.filter((line) => line[0] === code).length;
       console.log(
-        `WordPress.org ${release}: ${count("A")} added, ${count("M")} modified, ${count("D")} deleted, tags/${release} copied from trunk.`,
+        `WordPress.org ${release}: ${count("A")} added, ${count("M")} modified, ${count("D")} deleted in trunk and assets, then tags/${release} copied from trunk.`,
       );
       if (dryRun) {
         console.log(`Dry run: nothing committed to ${options.repository}.`);
       } else {
-        const result = svn(
+        // Trunk first, then the tag as a copy on the server, which sends no
+        // files. Copying in the working copy sent every file twice.
+        if (changes.length > 0) {
+          write(["commit", "--message", `OpenReceive ${release}`], checkout, () => {
+            return trunkStable() === release;
+          });
+        }
+        write(
           [
-            "commit",
+            "copy",
             "--message",
-            `OpenReceive ${release}`,
-            "--username",
-            username,
-            "--password-from-stdin",
-            "--no-auth-cache",
+            `Tag OpenReceive ${release}`,
+            `${options.repository}/trunk`,
+            `${options.repository}/tags/${release}`,
           ],
-          { cwd: checkout, input: password },
+          checkout,
+          () => tags().includes(release),
         );
-        console.log(result.trim().split("\n").at(-1));
       }
     }
     if (!dryRun && !options["skip-verify"]) {
       // The plugin API lists a version once wordpress.org has built its ZIP.
       const deadline = Date.now() + Number(options.timeout) * 1000;
       const info =
-        "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=openreceive";
+        "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=openreceive";
       for (;;) {
         const listed = await fetch(info)
           .then((response) => (response.ok ? response.json() : undefined))

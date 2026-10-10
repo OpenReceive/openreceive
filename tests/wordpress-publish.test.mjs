@@ -79,7 +79,7 @@ function publish({ url, assets }, zip, extra = [], env = {}) {
 const svn = (...args) => execFileSync("svn", args, { encoding: "utf8" });
 const revision = (url) => svn("info", "--show-item", "revision", url).trim();
 
-test("publish commits trunk, the version tag and the assets in one revision", {
+test("publish commits trunk and the assets, then tags the release on the server", {
   skip: !hasSvn,
 }, (t) => {
   const repo = directory(t);
@@ -112,7 +112,7 @@ test("publish commits trunk, the version tag and the assets in one revision", {
   const again = publish(repo, pluginZip(repo.dir, "1.2.4"));
   assert.equal(again.status, 0, again.stderr);
   assert.match(again.stdout, /already on WordPress\.org/);
-  assert.equal(revision(repo.url), "3");
+  assert.equal(revision(repo.url), "5");
 });
 
 test("publish refuses mismatched, older, prerelease or unauthenticated releases", {
@@ -139,5 +139,18 @@ test("publish refuses mismatched, older, prerelease or unauthenticated releases"
   });
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.match(dryRun.stdout, /Dry run: nothing committed/);
-  assert.equal(revision(repo.url), "2");
+  assert.equal(revision(repo.url), "3");
+});
+
+test("a re-run whose trunk commit landed only adds the missing tag", { skip: !hasSvn }, (t) => {
+  const repo = directory(t);
+  const zip = pluginZip(repo.dir, "3.0.0", { "src/A.php": "a" });
+  assert.equal(publish(repo, zip).status, 0);
+  svn("delete", "-q", "-m", "drop the tag", `${repo.url}/tags/3.0.0`);
+  const rerun = publish(repo, zip);
+  assert.equal(rerun.status, 0, rerun.stderr);
+  assert.match(rerun.stdout, /0 added, 0 modified, 0 deleted/);
+  assert.match(rerun.stdout, /Committed revision 5\./);
+  assert.equal(svn("ls", `${repo.url}/tags`), "3.0.0/\n");
+  assert.match(svn("ls", `${repo.url}/tags/3.0.0/src`), /A\.php/);
 });
