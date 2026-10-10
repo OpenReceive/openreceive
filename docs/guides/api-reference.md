@@ -663,7 +663,7 @@ Supabase, such as a Cloudflare Worker, replaces `db` and `onPaid` with
 
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `supabase` | `SupabaseStorageOptions` | yes | `{ url, key, fetch? }`: the project URL (`https://<project-ref>.supabase.co`), its secret key (`sb_secret_…`) or legacy `service_role` key, and optionally a `fetch` to use instead of the global one. The key stays on the server. |
+| `supabase` | `SupabaseStorageOptions` | yes | `{ url, key, fetch? }`: the project URL (`https://<project-ref>.supabase.co`; plain `http://` only for a private host, such as self-hosted Supabase at `http://kong:8000`), its secret key (`sb_secret_…`) or legacy `service_role` key, and optionally a `fetch` to use instead of the global one. The key stays on the server. |
 
 There is no `onPaid` in this mode, and passing one throws. Fulfillment is
 your SQL function `public.openreceive_on_paid(p_reference text,

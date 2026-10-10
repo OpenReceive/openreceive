@@ -41,7 +41,8 @@ Every check must pass:
 - the agent does the work itself, and never asks the merchant to run commands or
   edit files;
 - every OpenReceive setup command succeeds as documented, with no flag that
-  skips a failure, and the last doctor run is clean;
+  skips a failure, and the last doctor run is clean (Lovable's agent has no
+  terminal, so its trials have no doctor run);
 - the agent stays inside the app: it does not clone our repository or read
   other projects, and it never stops other programs' servers;
 - the agent finishes within the turn and time limits, with a short hand-over

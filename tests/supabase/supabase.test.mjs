@@ -514,6 +514,10 @@ test("keys and URLs that must not reach the server are refused up front", { skip
   assert.throws(build({ key: jwt("authenticated") }), /role is authenticated/);
   assert.throws(build({ key: " " }), /secret key/);
   assert.throws(build({ url: "http://example.supabase.co" }), /https:\/\//);
+  assert.throws(build({ url: "http://8.8.8.8:8000" }), /https:\/\//);
+  assert.throws(build({ url: "http://172.32.0.1" }), /https:\/\//);
+  for (const url of ["http://kong:8000", "http://10.1.2.3", "http://192.168.1.9:54321"])
+    assert.doesNotThrow(build({ url }), url);
   assert.throws(build({ url: "not a url" }), /project URL/);
   assert.doesNotThrow(build({ url: "https://example.supabase.co/rest/v1/" }));
 });

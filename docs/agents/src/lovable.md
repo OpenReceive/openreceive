@@ -37,9 +37,14 @@ key, because a Worker cannot open a Postgres connection to Supabase.
 
 ## Step 0 — ask for the two codes, one secret at a time
 
-Before anything else, your next action is a question to the user. Do not add
-packages, write migrations or edit files before asking it. A new shop has
-neither code yet.
+If the user says the codes are already saved as this project's secrets
+(`NWC_URI`, and `LSC_URI_PRIMARY` unless they want Bitcoin only), believe
+them: do not ask for them, and go to Step 1. You cannot read a secret's value,
+and you do not need to.
+
+Otherwise, before anything else, your next action is a question to the user.
+Do not add packages, write migrations or edit files before asking it. A new
+shop has neither code yet.
 
 Two server-only secrets are needed before the integration:
 

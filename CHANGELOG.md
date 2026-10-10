@@ -29,7 +29,12 @@
   never for a command, and send it to /guides/supabase-migration, a new page
   that publishes the scaffold's Supabase migration as SQL to copy. The
   TanStack Start recipe gains its Supabase route, and the skill lists the
-  Lovable directions.
+  Lovable directions. openreceive.org/platforms/lovable becomes a guide page
+  with that prompt; it has a local agent trial and no Tested badge yet.
+- Changed (JS): Supabase storage accepts a plain `http://` URL for a private
+  host only: localhost, a private IP, or a one-word name such as
+  self-hosted Supabase's `http://kong:8000`. A public host still needs
+  `https://`, so the server key never crosses the internet in clear text.
 - Added (release): the WordPress plugin is published to the
   [WordPress.org plugin directory](https://wordpress.org/plugins/openreceive/).
   Publishing a GitHub release starts the new `Publish WordPress.org` workflow.

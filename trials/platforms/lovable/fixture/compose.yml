@@ -1,0 +1,84 @@
+# The Widget Shop as Lovable runs it: a TanStack Start app whose server code
+# reaches its Supabase database over Supabase's HTTPS API. Supabase here is its
+# own Postgres image, PostgREST, and a stand-in for its API gateway (infra/).
+# Lovable gives server code SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, and
+# the project's secrets, from outside the code; so does this setup.
+# `docker compose run --rm migrate` applies new supabase/migrations files, as
+# Lovable does when the owner approves them.
+# The Compose project name is the directory name. The harness swaps 8080 for a
+# free port per run.
+services:
+  db:
+    image: supabase/postgres:17.11.0.004
+    environment:
+      POSTGRES_PASSWORD: shop
+    volumes:
+      - ./infra/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-widget-shop.sql:ro
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "127.0.0.1"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+  migrate:
+    image: supabase/postgres:17.11.0.004
+    entrypoint: ["sh", "/infra/migrate.sh"]
+    volumes:
+      - ./infra:/infra:ro
+      - ./supabase/migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+  rest:
+    image: postgrest/postgrest:v16.4
+    environment:
+      PGRST_DB_URI: postgres://authenticator:shop@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public, extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: widget-shop-local-jwt-secret-for-postgrest
+      PGRST_DB_CHANNEL_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+  supabase:
+    image: node:22-alpine
+    command: ["node", "/infra/gateway.mjs"]
+    environment:
+      REST_URL: http://rest:3000
+      SECRET_KEY: sb_secret_widget_shop_local
+      JWT_SECRET: widget-shop-local-jwt-secret-for-postgrest
+    volumes:
+      - ./infra:/infra:ro
+    depends_on:
+      - rest
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:8080:3000"
+    depends_on:
+      supabase:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+volumes:
+  db:

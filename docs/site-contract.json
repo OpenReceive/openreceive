@@ -95,7 +95,7 @@
       "slug": "lovable",
       "title": "Bitcoin Checkout on Lovable",
       "category": "guide",
-      "bytes": 5772
+      "bytes": 6100
     },
     {
       "path": "/guides/supabase",
@@ -125,7 +125,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 3884
+      "bytes": 3954
     },
     {
       "path": "/guides/quickstart-rails",
@@ -326,7 +326,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 129593
+      "bytes": 129686
     },
     {
       "path": "/guides/security",
@@ -496,7 +496,7 @@
       "slug": "agent-directions-lovable",
       "title": "Agent Directions: Lovable",
       "category": "quickstart",
-      "bytes": 25107
+      "bytes": 25367
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -536,7 +536,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 129593,
+      "bytes": 129686,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -802,7 +802,7 @@
       "kind": "agent-directions-payload",
       "stack": "lovable",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25107,
+      "bytes": 25367,
       "copy_button": true,
       "self_contained": true
     }
@@ -1183,11 +1183,22 @@
       "id": "lovable",
       "label": "Lovable",
       "kind": "ai-builder",
-      "summary": "Lovable builds TanStack Start apps on Cloudflare Workers, with Supabase.",
+      "summary": "Lovable builds TanStack Start apps on Cloudflare Workers, with Supabase. Save your wallet code as a secret, paste one prompt, and Lovable adds checkout to your app.",
       "framework": null,
       "framework_path": null,
-      "status": "planned",
-      "path": null
+      "status": "guide",
+      "path": "/platforms/lovable",
+      "markdown_path": "/platforms/lovable.md",
+      "database": "Lovable Cloud's Supabase, or your own connected project, over Supabase's HTTPS API",
+      "secrets": "Lovable Cloud secrets; Lovable gives server code the Supabase URL and key",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide_slug": "lovable",
+      "guide_path": "/guides/lovable",
+      "guide_source": "docs/guides/lovable.md",
+      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openreceive.org/agent-directions/lovable/full.md and follow it exactly: it has the migration, the server route and the checkout page. NWC_URI and LSC_URI_PRIMARY are already saved as this project's secrets, so do not ask me for them. Use @openreceive packages 0.4.23 or newer.",
+      "starter": null,
+      "eval": "lovable",
+      "tested": null
     },
     {
       "id": "supabase",

@@ -16,7 +16,7 @@ import {
   scopeViolation,
   secretMaterial,
 } from "../trials/harness/checks.ts";
-import { liveShopChecks } from "../trials/harness/live.ts";
+import { liveShopChecks, Visitor } from "../trials/harness/live.ts";
 import { loadMerchantCodes } from "../trials/harness/codes.ts";
 import { agentPool, pick } from "../trials/harness/agents.ts";
 import { parseClaudeStream } from "../trials/harness/claude.ts";
@@ -1254,4 +1254,36 @@ test("the default agent pool is Cursor on Grok and Codex, one picked per trial",
   assert.equal(agentPool("cursor", "gpt-5.2")[0]?.model, "gpt-5.2");
   assert.throws(() => agentPool("random", "gpt-5.2"), /single --agent/);
   assert.throws(() => agentPool("gemini"), /Unknown agent/);
+});
+
+// Lovable's agent has no terminal, so its trials skip doctor_clean; every
+// other platform keeps it.
+test("doctor_clean is checked unless the platform has no doctor", () => {
+  const turns = [{ role: "agent", text: "", tools: [shell("npm install @openreceive/http")] }];
+  assert.equal(commandChecks(turns).find((item) => item.id === "doctor_clean")?.pass, false);
+  assert.equal(
+    commandChecks(turns, [], false).some((item) => item.id === "doctor_clean"),
+    false,
+  );
+});
+
+// A Supabase shop's orders are uuids, and an integration may send the buyer
+// straight to the checkout page after the order is placed.
+test("the live buyer follows an order redirect to a uuid", async () => {
+  const id = "6f1d78f2-7761-4c1f-bb35-235fb09fcf6d";
+  const server = createServer((request, response) => {
+    if (request.method === "POST" && request.url === "/orders") {
+      response.statusCode = 303;
+      response.setHeader("location", `/checkout/${id}`);
+      return response.end();
+    }
+    response.end("<html></html>");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const buyer = new Visitor(`http://127.0.0.1:${server.address().port}`);
+    assert.equal(await buyer.placeOrder(), id);
+  } finally {
+    server.close();
+  }
 });

@@ -216,10 +216,13 @@ const WORKAROUND =
 /**
  * Our own commands do not fail in our own code, the last doctor run is clean,
  * nothing was forced past a failure, and nothing rewrote the installed package.
+ * A platform with no terminal (Lovable) has no doctor to run, so `doctor`
+ * false drops that one check.
  */
 export function commandChecks(
   turns: readonly Turn[],
   writes: readonly { readonly path: string; readonly content: string }[] = [],
+  doctor = true,
 ): Check[] {
   const ran = shells(turns);
   const broke = ran.find(
@@ -229,7 +232,7 @@ export function commandChecks(
       event.exitCode !== 0 &&
       OPENRECEIVE_FAILURE.test(event.output ?? ""),
   );
-  const doctor = ran.filter((event) => DOCTOR_COMMAND.test(event.command)).at(-1);
+  const lastDoctor = ran.filter((event) => DOCTOR_COMMAND.test(event.command)).at(-1);
   const forced = ran.find((event) => WORKAROUND.test(event.command));
   const patchedBy =
     writes.find((write) => patchesPackage(write.content) || DUNDER_PATCH.test(write.content))
@@ -244,17 +247,21 @@ export function commandChecks(
       "No OpenReceive command (install, scaffold, configure, doctor) failed inside OpenReceive's own code.",
       broke === undefined ? undefined : failedRun(broke),
     ),
-    check(
-      "doctor_clean",
-      "blocker",
-      doctor !== undefined && doctor.exitCode === 0,
-      "The agent ran doctor, and its last run exited 0.",
-      doctor === undefined
-        ? "doctor never ran"
-        : doctor.exitCode === 0
-          ? undefined
-          : failedRun(doctor),
-    ),
+    ...(doctor
+      ? [
+          check(
+            "doctor_clean",
+            "blocker",
+            lastDoctor !== undefined && lastDoctor.exitCode === 0,
+            "The agent ran doctor, and its last run exited 0.",
+            lastDoctor === undefined
+              ? "doctor never ran"
+              : lastDoctor.exitCode === 0
+                ? undefined
+                : failedRun(lastDoctor),
+          ),
+        ]
+      : []),
     check(
       "no_workaround_flag",
       "blocker",

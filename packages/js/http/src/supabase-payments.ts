@@ -419,13 +419,33 @@ function restBase(url: string): string {
       "Supabase storage needs the project URL, https://<project-ref>.supabase.co (SUPABASE_URL).",
     );
   }
-  const local = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
-  if (parsed.protocol !== "https:" && !(local && parsed.protocol === "http:"))
+  if (
+    parsed.protocol !== "https:" &&
+    !(parsed.protocol === "http:" && isPrivateHost(parsed.hostname))
+  )
     throw new TypeError(
-      "Supabase storage needs an https:// project URL: the server key must not travel in clear text.",
+      "Supabase storage needs an https:// project URL: the server key must not cross a public " +
+        "network in clear text. Plain http:// is accepted only for a private host (localhost, a " +
+        "private IP, or a one-word name such as Docker's kong).",
     );
   const path = parsed.pathname.replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
   return `${parsed.origin}${path}/rest/v1`;
+}
+
+/**
+ * Hosts that cannot be on the public internet: loopback, the private IPv4
+ * ranges, and one-word names, which only resolve inside a private network
+ * (self-hosted Supabase in Docker serves its API at http://kong:8000).
+ */
+function isPrivateHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::1") return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(host);
+  if (v4 !== null) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  return !host.includes(".") && !host.includes(":");
 }
 
 function checkedKey(key: string): string {

@@ -29,17 +29,19 @@ yet.
 
 ## Add checkout to your Lovable app
 
-1. Send Lovable this prompt:
+1. Open **More** → **Cloud** → **Secrets** → **Add secret**. Add `NWC_URI`
+   with your wallet code, then, for swaps, `LSC_URI_PRIMARY` with your swap
+   provider code. Secrets reach your app's server code and never the
+   browser. Lovable already gives server code `SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY`.
+2. Send Lovable this prompt:
 
 <!-- platform-prompt:begin -->
 ```text
-Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openreceive.org/agent-directions/lovable/full.md and follow it exactly, from Step 0: it has the migration, the server route and the checkout page. Ask me for NWC_URI and then LSC_URI_PRIMARY with the secure secret input, one at a time. Use @openreceive packages 0.4.23 or newer.
+Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openreceive.org/agent-directions/lovable/full.md and follow it exactly: it has the migration, the server route and the checkout page. NWC_URI and LSC_URI_PRIMARY are already saved as this project's secrets, so do not ask me for them. Use @openreceive packages 0.4.23 or newer.
 ```
 <!-- platform-prompt:end -->
 
-2. Lovable asks for `NWC_URI` with its secure secret input. Paste your
-   wallet code there. Then it asks for `LSC_URI_PRIMARY`: paste your swap
-   provider code, or answer "Bitcoin only".
 3. Lovable writes two Supabase migrations and asks you to apply them. The
    first is OpenReceive's: its two tables, locked away from your app's
    browser key, and the functions that write them. The second is yours:
@@ -47,8 +49,12 @@ Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openr
 4. Lovable ends with "Setup is finished" and tells you where to place an
    order.
 
-Bitcoin only, with no swap provider? Then end the prompt with "I want
-Bitcoin only, with no swaps." and Lovable asks for `NWC_URI` alone.
+Bitcoin only, with no swap provider? Then in the prompt, replace
+`NWC_URI and LSC_URI_PRIMARY are already saved` with
+`I want Bitcoin only, with no swaps. NWC_URI is already saved`.
+
+Rather paste the codes in the chat? Leave out the sentence about secrets.
+Lovable then asks for each code with its secure secret input, one at a time.
 
 ## Check it
 

@@ -211,6 +211,36 @@ npm run trial -- --platform replit --smoke
 npm run trial -- --platform replit
 ```
 
+## Lovable
+
+`--platform lovable` tests what a Lovable user gets. The shop is a TanStack
+Start app on Lovable's own build setup (`@lovable.dev/vite-tanstack-config`),
+with its products and orders in Supabase, reached over Supabase's HTTPS API
+the way Lovable's generated `supabaseAdmin` client reaches it. Supabase here is
+its own Postgres image, PostgREST and a stand-in for its API gateway, and the
+shop runs under the Vite dev server. The opening message is the prompt from
+`docs/guides/lovable.md`. The codes are already the project's secrets, so, as
+on Vercel, asking for a code or repeating one fails the run.
+
+Lovable applies a migration the agent writes only when the owner approves it,
+and its agent cannot run SQL. So `psql` is forbidden, the shop's README names
+`docker compose run --rm migrate` as the approval, and after the agent
+finishes the harness runs the platform's `before_live` steps: apply every
+pending migration, then rebuild and restart the web service. Then come the
+live checks, paid path included: `openreceive_on_paid` must mark the shop's own
+order paid. Lovable's directions have no doctor, so `doctor_clean` is not
+checked here.
+
+A pass here is not a run on Lovable: its agent, its migration approval and
+Cloudflare Workers are not part of it. The Supabase route's Workers run is in
+CI (`tests/supabase/lovable.test.mjs`). Trials install the published packages,
+so this one can pass from the release that ships Supabase storage, 0.4.23.
+
+```sh
+npm run trial -- --platform lovable --smoke
+npm run trial -- --platform lovable --serve-directions
+```
+
 ## Passed
 
 A platform counts as passed after three live runs in a row exit 0

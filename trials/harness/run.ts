@@ -26,7 +26,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 }
 
 function help(): void {
-  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|vercel|replit|rails|django|fastapi|php|laravel [--smoke] [--runs 1] [--parallel 1] [--keep]
+  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|vercel|replit|lovable|rails|django|fastapi|php|laravel [--smoke] [--runs 1] [--parallel 1] [--keep]
        [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,

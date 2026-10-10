@@ -54,5 +54,5 @@
     "tests/e2e-wordpress/**/*.ts",
     "trials/**/*.ts"
   ],
-  "exclude": ["**/node_modules/**", "packages/js/*/dist/**"]
+  "exclude": ["**/node_modules/**", "packages/js/*/dist/**", "trials/platforms/*/fixture/**"]
 }

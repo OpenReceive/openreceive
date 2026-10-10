@@ -59,9 +59,15 @@
       "id": "lovable",
       "label": "Lovable",
       "kind": "ai-builder",
-      "summary": "Lovable builds TanStack Start apps on Cloudflare Workers, with Supabase.",
+      "summary": "Lovable builds TanStack Start apps on Cloudflare Workers, with Supabase. Save your wallet code as a secret, paste one prompt, and Lovable adds checkout to your app.",
       "framework": null,
-      "planned": true
+      "database": "Lovable Cloud's Supabase, or your own connected project, over Supabase's HTTPS API",
+      "secrets": "Lovable Cloud secrets; Lovable gives server code the Supabase URL and key",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide": "lovable",
+      "prompt": true,
+      "starter": null,
+      "trial": "lovable"
     },
     {
       "id": "supabase",

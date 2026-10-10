@@ -1,0 +1,42 @@
+{
+  "slug": "lovable",
+  "name": "Lovable (TanStack Start on Supabase)",
+  "directions": "docs/agents/lovable.md",
+  "directions_slug": "lovable",
+  "prompt_name": "TanStack Start shop built with Lovable",
+  "opening_guide": "docs/guides/lovable.md",
+  "opening_context": "This is a shop built with Lovable: a TanStack Start app on Lovable Cloud.",
+  "doctor": "",
+  "credential_store": {
+    "kind": "platform",
+    "where": "Lovable Cloud secrets"
+  },
+  "platform_env": {
+    "SUPABASE_URL": "http://supabase:8000",
+    "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_widget_shop_local"
+  },
+  "live": true,
+  "before_live": [
+    ["run", "--rm", "migrate"],
+    ["up", "-d", "--build", "--wait", "--wait-timeout", "300", "web"]
+  ],
+  "allowed_install_paths": ["npm"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "\\bpsql\\b",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false,
+  "probes": {
+    "products": ["exec", "-T", "web", "node", "bin/product-count.mjs"],
+    "openreceive": ["exec", "-T", "web", "node", "bin/openreceive-installed.mjs"],
+    "orderStatus": ["exec", "-T", "web", "node", "bin/order-status.mjs"]
+  }
+}

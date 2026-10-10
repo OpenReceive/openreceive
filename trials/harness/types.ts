@@ -69,6 +69,12 @@ export interface Platform {
    */
   readonly deploy?: "vercel" | "local";
   /**
+   * Compose commands run after the agent finishes and before the live checks,
+   * as the platform would: Lovable applies the migrations the agent wrote when
+   * the user approves them, then serves the new build.
+   */
+  readonly before_live?: readonly (readonly string[])[];
+  /**
    * After the agent finishes, check the running shop on this machine: the
    * shop's own order form makes an order, its buyer gets a real Lightning
    * invoice, and another visitor asking for that order is refused.

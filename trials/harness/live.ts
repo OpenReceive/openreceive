@@ -79,9 +79,12 @@ export class Visitor {
     });
     this.remember(response);
     // The fixture redirects to /orders/<id>; an integration may send the buyer
-    // straight to its checkout page instead. Either way the id ends the path.
+    // straight to its checkout page instead. Either way the id ends the path:
+    // a number, or a uuid on a Supabase shop.
     const location = response.headers.get("location") ?? "";
-    const id = new URL(location, this.base).pathname.match(/\/(\d+)\/?$/)?.[1];
+    const id = new URL(location, this.base).pathname.match(
+      /\/(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i,
+    )?.[1];
     if (id === undefined) {
       throw new Error(`POST /orders answered ${response.status} without an order to go to`);
     }

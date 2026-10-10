@@ -109,6 +109,39 @@ function finishedCheck(done: boolean, reason: string): Check {
   };
 }
 
+/**
+ * The platform's own steps between the agent's last edit and a live visit,
+ * each a compose command. A failure is a blocker with the command's output,
+ * and the live checks still run so the report shows what a buyer would see.
+ */
+async function beforeLive(
+  directory: string,
+  platform: Platform,
+  log: (line: string) => void,
+): Promise<Check | undefined> {
+  if (platform.before_live === undefined || platform.before_live.length === 0) return undefined;
+  for (const args of platform.before_live) {
+    log(`before live: docker compose ${args.join(" ")}`);
+    const failure = await compose(directory, [...args], 10 * 60 * 1000)
+      .then(() => undefined)
+      .catch((error: unknown) => (error instanceof Error ? error.message : String(error)));
+    if (failure !== undefined)
+      return {
+        id: "before_live",
+        severity: "blocker",
+        pass: false,
+        summary: "The platform's steps before going live succeeded.",
+        evidence: `docker compose ${args.join(" ")}\n${failure}`,
+      };
+  }
+  return {
+    id: "before_live",
+    severity: "blocker",
+    pass: true,
+    summary: "The platform's steps before going live succeeded.",
+  };
+}
+
 export async function runDirections(request: LoopRequest): Promise<LoopResult> {
   const { platform } = request;
   const fixture = path.join(trialsRoot, "platforms", platform.slug, "fixture");
@@ -293,7 +326,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     }).map((check) => (check.id === "secret_not_tracked" ? secret : check));
     checks.push(stayedInShop(turns, repoRoot), finishedCheck(done, reason));
     checks.push(
-      ...commandChecks(turns, writes),
+      ...commandChecks(turns, writes, platform.doctor !== ""),
       ...closingChecks(turns, platform.closing_max_lines ?? 5),
     );
     const secrets = [shopNwc, wallet.lsc, wallet.lscBackup].filter(
@@ -309,6 +342,8 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       (platform.live === true || (platform.deploy === "vercel" && vercel === undefined)) &&
       done
     ) {
+      const prepared = await beforeLive(directory, platform, log);
+      if (prepared !== undefined) checks.push(prepared);
       log("live: the shop's own order, a checkout, a stranger");
       const live = await liveShopChecks(sandbox.baseUrl, { paid });
       // A 500 page says nothing; the shop's own log says why.
