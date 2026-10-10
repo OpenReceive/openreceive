@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/btcpay/full.md
 - Never tick the spend-capable override to make a save succeed.
 - Do not suggest rotating or revoking a code because it was pasted here.
 
-These directions describe OpenReceive 0.4.21.
+These directions describe OpenReceive 0.4.22.
 
 Connect a BTCPay Server store to a receive-only NWC wallet with the OpenReceive
 plugin, and optionally let payers pay BTCPay invoices with USDT, USDC, ETH or

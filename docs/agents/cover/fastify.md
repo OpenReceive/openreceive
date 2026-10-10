@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Fastify (0.4.21)
+# OpenReceive agent directions: Fastify (0.4.22)
 
 These directions are 38 KB. Download them with your shell and follow them from Step 0:
 

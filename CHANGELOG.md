@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.22 - Unreleased
+## 0.4.22 - 2026-10-10
 
 - Fixed (Python): wallet calls (`make_invoice`, `list_transactions`, the
   notification subscription) could fail with "timed out while waiting for

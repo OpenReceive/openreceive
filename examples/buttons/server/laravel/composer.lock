@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "80fa1a2cf148c54943cb774db94cf33f",
+    "content-hash": "d33e29b0009a45c79fd3ba90d2be5aed",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,26 +2726,26 @@
         },
         {
             "name": "openreceive/laravel",
-            "version": "0.4.21",
+            "version": "0.4.22",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/laravel",
-                "reference": "87f9b27cb6eb8b77ae531c9e52fbabce1a11cd69"
+                "reference": "c26c62078bb8e21b990af069fdf4610877fcff66"
             },
             "require": {
-                "illuminate/console": "^11.0 || ^12.0",
-                "illuminate/contracts": "^11.0 || ^12.0",
-                "illuminate/database": "^11.0 || ^12.0",
-                "illuminate/http": "^11.0 || ^12.0",
-                "illuminate/routing": "^11.0 || ^12.0",
-                "illuminate/support": "^11.0 || ^12.0",
+                "illuminate/console": "^11.0 || ^12.0 || ^13.0",
+                "illuminate/contracts": "^11.0 || ^12.0 || ^13.0",
+                "illuminate/database": "^11.0 || ^12.0 || ^13.0",
+                "illuminate/http": "^11.0 || ^12.0 || ^13.0",
+                "illuminate/routing": "^11.0 || ^12.0 || ^13.0",
+                "illuminate/support": "^11.0 || ^12.0 || ^13.0",
                 "nyholm/psr7": "^1.8",
-                "openreceive/openreceive": "~0.4.21",
+                "openreceive/openreceive": "~0.4.22",
                 "php": "^8.2",
-                "symfony/psr-http-message-bridge": "^7.0"
+                "symfony/psr-http-message-bridge": "^7.0 || ^8.0"
             },
             "require-dev": {
-                "orchestra/testbench": "^9.0 || ^10.0",
+                "orchestra/testbench": "^9.0 || ^10.0 || ^11.0",
                 "phpstan/phpstan": "^2.1",
                 "phpunit/phpunit": "^11.5 || ^12.0"
             },
@@ -2800,14 +2800,14 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.21",
+            "version": "0.4.22",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/openreceive",
-                "reference": "3848147b8ad96b4e7b6b7b956d95286262eff85d"
+                "reference": "6046d1845ff88e125dd7c49d26cf3248f3c3bb65"
             },
             "require": {
-                "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20",
+                "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
                 "dsbaars/nostr-php-nwc": "^0.0.1",
                 "ext-json": "*",
                 "ext-mbstring": "*",

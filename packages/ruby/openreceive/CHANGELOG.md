@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.22 - 2026-10-10
+
+Release with the complete 0.4.22 package family. The bundled agent skills'
+directions now end with a message that starts "Setup is finished" and sends
+nothing after it. They write the codes with the file-editing tool, check the
+app sees them with doctor rather than `printenv`, start the server the way
+the project already does, and restart only the app's own server by pid. No
+Ruby runtime changes from 0.4.21.
+
 ## 0.4.21 - 2026-10-09
 
 Release with the complete 0.4.21 package family. The bundled agent skills'
