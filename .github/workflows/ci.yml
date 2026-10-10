@@ -128,7 +128,8 @@ jobs:
       NWC_URI: ""
       # Lovable's apps reach Supabase over its HTTPS API, not a Postgres
       # connection: this lane runs the Supabase repository against Supabase's
-      # Postgres image and PostgREST, through a stand-in for its API gateway.
+      # Postgres image and PostgREST, through a stand-in for its API gateway,
+      # under Node and inside a Worker.
       OPENRECEIVE_TEST_SUPABASE_DB_URL: postgresql://postgres:openreceive@127.0.0.1:56532/postgres
       OPENRECEIVE_TEST_SUPABASE_REST_URL: http://127.0.0.1:56530
       OPENRECEIVE_TEST_SUPABASE_JWT_SECRET: openreceive-supabase-test-jwt-secret-32
@@ -140,6 +141,9 @@ jobs:
           cache: npm
       - run: docker compose -f tests/supabase/compose.yml up -d --wait
       - run: npm ci
+      # wrangler and the built packages, for the repository's run inside workerd.
+      - run: npm ci --prefix tests/workers
+      - run: npm run build:packages
       - run: npm run test:supabase
 
   ruby-engine:

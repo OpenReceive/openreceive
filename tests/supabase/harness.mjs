@@ -8,7 +8,11 @@ import { supabasePaymentsMigrationSql } from "../../packages/js/core/src/index.t
 // Supabase's API gateway in front of PostgREST.
 //
 //   docker compose -f tests/supabase/compose.yml up -d --wait
-//   npm run test:supabase
+//   npm ci --prefix tests/workers && npm run build:packages   # for workers.test.mjs
+//   OPENRECEIVE_TEST_SUPABASE_DB_URL=postgresql://postgres:openreceive@127.0.0.1:56532/postgres \
+//   OPENRECEIVE_TEST_SUPABASE_REST_URL=http://127.0.0.1:56530 \
+//   OPENRECEIVE_TEST_SUPABASE_JWT_SECRET=openreceive-supabase-test-jwt-secret-32 \
+//     npm run test:supabase
 
 export const databaseUrl = process.env.OPENRECEIVE_TEST_SUPABASE_DB_URL;
 export const restUrl = process.env.OPENRECEIVE_TEST_SUPABASE_REST_URL;

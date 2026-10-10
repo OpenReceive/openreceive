@@ -1,0 +1,8 @@
+// The Worker under test in tests/supabase/workers.test.mjs: OpenReceive's
+// Supabase repository in workerd, with Node compatibility as Lovable builds.
+{
+  "name": "openreceive-supabase-workers-test",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"]
+}
