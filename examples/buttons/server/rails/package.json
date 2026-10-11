@@ -15,7 +15,7 @@
     "@openreceive/core": "0.4.23",
     "@openreceive/provider-data": "0.4.23",
     "@rails/actioncable": "^8.1.300",
-    "@tabler/icons-react": "^3.46.0",
+    "@tabler/icons-react": "^3.49.0",
     "mobx": "^6.15.0",
     "mobx-keystone": "^1.21.0",
     "mobx-react": "^9.2.1",
