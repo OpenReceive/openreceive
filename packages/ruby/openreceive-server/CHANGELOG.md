@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.23 - 2026-10-11
+
+Release with the complete 0.4.23 package family. The bundled agent skill adds
+directions for Lovable's agent. Its BTCPay Server directions ask for one code
+per message and never search the machine for one, its WooCommerce directions
+install the plugin from WordPress.org, and its Laravel directions add GMP to
+the Docker image. No Ruby runtime changes from 0.4.22.
+
 ## 0.4.22 - 2026-10-10
 
 Release with the complete 0.4.22 package family. The bundled agent skills'

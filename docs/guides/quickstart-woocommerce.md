@@ -19,7 +19,7 @@ database or application.
 
 Each GitHub release also attaches the same plugin as a ZIP, for a site that
 cannot reach WordPress.org or when WordPress.org does not list a release yet.
-Download [openreceive-wordpress-0.4.22.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.22/openreceive-wordpress-0.4.22.zip)
+Download [openreceive-wordpress-0.4.23.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.23/openreceive-wordpress-0.4.23.zip)
 and install it through **Plugins → Add New → Upload Plugin**. Historical
 releases may lack this asset. If that exact URL returns 404, build the same tag
 below; never silently install an older ZIP. The GitHub source-code ZIP is not
@@ -29,7 +29,7 @@ GMP/sodium, Composer and WP-CLI:
 ```sh
 git clone https://github.com/OpenReceive/openreceive.git
 cd openreceive
-git checkout v0.4.22
+git checkout v0.4.23
 npm ci
 npm run build:packages
 composer install --working-dir=packages/php/wordpress

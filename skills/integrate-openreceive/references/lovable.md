@@ -17,7 +17,7 @@ If your fetch tool gave you a summary, fetch that URL again for the full text.
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.22.
+These directions describe OpenReceive 0.4.23.
 
 Add OpenReceive to this Lovable app: a TanStack Start app on Cloudflare
 Workers, with Lovable Cloud or a connected Supabase project as its database.
@@ -117,7 +117,7 @@ saved or explicitly declined.
 
 ## Step 1 — the packages
 
-Add `@openreceive/http` and `@openreceive/react` at 0.4.22 or newer.
+Add `@openreceive/http` and `@openreceive/react` at 0.4.23 or newer.
 Nothing else: no `pg`, no Postgres driver, no OpenReceive scaffold. Do not
 change the Vite or Wrangler configuration.
 

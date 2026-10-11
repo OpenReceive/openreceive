@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.23 - Unreleased
+## 0.4.23 - 2026-10-11
 
 - Added (JS): Supabase storage over Supabase's HTTPS API, for servers that
   cannot open a Postgres connection to Supabase. A Cloudflare Worker (and so

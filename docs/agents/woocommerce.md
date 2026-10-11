@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/woocommerce/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.22.
+These directions describe OpenReceive 0.4.23.
 
 Install and configure the OpenReceive payment gateway in the WooCommerce store
 you are working in. Preserve its theme, checkout, customer accounts, order
@@ -95,7 +95,7 @@ is saved or the user said "Bitcoin only". Never invent a placeholder code.
 Install this release from the WordPress.org plugin directory:
 
 ```sh
-wp plugin install openreceive --version=0.4.22 --activate
+wp plugin install openreceive --version=0.4.23 --activate
 ```
 
 If that fails because WordPress.org does not have this version yet, install
@@ -103,7 +103,7 @@ the ZIP attached to the same GitHub release. Never install the GitHub
 source-code ZIP or a ZIP from an older release:
 
 ```sh
-wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v0.4.22/openreceive-wordpress-0.4.22.zip --activate
+wp plugin install https://github.com/OpenReceive/openreceive/releases/download/v0.4.23/openreceive-wordpress-0.4.23.zip --activate
 ```
 
 It needs WooCommerce active, and PHP 8.2+ with GMP and sodium in BOTH the web
@@ -252,7 +252,7 @@ database or application.
 
 Each GitHub release also attaches the same plugin as a ZIP, for a site that
 cannot reach WordPress.org or when WordPress.org does not list a release yet.
-Download [openreceive-wordpress-0.4.22.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.22/openreceive-wordpress-0.4.22.zip)
+Download [openreceive-wordpress-0.4.23.zip](https://github.com/OpenReceive/openreceive/releases/download/v0.4.23/openreceive-wordpress-0.4.23.zip)
 and install it through **Plugins → Add New → Upload Plugin**. Historical
 releases may lack this asset. If that exact URL returns 404, build the same tag
 below; never silently install an older ZIP. The GitHub source-code ZIP is not
@@ -262,7 +262,7 @@ GMP/sodium, Composer and WP-CLI:
 ```sh
 git clone https://github.com/OpenReceive/openreceive.git
 cd openreceive
-git checkout v0.4.22
+git checkout v0.4.23
 npm ci
 npm run build:packages
 composer install --working-dir=packages/php/wordpress

@@ -2,7 +2,7 @@
 
 These packages make up the general release. They all share one version number:
 
-- OpenReceive `0.4.22`
+- OpenReceive `0.4.23`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -663,7 +663,7 @@ the publisher already does. Do not weaken or skip release coverage.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.4.22`. We do not use per-package
+Tag the prepared release commit once, as `v0.4.23`. We do not use per-package
 tags while the general package family releases in lockstep with the workspace
 version. Add per-package tags only if versions ever diverge, and only after the
 contract is stable enough that they will not confuse SDK consumers.
