@@ -29,6 +29,11 @@
   `next build` read. The Vercel guide also says what to do when Vercel asks
   for a Pro plan for an organization repository, or the starter's project
   name is taken.
+- Fixed (JS): `openreceive doctor` reads the env files Next.js reads, in
+  Next's order: `.env.development.local`, `.env.local`, `.env.development`,
+  then `.env` (the production files when `NODE_ENV=production`). It read only
+  `.env.local` and `.env`, so in a v0 project, whose codes live in
+  `.env.development.local`, it reported `NWC_URI: missing`.
 
 ## 0.4.23 - 2026-10-11
 

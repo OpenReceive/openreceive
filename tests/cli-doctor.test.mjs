@@ -21,7 +21,7 @@ function receiveOnlyWallet() {
   };
 }
 
-// Doctor reads .env.local and .env from its cwd, and the repo root keeps live
+// Doctor reads Next's env files from its cwd, and the repo root keeps live
 // codes in .env. Every test runs from an empty directory unless it says otherwise.
 const EMPTY_CWD = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-cwd-"));
 test.after(() => rm(EMPTY_CWD, { recursive: true, force: true }));
@@ -82,7 +82,39 @@ test("doctor reads .env.local, then .env, without overriding the environment", a
     });
     assert.equal(probed, otherNwc);
     assert.match(fromEnv.out, /LSC_URI connections: 0/);
-    assert.match(fromEnv.out, /env files: none used \(checked \.env\.local, \.env\)/);
+    assert.match(
+      fromEnv.out,
+      /env files: none used \(checked \.env\.development\.local, \.env\.local, \.env\.development, \.env\)/,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// v0 writes a project's variables to .env.development.local and no .env.local.
+test("doctor reads .env.development.local before .env.local, as Next does", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-env-"));
+  try {
+    const otherNwc = VALID_NWC.replace("a".repeat(64), "c".repeat(64));
+    await writeFile(path.join(dir, ".env.development.local"), `NWC_URI=${VALID_NWC}\n`);
+    let probed;
+    const walletClientFactory = (options) => {
+      probed = options.connectionString;
+      return receiveOnlyWallet();
+    };
+    const v0 = await doctor({ cwd: dir, walletClientFactory });
+    assert.equal(v0.code, 0);
+    assert.equal(probed, VALID_NWC);
+    assert.match(v0.out, /env files: \.env\.development\.local\n/);
+
+    await writeFile(path.join(dir, ".env.local"), `NWC_URI=${otherNwc}\n`);
+    await doctor({ cwd: dir, walletClientFactory });
+    assert.equal(probed, VALID_NWC);
+
+    // A production build reads the production files and never the development ones.
+    const production = await doctor({ cwd: dir, env: { NODE_ENV: "production" }, walletClientFactory });
+    assert.equal(probed, otherNwc);
+    assert.match(production.out, /env files: \.env\.local\n/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

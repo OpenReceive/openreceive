@@ -54,9 +54,11 @@ Usage: openreceive <command> [options]
 Commands:
   doctor              Validate server configuration: Node, NWC_URI, swap
                       providers, and a receive-only wallet probe over the relay.
-                      Reads .env.local, then .env, for variables the
-                      environment does not set. --db and --url extend the
-                      checks; exits 1 on problems.
+                      Reads the env files Next.js reads, first one wins:
+                      .env.development.local, .env.local, .env.development,
+                      .env (the production files when NODE_ENV=production),
+                      for variables the environment does not set. --db and
+                      --url extend the checks; exits 1 on problems.
   debug-report        Print the same diagnostics as a redacted support report
                       (alias of doctor; always exits 0).
   scaffold payments   Emit the openreceive_payments + openreceive_meta migration and wiring guide for your ORM.
@@ -223,7 +225,7 @@ async function runDiagnostics(input: {
   readonly walletClientFactory?: CliOptions["walletClientFactory"];
 }): Promise<number> {
   const { flags } = input;
-  const { env, files } = withEnvFiles(input.env, input.cwd);
+  const { env, files, checked } = withEnvFiles(input.env, input.cwd);
   const nwc = env.NWC_URI?.trim();
   let nwcError: unknown;
   try {
@@ -247,7 +249,7 @@ async function runDiagnostics(input: {
     "Agent skills: run `npx openreceive skills install`",
     `node: ${process.version}`,
     `cwd: ${input.cwd}`,
-    `env files: ${files.length > 0 ? files.join(", ") : `none used (checked ${ENV_FILES.join(", ")})`}`,
+    `env files: ${files.length > 0 ? files.join(", ") : `none used (checked ${checked.join(", ")})`}`,
     "storage: payment-attempt rows live in the host database (no separate store)",
     `NWC_URI: ${nwcError === undefined ? (nwc ? "present-redacted" : "missing") : safeErrorMessage(nwcError)}`,
     `LSC_URI connections: ${lscError === undefined ? lscConnections : safeErrorMessage(lscError)}`,
@@ -296,8 +298,14 @@ async function runDiagnostics(input: {
   return failed ? 1 : 0;
 }
 
-/** Next's order: the first file that sets a variable wins. */
-const ENV_FILES = [".env.local", ".env"] as const;
+/**
+ * Next's env files in Next's order: the first file that sets a variable wins.
+ * v0 writes a project's variables to .env.development.local.
+ */
+function envFileNames(env: NodeJS.ProcessEnv): string[] {
+  const mode = env.NODE_ENV === "production" ? "production" : "development";
+  return [`.env.${mode}.local`, ".env.local", `.env.${mode}`, ".env"];
+}
 const DOCTOR_ENV_NAMES = new Set<string>([
   "NWC_URI",
   ...LSC_ENV_NAMES,
@@ -306,7 +314,7 @@ const DOCTOR_ENV_NAMES = new Set<string>([
 
 /**
  * Fill doctor's variables from the project's env files, the way the app's own
- * loader does: the environment wins, then `.env.local`, then `.env`. Without
+ * loader does: the environment wins, then the files in Next's order. Without
  * this, an agent has to get the codes into a shell first, and sourcing the file
  * splits each URI at its `&` and prints the pieces. Only file names are
  * reported, never values.
@@ -314,10 +322,11 @@ const DOCTOR_ENV_NAMES = new Set<string>([
 function withEnvFiles(
   env: NodeJS.ProcessEnv,
   cwd: string,
-): { env: NodeJS.ProcessEnv; files: string[] } {
+): { env: NodeJS.ProcessEnv; files: string[]; checked: string[] } {
   const merged = { ...env };
   const files: string[] = [];
-  for (const name of ENV_FILES) {
+  const checked = envFileNames(env);
+  for (const name of checked) {
     const file = path.join(cwd, name);
     if (!existsSync(file)) continue;
     let used = false;
@@ -328,7 +337,7 @@ function withEnvFiles(
     }
     if (used) files.push(name);
   }
-  return { env: merged, files };
+  return { env: merged, files, checked };
 }
 
 /**
