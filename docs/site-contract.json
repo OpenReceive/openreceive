@@ -1216,7 +1216,7 @@
       "eval": "lovable",
       "tested": {
         "date": "2026-10-12",
-        "release": "0.4.23",
+        "release": "0.4.24",
         "agents": [
           "codex/default",
           "cursor/grok-4.7-medium-fast"

@@ -103,11 +103,11 @@
     {
       "trial": "lovable",
       "date": "2026-10-12",
-      "release": "0.4.23",
+      "release": "0.4.24",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "c5cf28ec737d"
+      "mode": "released",
+      "directions": "98d71b73d3ee"
     },
     {
       "trial": "replit",
