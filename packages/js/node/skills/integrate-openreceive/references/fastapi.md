@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (FastAPI)
 
 ```sh
-# READ THIS FIRST: this file is 39 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 40 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/fastapi/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -126,6 +126,11 @@ you store it. Ask one question per message.
    with `uvicorn --env-file .env` (update the app's run script or Procfile, not
    just your own command). When it is started with Docker Compose, give the
    service `env_file: .env`. Restart the server after writing the file.
+   Doctor needs the file too: run it as
+   `dotenv -f .env run -- openreceive doctor …`. The `dotenv` command comes
+   with python-dotenv, which `uvicorn --env-file` already needs; if it is
+   missing, `pip install "python-dotenv[cli]"`. Never `source`, `export` or
+   `cat` the file: the codes contain `&`, and the shell prints the pieces.
 
 Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
 saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
@@ -133,8 +138,9 @@ runs the receive-only preflight: if it reports spend methods such as
 `pay_invoice`, remove `NWC_URI` from `.env` and ask for a receive-only code
 again. Never set the spend-capable override to get past it.
 
-After the router is wired, run `openreceive doctor --app <module>:app`. It
-reports `NWC_URI` presence without printing it, probes the wallet, and names
+After the router is wired, run
+`dotenv -f .env run -- openreceive doctor --app <module>:app`. It reports
+`NWC_URI` presence without printing it, probes the wallet, and names
 any hook still on a placeholder and whether the migration ran. Exit code 1 is a
 finding to fix, not a reason to skip the check.
 
@@ -152,7 +158,8 @@ Only then start the quickstart.
 ## After the quickstart — hand over, then stop
 
 The quickstart is done when
-`openreceive doctor --app <module>:app --url <app url>` is clean and this app
+`dotenv -f .env run -- openreceive doctor --app <module>:app --url <app url>`
+is clean and this app
 serves the checkout page for one of its orders. Doctor names any failed check
 and exits nonzero; fix it before going on.
 
@@ -659,8 +666,13 @@ send it after commit.
 
 A page without a bundler renders the same checkout as a custom element:
 `<openreceive-checkout reference="…" prefix="/openreceive">` from
-`@openreceive/elements`. You can also serve its standalone build from your
-static directory.
+`@openreceive/elements`. For Jinja templates without a JavaScript build, serve
+its standalone build from your static directory: copy
+`openreceive-checkout.js` and `openreceive-checkout.css` from
+`node_modules/@openreceive/elements/dist/standalone/` to `static/openreceive/`,
+and load both on the checkout page. The `openreceive` package from PyPI carries
+the same two files in `openreceive/django/static/openreceive/`, so you can copy
+them from there without npm.
 
 Buy a Button is a runnable illustration of the boundary
 (`examples/buttons/server/fastapi`).
@@ -672,8 +684,15 @@ shape onto the models in THIS app.
 ### 6. Verify
 
 ```sh
-openreceive doctor --app main:app
+dotenv -f .env run -- openreceive doctor --app main:app
 ```
+
+Doctor reads the process environment. `dotenv -f .env run --` loads `.env`
+into it, as `uvicorn --env-file .env` does for the server. The `dotenv`
+command comes with python-dotenv, which `uvicorn --env-file` needs anyway; if
+it is missing, run `pip install "python-dotenv[cli]"`. Never `source` or
+`export` `.env` in a shell: the codes contain `&`, and the shell splits the
+line and prints the pieces.
 
 `openreceive doctor` checks Python, `NWC_URI`, and swap-provider
 configuration. It also probes the wallet relay to confirm the code is

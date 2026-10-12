@@ -1,6 +1,6 @@
 """The `openreceive` console script — the Python twin of `npx openreceive`.
 
-    openreceive doctor [--app main:app] [--offline] [--db URL] [--url BASE]
+    openreceive doctor [--app main:app] [--offline] [--db URL] [--url BASE] [--env-file .env]
     openreceive debug-report [...]            (same report, always exit 0)
     openreceive reconcile --app main:app      (one pass; prints the checks)
     openreceive notifications --app main:app  (long-lived NWC-02 listener + periodic pass)
@@ -10,7 +10,9 @@
 `--app module:attr` names the stack: the FastAPI app, the router from
 `openreceive_router`, an `OpenReceiveApp`, or a zero-argument callable
 returning one of those. Without `--app`, `DJANGO_SETTINGS_MODULE` selects
-the Django app (`openreceive.django`). Exit codes: 0 ok, 1 a failing check
+the Django app (`openreceive.django`). `doctor` and `debug-report` read
+`.env` from the working directory, as `uvicorn --env-file .env` does, for
+variables the environment does not set. Exit codes: 0 ok, 1 a failing check
 or error, 2 usage.
 """
 
@@ -45,6 +47,7 @@ from openreceive.server.service import redact_secrets
 DIALECTS = ("postgres", "sqlite", "mysql")
 DEFAULT_TABLE = "openreceive_payments"
 DEFAULT_META_TABLE = "openreceive_meta"
+ENV_FILE = ".env"
 STORAGE_GUIDE_URL = "https://openreceive.org/guides/storage.md"
 HTTP_PROBE_TIMEOUT_SECONDS = 5.0
 
@@ -55,7 +58,8 @@ Commands:
   doctor              Validate server configuration: Python, NWC_URI, swap providers,
                       a receive-only wallet probe over the relay; with --app (or a
                       Django settings module) also the payment tables and the host's
-                      hooks. Exits 1 on problems.
+                      hooks. Reads .env (as uvicorn --env-file .env does) for
+                      variables the environment does not set. Exits 1 on problems.
   debug-report        The same diagnostics as a redacted support report (always exit 0).
   reconcile           One reconciliation pass over pending attempts (needs --app).
   notifications       Long-lived NWC-02 listener + periodic reconcile pass (needs --app).
@@ -70,6 +74,8 @@ Options:
   --app module:attr   The FastAPI app, the router from openreceive_router, an
                       OpenReceiveApp, or a zero-argument callable returning one.
                       Without it, DJANGO_SETTINGS_MODULE selects the Django app.
+  --env-file <path>   Read this env file instead of .env (doctor, debug-report), or
+                      at all (reconcile, notifications). The environment wins.
 
 Doctor options:
   --offline                 Skip the wallet relay probe.
@@ -128,11 +134,11 @@ def run(
             io.stdout.write(USAGE)
             return 0
         if command in ("doctor", "debug-report"):
-            return run_doctor(command, args, environ, io, wallet_client_factory)
+            return run_doctor(command, args, environ, io, wallet_client_factory, cwd or Path.cwd())
         if command == "reconcile":
-            return run_reconcile(args, environ, io)
+            return run_reconcile(args, environ, io, cwd or Path.cwd())
         if command == "notifications":
-            return run_notifications(args, environ, io)
+            return run_notifications(args, environ, io, cwd or Path.cwd())
         if command == "scaffold":
             return run_scaffold(args, io, cwd or Path.cwd())
         if command == "skills":
@@ -195,6 +201,7 @@ def run_skills(args: list[str], io: CliIo, cwd: Path) -> int:
 def _parser(prog: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=f"openreceive {prog}", add_help=False)
     parser.add_argument("--app")
+    parser.add_argument("--env-file")
     return parser
 
 
@@ -206,6 +213,52 @@ def _parse(parser: argparse.ArgumentParser, args: list[str]) -> argparse.Namespa
     if unknown:
         raise UsageError(f"Unexpected option: {' '.join(unknown)}. See `openreceive --help`.")
     return namespace
+
+
+# ------------------------------------------------------------------ env file
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """`KEY=VALUE` lines: `#` comments, an optional `export `, and quoted or
+    unquoted values. No interpolation. An NWC or LSC code is one unquoted
+    value, `&` and all."""
+    values: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        key, separator, value = line.partition("=")
+        key = key.strip()
+        if not separator or not key or key.startswith("#"):
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        else:
+            value = re.split(r"\s+#", value, maxsplit=1)[0]
+        values[key] = value
+    return values
+
+
+def load_env_file(
+    name: str, env: Mapping[str, str], cwd: Path, *, required: bool
+) -> tuple[Mapping[str, str], str]:
+    """Fill the variables the environment does not set from an env file, the
+    way `uvicorn --env-file` does, so the app `--app` imports sees what the
+    dev server sees. Without this an agent has to load the file into a shell
+    first, and sourcing it splits each code at its `&` and prints the pieces.
+    Reports the file name only, never a value."""
+    path = cwd / name
+    if not path.is_file():
+        if required:
+            raise CliError(f"--env-file {name}: no such file in {cwd}")
+        return env, f"env file: none ({name} not found in {cwd})"
+    values = read_env_file(path)
+    added = {key: value for key, value in values.items() if key not in env}
+    if env is os.environ:
+        os.environ.update(added)
+        return os.environ, f"env file: {name}"
+    return {**env, **added}, f"env file: {name}"
 
 
 # ----------------------------------------------------------- app resolution
@@ -341,6 +394,7 @@ def run_doctor(
     env: Mapping[str, str],
     io: CliIo,
     wallet_client_factory: Callable[[str], Any] | None,
+    cwd: Path,
 ) -> int:
     parser = _parser(command)
     parser.add_argument("--offline", action="store_true")
@@ -350,6 +404,9 @@ def run_doctor(
     parser.add_argument("--table-name", default=DEFAULT_TABLE)
     parser.add_argument("--meta-table-name", default=DEFAULT_META_TABLE)
     options = _parse(parser, args)
+    env, env_line = load_env_file(
+        options.env_file or ENV_FILE, env, cwd, required=options.env_file is not None
+    )
 
     host: Host | None = None
     repository: Any | None = None
@@ -378,7 +435,12 @@ def run_doctor(
         offline=options.offline,
         command=command,
     )
-    lines = [*report.lines, "Agent skills: run `openreceive skills install`"]
+    lines = [
+        *report.lines[:2],
+        env_line,
+        *report.lines[2:],
+        "Agent skills: run `openreceive skills install`",
+    ]
     ok = report.ok
     if notes:
         lines.extend(notes)
@@ -456,10 +518,12 @@ def _require_stack(
     return stack.build_app()
 
 
-def run_reconcile(args: list[str], env: Mapping[str, str], io: CliIo) -> int:
+def run_reconcile(args: list[str], env: Mapping[str, str], io: CliIo, cwd: Path) -> int:
     parser = _parser("reconcile")
     parser.add_argument("--overlap-seconds", type=int, default=60)
     options = _parse(parser, args)
+    if options.env_file is not None:  # a worker in production reads the platform's environment
+        env, _ = load_env_file(options.env_file, env, cwd, required=True)
     app = _require_stack(options, env, "reconcile")
     checks = app.reconcile(overlap_seconds=options.overlap_seconds)
     counts: dict[str, int] = {}
@@ -473,10 +537,12 @@ def run_reconcile(args: list[str], env: Mapping[str, str], io: CliIo) -> int:
     return 0
 
 
-def run_notifications(args: list[str], env: Mapping[str, str], io: CliIo) -> int:
+def run_notifications(args: list[str], env: Mapping[str, str], io: CliIo, cwd: Path) -> int:
     parser = _parser("notifications")
     parser.add_argument("--interval-seconds", type=int)
     options = _parse(parser, args)
+    if options.env_file is not None:  # a worker in production reads the platform's environment
+        env, _ = load_env_file(options.env_file, env, cwd, required=True)
     app = _require_stack(options, env, "notifications")
     interval = options.interval_seconds
     if interval is None:

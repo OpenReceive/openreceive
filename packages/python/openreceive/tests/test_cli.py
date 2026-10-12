@@ -8,6 +8,7 @@ import io
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -22,9 +23,15 @@ RELAY = "wss://relay.test.openreceive.local"
 NWC_URI = f"{SCHEME}://{PUBKEY}?relay={RELAY}&secret={SECRET}"
 
 
+# Doctor reads .env from its cwd, and the repo root keeps live codes in .env.
+# Every call runs from an empty directory unless it says otherwise.
+EMPTY_CWD = Path(tempfile.mkdtemp(prefix="openreceive-cli-cwd-"))
+
+
 def cli(argv: list[str], **kwargs: Any) -> tuple[int, str, str]:
     out, err = io.StringIO(), io.StringIO()
     kwargs.setdefault("env", {})
+    kwargs.setdefault("cwd", EMPTY_CWD)
     code = run(argv, stdout=out, stderr=err, **kwargs)
     return code, out.getvalue(), err.getvalue()
 
@@ -162,6 +169,54 @@ def test_doctor_exit_codes_and_debug_report() -> None:
     assert (
         code == 1 and "not a valid NWC code" in out and "not-a-code" not in out.split("\n")[3][:8]
     )
+
+
+def test_doctor_reads_dot_env_without_overriding_the_environment(tmp_path: Path) -> None:
+    other = NWC_URI.replace(PUBKEY, "c" * 64)
+    (tmp_path / ".env").write_text(
+        f"# the shop's codes\nexport SESSION_SECRET='not-a-code'\nNWC_URI={NWC_URI}\n"
+    )
+    probed: list[str] = []
+
+    def factory(uri: str) -> ReceiveOnlyWallet:
+        probed.append(uri)
+        return ReceiveOnlyWallet(uri)
+
+    code, out, err = cli(["doctor"], cwd=tmp_path, wallet_client_factory=factory)
+    assert code == 0, out + err
+    assert probed == [NWC_URI]
+    assert "env file: .env\n" in out and "NWC_URI: present-redacted" in out
+    assert SECRET not in out + err and PUBKEY not in out + err
+
+    code, out, _ = cli(
+        ["doctor"], cwd=tmp_path, env={"NWC_URI": other}, wallet_client_factory=factory
+    )
+    assert code == 0 and probed[-1] == other
+
+    code, out, _ = cli(["doctor", "--offline"])
+    assert code == 1 and f"env file: none (.env not found in {EMPTY_CWD})" in out
+
+
+def test_env_file_names_another_file_and_a_missing_one_is_an_error(tmp_path: Path) -> None:
+    (tmp_path / ".env.local").write_text(f'NWC_URI="{NWC_URI}"  \n')
+    code, out, err = cli(["doctor", "--offline", "--env-file", ".env.local"], cwd=tmp_path)
+    assert code == 0, out + err
+    assert "env file: .env.local" in out
+
+    for argv in (["doctor"], ["debug-report"], ["reconcile"], ["notifications"]):
+        code, out, err = cli([*argv, "--env-file", ".env.prod"], cwd=tmp_path)
+        assert code == 1 and err == f"--env-file .env.prod: no such file in {tmp_path}\n", argv
+
+
+def test_env_file_values_reach_the_process_environment(tmp_path: Path) -> None:
+    # The app --app imports reads os.environ, as it does under uvicorn --env-file.
+    name = "OPENRECEIVE_TEST_FROM_ENV_FILE"
+    (tmp_path / ".env").write_text(f"{name}=a&b # trailing comment\n")
+    try:
+        code, _, _ = cli(["debug-report", "--offline"], cwd=tmp_path, env=None)
+        assert code == 0 and os.environ[name] == "a&b"
+    finally:
+        os.environ.pop(name, None)
 
 
 def test_doctor_url_probe_reports_an_unreachable_app() -> None:

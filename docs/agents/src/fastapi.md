@@ -107,6 +107,11 @@ you store it. Ask one question per message.
    with `uvicorn --env-file .env` (update the app's run script or Procfile, not
    just your own command). When it is started with Docker Compose, give the
    service `env_file: .env`. Restart the server after writing the file.
+   Doctor needs the file too: run it as
+   `dotenv -f .env run -- openreceive doctor …`. The `dotenv` command comes
+   with python-dotenv, which `uvicorn --env-file` already needs; if it is
+   missing, `pip install "python-dotenv[cli]"`. Never `source`, `export` or
+   `cat` the file: the codes contain `&`, and the shell prints the pieces.
 
 Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
 saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
@@ -114,8 +119,9 @@ runs the receive-only preflight: if it reports spend methods such as
 `pay_invoice`, remove `NWC_URI` from `.env` and ask for a receive-only code
 again. Never set the spend-capable override to get past it.
 
-After the router is wired, run `openreceive doctor --app <module>:app`. It
-reports `NWC_URI` presence without printing it, probes the wallet, and names
+After the router is wired, run
+`dotenv -f .env run -- openreceive doctor --app <module>:app`. It reports
+`NWC_URI` presence without printing it, probes the wallet, and names
 any hook still on a placeholder and whether the migration ran. Exit code 1 is a
 finding to fix, not a reason to skip the check.
 
@@ -133,7 +139,8 @@ Only then start the quickstart.
 ## After the quickstart — hand over, then stop
 
 The quickstart is done when
-`openreceive doctor --app <module>:app --url <app url>` is clean and this app
+`dotenv -f .env run -- openreceive doctor --app <module>:app --url <app url>`
+is clean and this app
 serves the checkout page for one of its orders. Doctor names any failed check
 and exits nonzero; fix it before going on.
 

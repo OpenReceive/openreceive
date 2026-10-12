@@ -34,6 +34,20 @@
   then `.env` (the production files when `NODE_ENV=production`). It read only
   `.env.local` and `.env`, so in a v0 project, whose codes live in
   `.env.development.local`, it reported `NWC_URI: missing`.
+- Fixed (Python): `openreceive doctor` and `debug-report` read `.env` in the
+  working directory, as `uvicorn --env-file .env` does, for variables the
+  environment does not set, and before `--app` is imported. They read only
+  the process environment, so an agent following the FastAPI directions got
+  `NWC_URI is not set` and loaded the file into its shell. Sourcing it split
+  each code at its `&` and printed the pieces in the transcript. Doctor prints
+  the file name, never a value. `--env-file <path>` names another file, and
+  `reconcile` and `notifications` read one only when it is given.
+- Fixed (docs): the FastAPI directions and quickstart run doctor as
+  `dotenv -f .env run -- openreceive doctor …`, which works on 0.4.23 too,
+  and say never to `source`, `export` or `cat` `.env`. The quickstart also
+  names the standalone checkout files for Jinja templates and where to copy
+  them from: npm's `@openreceive/elements/dist/standalone/` or the PyPI
+  package's `openreceive/django/static/openreceive/`.
 - Changed (examples): every demo product costs $5.00 or more, so a payer can
   pick USDT, USDC or SOL. The starters' sticker was $1.00 and the buttons ran
   $1 to $10, below the swap providers' minimums (USDT $2.63, USDC $2.39,

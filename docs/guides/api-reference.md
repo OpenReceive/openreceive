@@ -2180,9 +2180,16 @@ It never opens a database connection.
 ### openreceive doctor (Python)
 
 ```sh
-openreceive doctor [--app module:attr] [--offline] [--db <sqlalchemy-url>] [--url http://localhost:8000] [--prefix /openreceive]
+openreceive doctor [--app module:attr] [--offline] [--db <sqlalchemy-url>] [--url http://localhost:8000] [--prefix /openreceive] [--env-file .env]
 openreceive debug-report [...]     # the same lines, always exit 0
 ```
+
+Doctor reads `.env` in the working directory, as `uvicorn --env-file .env`
+does, for variables the environment does not set. The values reach the process
+environment before `--app` is imported, so the app sees what the dev server
+sees. Doctor prints the file name, never a value. `--env-file <path>` names
+another file. Before 0.4.24, doctor read the process environment only; run it
+as `dotenv -f .env run -- openreceive doctor …` on those versions.
 
 It checks:
 
@@ -2206,9 +2213,12 @@ its fix.
 ### openreceive reconcile / openreceive notifications
 
 ```sh
-openreceive reconcile --app main:app [--overlap-seconds 60]
-openreceive notifications --app main:app [--interval-seconds 15]
+openreceive reconcile --app main:app [--overlap-seconds 60] [--env-file .env]
+openreceive notifications --app main:app [--interval-seconds 15] [--env-file .env]
 ```
+
+The workers read an env file only when `--env-file` names one. In production
+the platform sets the environment.
 
 `reconcile` runs one bounded pass over the pending attempts and prints how many
 ended in each status. It matches `rake openreceive:reconcile`. Use it in a

@@ -248,8 +248,13 @@ send it after commit.
 
 A page without a bundler renders the same checkout as a custom element:
 `<openreceive-checkout reference="…" prefix="/openreceive">` from
-`@openreceive/elements`. You can also serve its standalone build from your
-static directory.
+`@openreceive/elements`. For Jinja templates without a JavaScript build, serve
+its standalone build from your static directory: copy
+`openreceive-checkout.js` and `openreceive-checkout.css` from
+`node_modules/@openreceive/elements/dist/standalone/` to `static/openreceive/`,
+and load both on the checkout page. The `openreceive` package from PyPI carries
+the same two files in `openreceive/django/static/openreceive/`, so you can copy
+them from there without npm.
 
 Buy a Button is a runnable illustration of the boundary
 ([`examples/buttons/server/fastapi`](../../examples/buttons/server/fastapi)).
@@ -261,8 +266,15 @@ shape onto the models in THIS app.
 ## 6. Verify
 
 ```sh
-openreceive doctor --app main:app
+dotenv -f .env run -- openreceive doctor --app main:app
 ```
+
+Doctor reads the process environment. `dotenv -f .env run --` loads `.env`
+into it, as `uvicorn --env-file .env` does for the server. The `dotenv`
+command comes with python-dotenv, which `uvicorn --env-file` needs anyway; if
+it is missing, run `pip install "python-dotenv[cli]"`. Never `source` or
+`export` `.env` in a shell: the codes contain `&`, and the shell splits the
+line and prints the pieces.
 
 `openreceive doctor` checks Python, `NWC_URI`, and swap-provider
 configuration. It also probes the wallet relay to confirm the code is

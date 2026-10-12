@@ -43,7 +43,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 14605
+      "bytes": 15401
     },
     {
       "path": "/guides/quickstart-django",
@@ -336,7 +336,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 129686
+      "bytes": 130307
     },
     {
       "path": "/guides/security",
@@ -436,7 +436,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 39162
+      "bytes": 40345
     },
     {
       "path": "/guides/agent-directions-django",
@@ -546,7 +546,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 129686,
+      "bytes": 130307,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -686,7 +686,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39162,
+      "bytes": 40345,
       "copy_button": true,
       "self_contained": true
     },
