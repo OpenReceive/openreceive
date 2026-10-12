@@ -39,12 +39,16 @@ The [Next.js + Postgres starter](https://github.com/OpenReceive/openreceive/tree
 is a one-product shop with checkout already wired.
 
 1. Click **Deploy** in its README. Vercel copies the starter into a new GitHub
-   repository: pick the **Git Scope** and a name, then **Create**.
+   repository: pick the **Git Scope** and a name, then **Create**. If you
+   have deployed the starter before, change the name: Vercel only says
+   `openreceive-starter` is taken after you click **Create**.
 
    <img alt="Vercel's New Project form cloning the starter into a new GitHub repository" width="560" src="../assets/vercel/1-new-project.webp">
 
    On the Hobby plan, a repository inside a GitHub organization must be
-   public; one under your personal account can stay private. When GitHub asks
+   public. If Vercel says a private GitHub organization needs a Pro plan,
+   click the lock icon to make the repository public. One under your personal
+   account can stay private. When GitHub asks
    which repositories Vercel may use, install it only where this project
    lives, not on every repository you own.
 2. Click **Add** next to Neon, keep the **Free** plan, then **Continue**,

@@ -1,7 +1,13 @@
 // Creates the shop's orders table and OpenReceive's payment tables. Every
 // statement is idempotent, so this runs before each `next build` and `next dev`.
+import nextEnv from "@next/env";
 import { paymentsSchemaSql } from "@openreceive/http";
 import pg from "pg";
+
+// Read the env files Next reads, in Next's order: the development files with
+// `--dev`, the production files for a build. v0's preview writes the
+// project's variables to .env.development.local, not .env.local.
+nextEnv.loadEnvConfig(process.cwd(), process.argv.includes("--dev"));
 
 const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
 if (!url) {

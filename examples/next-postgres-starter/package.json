@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=.env.local scripts/migrate.mjs && next dev",
-    "build": "node --env-file-if-exists=.env.local scripts/migrate.mjs && next build",
+    "dev": "node scripts/migrate.mjs --dev && next dev",
+    "build": "node scripts/migrate.mjs && next build",
     "start": "next start",
-    "migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
+    "migrate": "node scripts/migrate.mjs --dev"
   },
   "dependencies": {
+    "@next/env": "^16.4.0",
     "@openreceive/http": "^0.4.19",
     "@openreceive/next": "^0.4.19",
     "@openreceive/react": "^0.4.19",

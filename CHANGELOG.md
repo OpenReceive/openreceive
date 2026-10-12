@@ -21,6 +21,14 @@
   replaced the shop's order form route with one, so the shop's form stopped
   creating orders. The directions now say to call that function where the app
   already creates orders, and to keep those routes, forms and redirects.
+- Fixed (examples): the Next.js + Postgres starter's preview starts in v0.
+  v0 writes the project's variables to `.env.development.local`, and the
+  starter's table script read only `.env.local`, so `npm run dev` stopped
+  with "No database URL" before Next started. The script now loads env files
+  with Next's own loader, `@next/env`, so it reads the files `next dev` and
+  `next build` read. The Vercel guide also says what to do when Vercel asks
+  for a Pro plan for an organization repository, or the starter's project
+  name is taken.
 
 ## 0.4.23 - 2026-10-11
 
