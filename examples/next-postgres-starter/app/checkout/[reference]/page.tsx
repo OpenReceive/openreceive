@@ -10,14 +10,14 @@ export default async function CheckoutPage({ params }: { params: Promise<{ refer
   const { reference } = await params;
   const order = await findOwnOrder(reference);
   if (!order) notFound();
+  const paid = order.state === "paid";
   return (
     <main>
       <h1>{order.product_name}</h1>
       <p>
-        ${order.amount} {order.currency} ·{" "}
-        {order.state === "paid" ? "Paid, thank you." : "Awaiting payment"}
+        ${order.amount} {order.currency} · {paid ? "Paid, thank you." : "Awaiting payment"}
       </p>
-      <OrderCheckout reference={order.id} />
+      <OrderCheckout reference={order.id} paid={paid} />
     </main>
   );
 }

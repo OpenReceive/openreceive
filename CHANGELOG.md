@@ -9,6 +9,16 @@
   setup. Lovable's own agent, Lovable Cloud and its migration approval are
   not tested, and the guide asks for an issue when Lovable does something it
   does not describe. Step 1 links Lovable's Secrets docs.
+- Fixed (examples): the Next.js and Express starters' order pages say "Paid,
+  thank you." as soon as the checkout shows the payment received. The status
+  line came from the server render alone, so it said "Awaiting payment" under
+  a settled checkout until a reload. The Next.js page refreshes on
+  `onSettled`; `onPaid` has already marked the order paid by then. The Express
+  page updates the line on `openreceive-settled`. An order page opened after
+  the order is paid shows only the paid status. It used to show the checkout
+  too, which said "Could not start checkout." because `amountFor` has no
+  price for a paid order. A payment made on the page keeps its checkout and
+  receipt.
 
 ## 0.4.24 - 2026-10-12
 

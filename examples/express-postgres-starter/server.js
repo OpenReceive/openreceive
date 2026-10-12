@@ -115,13 +115,29 @@ app.get("/orders/:id", async (req, res) => {
     res.status(404).type("html").send(page("Not found", "<h1>Order not found</h1>"));
     return;
   }
-  const status = order.state === "paid" ? "Paid, thank you." : "Awaiting payment";
+  if (order.state === "paid") {
+    // Nothing is left to pay, and the checkout would only fail to start.
+    res.type("html").send(
+      page(
+        order.product_name,
+        `<h1>${escapeHtml(order.product_name)}</h1>
+<p>$${escapeHtml(order.amount)} ${escapeHtml(order.currency)} · Paid, thank you.</p>`,
+      ),
+    );
+    return;
+  }
   res.type("html").send(
     page(
       order.product_name,
       `<h1>${escapeHtml(order.product_name)}</h1>
-<p>$${escapeHtml(order.amount)} ${escapeHtml(order.currency)} · ${status}</p>
-<openreceive-checkout reference="${escapeHtml(order.id)}" prefix="/openreceive"></openreceive-checkout>`,
+<p>$${escapeHtml(order.amount)} ${escapeHtml(order.currency)} · <span id="order-status">Awaiting payment</span></p>
+<openreceive-checkout reference="${escapeHtml(order.id)}" prefix="/openreceive"></openreceive-checkout>
+<script type="module">
+  // onPaid has marked the order paid by the time the checkout shows settlement.
+  document.querySelector("openreceive-checkout").addEventListener("openreceive-settled", () => {
+    document.getElementById("order-status").textContent = "Paid, thank you.";
+  });
+</script>`,
     ),
   );
 });
