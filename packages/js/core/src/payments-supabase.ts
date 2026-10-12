@@ -5,7 +5,16 @@ import { paymentsDdlStatements } from "./payments-ddl.ts";
  * `openreceive_supabase_status()` reports it, and `@openreceive/http` refuses
  * to serve a database whose functions are older or newer than its own.
  */
-export const OPENRECEIVE_SUPABASE_FUNCTIONS_VERSION = 1 as const;
+export const OPENRECEIVE_SUPABASE_FUNCTIONS_VERSION = 2 as const;
+
+/**
+ * The SQLSTATE a write function raises when the reference changed since the
+ * repository read it. Not 40001: PostgREST 14, which Supabase runs, retries a
+ * transaction that fails with 40001 at once and forever, so the stale snapshot
+ * never reaches the repository and the request hangs. PostgREST answers a
+ * `PTxxx` state with HTTP status xxx and never retries it.
+ */
+export const OPENRECEIVE_SUPABASE_STALE_SQLSTATE = "PT409";
 
 /** Raised by the scaffold's `openreceive_on_paid` until the host replaces it. */
 export const OPENRECEIVE_ON_PAID_STUB_MARKER = "OPENRECEIVE_ON_PAID_NOT_IMPLEMENTED";
@@ -15,7 +24,7 @@ const ADVISORY_LOCK_SEED = 8_210_223;
 
 const lock = (reference: string): string =>
   `perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${reference}, ${ADVISORY_LOCK_SEED}));`;
-const STALE = `raise exception 'openreceive: this reference changed; read it again' using errcode = '40001';`;
+const STALE = `raise exception 'openreceive: this reference changed; read it again' using errcode = '${OPENRECEIVE_SUPABASE_STALE_SQLSTATE}';`;
 
 /** Every library function with its argument types, as `regprocedure` spells them. */
 const LIBRARY_FUNCTIONS = [
@@ -37,7 +46,7 @@ const ON_PAID = "openreceive_on_paid(text, text, bigint)";
  *
  * JS decides on a snapshot of the reference's rows; each write function takes
  * the reference lock, checks that snapshot still holds, and writes, or raises
- * SQLSTATE 40001 so the repository reads again. The settlement function calls
+ * {@link OPENRECEIVE_SUPABASE_STALE_SQLSTATE} so the repository reads again. The settlement function calls
  * the host's `public.openreceive_on_paid` inside the same transaction for the
  * reference's first settled attempt, so a failure there rolls the settlement
  * back and the attempt stays pending for the next pass.

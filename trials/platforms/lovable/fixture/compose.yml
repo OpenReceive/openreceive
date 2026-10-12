@@ -31,7 +31,7 @@ services:
         condition: service_healthy
     restart: "no"
   rest:
-    image: postgrest/postgrest:v16.4
+    image: postgrest/postgrest:v14.18
     environment:
       PGRST_DB_URI: postgres://authenticator:shop@db:5432/postgres
       PGRST_DB_SCHEMAS: public

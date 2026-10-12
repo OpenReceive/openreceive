@@ -5,8 +5,8 @@
 This is the SQL that `npx openreceive scaffold payments --supabase` writes,
 for [Supabase over HTTPS](supabase.md#supabase-over-https). Use this page when
 you cannot run the scaffold, for example from Lovable, whose agent has no
-terminal. It is functions version 1, for `@openreceive/http`
-0.4.23 or newer.
+terminal. It is functions version 2, for `@openreceive/http`
+0.4.24 or newer.
 
 Save it, unchanged, as one new migration (`supabase/migrations/<timestamp>_openreceive.sql`),
 or paste it into the Supabase SQL Editor and run it. It is safe to run again.
@@ -76,7 +76,7 @@ create or replace function public.openreceive_commit_attempt(
 begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_reference, 8210223));
   if public.openreceive_reference_snapshot(p_reference) is distinct from p_snapshot then
-    raise exception 'openreceive: this reference changed; read it again' using errcode = '40001';
+    raise exception 'openreceive: this reference changed; read it again' using errcode = 'PT409';
   end if;
   -- Marked, not closed: a superseded invoice stays payable until a wallet scan closes it.
   update public.openreceive_payments
@@ -100,7 +100,7 @@ create or replace function public.openreceive_record_settlement(
 begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_reference, 8210223));
   if public.openreceive_reference_snapshot(p_reference) is distinct from p_snapshot then
-    raise exception 'openreceive: this reference changed; read it again' using errcode = '40001';
+    raise exception 'openreceive: this reference changed; read it again' using errcode = 'PT409';
   end if;
   update public.openreceive_payments
      set status = 'settled',
@@ -108,7 +108,7 @@ begin
          paid_at = p_paid_at, updated_at = p_now
    where reference = p_reference and payment_hash = p_payment_hash and status = 'pending';
   if not found then
-    raise exception 'openreceive: this reference changed; read it again' using errcode = '40001';
+    raise exception 'openreceive: this reference changed; read it again' using errcode = 'PT409';
   end if;
   -- The host's fulfillment, in this transaction: if it raises, nothing is recorded.
   -- It runs with the search path the SQL Editor uses, so unqualified table names
@@ -190,7 +190,7 @@ begin
   end loop;
   v_on_paid := pg_catalog.to_regprocedure('public.openreceive_on_paid(text, text, bigint)');
   return jsonb_build_object(
-    'functions_version', 1,
+    'functions_version', 2,
     'schema_version', (select value from public.openreceive_meta where key = 'schema_version'),
     'on_paid', case
       when v_on_paid is null then 'missing'

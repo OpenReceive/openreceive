@@ -90,6 +90,7 @@
     "test:ci": "npm run test:ci:core && npm run test:ci:release",
     "test:live": "npm run test:live:nwc && npm run test:live:ruby:nwc && npm run test:live:python:nwc && npm run test:live:php:nwc",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs",
+    "test:live:supabase": "OPENRECEIVE_LIVE_SUPABASE=1 node --import tsx --test --test-concurrency=1 tests/supabase/live.test.mjs",
     "release:wordpress:plan": "node tools/release/wordpress-plugin.mjs plan",
     "release:wordpress:build": "node tools/release/wordpress-plugin.mjs build",
     "release:wordpress:publish": "node tools/release/wordpress-plugin.mjs publish",

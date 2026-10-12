@@ -29,7 +29,7 @@ This is the SQL that \`npx openreceive scaffold payments --supabase\` writes,
 for [Supabase over HTTPS](supabase.md#supabase-over-https). Use this page when
 you cannot run the scaffold, for example from Lovable, whose agent has no
 terminal. It is functions version ${OPENRECEIVE_SUPABASE_FUNCTIONS_VERSION}, for \`@openreceive/http\`
-0.4.23 or newer.
+0.4.24 or newer.
 
 Save it, unchanged, as one new migration (\`supabase/migrations/<timestamp>_openreceive.sql\`),
 or paste it into the Supabase SQL Editor and run it. It is safe to run again.

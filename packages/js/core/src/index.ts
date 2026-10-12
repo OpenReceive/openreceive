@@ -100,6 +100,7 @@ export {
 export {
   OPENRECEIVE_ON_PAID_STUB_MARKER,
   OPENRECEIVE_SUPABASE_FUNCTIONS_VERSION,
+  OPENRECEIVE_SUPABASE_STALE_SQLSTATE,
   supabasePaymentsMigrationSql,
 } from "./payments-supabase.ts";
 export type {

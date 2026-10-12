@@ -2,6 +2,7 @@ import {
   OPENRECEIVE_ON_PAID_STUB_MARKER,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   OPENRECEIVE_SUPABASE_FUNCTIONS_VERSION,
+  OPENRECEIVE_SUPABASE_STALE_SQLSTATE,
   unixSeconds,
 } from "@openreceive/core";
 import { hostError } from "./errors.ts";
@@ -34,7 +35,7 @@ import {
 // Instead JS decides on a snapshot of the reference's rows, and one SQL
 // function (from `openreceive scaffold payments --supabase`) takes the same
 // per-reference lock, checks the snapshot still holds, and writes. If another
-// writer got there first it raises SQLSTATE 40001, and JS reads and decides
+// writer got there first it raises SQLSTATE PT409, and JS reads and decides
 // again. Every write to openreceive_payments goes through such a function.
 //
 // Fulfillment is SQL too: the settlement function calls the host's
@@ -198,7 +199,11 @@ export function createSupabasePayments(
       try {
         return await attempt();
       } catch (error) {
-        if (!(error instanceof SupabaseRequestError) || error.code !== "40001") throw error;
+        if (
+          !(error instanceof SupabaseRequestError) ||
+          error.code !== OPENRECEIVE_SUPABASE_STALE_SQLSTATE
+        )
+          throw error;
       }
     }
     throw new Error(
@@ -369,7 +374,10 @@ export function createSupabasePayments(
           });
           return won === true;
         } catch (error) {
-          if (error instanceof SupabaseRequestError && error.code !== "40001")
+          if (
+            error instanceof SupabaseRequestError &&
+            error.code !== OPENRECEIVE_SUPABASE_STALE_SQLSTATE
+          )
             throw onPaidFailure(error);
           throw error;
         }

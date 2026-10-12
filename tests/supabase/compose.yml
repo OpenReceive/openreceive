@@ -18,7 +18,7 @@ services:
       timeout: 5s
       retries: 60
   rest:
-    image: postgrest/postgrest:v16.4
+    image: postgrest/postgrest:v14.18
     environment:
       PGRST_DB_URI: postgres://authenticator:openreceive@db:5432/postgres
       PGRST_DB_SCHEMAS: public

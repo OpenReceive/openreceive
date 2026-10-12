@@ -11,7 +11,7 @@ provider you configure converts the payment to **BTC over Lightning**, and it
 settles into the same wallet. Available assets and networks depend on the
 provider.
 
-Use `@openreceive/*` 0.4.23 or newer. The payment route this guide sets up
+Use `@openreceive/*` 0.4.24 or newer. The payment route this guide sets up
 runs in OpenReceive's CI as a Cloudflare Worker against Supabase's own
 database and API server, and it was checked on an app built with Lovable's
 build setup. Lovable's own agent has not run these directions in our tests
@@ -38,7 +38,7 @@ yet.
 
 <!-- platform-prompt:begin -->
 ```text
-Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openreceive.org/agent-directions/lovable/full.md and follow it exactly: it has the migration, the server route and the checkout page. NWC_URI and LSC_URI_PRIMARY are already saved as this project's secrets, so do not ask me for them. Use @openreceive packages 0.4.23 or newer.
+Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openreceive.org/agent-directions/lovable/full.md and follow it exactly: it has the migration, the server route and the checkout page. NWC_URI and LSC_URI_PRIMARY are already saved as this project's secrets, so do not ask me for them. Use @openreceive packages 0.4.24 or newer.
 ```
 <!-- platform-prompt:end -->
 

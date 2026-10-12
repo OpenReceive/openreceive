@@ -12,7 +12,7 @@ provider you configure converts the payment to **BTC over Lightning**, and it
 settles into the same wallet. Available assets and networks depend on the
 provider.
 
-Use OpenReceive 0.4.19 or newer, or 0.4.23 or newer for
+Use OpenReceive 0.4.19 or newer, or 0.4.24 or newer for
 [Supabase over HTTPS](#supabase-over-https). This guide adds the Supabase
 parts to a framework quickstart, so start from yours:
 [Next.js](quickstart-next.md), [Express](quickstart-node.md),

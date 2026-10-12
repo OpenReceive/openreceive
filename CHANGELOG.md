@@ -24,6 +24,22 @@
   their quickstart as documentation. The WordPress plugin's Plugin URI is
   `/integrations/woocommerce`.
 
+- Fixed (JS): Supabase storage over HTTPS no longer hangs when two requests
+  write the same order at once. The migration's write functions raised
+  SQLSTATE 40001 when the order changed since the read, and PostgREST 14,
+  which Supabase runs, retries a 40001 transaction at once and forever: the
+  request timed out after 15 seconds, and the retries kept a PostgREST
+  connection busy about 250 times a second after the client gave up. Two
+  checkout requests for one order at once were enough. The functions now
+  raise `PT409`, which PostgREST answers with a 409 and never retries, and
+  the repository reads again. This is functions version 2: apply the
+  migration again (`npx openreceive scaffold payments --supabase`, or the
+  SQL on /guides/supabase-migration). Until then the payment routes answer
+  503 and the log names the fix. CI now runs PostgREST v14.18, the version Supabase
+  serves; v16.4 does not retry, which hid this. Found by
+  `npm run test:live:supabase`, a new opt-in run against a real Supabase
+  project: Supavisor with Supabase's certificate authority, the API gateway
+  with an `sb_secret_` key, and the publishable key refused.
 - Fixed (docs): the Lovable directions keep the app's own order flow. They
   said to create orders in a server function, and one 0.4.23 agent trial
   replaced the shop's order form route with one, so the shop's form stopped

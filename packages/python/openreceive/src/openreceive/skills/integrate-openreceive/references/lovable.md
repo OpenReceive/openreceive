@@ -411,7 +411,7 @@ idempotent. See Payment storage.
 
 On Supabase the route keeps payments in your Supabase database through its
 HTTPS API, with the project's secret key. There is no `pg` pool. Use
-`@openreceive/*` 0.4.23 or newer:
+`@openreceive/*` 0.4.24 or newer:
 
 ```sh
 npm install @openreceive/http @openreceive/react
