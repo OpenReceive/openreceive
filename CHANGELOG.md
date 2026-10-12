@@ -9,6 +9,13 @@
   setup. Lovable's own agent, Lovable Cloud and its migration approval are
   not tested, and the guide asks for an issue when Lovable does something it
   does not describe. Step 1 links Lovable's Secrets docs.
+- Security updates in the lockfiles: rbsecp256k1 6.0.2, which allows
+  rubyzip 3.7.0 (the root and Rails demo bundles), and puma 8.0.2 in the Rails
+  trial shop, whose Gemfile now asks for `puma >= 5.0` as `rails new` writes
+  it. rbsecp256k1 6.0.2 builds libsecp256k1 v0.8.0 from bitcoin-core's release
+  archive, checked against a pinned SHA-256. The Rails demo's bundler-audit
+  ignore for the rubyzip advisory is gone. Apps on `openreceive-rails` take the
+  same fix with `bundle update rbsecp256k1`; the gems already allow it.
 - Fixed (examples): the Next.js and Express starters' order pages say "Paid,
   thank you." as soon as the checkout shows the payment received. The status
   line came from the server render alone, so it said "Awaiting payment" under

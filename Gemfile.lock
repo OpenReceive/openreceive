@@ -234,10 +234,10 @@ GEM
       logger
       prism (>= 1.6.0)
       tsort
-    rbsecp256k1 (6.0.0)
+    rbsecp256k1 (6.0.2)
       mini_portile2 (~> 2.8)
       pkg-config (~> 1.5)
-      rubyzip (~> 2.3)
+      rubyzip (~> 3.4)
     rdoc (8.1.0)
       erb
       prism (>= 1.6.0)
@@ -245,7 +245,7 @@ GEM
       tsort
     reline (0.7.0)
       io-console (~> 0.5)
-    rubyzip (2.4.1)
+    rubyzip (3.7.0)
     securerandom (0.4.1)
     sqlite3 (2.9.6-aarch64-linux-gnu)
     sqlite3 (2.9.6-arm64-darwin)
