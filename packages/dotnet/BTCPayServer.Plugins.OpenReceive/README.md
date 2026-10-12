@@ -7,8 +7,6 @@ BTC over Lightning in your connected wallet. Asset and network availability
 depends on the provider.
 Requires BTCPay Server 2.4.4 or later.
 
-Docs and setup: [openreceive.org/integrations/btcpay-server](https://openreceive.org/integrations/btcpay-server)
-
 The whole setup in 30 seconds:
 
 https://github.com/user-attachments/assets/9aee9edb-e62c-4935-b885-a2e2c4380834

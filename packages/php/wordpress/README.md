@@ -5,7 +5,7 @@ orders, prices, stock and email; the bundled PHP engine owns payment attempts
 in the existing WordPress database. Both classic and block checkout use the
 same OpenReceive checkout on the order-pay page. HPOS is supported.
 
-Docs and setup: [openreceive.org/integrations/woocommerce](https://openreceive.org/integrations/woocommerce)
+Docs and setup: [WooCommerce quickstart](https://openreceive.org/guides/quickstart-woocommerce)
 
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
 a configured swap provider. The provider converts the payment to **BTC over

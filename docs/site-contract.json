@@ -567,7 +567,7 @@
       "slug": "wordpress",
       "title": "OpenReceive for WordPress + WooCommerce",
       "category": "woocommerce",
-      "bytes": 3859,
+      "bytes": 3846,
       "assets_base": "/assets/"
     },
     {
@@ -578,7 +578,7 @@
       "slug": "btcpay",
       "title": "OpenReceive for BTCPay Server",
       "category": "btcpay",
-      "bytes": 5193,
+      "bytes": 5079,
       "assets_base": "/assets/",
       "video": {
         "path": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
