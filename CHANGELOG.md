@@ -56,6 +56,14 @@
   $20. ETH's minimum is near $20, so it can still be greyed out. A new step
   in the Rails, Django, Node and plain-PHP buttons demos reprices a database
   that was seeded at the old prices.
+- Fixed (examples): the Express buttons demo's Angular tab no longer goes
+  blank when a payer picks a coin. Starting a swap remounts the checkout to
+  resume that attempt, and the demo had given Angular its own React-owned
+  div as the component's host element. Destroying the old component removed
+  that div from the page, so the new one mounted into a detached node. The
+  demo now gives Angular a child element of its own. The weekly Demos run
+  had failed on this since 2026-09-28. The Vercel guide also says that
+  Neon's database gets a random name.
 
 ## 0.4.23 - 2026-10-11
 

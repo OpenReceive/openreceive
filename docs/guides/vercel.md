@@ -52,8 +52,9 @@ is a one-product shop with checkout already wired.
    which repositories Vercel may use, install it only where this project
    lives, not on every repository you own.
 2. Click **Add** next to Neon, keep the **Free** plan, then **Continue**,
-   **Create** and **Done**. The starter does not use Neon's **Auth**, so you
-   can turn it off. Our test left it on.
+   **Create** and **Done**. Vercel gives the database a random name, such as
+   `neon-canary-branch`, and any name works. The starter does not use Neon's
+   **Auth**, so you can turn it off. Our test left it on.
 
    <img alt="The Neon dialog: region, the Auth toggle, and the Free plan with no credit card required" width="500" src="../assets/vercel/2-add-neon.webp">
 

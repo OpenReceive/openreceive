@@ -371,9 +371,15 @@ const EmbeddedCheckout: React.FC<{
           return;
         }
 
+        // A host element of Angular's own. Destroying a component removes its
+        // host element from the page, so handing Angular React's div meant the
+        // first remount (a swap's resumePaymentHash arriving) mounted into a
+        // detached node and the payment column went blank.
+        const angularHost = document.createElement("div");
+        mountTarget.append(angularHost);
         const component = createComponent(CheckoutComponent, {
           environmentInjector: application.injector,
-          hostElement: mountTarget,
+          hostElement: angularHost,
         });
         component.setInput("reference", reference);
         component.setInput("prefix", prefix);
