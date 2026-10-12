@@ -370,6 +370,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the engine tables and the attempt state machine
 - https://openreceive.org/guides/supabase.md — when the database is Supabase: its pooler, its certificate, and locking the tables away from its Data API
+- https://openreceive.org/guides/serverless.md — when the app runs serverless (Netlify, AWS Lambda, Cloud Run, Google AI Studio): pooled database URLs, timeouts, and why it needs no cron or worker
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
 - https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds

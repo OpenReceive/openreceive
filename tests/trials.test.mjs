@@ -769,6 +769,17 @@ test("rewriting OpenReceive's installed package is a blocker; serving its files 
   assert.equal(commandCheckWith("no_package_patch", [], [settings]).pass, false);
   const plain = { path: "/tmp/shop/views.py", content: 'if __name__ == "__main__":\n    main()\n' };
   assert.equal(commandCheckWith("no_package_patch", [], [plain]).pass, true);
+  // A 0.4.23 Lovable agent appended to .gitignore from a heredoc, then read a
+  // package file: the heredoc's write is not aimed at the package.
+  const gitignore = shell(
+    "python3 - <<'PY'\nfrom pathlib import Path\np=Path('.gitignore');p.write_text(p.read_text()+'.wrangler\\n')\nPY\nsed -n '1270,1325p' node_modules/@openreceive/node/dist/index.js",
+  );
+  assert.equal(commandCheckWith("no_package_patch", [gitignore]).pass, true);
+  // A heredoc that names the package and writes it still is.
+  const inPlace = shell(
+    "python3 - <<'PY'\nfrom pathlib import Path\np=Path('node_modules/@openreceive/node/dist/index.js')\np.write_text(p.read_text().replace('a', 'b'))\nPY",
+  );
+  assert.equal(commandCheckWith("no_package_patch", [inPlace]).pass, false);
 });
 
 test("a stack frame inside OpenReceive's code in any output is surfaced as polish", () => {

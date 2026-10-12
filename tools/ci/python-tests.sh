@@ -12,7 +12,9 @@
 # editing this script; an empty glob is a hard failure so a moved suite
 # directory cannot silently skip its tests. Set OPENRECEIVE_TEST_PGSQL_URL /
 # OPENRECEIVE_TEST_MYSQL_URL to also run the repository suite against those
-# databases (the lock paths); SQLite always runs.
+# databases (the lock paths), and OPENRECEIVE_TEST_POOLER_URL for Postgres
+# behind PgBouncer in transaction mode (tests/orms/pooler/compose.yml); SQLite
+# always runs.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."

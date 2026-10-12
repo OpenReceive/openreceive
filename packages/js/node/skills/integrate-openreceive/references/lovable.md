@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Lovable)
 
 ```text
-READ THIS FIRST: this file is 25 KB and a summary drops required steps. Read all of it:
+READ THIS FIRST: this file is 26 KB and a summary drops required steps. Read all of it:
 https://openreceive.org/agent-directions/lovable/full.md
 If your fetch tool gave you a summary, fetch that URL again for the full text.
 ```
@@ -148,9 +148,12 @@ every settlement.
   `crypto.randomUUID()` (HttpOnly, Secure, SameSite=Lax, path `/`, one
   year) with `getCookie` and `setCookie` from `@tanstack/react-start/server`,
   then inserts the order with `buyer_token` set to it through `supabaseAdmin`
-  from `@/integrations/supabase/client.server`, and returns the id. If the app
-  creates orders in the browser today, move that insert into this function.
-  Keep the order's user column too, if the app has sign-in.
+  from `@/integrations/supabase/client.server`, and returns the id. Keep the
+  app's order flow as it is: where it creates orders on the server today (a
+  server route a form posts to, or another server function), call this
+  function there, and keep those routes, forms and redirects working. If the
+  app creates orders in the browser today, move that insert into this
+  function. Keep the order's user column too, if the app has sign-in.
 - **The order is unpaid or paid.** Do not copy attempt statuses (`pending`,
   `expired`, `failed`, `attention`) onto it, and do not add a relation to
   `openreceive_payments`.

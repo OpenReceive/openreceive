@@ -1,6 +1,8 @@
 """Repository fixtures: SQLite on a temp file always; PostgreSQL and MySQL when
 OPENRECEIVE_TEST_PGSQL_URL / OPENRECEIVE_TEST_MYSQL_URL are set (the lock
-paths). Each test gets uniquely named tables so runs never collide."""
+paths); PostgreSQL through PgBouncer in transaction mode when
+OPENRECEIVE_TEST_POOLER_URL is set (tests/orms/pooler/compose.yml). Each test
+gets uniquely named tables so runs never collide."""
 
 from __future__ import annotations
 
@@ -17,6 +19,8 @@ from openreceive.storage.sql import SqlPaymentRepository
 BACKENDS = ["sqlite"]
 if os.environ.get("OPENRECEIVE_TEST_PGSQL_URL"):
     BACKENDS.append("postgres")
+if os.environ.get("OPENRECEIVE_TEST_POOLER_URL"):
+    BACKENDS.append("pooler")
 if os.environ.get("OPENRECEIVE_TEST_MYSQL_URL"):
     BACKENDS.append("mysql")
 
@@ -24,12 +28,18 @@ if os.environ.get("OPENRECEIVE_TEST_MYSQL_URL"):
 def _engine_for(backend: str, tmp_path: Path) -> Engine:
     if backend == "sqlite":
         return create_engine(f"sqlite:///{tmp_path / 'openreceive.sqlite3'}")
-    if backend == "postgres":
-        url = os.environ["OPENRECEIVE_TEST_PGSQL_URL"].replace(
-            "postgres://", "postgresql+psycopg://", 1
+    if backend in ("postgres", "pooler"):
+        name = (
+            "OPENRECEIVE_TEST_PGSQL_URL" if backend == "postgres" else "OPENRECEIVE_TEST_POOLER_URL"
         )
+        url = os.environ[name].replace("postgres://", "postgresql+psycopg://", 1)
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+        if backend == "pooler":
+            # The engine the serverless guide documents: a transaction pooler
+            # gives each transaction any server connection, so psycopg must not
+            # prepare statements.
+            return create_engine(url, connect_args={"prepare_threshold": None})
         return create_engine(url)
     url = os.environ["OPENRECEIVE_TEST_MYSQL_URL"]
     if url.startswith("mysql://"):

@@ -193,7 +193,9 @@ jobs:
   # tools/ci/python-tests.sh (uv sync --frozen, pytest, the cross-language
   # conformance harness). The repository suite runs on SQLite always and, with
   # the two service containers below exporting OPENRECEIVE_TEST_*_URL, on
-  # Postgres and MySQL too — the per-dialect lock paths. Django's own tests
+  # Postgres and MySQL too — the per-dialect lock paths — plus Postgres behind
+  # PgBouncer in transaction mode, the way serverless hosts reach Supabase or
+  # Neon. Django's own tests
   # (tests/django, pytest-django) run on both supported Django lines. Django 6
   # requires Python 3.12+, so it does not join the Python 3.10 floor.
   python-engine:
@@ -243,12 +245,14 @@ jobs:
       OPENRECEIVE_TEST_DJANGO: ${{ matrix.django-version }}
       OPENRECEIVE_TEST_PGSQL_URL: postgresql+psycopg://openreceive:openreceive@127.0.0.1:5432/openreceive_test
       OPENRECEIVE_TEST_MYSQL_URL: mysql+pymysql://root:openreceive@127.0.0.1:3306/openreceive_test
+      OPENRECEIVE_TEST_POOLER_URL: postgresql+psycopg://openreceive:openreceive@127.0.0.1:56432/openreceive_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
         with:
           enable-cache: true
           cache-dependency-glob: packages/python/openreceive/uv.lock
+      - run: docker compose -f tests/orms/pooler/compose.yml up -d --wait
       - run: ./tools/ci/python-tests.sh
 
   # Browser E2E smoke on every push/PR: boots the node-express Buy a Button

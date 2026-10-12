@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.24 - Unreleased
+
+- Added (docs): a guide for serverless hosts (/guides/serverless): Netlify,
+  AWS Lambda, Google Cloud Run and Google AI Studio, beside the Vercel guide.
+  It covers pooled connection strings for Neon, Supabase, Cloud SQL and RDS
+  Proxy (Aurora DSQL is not supported: it has no advisory locks), a 30-second
+  function timeout (Lambda's default is 3), and why a serverless app needs no
+  cron job or worker. The Node, Next.js, Fastify, FastAPI and Django
+  directions link it.
+- Tests (Python): CI runs the SQLAlchemy repository through PgBouncer in
+  transaction mode too, with a new test of sustained concurrent checkouts.
+  Through a transaction pooler, psycopg's default prepared statements fail
+  under load with `prepared statement "_pg3_0" already exists`; the engine
+  needs `connect_args={"prepare_threshold": None}`, as the Supabase and
+  serverless guides say. Django's defaults need no change.
+
+- Fixed (docs): the Lovable directions keep the app's own order flow. They
+  said to create orders in a server function, and one 0.4.23 agent trial
+  replaced the shop's order form route with one, so the shop's form stopped
+  creating orders. The directions now say to call that function where the app
+  already creates orders, and to keep those routes, forms and redirects.
+
 ## 0.4.23 - 2026-10-11
 
 - Added (JS): Supabase storage over Supabase's HTTPS API, for servers that

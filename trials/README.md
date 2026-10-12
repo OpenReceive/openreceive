@@ -226,7 +226,12 @@ Lovable applies a migration the agent writes only when the owner approves it,
 and its agent cannot run SQL. So `psql` is forbidden, the shop's README names
 `docker compose run --rm migrate` as the approval, and after the agent
 finishes the harness runs the platform's `before_live` steps: apply every
-pending migration, then rebuild and restart the web service. Then come the
+pending migration, then rebuild and restart the web service. Lovable's agent
+has no terminal at all, and a trial's agent does, so the opening message
+says what Lovable allows: edit files and add npm packages, but no SQL and no
+container management. The first 0.4.23 run without that line had two Cursor
+agents query the database with `psql` to check their work, and one rebuilt
+the web container by hand with `docker run`. Then come the
 live checks, paid path included: `openreceive_on_paid` must mark the shop's own
 order paid. Lovable's directions have no doctor, so `doctor_clean` is not
 checked here.

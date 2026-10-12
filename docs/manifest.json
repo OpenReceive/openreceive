@@ -90,6 +90,14 @@
       "public": true
     },
     {
+      "slug": "serverless",
+      "title": "Bitcoin Checkout on Serverless Hosts",
+      "source_path": "docs/guides/serverless.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "source_path": "docs/guides/how-we-test-platforms.md",

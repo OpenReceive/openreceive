@@ -270,6 +270,7 @@ const UNLISTED_GUIDES_BY_STACK = {
       ]),
     ),
     supabase: "WordPress keeps its data in MySQL",
+    serverless: "WordPress runs on an ordinary PHP host",
   },
   btcpay: {
     authorization:
@@ -290,6 +291,7 @@ const UNLISTED_GUIDES_BY_STACK = {
     "api-reference": "documents the library API; the plugin's routes are in the BTCPay quickstart",
     "react-material-ui-recipe": "a custom browser UI recipe; not applicable inside BTCPay",
     supabase: "BTCPay keeps the plugin's table in its own database",
+    serverless: "BTCPay Server is a long-running server",
   },
   lovable: {
     "node-orms": "no ORM: payments go through Supabase's HTTPS API",
@@ -299,10 +301,20 @@ const UNLISTED_GUIDES_BY_STACK = {
     "payment-safety-upgrade": "a new integration has no existing attempts to upgrade",
     "react-material-ui-recipe":
       "Lovable apps use the drop-in; the directions forbid a custom checkout UI",
+    serverless: "the Lovable directions already cover Cloudflare Workers, Lovable's only host",
   },
-  rails: { supabase: "the Supabase guide covers Node and Python servers" },
-  php: { supabase: "the Supabase guide covers Node and Python servers" },
-  laravel: { supabase: "the Supabase guide covers Node and Python servers" },
+  rails: {
+    supabase: "the Supabase guide covers Node and Python servers",
+    serverless: "the serverless guide covers Node and Python servers",
+  },
+  php: {
+    supabase: "the Supabase guide covers Node and Python servers",
+    serverless: "the serverless guide covers Node and Python servers",
+  },
+  laravel: {
+    supabase: "the Supabase guide covers Node and Python servers",
+    serverless: "the serverless guide covers Node and Python servers",
+  },
 };
 
 const GUIDE_URL = (slug) => `https://openreceive.org/guides/${slug}`;

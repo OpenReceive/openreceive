@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 4190
+      "bytes": 4328
     },
     {
       "path": "/guides/quickstart-node",
@@ -116,6 +116,16 @@
       "title": "Supabase Migration",
       "category": "reference",
       "bytes": 11384
+    },
+    {
+      "path": "/guides/serverless",
+      "markdown_path": "/guides/serverless.md",
+      "source": "docs/guides/serverless.md",
+      "kind": "guide",
+      "slug": "serverless",
+      "title": "Bitcoin Checkout on Serverless Hosts",
+      "category": "guide",
+      "bytes": 9732
     },
     {
       "path": "/guides/how-we-test-platforms",
@@ -306,7 +316,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 11613
+      "bytes": 11821
     },
     {
       "path": "/guides/host-testing",
@@ -406,7 +416,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 37160
+      "bytes": 37359
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -416,7 +426,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 38278
+      "bytes": 38477
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -426,7 +436,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 38963
+      "bytes": 39162
     },
     {
       "path": "/guides/agent-directions-django",
@@ -436,7 +446,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 45507
+      "bytes": 45706
     },
     {
       "path": "/guides/agent-directions-next",
@@ -446,7 +456,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 40684
+      "bytes": 40883
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -496,7 +506,7 @@
       "slug": "agent-directions-lovable",
       "title": "Agent Directions: Lovable",
       "category": "quickstart",
-      "bytes": 25367
+      "bytes": 25593
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -613,7 +623,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37160,
+      "bytes": 37359,
       "copy_button": true,
       "self_contained": true
     },
@@ -634,7 +644,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38278,
+      "bytes": 38477,
       "copy_button": true,
       "self_contained": true
     },
@@ -655,7 +665,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40684,
+      "bytes": 40883,
       "copy_button": true,
       "self_contained": true
     },
@@ -676,7 +686,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38963,
+      "bytes": 39162,
       "copy_button": true,
       "self_contained": true
     },
@@ -697,7 +707,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45507,
+      "bytes": 45706,
       "copy_button": true,
       "self_contained": true
     },
@@ -802,7 +812,7 @@
       "kind": "agent-directions-payload",
       "stack": "lovable",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 25367,
+      "bytes": 25593,
       "copy_button": true,
       "self_contained": true
     }
@@ -1192,7 +1202,7 @@
       "summary": "Lovable builds TanStack Start apps on Cloudflare Workers, with Supabase. Save your wallet code as a secret, paste one prompt, and Lovable adds checkout to your app.",
       "framework": null,
       "framework_path": null,
-      "status": "guide",
+      "status": "tested",
       "path": "/platforms/lovable",
       "markdown_path": "/platforms/lovable.md",
       "database": "Lovable Cloud's Supabase, or your own connected project, over Supabase's HTTPS API",
@@ -1204,7 +1214,14 @@
       "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openreceive.org/agent-directions/lovable/full.md and follow it exactly: it has the migration, the server route and the checkout page. NWC_URI and LSC_URI_PRIMARY are already saved as this project's secrets, so do not ask me for them. Use @openreceive packages 0.4.23 or newer.",
       "starter": null,
       "eval": "lovable",
-      "tested": null
+      "tested": {
+        "date": "2026-10-12",
+        "release": "0.4.23",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "supabase",
@@ -1597,7 +1614,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 6041
+        "bytes": 6128
       },
       {
         "path": "/openapi.yaml",

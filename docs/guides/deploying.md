@@ -5,6 +5,10 @@ to your database. NWC (Nostr Wallet Connect) is how the server talks to your
 wallet. Attempt rows, the settlement claim, and the scan gate all live in the
 database. There is no separate OpenReceive service to deploy.
 
+On a serverless host (Vercel, Netlify, AWS Lambda, Google Cloud Run), also
+read [Bitcoin checkout on serverless hosts](serverless.md): pooled database
+URLs, function timeouts, and why no cron job is needed.
+
 ## Requirements
 
 | Stack | Floor |

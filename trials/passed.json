@@ -101,6 +101,15 @@
       "directions": "0da58e8adfc1"
     },
     {
+      "trial": "lovable",
+      "date": "2026-10-12",
+      "release": "0.4.23",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "c5cf28ec737d"
+    },
+    {
       "trial": "replit",
       "date": "2026-10-08",
       "release": "0.4.19",

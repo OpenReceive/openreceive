@@ -5,7 +5,7 @@
   "directions_slug": "lovable",
   "prompt_name": "TanStack Start shop built with Lovable",
   "opening_guide": "docs/guides/lovable.md",
-  "opening_context": "This is a shop built with Lovable: a TanStack Start app on Lovable Cloud.",
+  "opening_context": "This is a shop built with Lovable: a TanStack Start app on Lovable Cloud. As on Lovable, you edit files and add npm packages; you do not run SQL or manage the containers. I apply the migrations you write, and Lovable rebuilds the preview.",
   "doctor": "",
   "credential_store": {
     "kind": "platform",

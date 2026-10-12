@@ -357,6 +357,48 @@ def test_concurrent_settlement_fulfills_exactly_once(
     assert wins.count(True) == 1 and fulfilled == [H1]
 
 
+def test_sustained_concurrent_checkouts_settle_once_each(
+    repository: SqlPaymentRepository, clock: dict[str, int]
+) -> None:
+    """Eight threads each create and settle twelve orders, so every statement
+    runs many times on each pooled connection. psycopg prepares a statement on
+    its fifth run, and a transaction pooler hands each transaction any server
+    connection: through PgBouncer this fails with "prepared statement already
+    exists" unless the engine turns preparing off, as the serverless guide says."""
+    now = clock["now"]
+    fulfilled: list[str] = []
+    errors: list[str] = []
+    lock = threading.Lock()
+    start = threading.Barrier(8)
+
+    def worker(index: int) -> None:
+        start.wait()
+        try:
+            for order in range(12):
+                reference = f"ord-{index}-{order}"
+                payment_hash = f"{index * 100 + order + 1000:064x}"
+                repository.commit_attempt(
+                    PaymentInsert(
+                        reference, payment_hash, checkout(reference, payment_hash, now, now + 600)
+                    )
+                )
+                repository.record_settlement(
+                    SettlementRecord(payment_hash, now + 5),
+                    lambda s: fulfilled.append(s.payment_hash),
+                )
+        except Exception as error:  # noqa: BLE001 - the assertion reports every failure
+            with lock:
+                errors.append(f"{type(error).__name__}: {error}")
+
+    threads = [threading.Thread(target=worker, args=(index,)) for index in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=120)
+    assert errors == []
+    assert len(fulfilled) == 96 and len(set(fulfilled)) == 96
+
+
 def test_schema_sql_renders_per_dialect() -> None:
     for dialect in ("postgres", "sqlite", "mysql"):
         sql = payments_schema_sql(dialect)
