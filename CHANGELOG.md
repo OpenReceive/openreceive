@@ -15,6 +15,14 @@
   under load with `prepared statement "_pg3_0" already exists`; the engine
   needs `connect_args={"prepare_threshold": None}`, as the Supabase and
   serverless guides say. Django's defaults need no change.
+- Changed (packages): registry pages link the matching openreceive.org page.
+  `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`, the
+  three gems, the Python package, `openreceive/openreceive` and
+  `openreceive/laravel` set their homepage to their `/integrations/` page
+  (Rails for the gems, Django for Python, which also links FastAPI).
+  `openreceive-rails`, the Python package and both Composer packages link
+  their quickstart as documentation. The WordPress plugin's Plugin URI is
+  `/integrations/woocommerce`.
 
 - Fixed (docs): the Lovable directions keep the app's own order flow. They
   said to create orders in a server function, and one 0.4.23 agent trial

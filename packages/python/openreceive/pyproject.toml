@@ -38,10 +38,11 @@ flask = ["flask>=3", "sqlalchemy>=2"]
 sqlalchemy = ["sqlalchemy>=2"]
 
 [project.urls]
-Homepage = "https://openreceive.org"
-Documentation = "https://openreceive.org/guides"
-"Django quickstart" = "https://openreceive.org/guides/quickstart-django"
+Homepage = "https://openreceive.org/integrations/django"
+Documentation = "https://openreceive.org/guides/quickstart-django"
+"FastAPI integration" = "https://openreceive.org/integrations/fastapi"
 "FastAPI quickstart" = "https://openreceive.org/guides/quickstart-fastapi"
+Guides = "https://openreceive.org/guides"
 "Wallet setup" = "https://openreceive.org/get_a_nwc_code_to_receive_payments"
 "Swap provider setup" = "https://openreceive.org/set_up_swap_provider"
 Security = "https://openreceive.org/guides/security"

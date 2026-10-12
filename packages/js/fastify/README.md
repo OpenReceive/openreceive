@@ -6,6 +6,8 @@ hooks for authorization, order amounts, and fulfillment. OpenReceive manages
 payment attempts and reconciliation in your existing database while your app
 keeps its orders and customers.
 
+Docs and setup: [openreceive.org/integrations/fastify](https://openreceive.org/integrations/fastify)
+
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
 a configured swap provider. The provider converts the payment to **BTC over
 Lightning**, which settles into the merchant's connected wallet. Available

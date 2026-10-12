@@ -9,6 +9,8 @@ Use a PDO database handle and a `Host` with three methods: `authorize`,
 `amountFor`, and `onPaid`. Dispatch the PSR-15 handler from any front controller,
 or use the Laravel adapter for framework integration.
 
+Docs and setup: [openreceive.org/integrations/php](https://openreceive.org/integrations/php)
+
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
 a configured swap provider. The provider converts the payment to **BTC over
 Lightning**, which settles into the merchant's connected wallet. Available

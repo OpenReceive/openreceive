@@ -35,6 +35,29 @@ Optional Inbound Currencies:
 | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="SOL" width="28"> &nbsp;**SOL** (Solana)      | <img src="packages/js/browser/src/assets/icons/sol.svg" alt="Solana" width="18"> Solana                                                                                                                                                                                                           | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
 | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="ETH" width="28"> &nbsp;**ETH** (Ether)       | <img src="packages/js/browser/src/assets/icons/eth.svg" alt="Ethereum" width="18"> Ethereum                                                                                                                                                                                                       | <img src="packages/js/browser/src/assets/icons/btc.svg" alt="Bitcoin" width="18"> Bitcoin |
 
+## Integrations
+
+Each stack has an integration page and a quickstart on openreceive.org:
+
+| Stack | Quickstart |
+| --- | --- |
+| [WooCommerce / WordPress](https://openreceive.org/integrations/woocommerce) | [WooCommerce quickstart](https://openreceive.org/guides/quickstart-woocommerce) |
+| [Express (Node.js)](https://openreceive.org/integrations/express) | [Express quickstart](https://openreceive.org/guides/quickstart-node) |
+| [Fastify](https://openreceive.org/integrations/fastify) | [Fastify quickstart](https://openreceive.org/guides/quickstart-fastify) |
+| [Next.js](https://openreceive.org/integrations/nextjs) | [Next.js quickstart](https://openreceive.org/guides/quickstart-next) |
+| [Ruby on Rails](https://openreceive.org/integrations/rails) | [Rails quickstart](https://openreceive.org/guides/quickstart-rails) |
+| [Django](https://openreceive.org/integrations/django) | [Django quickstart](https://openreceive.org/guides/quickstart-django) |
+| [FastAPI](https://openreceive.org/integrations/fastapi) | [FastAPI quickstart](https://openreceive.org/guides/quickstart-fastapi) |
+| [Laravel](https://openreceive.org/integrations/laravel) | [Laravel quickstart](https://openreceive.org/guides/quickstart-laravel) |
+| [Plain PHP](https://openreceive.org/integrations/php) | [PHP quickstart](https://openreceive.org/guides/quickstart-php) |
+| [BTCPay Server](https://openreceive.org/integrations/btcpay-server) | [BTCPay quickstart](https://openreceive.org/guides/quickstart-btcpay) |
+
+Building on a platform? See [Vercel](https://openreceive.org/platforms/vercel),
+[v0](https://openreceive.org/platforms/v0),
+[Replit](https://openreceive.org/platforms/replit), or
+[Lovable](https://openreceive.org/platforms/lovable). Coming from Stripe? See
+[OpenReceive + Stripe](https://openreceive.org/processors/stripe).
+
 ## Install
 
 ```sh
@@ -54,20 +77,8 @@ gem "openreceive-rails"
 
 ## Quickstart
 
-Pick your stack:
-
-| Stack | Quickstart |
-| --- | --- |
-| Express / Node.js | [Express quickstart](docs/guides/quickstart-node.md) |
-| Fastify | [Fastify quickstart](docs/guides/quickstart-fastify.md) |
-| Next.js | [Next.js quickstart](docs/guides/quickstart-next.md) |
-| Ruby on Rails | [Rails quickstart](docs/guides/quickstart-rails.md) |
-| Django | [Django quickstart](docs/guides/quickstart-django.md) |
-| FastAPI | [FastAPI quickstart](docs/guides/quickstart-fastapi.md) |
-| Plain PHP | [PHP quickstart](docs/guides/quickstart-php.md) |
-| Laravel | [Laravel quickstart](docs/guides/quickstart-laravel.md) |
-| WordPress + WooCommerce | [WooCommerce quickstart](docs/guides/quickstart-woocommerce.md) |
-| BTCPay Server | [BTCPay quickstart](docs/guides/quickstart-btcpay.md) |
+Pick your stack under [Integrations](#integrations). The same quickstarts are
+in this repository under [docs/guides](docs/guides/README.md).
 
 Your application supplies authorization, the order amount, and the payment
 hook. OpenReceive tracks payment attempts in your existing database and
@@ -276,28 +287,29 @@ self-contained per-stack agent directions, `/llms.txt`, and the OpenAPI
 contract at [openreceive.org/agents](https://openreceive.org/agents). Working
 on OpenReceive itself? That is [AGENTS.md](AGENTS.md).
 
-Start with the [developer guides](docs/guides/README.md):
+Start with the [developer guides](docs/guides/README.md). Also on openreceive.org:
+[openreceive.org/guides](https://openreceive.org/guides).
 
-- [Node quickstart](docs/guides/quickstart-node.md)
-- [Node ORM recipes](docs/guides/node-orms.md)
-- [Rails quickstart](docs/guides/quickstart-rails.md)
-- [BTCPay Server quickstart](docs/guides/quickstart-btcpay.md)
-- [Frontend checkout](docs/guides/frontend-checkout.md)
-- [Headless checkout](docs/guides/headless-checkout.md)
-- [Writing your own checkout route](docs/guides/custom-checkout-route.md)
-- [Price feeds](docs/guides/price-feeds.md)
-- [Automated swaps](docs/guides/automated-swaps.md)
-- [Lightning Swap Connect](docs/guides/lightning-swap-connect.md)
-- [Environment variables](docs/guides/environment-variables.md)
-- [Provider registry](docs/guides/provider-registry.md)
-- [Authorization](docs/guides/authorization.md)
-- [Rate limiting](docs/guides/rate-limiting.md)
-- [Payment storage](docs/guides/storage.md)
-- [Deploying OpenReceive](docs/guides/deploying.md)
-- [Testing your OpenReceive integration](docs/guides/host-testing.md)
-- [Security](docs/guides/security.md)
-- [API reference](docs/guides/api-reference.md)
-- [React + Material UI recipe](docs/recipes/react-material-ui.md)
+- [Node quickstart](docs/guides/quickstart-node.md) ([on openreceive.org](https://openreceive.org/guides/quickstart-node))
+- [Node ORM recipes](docs/guides/node-orms.md) ([on openreceive.org](https://openreceive.org/guides/node-orms))
+- [Rails quickstart](docs/guides/quickstart-rails.md) ([on openreceive.org](https://openreceive.org/guides/quickstart-rails))
+- [BTCPay Server quickstart](docs/guides/quickstart-btcpay.md) ([on openreceive.org](https://openreceive.org/guides/quickstart-btcpay))
+- [Frontend checkout](docs/guides/frontend-checkout.md) ([on openreceive.org](https://openreceive.org/guides/frontend-checkout))
+- [Headless checkout](docs/guides/headless-checkout.md) ([on openreceive.org](https://openreceive.org/guides/headless-checkout))
+- [Writing your own checkout route](docs/guides/custom-checkout-route.md) ([on openreceive.org](https://openreceive.org/guides/custom-checkout-route))
+- [Price feeds](docs/guides/price-feeds.md) ([on openreceive.org](https://openreceive.org/guides/price-feeds))
+- [Automated swaps](docs/guides/automated-swaps.md) ([on openreceive.org](https://openreceive.org/guides/automated-swaps))
+- [Lightning Swap Connect](docs/guides/lightning-swap-connect.md) ([on openreceive.org](https://openreceive.org/guides/lightning-swap-connect))
+- [Environment variables](docs/guides/environment-variables.md) ([on openreceive.org](https://openreceive.org/guides/environment-variables))
+- [Provider registry](docs/guides/provider-registry.md) ([on openreceive.org](https://openreceive.org/guides/provider-registry))
+- [Authorization](docs/guides/authorization.md) ([on openreceive.org](https://openreceive.org/guides/authorization))
+- [Rate limiting](docs/guides/rate-limiting.md) ([on openreceive.org](https://openreceive.org/guides/rate-limiting))
+- [Payment storage](docs/guides/storage.md) ([on openreceive.org](https://openreceive.org/guides/storage))
+- [Deploying OpenReceive](docs/guides/deploying.md) ([on openreceive.org](https://openreceive.org/guides/deploying))
+- [Testing your OpenReceive integration](docs/guides/host-testing.md) ([on openreceive.org](https://openreceive.org/guides/host-testing))
+- [Security](docs/guides/security.md) ([on openreceive.org](https://openreceive.org/guides/security))
+- [API reference](docs/guides/api-reference.md) ([on openreceive.org](https://openreceive.org/guides/api-reference))
+- [React + Material UI recipe](docs/recipes/react-material-ui.md) ([on openreceive.org](https://openreceive.org/guides/react-material-ui-recipe))
 - [Normative HTTP contract](spec/openapi/openreceive-http.v1.yaml)
 - [Contributor and operator docs](docs/internal/README.md)
 

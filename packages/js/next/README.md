@@ -6,6 +6,8 @@ connect your existing database to three application hooks: authorization,
 order amounts, and fulfillment. OpenReceive handles payment attempts and
 reconciliation on the server.
 
+Docs and setup: [openreceive.org/integrations/nextjs](https://openreceive.org/integrations/nextjs)
+
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
 a configured swap provider. The provider converts the payment to **BTC over
 Lightning**, which settles into the merchant's connected wallet. Available

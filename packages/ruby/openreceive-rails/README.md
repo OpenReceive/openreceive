@@ -7,6 +7,8 @@ and sends payments directly to a wallet you control. Mount the engine, connect
 a receive-only Nostr Wallet Connect (NWC) wallet, and connect three hooks:
 authorize a request, look up the order amount, and handle a settled payment.
 
+Docs and setup: [openreceive.org/integrations/rails](https://openreceive.org/integrations/rails)
+
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
 a configured swap provider. The provider converts the payment to **BTC over
 Lightning**, which settles into the merchant's connected wallet. Available

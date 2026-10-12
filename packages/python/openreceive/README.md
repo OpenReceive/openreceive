@@ -10,7 +10,8 @@ OpenReceive connects checkout to your wallet, records payment attempts in your
 existing database, and tells your application when a payment has settled.
 There is no OpenReceive account to create and no separate database to operate.
 
-[Website](https://openreceive.org) ·
+Docs and setup: [Django](https://openreceive.org/integrations/django) ·
+[FastAPI](https://openreceive.org/integrations/fastapi) ·
 [Django quickstart](https://openreceive.org/guides/quickstart-django) ·
 [FastAPI quickstart](https://openreceive.org/guides/quickstart-fastapi) ·
 [All guides](https://openreceive.org/guides)

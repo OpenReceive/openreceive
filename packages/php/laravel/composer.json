@@ -3,10 +3,11 @@
   "description": "Accept Bitcoin Lightning payments in Laravel with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
   "type": "library",
   "license": "MIT",
-  "homepage": "https://openreceive.org",
+  "homepage": "https://openreceive.org/integrations/laravel",
   "support": {
     "issues": "https://github.com/OpenReceive/openreceive/issues",
-    "source": "https://github.com/OpenReceive/openreceive"
+    "source": "https://github.com/OpenReceive/openreceive",
+    "docs": "https://openreceive.org/guides/quickstart-laravel"
   },
   "keywords": ["laravel", "lightning", "nwc", "nostr", "payments", "bitcoin", "checkout"],
   "require": {

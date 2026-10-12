@@ -9,6 +9,8 @@ This adapter connects the `openreceive/openreceive` PHP engine to Laravel's
 routes, service container, migrations, and Artisan commands. Its install
 command creates the configuration and three application hooks.
 
+Docs and setup: [openreceive.org/integrations/laravel](https://openreceive.org/integrations/laravel)
+
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
 a configured swap provider. The provider converts the payment to **BTC over
 Lightning**, which settles into the merchant's connected wallet. Available

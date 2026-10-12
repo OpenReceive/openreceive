@@ -33,6 +33,8 @@ Optional swaps let customers pay with USDT, USDC, SOL, and ETH through your conf
 * MySQL 8 or MariaDB 10.5+. WordPress on SQLite is not supported.
 * WooCommerce 9 or newer.
 
+Overview: https://openreceive.org/integrations/woocommerce
+
 Documentation: https://openreceive.org/guides/quickstart-woocommerce
 
 == Installation ==

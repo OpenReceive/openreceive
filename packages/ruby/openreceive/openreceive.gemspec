@@ -26,14 +26,14 @@ Gem::Specification.new do |spec|
   spec.email = ["info@openreceive.org"]
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2"
-  spec.homepage = "https://openreceive.org"
+  spec.homepage = "https://openreceive.org/integrations/rails"
   # bigdecimal is a bundled gem from Ruby 3.4; declare it explicitly.
   spec.add_dependency "bigdecimal"
   # skills/ is the agent-skills copy kept in sync by `npm run generate:skills`.
   spec.files = Dir["lib/**/*.rb", "skills/**/*.md", "README.md", "CHANGELOG.md", "LICENSE"]
   spec.require_paths = ["lib"]
   spec.metadata = {
-    "homepage_uri" => "https://openreceive.org",
+    "homepage_uri" => "https://openreceive.org/integrations/rails",
     "source_code_uri" => "https://github.com/openreceive/openreceive",
     "changelog_uri" => "https://github.com/openreceive/openreceive/blob/master/packages/ruby/openreceive/CHANGELOG.md",
     "bug_tracker_uri" => "https://github.com/openreceive/openreceive/issues",

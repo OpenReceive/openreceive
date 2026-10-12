@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
   TEXT
   spec.authors = ["OpenReceive"]
   spec.email = ["info@openreceive.org"]
-  spec.homepage = "https://openreceive.org"
+  spec.homepage = "https://openreceive.org/integrations/rails"
   spec.license = "MIT"
 
   spec.required_ruby_version = ">= 3.2"
@@ -38,7 +38,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "openreceive", "= #{OpenReceive::Server::VERSION}"
 
   spec.metadata = {
-    "homepage_uri" => "https://openreceive.org",
+    "homepage_uri" => "https://openreceive.org/integrations/rails",
     "source_code_uri" => "https://github.com/openreceive/openreceive",
     "changelog_uri" => "https://github.com/openreceive/openreceive/blob/master/packages/ruby/openreceive-server/CHANGELOG.md",
     "bug_tracker_uri" => "https://github.com/openreceive/openreceive/issues",

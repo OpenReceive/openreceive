@@ -8,7 +8,7 @@
  * Requires Plugins: woocommerce
  * WC requires at least: 9.0
  * Author: OpenReceive
- * Plugin URI: https://openreceive.org/wordpress
+ * Plugin URI: https://openreceive.org/integrations/woocommerce
  * License: GPL-2.0-or-later
  * Text Domain: openreceive
  * Domain Path: /languages

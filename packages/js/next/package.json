@@ -47,7 +47,7 @@
   "bugs": {
     "url": "https://github.com/openreceive/openreceive/issues"
   },
-  "homepage": "https://openreceive.org",
+  "homepage": "https://openreceive.org/integrations/nextjs",
   "publishConfig": {
     "access": "public"
   },
