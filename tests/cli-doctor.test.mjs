@@ -112,7 +112,11 @@ test("doctor reads .env.development.local before .env.local, as Next does", asyn
     assert.equal(probed, VALID_NWC);
 
     // A production build reads the production files and never the development ones.
-    const production = await doctor({ cwd: dir, env: { NODE_ENV: "production" }, walletClientFactory });
+    const production = await doctor({
+      cwd: dir,
+      env: { NODE_ENV: "production" },
+      walletClientFactory,
+    });
     assert.equal(probed, otherNwc);
     assert.match(production.out, /env files: \.env\.local\n/);
   } finally {
