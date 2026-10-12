@@ -11,3 +11,29 @@ run = ["npm", "start"]
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+# Run and Preview need a workflow: without one, Replit reports the shop as
+# crashed even while it listens on port 5000.
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm start"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"

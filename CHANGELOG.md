@@ -37,6 +37,12 @@
   `next build` read. The Vercel guide also says what to do when Vercel asks
   for a Pro plan for an organization repository, or the starter's project
   name is taken.
+- Fixed (examples): the Express + Postgres starter's `.replit` has a Replit
+  workflow. It had only a `run` command, and current Replit runs an app
+  through a workflow: an imported copy showed no Run button, and Preview said
+  the shop had crashed while it listened on port 5000. The workflow is the
+  one Replit Agent wrote on a real import: `npm start`, waiting for port
+  5000.
 - Fixed (JS): `openreceive doctor` reads the env files Next.js reads, in
   Next's order: `.env.development.local`, `.env.local`, `.env.development`,
   then `.env` (the production files when `NODE_ENV=production`). It read only
