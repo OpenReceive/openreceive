@@ -16,12 +16,12 @@ const FRAMEWORK_TAB_LABELS: Record<CheckoutFramework, string> = {
 };
 
 /**
- * Static-price demo math: one Safety Orange at $1.00, BTC at $50,000 → 2,000
+ * Static-price demo math: one Safety Orange at $5.00, BTC at $50,000 → 10,000
  * sats. Safety Orange is the cheapest button and therefore the first card.
  */
 export const BUTTON_NAME = "Safety Orange";
-export const BUTTON_PRICE = "$1.00";
-export const BUTTON_SATS = "2,000 sats";
+export const BUTTON_PRICE = "$5.00";
+export const BUTTON_SATS = "10,000 sats";
 
 /**
  * Everything the checkout draws ships inside the OpenReceive JavaScript:

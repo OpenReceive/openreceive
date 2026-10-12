@@ -22,7 +22,7 @@ final class HostTest extends TestCase
         ], $user);
 
         $host = new Host();
-        self::assertSame(['currency' => 'USD', 'value' => '9.00', 'description' => 'OpenReceive buttons: Midnight Navy ×3'], $host->amountFor($order->id));
+        self::assertSame(['currency' => 'USD', 'value' => '21.00', 'description' => 'OpenReceive buttons: Midnight Navy ×3'], $host->amountFor($order->id));
         self::assertNull($host->amountFor('00000000-0000-0000-0000-000000000000'));
         self::assertNull($host->amountFor('not-a-uuid'));
     }
@@ -46,6 +46,6 @@ final class HostTest extends TestCase
         self::assertSame(6, CatalogSeed::apply());
         self::assertSame(6, CatalogSeed::apply());
         self::assertSame(6, ShopProduct::query()->count());
-        self::assertSame(100, ShopProduct::activeBySku('safety-orange')?->price_cents);
+        self::assertSame(500, ShopProduct::activeBySku('safety-orange')?->price_cents);
     }
 }

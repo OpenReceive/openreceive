@@ -41,10 +41,10 @@ class ShopOrderTest < ActiveSupport::TestCase
     assert_nil ShopOrder.find_by_reference(12_345)
   end
 
-  test "total_amount is a decimal string, and 1.00 rather than 1.0" do
+  test "total_amount is a decimal string, and 5.00 rather than 5.0" do
     order = place(safety_orange => 1)
 
-    assert_equal "1.00", order.total_amount
+    assert_equal "5.00", order.total_amount
     assert_instance_of String, order.total_amount
   end
 
@@ -54,8 +54,8 @@ class ShopOrderTest < ActiveSupport::TestCase
     amount = OpenReceive.config.amount_for.call(order.id)
 
     assert_equal "USD", amount[:currency]
-    # 2 × $1.00 + 1 × $5.00, summed on the server from product rows.
-    assert_equal "7.00", amount[:value]
+    # 2 × $5.00 + 1 × $9.00, summed on the server from product rows.
+    assert_equal "19.00", amount[:value]
     assert_equal "OpenReceive buttons: Safety Orange ×2, Classic Black", amount[:description]
   end
 
@@ -74,11 +74,11 @@ class ShopOrderTest < ActiveSupport::TestCase
   test "create_from_lines! prices from the product rows and snapshots them" do
     order = place(vintage_cream => 3)
 
-    assert_equal 2100, order.total_cents
+    assert_equal 3600, order.total_cents
     item = order.items.sole
     assert_equal "vintage-cream", item.sku
     assert_equal "Vintage Cream", item.name
-    assert_equal 700, item.unit_price_cents
+    assert_equal 1200, item.unit_price_cents
     assert_equal vintage_cream, item.product
   end
 

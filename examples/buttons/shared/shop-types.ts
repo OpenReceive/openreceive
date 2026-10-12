@@ -74,7 +74,7 @@ export type ShopOrderPayload = {
  * One line on a public feed row.
  *
  * Deliberately shows what was bought. The six prices are public and distinct,
- * so a $1.00 row is a Safety Orange with certainty — hiding the item while
+ * so a $5.00 row is a Safety Orange with certainty — hiding the item while
  * showing the amount is not anonymity, it is the appearance of it.
  */
 export type ShopFeedItem = {

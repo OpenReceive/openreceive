@@ -21,7 +21,7 @@ class ShopFeedTest < ActionDispatch::IntegrationTest
     assert_response :success
     rows = json_body.fetch("orders")
     assert_equal 1, rows.length
-    assert_equal 1000, rows.sole.fetch("total_cents")
+    assert_equal 2000, rows.sole.fetch("total_cents")
   end
 
   test "returns ONLY the whitelisted fields" do
@@ -113,7 +113,7 @@ class ShopFeedTest < ActionDispatch::IntegrationTest
 
     get shop_recent_orders_path
 
-    assert_equal [1000, 100], json_body.fetch("orders").map { |row| row.fetch("total_cents") }
+    assert_equal [2000, 500], json_body.fetch("orders").map { |row| row.fetch("total_cents") }
   end
 
   test "totals count paid orders and paid buttons only" do

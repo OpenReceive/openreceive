@@ -1,6 +1,6 @@
 # Buy a Button
 
-A shop that sells six virtual OR pin badges, $1 to $10, over Lightning or an
+A shop that sells six virtual OR pin badges, $5 to $20, over Lightning or an
 optional crypto swap — and shows every paid order on the site to every visitor.
 
 OpenReceive supports optional swaps from **USDT, USDC, SOL, and ETH** through
@@ -35,8 +35,8 @@ marked "You".
 
 This is the sentence that says whether it works, and it is run by hand:
 
-> Buy a $1 Safety Orange. Open the site in a DIFFERENT browser, open Recent
-> orders, and see $1.00 next to a UUID. Go back to the first browser: the same
+> Buy a $5 Safety Orange. Open the site in a DIFFERENT browser, open Recent
+> orders, and see $5.00 next to a UUID. Go back to the first browser: the same
 > UUID is marked "You". Close that browser, reopen it, and the download still
 > works.
 

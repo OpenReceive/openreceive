@@ -14,7 +14,7 @@ class ShopProductTest < ActiveSupport::TestCase
   test "the seed produces the six buttons in catalog order" do
     assert_equal %w[safety-orange midnight-navy classic-black vintage-cream plain-white signal-red],
                  ShopProduct.active.ordered.pluck(:sku)
-    assert_equal [100, 300, 500, 700, 900, 1000], ShopProduct.active.ordered.pluck(:price_cents)
+    assert_equal [500, 700, 900, 1200, 1500, 2000], ShopProduct.active.ordered.pluck(:price_cents)
   end
 
   test "the seed is idempotent" do
@@ -40,7 +40,7 @@ class ShopProductTest < ActiveSupport::TestCase
     # This is what the snapshots are for.
     assert_equal "signal-red", item.sku
     assert_equal "Signal Red", item.name
-    assert_equal 1000, item.unit_price_cents
+    assert_equal 2000, item.unit_price_cents
     assert_equal "OpenReceive buttons: Signal Red ×2", order.checkout_description
   end
 
@@ -54,7 +54,7 @@ class ShopProductTest < ActiveSupport::TestCase
     assert_nil item.product
     assert_equal "plain-white", item.sku
     assert_equal "Plain White", item.name
-    assert_equal 900, item.unit_price_cents
+    assert_equal 1500, item.unit_price_cents
   end
 
   test "image_name defaults from the sku when blank, and is respected when set" do
@@ -79,8 +79,8 @@ class ShopProductTest < ActiveSupport::TestCase
   end
 
   test "price_dollars is a decimal string" do
-    assert_equal "10.00", signal_red.price_dollars
-    assert_equal "1.00", ShopProduct.find_by!(sku: "safety-orange").price_dollars
+    assert_equal "20.00", signal_red.price_dollars
+    assert_equal "5.00", ShopProduct.find_by!(sku: "safety-orange").price_dollars
   end
 
   private

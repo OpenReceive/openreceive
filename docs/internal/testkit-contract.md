@@ -126,7 +126,7 @@ The provider knows nothing about the host's reference.
 ## The static price
 
 In testkit mode the engine's `StaticPriceProvider` sets prices: BTC/USD
-`50000.00`. Every stack's E2E asserts that a $1.00 button costs 2,000 sats. This
+`50000.00`. Every stack's E2E asserts that a $5.00 button costs 10,000 sats. This
 is the one fixture shared across all languages and all price code.
 
 ## The `__testkit` control routes

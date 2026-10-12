@@ -27,10 +27,10 @@ class ShopControllerTest < ActionDispatch::IntegrationTest
          as: :json
 
     assert_response :created
-    # $10.00 from the product row, not the $0.01 the payer asked for.
-    assert_equal 1000, json_body.fetch("total_cents")
-    assert_equal "10.00", json_body.fetch("total_amount")
-    assert_equal 1000, ShopOrder.sole.total_cents
+    # $20.00 from the product row, not the $0.01 the payer asked for.
+    assert_equal 2000, json_body.fetch("total_cents")
+    assert_equal "20.00", json_body.fetch("total_amount")
+    assert_equal 2000, ShopOrder.sole.total_cents
   end
 
   test "quantity 999 clamps to MAX_PER_SKU" do

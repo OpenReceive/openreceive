@@ -127,7 +127,7 @@ class TestkitFixturesTest < ActiveSupport::TestCase
     assert provider.pay_in_asset_catalog.all? { |row| row.fetch("available") }
   end
 
-  test "a $1.00 button is 2,000 sats at the static price" do
+  test "a $5.00 button is 10,000 sats at the static price" do
     # The same constant the JS StaticPriceProvider uses. Every stack's E2E
     # asserts this number, so it is the one fixture shared across languages.
     assert_equal "50000.00", OpenReceive::Rates::StaticPriceProvider.new.btc_fiat_price("USD")

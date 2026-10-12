@@ -61,7 +61,7 @@ SPA are the production paths. The database is SQLite under
 The fakes mint the same fixtures as every other engine's testkit (payment
 hashes are the mint counter in 64 hex characters, the Tron deposit address is
 `T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb`, provider orders are `testkit-swap-N`,
-BTC is a static $50,000 so a $1.00 button is 2,000 sats), which is what lets
+BTC is a static $50,000 so a $5.00 button is 10,000 sats), which is what lets
 one Playwright suite drive this stack with the same assertions
 (`OPENRECEIVE_E2E_STACK=django npm run test:e2e:smoke`).
 

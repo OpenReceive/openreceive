@@ -367,15 +367,21 @@ final class Store
                 }
             },
             // The six buttons, from the one catalog file every stack seeds from. Idempotent by sku.
-            '005_seed_shop_products' => function (): void {
-                $entries = json_decode((string) file_get_contents($this->sharedDir . '/shop-catalog.json'), true, 512, JSON_THROW_ON_ERROR);
-                $now = time();
-                $insert = $this->pdo->prepare('INSERT INTO shop_products (id, sku, name, price_cents, position, image_name, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT (sku) DO UPDATE SET name = excluded.name, price_cents = excluded.price_cents, position = excluded.position, image_name = excluded.image_name, active = 1, updated_at = excluded.updated_at');
-                foreach ($entries as $entry) {
-                    $insert->execute([self::uuid(), $entry['sku'], $entry['name'], $entry['price_cents'], $entry['position'], $entry['image_name'] ?? "openreceive-{$entry['sku']}-button.webp", $now, $now]);
-                }
-            },
+            '005_seed_shop_products' => fn () => $this->seedCatalog(),
+            // The prices went up so each button clears the swap providers' minimums;
+            // a database seeded by 005 keeps its old prices until the same upsert runs again.
+            '006_reprice_shop_products' => fn () => $this->seedCatalog(),
         ];
+    }
+
+    private function seedCatalog(): void
+    {
+        $entries = json_decode((string) file_get_contents($this->sharedDir . '/shop-catalog.json'), true, 512, JSON_THROW_ON_ERROR);
+        $now = time();
+        $insert = $this->pdo->prepare('INSERT INTO shop_products (id, sku, name, price_cents, position, image_name, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT (sku) DO UPDATE SET name = excluded.name, price_cents = excluded.price_cents, position = excluded.position, image_name = excluded.image_name, active = 1, updated_at = excluded.updated_at');
+        foreach ($entries as $entry) {
+            $insert->execute([self::uuid(), $entry['sku'], $entry['name'], $entry['price_cents'], $entry['position'], $entry['image_name'] ?? "openreceive-{$entry['sku']}-button.webp", $now, $now]);
+        }
     }
 
     /** @param list<mixed> $params @return array<string, mixed>|false */

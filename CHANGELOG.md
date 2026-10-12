@@ -34,6 +34,14 @@
   then `.env` (the production files when `NODE_ENV=production`). It read only
   `.env.local` and `.env`, so in a v0 project, whose codes live in
   `.env.development.local`, it reported `NWC_URI: missing`.
+- Changed (examples): every demo product costs $5.00 or more, so a payer can
+  pick USDT, USDC or SOL. The starters' sticker was $1.00 and the buttons ran
+  $1 to $10, below the swap providers' minimums (USDT $2.63, USDC $2.39,
+  SOL $2.60 on 2026-10-12), so those coins showed greyed out with "Minimum
+  amount". The sticker is now $5.00 and the buttons $5, $7, $9, $12, $15 and
+  $20. ETH's minimum is near $20, so it can still be greyed out. A new step
+  in the Rails, Django, Node and plain-PHP buttons demos reprices a database
+  that was seeded at the old prices.
 
 ## 0.4.23 - 2026-10-11
 

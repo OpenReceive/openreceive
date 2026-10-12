@@ -62,8 +62,8 @@ class CheckoutFlowTest < ActionDispatch::IntegrationTest
     payment_hash = checkout.fetch("payment_hash")
     assert_match(/\A[0-9a-f]{64}\z/, payment_hash)
     assert checkout.fetch("bolt11")
-    # 2 × $1.00 at the static $50,000/BTC test price is exactly 4000 sats.
-    assert_equal 4_000_000, checkout.fetch("amount_msats")
+    # 2 × $5.00 at the static $50,000/BTC test price is exactly 20,000 sats.
+    assert_equal 20_000_000, checkout.fetch("amount_msats")
 
     assert_equal "pending", check_payment!(reference, payment_hash).fetch("status")
 
@@ -137,7 +137,7 @@ class CheckoutFlowTest < ActionDispatch::IntegrationTest
     assert_response :success
     row = JSON.parse(response.body).fetch("orders").sole
     assert_equal buyer_ref, row.fetch("buyer")
-    assert_equal 500, row.fetch("total_cents")
+    assert_equal 900, row.fetch("total_cents")
     assert_equal "Classic Black", row.fetch("items").sole.fetch("name")
     refute_includes response.body, reference
   end

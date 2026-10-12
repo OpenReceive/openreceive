@@ -72,9 +72,17 @@ smoke() {
   # A cross-site POST is refused by the engine's own check — the protection a host without a CSRF layer relies on.
   [ "$(curl -s -o /dev/null -w '%{http_code}' -b "$jar" -H 'Content-Type: application/json' -H 'Sec-Fetch-Site: cross-site' -d "{\"reference\":\"$reference\"}" "http://127.0.0.1:$port/openreceive/checkouts/prepare")" = "403" ]
   curl -fsS -H 'Content-Type: application/json' -d "{\"payment_hash\":\"$hash\"}" "http://127.0.0.1:$port/__testkit/settle" | grep -q '"ok":true'
-  # The gate floor is 2 seconds between real wallet scans; the second check lands after it.
-  sleep 2.2
-  curl -fsS -b "$jar" -c "$jar" -H 'Content-Type: application/json' -d "{\"reference\":\"$reference\",\"payment_hash\":\"$hash\"}" "http://127.0.0.1:$port/openreceive/payments/check" | grep -q '"settled"'
+  # The gate floor is 3 seconds between real wallet scans, counted in whole
+  # seconds, so poll until a check lands after it.
+  local settled=""
+  for _ in $(seq 1 10); do
+    sleep 1
+    if curl -fsS -b "$jar" -c "$jar" -H 'Content-Type: application/json' -d "{\"reference\":\"$reference\",\"payment_hash\":\"$hash\"}" "http://127.0.0.1:$port/openreceive/payments/check" | grep -q '"settled"'; then
+      settled=1
+      break
+    fi
+  done
+  [ -n "$settled" ] || { echo "payments/check never reported settled" >&2; cat "$data/server.log" >&2; exit 1; }
   state="$(curl -fsS -b "$jar" -c "$jar" "http://127.0.0.1:$port/shop/orders/$reference" | php -r 'echo json_decode(stream_get_contents(STDIN), true)["state"];')"
   [ "$state" = "paid" ] || { echo "order is $state, expected paid" >&2; cat "$data/server.log" >&2; exit 1; }
   curl -fsS -b "$jar" -o "$data/download.webp" "http://127.0.0.1:$port/shop/orders/$reference/downloads/safety-orange"

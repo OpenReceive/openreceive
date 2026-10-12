@@ -67,7 +67,7 @@ test("a paid order outlives the page, and only its buyer can download it", async
 
     const feedRow = strangerPage.locator(".or-shop-feed-row").first();
     await expect(feedRow).toBeVisible();
-    await expect(feedRow).toContainText("$1.00");
+    await expect(feedRow).toContainText("$5.00");
     await expect(feedRow).toContainText("Safety Orange");
     // Anonymous to them: the buyer is a public uuid, and the YOU badge is the
     // page comparing it against its own bootstrap payload — which is a

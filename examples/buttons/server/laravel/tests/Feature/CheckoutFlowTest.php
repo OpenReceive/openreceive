@@ -46,7 +46,7 @@ final class CheckoutFlowTest extends TestCase
         $response->assertOk()->assertHeader('Cache-Control', 'no-store, private');
         self::assertSame('/openreceive', $response->json('shop.openreceive_prefix'));
         self::assertCount(6, $response->json('shop.catalog'));
-        self::assertSame(['sku' => 'safety-orange', 'name' => 'Safety Orange', 'price_cents' => 100, 'image_url' => '/images/openreceive-safety-orange-button.webp'], $response->json('shop.catalog.0'));
+        self::assertSame(['sku' => 'safety-orange', 'name' => 'Safety Orange', 'price_cents' => 500, 'image_url' => '/images/openreceive-safety-orange-button.webp'], $response->json('shop.catalog.0'));
         self::assertMatchesRegularExpression('/^[0-9a-f-]{36}$/', $response->json('shop.visitor.public_ref'));
     }
 
@@ -60,9 +60,9 @@ final class CheckoutFlowTest extends TestCase
         ]]);
         $created->assertStatus(201);
         self::assertSame('awaiting_payment', $created->json('state'));
-        // 2 × $1.00 + $5.00 + 10 (clamped) × $10.00
-        self::assertSame(10_700, $created->json('total_cents'));
-        self::assertSame('107.00', $created->json('total_amount'));
+        // 2 × $5.00 + $9.00 + 10 (clamped) × $20.00
+        self::assertSame(21_900, $created->json('total_cents'));
+        self::assertSame('219.00', $created->json('total_amount'));
         self::assertSame('OpenReceive buttons: Safety Orange ×2, Classic Black, Signal Red ×10', $created->json('description'));
         self::assertNull($created->json('items.0.download_path'));
 
@@ -73,12 +73,12 @@ final class CheckoutFlowTest extends TestCase
     {
         $reference = (string) $this->asVisitor('POST', '/shop/orders', ['items' => [['sku' => 'safety-orange', 'quantity' => 1]]])->json('reference');
 
-        // The mounted engine: authorize (this visitor owns the order) → amountFor ($1.00 → 2,000 sats) → mint.
+        // The mounted engine: authorize (this visitor owns the order) → amountFor ($5.00 → 10,000 sats) → mint.
         $checkout = $this->asVisitor('POST', '/openreceive/checkouts', ['reference' => $reference]);
         $checkout->assertStatus(201);
         $hash = (string) $checkout->json('checkout.payment_hash');
         self::assertSame(str_repeat('0', 63).'1', $hash);
-        self::assertSame(2_000_000, $checkout->json('checkout.amount_msats'));
+        self::assertSame(10_000_000, $checkout->json('checkout.amount_msats'));
         self::assertSame('OpenReceive button: Safety Orange', $checkout->json('description'));
         self::assertStringStartsWith('lnbcopenreceive', (string) $checkout->json('checkout.bolt11'));
 

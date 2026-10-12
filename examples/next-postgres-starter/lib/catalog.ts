@@ -4,6 +4,6 @@
 export const product = {
   id: "demo-sticker",
   name: "Demo sticker",
-  price: "1.00",
+  price: "5.00",
   currency: "USD",
 } as const;

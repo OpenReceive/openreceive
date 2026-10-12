@@ -56,7 +56,7 @@ The fakes in [`lib/button_shop/testkit/`](lib/button_shop/testkit) are a PORT
 of `packages/js/testkit`, down to the fixtures: payment hashes are the mint
 counter in 64 hex characters, the Tron deposit address is
 `T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb`, provider orders are `testkit-swap-N`, and
-BTC is a static $50,000 so a $1.00 button is 2,000 sats. That is what lets one
+BTC is a static $50,000 so a $5.00 button is 10,000 sats. That is what lets one
 Playwright suite drive this stack and the three Node stacks with the same
 assertions — a fake that satisfied the contract but not its JS twin would need
 a second harness, and a second harness is where stacks drift.

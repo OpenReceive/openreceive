@@ -47,7 +47,7 @@ def test_checkout_mints_settles_and_unlocks_the_download(browser: Browser) -> No
     reference = order["reference"]
 
     prepared = browser.post("/openreceive/checkouts/prepare", {"reference": reference}).json()
-    assert prepared["amount_msats"] == 4_000_000  # $2.00 at the static $50,000
+    assert prepared["amount_msats"] == 20_000_000  # $10.00 at the static $50,000
     assert prepared["description"] == "OpenReceive buttons: Safety Orange ×2"
 
     created = browser.post("/openreceive/checkouts", {"reference": reference})

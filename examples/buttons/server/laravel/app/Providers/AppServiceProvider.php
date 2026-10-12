@@ -26,7 +26,7 @@ class AppServiceProvider extends ServiceProvider
         // controllers and the SPA run exactly as they do in compose.
         //
         // BTC at a fixed $50,000, the same constant every stack's testkit uses,
-        // so a $1.00 button is 2,000 sats on every stack.
+        // so a $5.00 button is 10,000 sats on every stack.
         if (Testkit::enabled()) {
             $this->app->singleton(ReceiveNwcClient::class, static fn (): ReceiveNwcClient => Testkit::wallet());
             $this->app->singleton(PriceProvider::class, static fn (): PriceProvider => new StaticPriceProvider());

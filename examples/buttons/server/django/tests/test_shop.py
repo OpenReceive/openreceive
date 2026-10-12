@@ -37,7 +37,7 @@ def test_order_creation_is_the_trust_boundary(browser: Browser) -> None:
     )
     assert response.status_code == 201, response.content
     order = response.json()
-    assert order["total_cents"] == 10 * 100 + 500 and order["total_amount"] == "15.00"
+    assert order["total_cents"] == 10 * 500 + 900 and order["total_amount"] == "59.00"
     assert [(item["sku"], item["quantity"]) for item in order["items"]] == [
         ("safety-orange", 10),
         ("classic-black", 1),

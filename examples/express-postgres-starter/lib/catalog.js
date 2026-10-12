@@ -3,6 +3,6 @@
 // the browser.
 export const product = {
   name: "Demo sticker",
-  price: "1.00",
+  price: "5.00",
   currency: "USD",
 };

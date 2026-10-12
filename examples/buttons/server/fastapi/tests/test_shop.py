@@ -30,7 +30,7 @@ def test_order_pay_download(client: TestClient) -> None:
     assert shop["catalog"][0] == {
         "sku": "safety-orange",
         "name": "Safety Orange",
-        "price_cents": 100,
+        "price_cents": 500,
         "image_url": "/images/openreceive-safety-orange-button.webp",
     }
     assert client.get(shop["catalog"][0]["image_url"]).status_code == 200
@@ -43,14 +43,14 @@ def test_order_pay_download(client: TestClient) -> None:
     ).json()
     reference = order["reference"]
     assert (
-        order["total_amount"] == "1.00"
+        order["total_amount"] == "5.00"
         and order["description"] == "OpenReceive button: Safety Orange"
     )
     assert order["items"][0]["download_path"] is None
     assert client.get(f"/shop/orders/{reference}/downloads/safety-orange").status_code == 403
 
     prepared = client.post("/openreceive/checkouts/prepare", json={"reference": reference})
-    assert prepared.status_code == 200 and prepared.json()["amount_msats"] == 2_000_000
+    assert prepared.status_code == 200 and prepared.json()["amount_msats"] == 10_000_000
     created = client.post("/openreceive/checkouts", json={"reference": reference})
     assert created.status_code == 201, created.text
     payment_hash = created.json()["checkout"]["payment_hash"]

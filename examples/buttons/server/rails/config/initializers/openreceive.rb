@@ -34,7 +34,7 @@ OpenReceive.configure do |config|
     config.nwc_client = ButtonShop::Testkit.wallet
     config.swap_providers = [ButtonShop::Testkit.swap_provider]
     # BTC at a fixed $50,000, the same constant the JS StaticPriceProvider
-    # uses, so a $1.00 button is 2,000 sats on every stack.
+    # uses, so a $5.00 button is 10,000 sats on every stack.
     config.price_provider = OpenReceive::Rates::StaticPriceProvider.new
   else
     # Built-in cached live BTC/USD feed (a CoinGecko-compatible primary plus the

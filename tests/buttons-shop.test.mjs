@@ -162,9 +162,9 @@ test("a price in the request body is IGNORED", () => {
   const { result } = placeOrder(context, [
     { sku: "signal-red", quantity: 1, price_cents: 1, unit_price_cents: 1, total_cents: 1 },
   ]);
-  // Signal Red is $10.00 in shop-catalog.json, and that is the only authority.
-  assert.equal(result.json.total_cents, 1000);
-  assert.equal(result.json.items[0].unit_price_cents, 1000);
+  // Signal Red is $20.00 in shop-catalog.json, and that is the only authority.
+  assert.equal(result.json.total_cents, 2000);
+  assert.equal(result.json.items[0].unit_price_cents, 2000);
 });
 
 test("quantity 999 clamps to MAX_PER_SKU", () => {
@@ -304,8 +304,8 @@ test("amountFor reads only from our own row, and `value` is a decimal STRING", (
 
   const amount = amountFor(result.json.reference);
   assert.equal(amount.currency, "USD");
-  // "1.00", never "1.0" and never the float 1.
-  assert.equal(amount.value, "1.00");
+  // "5.00", never "5.0" and never the float 5.
+  assert.equal(amount.value, "5.00");
   assert.equal(typeof amount.value, "string");
   assert.equal(amount.description, "OpenReceive button: Safety Orange");
 
@@ -337,7 +337,7 @@ test("the feed shows paid orders only", async () => {
 
   const feed = recentOrders(request(), context).json;
   assert.equal(feed.orders.length, 1);
-  assert.equal(feed.orders[0].total_cents, 1000);
+  assert.equal(feed.orders[0].total_cents, 2000);
   assert.deepEqual(feed.totals, { paid_orders: 1, buttons_sold: 1 });
   // The unpaid one exists; it simply is not a billboard.
   assert.ok(context.store.orderByReference(unpaid.result.json.reference));
@@ -431,7 +431,7 @@ test("deactivating a product leaves an EXISTING order's receipt, download and fe
 
   const receipt = showOrder(request({ cookieHeader, params: { reference } }), context);
   assert.equal(receipt.json.items[0].name, "Signal Red");
-  assert.equal(receipt.json.items[0].unit_price_cents, 1000);
+  assert.equal(receipt.json.items[0].unit_price_cents, 2000);
 
   const params = { reference, sku: "signal-red" };
   assert.equal(download(request({ cookieHeader, params }), context).status, 200);
@@ -495,7 +495,24 @@ test("the store migrates once and the shop SURVIVES a restart", async () => {
   assert.equal(second.activeCatalog().length, 6);
   assert.ok(second.orderByReference(result.json.reference));
   // And the migrations did not run twice.
-  assert.equal(second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get().n, 5);
+  assert.equal(second.db.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get().n, 6);
+  second.close();
+});
+
+test("006 reprices a shop that 005 seeded at the old prices", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "buttons-reprice-"));
+  process.env.OPENRECEIVE_DEMO_DB = dir;
+
+  const first = openShopStore({ demoId: "reprice" });
+  first.db.prepare("UPDATE shop_products SET price_cents = 100 WHERE sku = ?").run("safety-orange");
+  first.db
+    .prepare("DELETE FROM schema_migrations WHERE version = ?")
+    .run("006_reprice_shop_products");
+  first.close();
+
+  const second = openShopStore({ demoId: "reprice" });
+  const row = second.activeCatalog().find((product) => product.sku === "safety-orange");
+  assert.equal(row.price_cents, 500);
   second.close();
 });
 

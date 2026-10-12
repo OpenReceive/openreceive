@@ -6,13 +6,13 @@
  * migrations; nothing that names a column is written twice.
  *
  * WHY A MODULE AND NOT A DIRECTORY OF .sql FILES. Numbered files read from
- * disk are the nicer shape and they are what this demo wanted, but two of the
- * five steps are not static SQL — 004 renders the engine's own DDL and 005
- * reads the catalog — and the three stacks bundle server code three different
- * ways. A runtime `readdir` of a migrations directory survives `tsx` and
- * breaks the day a Next.js build does not copy it. An explicit array is the
- * same mechanism with the same numbers, visible at once, and it cannot be
- * half-shipped by a bundler.
+ * disk are the nicer shape and they are what this demo wanted, but three of
+ * the steps are not static SQL — 004 renders the engine's own DDL, and 005 and
+ * 006 read the catalog — and the three stacks bundle server code three
+ * different ways. A runtime `readdir` of a migrations directory survives
+ * `tsx` and breaks the day a Next.js build does not copy it. An explicit array
+ * is the same mechanism with the same numbers, visible at once, and it cannot
+ * be half-shipped by a bundler.
  *
  * SQLite type notes, because this schema is Postgres' twin and the
  * differences are where the bugs live:
@@ -64,6 +64,36 @@ export const catalogSeedEntries = (): readonly ShopCatalogSeedEntry[] =>
  * lets a later higher-resolution download be added without renaming anything.
  */
 export const defaultImageName = (sku: string): string => `openreceive-${sku}-button.webp`;
+
+/** Upsert the six buttons from the one catalog file, by sku. */
+const seedCatalog = (db: DatabaseSync): void => {
+  const now = Math.floor(Date.now() / 1_000);
+  const insert = db.prepare(
+    `INSERT INTO shop_products
+       (id, sku, name, price_cents, position, image_name, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+     ON CONFLICT (sku) DO UPDATE SET
+       name = excluded.name,
+       price_cents = excluded.price_cents,
+       position = excluded.position,
+       image_name = excluded.image_name,
+       active = 1,
+       updated_at = excluded.updated_at`,
+  );
+
+  for (const entry of catalogSeedEntries()) {
+    insert.run(
+      randomUUID(),
+      entry.sku,
+      entry.name,
+      entry.price_cents,
+      entry.position,
+      entry.image_name ?? defaultImageName(entry.sku),
+      now,
+      now,
+    );
+  }
+};
 
 export const migrations: readonly ShopMigration[] = [
   {
@@ -178,33 +208,13 @@ export const migrations: readonly ShopMigration[] = [
     // A DATA migration: the six buttons, from the one catalog file. Idempotent
     // by sku so a re-run is a no-op rather than a duplicate-key crash.
     id: "005_seed_shop_products",
-    run: (db) => {
-      const now = Math.floor(Date.now() / 1_000);
-      const insert = db.prepare(
-        `INSERT INTO shop_products
-           (id, sku, name, price_cents, position, image_name, active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-         ON CONFLICT (sku) DO UPDATE SET
-           name = excluded.name,
-           price_cents = excluded.price_cents,
-           position = excluded.position,
-           image_name = excluded.image_name,
-           active = 1,
-           updated_at = excluded.updated_at`,
-      );
-
-      for (const entry of catalogSeedEntries()) {
-        insert.run(
-          randomUUID(),
-          entry.sku,
-          entry.name,
-          entry.price_cents,
-          entry.position,
-          entry.image_name ?? defaultImageName(entry.sku),
-          now,
-          now,
-        );
-      }
-    },
+    run: seedCatalog,
+  },
+  {
+    // The prices went up so each button clears the swap providers' minimums.
+    // A database seeded by 005 keeps its old prices until this re-runs the
+    // same upsert from the catalog file.
+    id: "006_reprice_shop_products",
+    run: seedCatalog,
   },
 ];

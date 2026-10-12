@@ -41,7 +41,7 @@ fakes = Fakes()
 def build_service(env: Mapping[str, str]) -> Service:
     if testkit_enabled(env):
         # BTC at a fixed $50,000, the constant every engine's testkit shares, so
-        # a $1.00 button is 2,000 sats on every stack.
+        # a $5.00 button is 10,000 sats on every stack.
         return Service(
             fakes.wallet,
             price_provider=StaticPriceProvider(),
