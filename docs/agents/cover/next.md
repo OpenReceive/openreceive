@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Next.js (0.4.23)
+# OpenReceive agent directions: Next.js (0.4.24)
 
 These directions are 41 KB. Download them with your shell and follow them from Step 0:
 

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1de4d7f0dccfd9c8e93ad1ce834aae9b",
+    "content-hash": "3f792dbac66e635a5640d0994f6e297f",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.23",
+            "version": "0.4.24",
             "dist": {
                 "type": "path",
                 "url": "../openreceive",
-                "reference": "75bea4b9b5d6c6e941f45e112e55ab75783300a5"
+                "reference": "7aafb725c9dbd9140239250ffb20e5f9eda76ffe"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
@@ -2781,7 +2781,7 @@
                 "MIT"
             ],
             "description": "Accept Bitcoin Lightning payments in PHP with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
-            "homepage": "https://openreceive.org",
+            "homepage": "https://openreceive.org/integrations/php",
             "keywords": [
                 "bitcoin",
                 "checkout",
@@ -2792,7 +2792,8 @@
             ],
             "support": {
                 "issues": "https://github.com/OpenReceive/openreceive/issues",
-                "source": "https://github.com/OpenReceive/openreceive"
+                "source": "https://github.com/OpenReceive/openreceive",
+                "docs": "https://openreceive.org/guides/quickstart-php"
             },
             "transport-options": {
                 "symlink": true,

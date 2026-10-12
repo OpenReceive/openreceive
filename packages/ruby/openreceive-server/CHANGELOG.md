@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.24 - 2026-10-12
+
+Release with the complete 0.4.24 package family. The gem's registry page
+now links openreceive.org's Rails page. The bundled agent skill's
+Lovable directions need `@openreceive/*` 0.4.24, whose Supabase functions
+no longer hang when two requests write one order, and keep the app's own
+order flow. Its FastAPI directions run doctor through `dotenv run` and never
+load `.env` into the shell, and the Node, Next.js, Fastify, FastAPI and Django
+directions link the serverless guide. No Ruby runtime changes from 0.4.23.
+
 ## 0.4.23 - 2026-10-11
 
 Release with the complete 0.4.23 package family. The bundled agent skill adds

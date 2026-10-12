@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.24 - Unreleased
+## 0.4.24 - 2026-10-12
 
 - Added (docs): a guide for serverless hosts (/guides/serverless): Netlify,
   AWS Lambda, Google Cloud Run and Google AI Studio, beside the Vercel guide.
@@ -23,7 +23,6 @@
   `openreceive-rails`, the Python package and both Composer packages link
   their quickstart as documentation. The WordPress plugin's Plugin URI is
   `/integrations/woocommerce`.
-
 - Fixed (JS): Supabase storage over HTTPS no longer hangs when two requests
   write the same order at once. The migration's write functions raised
   SQLSTATE 40001 when the order changed since the read, and PostgREST 14,

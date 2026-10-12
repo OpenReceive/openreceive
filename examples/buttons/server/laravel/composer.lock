@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1ccb21f6e1b0001c48103241c16dcaca",
+    "content-hash": "5289c1c79310412fff7bf35aacf0849f",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/laravel",
-            "version": "0.4.23",
+            "version": "0.4.24",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/laravel",
-                "reference": "25cf8a1e43e3cd4ca77a60070c39abcf6c4f3eeb"
+                "reference": "b8cd93f317e18196633731392b0c4caae4e3c71b"
             },
             "require": {
                 "illuminate/console": "^11.0 || ^12.0 || ^13.0",
@@ -2740,7 +2740,7 @@
                 "illuminate/routing": "^11.0 || ^12.0 || ^13.0",
                 "illuminate/support": "^11.0 || ^12.0 || ^13.0",
                 "nyholm/psr7": "^1.8",
-                "openreceive/openreceive": "~0.4.23",
+                "openreceive/openreceive": "~0.4.24",
                 "php": "^8.2",
                 "symfony/psr-http-message-bridge": "^7.0 || ^8.0"
             },
@@ -2779,7 +2779,7 @@
                 "MIT"
             ],
             "description": "Accept Bitcoin Lightning payments in Laravel with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
-            "homepage": "https://openreceive.org",
+            "homepage": "https://openreceive.org/integrations/laravel",
             "keywords": [
                 "bitcoin",
                 "checkout",
@@ -2791,7 +2791,8 @@
             ],
             "support": {
                 "issues": "https://github.com/OpenReceive/openreceive/issues",
-                "source": "https://github.com/OpenReceive/openreceive"
+                "source": "https://github.com/OpenReceive/openreceive",
+                "docs": "https://openreceive.org/guides/quickstart-laravel"
             },
             "transport-options": {
                 "symlink": true,
@@ -2800,11 +2801,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.23",
+            "version": "0.4.24",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/openreceive",
-                "reference": "75bea4b9b5d6c6e941f45e112e55ab75783300a5"
+                "reference": "7aafb725c9dbd9140239250ffb20e5f9eda76ffe"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
@@ -2855,7 +2856,7 @@
                 "MIT"
             ],
             "description": "Accept Bitcoin Lightning payments in PHP with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
-            "homepage": "https://openreceive.org",
+            "homepage": "https://openreceive.org/integrations/php",
             "keywords": [
                 "bitcoin",
                 "checkout",
@@ -2866,7 +2867,8 @@
             ],
             "support": {
                 "issues": "https://github.com/OpenReceive/openreceive/issues",
-                "source": "https://github.com/OpenReceive/openreceive"
+                "source": "https://github.com/OpenReceive/openreceive",
+                "docs": "https://openreceive.org/guides/quickstart-php"
             },
             "transport-options": {
                 "symlink": true,
