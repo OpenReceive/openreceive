@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Changed (docs): the Lovable guide says what is tested and what is not. The
+  route runs in CI as a Cloudflare Worker against Supabase's database and
+  PostgREST 14, the storage has run against a real Supabase project, and
+  coding agents pass the guide's prompt on a shop built with Lovable's build
+  setup. Lovable's own agent, Lovable Cloud and its migration approval are
+  not tested, and the guide asks for an issue when Lovable does something it
+  does not describe. Step 1 links Lovable's Secrets docs.
+
 ## 0.4.24 - 2026-10-12
 
 - Added (docs): a guide for serverless hosts (/guides/serverless): Netlify,

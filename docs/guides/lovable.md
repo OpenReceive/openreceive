@@ -11,11 +11,20 @@ provider you configure converts the payment to **BTC over Lightning**, and it
 settles into the same wallet. Available assets and networks depend on the
 provider.
 
-Use `@openreceive/*` 0.4.24 or newer. The payment route this guide sets up
-runs in OpenReceive's CI as a Cloudflare Worker against Supabase's own
-database and API server, and it was checked on an app built with Lovable's
-build setup. Lovable's own agent has not run these directions in our tests
-yet.
+Use `@openreceive/*` 0.4.24 or newer.
+
+What we test, and what we don't:
+
+- **Tested.** The payment route runs in OpenReceive's CI as a Cloudflare
+  Worker against Supabase's database and PostgREST 14, the API server
+  Supabase runs. The same storage code has run against a real Supabase
+  project, through its API gateway and its connection pooler. Coding agents
+  given this guide's prompt add checkout to a shop built with Lovable's build
+  setup, three runs in a row, and a paid order is marked paid.
+- **Not tested.** Lovable's own agent, Lovable Cloud, and its migration
+  approval. If Lovable does something this guide does not describe,
+  [open an issue](https://github.com/OpenReceive/openreceive/issues/new) and
+  say what it did.
 
 ## Before you start
 
@@ -32,7 +41,8 @@ yet.
 1. Open **More** → **Cloud** → **Secrets** → **Add secret**. Add `NWC_URI`
    with your wallet code, then, for swaps, `LSC_URI_PRIMARY` with your swap
    provider code. Secrets reach your app's server code and never the
-   browser. Lovable already gives server code `SUPABASE_URL` and
+   browser ([Lovable: Secrets](https://docs.lovable.dev/features/secrets)).
+   Lovable already gives server code `SUPABASE_URL` and
    `SUPABASE_SERVICE_ROLE_KEY`.
 2. Send Lovable this prompt:
 
