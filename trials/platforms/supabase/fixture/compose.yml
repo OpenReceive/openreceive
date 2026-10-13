@@ -1,0 +1,23 @@
+# The Widget Shop as it runs on a server, with its data in a Supabase project.
+# There is no database service here: the shop reaches Supabase's transaction
+# pooler. The host gives the server DATABASE_URL and SUPABASE_CA_CERT from
+# outside the code; so does this setup.
+# The Compose project name is the directory name. The harness swaps 8080 for a
+# free port per run.
+services:
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:8080:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

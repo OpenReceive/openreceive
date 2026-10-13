@@ -35,7 +35,7 @@ npm run trial -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Express (`node`), Fastify, Next.js, Vercel (Next.js on Neon), Replit (Express on Postgres), Rails, Django, FastAPI, plain PHP, and Laravel. None of them include OpenReceive.
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Express (`node`), Fastify, Next.js, Vercel (Next.js on Neon), Replit (Express on Postgres), Supabase (Express on a real Supabase project), Rails, Django, FastAPI, plain PHP, and Laravel. None of them include OpenReceive.
 
 ```sh
 npm run trial -- --platform php --smoke
@@ -244,6 +244,41 @@ so this one can pass from the release that ships Supabase storage, 0.4.23.
 ```sh
 npm run trial -- --platform lovable --smoke
 npm run trial -- --platform lovable --serve-directions
+```
+
+## Supabase
+
+`--platform supabase` tests what a developer gets whose app already keeps its
+data in Supabase. The shop is the Express store, with its products, users and
+orders in a real Supabase project, reached through Supabase's transaction
+pooler (Supavisor, port 6543) with Supabase's own certificate authority, as
+`docs/guides/supabase.md` connects it. The agent follows the Express
+directions; the codes are pasted as on any library shop.
+
+The project is the maintainer's, so the harness treats it differently from
+the throwaway test wallet:
+
+- The pooler URL comes from the repo-root `.env` (`SUPABASE_TRIAL_POOLER_URL`,
+  which `supabase_project` names) and reaches the shop's server as
+  `DATABASE_URL`, with `tests/supabase/prod-ca-2021.crt` as `SUPABASE_CA_CERT`,
+  through a Compose override beside the shop, as a host would set them.
+- Reports print the password as `<SECRET>`, and a run fails when it reaches
+  the agent at all (`database_password_not_in_output`).
+- Before each run the harness empties the project's `public` schema, so runs
+  go one at a time, and the plain shop creates its own tables at start. The
+  schema itself stays, with Supabase's default grants to `anon` and
+  `authenticated`, as on a new project. Use a project that holds nothing else,
+  and never run `npm run test:live:supabase` at the same time.
+
+After the live checks, `supabase_tables_private` reads the catalog: every
+`openreceive_` table must have row level security on, and neither `anon` nor
+`authenticated` may hold a privilege on it. That is step 3 of the Supabase
+guide. Without it, anyone with the project's anon key, which every visitor's
+browser has, could read `swap_data` through Supabase's Data API.
+
+```sh
+npm run trial -- --platform supabase --smoke
+npm run trial -- --platform supabase --runs 3
 ```
 
 ## BTCPay Server

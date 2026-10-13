@@ -48,6 +48,21 @@ function run(command: string, args: readonly string[], cwd: string): Promise<voi
 
 const FIXTURE_PORT = "127.0.0.1:8080:";
 
+/**
+ * A value as a Compose env_file line reads it back. A certificate spans
+ * lines, so it goes double-quoted with its newlines escaped; a one-line value
+ * stays as it is.
+ */
+export function envFileValue(value: string): string {
+  if (!value.includes("\n")) return value;
+  const escaped = value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("$", "$$$$")
+    .replaceAll("\n", "\\n");
+  return `"${escaped}"`;
+}
+
 /** Beside the shop, never inside it: the agent's `git add -A` must not pick it up. */
 export function platformEnvFile(directory: string): string {
   return `${directory}.platform.env`;
@@ -95,7 +110,9 @@ export async function prepareShop(
   // the shop and no file in it names them; docker.ts adds the override to
   // every `docker compose` through COMPOSE_FILE, the agent's included.
   if (platformEnv !== undefined && Object.keys(platformEnv).length > 0) {
-    const lines = Object.entries(platformEnv).map(([key, value]) => `${key}=${value}`);
+    const lines = Object.entries(platformEnv).map(
+      ([key, value]) => `${key}=${envFileValue(value)}`,
+    );
     await writeFile(platformEnvFile(directory), `${lines.join("\n")}\n`, { mode: 0o600 });
     await writeFile(
       platformOverrideFile(directory),
@@ -321,7 +338,13 @@ async function inspectContainerShop(
     platform.probes?.openreceive ?? ["exec", "-T", service, "node", "bin/openreceive-installed.js"],
     30_000,
   );
-  const env = await compose(directory, ["exec", "-T", service, "printenv"], 30_000);
+  // Names only: compose() echoes its output to the console, and a platform's
+  // variables can hold a real database's password.
+  const env = await compose(
+    directory,
+    ["exec", "-T", service, "sh", "-c", "env | cut -d= -f1"],
+    30_000,
+  );
   const lastLine = count.stdout.trim().split("\n").filter(Boolean).at(-1);
   return {
     baseUrl: `http://127.0.0.1:${port}`,

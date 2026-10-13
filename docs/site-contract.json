@@ -135,7 +135,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 3954
+      "bytes": 4193
     },
     {
       "path": "/guides/quickstart-rails",
@@ -1230,8 +1230,19 @@
       "summary": "Store payments in your Supabase Postgres, through its pooled connection or, from Cloudflare Workers, over its HTTPS API.",
       "framework": null,
       "framework_path": null,
-      "status": "planned",
-      "path": null
+      "status": "guide",
+      "path": "/platforms/supabase",
+      "markdown_path": "/platforms/supabase.md",
+      "database": "Your Supabase project's Postgres, through its transaction pooler; from Cloudflare Workers, over its HTTPS API",
+      "secrets": "Your server's environment or .env file, as your framework's quickstart says",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide_slug": "supabase",
+      "guide_path": "/guides/supabase",
+      "guide_source": "docs/guides/supabase.md",
+      "prompt": null,
+      "starter": null,
+      "eval": "supabase",
+      "tested": null
     }
   ],
   "assets": [

@@ -14,6 +14,7 @@ import { platformSummaryMarkdown } from "./report.ts";
 import { startTrialWallet, type TrialWallet } from "./wallet.ts";
 import { inspectShop, prepareShop, shopChecks, startShop } from "./sandbox.ts";
 import { serveDirectory } from "./serve.ts";
+import { loadSupabaseProject, resetSupabase } from "./supabase.ts";
 import type { Check, Platform } from "./types.ts";
 
 const trialsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -27,7 +28,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 }
 
 function help(): void {
-  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|vercel|replit|lovable|rails|django|fastapi|php|laravel|btcpay [--smoke] [--runs 1] [--parallel 1] [--keep]
+  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|vercel|replit|lovable|supabase|rails|django|fastapi|php|laravel|btcpay [--smoke] [--runs 1] [--parallel 1] [--keep]
        [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,
@@ -37,7 +38,8 @@ A trial pastes the codes of a test wallet (trials/wallet: a testkit NWC
 wallet on a real relay, and a test swap provider), never the merchant's, and
 the wallet pays the buyer's invoice so the trial can check the order turns
 paid. --parallel runs trials together. Vercel deploys go one at a time: they
-share one Vercel project and its database. Only one trial process runs at once.
+share one Vercel project and its database. So do Supabase trials, which share
+one real Supabase project. Only one trial process runs at once.
 
 --smoke              boot the shop, check that it is still plain, then tear it down
 --serve-directions   give the agent this working tree's docs/agents file, on 127.0.0.1
@@ -108,12 +110,14 @@ async function writeReport(
 async function smokeOne(platform: Platform, keep: boolean): Promise<void> {
   const fixture = path.join(trialsRoot, "platforms", platform.slug, "fixture");
   const seed = path.join(trialsRoot, "platforms", platform.slug, "seed");
+  const supabase = await loadSupabaseProject(platform);
   const directory = await prepareShop(
     fixture,
     platform.slug,
-    platform.platform_env,
+    { ...platform.platform_env, ...supabase?.env },
     platform.service,
   );
+  if (supabase !== undefined) await resetSupabase(supabase);
   const sandbox = await startShop(directory, seed, platform);
   try {
     const evidence = await inspectShop(directory, platform);
@@ -213,8 +217,14 @@ async function main(): Promise<void> {
       for (let index = 0; index < runs; index += 1) {
         jobs.push({
           heavy: platform.heavy,
-          // Every Vercel deploy goes to the one `openreceive-eval` project and wipes its database.
-          serial: platform.deploy === "vercel" && deploy ? "vercel" : undefined,
+          // Every Vercel deploy goes to the one `openreceive-eval` project and wipes its
+          // database; every Supabase trial empties the one real Supabase project.
+          serial:
+            platform.deploy === "vercel" && deploy
+              ? "vercel"
+              : platform.supabase_project !== undefined
+                ? "supabase"
+                : undefined,
           run: async () => {
             if (smoke) {
               await smokeOne(platform, keep);

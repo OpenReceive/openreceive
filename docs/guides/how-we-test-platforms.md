@@ -13,7 +13,8 @@ Grok or Claude Code.
 
 1. **A plain app.** We start from a small shop with five products and orders in
    its own database, built the usual way for that framework or platform, on its
-   current major version. It has no OpenReceive in it.
+   current major version. It has no OpenReceive in it. For a database such as
+   Supabase, the shop's data is already in a real project there.
 2. **An agent and our published directions.** A coding agent gets the same
    message a merchant would send, with a link to the directions on
    openreceive.org. It works on its own; a script plays the merchant and answers
@@ -50,6 +51,8 @@ Every check must pass:
 - on a framework app, the app is still running at the end: a buyer's order gets
   a Lightning invoice, another visitor asking for that order is refused, and
   once the test wallet pays the invoice, the shop marks its own order paid;
+- on a database platform such as Supabase, OpenReceive's tables end up closed
+  to the platform's public API, which every visitor's browser can reach;
 - on a hosting platform:
   - the payment route runs on Node, not an Edge runtime;
   - no worker or cron job was added, because settlement runs on page requests;

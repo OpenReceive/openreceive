@@ -75,7 +75,13 @@
       "kind": "database",
       "summary": "Store payments in your Supabase Postgres, through its pooled connection or, from Cloudflare Workers, over its HTTPS API.",
       "framework": null,
-      "planned": true
+      "database": "Your Supabase project's Postgres, through its transaction pooler; from Cloudflare Workers, over its HTTPS API",
+      "secrets": "Your server's environment or .env file, as your framework's quickstart says",
+      "settlement": "On page requests, with no worker or cron job",
+      "guide": "supabase",
+      "prompt": false,
+      "starter": null,
+      "trial": "supabase"
     }
   ]
 }

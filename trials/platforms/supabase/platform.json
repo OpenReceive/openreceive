@@ -1,0 +1,27 @@
+{
+  "slug": "supabase",
+  "name": "Supabase (Express on Supabase Postgres)",
+  "directions": "docs/agents/node.md",
+  "directions_slug": "node",
+  "prompt_name": "Express shop on Supabase",
+  "opening": "This is an Express shop whose products, users and orders are in a Supabase project. Its server connects through Supabase's transaction pooler: the host sets DATABASE_URL and SUPABASE_CA_CERT in the server's environment, not in a file. Enable Bitcoin and stablecoin payments with OpenReceive. Follow these directions: {{directions_url}}",
+  "doctor": "npx openreceive doctor",
+  "credential_store": { "kind": "dotenv", "where": ".env" },
+  "supabase_project": "SUPABASE_TRIAL_POOLER_URL",
+  "allowed_install_paths": ["npm"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b",
+    "\\bsource\\s+\\S*\\.env\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false,
+  "live": true
+}

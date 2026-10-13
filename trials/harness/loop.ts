@@ -23,6 +23,7 @@ import { redact } from "./redact.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { inspectShop, orderStatus, prepareShop, shopChecks, startShop } from "./sandbox.ts";
 import { scanTrackedSecrets } from "./scan.ts";
+import { loadSupabaseProject, resetSupabase, supabaseChecks } from "./supabase.ts";
 import type { Check, Platform, Scenario, Turn } from "./types.ts";
 import { loadVercelConfig, vercelChecks, vercelCodeChecks } from "./vercel.ts";
 import { type TrialWallet, trialWalletOverride } from "./wallet.ts";
@@ -155,11 +156,13 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     platform.deploy === "vercel" && request.deploy === true
       ? await loadVercelConfig(path.join(repoRoot, ".env"))
       : undefined;
+  const supabase = await loadSupabaseProject(platform);
   const directory = await prepareShop(
     fixture,
     platform.slug,
     {
       ...platform.platform_env,
+      ...supabase?.env,
       ...(platformCodes ? { NWC_URI: shopNwc, LSC_URI_PRIMARY: request.codes.lsc } : {}),
     },
     platform.service,
@@ -182,11 +185,17 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
   request.registerStop?.(stop);
 
   try {
+    // The shop creates its own tables at start, on a project emptied first.
+    if (supabase !== undefined) await resetSupabase(supabase);
     sandbox = await startShop(directory, seed, platform);
     const wallet = request.codes;
-    const uris = [wallet.nwc, wallet.lsc, wallet.lscBackup, wallet.nwcVercel].filter(
-      (value): value is string => typeof value === "string" && value.length > 0,
-    );
+    const uris = [
+      wallet.nwc,
+      wallet.lsc,
+      wallet.lscBackup,
+      wallet.nwcVercel,
+      supabase?.password,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0);
     const day = new Date().toISOString().slice(0, 10);
     const reportDir = path.join(
       trialsRoot,
@@ -344,6 +353,19 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     checks.push(
       platformCodes ? outputCheck(rawStreams, secrets) : commandOutputCheck(turns, secrets),
     );
+    // The test wallet's codes are throwaway; a real Supabase project's
+    // password is the maintainer's, so it must not reach the agent at all.
+    if (supabase !== undefined) {
+      const leaked = rawStreams.some((raw) => containsSecret(raw, [supabase.password]));
+      checks.push({
+        id: "database_password_not_in_output",
+        severity: "blocker",
+        pass: !leaked,
+        summary:
+          "The database password never reached the agent: not in a command, its output, a message or its reasoning.",
+        evidence: leaked ? "the password appeared in the agent's stream" : undefined,
+      });
+    }
     if (platform.deploy === "vercel" && vercel === undefined && done) {
       checks.push(...(await vercelCodeChecks(directory)));
     }
@@ -382,6 +404,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
         ),
       );
     }
+    if (supabase !== undefined && done) checks.push(await supabaseChecks(supabase));
     if (vercel !== undefined && done) {
       checks.push(
         ...(await vercelChecks(directory, vercel, { nwc: shopNwc, lsc: wallet.lsc }, log)),

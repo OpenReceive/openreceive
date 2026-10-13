@@ -27,8 +27,9 @@ import { InfraError, platformOverrideFile, shopComposeEnv } from "../trials/harn
 import { withDatabase } from "../trials/harness/local-publish.ts";
 import { classify, merchantReply } from "../trials/harness/merchant.ts";
 import { runPool } from "../trials/harness/pool.ts";
-import { platformEnvFile, prepareShop } from "../trials/harness/sandbox.ts";
+import { envFileValue, platformEnvFile, prepareShop } from "../trials/harness/sandbox.ts";
 import { redact } from "../trials/harness/redact.ts";
+import { loadSupabaseProject } from "../trials/harness/supabase.ts";
 import { scanTrackedSecrets } from "../trials/harness/scan.ts";
 import { serveDirectory } from "../trials/harness/serve.ts";
 import { trialWalletOverride } from "../trials/harness/wallet.ts";
@@ -331,6 +332,63 @@ test("reports replace the code and every 12-character slice of it", () => {
   assert.equal(hidden.includes("eval-test-secret"), false);
   assert.match(hidden, /<NWC>/);
   assert.match(hidden, /<LSC>/);
+});
+
+test("a platform's own secret, such as a database password, is redacted whole and in slices", () => {
+  const password = "fakeDatabasePassword1234567890";
+  const hidden = redact(`postgres://u:${password}@host and ${password.slice(3, 20)}`, [
+    nwc,
+    lsc,
+    password,
+  ]);
+  assert.equal(hidden.includes(password.slice(3, 15)), false);
+  assert.match(hidden, /<SECRET>/);
+  assert.doesNotMatch(hidden, /<LSC>/);
+});
+
+test("a multi-line platform variable is quoted so Compose's env_file reads it back", () => {
+  assert.equal(
+    envFileValue("postgresql://u:p@h:6543/postgres"),
+    "postgresql://u:p@h:6543/postgres",
+  );
+  assert.equal(
+    envFileValue('-----BEGIN\nab"c$d\\e\n-----END'),
+    '"-----BEGIN\\nab\\"c$$d\\\\e\\n-----END"',
+  );
+});
+
+const supabase = JSON.parse(
+  await readFile(new URL("../trials/platforms/supabase/platform.json", import.meta.url), "utf8"),
+);
+
+test("the Supabase trial reads its pooler URL from .env, and only the password is secret", async () => {
+  assert.equal(supabase.platform_env, undefined);
+  assert.match(supabase.supabase_project, /^SUPABASE_TRIAL_/);
+  const directory = await mkdtemp(path.join(tmpdir(), "supabase-env-"));
+  try {
+    const dotenv = path.join(directory, ".env");
+    await writeFile(
+      dotenv,
+      `NWC_URI=${nwc}\n${supabase.supabase_project}=postgresql://postgres.ref:p%40ss-word-1@pooler.example:6543/postgres\n`,
+    );
+    const project = await loadSupabaseProject(supabase, dotenv);
+    assert.equal(project.password, "p@ss-word-1");
+    assert.equal(
+      project.env.DATABASE_URL,
+      "postgresql://postgres.ref:p%40ss-word-1@pooler.example:6543/postgres",
+    );
+    assert.match(project.env.SUPABASE_CA_CERT, /^-----BEGIN CERTIFICATE-----/);
+    assert.deepEqual(Object.keys(project.env).sort(), ["DATABASE_URL", "SUPABASE_CA_CERT"]);
+    await writeFile(dotenv, `NWC_URI=${nwc}\n`);
+    await assert.rejects(loadSupabaseProject(supabase, dotenv), (error) => {
+      assert.ok(error instanceof InfraError);
+      assert.match(error.message, new RegExp(supabase.supabase_project));
+      assert.equal(error.message.includes(secretMaterial(nwc)), false);
+      return true;
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("commands that read this repo or a credential file are out of scope", () => {

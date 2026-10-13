@@ -75,6 +75,15 @@ export interface Platform {
    */
   readonly before_live?: readonly (readonly string[])[];
   /**
+   * The repo-root .env variable holding a real Supabase project's transaction
+   * pooler URL. The shop's server gets it as DATABASE_URL, with Supabase's CA
+   * as SUPABASE_CA_CERT. The harness empties the project's public schema
+   * before each run, so runs go one at a time; it keeps the password out of
+   * every report, and after the run it checks OpenReceive's tables are closed
+   * to Supabase's Data API (supabase.ts).
+   */
+  readonly supabase_project?: string;
+  /**
    * After the agent finishes, check the running shop on this machine: the
    * shop's own order form makes an order, its buyer gets a real Lightning
    * invoice, and another visitor asking for that order is refused.
