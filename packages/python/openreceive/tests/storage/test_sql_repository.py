@@ -203,12 +203,14 @@ def test_reconcile_gate_is_a_durable_cas(
     assert repository.claim_reconcile_gate(now=now + 2, interval_seconds=2) is None  # live lease
     scheduler = {"cursor": {"created_at": now, "payment_hash": H1}, "windows": []}
     assert repository.checkpoint_reconcile_gate(claim, scheduler, now=now + 2, release=True)
-    next_claim = repository.claim_reconcile_gate(now=now + 2, interval_seconds=2)
+    # The interval runs from the end of the pass too, not only from its claim.
+    assert repository.claim_reconcile_gate(now=now + 3, interval_seconds=2) is None
+    next_claim = repository.claim_reconcile_gate(now=now + 4, interval_seconds=2)
     assert next_claim is not None and next_claim["scheduler"] == scheduler
     assert not repository.checkpoint_reconcile_gate(
-        claim, {"cursor": None, "windows": []}, now=now + 2
+        claim, {"cursor": None, "windows": []}, now=now + 4
     )
-    assert not repository.checkpoint_reconcile_gate(next_claim, scheduler, now=now + 12)
+    assert not repository.checkpoint_reconcile_gate(next_claim, scheduler, now=now + 14)
     assert repository.claim_reconcile_gate(now=now + 1000, interval_seconds=2) is not None
     assert repository.claim_reconcile_gate(now=now + 880, interval_seconds=2) is not None
 

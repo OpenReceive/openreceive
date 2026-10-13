@@ -104,6 +104,13 @@ final class MetaStore
                 || (($current['lease_until'] ?? 0) > $now && $claimed <= $now + self::CLOCK_SKEW_SECONDS))) {
                 return null;
             }
+            // The interval also runs from the end of the last pass. A pass that takes
+            // longer than the interval would otherwise leave the gate open on release,
+            // and every sequential request after it would pay a full scan of its own.
+            $finished = $current['finished_at'] ?? null;
+            if (is_int($finished) && self::isFreshTimestamp($now, $finished, $interval)) {
+                return null;
+            }
             $state = ['version' => 1, 'claimed_at' => $now, 'token' => self::uuid(),
                 'lease_until' => $now + $leaseSeconds, 'interval_seconds' => $intervalSeconds,
                 'scheduler' => $current['scheduler'] ?? ['cursor' => null, 'windows' => []]];
@@ -139,7 +146,10 @@ final class MetaStore
             $state = self::parseGate($rows[0]['value']);
             if (($state['token'] ?? null) !== $claim['token'] || ($state['lease_until'] ?? 0) <= $now) return false;
             $state['scheduler'] = $scheduler;
-            if ($release) $state['lease_until'] = 0;
+            if ($release) {
+                $state['lease_until'] = 0;
+                $state['finished_at'] = $now;
+            }
             $encoded = json_encode($state, JSON_THROW_ON_ERROR);
             if (strlen($encoded) > 128 * 1024) throw new \InvalidArgumentException('Reconciliation checkpoint exceeded 128 KiB.');
             $this->db->execute("UPDATE {$this->table} SET value = ?, rev = rev + 1 WHERE {$this->key()} = ? AND rev = ?",

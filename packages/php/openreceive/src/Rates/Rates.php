@@ -8,6 +8,7 @@ use Brick\Math\BigDecimal;
 use OpenReceive\Http\HttpTransport;
 use OpenReceive\Money\Money;
 use OpenReceive\Support\Records;
+use OpenReceive\Support\SharedCache;
 
 /**
  * The built-in BTC price feed: static provider plus cached live feed with
@@ -162,13 +163,19 @@ final class Rates
         ?string $primaryUrl = null,
         ?string $fallbackUrl = null,
         ?int $primaryTimeoutMs = null,
+        ?SharedCache $sharedCache = null,
     ): CachedPriceFeed {
+        $primaryUrl ??= self::PRIMARY_PRICE_FEED_URL;
+        $fallbackUrl ??= self::FALLBACK_PRICE_FEED_URL;
         return new CachedPriceFeed(
             $currencies,
-            new HttpSimplePriceProvider($primaryUrl ?? self::PRIMARY_PRICE_FEED_URL, 'primary', $http, $primaryTimeoutMs ?? self::PRICE_FEED_PRIMARY_TIMEOUT_MS),
-            new HttpSimplePriceProvider($fallbackUrl ?? self::FALLBACK_PRICE_FEED_URL, 'fallback', $http),
+            new HttpSimplePriceProvider($primaryUrl, 'primary', $http, $primaryTimeoutMs ?? self::PRICE_FEED_PRIMARY_TIMEOUT_MS),
+            new HttpSimplePriceProvider($fallbackUrl, 'fallback', $http),
             $cacheSeconds,
             $clock,
+            $sharedCache,
+            // Changing a feed URL starts a fresh entry instead of serving the old feed's prices.
+            'openreceive:price_feed:' . substr(sha1("{$primaryUrl}\n{$fallbackUrl}"), 0, 16),
         );
     }
 }

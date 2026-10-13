@@ -976,11 +976,15 @@ test("a command that prints a code's value is a blocker on a dotenv shop", () =>
  */
 const HASH = "ab".repeat(32);
 
-async function csrfShop(authorize, { relayBlips = 0, onPaidWired = true } = {}) {
+async function csrfShop(
+  authorize,
+  { relayBlips = 0, onPaidWired = true, gateStaysShut = true } = {},
+) {
   const orders = new Map();
   let sessions = 0;
   let blips = relayBlips;
   let settled = false;
+  let paymentChecks = 0;
   const server = createServer((request, response) => {
     const cookies = Object.fromEntries(
       (request.headers.cookie ?? "")
@@ -1020,8 +1024,13 @@ async function csrfShop(authorize, { relayBlips = 0, onPaidWired = true } = {}) 
         return response.end();
       }
       if (request.url === "/openreceive/payments/check") {
+        // The first check wins the reconcile gate and answers with the wallet's
+        // details; a shut gate answers the rest from the shop's row.
+        paymentChecks += 1;
+        const scanned = paymentChecks === 1 || !gateStaysShut;
+        const details = scanned ? '"details":{"observed_at":1},' : "";
         response.statusCode = 200;
-        return response.end(`{"status":"${settled ? "settled" : "pending"}"}`);
+        return response.end(`{${details}"status":"${settled ? "settled" : "pending"}"}`);
       }
       if (request.url === "/openreceive/checkouts") {
         if (!csrfOk || request.headers["x-csrftoken"] !== "tok") {
@@ -1069,6 +1078,7 @@ test("the live check orders and pays through a CSRF-protected shop, as a browser
         ["live_health", true],
         ["live_invoice", true],
         ["live_refuses_stranger", true],
+        ["live_one_scan_back_to_back", true],
       ],
     );
   } finally {
@@ -1089,6 +1099,20 @@ test("the live buyer reads Flask-WTF's csrf_token field beside Django's, Laravel
     );
   }
   assert.equal(formToken('<input type="hidden" name="product_id" value="1">'), undefined);
+});
+
+test("back-to-back checks that each run a wallet scan fail the live check", async () => {
+  // The 0.4.24 PHP checkout: a pass outlasted the gate interval, so every
+  // request in a reload found the gate open and scanned the wallet again.
+  const shop = await csrfShop(true, { gateStaysShut: false });
+  try {
+    const checks = await liveShopChecks(shop.base);
+    const backToBack = checks.find((item) => item.id === "live_one_scan_back_to_back");
+    assert.equal(backToBack?.pass, false);
+    assert.match(backToBack?.evidence ?? "", /^\d+ ms \(scan\), \d+ ms \(scan\)/);
+  } finally {
+    shop.close();
+  }
 });
 
 test("a 503 the API marks retryable is tried again, as the browser checkout would", async () => {

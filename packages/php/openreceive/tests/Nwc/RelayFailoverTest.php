@@ -70,8 +70,10 @@ final class RelayFailoverTest extends TestCase
         self::assertSame(1234, $result->transactions[0]->settled_at);
         self::assertSame($connection['relays'], $calls);
         self::assertSame(1, $socket->dispatches);
-        self::assertTrue($socket->closed);
+        self::assertFalse($socket->closed, 'kept open for the next history page');
         self::assertNotEmpty($socket->sent[1][1]['sig'], 'the request is signed');
+        unset($rpc);
+        self::assertTrue($socket->closed);
     }
 
     public function testLostInvoiceResponseNeverDispatchesAnotherMint(): void
@@ -103,6 +105,55 @@ final class RelayFailoverTest extends TestCase
         self::assertTrue($first->closed);
         self::assertTrue($second->closed);
         self::assertSame([], $sockets);
+    }
+
+    public function testReadOnlyExchangesShareOneSocketAndAMintOpensItsOwn(): void
+    {
+        $connection = $this->connection();
+        $sockets = [];
+        $connector = new RelayConnector($connection['relays'], function () use (&$sockets): ScriptedRelaySocket {
+            return $sockets[] = new ScriptedRelaySocket(fn (array $message): string => $message[0] === 'EVENT'
+                ? $this->response($message[1], 'list_transactions', ['transactions' => []]) : '');
+        });
+        $rpc = new RelayRpcClient($connection, $connector, timeoutSeconds: 0.3);
+        foreach ([1, 2, 3] as $page) {
+            $rpc->execute(new Nip47Command('list_transactions', ['offset' => $page * 20]));
+        }
+        self::assertCount(1, $sockets, 'one reconcile pass, one relay connection');
+        self::assertSame(3, $sockets[0]->dispatches);
+        self::assertSame(3, count(array_filter($sockets[0]->sent, static fn (array $m): bool => $m[0] === 'CLOSE')), 'each page ends its own subscription');
+        self::assertFalse($sockets[0]->closed);
+
+        try {
+            $rpc->execute(new Nip47Command('make_invoice', ['amount' => 1000]));
+            self::fail('the scripted relay never answers a mint');
+        } catch (WalletUnavailableError) {
+        }
+        self::assertCount(2, $sockets, 'a mint never rides the kept socket');
+        self::assertTrue($sockets[1]->closed);
+        self::assertSame(3, $sockets[0]->dispatches);
+
+        $rpc->execute(new Nip47Command('list_transactions', []));
+        self::assertCount(2, $sockets);
+        self::assertSame(4, $sockets[0]->dispatches);
+        unset($rpc);
+        self::assertTrue($sockets[0]->closed, 'the kept socket closes with the client');
+    }
+
+    public function testAKeptSocketTheRelayDroppedFailsOverWithoutSpendingTheRelaysTurn(): void
+    {
+        $connection = [...$this->connection(), 'relays' => ['wss://only.invalid']];
+        $reply = fn (array $message): string => $message[0] === 'EVENT' ? $this->response($message[1], 'list_transactions', ['transactions' => []]) : '';
+        $sockets = [new ScriptedRelaySocket($reply, dropAfterDispatches: 1), new ScriptedRelaySocket($reply)];
+        $opened = [];
+        $connector = new RelayConnector($connection['relays'], static function () use (&$sockets, &$opened) { return $opened[] = array_shift($sockets); });
+        $rpc = new RelayRpcClient($connection, $connector);
+        $rpc->execute(new Nip47Command('list_transactions', []));
+        // The only relay dropped the idle socket; the next page reconnects instead of failing.
+        self::assertEquals((object) ['transactions' => []], $rpc->execute(new Nip47Command('list_transactions', [])));
+        self::assertCount(2, $opened);
+        self::assertTrue($opened[0]->closed);
+        self::assertSame(1, $opened[1]->dispatches);
     }
 
     public function testConnectionFailureAndCancellationHaveBoundedAttempts(): void
@@ -147,7 +198,8 @@ final class ScriptedRelaySocket extends Stream
     private string $inbound = '';
     private readonly \Closure $reply;
 
-    public function __construct(callable $reply, private readonly bool $disconnectAfterDispatch = false)
+    /** @param int|null $dropAfterDispatches answer this many requests, then go silent and report EOF (a relay dropping the socket) */
+    public function __construct(callable $reply, private readonly bool $disconnectAfterDispatch = false, private readonly ?int $dropAfterDispatches = null)
     {
         parent::__construct(fopen('php://temp', 'r+'));
         $this->reply = \Closure::fromCallable($reply);
@@ -158,8 +210,13 @@ final class ScriptedRelaySocket extends Stream
         $message = json_decode($string, true, flags: JSON_THROW_ON_ERROR);
         $this->sent[] = $message;
         if ($message[0] === 'EVENT') $this->dispatches++;
-        $this->inbound .= ($this->reply)($message);
+        if (!$this->dropped()) $this->inbound .= ($this->reply)($message);
         return strlen($string);
+    }
+
+    private function dropped(): bool
+    {
+        return $this->dropAfterDispatches !== null && $this->dispatches > $this->dropAfterDispatches;
     }
 
     public function read($length): string
@@ -169,6 +226,6 @@ final class ScriptedRelaySocket extends Stream
         return $next;
     }
 
-    public function eof(): bool { return $this->disconnectAfterDispatch && $this->dispatches > 0; }
+    public function eof(): bool { return ($this->disconnectAfterDispatch && $this->dispatches > 0) || $this->dropped(); }
     public function close(): void { $this->closed = true; parent::close(); }
 }

@@ -222,6 +222,18 @@ final class SqlPaymentRepositoryTest extends DatabaseCase
     }
 
     #[DataProvider('dialects')]
+    public function testTheGateIntervalRunsFromTheEndOfASlowPass(string $dialect): void
+    {
+        $repo = $this->repository($dialect);
+        $claim = $repo->claimReconcileGate(1_000, 3);
+        self::assertNotNull($claim);
+        // A slow relay: the pass releases five seconds after its claim, past the interval.
+        self::assertTrue($repo->checkpointReconcileGate($claim, $claim['scheduler'], 1_005, true));
+        self::assertNull($repo->claimReconcileGate(1_006, 3), 'the next sequential request finds the gate shut');
+        self::assertNotNull($repo->claimReconcileGate(1_008, 3));
+    }
+
+    #[DataProvider('dialects')]
     public function testTheRateLimitBudgetCountsOnInsertedAt(string $dialect): void
     {
         $repo = $this->repository($dialect);

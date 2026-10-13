@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OpenReceive\Rates;
 
+use OpenReceive\Support\SharedCache;
+
 /**
  * BTC fiat rates from a disposable process-local cache, refreshing from the
  * primary feed first and the fallback second. Port of the JS CachedPriceFeed
@@ -11,7 +13,8 @@ namespace OpenReceive\Rates;
  * fails closed for cacheSeconds unless a still-quotable observation (younger
  * than the invoice quote TTL) is in hand. PHP requests are single-threaded,
  * so the concurrent in-flight join of the Node/Ruby twins reduces to the
- * "refresh already started" refusal.
+ * "refresh already started" refusal. Process memory lasts one PHP request, so
+ * a host can pass a SharedCache to keep the finished refreshes across requests.
  */
 final class CachedPriceFeed implements PriceProvider
 {
@@ -21,13 +24,15 @@ final class CachedPriceFeed implements PriceProvider
     /** @var array{entry?: array{rates: array{bitcoin: array<string, string>}, source: string, fetched_at: int}, refresh_started_at?: int, refresh_failed_at?: int, refresh_error?: string}|null */
     private ?array $state = null;
 
-    /** @param list<string> $currencies @param (callable(): int)|null $clock */
+    /** @param list<string> $currencies @param (callable(): int)|null $clock @param string $sharedKey this feed's key in `$shared` */
     public function __construct(
         array $currencies,
         private readonly HttpSimplePriceProvider $primary,
         private readonly HttpSimplePriceProvider $fallback,
         ?int $cacheSeconds = null,
         ?callable $clock = null,
+        private readonly ?SharedCache $shared = null,
+        private readonly string $sharedKey = 'openreceive:price_feed',
     ) {
         if ($currencies === []) {
             throw new \InvalidArgumentException('CachedPriceFeed requires at least one currency');
@@ -85,7 +90,7 @@ final class CachedPriceFeed implements PriceProvider
     /** @return array{rates: array{bitcoin: array<string, string>}, source: string, fetched_at: int} */
     private function readOrRefresh(int $now): array
     {
-        $state = $this->state;
+        $state = $this->state ??= $this->readShared();
         $entry = $state['entry'] ?? null;
         $entryAge = $entry === null ? null : $this->stampAge($entry['fetched_at'], $now);
         if ($entry !== null && $entryAge !== null && $entryAge < $this->cacheSeconds) {
@@ -144,6 +149,7 @@ final class CachedPriceFeed implements PriceProvider
             try {
                 $entry = ['rates' => $provider->allBtcFiatRates(), 'source' => $provider->source, 'fetched_at' => $now];
                 $this->state = ['entry' => $entry];
+                $this->share($this->state);
                 return $entry;
             } catch (\Throwable $e) {
                 $failures[] = "{$provider->source}: {$e->getMessage()}";
@@ -155,6 +161,35 @@ final class CachedPriceFeed implements PriceProvider
             $failed['entry'] = $previous;
         }
         $this->state = $failed;
+        // The failure text can quote a configured feed URL; it stays in this process.
+        $this->share(array_diff_key($failed, ['refresh_error' => true]));
         throw new PriceFeedError($message);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function readShared(): ?array
+    {
+        try {
+            $stored = $this->shared?->get($this->sharedKey);
+        } catch (\Throwable) {
+            return null;
+        }
+        $state = $stored === null ? null : json_decode($stored, true);
+        return is_array($state) ? $state : null;
+    }
+
+    /**
+     * Only finished refreshes are shared. A claim alone would read as "refresh
+     * already started" in every other process and fail their quotes closed.
+     *
+     * @param array<string, mixed> $state
+     */
+    private function share(array $state): void
+    {
+        try {
+            $this->shared?->set($this->sharedKey, json_encode($state, JSON_THROW_ON_ERROR), Rates::INVOICE_QUOTE_TTL_SECONDS);
+        } catch (\Throwable) {
+            // A cache that cannot store leaves this feed process-local, as it was.
+        }
     }
 }

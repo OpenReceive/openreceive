@@ -6,6 +6,7 @@ namespace OpenReceive\Tests;
 
 use OpenReceive\Http\CallableTransport;
 use OpenReceive\Rates\CachedPriceFeed;
+use OpenReceive\Tests\Support\MemorySharedCache;
 use OpenReceive\Rates\HttpSimplePriceProvider;
 use OpenReceive\Rates\PriceFeedError;
 use OpenReceive\Rates\Rates;
@@ -124,6 +125,45 @@ final class RatesTest extends TestCase
         } catch (PriceFeedError $e) {
             self::assertStringContainsString('all price feeds failed', $e->getMessage());
         }
+    }
+
+    public function testASharedCacheCarriesTheFeedAcrossRequests(): void
+    {
+        $now = 1_000;
+        $shared = new MemorySharedCache();
+        $calls = 0;
+        $replies = [];
+        $http = new CallableTransport(static function () use (&$calls, &$replies): array {
+            $calls++;
+            return array_shift($replies) ?? ['status' => 200, 'body' => json_encode(['bitcoin' => ['usd' => '50000.00']])];
+        });
+        $clock = static function () use (&$now): int {
+            return $now;
+        };
+        // PHP builds a new feed for every request.
+        $request = static fn (string $primary = 'https://primary.test/price'): CachedPriceFeed => Rates::createCachedLivePriceFeed(['USD'], $http, $clock, 60, $primary, 'https://fallback.test/price', sharedCache: $shared);
+
+        self::assertSame('50000.00', $request()->btcFiatPrice('USD'));
+        $now = 1_030;
+        self::assertSame('50000.00', $request()->btcFiatPrice('USD'));
+        self::assertSame(1, $calls, 'the second request reads the first one\'s refresh');
+        $request('https://other.test/price')->btcFiatPrice('USD');
+        self::assertSame(2, $calls, 'another feed URL has its own entry');
+
+        $now = 1_061;
+        $replies = [['status' => 503, 'body' => 'down'], ['status' => 503, 'body' => 'down']];
+        try {
+            $request()->btcFiatPrice('USD');
+            self::fail('the failed refresh was not reported');
+        } catch (PriceFeedError) {
+        }
+        $stored = implode(' ', array_column($shared->entries, 'value'));
+        self::assertStringContainsString('refresh_failed_at', $stored);
+        self::assertStringNotContainsString('refresh_error', $stored, 'failure text can quote a feed URL; it stays in the process that saw it');
+        $calls = 0;
+        $now = 1_065;
+        self::assertSame('50000.00', $request()->btcFiatPrice('USD'), 'inside the backoff the next request serves the quotable entry');
+        self::assertSame(0, $calls, 'and does not retry the failed feeds');
     }
 
     public function testTheCacheWindowMustNotExceedTheQuoteTtl(): void

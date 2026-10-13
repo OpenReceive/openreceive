@@ -33,6 +33,12 @@ def claim_state(
     claimed = current.get("claimed_at")
     if claimed is not None and is_fresh_timestamp(now, int(claimed), interval_seconds):
         return None
+    # The interval also runs from the end of the last pass. A pass that takes
+    # longer than the interval would otherwise leave the gate open on release,
+    # and every sequential request after it would pay a full scan of its own.
+    finished = current.get("finished_at")
+    if finished is not None and is_fresh_timestamp(now, int(finished), interval_seconds):
+        return None
     if current.get("lease_until", 0) > now and int(current.get("claimed_at", 0)) <= now + 60:
         return None
     return {
@@ -57,6 +63,7 @@ def checkpoint_state(
     state = {**current, "scheduler": scheduler}
     if release:
         state["lease_until"] = 0
+        state["finished_at"] = now
     if len(scheduler.get("windows", [])) > 2 or any(
         len(w.get("attempts", [])) > 200 for w in scheduler.get("windows", [])
     ):

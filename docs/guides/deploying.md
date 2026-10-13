@@ -166,7 +166,8 @@ engine's `Service` runs a receive-only wallet preflight when it is
 constructed, so that check would run on every request. To avoid this, the
 package stores the wallet's info event in your app's default cache store for
 `config('openreceive.wallet_info_cache_seconds')` (600 by default). So a
-checkout request costs one relay round trip.
+checkout request costs one relay round trip. The same store keeps the BTC
+price and the swap provider's currencies and rates between requests.
 
 Rails runs an early preflight in production. Here, the same check runs on each
 web boot that misses the cache. It never runs in `php artisan config:cache`,

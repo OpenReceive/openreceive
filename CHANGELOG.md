@@ -63,6 +63,30 @@
   the refund calls. The Supabase guide shows the token route. The custom
   element and the Vue, Svelte and Angular wrappers keep using the page's own
   fetch.
+- Fixed (all engines): the reconcile gate's interval now also runs from the
+  end of the last pass, not only from its claim. A pass slower than the
+  interval used to leave the gate open when it ended, so every request in a
+  checkout's back-to-back burst ran a wallet scan of its own. On the PHP
+  checkout a scan took about 3 s, so each click cost 3–4 s and a reload took
+  15 s. The gate row stores `finished_at`; older engines ignore it. The gate
+  only gets stricter: it still refuses every scan the old rule refused, and a
+  refused request answers from the host's row without waiting. So the wallet
+  and its relay see fewer scans, about half as many under steady traffic. A
+  payment can take up to one scan longer to show as paid.
+- Fixed (PHP): a reconcile pass reuses one relay connection for its history
+  pages instead of a TLS handshake per page (about 0.4 s each). A mint
+  (`make_invoice`) still opens its own connection.
+- Added (PHP): `Service` takes an optional `sharedCache`
+  (`OpenReceive\Support\SharedCache`) that keeps the BTC price and the swap
+  provider's currency list and rates between requests. PHP builds the engine
+  for every request, so each route used to fetch them again (0.5–1.5 s).
+  `openreceive/laravel` passes the app's default cache store and the
+  WordPress plugin its transients. Measured on the trial wallet's public
+  relay with the engine rebuilt per request, a reload went from five scans
+  (14 s) to one (2 s).
+- Tests (trials): the live check makes four `payments/check` calls in a row
+  and fails when more than one of them ran a wallet scan
+  (`live_one_scan_back_to_back`). The evidence lists each call's time.
 - Changed (docs): the Lovable guide says what is tested and what is not. The
   route runs in CI as a Cloudflare Worker against Supabase's database and
   PostgREST 14, the storage has run against a real Supabase project, and

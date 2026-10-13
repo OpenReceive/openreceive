@@ -2313,7 +2313,7 @@ A custom `rateLimit` hook receives the same object.
 
 ```php
 $service = Service::fromEnvironment();   // NWC_URI, LSC_URI_PRIMARY/BACKUP, OPENRECEIVE_* from getenv() + $_ENV
-$service = new Service($nwcClient, $priceProvider, $swapProviders, ['USD'], $clock, $allowSpendCapableWallet, $env, $logger, $http);
+$service = new Service($nwcClient, $priceProvider, $swapProviders, ['USD'], $clock, $allowSpendCapableWallet, $env, $logger, $http, $sharedCache);
 ```
 
 The checkout service, which works with any storage. It covers prepare and
@@ -2332,11 +2332,19 @@ when:
 
 `fromEnvironment(?array $env, array $priceCurrencies,
 PriceProvider|false|null $priceProvider, ?array $swapProviders, bool
-$allowSpendCapableWallet, ?LoggerInterface $logger, ?HttpTransport $http)`:
+$allowSpendCapableWallet, ?LoggerInterface $logger, ?HttpTransport $http,
+?SharedCache $sharedCache)`:
 
 - Pass `$env` explicitly when the framework caches configuration.
 - Pass `false` for no rates.
 - Pass `[]` for no swaps.
+- Pass a `$sharedCache` to keep the BTC price and the swap provider's currency
+  list and rates between requests. Without one, each request fetches them
+  again, because PHP starts every request from nothing. It is
+  `OpenReceive\Support\SharedCache`, two methods over any cache you run:
+  `get(string $key): ?string` and `set(string $key, string $value, int
+  $ttlSeconds): void`. Only public market data is stored. Laravel and
+  WordPress pass their own cache store.
 
 The direct API is `prepareCheckout()`, `createCheckout()`, `reconcilePayments()`,
 `quoteSwap()`, `createSwap()`, `getSwap()`, `refundSwap()`, `listRates()`,

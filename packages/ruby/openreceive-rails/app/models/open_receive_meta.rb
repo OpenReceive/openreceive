@@ -79,6 +79,11 @@ class OpenReceiveMeta < ActiveRecord::Base
       current = parse_gate(row&.value)
       claimed = current["claimed_at"]
       return nil if claimed && fresh_timestamp?(now, claimed, interval_seconds)
+      # The interval also runs from the end of the last pass. A pass that takes
+      # longer than the interval would otherwise leave the gate open on release,
+      # and every sequential request after it would pay a full scan of its own.
+      finished = current["finished_at"]
+      return nil if finished && fresh_timestamp?(now, finished, interval_seconds)
       return nil if current.fetch("lease_until", 0) > now && current.fetch("claimed_at", 0) <= now + 60
 
       gate = {
@@ -105,7 +110,10 @@ class OpenReceiveMeta < ActiveRecord::Base
     raise ArgumentError, "Reconciliation checkpoint exceeded bounded cohorts" if windows.length > 2 || windows.any? { |w| w.fetch("attempts").length > 200 }
 
     gate["scheduler"] = scheduler
-    gate["lease_until"] = 0 if release
+    if release
+      gate["lease_until"] = 0
+      gate["finished_at"] = Integer(now)
+    end
     encoded = JSON.generate(gate)
     raise ArgumentError, "Reconciliation checkpoint exceeded 128 KiB" if encoded.bytesize > 128 * 1024
 

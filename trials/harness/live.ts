@@ -96,10 +96,7 @@ export class Visitor {
    * 503 the API marks retryable (a relay that timed out) is tried again, as
    * the browser checkout does, so a network blip is not a directions result.
    */
-  async createCheckout(
-    reference: string,
-    pagePath: string,
-  ): Promise<{ status: number; body: string }> {
+  async createCheckout(reference: string, pagePath: string): Promise<Answer> {
     let result = await this.post("/openreceive/checkouts", { reference }, pagePath);
     for (let retry = 0; retry < 2 && result.status === 503; retry += 1) {
       if (!/"retryable"\s*:\s*true/.test(result.body)) break;
@@ -110,11 +107,7 @@ export class Visitor {
   }
 
   /** POST /openreceive/payments/check, as the checkout polls while the payer pays. */
-  checkPayment(
-    reference: string,
-    paymentHash: string,
-    pagePath: string,
-  ): Promise<{ status: number; body: string }> {
+  checkPayment(reference: string, paymentHash: string, pagePath: string): Promise<Answer> {
     return this.post(
       "/openreceive/payments/check",
       { reference, payment_hash: paymentHash },
@@ -126,7 +119,7 @@ export class Visitor {
     route: string,
     body: Record<string, string>,
     pagePath: string,
-  ): Promise<{ status: number; body: string }> {
+  ): Promise<Answer> {
     await this.page(pagePath);
     const headers: Record<string, string> = {
       ...this.cookieHeader(),
@@ -141,13 +134,22 @@ export class Visitor {
     }
     const laravel = this.cookies.get("XSRF-TOKEN");
     if (laravel !== undefined) headers["x-xsrf-token"] = decodeURIComponent(laravel);
+    const started = performance.now();
     const response = await fetch(`${this.base}${route}`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
     });
-    return { status: response.status, body: await response.text() };
+    const text = await response.text();
+    return { status: response.status, body: text, ms: Math.round(performance.now() - started) };
   }
+}
+
+/** One OpenReceive API answer, and how long the POST took (the page fetch before it excluded). */
+export interface Answer {
+  readonly status: number;
+  readonly body: string;
+  readonly ms: number;
 }
 
 // Django, Laravel, Rails, and Flask-WTF's field, in that order.
@@ -203,7 +205,7 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
         "The shop issued a Lightning invoice for the buyer's own order.",
         bolt11 === undefined
           ? `${own.status} ${own.body.slice(0, 300)}`
-          : `${own.status} ${bolt11.slice(0, 16)}…`,
+          : `${own.status} ${bolt11.slice(0, 16)}… in ${own.ms} ms`,
       ),
     );
     // A second visitor with a session of their own, so a CSRF refusal cannot
@@ -219,6 +221,8 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
       ),
     );
     const paymentHash = own.body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
+    if (paymentHash !== undefined)
+      checks.push(await backToBackCheck(buyer, order, page, paymentHash));
     if (options.paid !== undefined && paymentHash !== undefined) {
       checks.push(...(await paidChecks(buyer, order, page, paymentHash, options.paid, options)));
     }
@@ -228,6 +232,42 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
     );
   }
   return checks;
+}
+
+/**
+ * A checkout's requests come one after another: a reload asks for the
+ * checkout, its state and the payment, each as soon as the last answered.
+ * Every request first runs the reconcile pass behind a gate, and after a pass
+ * the gate must stay shut for the requests that follow it. When it did not,
+ * every request paid a full wallet scan of its own: 3 s a click and 15 s a
+ * reload on the 0.4.24 PHP checkout. A payments/check that ran the scan
+ * answers with the wallet's `details`; one the gate turned away answers from
+ * the shop's row, without them.
+ */
+async function backToBackCheck(
+  buyer: Visitor,
+  order: string,
+  page: string,
+  paymentHash: string,
+): Promise<Check> {
+  const answers: Answer[] = [];
+  for (let request = 0; request < 4; request += 1) {
+    answers.push(await buyer.checkPayment(order, paymentHash, page));
+  }
+  const scanned = (answer: Answer) => /"details"\s*:/.test(answer.body);
+  const scans = answers.filter(scanned).length;
+  return check(
+    "live_one_scan_back_to_back",
+    answers.every((answer) => answer.status === 200) && scans <= 1,
+    "Four back-to-back payment checks ran at most one wallet scan: the gate stayed shut after it.",
+    answers
+      .map((answer) =>
+        answer.status !== 200
+          ? `${answer.status} ${answer.body.slice(0, 120)}`
+          : `${answer.ms} ms${scanned(answer) ? " (scan)" : ""}`,
+      )
+      .join(", "),
+  );
 }
 
 async function paidChecks(
@@ -240,7 +280,7 @@ async function paidChecks(
 ): Promise<Check[]> {
   await paid.settle(paymentHash);
   const deadline = Date.now() + (options.settleTimeoutMs ?? 60_000);
-  let last = { status: 0, body: "" };
+  let last: Answer = { status: 0, body: "", ms: 0 };
   let settled = false;
   while (!settled && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs ?? 4_000));

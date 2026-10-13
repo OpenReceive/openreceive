@@ -161,6 +161,34 @@ test("a second request inside the interval is gate_busy and costs no wallet walk
   assert.equal(body.details, undefined);
 });
 
+test("a pass slower than the interval still shuts the gate for the next request", async () => {
+  const fix = await fixture();
+  const checkout = await createCheckout(fix, "order-a");
+  fix.state.now = 1_010;
+  // A slow relay: every history page costs 2 s, so the pass outlasts the 3 s interval.
+  const walk = fix.wallet.listTransactions;
+  fix.wallet.listTransactions = async (request) => {
+    fix.state.now += 2;
+    return walk(request);
+  };
+  const check = () =>
+    fix.handler(
+      postJson("/payments/check", { reference: "order-a", payment_hash: checkout.payment_hash }),
+    );
+
+  assert.equal((await check()).status, 200);
+  const walksAfterFirst = fix.walks.length;
+  assert.ok(fix.state.now - 1_010 > 3, "the pass took longer than the interval");
+
+  // The browser's next request comes right after the slow pass ended.
+  assert.equal((await check()).status, 200);
+  assert.equal(fix.walks.length, walksAfterFirst, "the interval runs from the end of the pass");
+
+  fix.state.now += 3;
+  assert.equal((await check()).status, 200);
+  assert.ok(fix.walks.length > walksAfterFirst, "the gate reopens a full interval later");
+});
+
 test("a throwing scan still returns user B's 200", async () => {
   const fix = await fixture();
   await createCheckout(fix, "order-a");

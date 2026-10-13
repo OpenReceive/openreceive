@@ -9,6 +9,7 @@ use OpenReceive\Host;
 use OpenReceive\Hosts\AfterPaid;
 use OpenReceive\Hosts\AllowAllAuthorize;
 use OpenReceive\Hosts\LoggingOnPaid;
+use OpenReceive\Nwc\ReceiveNwcClient;
 use OpenReceive\PaymentSettlement;
 use OpenReceive\Rates\StaticPriceProvider;
 use OpenReceive\Server\AuthorizeContext;
@@ -43,6 +44,7 @@ final class EngineTest extends TestCase
     private array $afterPaid = [];
     /** @var list<string> */
     private array $logs = [];
+    private int $pages = 0;
 
     private function host(bool $placeholders = false): Host
     {
@@ -105,7 +107,8 @@ final class EngineTest extends TestCase
         $this->afterPaid[] = $settlement->reference;
     }
 
-    private function engine(bool $placeholders = false, bool|array $opportunistic = true, bool|array $rateLimiting = false): Engine
+    /** @param int $secondsPerPage how far the clock moves for each wallet history page (a slow relay) */
+    private function engine(bool $placeholders = false, bool|array $opportunistic = true, bool|array $rateLimiting = false, int $secondsPerPage = 0): Engine
     {
         $clock = fn (): int => $this->now;
         $this->wallet = new FakeWallet($clock);
@@ -113,7 +116,8 @@ final class EngineTest extends TestCase
         $db = new PdoConnection(new \PDO('sqlite::memory:'));
         PaymentsSchema::migrate($db);
         $this->repository = new SqlPaymentRepository($db, $clock);
-        $service = new Service($this->wallet, new StaticPriceProvider(), [$this->provider], ['USD'], $clock);
+        $wallet = $secondsPerPage === 0 ? $this->wallet : $this->slowWallet($secondsPerPage);
+        $service = new Service($wallet, new StaticPriceProvider(), [$this->provider], ['USD'], $clock);
         $logs = &$this->logs;
         $logger = new class ($logs) extends AbstractLogger {
             /** @param list<string> $lines */
@@ -127,6 +131,43 @@ final class EngineTest extends TestCase
             }
         };
         return new Engine($this->host($placeholders), $this->repository, $service, $opportunistic, $rateLimiting, null, null, $logger, '/openreceive', new Psr17Factory());
+    }
+
+    private function slowWallet(int $secondsPerPage): ReceiveNwcClient
+    {
+        $test = $this;
+        return new class ($this->wallet, $secondsPerPage, $test) implements ReceiveNwcClient {
+            public function __construct(private readonly FakeWallet $wallet, private readonly int $secondsPerPage, private readonly EngineTest $test)
+            {
+            }
+
+            public function makeInvoice(array $request): array
+            {
+                return $this->wallet->makeInvoice($request);
+            }
+
+            public function listTransactions(array $request): array
+            {
+                $this->test->walkPage($this->secondsPerPage);
+                return $this->wallet->listTransactions($request);
+            }
+
+            public function preflight(): array
+            {
+                return $this->wallet->preflight();
+            }
+
+            public function subscribeNotifications(callable $handler, ?callable $onIdle = null): void
+            {
+                $this->wallet->subscribeNotifications($handler, $onIdle);
+            }
+        };
+    }
+
+    public function walkPage(int $seconds): void
+    {
+        $this->pages++;
+        $this->now += $seconds;
     }
 
     /** @param array<string, mixed>|null $body */
@@ -303,6 +344,27 @@ final class EngineTest extends TestCase
         $engine->reconcile();
         self::assertSame('expired', $this->repository->findByPaymentHash($second['checkout']['payment_hash'])?->status);
         self::assertSame('wallet_reported_expired', $this->repository->findByPaymentHash($second['checkout']['payment_hash'])?->statusReason);
+    }
+
+    public function testAPassSlowerThanTheIntervalStillShutsTheGateForTheNextRequest(): void
+    {
+        $engine = $this->engine(secondsPerPage: 2);
+        $hash = self::json($this->call($engine, 'POST', '/openreceive/checkouts', ['reference' => 'order-1']))['checkout']['payment_hash'];
+        $check = fn (): ResponseInterface => $this->call($engine, 'POST', '/openreceive/payments/check', ['reference' => 'order-1', 'payment_hash' => $hash]);
+        $this->now += 3;
+        $started = $this->now;
+
+        self::assertSame(200, $check()->getStatusCode());
+        $pages = $this->pages;
+        self::assertGreaterThan(3, $this->now - $started, 'the pass took longer than the interval');
+
+        // The browser's next request comes right after the slow pass ended.
+        self::assertSame(200, $check()->getStatusCode());
+        self::assertSame($pages, $this->pages, 'the interval runs from the end of the pass');
+
+        $this->now += 3;
+        self::assertSame(200, $check()->getStatusCode());
+        self::assertGreaterThan($pages, $this->pages, 'the gate reopens a full interval later');
     }
 
     public function testTheGateIntervalStretchesWithInvoiceAge(): void

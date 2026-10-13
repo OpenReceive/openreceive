@@ -13,6 +13,7 @@ use OpenReceive\Host;
 use OpenReceive\Http\HttpTransport;
 use OpenReceive\Http\Psr18Transport;
 use OpenReceive\Kernel;
+use OpenReceive\Laravel\Cache\AppSharedCache;
 use OpenReceive\Laravel\Console\DoctorCommand;
 use OpenReceive\Laravel\Console\InstallCommand;
 use OpenReceive\Laravel\Console\NotificationsCommand;
@@ -138,7 +139,8 @@ final class OpenReceiveServiceProvider extends ServiceProvider
         $client = $app->bound(ReceiveNwcClient::class)
             ? $app->make(ReceiveNwcClient::class)
             : $this->clientFromEnvironment($app, $env, $config, $logger);
-        return new Service($client, $priceProvider, $swapProviders, $currencies, null, $allowSpend, $env, $logger, $http);
+        $shared = new AppSharedCache($app->make('cache')->store());
+        return new Service($client, $priceProvider, $swapProviders, $currencies, null, $allowSpend, $env, $logger, $http, $shared);
     }
 
     /**

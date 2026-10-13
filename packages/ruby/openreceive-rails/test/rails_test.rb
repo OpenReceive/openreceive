@@ -1513,6 +1513,15 @@ class OpportunisticReconcileTest < Minitest::Test
     assert OpenReceiveMeta.claim_reconcile_gate(now: now + 10, interval_seconds: 2)
   end
 
+  def test_gate_interval_runs_from_the_end_of_a_slow_pass
+    now = Time.now.to_i
+    claim = OpenReceiveMeta.claim_reconcile_gate(now: now, interval_seconds: 3)
+    # A slow relay: the pass releases five seconds after its claim, past the interval.
+    assert OpenReceiveMeta.checkpoint_reconcile_gate(claim, claim.fetch("scheduler"), now: now + 5, release: true)
+    refute OpenReceiveMeta.claim_reconcile_gate(now: now + 6, interval_seconds: 3)
+    assert OpenReceiveMeta.claim_reconcile_gate(now: now + 8, interval_seconds: 3)
+  end
+
   def test_gate_treats_a_far_future_claim_as_stale
     now = Time.now.to_i
     assert OpenReceiveMeta.claim_reconcile_gate(now: now + 3600, interval_seconds: 2)

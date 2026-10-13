@@ -195,7 +195,7 @@
       "slug": "quickstart-laravel",
       "title": "Laravel Quickstart",
       "category": "quickstart",
-      "bytes": 20999
+      "bytes": 21141
     },
     {
       "path": "/guides/quickstart-btcpay",
@@ -346,7 +346,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 11821
+      "bytes": 11919
     },
     {
       "path": "/guides/host-testing",
@@ -366,7 +366,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 131210
+      "bytes": 131720
     },
     {
       "path": "/guides/security",
@@ -526,7 +526,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "category": "quickstart",
-      "bytes": 45297
+      "bytes": 45439
     },
     {
       "path": "/guides/agent-directions-btcpay",
@@ -586,7 +586,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 131210,
+      "bytes": 131720,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -852,7 +852,7 @@
       "kind": "agent-directions-payload",
       "stack": "laravel",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45297,
+      "bytes": 45439,
       "copy_button": true,
       "self_contained": true
     },

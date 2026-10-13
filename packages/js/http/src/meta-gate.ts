@@ -36,6 +36,8 @@ interface StoredGate {
   token: string;
   lease_until: number;
   interval_seconds: number;
+  /** When the last pass released the gate. */
+  finished_at?: number;
   scheduler: ReconcileScheduler;
 }
 function parseGate(value: unknown): StoredGate | undefined {
@@ -65,9 +67,14 @@ export async function claimMetaGate(
   for (let attempt = 0; attempt < RECONCILE_GATE_CAS_RETRIES; attempt += 1) {
     const current = await store.read(RECONCILE_GATE_META_KEY);
     const gate = current === undefined ? undefined : parseGate(current.value);
+    // The interval also runs from the end of the last pass. A pass that takes
+    // longer than the interval would otherwise leave the gate open on release,
+    // and every sequential request after it would pay a full scan of its own.
+    const interval = Math.max(intervalSeconds, gate?.interval_seconds ?? 2);
     if (
       gate !== undefined &&
-      isFreshTimestamp(now, gate.claimed_at, Math.max(intervalSeconds, gate.interval_seconds ?? 2))
+      (isFreshTimestamp(now, gate.claimed_at, interval) ||
+        (gate.finished_at !== undefined && isFreshTimestamp(now, gate.finished_at, interval)))
     )
       return null;
     if (
@@ -133,6 +140,7 @@ export async function checkpointMetaGate(
     scheduler,
     lease_until: release ? 0 : gate.lease_until,
     interval_seconds: intervalSeconds ?? gate.interval_seconds,
+    finished_at: release ? now : gate.finished_at,
   });
   if (new TextEncoder().encode(value).length > 131072)
     throw new RangeError("Reconcile progress exceeds 128 KiB.");

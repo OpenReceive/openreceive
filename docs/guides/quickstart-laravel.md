@@ -314,7 +314,9 @@ PHP builds the whole engine again on every request. Under PHP-FPM or Apache,
 that same preflight would then run per request. To avoid that, the package
 caches the wallet's info event in your default cache store for
 `config('openreceive.wallet_info_cache_seconds')` (600). A checkout request
-then costs one relay round trip, not two.
+then costs one relay round trip, not two. The same store keeps the BTC price
+and the swap provider's currencies and rates between requests, so checkout
+routes do not fetch them again.
 
 ## Render the checkout
 

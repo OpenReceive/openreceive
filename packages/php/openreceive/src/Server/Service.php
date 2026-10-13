@@ -28,6 +28,7 @@ use OpenReceive\Server\Errors\WalletPreflightError;
 use OpenReceive\Settlement\Settlement;
 use OpenReceive\Support\Integers;
 use OpenReceive\Support\Records;
+use OpenReceive\Support\SharedCache;
 use OpenReceive\Swap\Assets;
 use OpenReceive\Swap\LscUri;
 use OpenReceive\Swap\Swap;
@@ -70,6 +71,8 @@ final class Service
      * (possibly empty) to override. `$priceProvider` null uses the built-in
      * cached live feed (with OPENRECEIVE_PRICE_FEED_*_URL overrides); pass a
      * provider to override, or `false` to run without rates entirely.
+     * `$sharedCache` keeps the built-in price feed and the swap providers'
+     * catalogs and rates across requests (see SharedCache).
      *
      * @param PriceProvider|false|null $priceProvider
      * @param list<SwapProvider>|null $swapProviders
@@ -87,14 +90,15 @@ final class Service
         ?array $env = null,
         private readonly ?LoggerInterface $logger = null,
         ?HttpTransport $http = null,
+        ?SharedCache $sharedCache = null,
     ) {
         Kernel::assertRuntime();
         $env ??= self::processEnvironment();
         $this->clock = $clock ?? static fn (): int => time();
         $this->priceCurrencies = array_values(array_map(static fn (mixed $value): string => strtoupper((string) $value), $priceCurrencies === [] ? ['USD'] : $priceCurrencies));
-        $this->priceProvider = $priceProvider === false ? null : ($priceProvider ?? $this->defaultPriceProvider($env, $http));
+        $this->priceProvider = $priceProvider === false ? null : ($priceProvider ?? $this->defaultPriceProvider($env, $http, $sharedCache));
         $this->swapProviders = array_values($swapProviders ?? Swap::providersFromEnvironment($env, $http, $this->clock));
-        $this->attachSwapProviderRuntime();
+        $this->attachSwapProviderRuntime($sharedCache);
         // The override relaxes only the spend refusal: receive-readiness and encryption are still enforced.
         $this->walletPreflight($allowSpendCapableWallet || $this->spendOverrideFromEnv($env));
     }
@@ -114,6 +118,7 @@ final class Service
         bool $allowSpendCapableWallet = false,
         ?LoggerInterface $logger = null,
         ?HttpTransport $http = null,
+        ?SharedCache $sharedCache = null,
     ): self {
         $env ??= self::processEnvironment();
         $connection = trim((string) ($env['NWC_URI'] ?? ''));
@@ -134,7 +139,7 @@ final class Service
                 $e
             );
         }
-        return new self($client, $priceProvider, $swapProviders === null ? null : array_values($swapProviders), $priceCurrencies, null, $allowSpendCapableWallet, $env, $logger, $http);
+        return new self($client, $priceProvider, $swapProviders === null ? null : array_values($swapProviders), $priceCurrencies, null, $allowSpendCapableWallet, $env, $logger, $http, $sharedCache);
     }
 
     /** @return array<string, mixed> */
@@ -530,19 +535,19 @@ final class Service
     }
 
     /** @param array<string, mixed> $env */
-    private function defaultPriceProvider(array $env, ?HttpTransport $http): PriceProvider
+    private function defaultPriceProvider(array $env, ?HttpTransport $http, ?SharedCache $sharedCache): PriceProvider
     {
         $overrides = Rates::readPriceFeedUrlOverrides($env);
-        return Rates::createCachedLivePriceFeed($this->priceCurrencies, $http, $this->clock, null, $overrides['primary_url'], $overrides['fallback_url']);
+        return Rates::createCachedLivePriceFeed($this->priceCurrencies, $http, $this->clock, null, $overrides['primary_url'], $overrides['fallback_url'], sharedCache: $sharedCache);
     }
 
     /** One shared transient cache and one per-provider weight budget, attached to every provider that accepts them. */
-    private function attachSwapProviderRuntime(): void
+    private function attachSwapProviderRuntime(?SharedCache $sharedCache): void
     {
         if ($this->swapProviders === []) {
             return;
         }
-        $cache = new TransientCache($this->clock, $this->logger);
+        $cache = new TransientCache($this->clock, $this->logger, $sharedCache);
         foreach ($this->swapProviders as $provider) {
             $name = $provider->name();
             if ($provider instanceof SwapProviderRuntime) {

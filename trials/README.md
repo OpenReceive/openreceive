@@ -114,6 +114,12 @@ video takes kept finding after a pass:
   second visitor with a session and CSRF token of their own is refused. So
   the check fails when the allow-all `authorize` placeholder is left in place.
   A failed live check carries the shop's log (`logs` in `platform.json`).
+- `live_one_scan_back_to_back`: on a live shop, four `payments/check` calls
+  in a row, as a checkout makes them, run at most one wallet scan between
+  them. A check that ran the scan answers with the wallet's `details`. When a
+  scan outlasted the reconcile gate's interval, the 0.4.24 PHP checkout
+  scanned on every request: 3 s a click, 15 s a reload. The evidence lists
+  each call's time, so a slow shop shows up even when the check passes.
 - `failed_commands` (polish) lists every command that exited nonzero.
 
 A candidate run (`--serve-directions`) tests this tree's directions against

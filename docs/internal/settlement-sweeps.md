@@ -25,6 +25,13 @@ grows with the age of the pending invoices:
 - 6 s while any is under 5 minutes old,
 - 12 s otherwise.
 
+The interval runs from the later of the pass's claim and its end: a released gate stores
+`finished_at`. A pass can take longer than the interval, at about half a second per
+history page on a public relay. Counted from the claim alone, such a pass left the gate
+open when it ended, and every request in a checkout's back-to-back burst paid a scan of
+its own (3 s a click and 15 s a reload on the 0.4.24 PHP checkout). The agent trials'
+`live_one_scan_back_to_back` check watches for it.
+
 The gate is the NWC scan budget. Open tabs polling `payments/check` share the one global
 pass. When User A closes the tab, User B's later call wins the gate and settles A's invoice.
 

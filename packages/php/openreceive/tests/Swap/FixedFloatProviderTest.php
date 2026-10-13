@@ -13,6 +13,7 @@ use OpenReceive\Swap\Swap;
 use OpenReceive\Swap\TransientCache;
 use OpenReceive\Swap\WeightBudget;
 use OpenReceive\Swap\WeightBudgetError;
+use OpenReceive\Tests\Support\MemorySharedCache;
 use PHPUnit\Framework\TestCase;
 
 final class FixedFloatProviderTest extends TestCase
@@ -211,6 +212,39 @@ final class FixedFloatProviderTest extends TestCase
         $now += FixedFloatRates::REFRESH_SECONDS + 1;
         $provider->payInAssetCatalog();
         self::assertCount(3, $this->calls, 'rates refreshed after their TTL while /ccies stays cached for a day');
+    }
+
+    public function testASharedCacheCarriesCatalogsAndRatesAcrossRequests(): void
+    {
+        $now = 5_000;
+        $clock = static function () use (&$now): int {
+            return $now;
+        };
+        $shared = new MemorySharedCache();
+        // PHP builds a new provider and cache for every request.
+        $request = fn (array $replies): FixedFloatProvider => $this->provider($replies, new TransientCache($clock, null, $shared));
+        $request(self::catalogReplies())->payInAssetCatalog();
+        self::assertCount(2, $this->calls, '/ccies and fixed.xml');
+        $request(self::catalogReplies())->payInAssetCatalog();
+        self::assertCount(2, $this->calls, 'the next request reads both from the shared cache');
+        self::assertSame(
+            ['openreceive:swap_limits:ff-test', 'openreceive:swap_rates:ff-test:fixed'],
+            array_keys($shared->entries),
+        );
+
+        $now += FixedFloatRates::REFRESH_SECONDS + 1;
+        $failing = [...self::catalogReplies(), '/rates/fixed.xml' => ['status' => 503, 'body' => 'down key-1']];
+        try {
+            $request($failing)->payInAssetCatalog();
+        } catch (\Throwable) {
+        }
+        self::assertCount(3, $this->calls, 'expired rates are fetched again; the catalog is still fresh');
+        self::assertStringNotContainsString('"error"', $shared->entries['openreceive:swap_rates:ff-test:fixed']['value'], 'failure text is not shared');
+        try {
+            $request(self::catalogReplies())->payInAssetCatalog();
+        } catch (\Throwable) {
+        }
+        self::assertCount(3, $this->calls, 'a request inside the failure backoff does not retry the provider');
     }
 
     public function testRatesMathIsExactIntegerFixedPoint(): void
