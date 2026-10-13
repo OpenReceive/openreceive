@@ -1,6 +1,6 @@
 # OpenReceive agent directions: FastAPI (0.4.24)
 
-These directions are 40 KB. Download them with your shell and follow them from Step 0:
+These directions are 41 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/fastapi/full.md
 

@@ -357,6 +357,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the engine tables and the attempt state machine
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's props, attributes and slots
+- https://openreceive.org/guides/mobile-apps.md — when a mobile app takes the payment: the checkout page it opens, and what the App Store and Google Play allow
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
 - https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
 - https://openreceive.org/guides/provider-registry.md — where the wallet logos and pay

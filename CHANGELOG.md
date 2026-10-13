@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added (docs): a guide for mobile apps (/guides/mobile-apps). The app opens a
+  checkout page on its own server in a browser tab, through a one-time link
+  the server turns into a cookie for that order, and asks its server whether
+  the order is paid; the wallet code never ships in the app. A table says what
+  the App Store and Google Play allow by kind of purchase, and where digital
+  goods may link out to the web (US, EU, Japan, Brazil) and at what
+  commission, from the stores' own pages as of October 2026. It has snippets
+  for Expo, Flutter, Swift and Kotlin. The Node, Fastify, Next.js, FastAPI,
+  Django, Rails, PHP and Laravel directions link it.
 - Changed (docs): the Lovable guide says what is tested and what is not. The
   route runs in CI as a Cloudflare Worker against Supabase's database and
   PostgREST 14, the storage has run against a real Supabase project, and

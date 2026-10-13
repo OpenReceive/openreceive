@@ -37,6 +37,7 @@ optional. The provider decides which assets and networks are available.
 22. [Payment safety upgrade and repair](payment-safety-upgrade.md): how to roll out the upgrade and how to review and recover existing attempts.
 23. [Deploying OpenReceive](deploying.md)
    - [Bitcoin checkout on serverless hosts](serverless.md): Netlify, AWS Lambda, Google Cloud Run and AI Studio, and pooled database URLs
+   - [Bitcoin checkout in mobile apps](mobile-apps.md): React Native, Flutter, Swift and Kotlin apps, and what the app stores allow
 24. [Testing your OpenReceive integration](host-testing.md)
 25. [API reference](api-reference.md)
 26. [Security](security.md)

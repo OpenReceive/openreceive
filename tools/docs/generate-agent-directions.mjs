@@ -271,6 +271,7 @@ const UNLISTED_GUIDES_BY_STACK = {
     ),
     supabase: "WordPress keeps its data in MySQL",
     serverless: "WordPress runs on an ordinary PHP host",
+    "mobile-apps": "the WooCommerce store's own checkout is the payment page",
   },
   btcpay: {
     authorization:
@@ -292,6 +293,7 @@ const UNLISTED_GUIDES_BY_STACK = {
     "react-material-ui-recipe": "a custom browser UI recipe; not applicable inside BTCPay",
     supabase: "BTCPay keeps the plugin's table in its own database",
     serverless: "BTCPay Server is a long-running server",
+    "mobile-apps": "BTCPay's checkout is the payment page",
   },
   lovable: {
     "node-orms": "no ORM: payments go through Supabase's HTTPS API",
@@ -302,6 +304,7 @@ const UNLISTED_GUIDES_BY_STACK = {
     "react-material-ui-recipe":
       "Lovable apps use the drop-in; the directions forbid a custom checkout UI",
     serverless: "the Lovable directions already cover Cloudflare Workers, Lovable's only host",
+    "mobile-apps": "Lovable builds web apps",
   },
   rails: {
     supabase: "the Supabase guide covers Node and Python servers",

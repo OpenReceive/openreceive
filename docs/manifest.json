@@ -98,6 +98,14 @@
       "public": true
     },
     {
+      "slug": "mobile-apps",
+      "title": "Bitcoin Checkout in Mobile Apps",
+      "source_path": "docs/guides/mobile-apps.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "source_path": "docs/guides/how-we-test-platforms.md",

@@ -44,6 +44,7 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Bitcoin Checkout with Supabase](https://openreceive.org/guides/supabase.md)
 - [Supabase Migration](https://openreceive.org/guides/supabase-migration.md)
 - [Bitcoin Checkout on Serverless Hosts](https://openreceive.org/guides/serverless.md)
+- [Bitcoin Checkout in Mobile Apps](https://openreceive.org/guides/mobile-apps.md)
 - [How We Test Platforms](https://openreceive.org/guides/how-we-test-platforms.md)
 - [BTCPay Plugin Reference](https://openreceive.org/guides/btcpay-reference.md)
 - [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)

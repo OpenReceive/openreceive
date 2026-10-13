@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (PHP)
 
 ```sh
-# READ THIS FIRST: this file is 40 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 41 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/php/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -380,6 +380,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/environment-variables.md — every variable, and what is deliberately not one
 - https://openreceive.org/guides/storage.md — the payment tables and the attempt state machine
 - https://openreceive.org/guides/frontend-checkout.md — the drop-in's attributes and slots, and the standalone build
+- https://openreceive.org/guides/mobile-apps.md — when a mobile app takes the payment: the checkout page it opens, and what the App Store and Google Play allow
 - https://openreceive.org/guides/checkout-ux.md — read before building any custom UI
 - https://openreceive.org/guides/headless-checkout.md — the controller, the display models, refunds
 - https://openreceive.org/guides/provider-registry.md — where the wallet logos and pay
