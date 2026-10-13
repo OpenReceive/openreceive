@@ -115,6 +115,15 @@
       "release": "0.4.19",
       "runs": 1,
       "mode": "builder"
+    },
+    {
+      "trial": "supabase",
+      "date": "2026-10-13",
+      "release": "0.4.24",
+      "runs": 3,
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "released",
+      "directions": "8d9eac9d2fd5"
     }
   ]
 }

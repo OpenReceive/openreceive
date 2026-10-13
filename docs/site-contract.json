@@ -125,7 +125,7 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 12781
+      "bytes": 13728
     },
     {
       "path": "/guides/supabase-migration",
@@ -1354,7 +1354,7 @@
       "summary": "Store payments in your Supabase Postgres, through its pooled connection or, from Cloudflare Workers, over its HTTPS API.",
       "framework": null,
       "framework_path": null,
-      "status": "guide",
+      "status": "tested",
       "path": "/platforms/supabase",
       "markdown_path": "/platforms/supabase.md",
       "database": "Your Supabase project's Postgres, through its transaction pooler; from Cloudflare Workers, over its HTTPS API",
@@ -1366,7 +1366,13 @@
       "prompt": null,
       "starter": null,
       "eval": "supabase",
-      "tested": null
+      "tested": {
+        "date": "2026-10-13",
+        "release": "0.4.24",
+        "agents": [
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     }
   ],
   "assets": [

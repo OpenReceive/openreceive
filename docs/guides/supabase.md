@@ -19,6 +19,22 @@ parts to a framework quickstart, so start from yours:
 [Fastify](quickstart-fastify.md), [FastAPI](quickstart-fastapi.md) or
 [Django](quickstart-django.md).
 
+What we test, and what we don't:
+
+- **Tested.** Coding agents given the Express directions add checkout to an
+  Express shop whose data is in a real Supabase project, three runs in a row.
+  The shop reaches Supabase through its transaction pooler with Supabase's
+  certificate. Each run creates OpenReceive's tables, keeps them closed to the
+  Data API, gets a real Lightning invoice for the buyer, refuses a stranger,
+  and marks a paid order paid. The storage code for `pg`, Knex, Prisma,
+  TypeORM and Python has run through the same pooler, and the HTTPS route
+  through the project's API gateway with a secret key.
+- **Not tested by an agent.** Next.js, Fastify, FastAPI and Django apps on
+  Supabase, Supabase Auth inside `authorize`, and Supabase Edge Functions,
+  which OpenReceive does not run on yet. If something on Supabase does not
+  work as this guide says,
+  [open an issue](https://github.com/OpenReceive/openreceive/issues/new).
+
 ## Where your server can run
 
 | Server | With Supabase |

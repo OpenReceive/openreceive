@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added (docs): Supabase is a Tested platform, and the Supabase guide says
+  what is tested and what is not. Coding agents following the Express
+  directions added checkout to an Express shop whose data is in a real
+  Supabase project, reached through Supavisor's transaction pooler with
+  Supabase's certificate: 3 of 3 runs passed on 0.4.24. Each created
+  OpenReceive's tables, closed them to Supabase's Data API, issued a real
+  invoice, refused a stranger and marked a paid order paid.
+  /platforms/supabase is published. The agent trials gain
+  `--platform supabase`, which runs on a real project named in the repo-root
+  .env, empties its public schema before each run, keeps the database
+  password out of reports and fails a run that shows it to the agent.
 - Added (docs): a guide for mobile apps (/guides/mobile-apps). The app opens a
   checkout page on its own server in a browser tab, through a one-time link
   the server turns into a cookie for that order, and asks its server whether
