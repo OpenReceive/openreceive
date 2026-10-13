@@ -233,7 +233,12 @@ itself, and they hold for every integration.
   such window. On the drop-ins: `resumePaymentHash`, fed from `onState`, on
   `<Checkout>`; the `resume-payment-hash` attribute, fed from the
   `openreceive-state` event (`event.detail.state.payment_hash`), on
-  `<openreceive-checkout>`. https://openreceive.org/guides/swap-refunds.md
+  `<openreceive-checkout>`.
+  That visit can come hours later, and `authorize` must still know the payer:
+  a session that expired in between answers 403 and strands the deposit. On a
+  guest shop, tie the order to a long-lived signed cookie, or put a secret
+  per-order token in its URL that your page trades for that cookie.
+  https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amount_for` and both drop-ins render it above the amount.
   Without it the checkout is a QR and "$1.00" with no sign of what the dollar

@@ -1,6 +1,6 @@
 # OpenReceive agent directions: Laravel (0.4.25)
 
-These directions are 45 KB. Download them with your shell and follow them from Step 0:
+These directions are 46 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/laravel/full.md
 

@@ -111,6 +111,12 @@ order id is a claim, not proof. See [Authorization](authorization.md). If a
 guest shop scopes orders to a signed visitor cookie, then only the browser
 that placed the order can resume it. Say so on the screen.
 
+Ownership must also last as long as the refund does. A payer can come back
+hours later. If your check reads a session that has expired by then, your
+routes answer `403` and the deposit is stranded. On a guest shop, tie the
+order to a long-lived signed cookie. Or put a secret per-order token in the
+order URL, and have your page trade it for that cookie.
+
 ### 3. The attempt, restored
 
 `POST …/checkouts/prepare` returns the amount and the catalog, and **no

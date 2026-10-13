@@ -227,6 +227,10 @@ itself, and they hold for every integration.
   `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
   such window. On the element: the `resume-payment-hash` attribute, fed from
   the `openreceive-state` event (`event.detail.state.payment_hash`).
+  That visit can come hours later, and `authorize` must still know the payer:
+  a session that expired in between answers 403 and strands the deposit. On a
+  guest shop, tie the order to a long-lived signed cookie, or put a secret
+  per-order token in its URL that your page trades for that cookie.
   https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amountFor` and the drop-in renders it above the amount.
