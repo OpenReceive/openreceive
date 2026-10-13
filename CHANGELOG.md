@@ -1,68 +1,7 @@
 # Changelog
 
-## Unreleased
+## 0.4.25 - 2026-10-13
 
-- Added (docs): Supabase is a Tested platform, and the Supabase guide says
-  what is tested and what is not. Coding agents following the Express
-  directions added checkout to an Express shop whose data is in a real
-  Supabase project, reached through Supavisor's transaction pooler with
-  Supabase's certificate: 3 of 3 runs passed on 0.4.24. Each created
-  OpenReceive's tables, closed them to Supabase's Data API, issued a real
-  invoice, refused a stranger and marked a paid order paid.
-  /platforms/supabase is published. The agent trials gain
-  `--platform supabase`, which runs on a real project named in the repo-root
-  .env, empties its public schema before each run, keeps the database
-  password out of reports and fails a run that shows it to the agent.
-- Added (docs): a guide for mobile apps (/guides/mobile-apps). The app opens a
-  checkout page on its own server in a browser tab, through a one-time link
-  the server turns into a cookie for that order, and asks its server whether
-  the order is paid; the wallet code never ships in the app. A table says what
-  the App Store and Google Play allow by kind of purchase, and where digital
-  goods may link out to the web (US, EU, Japan, Brazil) and at what
-  commission, from the stores' own pages as of October 2026. It has snippets
-  for Expo, Flutter, Swift and Kotlin. The Node, Fastify, Next.js, FastAPI,
-  Django, Rails, PHP and Laravel directions link it.
-- Added (docs): Flask is a directions target. /guides/quickstart-flask
-  replaces the Flask recipe (/guides/flask-recipe redirects to it), and
-  /agent-directions/flask.md hands it to a coding agent, with Flask on
-  openreceive.org/integrations. Flask still has no adapter package: the app
-  copies one file from the quickstart, `openreceive_flask.py`, a Blueprint
-  over the engine. The quickstart keeps Flask-WTF's CSRF protection on the
-  payment routes (the checkout sends `X-CSRFToken`), serves the checkout's
-  script and stylesheet from the installed `openreceive` package, and names
-  the object `openreceive doctor --app app:openreceive` reads.
-  examples/flask-starter is the quickstart as a one-product shop, and the
-  agent trials gain a Flask 3.1 shop (`npm run trial -- --platform flask`).
-  The trials' live buyer now sends Flask-WTF's `csrf_token` form field.
-- Added (docs): a NestJS quickstart (/guides/quickstart-nestjs), agent
-  directions for NestJS, and an /integrations/nestjs page. A Nest app mounts
-  `@openreceive/express` with `app.use()` in `main.ts`, with
-  `app.useBodyParser("json")` right before it: Nest adds its own JSON parser
-  only when the app starts listening, after anything `main.ts` mounts, so
-  without that line every checkout request failed with a 500. Nest's guards do
-  not run for middleware, so `authorize` makes the guard's check itself. The
-  hooks reach the app's services and its TypeORM `DataSource` through
-  `app.get()`.
-- Added (examples): examples/nestjs-starter, a one-product NestJS 12 shop on
-  Postgres with TypeORM migrations, sessions and Handlebars views, built on
-  the published packages. Checked in Docker against a test wallet: an order
-  gets a Lightning invoice, another browser is refused, and a paid invoice
-  marks the order paid.
-- Tests (trials): a NestJS 12 trial shop (`npm run trial -- --platform nestjs`):
-  TypeORM on Postgres, express-session sessions and server-rendered views.
-- Added (React): `<Checkout fetch>`, the fetch every checkout request goes
-  through: prepare and create, the status poll, and the swap quote, start,
-  status and refund calls, in create and snapshot mode alike. An app whose
-  sign-in is a bearer token kept in the browser (plain supabase-js keeps it in
-  localStorage) passes a fetch that adds the `Authorization` header, and its
-  `authorize` sees the same user on every call. The old prop, `createFetch`,
-  covered only prepare and create, so the poll and the swap calls went out
-  with cookies alone and such an app's `authorize` refused them. `createFetch`
-  still works, now covers every request too, and is deprecated.
-  `useCheckout` and `CheckoutProvider` take the same `fetch` for the poll and
-  the refund calls. The Supabase guide shows the token route. The custom
-  element and the Vue, Svelte and Angular wrappers keep using the page's own
-  fetch.
 - Fixed (all engines): the reconcile gate's interval now also runs from the
   end of the last pass, not only from its claim. A pass slower than the
   interval used to leave the gate open when it ended, so every request in a
@@ -84,9 +23,67 @@
   WordPress plugin its transients. Measured on the trial wallet's public
   relay with the engine rebuilt per request, a reload went from five scans
   (14 s) to one (2 s).
-- Tests (trials): the live check makes four `payments/check` calls in a row
-  and fails when more than one of them ran a wallet scan
-  (`live_one_scan_back_to_back`). The evidence lists each call's time.
+- Added (React): `<Checkout fetch>`, the fetch every checkout request goes
+  through: prepare and create, the status poll, and the swap quote, start,
+  status and refund calls, in create and snapshot mode alike. An app whose
+  sign-in is a bearer token kept in the browser (plain supabase-js keeps it in
+  localStorage) passes a fetch that adds the `Authorization` header, and its
+  `authorize` sees the same user on every call. The old prop, `createFetch`,
+  covered only prepare and create, so the poll and the swap calls went out
+  with cookies alone and such an app's `authorize` refused them. `createFetch`
+  still works, now covers every request too, and is deprecated.
+  `useCheckout` and `CheckoutProvider` take the same `fetch` for the poll and
+  the refund calls. The Supabase guide shows the token route. The custom
+  element and the Vue, Svelte and Angular wrappers keep using the page's own
+  fetch.
+- Added (docs): Flask is a directions target. /guides/quickstart-flask
+  replaces the Flask recipe (/guides/flask-recipe redirects to it), and
+  /agent-directions/flask.md hands it to a coding agent, with Flask on
+  openreceive.org/integrations. Flask still has no adapter package: the app
+  copies one file from the quickstart, `openreceive_flask.py`, a Blueprint
+  over the engine. The quickstart keeps Flask-WTF's CSRF protection on the
+  payment routes (the checkout sends `X-CSRFToken`), serves the checkout's
+  script and stylesheet from the installed `openreceive` package, and names
+  the object `openreceive doctor --app app:openreceive` reads.
+  examples/flask-starter is the quickstart as a one-product shop, and the
+  agent trials gain a Flask 3.1 shop (`npm run trial -- --platform flask`).
+  The trials' live buyer now sends Flask-WTF's `csrf_token` form field.
+  Three agent trials in a row passed on these directions, two with Codex and
+  one with Cursor, so /integrations/flask shows Tested.
+- Added (docs): a NestJS quickstart (/guides/quickstart-nestjs), agent
+  directions for NestJS, and an /integrations/nestjs page. A Nest app mounts
+  `@openreceive/express` with `app.use()` in `main.ts`, with
+  `app.useBodyParser("json")` right before it: Nest adds its own JSON parser
+  only when the app starts listening, after anything `main.ts` mounts, so
+  without that line every checkout request failed with a 500. Nest's guards do
+  not run for middleware, so `authorize` makes the guard's check itself. The
+  hooks reach the app's services and its TypeORM `DataSource` through
+  `app.get()`.
+- Added (examples): examples/nestjs-starter, a one-product NestJS 12 shop on
+  Postgres with TypeORM migrations, sessions and Handlebars views, built on
+  the published packages. Checked in Docker against a test wallet: an order
+  gets a Lightning invoice, another browser is refused, and a paid invoice
+  marks the order paid.
+- Added (docs): a guide for mobile apps (/guides/mobile-apps). The app opens a
+  checkout page on its own server in a browser tab, through a one-time link
+  the server turns into a cookie for that order, and asks its server whether
+  the order is paid; the wallet code never ships in the app. A table says what
+  the App Store and Google Play allow by kind of purchase, and where digital
+  goods may link out to the web (US, EU, Japan, Brazil) and at what
+  commission, from the stores' own pages as of October 2026. It has snippets
+  for Expo, Flutter, Swift and Kotlin. The Node, Fastify, Next.js, FastAPI,
+  Django, Rails, PHP and Laravel directions link it.
+- Added (docs): Supabase is a Tested platform, and the Supabase guide says
+  what is tested and what is not. Coding agents following the Express
+  directions added checkout to an Express shop whose data is in a real
+  Supabase project, reached through Supavisor's transaction pooler with
+  Supabase's certificate: 3 of 3 runs passed on 0.4.24. Each created
+  OpenReceive's tables, closed them to Supabase's Data API, issued a real
+  invoice, refused a stranger and marked a paid order paid.
+  /platforms/supabase is published. The agent trials gain
+  `--platform supabase`, which runs on a real project named in the repo-root
+  .env, empties its public schema before each run, keeps the database
+  password out of reports and fails a run that shows it to the agent.
 - Changed (docs): the Lovable guide says what is tested and what is not. The
   route runs in CI as a Cloudflare Worker against Supabase's database and
   PostgREST 14, the storage has run against a real Supabase project, and
@@ -94,13 +91,6 @@
   setup. Lovable's own agent, Lovable Cloud and its migration approval are
   not tested, and the guide asks for an issue when Lovable does something it
   does not describe. Step 1 links Lovable's Secrets docs.
-- Security updates in the lockfiles: rbsecp256k1 6.0.2, which allows
-  rubyzip 3.7.0 (the root and Rails demo bundles), and puma 8.0.2 in the Rails
-  trial shop, whose Gemfile now asks for `puma >= 5.0` as `rails new` writes
-  it. rbsecp256k1 6.0.2 builds libsecp256k1 v0.8.0 from bitcoin-core's release
-  archive, checked against a pinned SHA-256. The Rails demo's bundler-audit
-  ignore for the rubyzip advisory is gone. Apps on `openreceive-rails` take the
-  same fix with `bundle update rbsecp256k1`; the gems already allow it.
 - Fixed (examples): the Next.js and Express starters' order pages say "Paid,
   thank you." as soon as the checkout shows the payment received. The status
   line came from the server render alone, so it said "Awaiting payment" under
@@ -111,6 +101,20 @@
   too, which said "Could not start checkout." because `amountFor` has no
   price for a paid order. A payment made on the page keeps its checkout and
   receipt.
+- Security updates in the lockfiles: rbsecp256k1 6.0.2, which allows
+  rubyzip 3.7.0 (the root and Rails demo bundles), and puma 8.0.2 in the Rails
+  trial shop, whose Gemfile now asks for `puma >= 5.0` as `rails new` writes
+  it. rbsecp256k1 6.0.2 builds libsecp256k1 v0.8.0 from bitcoin-core's release
+  archive, checked against a pinned SHA-256. The Rails demo's bundler-audit
+  ignore for the rubyzip advisory is gone. Apps on `openreceive-rails` take the
+  same fix with `bundle update rbsecp256k1`; the gems already allow it.
+- Tests (trials): a NestJS 12 trial shop (`npm run trial -- --platform nestjs`):
+  TypeORM on Postgres, express-session sessions and server-rendered views.
+  Three agent trials in a row passed on the NestJS directions, so
+  /integrations/nestjs shows Tested.
+- Tests (trials): the live check makes four `payments/check` calls in a row
+  and fails when more than one of them ran a wallet scan
+  (`live_one_scan_back_to_back`). The evidence lists each call's time.
 
 ## 0.4.24 - 2026-10-12
 

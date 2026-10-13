@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.25 - 2026-10-13
+
+Release with the complete 0.4.25 package family. The reconcile gate's
+interval now also runs from the end of the last pass, not only from its
+claim, as in every other engine. A pass slower than the interval used to
+leave the gate open when it ended, so each request in a checkout's burst of
+status checks ran a wallet scan of its own. The gate row stores
+`finished_at`; older engines sharing the table ignore it. The bundled agent
+skill adds directions for Flask and NestJS, and every server stack's
+directions link the new guide for mobile apps.
+
 ## 0.4.24 - 2026-10-12
 
 Release with the complete 0.4.24 package family. The gem's registry page

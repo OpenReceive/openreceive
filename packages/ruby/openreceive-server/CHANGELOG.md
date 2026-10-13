@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.25 - 2026-10-13
+
+Release with the complete 0.4.25 package family. The bundled agent skill
+adds directions for Flask and NestJS, and every server stack's directions
+link the new guide for mobile apps. No runtime changes from 0.4.24.
+
 ## 0.4.24 - 2026-10-12
 
 Release with the complete 0.4.24 package family. The gem's registry page
