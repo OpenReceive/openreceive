@@ -36,6 +36,9 @@ export const SITE_REDIRECTS = [
   // The Vercel and v0 guide was published at /guides/v0 in 0.4.19.
   { from: "/guides/v0", to: "/guides/vercel", status: 301 },
   { from: "/guides/v0.md", to: "/guides/vercel.md", status: 301 },
+  // The Flask recipe became the Flask quickstart, with agent directions, on 2026-10-13.
+  { from: "/guides/flask-recipe", to: "/guides/quickstart-flask", status: 301 },
+  { from: "/guides/flask-recipe.md", to: "/guides/quickstart-flask.md", status: 301 },
 ];
 
 // The platform pages (contract v8): the /platforms index, and /platforms/<id>
@@ -85,6 +88,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/next.md",
   "/agent-directions/fastapi.md",
   "/agent-directions/django.md",
+  "/agent-directions/flask.md",
   "/agent-directions/rails.md",
   "/agent-directions/php.md",
   "/agent-directions/laravel.md",

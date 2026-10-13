@@ -249,6 +249,22 @@ app.include_router(router, prefix="/openreceive")
 
 def factory():
     return router.openreceive.app
+
+
+class FlaskStyle:
+    # The Flask quickstart's OpenReceiveFlask as the CLI sees it: host and
+    # repository read without the wallet, start() and app build the stack.
+    def __init__(self):
+        self.host = host
+        self.repository = SqlPaymentRepository(engine)
+
+    def start(self):
+        return router.openreceive.app
+
+    app = property(start)
+
+
+flask_style = FlaskStyle()
 """
 
 
@@ -270,7 +286,7 @@ def host_module(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_doctor_with_app_checks_tables_and_host(host_module: Path) -> None:
     env = {"NWC_URI": NWC_URI}
-    for target in ("shopmod:app", "shopmod:router", "shopmod:factory"):
+    for target in ("shopmod:app", "shopmod:router", "shopmod:factory", "shopmod:flask_style"):
         code, out, err = cli(["doctor", "--offline", "--app", target], env=env)
         assert code == 0, target + out + err
         assert "database: openreceive_payments and openreceive_meta present" in out

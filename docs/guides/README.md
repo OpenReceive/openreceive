@@ -18,6 +18,7 @@ optional. The provider decides which assets and networks are available.
 4. [Node ORM recipes](node-orms.md)
 5. [Rails quickstart](quickstart-rails.md)
 6. [FastAPI quickstart](quickstart-fastapi.md)
+   - [Flask quickstart](quickstart-flask.md): the same Python engine, as a Flask Blueprint
 7. [Django quickstart](quickstart-django.md)
 8. [PHP quickstart (plain PHP)](quickstart-php.md)
 9. [Laravel quickstart](quickstart-laravel.md)
@@ -48,7 +49,6 @@ optional. The provider decides which assets and networks are available.
 31. [How we test platforms](how-we-test-platforms.md): what a Tested badge on openreceive.org means
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
-[Flask](../recipes/flask.md) (the Python engine as a Blueprint),
 [TanStack Start](../recipes/tanstack-start.md) (a server route, on Node or Cloudflare Workers)
 
 Building this with a coding agent? Give it one of the agent-directions
@@ -58,6 +58,7 @@ payloads instead of a reading list:
 [Next.js](https://openreceive.org/agent-directions/next/full.md),
 [FastAPI](https://openreceive.org/agent-directions/fastapi/full.md),
 [Django](https://openreceive.org/agent-directions/django/full.md),
+[Flask](https://openreceive.org/agent-directions/flask/full.md),
 [Rails](https://openreceive.org/agent-directions/rails/full.md),
 [PHP](https://openreceive.org/agent-directions/php/full.md),
 [Laravel](https://openreceive.org/agent-directions/laravel/full.md),

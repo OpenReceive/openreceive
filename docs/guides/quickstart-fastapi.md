@@ -20,7 +20,7 @@ with the Django quickstart. A page without a bundler uses
 
 |          | Packages                                                                                                                      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Server   | `openreceive[fastapi]`, `openreceive[django]`, `openreceive[sqlalchemy]` (Flask and plain WSGI/ASGI: [the Flask recipe](../recipes/flask.md)) |
+| Server   | `openreceive[fastapi]`, `openreceive[django]`, `openreceive[sqlalchemy]` (Flask and plain WSGI/ASGI: [the Flask quickstart](quickstart-flask.md)) |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
 Use `uv` or a virtualenv on Python 3.10 or newer. A system Python 3.9 cannot

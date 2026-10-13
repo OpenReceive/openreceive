@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ order.product_name }}{% endblock %}
+{% block content %}
+<h1>{{ order.product_name }}</h1>
+{% if order.status == "paid" %}
+{# Nothing is left to pay, and the checkout would only fail to start. #}
+<p>${{ order.amount }} {{ order.currency }} · Paid, thank you.</p>
+{% else %}
+<p>${{ order.amount }} {{ order.currency }} · <span id="order-status">Awaiting payment</span></p>
+<openreceive-checkout reference="{{ order.id }}" prefix="/openreceive" csrf-header="X-CSRFToken"></openreceive-checkout>
+<script type="module">
+  // on_paid has marked the order paid by the time the checkout shows settlement.
+  document.querySelector("openreceive-checkout").addEventListener("openreceive-settled", () => {
+    document.getElementById("order-status").textContent = "Paid, thank you.";
+  });
+</script>
+{% endif %}
+{% endblock %}

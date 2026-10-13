@@ -1,0 +1,5 @@
+openreceive[sqlalchemy]>=0.4.24
+flask>=3.1,<4
+flask-sqlalchemy>=3.1,<4
+flask-wtf>=1.2,<2
+gunicorn>=23,<24

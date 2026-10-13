@@ -36,6 +36,8 @@ connected wallet; asset and network availability depends on the provider.
    - Python, FastAPI: [references/fastapi.md](references/fastapi.md)
    - Plain PHP: [references/php.md](references/php.md)
    - Django: [references/django.md](references/django.md)
+   - Flask: [references/flask.md](references/flask.md) — a one-file Blueprint
+     copied from the quickstart; there is no `openreceive.flask` package.
    - Laravel: [references/laravel.md](references/laravel.md)
    - WordPress + WooCommerce: [references/woocommerce.md](references/woocommerce.md) — the packaged gateway and merchant settings.
    - Lovable (TanStack Start on Cloudflare Workers, with Supabase):
@@ -55,7 +57,7 @@ Fastify: `npm install @openreceive/fastify @openreceive/react`; Next.js:
 `svelte`, `angular`, `elements`) for the frontend the app already has. Install
 (Rails): `bundle add openreceive-rails`.
 Django: `pip install "openreceive[django]"`; FastAPI:
-`pip install "openreceive[fastapi]"`; Laravel: `composer require openreceive/laravel`;
+`pip install "openreceive[fastapi]"`; Flask: `pip install "openreceive[sqlalchemy]"`; Laravel: `composer require openreceive/laravel`;
 plain PHP: `composer require openreceive/openreceive nyholm/psr7 nyholm/psr7-server`.
 
 ## The three server objects

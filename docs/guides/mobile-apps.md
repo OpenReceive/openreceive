@@ -90,7 +90,7 @@ The checkout page and the payment routes run on your server, from any
 OpenReceive quickstart: [Express](quickstart-node.md),
 [Fastify](quickstart-fastify.md), [Next.js](quickstart-next.md),
 [Rails](quickstart-rails.md), [FastAPI](quickstart-fastapi.md),
-[Django](quickstart-django.md), [Flask](../recipes/flask.md),
+[Django](quickstart-django.md), [Flask](quickstart-flask.md),
 [PHP](quickstart-php.md) or [Laravel](quickstart-laravel.md).
 
 An app built on a backend-as-a-service has functions instead of a server.

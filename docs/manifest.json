@@ -42,6 +42,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-flask",
+      "title": "Flask Quickstart",
+      "source_path": "docs/guides/quickstart-flask.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "source_path": "docs/guides/quickstart-next.md",
@@ -306,14 +314,6 @@
       "public": true
     },
     {
-      "slug": "flask-recipe",
-      "title": "Flask Recipe",
-      "source_path": "docs/recipes/flask.md",
-      "category": "recipe",
-      "audience": "developer",
-      "public": true
-    },
-    {
       "slug": "tanstack-start-recipe",
       "title": "TanStack Start Recipe",
       "source_path": "docs/recipes/tanstack-start.md",
@@ -517,6 +517,14 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "source_path": "docs/agents/django.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-flask",
+      "title": "Agent Directions: Flask",
+      "source_path": "docs/agents/flask.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true

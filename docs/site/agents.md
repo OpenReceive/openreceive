@@ -26,6 +26,7 @@ the full quickstart), or paste the one-prompt agent directions:
   [Laravel](https://openreceive.org/agent-directions/laravel/full.md) ·
   [Django](https://openreceive.org/agent-directions/django/full.md) ·
   [FastAPI](https://openreceive.org/agent-directions/fastapi/full.md) ·
+  [Flask](https://openreceive.org/agent-directions/flask/full.md) ·
   [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) ·
   [Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
   [BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md). Each

@@ -39,6 +39,8 @@ export const QUICKSTARTS = [
   "docs/guides/quickstart-laravel.md",
   // Plain PHP carries the credentials block and the reading list.
   "docs/guides/quickstart-php.md",
+  // Flask carries the credentials block and the reading list.
+  "docs/guides/quickstart-flask.md",
 ];
 
 const FENCE = /^<!-- shared:(begin|end) ([a-z0-9-]+) -->$/;

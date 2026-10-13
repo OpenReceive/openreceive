@@ -231,7 +231,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
   const libraries = payloads.filter(
     ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
   );
-  assert.equal(libraries.length, 8);
+  assert.equal(libraries.length, 9);
   for (const { stack, text } of libraries) {
     const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
     assert.match(ending, /The browser check in the quickstart's\s[\s\S]*?is theirs/, stack);

@@ -150,6 +150,12 @@ const STACKS = [
     brief: libraryBrief(".env"),
   },
   {
+    stack: "flask",
+    source: "docs/agents/src/flask.md",
+    quickstart: "docs/guides/quickstart-flask.md",
+    brief: libraryBrief(".env"),
+  },
+  {
     stack: "rails",
     source: "docs/agents/src/rails.md",
     quickstart: "docs/guides/quickstart-rails.md",
@@ -216,6 +222,7 @@ const UNLISTED_GUIDES = {
   "agent-directions-next": "this payload's own page",
   "agent-directions-fastapi": "this payload's own page",
   "agent-directions-django": "this payload's own page",
+  "agent-directions-flask": "this payload's own page",
   "agent-directions-rails": "this payload's own page",
   "agent-directions-php": "this payload's own page",
   "agent-directions-laravel": "this payload's own page",
@@ -226,6 +233,7 @@ const UNLISTED_GUIDES = {
   "quickstart-next": "inlined in full below, or another stack's",
   "quickstart-fastapi": "inlined in full below, or another stack's",
   "quickstart-django": "inlined in full below, or another stack's",
+  "quickstart-flask": "inlined in full below, or another stack's",
   "quickstart-rails": "inlined in full below, or another stack's",
   "quickstart-php": "inlined in full below, or another stack's",
   "quickstart-laravel": "inlined in full below, or another stack's",
@@ -233,8 +241,6 @@ const UNLISTED_GUIDES = {
   "btcpay-reference":
     "the BTCPay plugin's reference; linked from the BTCPay payload, another stack's otherwise",
   "node-orms": "Node only; the Rails engine owns its tables",
-  "flask-recipe":
-    "Flask only; the FastAPI payload links it as the Python sibling, the other stacks have no use for it",
   "tanstack-start-recipe":
     "TanStack Start only; the Next.js payload links it as the web-standard sibling, the other stacks have no use for it",
 };

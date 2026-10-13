@@ -73,9 +73,9 @@ pip install "openreceive[fastapi]"
 pip install "openreceive[sqlalchemy]"
 ```
 
-Start with the [Django quickstart](https://openreceive.org/guides/quickstart-django)
-or [FastAPI quickstart](https://openreceive.org/guides/quickstart-fastapi).
-There is also a [Flask recipe](https://openreceive.org/guides/flask-recipe).
+Start with the [Django quickstart](https://openreceive.org/guides/quickstart-django),
+the [FastAPI quickstart](https://openreceive.org/guides/quickstart-fastapi) or
+the [Flask quickstart](https://openreceive.org/guides/quickstart-flask).
 Django includes the checkout's browser assets; FastAPI and other hosts can use
 OpenReceive's [frontend components](https://openreceive.org/guides/frontend-checkout).
 The SQLAlchemy integration uses a synchronous engine for the payment tables.

@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 4460
+      "bytes": 4551
     },
     {
       "path": "/guides/quickstart-node",
@@ -43,7 +43,7 @@
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "category": "quickstart",
-      "bytes": 15401
+      "bytes": 15405
     },
     {
       "path": "/guides/quickstart-django",
@@ -54,6 +54,16 @@
       "title": "Django Quickstart",
       "category": "quickstart",
       "bytes": 20286
+    },
+    {
+      "path": "/guides/quickstart-flask",
+      "markdown_path": "/guides/quickstart-flask.md",
+      "source": "docs/guides/quickstart-flask.md",
+      "kind": "guide",
+      "slug": "quickstart-flask",
+      "title": "Flask Quickstart",
+      "category": "quickstart",
+      "bytes": 17701
     },
     {
       "path": "/guides/quickstart-next",
@@ -105,7 +115,7 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 12781
+      "bytes": 13728
     },
     {
       "path": "/guides/supabase-migration",
@@ -346,7 +356,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 130307
+      "bytes": 130398
     },
     {
       "path": "/guides/security",
@@ -387,16 +397,6 @@
       "title": "React Material UI Recipe",
       "category": "recipe",
       "bytes": 4143
-    },
-    {
-      "path": "/guides/flask-recipe",
-      "markdown_path": "/guides/flask-recipe.md",
-      "source": "docs/recipes/flask.md",
-      "kind": "guide",
-      "slug": "flask-recipe",
-      "title": "Flask Recipe",
-      "category": "recipe",
-      "bytes": 6527
     },
     {
       "path": "/guides/tanstack-start-recipe",
@@ -446,7 +446,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 40507
+      "bytes": 40600
     },
     {
       "path": "/guides/agent-directions-django",
@@ -456,7 +456,17 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 45868
+      "bytes": 45903
+    },
+    {
+      "path": "/guides/agent-directions-flask",
+      "markdown_path": "/guides/agent-directions-flask.md",
+      "source": "docs/agents/flask.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-flask",
+      "title": "Agent Directions: Flask",
+      "category": "quickstart",
+      "bytes": 43106
     },
     {
       "path": "/guides/agent-directions-next",
@@ -556,7 +566,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 130307,
+      "bytes": 130398,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -567,7 +577,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 3919
+      "bytes": 3988
     },
     {
       "path": "/wordpress",
@@ -696,7 +706,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40507,
+      "bytes": 40600,
       "copy_button": true,
       "self_contained": true
     },
@@ -717,7 +727,28 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45868,
+      "bytes": 45903,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/flask.md",
+      "source": "docs/agents/cover/flask.md",
+      "kind": "agent-directions-cover",
+      "stack": "flask",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 287,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/flask/full.md"
+    },
+    {
+      "path": "/agent-directions/flask/full.md",
+      "source": "docs/agents/flask.md",
+      "kind": "agent-directions-payload",
+      "stack": "flask",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 43106,
       "copy_button": true,
       "self_contained": true
     },
@@ -1050,6 +1081,27 @@
           "cursor/grok-4.7-medium-fast"
         ]
       }
+    },
+    {
+      "id": "flask",
+      "label": "Flask",
+      "family": "python",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Flask",
+      "quickstart_slug": "quickstart-flask",
+      "quickstart_path": "/guides/quickstart-flask",
+      "quickstart_title": "Flask Quickstart",
+      "agent_stack": "flask",
+      "agent_payload_path": "/agent-directions/flask.md",
+      "agent_full_path": "/agent-directions/flask/full.md",
+      "adapter_package": "openreceive[sqlalchemy]",
+      "install": "pip install \"openreceive[sqlalchemy]\"",
+      "requires": "Python ≥ 3.10, Flask ≥ 3",
+      "example_path": "examples/flask-starter",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/flask-starter",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": true,
+      "tested": null
     },
     {
       "id": "laravel",
@@ -1626,6 +1678,18 @@
       "to": "/guides/vercel.md",
       "status": 301,
       "must_exist": true
+    },
+    {
+      "from": "/guides/flask-recipe",
+      "to": "/guides/quickstart-flask",
+      "status": 301,
+      "must_exist": true
+    },
+    {
+      "from": "/guides/flask-recipe.md",
+      "to": "/guides/quickstart-flask.md",
+      "status": 301,
+      "must_exist": true
     }
   ],
   "agent_discovery": {
@@ -1635,7 +1699,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 6211
+        "bytes": 6357
       },
       {
         "path": "/openapi.yaml",

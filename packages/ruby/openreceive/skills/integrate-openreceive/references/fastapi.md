@@ -408,7 +408,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/api-reference.md — every route, option and error code
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
-- https://openreceive.org/guides/flask-recipe.md — the same engine as a Flask Blueprint, if this app is Flask after all
+- https://openreceive.org/agent-directions/flask.md — the same engine as a Flask Blueprint: follow those directions instead if this app is Flask after all
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
@@ -445,7 +445,7 @@ with the Django quickstart. A page without a bundler uses
 
 |          | Packages                                                                                                                      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Server   | `openreceive[fastapi]`, `openreceive[django]`, `openreceive[sqlalchemy]` (Flask and plain WSGI/ASGI: the Flask recipe) |
+| Server   | `openreceive[fastapi]`, `openreceive[django]`, `openreceive[sqlalchemy]` (Flask and plain WSGI/ASGI: [the Flask quickstart](https://openreceive.org/guides/quickstart-flask.md)) |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
 Use `uv` or a virtualenv on Python 3.10 or newer. A system Python 3.9 cannot

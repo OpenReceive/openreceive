@@ -52,6 +52,7 @@ const AGENT_PAYLOADS = [
   { path: "/agent-directions/next.md", source: "docs/agents/next.md", stack: "next" },
   { path: "/agent-directions/fastapi.md", source: "docs/agents/fastapi.md", stack: "fastapi" },
   { path: "/agent-directions/django.md", source: "docs/agents/django.md", stack: "django" },
+  { path: "/agent-directions/flask.md", source: "docs/agents/flask.md", stack: "flask" },
   { path: "/agent-directions/rails.md", source: "docs/agents/rails.md", stack: "rails" },
   { path: "/agent-directions/php.md", source: "docs/agents/php.md", stack: "php" },
   { path: "/agent-directions/laravel.md", source: "docs/agents/laravel.md", stack: "laravel" },
@@ -300,6 +301,23 @@ const FRAMEWORKS = [
     install: 'pip install "openreceive[fastapi]"',
     requires: "Python ≥ 3.10, FastAPI ≥ 0.115",
     demo: "fastapi",
+    video: null,
+    shared_checkout_demo: true,
+  },
+  // Flask has no adapter package: the quickstart's one-file Blueprint over the
+  // engine is the integration until it meets the promotion rule, so the
+  // install line is the engine with its SQLAlchemy extra.
+  {
+    id: "flask",
+    label: "Flask",
+    family: "python",
+    quickstart_slug: "quickstart-flask",
+    agent_stack: "flask",
+    adapter_package: "openreceive[sqlalchemy]",
+    install: 'pip install "openreceive[sqlalchemy]"',
+    requires: "Python ≥ 3.10, Flask ≥ 3",
+    demo: null,
+    example_path: "examples/flask-starter",
     video: null,
     shared_checkout_demo: true,
   },

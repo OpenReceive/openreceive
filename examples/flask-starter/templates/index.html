@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block content %}
+<h1>{{ product.name }}</h1>
+<p>${{ product.price }} {{ product.currency }}, paid in bitcoin over Lightning, straight to the shop's wallet.</p>
+<form method="post" action="/orders">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit">Buy</button>
+</form>
+{% endblock %}

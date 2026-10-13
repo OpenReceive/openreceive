@@ -16,6 +16,7 @@ markdown.
 - [Fastify Quickstart](https://openreceive.org/guides/quickstart-fastify.md)
 - [FastAPI Quickstart](https://openreceive.org/guides/quickstart-fastapi.md)
 - [Django Quickstart](https://openreceive.org/guides/quickstart-django.md)
+- [Flask Quickstart](https://openreceive.org/guides/quickstart-flask.md)
 - [Next.js Quickstart](https://openreceive.org/guides/quickstart-next.md)
 - [Rails Quickstart](https://openreceive.org/guides/quickstart-rails.md)
 - [PHP Quickstart (plain PHP)](https://openreceive.org/guides/quickstart-php.md)
@@ -27,6 +28,7 @@ markdown.
 - [Agent Directions: Next.js](https://openreceive.org/agent-directions/next/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: FastAPI](https://openreceive.org/agent-directions/fastapi/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Django](https://openreceive.org/agent-directions/django/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Flask](https://openreceive.org/agent-directions/flask/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Rails](https://openreceive.org/agent-directions/rails/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: PHP](https://openreceive.org/agent-directions/php/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Laravel](https://openreceive.org/agent-directions/laravel/full.md): self-contained agent directions, quickstart included
@@ -66,7 +68,6 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Provider Registry](https://openreceive.org/guides/provider-registry.md)
 - [Price Feeds](https://openreceive.org/guides/price-feeds.md)
 - [React Material UI Recipe](https://openreceive.org/guides/react-material-ui-recipe.md)
-- [Flask Recipe](https://openreceive.org/guides/flask-recipe.md)
 - [TanStack Start Recipe](https://openreceive.org/guides/tanstack-start-recipe.md)
 - [Writing Your Own Checkout Route](https://openreceive.org/guides/custom-checkout-route.md)
 - [WordPress Hosting Requirements](https://openreceive.org/guides/wordpress-hosting.md)

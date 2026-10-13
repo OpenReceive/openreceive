@@ -16,7 +16,7 @@ import {
   scopeViolation,
   secretMaterial,
 } from "../trials/harness/checks.ts";
-import { liveShopChecks, Visitor } from "../trials/harness/live.ts";
+import { formToken, liveShopChecks, Visitor } from "../trials/harness/live.ts";
 import { loadMerchantCodes } from "../trials/harness/codes.ts";
 import { agentPool, pick } from "../trials/harness/agents.ts";
 import { asksPluginInstall } from "../trials/harness/btcpay.ts";
@@ -1074,6 +1074,21 @@ test("the live check orders and pays through a CSRF-protected shop, as a browser
   } finally {
     shop.close();
   }
+});
+
+// Flask-WTF names its form field csrf_token; without it the live buyer posted
+// the Flask shop's order form with no token and got a 400.
+test("the live buyer reads Flask-WTF's csrf_token field beside Django's, Laravel's and Rails's", () => {
+  for (const name of ["csrfmiddlewaretoken", "_token", "authenticity_token", "csrf_token"]) {
+    assert.deepEqual(
+      formToken(`<form><input type="hidden" name="${name}" value="t-${name}"></form>`),
+      {
+        name,
+        value: `t-${name}`,
+      },
+    );
+  }
+  assert.equal(formToken('<input type="hidden" name="product_id" value="1">'), undefined);
 });
 
 test("a 503 the API marks retryable is tried again, as the browser checkout would", async () => {

@@ -6,7 +6,7 @@
 // open SKILL.md format). Three things are generated from it rather than
 // maintained by hand:
 //
-//   1. skills/integrate-openreceive/references/{node,fastify,next,fastapi,django,rails,btcpay}.md are byte copies
+//   1. skills/integrate-openreceive/references/{node,fastify,next,fastapi,django,flask,rails,btcpay}.md are byte copies
 //      of the agent-directions payloads (docs/agents/*.md) — already
 //      version-stamped, size-budgeted, and link-checked by
 //      generate-agent-directions.mjs, so the skill's per-stack detail cannot
@@ -48,6 +48,7 @@ const GENERATED_REFERENCES = [
     source: "docs/agents/django.md",
     target: "skills/integrate-openreceive/references/django.md",
   },
+  { source: "docs/agents/flask.md", target: "skills/integrate-openreceive/references/flask.md" },
   { source: "docs/agents/rails.md", target: "skills/integrate-openreceive/references/rails.md" },
   { source: "docs/agents/php.md", target: "skills/integrate-openreceive/references/php.md" },
   {

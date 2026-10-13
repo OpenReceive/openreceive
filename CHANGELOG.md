@@ -11,6 +11,18 @@
   commission, from the stores' own pages as of October 2026. It has snippets
   for Expo, Flutter, Swift and Kotlin. The Node, Fastify, Next.js, FastAPI,
   Django, Rails, PHP and Laravel directions link it.
+- Added (docs): Flask is a directions target. /guides/quickstart-flask
+  replaces the Flask recipe (/guides/flask-recipe redirects to it), and
+  /agent-directions/flask.md hands it to a coding agent, with Flask on
+  openreceive.org/integrations. Flask still has no adapter package: the app
+  copies one file from the quickstart, `openreceive_flask.py`, a Blueprint
+  over the engine. The quickstart keeps Flask-WTF's CSRF protection on the
+  payment routes (the checkout sends `X-CSRFToken`), serves the checkout's
+  script and stylesheet from the installed `openreceive` package, and names
+  the object `openreceive doctor --app app:openreceive` reads.
+  examples/flask-starter is the quickstart as a one-product shop, and the
+  agent trials gain a Flask 3.1 shop (`npm run trial -- --platform flask`).
+  The trials' live buyer now sends Flask-WTF's `csrf_token` form field.
 - Changed (docs): the Lovable guide says what is tested and what is not. The
   route runs in CI as a Cloudflare Worker against Supabase's database and
   PostgREST 14, the storage has run against a real Supabase project, and

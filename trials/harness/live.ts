@@ -31,8 +31,8 @@ export async function sourceTexts(directory: string): Promise<Map<string, string
 
 /**
  * One browser visitor: its own cookies, and the CSRF token a page hands it.
- * Django, Rails and Laravel shops refuse a POST without the token; the others
- * ignore it.
+ * Django, Rails, Laravel and Flask-WTF shops refuse a POST without the token;
+ * the others ignore it.
  */
 export class Visitor {
   private readonly cookies = new Map<string, string>();
@@ -132,8 +132,8 @@ export class Visitor {
       ...this.cookieHeader(),
       "content-type": "application/json",
     };
-    // Django reads X-CSRFToken, Rails and Laravel X-CSRF-Token; each accepts
-    // its page's token there. Django also accepts its cookie's value.
+    // Django and Flask-WTF read X-CSRFToken, Rails and Laravel X-CSRF-Token;
+    // each accepts its page's token there. Django also accepts its cookie's value.
     const token = this.token ?? this.cookies.get("csrftoken");
     if (token !== undefined) {
       headers["x-csrftoken"] = token;
@@ -150,7 +150,9 @@ export class Visitor {
   }
 }
 
-const FORM_TOKEN = /<input[^>]*name="(csrfmiddlewaretoken|_token|authenticity_token)"[^>]*>/i;
+// Django, Laravel, Rails, and Flask-WTF's field, in that order.
+const FORM_TOKEN =
+  /<input[^>]*name="(csrfmiddlewaretoken|_token|authenticity_token|csrf_token)"[^>]*>/i;
 
 export function formToken(html: string): { name: string; value: string } | undefined {
   const input = html.match(FORM_TOKEN);

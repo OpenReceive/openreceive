@@ -2057,7 +2057,7 @@ snake_case:
 - the FastAPI binding is two functions on top of it.
 
 Django apps use `openreceive.django`, which has its own quickstart. Flask apps
-use the [recipe](../recipes/flask.md). Python APIs and the wire use the same
+copy one file from the [Flask quickstart](quickstart-flask.md). Python APIs and the wire use the same
 spelling (`payment_hash`, `amount_msats`). Money is `int` msats or decimal
 strings.
 
@@ -2137,7 +2137,7 @@ app.maybe_reconcile()                           # the gated request-path pass: {
 ```
 
 The framework-free engine, with storage, that the FastAPI router, the Django
-views and the Flask recipe mount.
+views and the Flask quickstart's Blueprint mount.
 
 - `Service(nwc_client, price_provider=…, swap_providers=…, price_currencies=…, env=…)`
   is the wallet, rates and swaps half. Its constructor IS the preflight, and it
@@ -2201,8 +2201,8 @@ It checks:
   still placeholders.
 
 For the last check it needs your app. Pass `--app` with the FastAPI app, the
-router from `openreceive_router`, an `OpenReceiveApp`, or a zero-argument
-callable that returns one. Without `--app`, `DJANGO_SETTINGS_MODULE` selects the
+router from `openreceive_router`, the Flask quickstart's `OpenReceiveFlask`
+object, an `OpenReceiveApp`, or a zero-argument callable that returns one. Without `--app`, `DJANGO_SETTINGS_MODULE` selects the
 Django app.
 
 `--db` checks the tables at any SQLAlchemy URL instead. `--url` proves the
