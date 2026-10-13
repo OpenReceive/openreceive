@@ -124,6 +124,24 @@
       "agents": ["cursor/grok-4.7-medium-fast"],
       "mode": "released",
       "directions": "8d9eac9d2fd5"
+    },
+    {
+      "trial": "flask",
+      "date": "2026-10-13",
+      "release": "0.4.24",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "0f04d919ac28"
+    },
+    {
+      "trial": "nestjs",
+      "date": "2026-10-13",
+      "release": "0.4.24",
+      "runs": 3,
+      "agents": ["codex/default"],
+      "mode": "candidate",
+      "directions": "5ea3b3923831"
     }
   ]
 }

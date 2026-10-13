@@ -1031,7 +1031,13 @@
       "demo_port": null,
       "video": null,
       "shared_checkout_demo": true,
-      "tested": null
+      "tested": {
+        "date": "2026-10-13",
+        "release": "0.4.24",
+        "agents": [
+          "codex/default"
+        ]
+      }
     },
     {
       "id": "rails",
@@ -1163,7 +1169,14 @@
       "demo_port": null,
       "video": null,
       "shared_checkout_demo": true,
-      "tested": null
+      "tested": {
+        "date": "2026-10-13",
+        "release": "0.4.24",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "laravel",
