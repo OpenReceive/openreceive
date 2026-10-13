@@ -202,6 +202,35 @@ from `@supabase/ssr`. In Python, read the session from your framework's own
 request. More on what `authorize` sees:
 [Authorization and the host](authorization.md).
 
+If your app signs users in with plain `@supabase/supabase-js`, the session
+lives in the browser's localStorage, and the page's cookies carry no user.
+From 0.4.25, give `<Checkout>` a `fetch` that sends the access token on every
+checkout request, polling and swaps included:
+
+```tsx
+const withSupabaseToken: typeof fetch = async (input, init) => {
+  const { data } = await supabase.auth.getSession();
+  const headers = new Headers(init?.headers);
+  if (data.session) headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  return fetch(input, { ...init, headers });
+};
+
+<Checkout reference={order.id} fetch={withSupabaseToken} />;
+```
+
+Then check the token in `authorize`. `getUser(token)` asks Supabase Auth
+whether the token is valid:
+
+```ts
+authorize: async ({ request, resource }) => {
+  const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
+  if (!token) return false;
+  const { data } = await supabase.auth.getUser(token);
+  const order = resource.reference ? await findOrder(resource.reference) : null;
+  return Boolean(data.user && order && order.user_id === data.user.id);
+},
+```
+
 ## Supabase over HTTPS
 
 Use this when your server cannot open a Postgres connection to Supabase: on

@@ -67,6 +67,12 @@ export interface UseCheckoutOptions
   readonly prefix?: string;
   /** Header name the page's `<meta name="csrf-token">` is sent under; default `X-CSRF-Token`. */
   readonly csrfHeader?: string;
+  /**
+   * The fetch the status poll and the swap refund calls go through. Default
+   * `globalThis.fetch`. Pass one that adds an `Authorization` header when the
+   * app's session is a bearer token rather than a cookie.
+   */
+  readonly fetch?: typeof globalThis.fetch;
   readonly polling?: boolean;
   readonly pollIntervalMs?: number;
 }
@@ -184,10 +190,19 @@ export interface CheckoutProps
     // The DOM copy/error handlers are replaced by the OpenReceive ones above.
     Omit<React.HTMLAttributes<HTMLElement>, "children" | "prefix" | "onCopy" | "onError"> {
   /**
-   * Create mode (`reference`, no `checkout`): the component creates the checkout against
-   * `${prefix}/checkouts`, then polls `${prefix}/payments/check`. Later requests carry
-   * `reference` and the displayed `payment_hash`; the host remains responsible for
-   * authorization, order display, and routing. This fetch makes those create calls.
+   * The fetch every checkout request goes through, in both modes: prepare and
+   * create, the `${prefix}/payments/check` poll, and the swap quote, start,
+   * status and refund calls. Default `globalThis.fetch`, which sends the page's
+   * cookies. An app whose session is a bearer token (supabase-js keeps it in
+   * localStorage) passes a fetch that adds the `Authorization` header, so its
+   * `authorize` sees the same session on every call. The host remains
+   * responsible for authorization, order display, and routing.
+   */
+  readonly fetch?: typeof globalThis.fetch;
+  /**
+   * @deprecated The old name of `fetch`, from when it covered only the create
+   * calls. It now covers every request, as `fetch` does; `fetch` wins when both
+   * are set. It will be removed in a later release.
    */
   readonly createFetch?: typeof globalThis.fetch;
   /** `false` turns status polling off entirely. */

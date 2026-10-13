@@ -151,6 +151,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   const {
     onError,
     metadata,
+    fetch: fetchProp,
     createFetch,
     className,
     classNames,
@@ -184,8 +185,9 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   onErrorRef.current = onError;
   const metadataRef = React.useRef(metadata);
   metadataRef.current = metadata;
-  const createFetchRef = React.useRef(createFetch);
-  createFetchRef.current = createFetch;
+  // `createFetch` is the deprecated name of `fetch`; either one carries every request.
+  const fetchRef = React.useRef(fetchProp ?? createFetch);
+  fetchRef.current = fetchProp ?? createFetch;
   // Ref so the session always reads the latest checkout without being a dep.
   const createdCheckoutRef = React.useRef(created.checkout);
   createdCheckoutRef.current = created.checkout;
@@ -205,7 +207,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         reference: id,
         ...(csrfHeader === undefined ? {} : { csrfHeader }),
         ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
-        ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
+        ...(fetchRef.current === undefined ? {} : { fetch: fetchRef.current }),
       }),
     // One stable CheckoutView across the mint: swapping the rendered shell
     // remounted PaymentWizard and wiped the payer's method selection.
@@ -224,7 +226,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   }, [syncUrl, reference, resumePathPrefix, routeReference]);
 
   // Prepare on mount (amount lock + methods). Lightning mints only when Bitcoin is selected.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; createFetch/onError are read from refs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; fetch/onError are read from refs.
   React.useEffect(() => {
     let cancelled = false;
     const action = session.capture();
@@ -234,7 +236,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       signal: action.signal,
       reference,
       ...(csrfHeader === undefined ? {} : { csrfHeader }),
-      ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
+      ...(fetchRef.current === undefined ? {} : { fetch: fetchRef.current }),
     })
       // A host that remembered this order's swap attempt gets it back on the
       // screen; prepare returns none, so without this a bookmarked refund opens
@@ -245,7 +247,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
           ? checkout
           : resumeCheckoutAttempt({
               signal: action.signal,
-              fetch: createFetchRef.current ?? globalThis.fetch,
+              fetch: fetchRef.current ?? globalThis.fetch,
               prefix: resolvedPrefix,
               ...(csrfHeader === undefined ? {} : { csrfHeader }),
               reference,
@@ -382,7 +384,9 @@ function CheckoutView(
     prefix = OPENRECEIVE_DEFAULT_PREFIX,
     csrfHeader,
     metadata: _metadata,
-    createFetch: _createFetch,
+    // Read by the view too: the poll and the swap calls go through it.
+    fetch: fetchProp,
+    createFetch,
     // Not `_`-prefixed like its neighbours: the view reads it, to infer
     // `resumable` for the refund screen. Still destructured out so it never
     // reaches the rendered <section>.
@@ -421,6 +425,10 @@ function CheckoutView(
     className,
     ...sectionProps
   } = props;
+  // One fetch for every request the view makes: the status poll and the swap
+  // refund (through the hook's controller) and the swap quote and start
+  // (through the wizard). A bearer-token app needs all of them authorized.
+  const hostFetch = fetchProp ?? createFetch;
   const checkoutModel = useCheckout({
     checkout,
     logger,
@@ -434,6 +442,7 @@ function CheckoutView(
     onSettled,
     polling,
     ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
+    ...(hostFetch === undefined ? {} : { fetch: hostFetch }),
   });
   const theme = useTheme({
     defaultTheme,
@@ -732,6 +741,7 @@ function CheckoutView(
               onSwapFocusChange: setSwapFocused,
               onLightningFocusChange: setLightningFocused,
               prefix,
+              ...(hostFetch === undefined ? {} : { fetch: hostFetch }),
               csrfHeader,
               qrEncoder,
               decodeLinkUrl,

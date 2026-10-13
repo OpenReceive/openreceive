@@ -35,7 +35,8 @@ export async function createLifecycleStack(options = {}) {
   });
   const handler = createHttpHandler({
     service,
-    authorize: () => true,
+    // Allow-all unless a test checks how the page authenticates.
+    authorize: options.authorize ?? (() => true),
     host,
   });
   const requests = [];

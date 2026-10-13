@@ -48,6 +48,11 @@ Full list: [API reference → Browser & React](api-reference.md#browser--react).
 
   The prop has the same name in all four wrappers. On the custom element it is
   `csrf-header`.
+- `fetch` (React, 0.4.25 or newer): the fetch every checkout request goes
+  through, polling and swaps included. The default sends the page's cookies.
+  If your sign-in is a bearer token kept in the browser, pass a fetch that
+  adds the `Authorization` header, so `authorize` sees the same user on every
+  call. The custom element always uses the page's own fetch.
 - `onSettled`, `onError`, `onState`: settlement, failures, and every attempt
   the checkout watches. If you want the payer to come back to a refund later,
   store the swap `payment_hash` from `onState`.

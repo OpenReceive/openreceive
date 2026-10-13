@@ -50,6 +50,19 @@
   marks the order paid.
 - Tests (trials): a NestJS 12 trial shop (`npm run trial -- --platform nestjs`):
   TypeORM on Postgres, express-session sessions and server-rendered views.
+- Added (React): `<Checkout fetch>`, the fetch every checkout request goes
+  through: prepare and create, the status poll, and the swap quote, start,
+  status and refund calls, in create and snapshot mode alike. An app whose
+  sign-in is a bearer token kept in the browser (plain supabase-js keeps it in
+  localStorage) passes a fetch that adds the `Authorization` header, and its
+  `authorize` sees the same user on every call. The old prop, `createFetch`,
+  covered only prepare and create, so the poll and the swap calls went out
+  with cookies alone and such an app's `authorize` refused them. `createFetch`
+  still works, now covers every request too, and is deprecated.
+  `useCheckout` and `CheckoutProvider` take the same `fetch` for the poll and
+  the refund calls. The Supabase guide shows the token route. The custom
+  element and the Vue, Svelte and Angular wrappers keep using the page's own
+  fetch.
 - Changed (docs): the Lovable guide says what is tested and what is not. The
   route runs in CI as a Cloudflare Worker against Supabase's database and
   PostgREST 14, the storage has run against a real Supabase project, and

@@ -1550,7 +1550,7 @@ Common props:
   still sets `data-theme`.
 - `defaultTheme`, `storageKey`, `decodeLinkUrl`, `csrfHeader`, `components`,
   `classNames`, `syncUrl`, `resumePathPrefix`, `routeReference`, `resumable`,
-  `resumePaymentHash`, `metadata`, `createFetch`
+  `resumePaymentHash`, `metadata`, `fetch`
 
 There is no image prop. Everything the checkout draws ships inside the
 JavaScript ([Provider registry](provider-registry.md#assets)).
@@ -1559,6 +1559,16 @@ JavaScript ([Provider registry](provider-registry.md#assets)).
 `<meta name="csrf-token">` value on every request. Rails and Laravel read the
 default. Django reads `X-CSRFToken`. WordPress REST reads `X-WP-Nonce`. The meta
 tag name is fixed.
+
+`fetch` (0.4.25 or newer) is the fetch every checkout request goes through, in
+both modes: prepare, create, the status poll, and the swap quote, start, status
+and refund calls. The default is `globalThis.fetch`, which sends the page's
+cookies. If your app keeps its session as a bearer token in the browser
+(supabase-js does, in localStorage), pass a fetch that adds the
+`Authorization` header, and read it in `authorize` from `request.headers`.
+Before 0.4.25 this prop was `createFetch`, and it covered prepare and create
+only. `createFetch` still works and now covers every request too. It is
+deprecated and will be removed in a later release.
 
 `resumePaymentHash` (create mode) names a swap attempt this order already has in
 progress. The checkout reopens it after prepare instead of showing the method
@@ -1576,8 +1586,8 @@ names and defaults. These are everything in the list above up to and including
 
 - `theme` is a React-only prop. The custom element carries the same lock as its
   `theme` attribute.
-- `components`, `classNames`, `children` and `createFetch` are React-only, with
-  no wrapper equivalent.
+- `components`, `classNames`, `children` and `fetch` are React-only, with
+  no wrapper equivalent. The custom element always uses `globalThis.fetch`.
 - `polling` / `pollIntervalMs` reach the wrappers only through their `options`
   escape hatch.
 
@@ -1597,8 +1607,10 @@ From `@openreceive/react`: `useCheckout(options)`. The hook behind `<Checkout>`,
 for custom layouts. It drives a concrete `checkout` snapshot. Create mode belongs
 to `<Checkout>`. Unlike the component, it does **not** default `prefix`. Pass
 `prefix` to poll `/payments/check`. Omit it, or pass `polling: false`, to render
-the snapshot without polling. It returns the live snapshot, `status`, countdown
-labels, `statusTitle`/`statusDetail`, and
+the snapshot without polling. Pass `fetch` (0.4.25 or newer) to send the poll
+and the swap refund calls through your own fetch, as `<Checkout fetch>` does.
+It returns the live snapshot, `status`, countdown labels,
+`statusTitle`/`statusDetail`, and
 `copyInvoice`/`openWallet`/`reloadState`/`retry`/`cancel`.
 
 `openWallet` is for **touch devices**. By default it calls `location.assign` on

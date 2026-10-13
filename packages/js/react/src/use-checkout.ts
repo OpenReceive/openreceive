@@ -72,6 +72,12 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   const refreshStatusRef = React.useRef(refreshStatus);
   refreshStatusRef.current = refreshStatus;
   const polls = refreshStatus !== undefined;
+  // The same rule for the host's fetch: an inline arrow is a new function on
+  // every render, so the controller calls through a ref, and only whether a
+  // fetch is supplied may recreate it.
+  const fetchRef = React.useRef(options.fetch);
+  fetchRef.current = options.fetch;
+  const hostFetch = options.fetch !== undefined;
   // `polling: false` and "no prefix to poll" are the same answer to the
   // controller: don't give it a mount, and it starts no status fetcher.
   const prefix = options.polling === false ? undefined : options.prefix;
@@ -84,7 +90,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   const snapshotRef = React.useRef(snapshot);
   snapshotRef.current = snapshot;
   const checkoutIdentity = `${snapshot.checkout_id} ${snapshot.reference}`;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: checkoutIdentity is an intentional recreate trigger — the effect seeds from snapshotRef, not from checkoutIdentity directly. logger/onError/refreshStatus are read from refs so inline host callbacks cannot restart polling.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: checkoutIdentity is an intentional recreate trigger — the effect seeds from snapshotRef, not from checkoutIdentity directly. logger/onError/refreshStatus/fetch are read from refs so inline host callbacks cannot restart polling.
   React.useEffect(() => {
     const controller = createCheckoutController({
       snapshot: snapshotRef.current,
@@ -96,6 +102,12 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
         : {}),
       ...(prefix === undefined ? {} : { prefix }),
       ...(options.csrfHeader === undefined ? {} : { csrfHeader: options.csrfHeader }),
+      ...(hostFetch
+        ? {
+            fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+              (fetchRef.current ?? globalThis.fetch)(input, init),
+          }
+        : {}),
       pollIntervalMs: options.pollIntervalMs,
       // Omit logger when unset so @openreceive/browser attaches its default console sink.
       // Pass `false` through to disable; wrap custom sinks so inline host callbacks stay stable.
@@ -130,7 +142,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       controller.stop();
       if (controllerRef.current === controller) controllerRef.current = null;
     };
-  }, [checkoutIdentity, polls, prefix, options.csrfHeader, options.pollIntervalMs]);
+  }, [checkoutIdentity, polls, prefix, options.csrfHeader, options.pollIntervalMs, hostFetch]);
   const publicStatus = deriveStatus(state);
   const richStatus = createCheckoutStatusModel(state);
 

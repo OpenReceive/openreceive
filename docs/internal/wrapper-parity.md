@@ -34,7 +34,7 @@ element cannot: component slots, class-name slots, and render-prop children.
 | `resumePaymentRail` | `swap` | yes | yes | **create only** |
 | `resumable` | inferred from `syncUrl` / `routeReference` | yes | yes | both |
 | `polling` / `pollIntervalMs` | on / engine default | yes | via `options` | both |
-| `createFetch` | `globalThis.fetch` | yes | element-owned | create |
+| `fetch` (deprecated name: `createFetch`) | `globalThis.fetch` | yes | element-owned | both |
 | `qrEncoder`, `logger` | – | yes | element-owned | both |
 | `components`, `classNames`, `children` | – | yes | not representable | both |
 | `theme` (host lock) | – (stored preference applies) | yes (React-only prop) | element `theme` attribute; wrappers don't forward it yet | both |
