@@ -21,6 +21,7 @@ the full quickstart), or paste the one-prompt agent directions:
   your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.md) ·
   [Fastify](https://openreceive.org/agent-directions/fastify/full.md) ·
   [Next.js](https://openreceive.org/agent-directions/next/full.md) ·
+  [NestJS](https://openreceive.org/agent-directions/nestjs/full.md) ·
   [Rails](https://openreceive.org/agent-directions/rails/full.md) ·
   [PHP](https://openreceive.org/agent-directions/php/full.md) ·
   [Laravel](https://openreceive.org/agent-directions/laravel/full.md) ·

@@ -2,7 +2,7 @@
 name: integrate-openreceive
 description: >
   Integrate OpenReceive Bitcoin Lightning checkout and optional USDT, USDC,
-  SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, Rails,
+  SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, NestJS, Rails,
   Python, Django, FastAPI, Laravel, plain PHP, WordPress/WooCommerce,
   React, Vue, Svelte, Angular, or plain HTML applications, or connecting
   BTCPay Server to a receive-only NWC wallet. A configured swap provider
@@ -32,6 +32,7 @@ connected wallet; asset and network availability depends on the provider.
    - Node, Express: [references/node.md](references/node.md)
    - Node, Fastify: [references/fastify.md](references/fastify.md)
    - Node, Next.js App Router: [references/next.md](references/next.md)
+   - Node, NestJS (Express platform): [references/nestjs.md](references/nestjs.md)
    - Rails: [references/rails.md](references/rails.md)
    - Python, FastAPI: [references/fastapi.md](references/fastapi.md)
    - Plain PHP: [references/php.md](references/php.md)
@@ -53,7 +54,8 @@ connected wallet; asset and network availability depends on the provider.
 
 Install, per adapter — Express: `npm install @openreceive/express @openreceive/react`;
 Fastify: `npm install @openreceive/fastify @openreceive/react`; Next.js:
-`npm install @openreceive/next @openreceive/react`. Swap the UI package (`vue`,
+`npm install @openreceive/next @openreceive/react`; NestJS:
+`npm install @openreceive/express @openreceive/http @openreceive/react`. Swap the UI package (`vue`,
 `svelte`, `angular`, `elements`) for the frontend the app already has. Install
 (Rails): `bundle add openreceive-rails`.
 Django: `pip install "openreceive[django]"`; FastAPI:

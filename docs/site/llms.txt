@@ -14,6 +14,7 @@ markdown.
 
 - [Express Quickstart (Node)](https://openreceive.org/guides/quickstart-node.md)
 - [Fastify Quickstart](https://openreceive.org/guides/quickstart-fastify.md)
+- [NestJS Quickstart](https://openreceive.org/guides/quickstart-nestjs.md)
 - [FastAPI Quickstart](https://openreceive.org/guides/quickstart-fastapi.md)
 - [Django Quickstart](https://openreceive.org/guides/quickstart-django.md)
 - [Flask Quickstart](https://openreceive.org/guides/quickstart-flask.md)
@@ -26,6 +27,7 @@ markdown.
 - [Agent Directions: Node.js](https://openreceive.org/agent-directions/node/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Fastify](https://openreceive.org/agent-directions/fastify/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Next.js](https://openreceive.org/agent-directions/next/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: NestJS](https://openreceive.org/agent-directions/nestjs/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: FastAPI](https://openreceive.org/agent-directions/fastapi/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Django](https://openreceive.org/agent-directions/django/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Flask](https://openreceive.org/agent-directions/flask/full.md): self-contained agent directions, quickstart included

@@ -26,6 +26,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-nestjs",
+      "title": "NestJS Quickstart",
+      "source_path": "docs/guides/quickstart-nestjs.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-fastapi",
       "title": "FastAPI Quickstart",
       "source_path": "docs/guides/quickstart-fastapi.md",
@@ -533,6 +541,14 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "source_path": "docs/agents/next.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-nestjs",
+      "title": "Agent Directions: NestJS",
+      "source_path": "docs/agents/nestjs.md",
       "category": "quickstart",
       "audience": "developer",
       "public": true

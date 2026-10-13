@@ -210,7 +210,7 @@ test("the WooCommerce payload ends at test-invoice and keeps the agent in the st
 // The 0.4.18 Next.js trial agent could not get doctor to see `.env.local`, ran
 // `set -a; . ./.env.local`, and the `&` in each code printed pieces of both.
 test("the @openreceive/node payloads say doctor reads the env file and never to source it", () => {
-  const envFiles = { node: ".env", fastify: ".env", next: ".env.local" };
+  const envFiles = { node: ".env", fastify: ".env", next: ".env.local", nestjs: ".env" };
   for (const [stack, file] of Object.entries(envFiles)) {
     const { text } = payloads.find((payload) => payload.stack === stack);
     assert.ok(
@@ -231,7 +231,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
   const libraries = payloads.filter(
     ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
   );
-  assert.equal(libraries.length, 9);
+  assert.equal(libraries.length, 10);
   for (const { stack, text } of libraries) {
     const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
     assert.match(ending, /The browser check in the quickstart's\s[\s\S]*?is theirs/, stack);
@@ -284,7 +284,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
 // line; only the WooCommerce directions named the file-editing tool. One
 // Fastify agent passed the Web Request to the shop's cookie helper, so every
 // buyer got a 403: the quickstart's own example did the same.
-test("every library payload writes codes with the file tool, and Express and Fastify read the session from native", () => {
+test("every library payload writes codes with the file tool, and Express, Fastify and NestJS read the session from native", () => {
   const libraries = payloads.filter(
     ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
   );
@@ -298,6 +298,26 @@ test("every library payload writes codes with the file tool, and Express and Fas
     assert.doesNotMatch(text, /currentUser\(request\)/, stack);
     assert.match(text, /sessions\.currentUser\(native\)/, stack);
   }
+  const nest = payloads.find((payload) => payload.stack === "nestjs").text;
+  assert.doesNotMatch(nest, /currentUser\(request\)/);
+  assert.match(nest, /auth\.currentUser\(native as Request\)/);
+});
+
+// Nest registers its JSON body parser when the app starts listening, after
+// anything main.ts mounts, so a plain app.use() of the Express adapter saw no
+// body and refused every checkout. Nest's guards never run for middleware.
+test("the NestJS payload parses JSON before the mount and checks ownership in authorize", () => {
+  const text = payloads.find(({ stack }) => stack === "nestjs").text;
+  const own = text.slice(0, text.indexOf("## The quickstart, in full"));
+  assert.match(own, /`app\.useBodyParser\("json"\)` right before it/);
+  assert.match(own, /guards, interceptors and pipes do not run for middleware/);
+  assert.match(own, /`app\.get\(DataSource\)`/);
+  const quickstart = text.slice(text.indexOf("## The quickstart, in full"));
+  assert.ok(
+    quickstart.indexOf('app.useBodyParser("json");') <
+      quickstart.indexOf("app.use(\n    openReceiveExpress({"),
+    "the quickstart parses JSON after the mount",
+  );
 });
 
 // The 2026-10-10 WooCommerce trials ended on 10 to 14 lines that listed

@@ -41,6 +41,10 @@ const GENERATED_REFERENCES = [
   },
   { source: "docs/agents/next.md", target: "skills/integrate-openreceive/references/next.md" },
   {
+    source: "docs/agents/nestjs.md",
+    target: "skills/integrate-openreceive/references/nestjs.md",
+  },
+  {
     source: "docs/agents/fastapi.md",
     target: "skills/integrate-openreceive/references/fastapi.md",
   },

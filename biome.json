@@ -93,6 +93,21 @@
           }
         }
       }
+    },
+    {
+      "includes": ["examples/nestjs-starter/**"],
+      "javascript": {
+        "parser": {
+          "unsafeParameterDecoratorsEnabled": true
+        }
+      },
+      "linter": {
+        "rules": {
+          "style": {
+            "useImportType": "off"
+          }
+        }
+      }
     }
   ]
 }

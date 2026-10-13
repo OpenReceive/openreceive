@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 4551
+      "bytes": 4707
     },
     {
       "path": "/guides/quickstart-node",
@@ -34,6 +34,16 @@
       "title": "Fastify Quickstart",
       "category": "quickstart",
       "bytes": 14706
+    },
+    {
+      "path": "/guides/quickstart-nestjs",
+      "markdown_path": "/guides/quickstart-nestjs.md",
+      "source": "docs/guides/quickstart-nestjs.md",
+      "kind": "guide",
+      "slug": "quickstart-nestjs",
+      "title": "NestJS Quickstart",
+      "category": "quickstart",
+      "bytes": 16021
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -115,7 +125,7 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 13728
+      "bytes": 12781
     },
     {
       "path": "/guides/supabase-migration",
@@ -145,7 +155,7 @@
       "slug": "mobile-apps",
       "title": "Bitcoin Checkout in Mobile Apps",
       "category": "guide",
-      "bytes": 14481
+      "bytes": 14513
     },
     {
       "path": "/guides/how-we-test-platforms",
@@ -479,6 +489,16 @@
       "bytes": 41045
     },
     {
+      "path": "/guides/agent-directions-nestjs",
+      "markdown_path": "/guides/agent-directions-nestjs.md",
+      "source": "docs/agents/nestjs.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-nestjs",
+      "title": "Agent Directions: NestJS",
+      "category": "quickstart",
+      "bytes": 40996
+    },
+    {
       "path": "/guides/agent-directions-rails",
       "markdown_path": "/guides/agent-directions-rails.md",
       "source": "docs/agents/rails.md",
@@ -577,7 +597,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 3988
+      "bytes": 4059
     },
     {
       "path": "/wordpress",
@@ -686,6 +706,27 @@
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 41045,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/nestjs.md",
+      "source": "docs/agents/cover/nestjs.md",
+      "kind": "agent-directions-cover",
+      "stack": "nestjs",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 289,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/nestjs/full.md"
+    },
+    {
+      "path": "/agent-directions/nestjs/full.md",
+      "source": "docs/agents/nestjs.md",
+      "kind": "agent-directions-payload",
+      "stack": "nestjs",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 40996,
       "copy_button": true,
       "self_contained": true
     },
@@ -970,6 +1011,27 @@
           "cursor/grok-4.7-medium-fast"
         ]
       }
+    },
+    {
+      "id": "nestjs",
+      "label": "NestJS",
+      "family": "node",
+      "heading": "Accept Bitcoin & Stablecoin Payments With NestJS",
+      "quickstart_slug": "quickstart-nestjs",
+      "quickstart_path": "/guides/quickstart-nestjs",
+      "quickstart_title": "NestJS Quickstart",
+      "agent_stack": "nestjs",
+      "agent_payload_path": "/agent-directions/nestjs.md",
+      "agent_full_path": "/agent-directions/nestjs/full.md",
+      "adapter_package": "@openreceive/express",
+      "install": "npm install @openreceive/express @openreceive/http @openreceive/react",
+      "requires": "Node ≥ 22, NestJS ≥ 10 on the Express platform",
+      "example_path": "examples/nestjs-starter",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/examples/nestjs-starter",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": true,
+      "tested": null
     },
     {
       "id": "rails",
@@ -1699,7 +1761,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 6357
+        "bytes": 6572
       },
       {
         "path": "/openapi.yaml",

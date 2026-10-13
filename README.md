@@ -45,6 +45,7 @@ Each stack has an integration page and a quickstart on openreceive.org:
 | [Express (Node.js)](https://openreceive.org/integrations/express) | [Express quickstart](https://openreceive.org/guides/quickstart-node) |
 | [Fastify](https://openreceive.org/integrations/fastify) | [Fastify quickstart](https://openreceive.org/guides/quickstart-fastify) |
 | [Next.js](https://openreceive.org/integrations/nextjs) | [Next.js quickstart](https://openreceive.org/guides/quickstart-next) |
+| [NestJS](https://openreceive.org/integrations/nestjs) | [NestJS quickstart](https://openreceive.org/guides/quickstart-nestjs) |
 | [Ruby on Rails](https://openreceive.org/integrations/rails) | [Rails quickstart](https://openreceive.org/guides/quickstart-rails) |
 | [Django](https://openreceive.org/integrations/django) | [Django quickstart](https://openreceive.org/guides/quickstart-django) |
 | [FastAPI](https://openreceive.org/integrations/fastapi) | [FastAPI quickstart](https://openreceive.org/guides/quickstart-fastapi) |

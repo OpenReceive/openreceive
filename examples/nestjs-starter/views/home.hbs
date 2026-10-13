@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{product.name}}</title>
+</head>
+<body>
+<main>
+<h1>{{product.name}}</h1>
+<p>${{product.price}} {{product.currency}}, paid in bitcoin over Lightning, straight to the shop's wallet.</p>
+<form method="post" action="/orders"><button type="submit">Buy</button></form>
+</main>
+</body>
+</html>

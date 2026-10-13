@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{order.productName}}</title>
+<link rel="stylesheet" href="/checkout-assets/openreceive-checkout.css">
+<script type="module" src="/checkout-assets/openreceive-checkout.js"></script>
+</head>
+<body>
+<main>
+<h1>{{order.productName}}</h1>
+{{#if paid}}
+<p>${{order.amount}} {{order.currency}} · Paid, thank you.</p>
+{{else}}
+<p>${{order.amount}} {{order.currency}} · <span id="order-status">Awaiting payment</span></p>
+<openreceive-checkout reference="{{order.id}}" prefix="/openreceive"></openreceive-checkout>
+<script type="module">
+  // onPaid has marked the order paid by the time the checkout shows settlement.
+  document.querySelector("openreceive-checkout").addEventListener("openreceive-settled", () => {
+    document.getElementById("order-status").textContent = "Paid, thank you.";
+  });
+</script>
+{{/if}}
+</main>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Order {{order.id}}</title>
+</head>
+<body>
+<main>
+<h1>Order {{order.id}}</h1>
+<p>{{order.productName}} — ${{order.amount}} {{order.currency}}</p>
+{{#if paid}}
+<p>Paid, thank you.</p>
+{{else}}
+<p>Awaiting payment. Online payments are not set up yet.</p>
+{{/if}}
+</main>
+</body>
+</html>

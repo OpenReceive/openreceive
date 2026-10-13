@@ -23,6 +23,22 @@
   examples/flask-starter is the quickstart as a one-product shop, and the
   agent trials gain a Flask 3.1 shop (`npm run trial -- --platform flask`).
   The trials' live buyer now sends Flask-WTF's `csrf_token` form field.
+- Added (docs): a NestJS quickstart (/guides/quickstart-nestjs), agent
+  directions for NestJS, and an /integrations/nestjs page. A Nest app mounts
+  `@openreceive/express` with `app.use()` in `main.ts`, with
+  `app.useBodyParser("json")` right before it: Nest adds its own JSON parser
+  only when the app starts listening, after anything `main.ts` mounts, so
+  without that line every checkout request failed with a 500. Nest's guards do
+  not run for middleware, so `authorize` makes the guard's check itself. The
+  hooks reach the app's services and its TypeORM `DataSource` through
+  `app.get()`.
+- Added (examples): examples/nestjs-starter, a one-product NestJS 12 shop on
+  Postgres with TypeORM migrations, sessions and Handlebars views, built on
+  the published packages. Checked in Docker against a test wallet: an order
+  gets a Lightning invoice, another browser is refused, and a paid invoice
+  marks the order paid.
+- Tests (trials): a NestJS 12 trial shop (`npm run trial -- --platform nestjs`):
+  TypeORM on Postgres, express-session sessions and server-rendered views.
 - Changed (docs): the Lovable guide says what is tested and what is not. The
   route runs in CI as a Cloudflare Worker against Supabase's database and
   PostgREST 14, the storage has run against a real Supabase project, and

@@ -29,6 +29,8 @@ export const QUICKSTARTS = [
   "docs/guides/quickstart-node.md",
   "docs/guides/quickstart-fastify.md",
   "docs/guides/quickstart-next.md",
+  // NestJS mounts the Express adapter and carries every Node block.
+  "docs/guides/quickstart-nestjs.md",
   "docs/guides/quickstart-fastapi.md",
   // Rails and Django share the exactly-once paragraph (`fulfill-once`); Django
   // also carries the credentials block and the reading list.

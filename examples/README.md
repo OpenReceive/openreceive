@@ -19,6 +19,11 @@ Express and Postgres, set up for Replit: a `.replit` for Autoscale and a
 `replit.md` that tells Replit Agent how the payment code fits together. It has
 no build step and also uses only the published packages.
 
+[`nestjs-starter/`](nestjs-starter) is the same shop on NestJS: TypeORM
+migrations, sessions in Postgres, Handlebars views, and OpenReceive mounted as
+Express middleware in `main.ts`. It also uses only the published packages, and
+runs with `docker compose up --build`.
+
 [`wordpress/`](wordpress) runs a real WordPress + WooCommerce shop, with the
 OpenReceive payment gateway, checkout blocks, MySQL and the shared product
 catalog. Start it with `npm run demo wordpress` (port 3009).

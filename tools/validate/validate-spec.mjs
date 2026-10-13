@@ -270,6 +270,7 @@ function validateStorageFreeTree() {
   const hostApps = new Set([
     "examples/next-postgres-starter/package.json",
     "examples/express-postgres-starter/package.json",
+    "examples/nestjs-starter/package.json",
   ]);
   const manifests = ["packages", "examples"]
     .flatMap((dir) =>

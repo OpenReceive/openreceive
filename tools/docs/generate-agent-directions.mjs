@@ -138,6 +138,12 @@ const STACKS = [
     brief: libraryBrief(".env.local"),
   },
   {
+    stack: "nestjs",
+    source: "docs/agents/src/nestjs.md",
+    quickstart: "docs/guides/quickstart-nestjs.md",
+    brief: libraryBrief(".env"),
+  },
+  {
     stack: "fastapi",
     source: "docs/agents/src/fastapi.md",
     quickstart: "docs/guides/quickstart-fastapi.md",
@@ -220,6 +226,7 @@ const UNLISTED_GUIDES = {
   "agent-directions-node": "this payload's own page",
   "agent-directions-fastify": "this payload's own page",
   "agent-directions-next": "this payload's own page",
+  "agent-directions-nestjs": "this payload's own page",
   "agent-directions-fastapi": "this payload's own page",
   "agent-directions-django": "this payload's own page",
   "agent-directions-flask": "this payload's own page",
@@ -231,6 +238,7 @@ const UNLISTED_GUIDES = {
   "quickstart-node": "inlined in full below, or another stack's",
   "quickstart-fastify": "inlined in full below, or another stack's",
   "quickstart-next": "inlined in full below, or another stack's",
+  "quickstart-nestjs": "inlined in full below, or another stack's",
   "quickstart-fastapi": "inlined in full below, or another stack's",
   "quickstart-django": "inlined in full below, or another stack's",
   "quickstart-flask": "inlined in full below, or another stack's",
