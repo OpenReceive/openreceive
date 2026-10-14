@@ -2458,8 +2458,9 @@ Step 0 of the agent directions, as report lines. It reports:
 - the wallet preflight. `$walletCheck` is a closure that builds the `Service`.
   If it throws, the error is reported, never raised.
 
-`$engine->doctor()` does the same for a built engine. The output is safe to
-paste into an issue.
+`$engine->doctor(?array $env, ?callable $walletCheck, ?string $mountedAt)` does
+the same for a built engine. Like `report()`, it skips the wallet preflight
+unless you pass `$walletCheck`. The output is safe to paste into an issue.
 
 ### OpenReceive\Testing
 

@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { runCli } from "../packages/js/node/src/cli.ts";
 import { paymentsSchemaSql } from "../packages/js/http/src/sql-payments.ts";
+import { runCli } from "../packages/js/node/src/cli.ts";
 
 const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
 
@@ -227,6 +227,42 @@ test("doctor --url recognizes the OpenReceive router's own 404", async () => {
     assert.match(out, /routes: OpenReceive router answering at .*\/openreceive/);
   } finally {
     mounted.close();
+  }
+});
+
+// The router answers GET without a JSON body parser in front of it, so only a
+// POST shows that every checkout create would 500.
+test("doctor --url fails when no JSON body parser runs before the router", async () => {
+  const unparsed = http.createServer((request, response) => {
+    response.writeHead(request.method === "POST" ? 500 : 404, {
+      "content-type": "application/json; charset=utf-8",
+    });
+    response.end(
+      JSON.stringify(
+        request.method === "POST"
+          ? {
+              code: "INTERNAL",
+              message:
+                "OpenReceive received a JSON request body that no body parser had read. Mount your " +
+                "framework's JSON body parser (Express: app.use(express.json())) before the OpenReceive " +
+                "middleware.",
+            }
+          : { code: "NOT_FOUND", message: "No OpenReceive route matched this method and path." },
+      ),
+    );
+  });
+  await new Promise((resolve) => unparsed.listen(0, "127.0.0.1", resolve));
+  const port = unparsed.address().port;
+  try {
+    const { code, out } = await doctor({
+      argv: ["--offline", "--url", `http://127.0.0.1:${port}`],
+      env: { NWC_URI: VALID_NWC },
+    });
+    assert.equal(code, 1);
+    assert.match(out, /routes: the router answers at .*\/openreceive, but every POST fails/);
+    assert.match(out, /app\.use\(express\.json\(\)\)/);
+  } finally {
+    unparsed.close();
   }
 });
 

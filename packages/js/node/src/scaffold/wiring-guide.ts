@@ -49,23 +49,25 @@ const host = createHost({ db, amountFor, onPaid });
 - \`amountFor(reference)\` returns the trusted amount — never a payer-supplied
   value — or \`null\` for a 404.
 - \`onPaid\` fires for the first settled attempt for a reference only, so give
-  every order its own reference and never reuse one. Mark the order paid with
-  your own ORM:
+  every order its own reference and never reuse one. Mark the order paid
+  through the \`query\` it receives: \`query\` runs inside OpenReceive's
+  settlement transaction, so the order update commits or rolls back with the
+  payment record. Do not use your ORM's own connection there.
 
 \`\`\`ts
-const onPaid = async ({ reference }) => {
-  ${onPaidUpdateLine(options)}
+const onPaid = async ({ reference, paidAt, query }) => {
+  await query(
+    ${guardedUpdateSql(options)},
+    [paidAt, reference],
+  );
 };
 \`\`\`
 
-  \`onPaid\` also receives \`{ paymentHash, paidAt, query }\`. \`query\` runs
-  inside the settlement transaction — use it for transactional outbox rows or to
-  make the order update atomic with the payment record. Plain ORM calls are
-  fine: delivery is at-least-once and retried until \`onPaid\` succeeds, so make
-  it idempotent.
-
-The one-liner above is deliberately the simplest thing that works — see
-[section 3](#3-fulfilling-exactly-once) before shipping it.
+  \`onPaid\` also receives \`paymentHash\`. Delivery is at-least-once and
+  retried until \`onPaid\` succeeds, so keep it idempotent; the
+  \`awaiting_payment\` guard does that. See
+  [section 3](#3-fulfilling-exactly-once) before adding work beyond the order
+  row.
 
 Pass the same \`host\` to your mounted HTTP adapter. No background process is
 needed: every mounted OpenReceive route runs an opportunistic, durably gated
@@ -130,21 +132,6 @@ function guardedUpdateSql(options: ScaffoldPaymentsOptions): string {
     "        AND state = 'awaiting_payment'",
     "     RETURNING id`",
   ].join("\n");
-}
-
-function onPaidUpdateLine(options: ScaffoldPaymentsOptions): string {
-  switch (options.orm) {
-    case "prisma":
-      return 'await prisma.order.update({ where: { id: reference }, data: { state: "paid" } });';
-    case "drizzle":
-      return 'await orm.update(orders).set({ state: "paid" }).where(eq(orders.id, reference));';
-    case "typeorm":
-      return 'await dataSource.getRepository(Order).update({ id: reference }, { state: "paid" });';
-    case "sequelize":
-      return 'await Order.update({ state: "paid" }, { where: { id: reference } });';
-    case "knex":
-      return 'await knex("orders").where({ id: reference }).update({ state: "paid" });';
-  }
 }
 
 function migrationStep(options: ScaffoldPaymentsOptions): string {

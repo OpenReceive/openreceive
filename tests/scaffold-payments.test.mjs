@@ -3,6 +3,8 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fulfillmentNote, supabasePaymentsMigrationSql } from "../packages/js/core/src/index.ts";
+import { paymentsSchemaSql } from "../packages/js/http/src/sql-payments.ts";
 import {
   finalizeScaffoldOptions,
   parseScaffoldPaymentsArgv,
@@ -10,10 +12,8 @@ import {
   runCli,
   runScaffoldPayments,
 } from "../packages/js/node/src/cli.ts";
-import { OPENRECEIVE_DIALECTS, OPENRECEIVE_ORMS } from "../packages/js/node/src/scaffold/types.ts";
 import { canonicalPaymentsDdlStatements } from "../packages/js/node/src/scaffold/shared.ts";
-import { fulfillmentNote, supabasePaymentsMigrationSql } from "../packages/js/core/src/index.ts";
-import { paymentsSchemaSql } from "../packages/js/http/src/sql-payments.ts";
+import { OPENRECEIVE_DIALECTS, OPENRECEIVE_ORMS } from "../packages/js/node/src/scaffold/types.ts";
 
 const SCHEMA_PATHS = {
   prisma: "prisma/schema.openreceive.prisma",
@@ -343,6 +343,13 @@ test("wiring guide shows the library host wiring and the optional worker", () =>
       assert.match(guide, /unix-seconds integers/);
       assert.match(guide, /status_reason/);
       assert.match(guide, /openreceive_meta/);
+      // onPaid writes through the settlement transaction's `query`, as the
+      // agent directions and the ORM guide say: never the ORM's own connection.
+      assert.match(
+        guide,
+        /const onPaid = async \(\{ reference, paidAt, query \}\) => \{\n {2}await query\(/,
+      );
+      assert.doesNotMatch(guide, /Plain ORM calls|with\s+your own ORM/);
     }
   }
 });

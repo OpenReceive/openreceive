@@ -422,13 +422,16 @@ That is the whole install. `openreceive-rails` depends on `openreceive`,
 nothing else added. It is built from `NWC_URI`. If your app brings its own NWC
 client, set `config.nwc_client` instead.
 
-There is one native prerequisite. `nwc-ruby` uses `rbsecp256k1`, which builds
-libsecp256k1 from source. Minimal images (`ruby:3.3-slim`, fresh Docker builds)
-need the autotools for that, or `bundle install` fails with
-`autoreconf: not found`. Install them before bundling:
+Two native builds need system packages. `nwc-ruby` uses `rbsecp256k1`, which
+builds libsecp256k1 from source and needs the autotools; without them
+`bundle install` fails with `autoreconf: not found`. Its connection libraries
+also need a newer `openssl` gem than Ruby ships, and Bundler compiles that gem
+against the OpenSSL headers; without them it fails installing `openssl` at
+`checking for openssl/ssl.h... no`. Minimal images (`ruby:3.3-slim`, fresh
+Docker builds) have neither. Install them before bundling:
 
 ```sh
-apt-get install -y autoconf automake libtool build-essential pkg-config
+apt-get install -y autoconf automake libtool build-essential pkg-config libssl-dev
 ```
 
 Full Ruby images and typical developer machines already have these.

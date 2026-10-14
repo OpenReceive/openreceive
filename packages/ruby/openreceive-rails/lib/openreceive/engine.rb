@@ -11,6 +11,13 @@ module OpenReceive
       end
     end
 
+    # ReconcileJob subclasses ActiveJob::Base. A host without ActiveJob
+    # (`rails new --minimal`, or an app that loads only the railties it uses)
+    # cannot schedule it, and eager loading it would stop that host's boot.
+    initializer "openreceive.jobs", before: :set_autoload_paths do
+      ::Rails.autoloaders.main.ignore(root.join("app/jobs")) unless defined?(::ActiveJob::Base)
+    end
+
     # Boot fails closed for real: in production the service — and its wallet
     # preflight — is built eagerly, so a missing NWC_URI, a dead relay, or a
     # spend-capable wallet stops the deploy instead of surfacing as

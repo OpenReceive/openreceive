@@ -152,11 +152,13 @@ in place of the other.
 ## Rails in Docker
 
 `openreceive-rails → nwc-ruby → rbsecp256k1` compiles libsecp256k1 from
-source. So slim images need the autotools in the build stage. Without them,
-`bundle install` fails with `autoreconf: not found`:
+source, and Bundler compiles the newer `openssl` gem that `nwc-ruby`'s
+connection libraries need. So slim images need the autotools and the OpenSSL
+headers in the build stage. Without them, `bundle install` fails with
+`autoreconf: not found` or at `checking for openssl/ssl.h... no`:
 
 ```dockerfile
-RUN apt-get update && apt-get install -y autoconf automake libtool build-essential pkg-config
+RUN apt-get update && apt-get install -y autoconf automake libtool build-essential pkg-config libssl-dev
 ```
 
 ## Laravel in production

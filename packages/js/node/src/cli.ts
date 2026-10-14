@@ -570,6 +570,15 @@ async function checkRoutesMounted(input: {
       ? String((body as { message: unknown }).message)
       : "";
   if (message.startsWith("No OpenReceive route matched")) {
+    const unparsed = await unparsedJsonBody(probe);
+    if (unparsed !== undefined) {
+      return {
+        ok: false,
+        lines: [
+          `routes: the router answers at ${base}${prefix}, but every POST fails: ${unparsed}`,
+        ],
+      };
+    }
     return { ok: true, lines: [`routes: OpenReceive router answering at ${base}${prefix}`] };
   }
   return {
@@ -578,6 +587,30 @@ async function checkRoutesMounted(input: {
       `routes: nothing OpenReceive answered at ${base}${prefix} (HTTP ${response.status}) — ${fix}`,
     ],
   };
+}
+
+/**
+ * A GET reaches the router even when no JSON body parser runs before it, but
+ * then every checkout POST answers 500. POST a JSON body to the same unmatched
+ * path: a parsed body gets the router's 404 (no route runs, so no wallet scan),
+ * an unparsed one the adapter's own 500. Only that 500 fails; any other answer,
+ * such as an app's CSRF refusal, says nothing about the parser.
+ */
+async function unparsedJsonBody(probe: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(probe, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(HTTP_PROBE_TIMEOUT_MS),
+    });
+    if (response.status !== 500) return undefined;
+    const body = JSON.parse(await response.text()) as { message?: unknown };
+    const message = typeof body.message === "string" ? body.message : "";
+    return message.includes("no body parser had read") ? message : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function safeErrorMessage(error: unknown): string {

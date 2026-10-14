@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (PHP)
 
 ```sh
-# READ THIS FIRST: this file is 42 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 43 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/php/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -737,8 +737,11 @@ foreach (\OpenReceive\Server\Doctor::report(
 - where the handler is mounted;
 - the receive-only wallet preflight.
 
-`$engine->doctor()` is the same report for an engine you already built. Put it
-behind a `bin/doctor` script. The demo's is twelve lines.
+`$engine->doctor()` is the same report for an engine you already built, but it
+runs the wallet preflight only when you pass the same factory:
+`$engine->doctor(walletCheck: static fn () => \OpenReceive\Server\Service::fromEnvironment())`.
+Without it the preflight line reads `skipped`. Put the report behind a
+`bin/doctor` script. The demo's is twelve lines.
 → [Doctor](https://openreceive.org/guides/api-reference.md#openreceiveserverdoctor)
 
 Then open the checkout in a browser. Confirm the payment-method icons and

@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+- Fixed (Rails): a host without ActiveJob (`rails new --minimal`, or an app
+  that loads only the railties it uses) could not boot in production. Eager
+  loading reached `OpenReceive::ReconcileJob`, a subclass of
+  `ActiveJob::Base`, and stopped with `uninitialized constant
+  OpenReceive::ActiveJob`; so did `bin/rails generate openreceive:install`.
+  The engine now skips its `app/jobs` when ActiveJob is not loaded.
+- Fixed (Node): `npx openreceive doctor --url` passed an Express app with no
+  JSON body parser in front of the OpenReceive middleware, and every checkout
+  then answered 500. Doctor now also POSTs a JSON body to its probe path and
+  fails with the adapter's own fix (`app.use(express.json())`).
+- Fixed (Node): the `OPENRECEIVE_PAYMENTS.md` that `openreceive scaffold
+  payments` writes marked the order paid with the ORM's own connection and
+  said plain ORM calls were fine. Its first `onPaid` example now uses the
+  `query` it receives, inside the settlement transaction, as the agent
+  directions and the [ORM guide](docs/guides/node-orms.md) say.
+- Docs (Rails): slim images also need `libssl-dev`. `nwc-ruby`'s connection
+  libraries need a newer `openssl` gem than Ruby ships, and Bundler compiles
+  it against the OpenSSL headers.
+- Docs (PHP): `$engine->doctor()` runs the wallet preflight only when it gets
+  the same factory `Doctor::report()` takes; without it the preflight line
+  reads `skipped`.
+
 ## 0.4.26 - 2026-10-14
 
 - Fixed (PHP): a plain PHP app's checkout was 5–10 times slower than
