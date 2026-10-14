@@ -295,6 +295,30 @@ products, and you do not join them.
   only in the hook; emails, jobs, and pushes after commit. Placeholder style is
   the dialect you declared: `?` on sqlite, `$1` on postgres.
 
+### If the database is Supabase
+
+Supabase is Postgres, so the tables above go there like any others. Three
+things differ; https://openreceive.org/guides/supabase.md has each in full.
+
+- Connect through its transaction pooler (port `6543`, user
+  `postgres.<project-ref>`). Run migrations through the session pooler
+  (port `5432` on the same host).
+- Verify Supabase's certificate authority: delete `sslmode` from the URL and
+  give `pg` `ssl: { ca }`, the text of the project's `prod-ca-2021.crt` (an
+  environment variable such as `SUPABASE_CA_CERT`; it is not a secret). Never
+  `rejectUnauthorized: false`.
+- After the migration, close both tables to Supabase's Data API, or anyone
+  with the project's anon key can read `swap_data`:
+
+  ```sql
+  alter table openreceive_payments enable row level security;
+  alter table openreceive_meta enable row level security;
+  revoke all on table openreceive_payments, openreceive_meta from anon, authenticated;
+  ```
+
+`npx openreceive scaffold payments --supabase` writes the HTTPS-API route,
+which is for Cloudflare Workers only. A Node server uses the connection above.
+
 ## If you build your own checkout UI
 
 The drop-ins (`<Checkout>`, `<openreceive-checkout>`) already obey all of this.

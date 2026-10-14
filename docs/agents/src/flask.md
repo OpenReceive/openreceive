@@ -319,6 +319,27 @@ orders, users, or products, and you do not join them.
   `db.session`. Database writes only in the hook; emails,
   jobs, and pushes in `after_paid` or after commit.
 
+### If the database is Supabase
+
+Supabase is Postgres, so the tables above go there like any others. Three
+things differ; https://openreceive.org/guides/supabase.md has each in full.
+
+- Connect through its transaction pooler (port `6543`, user
+  `postgres.<project-ref>`). Run migrations through the session pooler
+  (port `5432` on the same host). The transaction pooler keeps no prepared statements: give the SQLAlchemy
+  engine `connect_args={"prepare_threshold": None}`.
+- Verify Supabase's certificate authority: commit the project's
+  `prod-ca-2021.crt` (it is not a secret) and add
+  `?sslmode=verify-full&sslrootcert=prod-ca-2021.crt` to the URL.
+- After the migration, close both tables to Supabase's Data API, or anyone
+  with the project's anon key can read `swap_data`:
+
+  ```sql
+  alter table openreceive_payments enable row level security;
+  alter table openreceive_meta enable row level security;
+  revoke all on table openreceive_payments, openreceive_meta from anon, authenticated;
+  ```
+
 ## If you build your own checkout UI
 
 The drop-ins (`<Checkout>`, `<openreceive-checkout>`) already obey all of this.

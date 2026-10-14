@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Django)
 
 ```sh
-# READ THIS FIRST: this file is 47 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 48 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/django/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -326,6 +326,27 @@ products, and you do not join them.
   is the whole mount; DRF authentication classes, renderers and permission
   classes would sit in front of the engine's own JSON-only, same-site and
   authorize gates and change the wire contract. Your DRF views stay yours.
+
+### If the database is Supabase
+
+Supabase is Postgres, so the tables above go there like any others. Three
+things differ; https://openreceive.org/guides/supabase.md has each in full.
+
+- Connect through its transaction pooler (port `6543`, user
+  `postgres.<project-ref>`). Run migrations through the session pooler
+  (port `5432` on the same host). Django already turns prepared statements off for PostgreSQL, which the
+  transaction pooler needs.
+- Verify Supabase's certificate authority: commit the project's
+  `prod-ca-2021.crt` (it is not a secret) and add
+  `?sslmode=verify-full&sslrootcert=prod-ca-2021.crt` to the URL.
+- After the migration, close both tables to Supabase's Data API, or anyone
+  with the project's anon key can read `swap_data`:
+
+  ```sql
+  alter table openreceive_payments enable row level security;
+  alter table openreceive_meta enable row level security;
+  revoke all on table openreceive_payments, openreceive_meta from anon, authenticated;
+  ```
 
 ## If you build your own checkout UI
 

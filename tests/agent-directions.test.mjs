@@ -244,7 +244,11 @@ test("every library payload ends with setup finished and keeps the agent in the 
   assert.equal(libraries.length, 15);
   for (const { stack, text } of libraries) {
     const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
-    assert.match(ending, /The browser check (?:in the quickstart's|of that page)\s[\s\S]*?is theirs/, stack);
+    assert.match(
+      ending,
+      /The browser check (?:in the quickstart's|of that page)\s[\s\S]*?is theirs/,
+      stack,
+    );
     assert.match(ending, /You cannot pay the invoice/, stack);
     assert.match(
       ending,
@@ -358,5 +362,35 @@ test("the Lovable payload asks through the secret input and needs no terminal", 
   assert.match(own, /Your last message starts "Setup is finished"/);
   for (const command of [/\bcurl\b/, /\bnpx\b/, /\bdoctor\b/, /docker compose/, /\bpkill\b/]) {
     assert.doesNotMatch(own, command, `the Lovable steps mention ${command}`);
+  }
+});
+
+// The Supabase badge (0.4.24) was earned on the Node directions with an
+// opening message that named Supabase; without that, an agent reached the
+// pooler, the certificate and the Data API lock-down only through one line of
+// further reading. Each server stack that can sit on Supabase carries the
+// branch in its database step.
+test("every server payload that can run on Supabase has the Supabase branch in its database step", () => {
+  const stacks = [
+    "node",
+    "fastify",
+    "next",
+    "nestjs",
+    "tanstack-start",
+    "fastapi",
+    "django",
+    "flask",
+  ];
+  for (const stack of stacks) {
+    const { text } = payloads.find((payload) => payload.stack === stack);
+    const branch = text.match(/^### If the database is Supabase\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+    assert.notEqual(branch, "", `${stack}: no Supabase branch`);
+    assert.match(branch, /transaction pooler \(port `6543`/, stack);
+    assert.match(branch, /prod-ca-2021\.crt/, stack);
+    assert.match(
+      branch,
+      /revoke all on table openreceive_payments, openreceive_meta from anon, authenticated;/,
+      stack,
+    );
   }
 });

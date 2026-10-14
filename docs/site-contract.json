@@ -476,7 +476,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 38902
+      "bytes": 40019
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -486,7 +486,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 39541
+      "bytes": 40658
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -496,7 +496,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "category": "quickstart",
-      "bytes": 41503
+      "bytes": 42509
     },
     {
       "path": "/guides/agent-directions-django",
@@ -506,7 +506,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "category": "quickstart",
-      "bytes": 46772
+      "bytes": 47751
     },
     {
       "path": "/guides/agent-directions-flask",
@@ -516,7 +516,7 @@
       "slug": "agent-directions-flask",
       "title": "Agent Directions: Flask",
       "category": "quickstart",
-      "bytes": 43975
+      "bytes": 44981
     },
     {
       "path": "/guides/agent-directions-next",
@@ -526,7 +526,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 42360
+      "bytes": 43477
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -536,7 +536,7 @@
       "slug": "agent-directions-nestjs",
       "title": "Agent Directions: NestJS",
       "category": "quickstart",
-      "bytes": 42071
+      "bytes": 43188
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -636,7 +636,7 @@
       "slug": "agent-directions-tanstack-start",
       "title": "Agent Directions: TanStack Start",
       "category": "quickstart",
-      "bytes": 37808
+      "bytes": 38925
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -753,7 +753,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38902,
+      "bytes": 40019,
       "copy_button": true,
       "self_contained": true
     },
@@ -774,7 +774,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39541,
+      "bytes": 40658,
       "copy_button": true,
       "self_contained": true
     },
@@ -795,7 +795,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42360,
+      "bytes": 43477,
       "copy_button": true,
       "self_contained": true
     },
@@ -816,7 +816,7 @@
       "kind": "agent-directions-payload",
       "stack": "nestjs",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42071,
+      "bytes": 43188,
       "copy_button": true,
       "self_contained": true
     },
@@ -837,7 +837,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastapi",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41503,
+      "bytes": 42509,
       "copy_button": true,
       "self_contained": true
     },
@@ -858,7 +858,7 @@
       "kind": "agent-directions-payload",
       "stack": "django",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 46772,
+      "bytes": 47751,
       "copy_button": true,
       "self_contained": true
     },
@@ -879,7 +879,7 @@
       "kind": "agent-directions-payload",
       "stack": "flask",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 43975,
+      "bytes": 44981,
       "copy_button": true,
       "self_contained": true
     },
@@ -1089,7 +1089,7 @@
       "kind": "agent-directions-payload",
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37808,
+      "bytes": 38925,
       "copy_button": true,
       "self_contained": true
     }
