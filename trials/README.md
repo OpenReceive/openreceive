@@ -6,6 +6,16 @@ An agent trial is one coding agent adding OpenReceive to a plain shop from our p
 - **Filmed trial**: the same job on camera, by a separate agent, for a video.
 - **Builder trial**: one run on a hosting platform itself, by that platform's own agent (Replit below). Bitcoin is the required payment; a configured swap provider can also convert USDT, USDC, SOL, and ETH into BTC over Lightning in the merchant's wallet. Asset and network availability depends on the provider.
 
+## By hand, with any agent
+
+[`by-hand.md`](by-hand.md) is a prompt for a coding agent the harness cannot
+drive (any model, in any tool). The agent integrates each Docker-only shop
+itself, playing the merchant from a fixed script, and writes its findings to
+`zz-agent-tests-results-<name>.txt` at the repo root. `npm run trial:by-hand`
+does the harness's part around it: `prepare` starts a plain shop wired to the
+trial wallet and writes the codes to files, `check` runs the live checks
+below plus a swap-methods check, and `stop` removes the shop.
+
 ## One shop
 
 ```sh

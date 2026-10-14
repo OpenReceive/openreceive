@@ -106,6 +106,11 @@ export class Visitor {
     return result;
   }
 
+  /** POST /openreceive/checkouts/prepare: the amount and the swap methods the picker shows. */
+  prepareCheckout(reference: string, pagePath: string): Promise<Answer> {
+    return this.post("/openreceive/checkouts/prepare", { reference }, pagePath);
+  }
+
   /** POST /openreceive/payments/check, as the checkout polls while the payer pays. */
   checkPayment(reference: string, paymentHash: string, pagePath: string): Promise<Answer> {
     return this.post(

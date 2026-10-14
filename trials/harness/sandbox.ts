@@ -142,7 +142,7 @@ export async function prepareShop(
 
 const execFileAsync = promisify(execFile);
 
-async function removeShop(directory: string): Promise<void> {
+export async function removeShop(directory: string): Promise<void> {
   const id = path.basename(directory);
   await compose(directory, ["down", "-v", "--remove-orphans"], 120_000).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
