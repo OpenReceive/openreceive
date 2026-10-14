@@ -246,7 +246,7 @@ async function runDiagnostics(input: {
 
   const lines = [
     `OpenReceive ${input.command}`,
-    "Agent skills: run `npx openreceive skills install`",
+    agentSkillsLine(input.cwd, env.HOME ?? env.USERPROFILE),
     `node: ${process.version}`,
     `cwd: ${input.cwd}`,
     `env files: ${files.length > 0 ? files.join(", ") : `none used (checked ${checked.join(", ")})`}`,
@@ -311,6 +311,35 @@ const DOCTOR_ENV_NAMES = new Set<string>([
   ...LSC_ENV_NAMES,
   "OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC",
 ]);
+
+/**
+ * Where an agent already finds the integrate-openreceive skill: a copy in the
+ * project's skills folders, or the Claude Code plugin enabled in project or
+ * user settings. Doctor suggests an install only when it finds none.
+ */
+function agentSkillsLine(cwd: string, home: string | undefined): string {
+  for (const dir of [".agents/skills", ".claude/skills"]) {
+    if (existsSync(path.join(cwd, dir, "integrate-openreceive", "SKILL.md"))) {
+      return `Agent skills: installed (${dir}/integrate-openreceive)`;
+    }
+  }
+  const settings: [label: string, file: string][] = [
+    [".claude/settings.local.json", path.join(cwd, ".claude", "settings.local.json")],
+    [".claude/settings.json", path.join(cwd, ".claude", "settings.json")],
+  ];
+  if (home) settings.push(["~/.claude/settings.json", path.join(home, ".claude", "settings.json")]);
+  for (const [label, file] of settings) {
+    try {
+      const parsed = JSON.parse(readFileSync(file, "utf8"));
+      if (parsed?.enabledPlugins?.["openreceive@openreceive"] === true) {
+        return `Agent skills: installed (${label} enables the openreceive plugin)`;
+      }
+    } catch {
+      // Missing or not JSON: Claude Code would not load the plugin from it either.
+    }
+  }
+  return `Agent skills: optional — if your agent has no OpenReceive skill yet, run \`npx openreceive skills install\``;
+}
 
 /**
  * Fill doctor's variables from the project's env files, the way the app's own

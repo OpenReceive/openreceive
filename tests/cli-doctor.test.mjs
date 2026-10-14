@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -290,6 +290,45 @@ test("doctor rejects unknown options with help pointer", async () => {
   const { code, err } = await doctor({ argv: ["--wat"], env: { NWC_URI: VALID_NWC } });
   assert.equal(code, 1);
   assert.match(err, /Unexpected option: --wat/);
+});
+
+// A merchant who installed the Claude Code plugin saw doctor tell them to
+// install the skills again.
+test("doctor suggests the skills install only when no skill is installed", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-skills-"));
+  const home = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-home-"));
+  const skillsLine = async (env = {}) =>
+    (await doctor({ argv: ["--offline"], env: { NWC_URI: VALID_NWC, ...env }, cwd: dir })).out
+      .split("\n")
+      .find((line) => line.startsWith("Agent skills:"));
+  const enable = (file, enabled) =>
+    writeFile(file, JSON.stringify({ enabledPlugins: { "openreceive@openreceive": enabled } }));
+  try {
+    assert.match(await skillsLine(), /optional — .*run `npx openreceive skills install`/);
+    await mkdir(path.join(home, ".claude"));
+    await enable(path.join(home, ".claude/settings.json"), true);
+    assert.equal(
+      await skillsLine({ HOME: home }),
+      "Agent skills: installed (~/.claude/settings.json enables the openreceive plugin)",
+    );
+    await mkdir(path.join(dir, ".claude"));
+    await enable(path.join(dir, ".claude/settings.local.json"), false);
+    assert.match(await skillsLine(), /optional/);
+    await enable(path.join(dir, ".claude/settings.json"), true);
+    assert.equal(
+      await skillsLine(),
+      "Agent skills: installed (.claude/settings.json enables the openreceive plugin)",
+    );
+    await mkdir(path.join(dir, ".agents/skills/integrate-openreceive"), { recursive: true });
+    await writeFile(path.join(dir, ".agents/skills/integrate-openreceive/SKILL.md"), "---\n");
+    assert.equal(
+      await skillsLine(),
+      "Agent skills: installed (.agents/skills/integrate-openreceive)",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
 });
 
 test("debug-report always exits 0, even with nothing configured", async () => {

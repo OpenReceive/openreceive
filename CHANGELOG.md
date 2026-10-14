@@ -31,6 +31,18 @@
   said plain ORM calls were fine. Its first `onPaid` example now uses the
   `query` it receives, inside the settlement transaction, as the agent
   directions and the [ORM guide](docs/guides/node-orms.md) say.
+- Changed (Node, Python, PHP): doctor no longer says to install the agent
+  skills when the project already has them. A merchant who had installed the
+  Claude Code plugin was told to run `npx openreceive skills install`. Doctor
+  now reports `installed` when it finds `integrate-openreceive` in
+  `.agents/skills/` or `.claude/skills/`, or the `openreceive` plugin enabled in
+  `.claude/settings.local.json`, `.claude/settings.json` or
+  `~/.claude/settings.json`. Otherwise it calls the install optional.
+- Docs: the Claude Code plugin's description lists every stack the skill
+  covers, as Claude Code's install screen shows it. Flask, NestJS, Fastify,
+  Next.js, the recipe stacks and Lovable were missing. The skill's own
+  description adds Flask, Lovable and Supabase. /agents puts each install
+  command in its own block with a copy button.
 - Docs (Rails): slim images also need `libssl-dev`. `nwc-ruby`'s connection
   libraries need a newer `openssl` gem than Ruby ships, and Bundler compiles
   it against the OpenSSL headers.

@@ -39,8 +39,38 @@ final class Doctor
         }
         $lines[] = '  engine mounted:   ' . ($mountedAt === null ? 'unknown — the host mounts Psr15Handler' : "at {$mountedAt}");
         $lines[] = '  wallet preflight: ' . self::walletReport($walletCheck);
-        $lines[] = 'Agent skills: run `npx skills add OpenReceive/openreceive` in your project';
+        $lines[] = self::agentSkillsLine((string) getcwd(), ($env['HOME'] ?? null) ?: (getenv('HOME') ?: null));
         return $lines;
+    }
+
+    /**
+     * Where an agent already finds the integrate-openreceive skill: a copy in
+     * the project's skills folders, or the Claude Code plugin enabled in
+     * project or user settings. Doctor suggests an install only when it finds none.
+     */
+    public static function agentSkillsLine(string $cwd, ?string $home): string
+    {
+        foreach (['.agents/skills', '.claude/skills'] as $dir) {
+            if (is_file("{$cwd}/{$dir}/integrate-openreceive/SKILL.md")) {
+                return "Agent skills: installed ({$dir}/integrate-openreceive)";
+            }
+        }
+        $settings = [
+            '.claude/settings.local.json' => "{$cwd}/.claude/settings.local.json",
+            '.claude/settings.json' => "{$cwd}/.claude/settings.json",
+        ];
+        if ($home !== null && $home !== '') {
+            $settings['~/.claude/settings.json'] = "{$home}/.claude/settings.json";
+        }
+        foreach ($settings as $label => $file) {
+            // Missing or not JSON: Claude Code would not load the plugin from it either.
+            $parsed = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+            if (is_array($parsed) && is_array($parsed['enabledPlugins'] ?? null)
+                && ($parsed['enabledPlugins']['openreceive@openreceive'] ?? null) === true) {
+                return "Agent skills: installed ({$label} enables the openreceive plugin)";
+            }
+        }
+        return 'Agent skills: optional — if your agent has no OpenReceive skill yet, run `npx skills add OpenReceive/openreceive`';
     }
 
     /**

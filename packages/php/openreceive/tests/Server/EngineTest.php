@@ -417,6 +417,36 @@ final class EngineTest extends TestCase
         self::assertStringNotContainsString('deadbeef', implode("\n", $failed));
     }
 
+    /** A merchant with the Claude Code plugin saw doctor say to install the skills again. */
+    public function testTheDoctorSuggestsTheSkillsInstallOnlyWhenNoSkillIsInstalled(): void
+    {
+        $root = sys_get_temp_dir() . '/openreceive-doctor-skills-' . bin2hex(random_bytes(4));
+        $project = "{$root}/shop";
+        $home = "{$root}/home";
+        $enable = static function (string $file, bool $enabled): void {
+            @mkdir(dirname($file), 0777, true);
+            file_put_contents($file, json_encode(['enabledPlugins' => ['openreceive@openreceive' => $enabled]]));
+        };
+        try {
+            mkdir($project, 0777, true);
+            self::assertStringStartsWith('Agent skills: optional', Doctor::agentSkillsLine($project, null));
+            $enable("{$home}/.claude/settings.json", true);
+            self::assertSame('Agent skills: installed (~/.claude/settings.json enables the openreceive plugin)', Doctor::agentSkillsLine($project, $home));
+            $enable("{$project}/.claude/settings.local.json", false);
+            self::assertStringStartsWith('Agent skills: optional', Doctor::agentSkillsLine($project, null));
+            $enable("{$project}/.claude/settings.json", true);
+            self::assertSame('Agent skills: installed (.claude/settings.json enables the openreceive plugin)', Doctor::agentSkillsLine($project, null));
+            mkdir("{$project}/.agents/skills/integrate-openreceive", 0777, true);
+            file_put_contents("{$project}/.agents/skills/integrate-openreceive/SKILL.md", "---\n");
+            self::assertSame('Agent skills: installed (.agents/skills/integrate-openreceive)', Doctor::agentSkillsLine($project, null));
+        } finally {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST) as $entry) {
+                $entry->isDir() ? rmdir($entry->getPathname()) : unlink($entry->getPathname());
+            }
+            rmdir($root);
+        }
+    }
+
     public function testCustomAndBuiltInRateLimitsAreMutuallyExclusive(): void
     {
         $this->expectException(\OpenReceive\ConfigurationError::class);

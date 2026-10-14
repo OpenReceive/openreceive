@@ -34,7 +34,7 @@ from typing import Any, TextIO
 
 from openreceive._version import __version__
 from openreceive.server.app import OpenReceiveApp
-from openreceive.server.doctor import doctor_report
+from openreceive.server.doctor import agent_skills_line, doctor_report
 from openreceive.server.errors import ConfigurationError
 from openreceive.server.hosts import Host
 from openreceive.server.notifications import (
@@ -439,7 +439,7 @@ def run_doctor(
         *report.lines[:2],
         env_line,
         *report.lines[2:],
-        "Agent skills: run `openreceive skills install`",
+        agent_skills_line(cwd, env.get("HOME") or env.get("USERPROFILE")),
     ]
     ok = report.ok
     if notes:

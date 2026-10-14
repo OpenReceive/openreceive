@@ -171,6 +171,40 @@ def test_doctor_exit_codes_and_debug_report() -> None:
     )
 
 
+def test_doctor_suggests_the_skills_install_only_when_no_skill_is_installed(
+    tmp_path: Path,
+) -> None:
+    # A merchant with the Claude Code plugin saw doctor say to install the skills again.
+    project, home = tmp_path / "shop", tmp_path / "home"
+    project.mkdir()
+
+    def skills_line(env: dict[str, str] | None = None) -> str:
+        _, out, _ = cli(["doctor", "--offline"], cwd=project, env=env or {})
+        return next(line for line in out.split("\n") if line.startswith("Agent skills:"))
+
+    def enable(file: Path, enabled: bool) -> None:
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(
+            f'{{"enabledPlugins": {{"openreceive@openreceive": {str(enabled).lower()}}}}}'
+        )
+
+    assert "optional" in skills_line() and "run `openreceive skills install`" in skills_line()
+    enable(home / ".claude" / "settings.json", True)
+    assert skills_line({"HOME": str(home)}) == (
+        "Agent skills: installed (~/.claude/settings.json enables the openreceive plugin)"
+    )
+    enable(project / ".claude" / "settings.local.json", False)
+    assert "optional" in skills_line()
+    enable(project / ".claude" / "settings.json", True)
+    assert skills_line() == (
+        "Agent skills: installed (.claude/settings.json enables the openreceive plugin)"
+    )
+    skill = project / ".agents" / "skills" / "integrate-openreceive" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\n")
+    assert skills_line() == "Agent skills: installed (.agents/skills/integrate-openreceive)"
+
+
 def test_doctor_reads_dot_env_without_overriding_the_environment(tmp_path: Path) -> None:
     other = NWC_URI.replace(PUBKEY, "c" * 64)
     (tmp_path / ".env").write_text(

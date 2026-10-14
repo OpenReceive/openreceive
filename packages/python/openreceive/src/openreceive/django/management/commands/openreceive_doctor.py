@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -16,6 +17,7 @@ from django.urls import NoReverseMatch, reverse
 from openreceive.django import conf
 from openreceive.django.repository import DjangoPaymentRepository
 from openreceive.server import Host, doctor_report
+from openreceive.server.doctor import agent_skills_line
 from openreceive.server.service import sanitize_failure_message
 
 
@@ -62,7 +64,8 @@ class Command(BaseCommand):
             offline=bool(options["offline"]),
             command="openreceive_doctor",
         )
-        lines = [*report.lines, "Agent skills: run `openreceive skills install`"]
+        home = os.environ.get("HOME") or os.environ.get("USERPROFILE")
+        lines = [*report.lines, agent_skills_line(Path.cwd(), home)]
         ok = report.ok
         if host_error is not None:
             lines.append(f"host: {sanitize_failure_message(ImproperlyConfigured(host_error))}")

@@ -7,38 +7,52 @@ application — or debug one — without guessing.
 ## Building an integration?
 
 Install the **integrate-openreceive** skill (it detects your stack and carries
-the full quickstart), or paste the one-prompt agent directions:
+the full quickstart), or paste the one-prompt agent directions.
 
-- Claude Code: `/plugin marketplace add OpenReceive/openreceive`, then
-  `/plugin install openreceive`
-- Skills CLI (Codex, Cursor, and other SKILL.md-compatible tools):
-  `npx skills add OpenReceive/openreceive`
-- For GitHub Copilot and other agents, install into **your application's**
-  `.agents/skills/` with `npx skills add OpenReceive/openreceive` or the
-  package command below. The OpenReceive repository's own `.agents/skills/`
-  is only discovered when that repository is the workspace.
-- No installer? Copy the agent directions for your stack and paste them into
-  your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.md) ·
-  [Fastify](https://openreceive.org/agent-directions/fastify/full.md) ·
-  [Next.js](https://openreceive.org/agent-directions/next/full.md) ·
-  [NestJS](https://openreceive.org/agent-directions/nestjs/full.md) ·
-  [Rails](https://openreceive.org/agent-directions/rails/full.md) ·
-  [PHP](https://openreceive.org/agent-directions/php/full.md) ·
-  [Laravel](https://openreceive.org/agent-directions/laravel/full.md) ·
-  [Django](https://openreceive.org/agent-directions/django/full.md) ·
-  [FastAPI](https://openreceive.org/agent-directions/fastapi/full.md) ·
-  [Flask](https://openreceive.org/agent-directions/flask/full.md) ·
-  [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) ·
-  [Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
-  [SvelteKit](https://openreceive.org/agent-directions/sveltekit/full.md) ·
-  [Nuxt](https://openreceive.org/agent-directions/nuxt/full.md) ·
-  [Astro](https://openreceive.org/agent-directions/astro/full.md) ·
-  [React Router](https://openreceive.org/agent-directions/react-router/full.md) ·
-  [TanStack Start](https://openreceive.org/agent-directions/tanstack-start/full.md) ·
-  [BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md). Each
-  is self-contained, quickstart included. To hand an agent a link instead, drop
-  `/full` from the URL: that short page tells it to download the full file with
-  its shell.
+**Claude Code:** run these two commands in Claude Code, one at a time.
+
+```text
+/plugin marketplace add OpenReceive/openreceive
+```
+
+```text
+/plugin install openreceive
+```
+
+**Skills CLI** (Codex, Cursor, GitHub Copilot, and other SKILL.md-compatible
+tools): run this from your application's directory.
+
+```sh
+npx skills add OpenReceive/openreceive
+```
+
+Run it in **your application**, or use the package command below: agents such
+as GitHub Copilot look for skills in the application's own `.agents/skills/`.
+The OpenReceive repository's own `.agents/skills/` is only discovered when that
+repository is the workspace.
+
+**No installer?** Copy the agent directions for your stack and paste them into
+your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.md) ·
+[Fastify](https://openreceive.org/agent-directions/fastify/full.md) ·
+[Next.js](https://openreceive.org/agent-directions/next/full.md) ·
+[NestJS](https://openreceive.org/agent-directions/nestjs/full.md) ·
+[Rails](https://openreceive.org/agent-directions/rails/full.md) ·
+[PHP](https://openreceive.org/agent-directions/php/full.md) ·
+[Laravel](https://openreceive.org/agent-directions/laravel/full.md) ·
+[Django](https://openreceive.org/agent-directions/django/full.md) ·
+[FastAPI](https://openreceive.org/agent-directions/fastapi/full.md) ·
+[Flask](https://openreceive.org/agent-directions/flask/full.md) ·
+[WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) ·
+[Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
+[SvelteKit](https://openreceive.org/agent-directions/sveltekit/full.md) ·
+[Nuxt](https://openreceive.org/agent-directions/nuxt/full.md) ·
+[Astro](https://openreceive.org/agent-directions/astro/full.md) ·
+[React Router](https://openreceive.org/agent-directions/react-router/full.md) ·
+[TanStack Start](https://openreceive.org/agent-directions/tanstack-start/full.md) ·
+[BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md). Each
+is self-contained, quickstart included. To hand an agent a link instead, drop
+`/full` from the URL: that short page tells it to download the full file with
+its shell.
 
 One package per ecosystem bundles an offline copy: `@openreceive/node`, the
 core `openreceive` gem, Python's `openreceive`, and Composer's
@@ -48,7 +62,7 @@ where your agent can discover it:
 | Stack | Install bundled skills |
 | --- | --- |
 | Node | `npx openreceive skills install` |
-| Python (Django or FastAPI) | `openreceive skills install` |
+| Python (Django, FastAPI or Flask) | `openreceive skills install` |
 | Rails | `bin/rails openreceive:skills` |
 | Laravel | `php artisan openreceive:skills` |
 

@@ -4,9 +4,9 @@ description: >
   Integrate OpenReceive Bitcoin Lightning checkout and optional USDT, USDC,
   SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, NestJS,
   SvelteKit, Nuxt, Astro, React Router, TanStack Start, Rails,
-  Python, Django, FastAPI, Laravel, plain PHP, WordPress/WooCommerce,
-  React, Vue, Svelte, Angular, or plain HTML applications, or connecting
-  BTCPay Server to a receive-only NWC wallet. A configured swap provider
+  Python, Django, FastAPI, Flask, Laravel, plain PHP, WordPress/WooCommerce,
+  Lovable, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
+  or connecting BTCPay Server to a receive-only NWC wallet. A configured swap provider
   converts these payments to BTC over Lightning in the merchant's connected
   wallet; asset and network availability depends on the provider.
 license: MIT

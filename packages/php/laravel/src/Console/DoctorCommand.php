@@ -63,8 +63,8 @@ final class DoctorCommand extends Command
             );
         }
         foreach ($lines as $line) {
-            $this->line(str_starts_with($line, 'Agent skills:')
-                ? 'Agent skills: run `php artisan openreceive:skills`'
+            $this->line(str_starts_with($line, 'Agent skills: optional')
+                ? 'Agent skills: optional — if your agent has no OpenReceive skill yet, run `php artisan openreceive:skills`'
                 : $line);
         }
         return self::SUCCESS;

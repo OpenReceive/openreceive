@@ -8,9 +8,11 @@ Rails `openreceive:doctor` task."""
 
 from __future__ import annotations
 
+import json
 import platform
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from openreceive._version import __version__
@@ -99,6 +101,33 @@ def doctor_report(
             lines.append("host: amount_for, authorize and on_paid are set")
 
     return DoctorReport(ok=not failed, lines=lines)
+
+
+def agent_skills_line(cwd: Path, home: str | None) -> str:
+    """Where an agent already finds the integrate-openreceive skill: a copy in
+    the project's skills folders, or the Claude Code plugin enabled in project
+    or user settings. Doctor suggests an install only when it finds none."""
+    for folder in (".agents/skills", ".claude/skills"):
+        if (cwd / folder / "integrate-openreceive" / "SKILL.md").is_file():
+            return f"Agent skills: installed ({folder}/integrate-openreceive)"
+    settings = [
+        (".claude/settings.local.json", cwd / ".claude" / "settings.local.json"),
+        (".claude/settings.json", cwd / ".claude" / "settings.json"),
+    ]
+    if home:
+        settings.append(("~/.claude/settings.json", Path(home) / ".claude" / "settings.json"))
+    for label, file in settings:
+        try:
+            plugins = json.loads(file.read_text(encoding="utf-8")).get("enabledPlugins")
+        except (OSError, ValueError, AttributeError):
+            # Missing or not JSON: Claude Code would not load the plugin from it either.
+            continue
+        if isinstance(plugins, dict) and plugins.get("openreceive@openreceive") is True:
+            return f"Agent skills: installed ({label} enables the openreceive plugin)"
+    return (
+        "Agent skills: optional — if your agent has no OpenReceive skill yet, "
+        "run `openreceive skills install`"
+    )
 
 
 def probe_wallet(
