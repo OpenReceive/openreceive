@@ -3,21 +3,21 @@
   "passed": [
     {
       "trial": "woocommerce",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
-      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "5fa57da8b7f6"
+      "agents": ["codex/default"],
+      "mode": "released",
+      "directions": "ce0ed22bd6ce"
     },
     {
       "trial": "node",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
-      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "5c588316bf75"
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "released",
+      "directions": "66285d856e3d"
     },
     {
       "trial": "fastify",
@@ -30,21 +30,21 @@
     },
     {
       "trial": "next",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
-      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "8bac46517dd1"
+      "agents": ["codex/default"],
+      "mode": "released",
+      "directions": "2f9b2bab7388"
     },
     {
       "trial": "rails",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "a6fb5bf5795f"
+      "mode": "released",
+      "directions": "0cbdc78e5a6c"
     },
     {
       "trial": "php",
@@ -57,12 +57,12 @@
     },
     {
       "trial": "fastapi",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
-      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "63ea814c2bd0"
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "released",
+      "directions": "2229652ed598"
     },
     {
       "trial": "django",
