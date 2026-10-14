@@ -7,8 +7,13 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const tool = fileURLToPath(new URL("../tools/release/wordpress-plugin.mjs", import.meta.url));
-const hasSvn =
-  spawnSync("sh", ["-c", "command -v svn svnadmin zip unzip"], { stdio: "ignore" }).status === 0;
+// One tool per lookup: bash (macOS's /bin/sh) exits 0 from `command -v a b`
+// when any one of them is found.
+const missingTools = ["svn", "svnadmin", "zip", "unzip"].filter(
+  (tool) =>
+    spawnSync("sh", ["-c", 'command -v "$1"', "sh", tool], { stdio: "ignore" }).status !== 0,
+);
+const skip = missingTools.length > 0 && `needs ${missingTools.join(", ")} on PATH`;
 
 // A local file:// repository laid out like a new WordPress.org plugin.
 function directory(t) {
@@ -80,7 +85,7 @@ const svn = (...args) => execFileSync("svn", args, { encoding: "utf8" });
 const revision = (url) => svn("info", "--show-item", "revision", url).trim();
 
 test("publish commits trunk and the assets, then tags the release on the server", {
-  skip: !hasSvn,
+  skip,
 }, (t) => {
   const repo = directory(t);
   const first = publish(
@@ -116,7 +121,7 @@ test("publish commits trunk and the assets, then tags the release on the server"
 });
 
 test("publish refuses mismatched, older, prerelease or unauthenticated releases", {
-  skip: !hasSvn,
+  skip,
 }, (t) => {
   const repo = directory(t);
   assert.equal(publish(repo, pluginZip(repo.dir, "2.0.0")).status, 0);
@@ -142,7 +147,7 @@ test("publish refuses mismatched, older, prerelease or unauthenticated releases"
   assert.equal(revision(repo.url), "3");
 });
 
-test("a re-run whose trunk commit landed only adds the missing tag", { skip: !hasSvn }, (t) => {
+test("a re-run whose trunk commit landed only adds the missing tag", { skip }, (t) => {
   const repo = directory(t);
   const zip = pluginZip(repo.dir, "3.0.0", { "src/A.php": "a" });
   assert.equal(publish(repo, zip).status, 0);

@@ -30,8 +30,21 @@ for manifest in "${packages[@]}"; do
   dir="$(dirname "$manifest")"
   echo "== $dir"
   (cd "$dir" && composer validate --no-check-publish --no-interaction)
-  if [ ! -f "$dir/vendor/autoload.php" ]; then
-    (cd "$dir" && composer install --no-interaction --no-progress --prefer-dist)
+  # Install every time: it does nothing when vendor/ already matches the lock,
+  # and it applies a lock that changed since vendor/ was built.
+  (cd "$dir" && composer install --no-interaction --no-progress --prefer-dist)
+  # A path repository with "symlink": false (the WordPress plugin's engine) is
+  # a copy, and install never refreshes a copy whose version is unchanged.
+  # Mirror it again so the suite runs against the engine in this checkout.
+  copied="$(cd "$dir" && php -r '
+    foreach (json_decode(file_get_contents("composer.json"), true)["repositories"] ?? [] as $repo) {
+      if (($repo["type"] ?? "") === "path" && ($repo["options"]["symlink"] ?? null) === false) {
+        echo json_decode(file_get_contents($repo["url"] . "/composer.json"), true)["name"], "\n";
+      }
+    }')"
+  if [ -n "$copied" ]; then
+    # shellcheck disable=SC2086 # one package name per word
+    (cd "$dir" && composer reinstall --no-interaction --no-progress $copied)
   fi
   tests=("$dir"/tests/*Test.php "$dir"/tests/*/*Test.php)
   if [ "${#tests[@]}" -eq 0 ]; then

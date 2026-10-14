@@ -64,6 +64,9 @@ tests/e2e/test-results/
 
 # Agent trial reports. A transcript can contain a pasted wallet code.
 trials/reports/
+# The trials' old home. A checkout from before the rename still holds its
+# reports under evals/directions/reports/.
+/evals/
 # The trial wallet's CA and bundle, written by trials/harness/wallet.ts.
 trials/wallet/certs/
 
