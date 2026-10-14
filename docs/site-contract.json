@@ -596,7 +596,7 @@
       "slug": "agent-directions-sveltekit",
       "title": "Agent Directions: SvelteKit",
       "category": "quickstart",
-      "bytes": 34910
+      "bytes": 35306
     },
     {
       "path": "/guides/agent-directions-nuxt",
@@ -616,7 +616,7 @@
       "slug": "agent-directions-astro",
       "title": "Agent Directions: Astro",
       "category": "quickstart",
-      "bytes": 34661
+      "bytes": 35055
     },
     {
       "path": "/guides/agent-directions-react-router",
@@ -636,7 +636,7 @@
       "slug": "agent-directions-tanstack-start",
       "title": "Agent Directions: TanStack Start",
       "category": "quickstart",
-      "bytes": 38925
+      "bytes": 39000
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -1005,7 +1005,7 @@
       "kind": "agent-directions-payload",
       "stack": "sveltekit",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34910,
+      "bytes": 35306,
       "copy_button": true,
       "self_contained": true
     },
@@ -1047,7 +1047,7 @@
       "kind": "agent-directions-payload",
       "stack": "astro",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34661,
+      "bytes": 35055,
       "copy_button": true,
       "self_contained": true
     },
@@ -1089,7 +1089,7 @@
       "kind": "agent-directions-payload",
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38925,
+      "bytes": 39000,
       "copy_button": true,
       "self_contained": true
     }

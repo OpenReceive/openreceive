@@ -253,7 +253,13 @@ itself, and they hold for every integration.
   stack is built on the first request, never at import: `vite build` imports
   server modules to analyse them, and a stack connects to the wallet as it is
   built. The endpoint exports `GET` and `POST`, runs on Node through
-  adapter-node — never an edge runtime — and is never prerendered.
+  adapter-node — never an edge runtime — and is never prerendered. If you
+  declare `NWC_URI` in `src/env.ts`, give it the recipe's schema, which
+  returns `""` while `building`: the build checks every declared variable
+  without the codes, and a missing one fails it.
+- Install the OpenReceive packages and `pg` as `dependencies`, never
+  `devDependencies`: adapter-node bundles devDependencies into the server
+  build and leaves dependencies to `node_modules`.
 - Pass the `RequestEvent` as `native`, so `authorize` reads the session the
   app already has, and give `rateLimiting` `ip: ({ native }) =>
   native.getClientAddress()`. Behind your own reverse proxy, set adapter-node's

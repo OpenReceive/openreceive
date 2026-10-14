@@ -132,9 +132,8 @@ you store it. Ask one question per message.
    back (the swap non-negotiable below) as part of this integration. If they
    chose Bitcoin only, leave `LSC_URI_PRIMARY` unset and skip that route.
 5. **Make the server load the file — yourself.** OpenReceive reads
-   `process.env`, and a `.env` file on disk is not in it. Start the dev
-   server with `node --env-file=.env node_modules/.bin/vite dev`, and the
-   built server with `node --env-file=.env .output/server/index.mjs`. When
+   `process.env`. `vite dev` loads `.env` into it, but the built server does
+   not: start it with `node --env-file=.env .output/server/index.mjs`. When
    the app is started with Docker Compose, give the service `env_file: .env`.
    Never give a code a `VITE_` prefix: that puts it in the browser bundle.
    Restart the server after writing the file.
@@ -282,6 +281,7 @@ itself, and they hold for every integration.
   ```ts
   // src/lib/openreceive.server.ts — on Node: one stack for the process
   import { createStack, type Stack } from "@openreceive/http";
+  import { getRequestIP } from "@tanstack/react-start/server";
   import { db } from "./db.server"; // the app's existing pg Pool
 
   let stack: Stack | undefined;
@@ -292,7 +292,7 @@ itself, and they hold for every integration.
       storage: { db, onPaid }, // onPaid, amountFor, authorize: as in the recipe
       amountFor,
       authorize,
-      rateLimiting: { ip: ({ request: incoming }) => clientIp(incoming) },
+      rateLimiting: { ip: () => getRequestIP() }, // the socket address
     });
     return stack.handler(request, { native: request });
   }
@@ -300,11 +300,12 @@ itself, and they hold for every integration.
 
   Keep the recipe's route file as it is. Skip its On Supabase (Lovable)
   section.
-- `authorize` gets the Web `request`: read the app's session from its cookie
-  header, with the same helper its server functions use. `clientIp` returns
-  only a header that your own reverse proxy sets and overwrites, such as
-  `x-real-ip`; never one a client can send. Without such a proxy, return
-  `undefined` and the limit does not apply.
+- `authorize` runs inside the request, so the app's own cookie and session
+  helpers work there (`getCookie()` from `@tanstack/react-start/server`, or
+  the helper its server functions use). `getRequestIP()` is the socket
+  address. Behind your own reverse proxy, which sets `x-forwarded-for`, use
+  `getRequestIP({ xForwardedFor: true })` instead; never read that header
+  without such a proxy, because a client can send it.
 - `<Checkout>` comes from `@openreceive/react`, with
   `@openreceive/react/styles.css`, on the order's own page: its resumable URL.
 - HTTP JSON is snake_case; TypeScript APIs are camelCase.

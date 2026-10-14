@@ -274,6 +274,12 @@ itself, and they hold for every integration.
   the wallet. The endpoint and the checkout page set
   `export const prerender = false` and run on `@astrojs/node`, never an edge
   adapter. The rest of the site may stay static.
+- Read `NWC_URI` from `astro:env/server`, declared as a server secret in
+  `env.schema` as the recipe does, never from `import.meta.env`: the build
+  writes an `import.meta.env` value into the server bundle. Leave
+  `LSC_URI_*` out of the schema, because OpenReceive reads them from
+  `process.env`, and a declared variable that is missing at run time makes
+  every on-demand route answer 500.
 - Pass the endpoint's `APIContext` as `native`, so `authorize` reads the
   session the app already has, and give `rateLimiting` `ip: ({ native }) =>
   native.clientAddress`. Behind your own reverse proxy, list your domain in

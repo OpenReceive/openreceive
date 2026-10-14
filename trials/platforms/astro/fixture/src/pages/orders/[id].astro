@@ -1,0 +1,24 @@
+---
+import Shop from "../../layouts/Shop.astro";
+import { findOrder } from "../../lib/shop";
+
+export const prerender = false;
+
+// Only the browser that placed the order may see it.
+const order = await findOrder(Number(Astro.params.id), Astro.cookies.get("widget_user")?.value);
+if (!order) {
+  return new Response("That order is not yours.", { status: 404 });
+}
+---
+
+<Shop title={`Order ${order.id}`}>
+  <h1>Order {order.id}</h1>
+  <p>{order.product_name} — ${order.amount} {order.currency}</p>
+  {
+    order.status === "paid" ? (
+      <p>Paid.</p>
+    ) : (
+      <p>Awaiting payment. Online payments are not set up yet.</p>
+    )
+  }
+</Shop>

@@ -1,0 +1,6 @@
+import { listProducts } from '#lib/server/shop.ts';
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async () => {
+	return { products: await listProducts() };
+};
