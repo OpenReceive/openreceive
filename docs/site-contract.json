@@ -476,7 +476,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 38729
+      "bytes": 38902
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -526,7 +526,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 42187
+      "bytes": 42360
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -536,7 +536,7 @@
       "slug": "agent-directions-nestjs",
       "title": "Agent Directions: NestJS",
       "category": "quickstart",
-      "bytes": 41898
+      "bytes": 42071
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -703,7 +703,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 38729,
+      "bytes": 38902,
       "copy_button": true,
       "self_contained": true
     },
@@ -745,7 +745,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42187,
+      "bytes": 42360,
       "copy_button": true,
       "self_contained": true
     },
@@ -766,7 +766,7 @@
       "kind": "agent-directions-payload",
       "stack": "nestjs",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41898,
+      "bytes": 42071,
       "copy_button": true,
       "self_contained": true
     },

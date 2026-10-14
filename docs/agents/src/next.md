@@ -49,7 +49,9 @@ server load the file), then the quickstart.
 On a hosted builder (v0, Vercel, Replit, Lovable), the user may say instead
 that both codes are already set as the project's environment variables or
 secrets. Believe them: do not ask for the codes, do not write `.env.local`, and
-do not read or print the variables. Next reads them from the environment.
+do not read or print the variables. Next reads them from the environment. Do not add them to a compose file or any other deploy config
+either: they already reach the app, and a line such as `NWC_URI: ${NWC_URI}`
+replaces them with an empty value.
 
 Otherwise your next action is a question to the user. Do not install packages,
 edit the app, write `.env.example`, or search anywhere else before asking
