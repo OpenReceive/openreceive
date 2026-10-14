@@ -1,4 +1,4 @@
-# OpenReceive agent directions: NestJS (0.4.25)
+# OpenReceive agent directions: NestJS (0.4.26)
 
 These directions are 42 KB. Download them with your shell and follow them from Step 0:
 

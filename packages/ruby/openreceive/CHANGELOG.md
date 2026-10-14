@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.26 - 2026-10-14
+
+Release with the complete 0.4.26 package family. The bundled agent skill's
+directions say that a paid order's page shows that it is paid and no
+checkout, and that a Docker Compose app recreates its container after
+writing `.env`. The plain PHP directions describe the engine's new default
+cache. No Ruby runtime changes from 0.4.25.
+
 ## 0.4.25 - 2026-10-13
 
 Release with the complete 0.4.25 package family. The bundled agent skill

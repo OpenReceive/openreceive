@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.26 - 2026-10-14
 
 - Fixed (PHP): a plain PHP app's checkout was 5–10 times slower than
   Laravel's. `Service::fromEnvironment()` kept nothing between requests. So

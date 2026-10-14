@@ -1,4 +1,4 @@
-# OpenReceive agent directions: BTCPay Server (0.4.25)
+# OpenReceive agent directions: BTCPay Server (0.4.26)
 
 These directions are 16 KB. Download them with your shell and follow them from Step 0:
 

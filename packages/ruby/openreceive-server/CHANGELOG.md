@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.26 - 2026-10-14
+
+Release with the complete 0.4.26 package family. No runtime changes from
+0.4.25.
+
 ## 0.4.25 - 2026-10-13
 
 Release with the complete 0.4.25 package family. The bundled agent skill

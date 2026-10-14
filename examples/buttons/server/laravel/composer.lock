@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e1862d3c2b711f6ee75cfc1c4f277155",
+    "content-hash": "7e3728c05eb4fdc9ffd9426c0781df07",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/laravel",
-            "version": "0.4.25",
+            "version": "0.4.26",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/laravel",
-                "reference": "71d67060d311f91ef9848d2ebc132127fa142bd0"
+                "reference": "f7c62804c897d8a25476a7d0a1f62bbe6b162b5c"
             },
             "require": {
                 "illuminate/console": "^11.0 || ^12.0 || ^13.0",
@@ -2740,7 +2740,7 @@
                 "illuminate/routing": "^11.0 || ^12.0 || ^13.0",
                 "illuminate/support": "^11.0 || ^12.0 || ^13.0",
                 "nyholm/psr7": "^1.8",
-                "openreceive/openreceive": "~0.4.25",
+                "openreceive/openreceive": "~0.4.26",
                 "php": "^8.2",
                 "symfony/psr-http-message-bridge": "^7.0 || ^8.0"
             },
@@ -2801,11 +2801,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.25",
+            "version": "0.4.26",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/openreceive",
-                "reference": "c8e3ac8ed339f1a218c6557836966de928976dc9"
+                "reference": "63279e2339d063b5f20db2e56c2b843d1c6630f6"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
