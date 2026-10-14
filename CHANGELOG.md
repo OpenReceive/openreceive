@@ -10,6 +10,13 @@
   under the same 64 KB cap; a larger one answers 413. When something else
   already drained the body without setting `req.body`, the adapter still
   answers the 500 that names the missing body parser.
+- Docs: agent directions for SvelteKit, Nuxt, Astro, React Router and
+  TanStack Start on Node, each with its recipe inlined as the quickstart, and
+  agent trials that pass 3 of 3 on each. Site contract v10: a recipe row may
+  carry agent directions. The Node, Fastify, Next.js, NestJS, TanStack Start,
+  FastAPI, Django and Flask directions gain an "If the database is Supabase"
+  branch in their database step: the transaction pooler, Supabase's
+  certificate authority, and closing OpenReceive's tables to the Data API.
 - Fixed (Node): when the wallet was unreachable at boot, a stack built with
   `createStack` (and every adapter's all-in-one form) answered each request
   with the 503 `WALLET_UNAVAILABLE`, and then the process exited: the
