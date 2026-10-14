@@ -18,6 +18,7 @@ final class CachedWalletInfoTest extends PlainTestCase
     {
         $counting = new class implements ReceiveNwcClient {
             public int $preflights = 0;
+            public bool $stopped = false;
             private readonly FakeWallet $inner;
 
             public function __construct()
@@ -45,6 +46,11 @@ final class CachedWalletInfoTest extends PlainTestCase
             {
                 $this->inner->subscribeNotifications($handler, $onIdle);
             }
+
+            public function stopNotifications(): void
+            {
+                $this->stopped = true;
+            }
         };
         $cache = new Repository(new ArrayStore());
         $build = static fn (): Service => new Service(new CachedWalletInfo($counting, $cache, 'k', 600), false, [], ['USD']);
@@ -56,6 +62,9 @@ final class CachedWalletInfoTest extends PlainTestCase
         self::assertSame(['make_invoice', 'list_transactions'], $cache->get('k')['methods']);
         // Requests still go to the wallet: the cache holds the info event only.
         self::assertSame(str_repeat('0', 63) . '1', $third->createCheckout(['reference' => 'r', 'amount' => ['sats' => 2000]])['payment_hash']);
+
+        $third->stopNotifications();
+        self::assertTrue($counting->stopped, "the worker's SIGTERM reaches the listener through the wrapper");
 
         // TTL 0 = every construction preflights.
         new Service(new CachedWalletInfo($counting, $cache, 'k', 0), false, [], ['USD']);

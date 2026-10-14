@@ -2333,18 +2333,26 @@ when:
 `fromEnvironment(?array $env, array $priceCurrencies,
 PriceProvider|false|null $priceProvider, ?array $swapProviders, bool
 $allowSpendCapableWallet, ?LoggerInterface $logger, ?HttpTransport $http,
-?SharedCache $sharedCache)`:
+SharedCache|false|null $sharedCache, int $walletInfoCacheSeconds = 600)`:
 
 - Pass `$env` explicitly when the framework caches configuration.
 - Pass `false` for no rates.
 - Pass `[]` for no swaps.
-- Pass a `$sharedCache` to keep the BTC price and the swap provider's currency
-  list and rates between requests. Without one, each request fetches them
-  again, because PHP starts every request from nothing. It is
+- `$sharedCache` keeps the BTC price, the swap provider's currency list and
+  rates, and the wallet's info event between requests. PHP starts every
+  request from nothing, so without it each request fetches them again and
+  runs the preflight against the wallet. Left `null`, a web request uses
+  `OpenReceive\Support\FileSharedCache`: a directory under the system temp
+  dir that only the PHP user can open, named from a hash of the codes and the
+  install path. A command-line run (doctor, the notifications worker) uses no
+  cache. Pass `false` for no cache, or your own
   `OpenReceive\Support\SharedCache`, two methods over any cache you run:
   `get(string $key): ?string` and `set(string $key, string $value, int
-  $ttlSeconds): void`. Only public market data is stored. Laravel and
-  WordPress pass their own cache store.
+  $ttlSeconds): void`. Laravel and WordPress pass their own cache store.
+  Connection codes, payments and swap data never go in it.
+- `$walletInfoCacheSeconds` is how long the info event is kept
+  (`OpenReceive\Nwc\CachedWalletInfo`). The key is a hash of the code, so a
+  new code is always checked live. `0` runs the live preflight every time.
 
 The direct API is `prepareCheckout()`, `createCheckout()`, `reconcilePayments()`,
 `quoteSwap()`, `createSwap()`, `getSwap()`, `refundSwap()`, `listRates()`,

@@ -217,7 +217,7 @@ final class Plugin
             $client->primeInfo($cached['info']);
             return new Service($client, priceCurrencies: $currencies, env: $env, http: new WpHttpTransport(), sharedCache: new WpTransientsCache());
         }
-        $service = Service::fromEnvironment($env, $currencies, http: new WpHttpTransport(), sharedCache: new WpTransientsCache());
+        $service = Service::fromEnvironment($env, $currencies, http: new WpHttpTransport(), sharedCache: new WpTransientsCache(), walletInfoCacheSeconds: 0);
         set_transient('openreceive_wallet_info', ['key' => $key(), 'info' => $service->nwcClient()->preflight()], 10 * MINUTE_IN_SECONDS);
         return $service;
     }

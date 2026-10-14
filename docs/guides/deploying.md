@@ -182,6 +182,18 @@ web boot that misses the cache. It never runs in `php artisan config:cache`,
   process in total. Use the same image as the web process with a different
   command. `ext-pcntl` lets it stop cleanly on SIGTERM.
 
+## Plain PHP in production
+
+PHP boots the engine again on every request. Under a web server,
+`Service::fromEnvironment()` keeps the wallet's info event and the market data
+in a directory under the system temp dir that only the PHP user can open, so
+a checkout route does not ask for them again. Each server keeps its own copy.
+Nothing in it needs a backup: deleting it costs one slower request. When the
+temp dir is not writable (`open_basedir`, a read-only file system) the engine
+runs without the cache and each checkout route takes seconds longer. Pass your
+own cache as `sharedCache:` then
+([Service](api-reference.md#openreceiveserverservice)).
+
 ## Python (FastAPI) in production
 
 The engine is synchronous on purpose. One wallet RPC is one blocking call.

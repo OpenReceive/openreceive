@@ -250,10 +250,11 @@ itself, and they hold for every integration.
   array keys, and the browser packages' TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats. `amountFor`
   returns `'value' => '12.00'`, a string; never `12.00`.
-- PHP starts every request from nothing. The engine is built for that — the
-  settlement gate is a row in `openreceive_meta`, not process memory — so do
-  not add a cache, a static, or an APCu entry to "remember" the wallet or a
-  reconcile timer between requests.
+- PHP starts every request from nothing. The engine is built for that: the
+  settlement gate is a row in `openreceive_meta`, and under a web server
+  `Service::fromEnvironment()` keeps the wallet's info and the market data in
+  a private temp directory. So do not add a cache, a static, or an APCu entry
+  to "remember" the wallet or a reconcile timer between requests.
 
 ## Your tables, not ours
 

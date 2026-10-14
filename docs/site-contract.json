@@ -185,7 +185,7 @@
       "slug": "quickstart-php",
       "title": "PHP Quickstart (plain PHP)",
       "category": "quickstart",
-      "bytes": 15880
+      "bytes": 16605
     },
     {
       "path": "/guides/quickstart-laravel",
@@ -346,7 +346,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 11919
+      "bytes": 12570
     },
     {
       "path": "/guides/host-testing",
@@ -366,7 +366,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 131720
+      "bytes": 132360
     },
     {
       "path": "/guides/security",
@@ -556,7 +556,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "quickstart",
-      "bytes": 41445
+      "bytes": 42302
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -626,7 +626,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 131720,
+      "bytes": 132360,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -871,7 +871,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41445,
+      "bytes": 42302,
       "copy_button": true,
       "self_contained": true
     },

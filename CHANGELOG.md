@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Fixed (PHP): a plain PHP app's checkout was 5–10 times slower than
+  Laravel's. `Service::fromEnvironment()` kept nothing between requests. So
+  every route asked the wallet for its info event (about 0.5 s) and fetched
+  the BTC price and the swap provider's currencies and rates again
+  (0.5–1.5 s). Routes that slow also kept the reconcile gate open, so most of
+  them ran a wallet scan too. Under a web server, `fromEnvironment()` now
+  keeps all of it in `OpenReceive\Support\FileSharedCache`: a directory under
+  the system temp dir that only the PHP user can open, named from a hash of
+  the codes and the install path, so a new code is checked live. Command-line
+  runs (doctor, the notifications worker) still ask the wallet. Pass
+  `sharedCache:` to use your own cache or `false` for none, and
+  `walletInfoCacheSeconds: 0` to keep the preflight live. The info cache is
+  `OpenReceive\Nwc\CachedWalletInfo`, the core twin of the Laravel adapter's.
+  On an agent-built plain PHP shop with the trial wallet, the second
+  `checkouts/prepare` went from 5.0 s to 6 ms, a swap quote from 6.2 s to
+  5 ms, and the 13 routes of a checkout and a reload from 34 s to 12 s. The
+  price feed is also asked far less often, which avoids its 503 "Exchange
+  rates are temporarily unavailable" when several shops share an address.
+- Fixed (Laravel): `php artisan openreceive:notifications` stops on SIGTERM.
+  The wallet-info wrapper did not pass the stop on, so the listener kept
+  running until its relay connection ended.
+- Changed (PHP): `Doctor::report()` heads its output `OpenReceive doctor`, as
+  the Node doctor does, instead of the artisan command name
+  `openreceive:doctor`, which a plain PHP app's `bin/doctor` also printed.
 - Docs: four new recipes mount `@openreceive/http` as a web-standard route
   on Node: [SvelteKit](docs/recipes/sveltekit.md) (an endpoint, with
   `@openreceive/svelte`), [Nuxt](docs/recipes/nuxt.md) (a Nitro server route,

@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (PHP)
 
 ```sh
-# READ THIS FIRST: this file is 41 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 42 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/php/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -269,10 +269,11 @@ itself, and they hold for every integration.
   array keys, and the browser packages' TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats. `amountFor`
   returns `'value' => '12.00'`, a string; never `12.00`.
-- PHP starts every request from nothing. The engine is built for that — the
-  settlement gate is a row in `openreceive_meta`, not process memory — so do
-  not add a cache, a static, or an APCu entry to "remember" the wallet or a
-  reconcile timer between requests.
+- PHP starts every request from nothing. The engine is built for that: the
+  settlement gate is a row in `openreceive_meta`, and under a web server
+  `Service::fromEnvironment()` keeps the wallet's info and the market data in
+  a private temp directory. So do not add a cache, a static, or an APCu entry
+  to "remember" the wallet or a reconcile timer between requests.
 
 ## Your tables, not ours
 
@@ -599,8 +600,20 @@ if (str_starts_with($path, '/openreceive')) {
 
 `Service::fromEnvironment()` builds the wallet client from `NWC_URI` and runs
 the receive-only preflight. A missing, invalid or spend-capable code throws
-before any route is served. PHP starts every request from nothing, so that
-check runs on every request that reaches the engine.
+before any route is served.
+
+PHP starts every request from nothing. Without a cache, every checkout route
+would ask the wallet for its info event again and fetch the BTC price and the
+swap provider's currencies and rates again, which costs seconds per click.
+Under a web server, `fromEnvironment()` keeps them in a directory under the
+system temp dir that only the PHP user can open
+(`OpenReceive\Support\FileSharedCache`). The wallet's info is kept for 10
+minutes. A new code gets a new directory, so it is always checked live.
+Command-line runs, such as `bin/doctor` and the notifications worker, always
+ask the wallet. No secret goes in the cache: codes, payments and swap data
+stay out of it. If your app already runs a cache, pass it as `sharedCache:`
+([Service](https://openreceive.org/guides/api-reference.md#openreceiveserverservice)); `sharedCache: false`
+turns caching off.
 
 The settlement gate the engine relies on lives in `openreceive_meta`, not in
 memory. That is why a fleet of PHP-FPM workers shares one wallet-scan budget,

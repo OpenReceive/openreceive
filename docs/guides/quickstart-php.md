@@ -177,8 +177,20 @@ if (str_starts_with($path, '/openreceive')) {
 
 `Service::fromEnvironment()` builds the wallet client from `NWC_URI` and runs
 the receive-only preflight. A missing, invalid or spend-capable code throws
-before any route is served. PHP starts every request from nothing, so that
-check runs on every request that reaches the engine.
+before any route is served.
+
+PHP starts every request from nothing. Without a cache, every checkout route
+would ask the wallet for its info event again and fetch the BTC price and the
+swap provider's currencies and rates again, which costs seconds per click.
+Under a web server, `fromEnvironment()` keeps them in a directory under the
+system temp dir that only the PHP user can open
+(`OpenReceive\Support\FileSharedCache`). The wallet's info is kept for 10
+minutes. A new code gets a new directory, so it is always checked live.
+Command-line runs, such as `bin/doctor` and the notifications worker, always
+ask the wallet. No secret goes in the cache: codes, payments and swap data
+stay out of it. If your app already runs a cache, pass it as `sharedCache:`
+([Service](api-reference.md#openreceiveserverservice)); `sharedCache: false`
+turns caching off.
 
 The settlement gate the engine relies on lives in `openreceive_meta`, not in
 memory. That is why a fleet of PHP-FPM workers shares one wallet-scan budget,

@@ -7,6 +7,7 @@ namespace OpenReceive\Server;
 use OpenReceive\Http\HttpTransport;
 use OpenReceive\Kernel;
 use OpenReceive\Money\Money;
+use OpenReceive\Nwc\CachedWalletInfo;
 use OpenReceive\Nwc\Errors;
 use OpenReceive\Nwc\Info;
 use OpenReceive\Nwc\NostrPhpNwcReceiveClient;
@@ -26,6 +27,7 @@ use OpenReceive\Server\Errors\WalletContractError;
 use OpenReceive\Server\Errors\WalletFailureError;
 use OpenReceive\Server\Errors\WalletPreflightError;
 use OpenReceive\Settlement\Settlement;
+use OpenReceive\Support\FileSharedCache;
 use OpenReceive\Support\Integers;
 use OpenReceive\Support\Records;
 use OpenReceive\Support\SharedCache;
@@ -107,6 +109,14 @@ final class Service
      * The quickstart constructor: NWC_URI (and LSC_URI_*, OPENRECEIVE_*) from
      * the environment, the bundled nostr-php transport, live prices.
      *
+     * PHP builds the engine again on every request, so `$sharedCache` keeps
+     * the market data and the wallet's info event (the preflight) between
+     * requests. Left null, a web request uses a FileSharedCache in a private
+     * temp directory and a command-line run (doctor, the notifications
+     * worker, a cron pass) asks the wallet live. Pass your own cache, or
+     * `false` for none. `$walletInfoCacheSeconds` 0 always runs the live
+     * preflight.
+     *
      * @param array<string, mixed>|null $env
      * @param list<string> $priceCurrencies
      */
@@ -118,7 +128,8 @@ final class Service
         bool $allowSpendCapableWallet = false,
         ?LoggerInterface $logger = null,
         ?HttpTransport $http = null,
-        ?SharedCache $sharedCache = null,
+        SharedCache|false|null $sharedCache = null,
+        int $walletInfoCacheSeconds = CachedWalletInfo::TTL_SECONDS,
     ): self {
         $env ??= self::processEnvironment();
         $connection = trim((string) ($env['NWC_URI'] ?? ''));
@@ -139,7 +150,28 @@ final class Service
                 $e
             );
         }
+        if ($sharedCache === null && PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
+            $sharedCache = FileSharedCache::inTempDir(self::cacheScope($env));
+        }
+        $sharedCache = $sharedCache ?: null;
+        if ($sharedCache !== null && $walletInfoCacheSeconds > 0) {
+            $client = new CachedWalletInfo($client, $sharedCache, CachedWalletInfo::keyFor($connection), $walletInfoCacheSeconds, $logger);
+        }
         return new self($client, $priceProvider, $swapProviders === null ? null : array_values($swapProviders), $priceCurrencies, null, $allowSpendCapableWallet, $env, $logger, $http, $sharedCache);
+    }
+
+    /**
+     * What the default cache directory is named from: this install of the
+     * library and every setting its entries depend on. Two apps on one
+     * server never share entries, and the codes' secrets make the name
+     * unguessable to other accounts.
+     *
+     * @param array<string, mixed> $env
+     */
+    private static function cacheScope(array $env): string
+    {
+        $settings = ['NWC_URI', 'LSC_URI_PRIMARY', 'LSC_URI_BACKUP', Rates::PRICE_FEED_PRIMARY_URL_ENV, Rates::PRICE_FEED_FALLBACK_URL_ENV];
+        return json_encode([__DIR__, ...array_map(static fn (string $name): string => trim((string) ($env[$name] ?? '')), $settings)], JSON_THROW_ON_ERROR);
     }
 
     /** @return array<string, mixed> */

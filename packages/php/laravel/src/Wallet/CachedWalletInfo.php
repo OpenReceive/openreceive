@@ -73,6 +73,14 @@ final class CachedWalletInfo implements ReceiveNwcClient
         $this->inner->subscribeNotifications($handler, $onIdle);
     }
 
+    /** The notifications worker's SIGTERM reaches the listener only through this. */
+    public function stopNotifications(): void
+    {
+        if (is_callable([$this->inner, 'stopNotifications'])) {
+            $this->inner->stopNotifications();
+        }
+    }
+
     /** @return array<string, mixed>|null */
     private function read(): ?array
     {

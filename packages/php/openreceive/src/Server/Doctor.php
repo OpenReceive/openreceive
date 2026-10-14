@@ -24,7 +24,7 @@ final class Doctor
     {
         $set = static fn (string $name): string => trim((string) ($env[$name] ?? '')) === '' ? 'unset' : 'set';
         $lines = [
-            'openreceive:doctor',
+            'OpenReceive doctor',
             "  NWC_URI:          {$set('NWC_URI')}",
             "  LSC_URI_PRIMARY:  {$set('LSC_URI_PRIMARY')}",
             "  LSC_URI_BACKUP:   {$set('LSC_URI_BACKUP')}",
