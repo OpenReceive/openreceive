@@ -1413,6 +1413,30 @@ test("the BTCPay merchant installs the plugin when the agent asks, not when it q
   assert.ok(!asksPluginInstall("Please paste your receive-only NWC code."));
 });
 
+// WordPress's HTTP API trusts only the CA bundle it ships, so the WooCommerce
+// shop once got the merchant's real swap code from .env and no swap check.
+test("the WooCommerce shop trusts the test swap provider through a must-use plugin", async () => {
+  assert.equal(woocommerce.swap_provider, undefined);
+  assert.deepEqual(woocommerce.wallet_services, ["wordpress", "cli"]);
+  const fixture = new URL("../trials/platforms/woocommerce/fixture/", import.meta.url);
+  const compose = parseYaml(await readFile(new URL("compose.yml", fixture), "utf8"));
+  const mount =
+    "./trust-system-cas.php:/var/www/html/wp-content/mu-plugins/trust-system-cas.php:ro";
+  for (const service of woocommerce.wallet_services) {
+    assert.ok(compose.services[service].volumes.includes(mount), service);
+  }
+  const plugin = await readFile(new URL("trust-system-cas.php", fixture), "utf8");
+  assert.match(plugin, /add_filter\('http_request_args'/);
+  assert.match(plugin, /\$args\['sslcertificates'\] = \$bundle;/);
+  assert.match(plugin, /'\/etc\/ssl\/certs\/ca-certificates\.crt'/);
+  // The seed's chown must skip the read-only mount, or the shop never starts.
+  const seed = await readFile(
+    new URL("../trials/platforms/woocommerce/seed/seed.sh", import.meta.url),
+    "utf8",
+  );
+  assert.match(seed, /! -path \/var\/www\/html\/wp-content\/mu-plugins\/trust-system-cas\.php/);
+});
+
 test("the BTCPay platform shares the trial chain and checks its store instead of a doctor command", async () => {
   const btcpay = JSON.parse(
     await readFile(new URL("../trials/platforms/btcpay/platform.json", import.meta.url), "utf8"),

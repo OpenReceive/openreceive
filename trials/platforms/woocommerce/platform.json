@@ -17,5 +17,5 @@
   "max_minutes": 90,
   "heavy": true,
   "closing_max_lines": 8,
-  "swap_provider": "live"
+  "wallet_services": ["wordpress", "cli"]
 }

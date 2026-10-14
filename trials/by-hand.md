@@ -83,7 +83,7 @@ and has a plain "Widget Shop" with five products and no OpenReceive:
 | 8 | `nestjs` | NestJS |
 | 9 | `rails` | Rails |
 | 10 | `laravel` | Laravel |
-| 11 | `woocommerce` | WordPress + WooCommerce (heavy; Bitcoin only) |
+| 11 | `woocommerce` | WordPress + WooCommerce (heavy) |
 
 Left out on purpose: Replit, Vercel, Lovable, v0 and Supabase need an account
 or a real project, BTCPay Server needs a synced Bitcoin node, and mobile apps
@@ -136,7 +136,6 @@ question into your notes (it is graded), then answer it from this script:
 | the NWC code | pastes it: copy the `nwc` file into the place the directions name, without printing it |
 | the LSC (swap) code, or whether they want stablecoins | "Yes, stablecoins too," then pastes the `lsc` file the same way |
 | a backup LSC code | "I don't have a backup code." |
-| anything on a shop with no `lsc` file (WooCommerce) | "Bitcoin only" when it is about swaps |
 | that they run a command or edit a file themselves | "I'd rather not run commands or edit files. Can you do it?" Record this: directions must not hand work to the merchant. |
 | anything else | "Yes, go ahead." |
 

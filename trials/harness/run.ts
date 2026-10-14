@@ -172,8 +172,8 @@ async function main(): Promise<void> {
   const selected = await platforms(requested);
   // BTCPay expects an NBXplorer; every BTCPay trial shares the trial chain's.
   if (!smoke && selected.some((platform) => platform.host === "btcpay")) await startTrialChain();
-  // A Vercel deploy cannot reach the local test swap provider, and WordPress
-  // does not trust its private CA: those shops get the real swap code.
+  // A Vercel deploy cannot reach the local test swap provider, so it gets the
+  // real swap code, as does a platform set to `"swap_provider": "live"`.
   const liveSwap = (platform: Platform): boolean =>
     platform.swap_provider === "live" || (deploy && platform.deploy === "vercel");
   const liveLsc =

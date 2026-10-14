@@ -16,6 +16,9 @@ services:
       - "127.0.0.1:8080:80"
     volumes:
       - wp:/var/www/html
+      # Trial setup: WordPress's HTTP API uses the system CA store, which a
+      # trial extends with the test swap provider's CA (trust-system-cas.php).
+      - ./trust-system-cas.php:/var/www/html/wp-content/mu-plugins/trust-system-cas.php:ro
     depends_on:
       db:
         condition: service_healthy
@@ -52,6 +55,7 @@ services:
       WORDPRESS_DB_PASSWORD: wordpress-local
     volumes:
       - wp:/var/www/html
+      - ./trust-system-cas.php:/var/www/html/wp-content/mu-plugins/trust-system-cas.php:ro
     depends_on:
       db:
         condition: service_healthy

@@ -76,16 +76,19 @@ shop's own order row with the fixture's `bin/order-status` probe. A shop whose
 order paid, and `live_order_paid` fails.
 
 WordPress's HTTP API trusts only the CA bundle WordPress ships, not the
-system store, so the WooCommerce trial sets `"swap_provider": "live"`: its
-shop gets the repo-root `.env`'s `LSC_URI_PRIMARY` and no private network,
-while its NWC code is still the test wallet's. A trial does not create swaps.
+system store. The WooCommerce fixture mounts a must-use plugin,
+`trust-system-cas.php`, into both its `wordpress` and `cli` services, and it
+points WordPress at the system store, which the override extends with the
+private CA. Both services join the trial network (`wallet_services`), so
+WooCommerce gets the test swap provider like every other shop. A trial does
+not create swaps.
 
 Stop the stack with `docker compose -f trials/wallet/compose.yml down -v`. A
 restart makes a new wallet key, so the codes change.
 
 Trials run together with `--parallel` (`--platform fastify,next,php --runs 3
 --parallel 8`). Only one trial process runs at a time. WooCommerce allows 30
-turns: the 0.4.16 run used 20, and a real swap quote needs the extra room.
+turns: the 0.4.16 run used 20, and a swap quote needs the extra room.
 
 Exit 0 when every blocker passed, 1 when a directions check failed, 2 when Docker, the agent's CLI, or a missing code failed.
 

@@ -98,9 +98,10 @@ export interface Platform {
   readonly wallet_services?: readonly string[];
   /**
    * `test` (the default) gives the shop the trial wallet's test swap provider;
-   * `live` the repo-root .env's LSC_URI_PRIMARY, for a shop that cannot trust
-   * the test provider's private CA (WordPress's HTTP API ships its own bundle).
-   * The NWC code is the trial wallet's either way.
+   * `live` the repo-root .env's LSC_URI_PRIMARY, for a shop that cannot reach
+   * or trust the test provider. No platform needs it today: WooCommerce's
+   * fixture points WordPress's HTTP API at the system CA store
+   * (trust-system-cas.php). The NWC code is the trial wallet's either way.
    */
   readonly swap_provider?: "test" | "live";
   /** The most lines the closing message may have. 5 when omitted. */

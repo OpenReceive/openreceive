@@ -19,4 +19,6 @@ wp option update woocommerce_coming_soon no >/dev/null
 wp option update woocommerce_store_pages_only no >/dev/null
 wp rewrite structure '/%postname%/' >/dev/null
 wp eval-file /seed/products.php
-chown -R 33:33 /var/www/html
+# The trial's must-use plugin is a read-only bind mount (compose.yml).
+find /var/www/html ! -path /var/www/html/wp-content/mu-plugins/trust-system-cas.php \
+  -exec chown 33:33 {} +
