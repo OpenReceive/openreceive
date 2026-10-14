@@ -33,7 +33,7 @@ a `markdown_path` as well as a `path`, and the directions link the
 
 ## `contract_version`
 
-The contract is at **v8**. A site that reads it should refuse to publish a
+The contract is at **v9**. A site that reads it should refuse to publish a
 version it does not understand, rather than publish part of it. A half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -120,6 +120,15 @@ contract is how a payload ends up linking a page nobody serves.
   `site_redirects[]` entries. The layout is in [Platforms](#platforms-contract-v8)
   below. The version bumps because published guides now link `/platforms`, so
   a site on v7 would serve 404s for those links.
+- **v9**: every `frameworks[]` row gains `type` and `capabilities`, and five
+  recipe rows join the table: `sveltekit`, `nuxt`, `astro`, `react-router` and
+  `tanstack-start`. A recipe row has no agent directions and no example app,
+  so its `agent_stack`, `agent_payload_path`, `agent_full_path`,
+  `example_path` and `example_url` are null, and its `quickstart_path` is the
+  recipe. The Lovable platform row now runs on `tanstack-start`. The layout is
+  in [Integration types](#integration-types-contract-v9) below. The version
+  bumps because a site on v8 would draw a copy button and an example link
+  from those nulls.
 
 `release_version` changes with every library release and says nothing about the
 shape of this file. `contract_version` changes only when the site has to do
@@ -192,7 +201,10 @@ something new.
     the shared checkout panel. A null video stays hidden. WordPress uses the
     `/wordpress` overview and screenshot. BTCPay uses `/btcpay` and its video.
     Keep every framework row, including FastAPI, Django, PHP, Laravel and
-    WooCommerce. Do not maintain a smaller site-side list.
+    WooCommerce. Do not maintain a smaller site-side list. Since v9, show each
+    row's `type` and `capabilities`, and draw recipe rows without a copy
+    button or an example link, as [Integration types](#integration-types-contract-v9)
+    describes.
 11. Import every `site_redirects[]` entry into the Rails routing layer. A direct
     request to `from` must return its `status` and a `Location` resolving to `to`,
     before any SPA fallback. Follow the target and require a successful page.
@@ -319,7 +331,7 @@ contract:
 | `agent-directions-cover` | `/agent-directions/<stack>.md` for every payload stack | The URL people paste. About 300 bytes of `text/markdown` whose one instruction is to `curl` the `full_path` (contract v7). |
 | `agent-directions-payload` | `/agent-directions/<stack>/full.md` for every payload stack | The full directions as `text/markdown`: the bytes the copy button copies and the cover's curl fetches. |
 | permanent redirect | `/integrations/wordpress` | `site_redirects[]`: HTTP 301 to `/integrations/woocommerce`, applied before the SPA fallback. |
-| framework page | `/integrations/<id>` | `frameworks[]` (contract v5; `php` and `python` families since v6). Not a `publish[]` entry, because the page is the site's own template rendered from the row. The row names which `publish[]` pages it links. |
+| framework page | `/integrations/<id>` | `frameworks[]` (contract v5; `php` and `python` families since v6; `type`, `capabilities` and recipe rows since v9). Not a `publish[]` entry, because the page is the site's own template rendered from the row. The row names which `publish[]` pages it links. |
 | platforms index | `/platforms` | `platforms_index` and `platforms[]` (contract v8). The site's own template: every row, grouped by `kind`. Not a `publish[]` entry. |
 | platform page | `/platforms/<id>` | One page per `platforms[]` row whose `path` is not null: a header rendered from the row, then the guide at `guide_source`, rendered. Its twin `/platforms/<id>.md` serves the guide's raw markdown. |
 | `agents-page` | `/agents` | The entry point for coding agents (`docs/site/agents.md`): skills, install commands, which artifact answers which question. Rendered and twinned like a guide. Worth a link in the docs navigation. |
@@ -363,6 +375,57 @@ Leave external URLs as they are.
 
 The agent payloads need none of this. Every link in them is already absolute
 and already points at a `.md`, which is the point of them.
+
+## Integration types (contract v9)
+
+A visitor should know from the card what they are getting: a package we
+publish and test, a guide over another package, or a page of code to copy.
+Every `frameworks[]` row says which in `type`:
+
+| `type` | Meaning | Rows today |
+| --- | --- | --- |
+| `package` | An OpenReceive adapter for this framework, installed from its registry | `express`, `fastify`, `nextjs`, `rails`, `django`, `fastapi`, `laravel`, `php` |
+| `plugin` | A store plugin, installed from the store's plugin directory | `woocommerce`, `btcpay-server` |
+| `guide` | A quickstart and agent directions over another row's package, with an example app and agent trials | `nestjs` (on `@openreceive/express`), `flask` (on the `openreceive` engine) |
+| `recipe` | A recipe page of code to copy. No agent directions, no example app, no agent trials | `sveltekit`, `nuxt`, `astro`, `react-router`, `tanstack-start` |
+| `via-btcpay` | A store that takes payments through BTCPay Server and its plugin | none yet |
+
+Show the type on every framework card and at the top of every framework
+page, in words a merchant reads: "Package", "Plugin", "Guide", "Recipe" and
+"Via BTCPay Server". Never show a recipe or a guide as a package. The Tested
+badge stays separate: it comes only from `tested`, which a recipe row never
+has.
+
+### The capability record
+
+`capabilities` holds five plain sentences for a "How it runs" list on the
+framework page, the same kind of list as a platform page's:
+
+| Field | Label | Meaning |
+| --- | --- | --- |
+| `runtime` | Tested on | What CI and the agent trials run it on. For a recipe, what the recipe's own check ran on. |
+| `databases` | Databases | The databases CI and the trials run it with |
+| `secrets` | Secrets | Where the wallet code and the optional swap code live |
+| `refunds` | Refunds | What a refund can and cannot do. The wallet code is receive-only, so no row refunds a settled Lightning payment. |
+| `mobile` | Mobile apps | What a mobile app may assume. No row has an app SDK. |
+
+`requires` is still the version floor. `runtime` is what was run, so the two
+can differ: Laravel's floor is 11, and it is tested on 12 and 13.
+
+### Recipe rows
+
+A recipe row's `quickstart_path` is its recipe (`/guides/<id>-recipe`), so:
+
+- the page's guide buttons read "Read the recipe", not "Full quickstart"
+- there is no copy button and no agent-directions caption, because
+  `agent_full_path` is null. Offer the recipe instead.
+- there is no example link, because `example_url` is null
+- there are no quoted snippets. The setup section is the install line and a
+  pointer to the recipe, which holds the route, the database and the page.
+- the shared checkout demo still applies: a recipe renders the same checkout.
+
+Logos for the new rows are the site's own, like every framework logo. Until
+one exists, draw the card without it.
 
 ## Platforms (contract v8)
 

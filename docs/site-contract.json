@@ -1,5 +1,5 @@
 {
-  "contract_version": 8,
+  "contract_version": 9,
   "release_version": "0.4.26",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -944,6 +944,7 @@
       "id": "woocommerce",
       "label": "WordPress + WooCommerce",
       "family": "php",
+      "type": "plugin",
       "heading": "Accept Bitcoin & Stablecoin Payments With WordPress + WooCommerce",
       "quickstart_slug": "quickstart-woocommerce",
       "quickstart_path": "/guides/quickstart-woocommerce",
@@ -959,6 +960,13 @@
       "demo_port": "3009",
       "video": null,
       "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "WordPress 7.1 with WooCommerce, on PHP 8.2",
+        "databases": "MySQL 8, WordPress's own database",
+        "secrets": "The plugin's settings, encrypted with keys derived from WordPress's auth keys, or OPENRECEIVE_NWC_URI in wp-config.php",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the order's pay link.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.21",
@@ -972,6 +980,7 @@
       "id": "express",
       "label": "Express",
       "family": "node",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With Express",
       "quickstart_slug": "quickstart-node",
       "quickstart_path": "/guides/quickstart-node",
@@ -987,6 +996,13 @@
       "demo_port": "3000",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node 22",
+        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.21",
@@ -1000,6 +1016,7 @@
       "id": "fastify",
       "label": "Fastify",
       "family": "node",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With Fastify",
       "quickstart_slug": "quickstart-fastify",
       "quickstart_path": "/guides/quickstart-fastify",
@@ -1015,6 +1032,13 @@
       "demo_port": "3004",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node 22",
+        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.21",
@@ -1028,6 +1052,7 @@
       "id": "nextjs",
       "label": "Next.js",
       "family": "node",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With Next.js",
       "quickstart_slug": "quickstart-next",
       "quickstart_path": "/guides/quickstart-next",
@@ -1043,6 +1068,13 @@
       "demo_port": "3002",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node 22",
+        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.21",
@@ -1056,6 +1088,7 @@
       "id": "nestjs",
       "label": "NestJS",
       "family": "node",
+      "type": "guide",
       "heading": "Accept Bitcoin & Stablecoin Payments With NestJS",
       "quickstart_slug": "quickstart-nestjs",
       "quickstart_path": "/guides/quickstart-nestjs",
@@ -1071,6 +1104,13 @@
       "demo_port": null,
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node 22",
+        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-13",
         "release": "0.4.24",
@@ -1083,6 +1123,7 @@
       "id": "rails",
       "label": "Rails",
       "family": "rails",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With Rails",
       "quickstart_slug": "quickstart-rails",
       "quickstart_path": "/guides/quickstart-rails",
@@ -1098,6 +1139,13 @@
       "demo_port": "3003",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Ruby 3.2 to 3.4, Rails 8.1",
+        "databases": "PostgreSQL and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.21",
@@ -1111,6 +1159,7 @@
       "id": "btcpay-server",
       "label": "BTCPay Server",
       "family": "btcpay",
+      "type": "plugin",
       "heading": "Accept Bitcoin & Stablecoin Payments With BTCPay Server",
       "quickstart_slug": "quickstart-btcpay",
       "quickstart_path": "/guides/quickstart-btcpay",
@@ -1126,6 +1175,13 @@
       "demo_port": null,
       "video": "/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4",
       "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "BTCPay Server 2.4.5",
+        "databases": "BTCPay Server's own PostgreSQL",
+        "secrets": "The store's OpenReceive settings, in BTCPay Server's database",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, so BTCPay's Lightning refunds are off. A payer reclaims a swap deposit that never converted from the invoice page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.22",
@@ -1138,6 +1194,7 @@
       "id": "django",
       "label": "Django",
       "family": "python",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With Django",
       "quickstart_slug": "quickstart-django",
       "quickstart_path": "/guides/quickstart-django",
@@ -1153,6 +1210,13 @@
       "demo_port": "3006",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Python 3.10 to 3.13, Django 5.2 and 6.0",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8 and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.22",
@@ -1166,6 +1230,7 @@
       "id": "fastapi",
       "label": "FastAPI",
       "family": "python",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With FastAPI",
       "quickstart_slug": "quickstart-fastapi",
       "quickstart_path": "/guides/quickstart-fastapi",
@@ -1181,6 +1246,13 @@
       "demo_port": "3007",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Python 3.10 to 3.13",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8 and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.21",
@@ -1194,6 +1266,7 @@
       "id": "flask",
       "label": "Flask",
       "family": "python",
+      "type": "guide",
       "heading": "Accept Bitcoin & Stablecoin Payments With Flask",
       "quickstart_slug": "quickstart-flask",
       "quickstart_path": "/guides/quickstart-flask",
@@ -1209,6 +1282,13 @@
       "demo_port": null,
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Python 3.10 to 3.13",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8 and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-13",
         "release": "0.4.24",
@@ -1222,6 +1302,7 @@
       "id": "laravel",
       "label": "Laravel",
       "family": "php",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With Laravel",
       "quickstart_slug": "quickstart-laravel",
       "quickstart_path": "/guides/quickstart-laravel",
@@ -1237,6 +1318,13 @@
       "demo_port": "3005",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "PHP 8.2 to 8.4, Laravel 12 and 13",
+        "databases": "PostgreSQL, MySQL 8 and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.22",
@@ -1250,6 +1338,7 @@
       "id": "php",
       "label": "PHP",
       "family": "php",
+      "type": "package",
       "heading": "Accept Bitcoin & Stablecoin Payments With PHP",
       "quickstart_slug": "quickstart-php",
       "quickstart_path": "/guides/quickstart-php",
@@ -1265,6 +1354,13 @@
       "demo_port": "3008",
       "video": null,
       "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "PHP 8.2 to 8.4",
+        "databases": "PostgreSQL, MySQL 8 and SQLite",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
       "tested": {
         "date": "2026-10-10",
         "release": "0.4.21",
@@ -1273,6 +1369,151 @@
           "cursor/grok-4.7-medium-fast"
         ]
       }
+    },
+    {
+      "id": "sveltekit",
+      "label": "SvelteKit",
+      "family": "node",
+      "type": "recipe",
+      "heading": "Accept Bitcoin & Stablecoin Payments With SvelteKit",
+      "quickstart_slug": "sveltekit-recipe",
+      "quickstart_path": "/guides/sveltekit-recipe",
+      "quickstart_title": "SvelteKit Recipe",
+      "agent_stack": null,
+      "agent_payload_path": null,
+      "agent_full_path": null,
+      "adapter_package": "@openreceive/http",
+      "install": "npm install @openreceive/http @openreceive/svelte pg",
+      "requires": "Node ≥ 22, SvelteKit with @sveltejs/adapter-node",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node, checked with SvelteKit 3.0, adapter-node 6 and OpenReceive 0.4.25",
+        "databases": "PostgreSQL",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
+      "tested": null
+    },
+    {
+      "id": "nuxt",
+      "label": "Nuxt",
+      "family": "node",
+      "type": "recipe",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Nuxt",
+      "quickstart_slug": "nuxt-recipe",
+      "quickstart_path": "/guides/nuxt-recipe",
+      "quickstart_title": "Nuxt Recipe",
+      "agent_stack": null,
+      "agent_payload_path": null,
+      "agent_full_path": null,
+      "adapter_package": "@openreceive/http",
+      "install": "npm install @openreceive/http @openreceive/vue pg",
+      "requires": "Node ≥ 22, Nuxt on Nitro's node-server preset",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node, checked with Nuxt 4.6 (Nitro 2) and OpenReceive 0.4.25",
+        "databases": "PostgreSQL",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
+      "tested": null
+    },
+    {
+      "id": "astro",
+      "label": "Astro",
+      "family": "node",
+      "type": "recipe",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Astro",
+      "quickstart_slug": "astro-recipe",
+      "quickstart_path": "/guides/astro-recipe",
+      "quickstart_title": "Astro Recipe",
+      "agent_stack": null,
+      "agent_payload_path": null,
+      "agent_full_path": null,
+      "adapter_package": "@openreceive/http",
+      "install": "npx astro add node\nnpm install @openreceive/http @openreceive/elements pg",
+      "requires": "Node ≥ 22, Astro with @astrojs/node",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node, checked with Astro 7.3, @astrojs/node 11.1 and OpenReceive 0.4.25",
+        "databases": "PostgreSQL",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
+      "tested": null
+    },
+    {
+      "id": "react-router",
+      "label": "React Router",
+      "family": "node",
+      "type": "recipe",
+      "heading": "Accept Bitcoin & Stablecoin Payments With React Router",
+      "quickstart_slug": "react-router-recipe",
+      "quickstart_path": "/guides/react-router-recipe",
+      "quickstart_title": "React Router Recipe",
+      "agent_stack": null,
+      "agent_payload_path": null,
+      "agent_full_path": null,
+      "adapter_package": "@openreceive/http",
+      "install": "npm install @openreceive/http @openreceive/react pg",
+      "requires": "Node ≥ 22, React Router in framework mode",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Node, checked with React Router 8.4 and OpenReceive 0.4.25",
+        "databases": "PostgreSQL",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
+      "tested": null
+    },
+    {
+      "id": "tanstack-start",
+      "label": "TanStack Start",
+      "family": "node",
+      "type": "recipe",
+      "heading": "Accept Bitcoin & Stablecoin Payments With TanStack Start",
+      "quickstart_slug": "tanstack-start-recipe",
+      "quickstart_path": "/guides/tanstack-start-recipe",
+      "quickstart_title": "TanStack Start Recipe",
+      "agent_stack": null,
+      "agent_payload_path": null,
+      "agent_full_path": null,
+      "adapter_package": "@openreceive/http",
+      "install": "npm install @openreceive/http @openreceive/react pg",
+      "requires": "Node ≥ 22, or Cloudflare Workers with Node compatibility",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": true,
+      "capabilities": {
+        "runtime": "Cloudflare Workers (workerd), checked with TanStack Start 1.168 and OpenReceive 0.4.19; CI runs its Supabase route as a Worker",
+        "databases": "PostgreSQL through a transaction pooler, or Supabase over its HTTPS API",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, as server secrets (Worker secrets on Cloudflare), never with a VITE_ prefix",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+        "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
+      },
+      "tested": null
     }
   ],
   "platforms_index": {
@@ -1377,8 +1618,8 @@
       "label": "Lovable",
       "kind": "ai-builder",
       "summary": "Lovable builds TanStack Start apps on Cloudflare Workers, with Supabase. Save your wallet code as a secret, paste one prompt, and Lovable adds checkout to your app.",
-      "framework": null,
-      "framework_path": null,
+      "framework": "tanstack-start",
+      "framework_path": "/integrations/tanstack-start",
       "status": "tested",
       "path": "/platforms/lovable",
       "markdown_path": "/platforms/lovable.md",

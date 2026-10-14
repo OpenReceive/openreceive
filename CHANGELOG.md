@@ -31,6 +31,14 @@
 - Docs (PHP): `$engine->doctor()` runs the wallet preflight only when it gets
   the same factory `Doctor::report()` takes; without it the preflight line
   reads `skipped`.
+- Site contract v9: every framework row says what kind of integration it is
+  (`package`, `plugin`, `guide`, `recipe` or `via-btcpay`) and carries a
+  capability record: the runtime and databases it is tested on, where its
+  secrets live, what a refund can do, and what a mobile app may assume. The
+  SvelteKit, Nuxt, Astro, React Router and TanStack Start recipes join the
+  table, so each gets an `/integrations` page. A recipe row has no agent
+  directions and no example app, and its page links the recipe. NestJS and
+  Flask are `guide` rows: each is a quickstart over another package.
 
 ## 0.4.26 - 2026-10-14
 

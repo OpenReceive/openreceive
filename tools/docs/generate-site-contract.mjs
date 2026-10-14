@@ -193,11 +193,57 @@ const AGENT_ARTIFACTS = [
 // manifest — and every reference is gated below: the quickstart must be a
 // public doc, the agent stack a payload, the example path a directory on
 // disk, and the video null, an absolute URL, or an assets[] entry.
+//
+// Since contract v9 each row also says what kind of integration it is, so a
+// page never presents guide-only support as a package:
+//   package     an OpenReceive adapter for this framework, from its registry
+//   plugin      a store plugin, from the store's plugin directory
+//   guide       a quickstart and agent directions over another row's package
+//   recipe      a recipe page of code to copy: no agent directions and no
+//               example app, so the row names neither
+//   via-btcpay  a store that takes payments through BTCPay Server and its plugin
+// and carries a capability record for the page's "How it runs" list.
+// `runtime` and `databases` are what CI and the agent trials (or, for a
+// recipe, the check the recipe describes) ran it on; `requires` is the floor.
 const GITHUB_TREE = "https://github.com/OpenReceive/openreceive/tree/master";
+const INTEGRATION_TYPES = ["package", "plugin", "guide", "recipe", "via-btcpay"];
+const CAPABILITY_FIELDS = ["runtime", "databases", "secrets", "refunds", "mobile"];
+// Every server-side row says the same about secrets, refunds and mobile apps.
+const SERVER_CAPABILITIES = {
+  secrets:
+    "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
+  refunds:
+    "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
+  mobile:
+    "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program.",
+};
+const STORE_MOBILE =
+  "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout.";
+const NODE_CAPABILITIES = {
+  runtime: "Node 22",
+  databases: "PostgreSQL, directly or through a transaction pooler, and SQLite",
+  ...SERVER_CAPABILITIES,
+};
+const PYTHON_CAPABILITIES = {
+  runtime: "Python 3.10 to 3.13",
+  databases: "PostgreSQL, directly or through a transaction pooler, MySQL 8 and SQLite",
+  ...SERVER_CAPABILITIES,
+};
+const PHP_CAPABILITIES = {
+  runtime: "PHP 8.2 to 8.4",
+  databases: "PostgreSQL, MySQL 8 and SQLite",
+  ...SERVER_CAPABILITIES,
+};
+// The four recipes checked together on 2026-10-13 (docs/recipes/*.md say how).
+const RECIPE_CAPABILITIES = {
+  databases: "PostgreSQL",
+  ...SERVER_CAPABILITIES,
+};
 const FRAMEWORKS = [
   {
     id: "woocommerce",
     label: "WordPress + WooCommerce",
+    type: "plugin",
     family: "php",
     quickstart_slug: "quickstart-woocommerce",
     agent_stack: "woocommerce",
@@ -207,10 +253,20 @@ const FRAMEWORKS = [
     demo: "wordpress",
     video: null,
     shared_checkout_demo: false,
+    capabilities: {
+      runtime: "WordPress 7.1 with WooCommerce, on PHP 8.2",
+      databases: "MySQL 8, WordPress's own database",
+      secrets:
+        "The plugin's settings, encrypted with keys derived from WordPress's auth keys, or OPENRECEIVE_NWC_URI in wp-config.php",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the order's pay link.",
+      mobile: STORE_MOBILE,
+    },
   },
   {
     id: "express",
     label: "Express",
+    type: "package",
     family: "node",
     quickstart_slug: "quickstart-node",
     agent_stack: "node",
@@ -220,10 +276,12 @@ const FRAMEWORKS = [
     demo: "node-express",
     video: null,
     shared_checkout_demo: true,
+    capabilities: NODE_CAPABILITIES,
   },
   {
     id: "fastify",
     label: "Fastify",
+    type: "package",
     family: "node",
     quickstart_slug: "quickstart-fastify",
     agent_stack: "fastify",
@@ -233,10 +291,12 @@ const FRAMEWORKS = [
     demo: "fastify",
     video: null,
     shared_checkout_demo: true,
+    capabilities: NODE_CAPABILITIES,
   },
   {
     id: "nextjs",
     label: "Next.js",
+    type: "package",
     family: "node",
     quickstart_slug: "quickstart-next",
     agent_stack: "next",
@@ -246,12 +306,14 @@ const FRAMEWORKS = [
     demo: "nextjs",
     video: null,
     shared_checkout_demo: true,
+    capabilities: NODE_CAPABILITIES,
   },
   // NestJS mounts the Express adapter in main.ts. It has no Buy a Button demo:
   // its example is the one-product starter.
   {
     id: "nestjs",
     label: "NestJS",
+    type: "guide",
     family: "node",
     quickstart_slug: "quickstart-nestjs",
     agent_stack: "nestjs",
@@ -262,10 +324,12 @@ const FRAMEWORKS = [
     example_path: "examples/nestjs-starter",
     video: null,
     shared_checkout_demo: true,
+    capabilities: NODE_CAPABILITIES,
   },
   {
     id: "rails",
     label: "Rails",
+    type: "package",
     family: "rails",
     quickstart_slug: "quickstart-rails",
     agent_stack: "rails",
@@ -275,10 +339,16 @@ const FRAMEWORKS = [
     demo: "rails",
     video: null,
     shared_checkout_demo: true,
+    capabilities: {
+      runtime: "Ruby 3.2 to 3.4, Rails 8.1",
+      databases: "PostgreSQL and SQLite",
+      ...SERVER_CAPABILITIES,
+    },
   },
   {
     id: "btcpay-server",
     label: "BTCPay Server",
+    type: "plugin",
     family: "btcpay",
     quickstart_slug: "quickstart-btcpay",
     agent_stack: "btcpay",
@@ -292,12 +362,21 @@ const FRAMEWORKS = [
     example_path: "packages/dotnet/BTCPayServer.Plugins.OpenReceive",
     video: assetPath("docs/assets/btcpayserver/basic-btcpayserver-demo-compressed.mp4"),
     shared_checkout_demo: false,
+    capabilities: {
+      runtime: "BTCPay Server 2.4.5",
+      databases: "BTCPay Server's own PostgreSQL",
+      secrets: "The store's OpenReceive settings, in BTCPay Server's database",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, so BTCPay's Lightning refunds are off. A payer reclaims a swap deposit that never converted from the invoice page.",
+      mobile: STORE_MOBILE,
+    },
   },
   // The `python` family (contract v6): the install line is `pip install`, the
   // adapter is an extra of the one `openreceive` distribution.
   {
     id: "django",
     label: "Django",
+    type: "package",
     family: "python",
     quickstart_slug: "quickstart-django",
     agent_stack: "django",
@@ -307,10 +386,12 @@ const FRAMEWORKS = [
     demo: "django",
     video: null,
     shared_checkout_demo: true,
+    capabilities: { ...PYTHON_CAPABILITIES, runtime: "Python 3.10 to 3.13, Django 5.2 and 6.0" },
   },
   {
     id: "fastapi",
     label: "FastAPI",
+    type: "package",
     family: "python",
     quickstart_slug: "quickstart-fastapi",
     agent_stack: "fastapi",
@@ -320,6 +401,7 @@ const FRAMEWORKS = [
     demo: "fastapi",
     video: null,
     shared_checkout_demo: true,
+    capabilities: PYTHON_CAPABILITIES,
   },
   // Flask has no adapter package: the quickstart's one-file Blueprint over the
   // engine is the integration until it meets the promotion rule, so the
@@ -327,6 +409,7 @@ const FRAMEWORKS = [
   {
     id: "flask",
     label: "Flask",
+    type: "guide",
     family: "python",
     quickstart_slug: "quickstart-flask",
     agent_stack: "flask",
@@ -337,10 +420,12 @@ const FRAMEWORKS = [
     example_path: "examples/flask-starter",
     video: null,
     shared_checkout_demo: true,
+    capabilities: PYTHON_CAPABILITIES,
   },
   {
     id: "laravel",
     label: "Laravel",
+    type: "package",
     family: "php",
     quickstart_slug: "quickstart-laravel",
     agent_stack: "laravel",
@@ -350,10 +435,12 @@ const FRAMEWORKS = [
     demo: "laravel",
     video: null,
     shared_checkout_demo: true,
+    capabilities: { ...PHP_CAPABILITIES, runtime: "PHP 8.2 to 8.4, Laravel 12 and 13" },
   },
   {
     id: "php",
     label: "PHP",
+    type: "package",
     family: "php",
     quickstart_slug: "quickstart-php",
     agent_stack: "php",
@@ -363,6 +450,110 @@ const FRAMEWORKS = [
     demo: "php-plain",
     video: null,
     shared_checkout_demo: true,
+    capabilities: PHP_CAPABILITIES,
+  },
+  // Recipes (contract v9): the web-standard handler from @openreceive/http,
+  // mounted by hand. The page links the recipe in place of a quickstart, and
+  // there is no copy button and no example app.
+  {
+    id: "sveltekit",
+    label: "SvelteKit",
+    type: "recipe",
+    family: "node",
+    quickstart_slug: "sveltekit-recipe",
+    agent_stack: null,
+    adapter_package: "@openreceive/http",
+    install: "npm install @openreceive/http @openreceive/svelte pg",
+    requires: "Node ≥ 22, SvelteKit with @sveltejs/adapter-node",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: true,
+    capabilities: {
+      runtime: "Node, checked with SvelteKit 3.0, adapter-node 6 and OpenReceive 0.4.25",
+      ...RECIPE_CAPABILITIES,
+    },
+  },
+  {
+    id: "nuxt",
+    label: "Nuxt",
+    type: "recipe",
+    family: "node",
+    quickstart_slug: "nuxt-recipe",
+    agent_stack: null,
+    adapter_package: "@openreceive/http",
+    install: "npm install @openreceive/http @openreceive/vue pg",
+    requires: "Node ≥ 22, Nuxt on Nitro's node-server preset",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: true,
+    capabilities: {
+      runtime: "Node, checked with Nuxt 4.6 (Nitro 2) and OpenReceive 0.4.25",
+      ...RECIPE_CAPABILITIES,
+    },
+  },
+  {
+    id: "astro",
+    label: "Astro",
+    type: "recipe",
+    family: "node",
+    quickstart_slug: "astro-recipe",
+    agent_stack: null,
+    adapter_package: "@openreceive/http",
+    install: "npx astro add node\nnpm install @openreceive/http @openreceive/elements pg",
+    requires: "Node ≥ 22, Astro with @astrojs/node",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: true,
+    capabilities: {
+      runtime: "Node, checked with Astro 7.3, @astrojs/node 11.1 and OpenReceive 0.4.25",
+      ...RECIPE_CAPABILITIES,
+    },
+  },
+  {
+    id: "react-router",
+    label: "React Router",
+    type: "recipe",
+    family: "node",
+    quickstart_slug: "react-router-recipe",
+    agent_stack: null,
+    adapter_package: "@openreceive/http",
+    install: "npm install @openreceive/http @openreceive/react pg",
+    requires: "Node ≥ 22, React Router in framework mode",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: true,
+    capabilities: {
+      runtime: "Node, checked with React Router 8.4 and OpenReceive 0.4.25",
+      ...RECIPE_CAPABILITIES,
+    },
+  },
+  // Lovable's stack. CI runs the recipe's Supabase route as a Worker.
+  {
+    id: "tanstack-start",
+    label: "TanStack Start",
+    type: "recipe",
+    family: "node",
+    quickstart_slug: "tanstack-start-recipe",
+    agent_stack: null,
+    adapter_package: "@openreceive/http",
+    install: "npm install @openreceive/http @openreceive/react pg",
+    requires: "Node ≥ 22, or Cloudflare Workers with Node compatibility",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: true,
+    capabilities: {
+      runtime:
+        "Cloudflare Workers (workerd), checked with TanStack Start 1.168 and OpenReceive 0.4.19; CI runs its Supabase route as a Worker",
+      databases: "PostgreSQL through a transaction pooler, or Supabase over its HTTPS API",
+      ...SERVER_CAPABILITIES,
+      secrets:
+        "NWC_URI, and LSC_URI_PRIMARY for swaps, as server secrets (Worker secrets on Cloudflare), never with a VITE_ prefix",
+    },
   },
 ];
 
@@ -525,38 +716,56 @@ const passed = new Map(
 
 const frameworks = FRAMEWORKS.map((framework) => {
   const { demo: demoKey, ...row } = framework;
+  const fail = (message) => {
+    throw new Error(`${TARGET}: framework ${row.id} ${message}`);
+  };
+  if (!INTEGRATION_TYPES.includes(row.type)) {
+    fail(`has type ${row.type}; it must be one of ${INTEGRATION_TYPES.join(", ")}`);
+  }
+  const capabilities = row.capabilities ?? {};
+  const fields = Object.keys(capabilities);
+  if (
+    fields.length !== CAPABILITY_FIELDS.length ||
+    !CAPABILITY_FIELDS.every((field) => typeof capabilities[field] === "string")
+  ) {
+    fail(`needs a capability record of exactly ${CAPABILITY_FIELDS.join(", ")} (got ${fields})`);
+  }
   const demo =
     demoKey === null ? null : OPENRECEIVE_DEMOS.find((entry) => entry.keys.includes(demoKey));
   if (demoKey !== null && !demo) {
-    throw new Error(
-      `${TARGET}: framework ${row.id} names demo "${demoKey}", which is not in tools/shared/demo-catalog.mjs`,
-    );
+    fail(`names demo "${demoKey}", which is not in tools/shared/demo-catalog.mjs`);
   }
   const quickstart = bySlug.get(row.quickstart_slug);
   if (!quickstart?.public) {
-    throw new Error(
-      `${TARGET}: framework ${row.id} names quickstart ${row.quickstart_slug}, which is not a public doc in docs/manifest.json`,
+    fail(
+      `names quickstart ${row.quickstart_slug}, which is not a public doc in docs/manifest.json`,
     );
   }
-  if (!AGENT_PAYLOADS.some((payload) => payload.stack === row.agent_stack)) {
-    throw new Error(
-      `${TARGET}: framework ${row.id} names agent stack ${row.agent_stack}, which has no payload in AGENT_PAYLOADS`,
-    );
+  // A recipe has neither agent directions nor an example app: its page links
+  // the recipe where other rows link their quickstart.
+  const recipe = row.type === "recipe";
+  if (recipe && (row.agent_stack !== null || demo || row.example_path !== null)) {
+    fail("is a recipe, so its agent_stack, demo and example_path must be null");
   }
-  const payloadPath = `/agent-directions/${row.agent_stack}.md`;
-  if (!AGENT_PAYLOAD_PATHS.includes(payloadPath)) {
-    throw new Error(
-      `${TARGET}: ${payloadPath} is not in AGENT_PAYLOAD_PATHS (tools/docs/site-paths.mjs)`,
-    );
+  if (recipe !== (quickstart.category === "recipe")) {
+    fail(`has type ${row.type}, but ${row.quickstart_slug} is in category ${quickstart.category}`);
   }
-  const example_path = demo ? demo.dir : row.example_path;
+  const payloadPath = recipe ? null : `/agent-directions/${row.agent_stack}.md`;
+  if (!recipe && !AGENT_PAYLOADS.some((payload) => payload.stack === row.agent_stack)) {
+    fail(`names agent stack ${row.agent_stack}, which has no payload in AGENT_PAYLOADS`);
+  }
+  if (!recipe && !AGENT_PAYLOAD_PATHS.includes(payloadPath)) {
+    fail(`needs ${payloadPath} in AGENT_PAYLOAD_PATHS (tools/docs/site-paths.mjs)`);
+  }
+  const example_path = recipe ? null : demo ? demo.dir : row.example_path;
   if (
-    !existsSync(path.join(root, example_path)) ||
-    !statSync(path.join(root, example_path)).isDirectory()
+    !recipe &&
+    !(
+      existsSync(path.join(root, example_path)) &&
+      statSync(path.join(root, example_path)).isDirectory()
+    )
   ) {
-    throw new Error(
-      `${TARGET}: framework ${row.id} names example ${example_path}, which is not a directory in this repo`,
-    );
+    fail(`names example ${example_path}, which is not a directory in this repo`);
   }
   const video = row.video;
   const videoOk =
@@ -564,30 +773,34 @@ const frameworks = FRAMEWORKS.map((framework) => {
     /^https:\/\//.test(video) ||
     servedAssets.some((asset) => asset.path === video && asset.content_type === "video/mp4");
   if (!videoOk) {
-    throw new Error(
-      `${TARGET}: framework ${row.id} video must be null, an absolute https URL, or an assets[] mp4 under docs/assets/ (got ${video})`,
+    fail(
+      `video must be null, an absolute https URL, or an assets[] mp4 under docs/assets/ (got ${video})`,
     );
   }
   return {
     id: row.id,
     label: row.label,
     family: row.family,
+    type: row.type,
     heading: `Accept Bitcoin & Stablecoin Payments With ${row.label}`,
     quickstart_slug: row.quickstart_slug,
     quickstart_path: `/guides/${row.quickstart_slug}`,
     quickstart_title: quickstart.title,
     agent_stack: row.agent_stack,
     agent_payload_path: payloadPath,
-    agent_full_path: agentFullPath(payloadPath),
+    agent_full_path: payloadPath && agentFullPath(payloadPath),
     adapter_package: row.adapter_package,
     install: row.install,
     requires: row.requires,
     example_path,
-    example_url: `${GITHUB_TREE}/${example_path}`,
+    example_url: example_path && `${GITHUB_TREE}/${example_path}`,
     demo_port: demo ? demo.port : null,
     video,
     shared_checkout_demo: row.shared_checkout_demo,
-    tested: passed.get(row.agent_stack) ?? null,
+    capabilities: Object.fromEntries(
+      CAPABILITY_FIELDS.map((field) => [field, capabilities[field]]),
+    ),
+    tested: (row.agent_stack && passed.get(row.agent_stack)) ?? null,
   };
 });
 
@@ -757,8 +970,11 @@ const contract = {
   // /platforms/<id> page per row, each a header from the row above its guide)
   // and `tested` on every framework row, from trials/passed.json. A
   // bump because the published guides link /platforms: a site on v7 would
-  // 404 them.
-  contract_version: 8,
+  // 404 them. v9 adds `type` and `capabilities` to every frameworks[] row,
+  // and recipe rows whose agent_stack, agent_payload_path, agent_full_path,
+  // example_path and example_url are null. A bump because a site on v8 would
+  // draw a copy button and an example link from those nulls.
+  contract_version: 9,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.
@@ -774,7 +990,9 @@ const contract = {
   // is `example_url`. `video` is null until a speed-run exists (hide the
   // slot), an absolute URL, or an `assets[]` path to serve. When
   // `shared_checkout_demo` is false the page shows the video and screenshots
-  // instead of the shared checkout panel.
+  // instead of the shared checkout panel. Since v9, show `type` on every card
+  // and page and `capabilities` as the page's "How it runs" list; a recipe row
+  // has no copy button and no example link, and `quickstart_path` is its recipe.
   frameworks,
   // Where people build and host (contract v8). Render /platforms as the index
   // and one page per row whose `path` is not null; docs/internal/site-build.md
