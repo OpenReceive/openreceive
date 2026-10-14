@@ -169,3 +169,9 @@ into `runtimeConfig.public`, which goes to the browser.
 No worker or cron job is needed. Each request to the payment routes also
 checks the wallet for settled invoices, through a lock in your database. A
 payer who closes the tab is settled on the next request.
+
+## Next
+
+- To have a coding agent do this, give it the
+  [Nuxt agent directions](https://openreceive.org/agent-directions/nuxt.md):
+  this recipe in full, plus the steps an agent gets wrong.

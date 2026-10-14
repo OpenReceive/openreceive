@@ -37,6 +37,11 @@ markdown.
 - [Agent Directions: BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md): self-contained agent directions, quickstart included
 - [Agent directions (WordPress + WooCommerce)](https://openreceive.org/agent-directions/woocommerce/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: Lovable](https://openreceive.org/agent-directions/lovable/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: SvelteKit](https://openreceive.org/agent-directions/sveltekit/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Nuxt](https://openreceive.org/agent-directions/nuxt/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Astro](https://openreceive.org/agent-directions/astro/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: React Router](https://openreceive.org/agent-directions/react-router/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: TanStack Start](https://openreceive.org/agent-directions/tanstack-start/full.md): self-contained agent directions, quickstart included
 
 ## Guides
 

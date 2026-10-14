@@ -63,6 +63,25 @@ const GENERATED_REFERENCES = [
   {
     source: "docs/agents/lovable.md",
     target: "skills/integrate-openreceive/references/lovable.md",
+  },  {
+    source: "docs/agents/sveltekit.md",
+    target: "skills/integrate-openreceive/references/sveltekit.md",
+  },
+  {
+    source: "docs/agents/nuxt.md",
+    target: "skills/integrate-openreceive/references/nuxt.md",
+  },
+  {
+    source: "docs/agents/astro.md",
+    target: "skills/integrate-openreceive/references/astro.md",
+  },
+  {
+    source: "docs/agents/react-router.md",
+    target: "skills/integrate-openreceive/references/react-router.md",
+  },
+  {
+    source: "docs/agents/tanstack-start.md",
+    target: "skills/integrate-openreceive/references/tanstack-start.md",
   },
 ];
 

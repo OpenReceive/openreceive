@@ -210,7 +210,17 @@ test("the WooCommerce payload ends at test-invoice and keeps the agent in the st
 // The 0.4.18 Next.js trial agent could not get doctor to see `.env.local`, ran
 // `set -a; . ./.env.local`, and the `&` in each code printed pieces of both.
 test("the @openreceive/node payloads say doctor reads the env file and never to source it", () => {
-  const envFiles = { node: ".env", fastify: ".env", next: ".env.local", nestjs: ".env" };
+  const envFiles = {
+    node: ".env",
+    fastify: ".env",
+    next: ".env.local",
+    nestjs: ".env",
+    sveltekit: ".env",
+    nuxt: ".env",
+    astro: ".env",
+    "react-router": ".env",
+    "tanstack-start": ".env",
+  };
   for (const [stack, file] of Object.entries(envFiles)) {
     const { text } = payloads.find((payload) => payload.stack === stack);
     assert.ok(
@@ -231,10 +241,10 @@ test("every library payload ends with setup finished and keeps the agent in the 
   const libraries = payloads.filter(
     ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
   );
-  assert.equal(libraries.length, 10);
+  assert.equal(libraries.length, 15);
   for (const { stack, text } of libraries) {
     const ending = text.match(/^## After the quickstart\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
-    assert.match(ending, /The browser check in the quickstart's\s[\s\S]*?is theirs/, stack);
+    assert.match(ending, /The browser check (?:in the quickstart's|of that page)\s[\s\S]*?is theirs/, stack);
     assert.match(ending, /You cannot pay the invoice/, stack);
     assert.match(
       ending,

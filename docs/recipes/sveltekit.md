@@ -203,3 +203,9 @@ out of `process.env`. To try swaps locally, start it with
 No worker or cron job is needed. Each request to the payment routes also
 checks the wallet for settled invoices, through a lock in your database. A
 payer who closes the tab is settled on the next request.
+
+## Next
+
+- To have a coding agent do this, give it the
+  [SvelteKit agent directions](https://openreceive.org/agent-directions/sveltekit.md):
+  this recipe in full, plus the steps an agent gets wrong.

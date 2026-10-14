@@ -26,6 +26,10 @@ every step is a file edit, a package, a Supabase migration or a secret. Never
 ask the user to run a command. The TanStack Start recipe is appended to this
 file in full; its "On Supabase (Lovable)" section is the code to follow.
 
+A TanStack Start app on a Node server you run, with its own Postgres, is not
+a Lovable app: follow https://openreceive.org/agent-directions/tanstack-start.md
+for it instead.
+
 Do not clone the OpenReceive repository, and do not copy a demo's models over
 tables that already exist. Find this app's orders and products, whatever they
 are named, and map the hooks onto those. Keep this app's UI, sign-in and

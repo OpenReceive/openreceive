@@ -626,6 +626,46 @@
       "public": true
     },
     {
+      "slug": "agent-directions-sveltekit",
+      "title": "Agent Directions: SvelteKit",
+      "source_path": "docs/agents/sveltekit.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-nuxt",
+      "title": "Agent Directions: Nuxt",
+      "source_path": "docs/agents/nuxt.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-astro",
+      "title": "Agent Directions: Astro",
+      "source_path": "docs/agents/astro.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-react-router",
+      "title": "Agent Directions: React Router",
+      "source_path": "docs/agents/react-router.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-tanstack-start",
+      "title": "Agent Directions: TanStack Start",
+      "source_path": "docs/agents/tanstack-start.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "source_path": "docs/guides/quickstart-woocommerce.md",

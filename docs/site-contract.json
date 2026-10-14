@@ -1,5 +1,5 @@
 {
-  "contract_version": 9,
+  "contract_version": 10,
   "release_version": "0.4.26",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -416,7 +416,7 @@
       "slug": "tanstack-start-recipe",
       "title": "TanStack Start Recipe",
       "category": "recipe",
-      "bytes": 9973
+      "bytes": 10300
     },
     {
       "path": "/guides/sveltekit-recipe",
@@ -426,7 +426,7 @@
       "slug": "sveltekit-recipe",
       "title": "SvelteKit Recipe",
       "category": "recipe",
-      "bytes": 8131
+      "bytes": 8333
     },
     {
       "path": "/guides/nuxt-recipe",
@@ -436,7 +436,7 @@
       "slug": "nuxt-recipe",
       "title": "Nuxt Recipe",
       "category": "recipe",
-      "bytes": 6933
+      "bytes": 7125
     },
     {
       "path": "/guides/astro-recipe",
@@ -446,7 +446,7 @@
       "slug": "astro-recipe",
       "title": "Astro Recipe",
       "category": "recipe",
-      "bytes": 7727
+      "bytes": 7921
     },
     {
       "path": "/guides/react-router-recipe",
@@ -456,7 +456,7 @@
       "slug": "react-router-recipe",
       "title": "React Router Recipe",
       "category": "recipe",
-      "bytes": 7386
+      "bytes": 7594
     },
     {
       "path": "/guides/custom-checkout-route",
@@ -586,7 +586,57 @@
       "slug": "agent-directions-lovable",
       "title": "Agent Directions: Lovable",
       "category": "quickstart",
-      "bytes": 26016
+      "bytes": 26191
+    },
+    {
+      "path": "/guides/agent-directions-sveltekit",
+      "markdown_path": "/guides/agent-directions-sveltekit.md",
+      "source": "docs/agents/sveltekit.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-sveltekit",
+      "title": "Agent Directions: SvelteKit",
+      "category": "quickstart",
+      "bytes": 34910
+    },
+    {
+      "path": "/guides/agent-directions-nuxt",
+      "markdown_path": "/guides/agent-directions-nuxt.md",
+      "source": "docs/agents/nuxt.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-nuxt",
+      "title": "Agent Directions: Nuxt",
+      "category": "quickstart",
+      "bytes": 33393
+    },
+    {
+      "path": "/guides/agent-directions-astro",
+      "markdown_path": "/guides/agent-directions-astro.md",
+      "source": "docs/agents/astro.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-astro",
+      "title": "Agent Directions: Astro",
+      "category": "quickstart",
+      "bytes": 34661
+    },
+    {
+      "path": "/guides/agent-directions-react-router",
+      "markdown_path": "/guides/agent-directions-react-router.md",
+      "source": "docs/agents/react-router.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-react-router",
+      "title": "Agent Directions: React Router",
+      "category": "quickstart",
+      "bytes": 34052
+    },
+    {
+      "path": "/guides/agent-directions-tanstack-start",
+      "markdown_path": "/guides/agent-directions-tanstack-start.md",
+      "source": "docs/agents/tanstack-start.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-tanstack-start",
+      "title": "Agent Directions: TanStack Start",
+      "category": "quickstart",
+      "bytes": 37808
     },
     {
       "path": "/guides/quickstart-woocommerce",
@@ -637,7 +687,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 4059
+      "bytes": 4442
     },
     {
       "path": "/wordpress",
@@ -934,7 +984,112 @@
       "kind": "agent-directions-payload",
       "stack": "lovable",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 26016,
+      "bytes": 26191,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/sveltekit.md",
+      "source": "docs/agents/cover/sveltekit.md",
+      "kind": "agent-directions-cover",
+      "stack": "sveltekit",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 295,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/sveltekit/full.md"
+    },
+    {
+      "path": "/agent-directions/sveltekit/full.md",
+      "source": "docs/agents/sveltekit.md",
+      "kind": "agent-directions-payload",
+      "stack": "sveltekit",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 34910,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/nuxt.md",
+      "source": "docs/agents/cover/nuxt.md",
+      "kind": "agent-directions-cover",
+      "stack": "nuxt",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 285,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/nuxt/full.md"
+    },
+    {
+      "path": "/agent-directions/nuxt/full.md",
+      "source": "docs/agents/nuxt.md",
+      "kind": "agent-directions-payload",
+      "stack": "nuxt",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 33393,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/astro.md",
+      "source": "docs/agents/cover/astro.md",
+      "kind": "agent-directions-cover",
+      "stack": "astro",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 287,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/astro/full.md"
+    },
+    {
+      "path": "/agent-directions/astro/full.md",
+      "source": "docs/agents/astro.md",
+      "kind": "agent-directions-payload",
+      "stack": "astro",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 34661,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/react-router.md",
+      "source": "docs/agents/cover/react-router.md",
+      "kind": "agent-directions-cover",
+      "stack": "react-router",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 301,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/react-router/full.md"
+    },
+    {
+      "path": "/agent-directions/react-router/full.md",
+      "source": "docs/agents/react-router.md",
+      "kind": "agent-directions-payload",
+      "stack": "react-router",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 34052,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/tanstack-start.md",
+      "source": "docs/agents/cover/tanstack-start.md",
+      "kind": "agent-directions-cover",
+      "stack": "tanstack-start",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 305,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/tanstack-start/full.md"
+    },
+    {
+      "path": "/agent-directions/tanstack-start/full.md",
+      "source": "docs/agents/tanstack-start.md",
+      "kind": "agent-directions-payload",
+      "stack": "tanstack-start",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 37808,
       "copy_button": true,
       "self_contained": true
     }
@@ -1375,9 +1530,9 @@
       "quickstart_slug": "sveltekit-recipe",
       "quickstart_path": "/guides/sveltekit-recipe",
       "quickstart_title": "SvelteKit Recipe",
-      "agent_stack": null,
-      "agent_payload_path": null,
-      "agent_full_path": null,
+      "agent_stack": "sveltekit",
+      "agent_payload_path": "/agent-directions/sveltekit.md",
+      "agent_full_path": "/agent-directions/sveltekit/full.md",
       "adapter_package": "@openreceive/http",
       "install": "npm install @openreceive/http @openreceive/svelte pg",
       "requires": "Node ≥ 22, SvelteKit with @sveltejs/adapter-node",
@@ -1404,9 +1559,9 @@
       "quickstart_slug": "nuxt-recipe",
       "quickstart_path": "/guides/nuxt-recipe",
       "quickstart_title": "Nuxt Recipe",
-      "agent_stack": null,
-      "agent_payload_path": null,
-      "agent_full_path": null,
+      "agent_stack": "nuxt",
+      "agent_payload_path": "/agent-directions/nuxt.md",
+      "agent_full_path": "/agent-directions/nuxt/full.md",
       "adapter_package": "@openreceive/http",
       "install": "npm install @openreceive/http @openreceive/vue pg",
       "requires": "Node ≥ 22, Nuxt on Nitro's node-server preset",
@@ -1433,9 +1588,9 @@
       "quickstart_slug": "astro-recipe",
       "quickstart_path": "/guides/astro-recipe",
       "quickstart_title": "Astro Recipe",
-      "agent_stack": null,
-      "agent_payload_path": null,
-      "agent_full_path": null,
+      "agent_stack": "astro",
+      "agent_payload_path": "/agent-directions/astro.md",
+      "agent_full_path": "/agent-directions/astro/full.md",
       "adapter_package": "@openreceive/http",
       "install": "npx astro add node\nnpm install @openreceive/http @openreceive/elements pg",
       "requires": "Node ≥ 22, Astro with @astrojs/node",
@@ -1462,9 +1617,9 @@
       "quickstart_slug": "react-router-recipe",
       "quickstart_path": "/guides/react-router-recipe",
       "quickstart_title": "React Router Recipe",
-      "agent_stack": null,
-      "agent_payload_path": null,
-      "agent_full_path": null,
+      "agent_stack": "react-router",
+      "agent_payload_path": "/agent-directions/react-router.md",
+      "agent_full_path": "/agent-directions/react-router/full.md",
       "adapter_package": "@openreceive/http",
       "install": "npm install @openreceive/http @openreceive/react pg",
       "requires": "Node ≥ 22, React Router in framework mode",
@@ -1491,9 +1646,9 @@
       "quickstart_slug": "tanstack-start-recipe",
       "quickstart_path": "/guides/tanstack-start-recipe",
       "quickstart_title": "TanStack Start Recipe",
-      "agent_stack": null,
-      "agent_payload_path": null,
-      "agent_full_path": null,
+      "agent_stack": "tanstack-start",
+      "agent_payload_path": "/agent-directions/tanstack-start.md",
+      "agent_full_path": "/agent-directions/tanstack-start/full.md",
       "adapter_package": "@openreceive/http",
       "install": "npm install @openreceive/http @openreceive/react pg",
       "requires": "Node ≥ 22, or Cloudflare Workers with Node compatibility",
@@ -2057,7 +2212,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 6852
+        "bytes": 7580
       },
       {
         "path": "/openapi.yaml",

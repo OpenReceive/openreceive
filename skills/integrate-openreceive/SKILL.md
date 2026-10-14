@@ -2,7 +2,8 @@
 name: integrate-openreceive
 description: >
   Integrate OpenReceive Bitcoin Lightning checkout and optional USDT, USDC,
-  SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, NestJS, Rails,
+  SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, NestJS,
+  SvelteKit, Nuxt, Astro, React Router, TanStack Start, Rails,
   Python, Django, FastAPI, Laravel, plain PHP, WordPress/WooCommerce,
   React, Vue, Svelte, Angular, or plain HTML applications, or connecting
   BTCPay Server to a receive-only NWC wallet. A configured swap provider
@@ -33,6 +34,13 @@ connected wallet; asset and network availability depends on the provider.
    - Node, Fastify: [references/fastify.md](references/fastify.md)
    - Node, Next.js App Router: [references/next.md](references/next.md)
    - Node, NestJS (Express platform): [references/nestjs.md](references/nestjs.md)
+   - Node, SvelteKit (adapter-node): [references/sveltekit.md](references/sveltekit.md)
+   - Node, Nuxt (Nitro node-server): [references/nuxt.md](references/nuxt.md)
+   - Node, Astro (@astrojs/node): [references/astro.md](references/astro.md)
+   - Node, React Router (framework mode): [references/react-router.md](references/react-router.md)
+   - Node, TanStack Start on your own server:
+     [references/tanstack-start.md](references/tanstack-start.md) — on Lovable,
+     use the Lovable reference below instead.
    - Rails: [references/rails.md](references/rails.md)
    - Python, FastAPI: [references/fastapi.md](references/fastapi.md)
    - Plain PHP: [references/php.md](references/php.md)
@@ -55,7 +63,9 @@ connected wallet; asset and network availability depends on the provider.
 Install, per adapter — Express: `npm install @openreceive/express @openreceive/react`;
 Fastify: `npm install @openreceive/fastify @openreceive/react`; Next.js:
 `npm install @openreceive/next @openreceive/react`; NestJS:
-`npm install @openreceive/express @openreceive/http @openreceive/react`. Swap the UI package (`vue`,
+`npm install @openreceive/express @openreceive/http @openreceive/react`;
+SvelteKit, Nuxt, Astro, React Router and TanStack Start: `npm install @openreceive/http pg`
+plus the UI package. Swap the UI package (`vue`,
 `svelte`, `angular`, `elements`) for the frontend the app already has. Install
 (Rails): `bundle add openreceive-rails`.
 Django: `pip install "openreceive[django]"`; FastAPI:

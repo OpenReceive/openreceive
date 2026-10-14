@@ -33,7 +33,7 @@ a `markdown_path` as well as a `path`, and the directions link the
 
 ## `contract_version`
 
-The contract is at **v9**. A site that reads it should refuse to publish a
+The contract is at **v10**. A site that reads it should refuse to publish a
 version it does not understand, rather than publish part of it. A half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -129,6 +129,13 @@ contract is how a payload ends up linking a page nobody serves.
   in [Integration types](#integration-types-contract-v9) below. The version
   bumps because a site on v8 would draw a copy button and an example link
   from those nulls.
+- **v10**: a recipe row may carry agent directions. The five recipe rows get
+  an `agent_stack` (their own id) and with it an `agent_payload_path` and an
+  `agent_full_path`, and `publish[]` gains their covers and full payloads,
+  which inline the recipe as the quickstart. Their `example_path` stays null.
+  A recipe row gains `tested` once its trials pass. The version bumps because
+  a site on v9 hides the copy button on every recipe row, so it would publish
+  the payloads with no way to copy them.
 
 `release_version` changes with every library release and says nothing about the
 shape of this file. `contract_version` changes only when the site has to do
@@ -202,9 +209,9 @@ something new.
     `/wordpress` overview and screenshot. BTCPay uses `/btcpay` and its video.
     Keep every framework row, including FastAPI, Django, PHP, Laravel and
     WooCommerce. Do not maintain a smaller site-side list. Since v9, show each
-    row's `type` and `capabilities`, and draw recipe rows without a copy
-    button or an example link, as [Integration types](#integration-types-contract-v9)
-    describes.
+    row's `type` and `capabilities`, and draw recipe rows without an example
+    link, as [Integration types](#integration-types-contract-v9) describes.
+    Since v10, a recipe row with an `agent_full_path` has a copy button.
 11. Import every `site_redirects[]` entry into the Rails routing layer. A direct
     request to `from` must return its `status` and a `Location` resolving to `to`,
     before any SPA fallback. Follow the target and require a successful page.
@@ -387,14 +394,14 @@ Every `frameworks[]` row says which in `type`:
 | `package` | An OpenReceive adapter for this framework, installed from its registry | `express`, `fastify`, `nextjs`, `rails`, `django`, `fastapi`, `laravel`, `php` |
 | `plugin` | A store plugin, installed from the store's plugin directory | `woocommerce`, `btcpay-server` |
 | `guide` | A quickstart and agent directions over another row's package, with an example app and agent trials | `nestjs` (on `@openreceive/express`), `flask` (on the `openreceive` engine) |
-| `recipe` | A recipe page of code to copy. No agent directions, no example app, no agent trials | `sveltekit`, `nuxt`, `astro`, `react-router`, `tanstack-start` |
+| `recipe` | A recipe page of code to copy, with no example app. Since v10, agent directions that inline the recipe, and agent trials | `sveltekit`, `nuxt`, `astro`, `react-router`, `tanstack-start` |
 | `via-btcpay` | A store that takes payments through BTCPay Server and its plugin | none yet |
 
 Show the type on every framework card and at the top of every framework
 page, in words a merchant reads: "Package", "Plugin", "Guide", "Recipe" and
 "Via BTCPay Server". Never show a recipe or a guide as a package. The Tested
-badge stays separate: it comes only from `tested`, which a recipe row never
-has.
+badge stays separate: it comes only from `tested`, which a recipe row has
+only once its agent trials pass (v10).
 
 ### The capability record
 
@@ -417,8 +424,9 @@ can differ: Laravel's floor is 11, and it is tested on 12 and 13.
 A recipe row's `quickstart_path` is its recipe (`/guides/<id>-recipe`), so:
 
 - the page's guide buttons read "Read the recipe", not "Full quickstart"
-- there is no copy button and no agent-directions caption, because
-  `agent_full_path` is null. Offer the recipe instead.
+- since v10, the copy button and the agent-directions caption appear when
+  `agent_full_path` is set, as on any other row. When it is null, offer the
+  recipe instead.
 - there is no example link, because `example_url` is null
 - there are no quoted snippets. The setup section is the install line and a
   pointer to the recipe, which holds the route, the database and the page.

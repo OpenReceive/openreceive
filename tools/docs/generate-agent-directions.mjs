@@ -195,6 +195,44 @@ const STACKS = [
       "Steps 0–6 above are the setup on Lovable and this recipe is their reference: follow its On Supabase (Lovable) section, not its pg pool, and skip its npm commands. Where the two differ, the steps win.",
     // Lovable's agent reads pages with its fetch tool and has no shell.
     fetchOnly: true,
+  },  {
+    stack: "sveltekit",
+    source: "docs/agents/src/sveltekit.md",
+    quickstart: "docs/recipes/sveltekit.md",
+    quickstartSlug: "sveltekit-recipe",
+    brief: libraryBrief(".env"),
+  },
+  {
+    stack: "nuxt",
+    source: "docs/agents/src/nuxt.md",
+    quickstart: "docs/recipes/nuxt.md",
+    quickstartSlug: "nuxt-recipe",
+    brief: libraryBrief(".env"),
+  },
+  {
+    stack: "astro",
+    source: "docs/agents/src/astro.md",
+    quickstart: "docs/recipes/astro.md",
+    quickstartSlug: "astro-recipe",
+    brief: libraryBrief(".env"),
+  },
+  {
+    stack: "react-router",
+    source: "docs/agents/src/react-router.md",
+    quickstart: "docs/recipes/react-router.md",
+    quickstartSlug: "react-router-recipe",
+    brief: libraryBrief(".env"),
+  },
+  {
+    stack: "tanstack-start",
+    source: "docs/agents/src/tanstack-start.md",
+    quickstart: "docs/recipes/tanstack-start.md",
+    quickstartSlug: "tanstack-start-recipe",
+    brief: libraryBrief(".env"),
+    // The recipe's route builds a stack per request for Workers; on Node the
+    // directions' one-stack module replaces it.
+    quickstartRole:
+      "On Node, the one-stack module in the non-negotiables above replaces its per-request handleOpenReceive, and its On Supabase (Lovable) section does not apply.",
   },
 ];
 
@@ -234,6 +272,11 @@ const UNLISTED_GUIDES = {
   "agent-directions-php": "this payload's own page",
   "agent-directions-laravel": "this payload's own page",
   "agent-directions-btcpay": "this payload's own page",
+  "agent-directions-sveltekit": "this payload's own page",
+  "agent-directions-nuxt": "this payload's own page",
+  "agent-directions-astro": "this payload's own page",
+  "agent-directions-react-router": "this payload's own page",
+  "agent-directions-tanstack-start": "this payload's own page",
   guides: "linked as the index at the end of the reading list, not as an entry",
   "quickstart-node": "inlined in full below, or another stack's",
   "quickstart-fastify": "inlined in full below, or another stack's",
@@ -392,9 +435,12 @@ export function inlineGuide(markdown, publicSlugs) {
   return (
     out
       .join("\n")
-      .replace(/\]\(([a-z0-9-]+)\.md(#[a-z0-9_-]+)?\)/g, (whole, slug, anchor) =>
-        publicSlugs.has(slug) ? `](${GUIDE_MARKDOWN_URL(slug)}${anchor ?? ""})` : whole,
-      )
+      // A recipe links its siblings by file name (`tanstack-start.md`); their
+      // public slugs carry a `-recipe` suffix.
+      .replace(/\]\(([a-z0-9-]+)\.md(#[a-z0-9_-]+)?\)/g, (whole, file, anchor) => {
+        const slug = publicSlugs.has(file) ? file : `${file}-recipe`;
+        return publicSlugs.has(slug) ? `](${GUIDE_MARKDOWN_URL(slug)}${anchor ?? ""})` : whole;
+      })
       // A path into the repository (the demo app, a contributor doc) is dead
       // once the file has been pasted somewhere else, and cloning is not the
       // shape of this integration. Keep the name, drop the link.

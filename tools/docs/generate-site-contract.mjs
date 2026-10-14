@@ -59,6 +59,23 @@ const AGENT_PAYLOADS = [
   { path: "/agent-directions/laravel.md", source: "docs/agents/laravel.md", stack: "laravel" },
   { path: "/agent-directions/btcpay.md", source: "docs/agents/btcpay.md", stack: "btcpay" },
   { path: "/agent-directions/lovable.md", source: "docs/agents/lovable.md", stack: "lovable" },
+  {
+    path: "/agent-directions/sveltekit.md",
+    source: "docs/agents/sveltekit.md",
+    stack: "sveltekit",
+  },
+  { path: "/agent-directions/nuxt.md", source: "docs/agents/nuxt.md", stack: "nuxt" },
+  { path: "/agent-directions/astro.md", source: "docs/agents/astro.md", stack: "astro" },
+  {
+    path: "/agent-directions/react-router.md",
+    source: "docs/agents/react-router.md",
+    stack: "react-router",
+  },
+  {
+    path: "/agent-directions/tanstack-start.md",
+    source: "docs/agents/tanstack-start.md",
+    stack: "tanstack-start",
+  },
 ];
 
 // Pages served under agent-discovery paths: site-owned names whose content is
@@ -199,8 +216,8 @@ const AGENT_ARTIFACTS = [
 //   package     an OpenReceive adapter for this framework, from its registry
 //   plugin      a store plugin, from the store's plugin directory
 //   guide       a quickstart and agent directions over another row's package
-//   recipe      a recipe page of code to copy: no agent directions and no
-//               example app, so the row names neither
+//   recipe      a recipe page of code to copy, with no example app; since
+//               v10 it may have agent directions that inline the recipe
 //   via-btcpay  a store that takes payments through BTCPay Server and its plugin
 // and carries a capability record for the page's "How it runs" list.
 // `runtime` and `databases` are what CI and the agent trials (or, for a
@@ -454,14 +471,15 @@ const FRAMEWORKS = [
   },
   // Recipes (contract v9): the web-standard handler from @openreceive/http,
   // mounted by hand. The page links the recipe in place of a quickstart, and
-  // there is no copy button and no example app.
+  // there is no example app. Since v10 each has agent directions that inline
+  // the recipe, so its page has a copy button too.
   {
     id: "sveltekit",
     label: "SvelteKit",
     type: "recipe",
     family: "node",
     quickstart_slug: "sveltekit-recipe",
-    agent_stack: null,
+    agent_stack: "sveltekit",
     adapter_package: "@openreceive/http",
     install: "npm install @openreceive/http @openreceive/svelte pg",
     requires: "Node ≥ 22, SvelteKit with @sveltejs/adapter-node",
@@ -480,7 +498,7 @@ const FRAMEWORKS = [
     type: "recipe",
     family: "node",
     quickstart_slug: "nuxt-recipe",
-    agent_stack: null,
+    agent_stack: "nuxt",
     adapter_package: "@openreceive/http",
     install: "npm install @openreceive/http @openreceive/vue pg",
     requires: "Node ≥ 22, Nuxt on Nitro's node-server preset",
@@ -499,7 +517,7 @@ const FRAMEWORKS = [
     type: "recipe",
     family: "node",
     quickstart_slug: "astro-recipe",
-    agent_stack: null,
+    agent_stack: "astro",
     adapter_package: "@openreceive/http",
     install: "npx astro add node\nnpm install @openreceive/http @openreceive/elements pg",
     requires: "Node ≥ 22, Astro with @astrojs/node",
@@ -518,7 +536,7 @@ const FRAMEWORKS = [
     type: "recipe",
     family: "node",
     quickstart_slug: "react-router-recipe",
-    agent_stack: null,
+    agent_stack: "react-router",
     adapter_package: "@openreceive/http",
     install: "npm install @openreceive/http @openreceive/react pg",
     requires: "Node ≥ 22, React Router in framework mode",
@@ -538,7 +556,7 @@ const FRAMEWORKS = [
     type: "recipe",
     family: "node",
     quickstart_slug: "tanstack-start-recipe",
-    agent_stack: null,
+    agent_stack: "tanstack-start",
     adapter_package: "@openreceive/http",
     install: "npm install @openreceive/http @openreceive/react pg",
     requires: "Node ≥ 22, or Cloudflare Workers with Node compatibility",
@@ -741,20 +759,25 @@ const frameworks = FRAMEWORKS.map((framework) => {
       `names quickstart ${row.quickstart_slug}, which is not a public doc in docs/manifest.json`,
     );
   }
-  // A recipe has neither agent directions nor an example app: its page links
-  // the recipe where other rows link their quickstart.
+  // A recipe has no example app: its page links the recipe where other rows
+  // link their quickstart. Since contract v10 a recipe may carry agent
+  // directions, which inline the recipe as their quickstart; every other
+  // type must.
   const recipe = row.type === "recipe";
-  if (recipe && (row.agent_stack !== null || demo || row.example_path !== null)) {
-    fail("is a recipe, so its agent_stack, demo and example_path must be null");
+  if (recipe && (demo || row.example_path !== null)) {
+    fail("is a recipe, so its demo and example_path must be null");
+  }
+  if (!recipe && row.agent_stack === null) {
+    fail(`has type ${row.type}, so it needs an agent_stack`);
   }
   if (recipe !== (quickstart.category === "recipe")) {
     fail(`has type ${row.type}, but ${row.quickstart_slug} is in category ${quickstart.category}`);
   }
-  const payloadPath = recipe ? null : `/agent-directions/${row.agent_stack}.md`;
-  if (!recipe && !AGENT_PAYLOADS.some((payload) => payload.stack === row.agent_stack)) {
+  const payloadPath = row.agent_stack === null ? null : `/agent-directions/${row.agent_stack}.md`;
+  if (payloadPath !== null && !AGENT_PAYLOADS.some((payload) => payload.stack === row.agent_stack)) {
     fail(`names agent stack ${row.agent_stack}, which has no payload in AGENT_PAYLOADS`);
   }
-  if (!recipe && !AGENT_PAYLOAD_PATHS.includes(payloadPath)) {
+  if (payloadPath !== null && !AGENT_PAYLOAD_PATHS.includes(payloadPath)) {
     fail(`needs ${payloadPath} in AGENT_PAYLOAD_PATHS (tools/docs/site-paths.mjs)`);
   }
   const example_path = recipe ? null : demo ? demo.dir : row.example_path;
@@ -973,8 +996,12 @@ const contract = {
   // 404 them. v9 adds `type` and `capabilities` to every frameworks[] row,
   // and recipe rows whose agent_stack, agent_payload_path, agent_full_path,
   // example_path and example_url are null. A bump because a site on v8 would
-  // draw a copy button and an example link from those nulls.
-  contract_version: 9,
+  // draw a copy button and an example link from those nulls. v10 lets a
+  // recipe row carry agent directions: the five recipes get an agent_stack
+  // and a payload that inlines the recipe, and still no example app. A bump
+  // because a site on v9 treats every recipe row as having no directions, so
+  // it would publish the payloads but hide their copy buttons.
+  contract_version: 10,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.

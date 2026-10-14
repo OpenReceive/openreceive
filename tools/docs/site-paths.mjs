@@ -96,6 +96,11 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/btcpay.md",
   "/agent-directions/woocommerce.md",
   "/agent-directions/lovable.md",
+  "/agent-directions/sveltekit.md",
+  "/agent-directions/nuxt.md",
+  "/agent-directions/astro.md",
+  "/agent-directions/react-router.md",
+  "/agent-directions/tanstack-start.md",
 ];
 
 /** The full directions behind a cover: what the copy button copies and the cover's curl fetches. */
