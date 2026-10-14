@@ -231,6 +231,11 @@ authorize: async ({ request, resource }) => {
 },
 ```
 
+Only the React `<Checkout>` takes a `fetch`. `<openreceive-checkout>` and
+the Vue, Svelte and Angular checkouts send every request with the page's own
+fetch, which carries cookies and no token. With those, keep the session in
+cookies with `@supabase/ssr`, as above.
+
 ## Supabase over HTTPS
 
 Use this when your server cannot open a Postgres connection to Supabase: on

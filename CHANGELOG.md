@@ -18,6 +18,14 @@
   `.env` out of `process.env` in development, where OpenReceive reads the
   swap settings, so those two recipes say how to load it. The Node and
   Next.js directions link the four recipes.
+- Docs: the agent directions say that a paid order's page shows that it is
+  paid and no checkout. A checkout that settles on the page updates the
+  page's status line and stays mounted as the payer's receipt. The 0.4.25
+  starters already do this; an app built from the directions did not, and
+  its paid order's page showed a checkout that could not start. Under Docker
+  Compose the directions now recreate the container after writing `.env`,
+  because `docker compose restart` keeps the old environment. The Supabase
+  guide says that only the React `<Checkout>` takes a `fetch`.
 
 ## 0.4.25 - 2026-10-13
 

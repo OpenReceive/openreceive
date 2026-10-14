@@ -111,6 +111,8 @@ you store it. Ask one question per message.
    `.env` the server reads (an image that copies `.env.example` over it
    drops them), start `php artisan serve` with `--no-reload`, or set
    `clear_env = no` for php-fpm. Restart the server after writing the file.
+   Under Compose, recreate the container with `docker compose up -d`:
+   `docker compose restart` keeps its old environment.
 
 Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
 saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
@@ -279,6 +281,12 @@ not replace your orders, users, or products, and you do not join them.
   expired invoice does not cancel the order; a later checkout may mint another
   attempt. The engine refuses a new checkout under a reference that already
   settled (409).
+- **A paid order's page says it is paid and shows no checkout.** Nothing is left
+  to pay, and a checkout cannot start a new payment for a paid order. Mount the
+  checkout only while the order is unpaid. When it settles on the page, update
+  the page's status line from the `openreceive-settled` event on
+  `<openreceive-checkout>`: `onPaid` has already marked the order paid. Keep
+  that checkout mounted, because it is the payer's receipt.
 - **Do not model `openreceive_payments`.** No Eloquent model, no `hasMany`, no
   `belongsTo`, no foreign key either direction. `reference` is not unique (many
   attempts per order). Fulfillment is a guarded transition on YOUR order row

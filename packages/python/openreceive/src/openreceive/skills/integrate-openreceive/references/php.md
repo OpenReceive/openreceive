@@ -124,6 +124,8 @@ you store it. Ask one question per message.
    front controller before `Service::fromEnvironment()`. When the app is started
    with Docker Compose, give the service `env_file: .env`. Restart PHP-FPM or
    the server after writing the file.
+   Under Compose, recreate the container with `docker compose up -d`:
+   `docker compose restart` keeps its old environment.
 
 Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
 saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
@@ -302,6 +304,12 @@ not replace your orders, users, or products, and you do not join them.
   expired invoice does not cancel the order; a later checkout may mint another
   attempt. The engine refuses a new checkout under a reference that already
   settled (409).
+- **A paid order's page says it is paid and shows no checkout.** Nothing is left
+  to pay, and a checkout cannot start a new payment for a paid order. Mount the
+  checkout only while the order is unpaid. When it settles on the page, update
+  the page's status line from the `openreceive-settled` event on
+  `<openreceive-checkout>`: `onPaid` has already marked the order paid. Keep
+  that checkout mounted, because it is the payer's receipt.
 - **Pass this app's PDO.** `new SqlPaymentRepository(new PdoConnection($pdo))`
   over the connection the app already opens; do not implement
   `PaymentRepository` unless no PDO can reach this database. `reference` is not

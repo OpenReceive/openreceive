@@ -138,6 +138,12 @@ every settlement.
 - **The order is unpaid or paid.** Do not copy attempt statuses (`pending`,
   `expired`, `failed`, `attention`) onto it, and do not add a relation to
   `openreceive_payments`.
+- **A paid order's page says it is paid and shows no checkout.** Nothing is left
+  to pay, and a checkout cannot start a new payment for a paid order. Mount the
+  checkout only while the order is unpaid. When it settles on the page, update
+  the page's status line from `onSettled` on `<Checkout>`: `openreceive_on_paid`
+  has already marked the order paid. Keep that checkout mounted, because it is
+  the payer's receipt.
 
 ## Step 4 — `openreceive_on_paid`
 

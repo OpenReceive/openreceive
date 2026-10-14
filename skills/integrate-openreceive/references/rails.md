@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Rails)
 
 ```sh
-# READ THIS FIRST: this file is 42 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 43 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/rails/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -122,6 +122,8 @@ you store it. Ask one question per message.
    add `dotenv-rails` to the Gemfile. When it is started with Docker Compose,
    give the service `env_file: .env`. Restart the server after writing the
    file; the values are read at boot.
+   Under Compose, recreate the container with `docker compose up -d`:
+   `docker compose restart` keeps its old environment.
 
 Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
 saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
@@ -287,6 +289,12 @@ not replace your orders, users, or products, and you do not join them.
   expired invoice does not cancel the order; a later checkout may mint another
   attempt. The engine refuses a new checkout under a reference that already
   settled (409).
+- **A paid order's page says it is paid and shows no checkout.** Nothing is left
+  to pay, and a checkout cannot start a new payment for a paid order. Mount the
+  checkout only while the order is unpaid. When it settles on the page, update
+  the page's status line from the `openreceive-settled` event on
+  `<openreceive-checkout>`: `on_paid` has already marked the order paid. Keep
+  that checkout mounted, because it is the payer's receipt.
 - **Do not associate `OpenReceivePayment`.** No `has_many`, no `belongs_to`, no
   foreign key either direction. `reference` is not unique (many attempts per
   order). Fulfillment is a guarded transition on YOUR order row inside

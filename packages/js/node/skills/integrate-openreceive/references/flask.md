@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Flask)
 
 ```sh
-# READ THIS FIRST: this file is 43 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 44 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/flask/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -131,6 +131,8 @@ you store it. Ask one question per message.
    `dotenv -f .env run -- gunicorn …` (python-dotenv's CLI,
    `pip install "python-dotenv[cli]"`), in the app's run script or Procfile,
    not just your own command. Restart the server after writing the file.
+   Under Compose, recreate the container with `docker compose up -d`:
+   `docker compose restart` keeps its old environment.
    Doctor reads `.env` from its working directory by itself. Never `source`,
    `export` or `cat` the file: the codes contain `&`, and the shell prints the
    pieces.
@@ -320,6 +322,12 @@ orders, users, or products, and you do not join them.
   expired invoice does not cancel the order; a later checkout may mint another
   attempt. The library refuses a new checkout under a reference that already
   settled (409).
+- **A paid order's page says it is paid and shows no checkout.** Nothing is left
+  to pay, and a checkout cannot start a new payment for a paid order. Mount the
+  checkout only while the order is unpaid. When it settles on the page, update
+  the page's status line from the `openreceive-settled` event on
+  `<openreceive-checkout>`: `on_paid` has already marked the order paid. Keep
+  that checkout mounted, because it is the payer's receipt.
 - **Pass a sync SQLAlchemy `Engine` for this app's database.** Do not add an
   ORM relationship from Order to `openreceive_payments`, and do not implement
   `PaymentRepository` unless no SQLAlchemy engine can reach this database.

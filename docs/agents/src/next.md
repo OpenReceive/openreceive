@@ -109,6 +109,8 @@ you store it. Ask one question per message.
    give a credential a `NEXT_PUBLIC_` prefix, which inlines it into the browser
    bundle. When the app is started with Docker Compose, give the service
    `env_file: .env.local`. Restart the dev server after writing the file.
+   Under Compose, recreate the container with `docker compose up -d`:
+   `docker compose restart` keeps its old environment.
 
 Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
 saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
@@ -282,6 +284,12 @@ products, and you do not join them.
   expired invoice does not cancel the order; a later checkout may mint another
   attempt. The library refuses a new checkout under a reference that already
   settled (409).
+- **A paid order's page says it is paid and shows no checkout.** Nothing is left
+  to pay, and a checkout cannot start a new payment for a paid order. Mount the
+  checkout only while the order is unpaid. When it settles on the page, update
+  the page's status line from `onSettled` on `<Checkout>`: `onPaid` has already
+  marked the order paid. Keep that checkout mounted, because it is the payer's
+  receipt.
 - **Pass this app's `db` handle.** Do not add a Prisma/Drizzle relation from
   Order to `openreceive_payments`, and do not implement `PaymentRepository`
   unless no supported handle can reach this database. `reference` is not unique
