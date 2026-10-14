@@ -21,12 +21,12 @@
     },
     {
       "trial": "fastify",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "deb95dc26ee3"
+      "mode": "released",
+      "directions": "3566f2accaca"
     },
     {
       "trial": "next",
@@ -84,12 +84,12 @@
     },
     {
       "trial": "vercel",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
-      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "8bac46517dd1"
+      "agents": ["codex/default"],
+      "mode": "released",
+      "directions": "9dff017be130"
     },
     {
       "trial": "btcpay",
@@ -136,12 +136,12 @@
     },
     {
       "trial": "nestjs",
-      "date": "2026-10-13",
-      "release": "0.4.24",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
-      "agents": ["codex/default"],
-      "mode": "candidate",
-      "directions": "5ea3b3923831"
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "released",
+      "directions": "b3d4e3177022"
     },
     {
       "trial": "sveltekit",
