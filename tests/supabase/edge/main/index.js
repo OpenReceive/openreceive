@@ -6,7 +6,7 @@ Deno.serve(async (request) => {
   if (!name) return new Response("ok\n");
   try {
     const worker = await EdgeRuntime.userWorkers.create({
-      servicePath: `/home/deno/functions/${name}`,
+      servicePath: `/srv/functions/${name}`,
       memoryLimitMb: 256,
       workerTimeoutMs: 150_000,
       noModuleCache: false,
