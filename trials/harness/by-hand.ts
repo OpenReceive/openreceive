@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
-import { check, liveShopChecks, Visitor } from "./live.ts";
+import { liveShopChecks } from "./live.ts";
 import { openingFor } from "./loop.ts";
 import {
   inspectShop,
@@ -135,39 +135,6 @@ async function readState(directory: string): Promise<State> {
   return JSON.parse(await readFile(stateFile(directory), "utf8")) as State;
 }
 
-/**
- * The checkout's swap picker: with an LSC code, at least one method must be on
- * offer. The order is the $12 product: the test swap provider prices BTC at a
- * fixed $100,000 and takes at least 10 USDT, so the $7 one is too small
- * whenever BTC trades above about $70,000.
- */
-async function swapCheck(baseUrl: string): Promise<Check> {
-  const buyer = new Visitor(baseUrl);
-  const order = await buyer.placeOrder(2);
-  const prepared = await buyer.prepareCheckout(order, `/orders/${order}`);
-  const methods = (() => {
-    try {
-      const body = JSON.parse(prepared.body) as {
-        payment_methods?: { pay_in_asset: string; available: boolean }[];
-      };
-      return body.payment_methods ?? [];
-    } catch {
-      return [];
-    }
-  })();
-  const available = methods
-    .filter((method) => method.available)
-    .map((method) => method.pay_in_asset);
-  return check(
-    "live_swap_methods",
-    prepared.status === 200 && available.length > 0,
-    "The checkout offers swap pay-in methods from the test swap provider.",
-    prepared.status === 200
-      ? `available: ${available.join(", ") || "none"}`
-      : `${prepared.status} ${prepared.body.slice(0, 200)}`,
-  );
-}
-
 async function checkShop(argv: readonly string[]): Promise<void> {
   const directory = path.resolve(value(argv, "--shop") ?? "");
   const state = await readState(directory);
@@ -176,15 +143,18 @@ async function checkShop(argv: readonly string[]): Promise<void> {
   const secrets = [wallet.nwc, wallet.lsc];
   const checks: Check[] = [await scanTrackedSecrets(directory, secrets, [])];
   if (platform.live === true) {
+    const paid = {
+      settle: wallet.settle,
+      orderStatus: (id: string) => orderStatus(directory, platform, id),
+    };
     checks.push(
       ...(await liveShopChecks(state.baseUrl, {
-        paid: {
-          settle: wallet.settle,
-          orderStatus: (id: string) => orderStatus(directory, platform, id),
-        },
+        paid,
+        ...(platform.swap_provider !== "live"
+          ? { swap: { ...paid, complete: wallet.completeSwap } }
+          : {}),
       })),
     );
-    if (platform.swap_provider !== "live") checks.push(await swapCheck(state.baseUrl));
   } else {
     console.log(
       "This platform has no scripted live checks: buy a product in the browser instead (trials/by-hand.md).",

@@ -48,6 +48,11 @@ export interface TrialWallet {
   readonly caBundle: string;
   /** Mark one of the wallet's invoices paid. Unknown hashes throw. */
   settle: (paymentHash: string) => Promise<void>;
+  /**
+   * Move the test provider's swap order for this invoice to completed, as a
+   * provider does once the deposit arrived. Nothing pays the invoice: settle it too.
+   */
+  completeSwap: (bolt11: string) => Promise<void>;
   /** Every invoice the wallet holds, paid or not, without preimages. */
   invoices: () => Promise<unknown>;
 }
@@ -76,10 +81,19 @@ async function testkitHealthy(): Promise<boolean> {
   }
 }
 
-/** GET a fake-lsc control path over its TLS, trusting only the private CA. */
-function fakeLscJson(pathname: string, ca: string): Promise<unknown> {
+/** A fake-lsc control path over its TLS, trusting only the private CA: GET, or POST with a JSON body. */
+function fakeLscJson(pathname: string, ca: string, body?: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const call = request(`${FAKE_LSC}${pathname}`, { ca, timeout: 5_000 }, (response) => {
+    const options =
+      body === undefined
+        ? { ca, timeout: 5_000 }
+        : {
+            ca,
+            timeout: 5_000,
+            method: "POST",
+            headers: { "content-type": "application/json" },
+          };
+    const call = request(`${FAKE_LSC}${pathname}`, options, (response) => {
       let body = "";
       response.setEncoding("utf8");
       response.on("data", (chunk: string) => {
@@ -101,7 +115,7 @@ function fakeLscJson(pathname: string, ca: string): Promise<unknown> {
     });
     call.on("timeout", () => call.destroy(new Error("timed out")));
     call.on("error", (error) => reject(new InfraError(`fake-lsc: ${error.message}`)));
-    call.end();
+    call.end(body === undefined ? undefined : JSON.stringify(body));
   });
 }
 
@@ -184,6 +198,21 @@ async function settle(paymentHash: string): Promise<void> {
   }
 }
 
+/**
+ * Script one swap order to completed, found by its invoice. By order id, not
+ * by asset: an asset script would also move every other trial's orders.
+ */
+async function completeSwap(bolt11: string, ca: string): Promise<void> {
+  const listed = (await fakeLscJson("/__testkit/orders", ca)) as {
+    orders?: { id: string; bolt11: string }[];
+  };
+  const order = listed.orders?.find((item) => item.bolt11 === bolt11);
+  if (order === undefined) {
+    throw new InfraError("The test swap provider holds no order for that invoice.");
+  }
+  await fakeLscJson("/__testkit/script", ca, { selector: order.id, states: ["completed"] });
+}
+
 async function invoices(): Promise<unknown> {
   const response = await fetch(`${TESTKIT}/invoices`, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok)
@@ -206,6 +235,7 @@ export async function startTrialWallet(): Promise<TrialWallet> {
     caFile,
     caBundle,
     settle,
+    completeSwap: (bolt11: string) => completeSwap(bolt11, ca),
     invoices,
   };
 }

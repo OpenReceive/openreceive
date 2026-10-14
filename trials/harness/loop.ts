@@ -331,6 +331,15 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
             settle: request.wallet.settle,
             orderStatus: (orderId: string) => orderStatus(directory, platform, orderId),
           };
+    // A swap too, when the merchant gave the test provider's code: never on a
+    // live provider, which would want a real deposit.
+    const swap =
+      paid !== undefined &&
+      request.wallet !== undefined &&
+      scenario.swaps &&
+      platform.swap_provider !== "live"
+        ? { ...paid, complete: request.wallet.completeSwap }
+        : undefined;
     const secret = await scanTrackedSecrets(directory, uris, writes);
     const checks = evaluate({
       scenario,
@@ -379,7 +388,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       const live =
         platform.host === "btcpay"
           ? await liveBtcpayChecks(directory, request.wallet?.settle)
-          : await liveShopChecks(sandbox.baseUrl, { paid });
+          : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

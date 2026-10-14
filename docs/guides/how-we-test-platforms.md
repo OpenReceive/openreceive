@@ -49,8 +49,13 @@ Every check must pass:
 - the agent finishes within the turn and time limits, with a short hand-over
   that starts "Setup is finished" and asks the merchant nothing;
 - on a framework app, the app is still running at the end: a buyer's order gets
-  a Lightning invoice, another visitor asking for that order is refused, and
-  once the test wallet pays the invoice, the shop marks its own order paid;
+  a Lightning invoice, reloading the order page resumes that same invoice,
+  another visitor asking for that order is refused, and once the test wallet
+  pays the invoice, the shop marks its own order paid;
+- on a framework app with the swap code, the checkout offers the test
+  provider's coins, and a buyer pays a second order by swap, USDT on Solana:
+  the test provider completes the swap, its Lightning invoice settles in the
+  test wallet, and the shop marks that order paid too;
 - on a database platform such as Supabase, OpenReceive's tables end up closed
   to the platform's public API, which every visitor's browser can reach;
 - on a hosting platform:
@@ -67,9 +72,14 @@ Every check must pass:
 - **It covers the path we document.** It does not cover every configuration a
   platform allows. A custom database adapter, an Edge runtime or an unusual
   build setup is outside the test.
-- **It pays one invoice, from a test wallet.** The trial checks that a paid
-  invoice reaches the shop's own order. Refunds, swap recovery and every
-  settlement edge case are covered by each library's own test suites.
+- **It pays twice, from a test wallet.** The trial checks that a paid
+  Lightning invoice and a completed swap each reach the shop's own order. The
+  test swap provider moves no money: it completes the swap when the trial says
+  so. Refunds, swap recovery and every settlement edge case are covered by
+  each library's own test suites.
+- **The swap and reload checks are newer than some badges.** They joined on
+  2026-10-14. A badge earned before them stands until that platform's next
+  trials.
 - **"Guide" means not yet tested.** A platform with a guide but no badge is
   documented, and we have not yet run it end to end.
 

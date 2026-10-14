@@ -165,7 +165,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 4193
+      "bytes": 4804
     },
     {
       "path": "/guides/quickstart-rails",
@@ -1326,8 +1326,8 @@
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
       "tested": {
-        "date": "2026-10-10",
-        "release": "0.4.22",
+        "date": "2026-10-14",
+        "release": "0.4.26",
         "agents": [
           "codex/default",
           "cursor/grok-4.7-medium-fast"
@@ -1362,8 +1362,8 @@
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
       "tested": {
-        "date": "2026-10-10",
-        "release": "0.4.21",
+        "date": "2026-10-14",
+        "release": "0.4.26",
         "agents": [
           "codex/default",
           "cursor/grok-4.7-medium-fast"

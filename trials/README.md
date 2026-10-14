@@ -75,6 +75,17 @@ shop's own order row with the fixture's `bin/order-status` probe. A shop whose
 `onPaid` is still the logging-only placeholder settles but never marks the
 order paid, and `live_order_paid` fails.
 
+A swap pays a second order the same way. The buyer orders the $12 product
+(the test provider prices BTC at a fixed $100,000 and takes at least 10
+USDT), and the checkout must offer the provider's pay-in methods
+(`live_swap_methods`). The buyer starts a USDT-on-Solana swap through the
+shop's own `/openreceive/swaps`. The harness scripts that order to `completed`
+on the test provider (`POST /__testkit/script`, by order id, so other
+trials' orders stay put), settles the swap's invoice on the wallet, polls as
+the swap view does, and reads the order (`live_swap_paid`). It runs when the
+merchant gave the test provider's code, and never on a platform whose
+`swap_provider` is `"live"`.
+
 WordPress's HTTP API trusts only the CA bundle WordPress ships, not the
 system store. The WooCommerce fixture mounts a must-use plugin,
 `trust-system-cas.php`, into both its `wordpress` and `cli` services, and it
@@ -127,6 +138,12 @@ video takes kept finding after a pass:
   second visitor with a session and CSRF token of their own is refused. So
   the check fails when the allow-all `authorize` placeholder is left in place.
   A failed live check carries the shop's log (`logs` in `platform.json`).
+- `live_reload`: the buyer loads the order page twice and asks for its
+  checkout again, and gets the same invoice. Where the page names its
+  checkout's `reference` (the element's attribute, or a React prop in the
+  page's payload), both loads name the same one, so a page that makes a new
+  order on every load fails.
+- `live_swap_methods`, `live_swap_paid`: the swap above.
 - `live_one_scan_back_to_back`: on a live shop, four `payments/check` calls
   in a row, as a checkout makes them, run at most one wallet scan between
   them. A check that ran the scan answers with the wallet's `details`. When a

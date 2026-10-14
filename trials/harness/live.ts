@@ -3,8 +3,9 @@ import path from "node:path";
 import type { Check } from "./types.ts";
 
 // The live checks every published shop gets, wherever it runs: it answers,
-// a buyer's own order gets a real Lightning invoice, and a stranger asking for
-// that order is refused. Nothing is paid.
+// a buyer's own order gets a real Lightning invoice, a reload resumes it, and
+// a stranger asking for that order is refused. On the trial wallet the buyer
+// also pays, by Lightning and by a swap through the test provider.
 
 export function check(id: string, pass: boolean, summary: string, evidence?: string): Check {
   return { id, severity: "blocker", pass, summary, evidence };
@@ -115,6 +116,25 @@ export class Visitor {
     return this.post("/openreceive/checkouts/prepare", { reference }, pagePath);
   }
 
+  /** POST /openreceive/swaps: the payer picked a pay-in asset in the swap picker. */
+  createSwap(reference: string, payInAsset: string, pagePath: string): Promise<Answer> {
+    return this.post("/openreceive/swaps", { reference, pay_in_asset: payInAsset }, pagePath);
+  }
+
+  /** POST /openreceive/swaps/status, as the swap view polls the provider. */
+  swapStatus(reference: string, paymentHash: string, pagePath: string): Promise<Answer> {
+    return this.post(
+      "/openreceive/swaps/status",
+      { reference, payment_hash: paymentHash },
+      pagePath,
+    );
+  }
+
+  /** The order page as a reload fetches it. */
+  reload(pagePath: string): Promise<string> {
+    return this.page(pagePath);
+  }
+
   /** POST /openreceive/payments/check, as the checkout polls while the payer pays. */
   checkPayment(reference: string, paymentHash: string, pagePath: string): Promise<Answer> {
     return this.post(
@@ -186,9 +206,20 @@ export interface PaidPath {
   readonly orderStatus: (orderId: string) => Promise<string>;
 }
 
+/**
+ * The swap path, on the trial wallet's test provider: the provider completes
+ * the order as if the deposit arrived, the wallet settles the swap's invoice,
+ * and the shop's own order must read paid.
+ */
+export interface SwapPath extends PaidPath {
+  readonly complete: (bolt11: string) => Promise<void>;
+}
+
 export interface LiveOptions {
   readonly retryDelayMs?: number;
   readonly paid?: PaidPath;
+  /** Only where the merchant gave the test provider's swap code. */
+  readonly swap?: SwapPath;
   /** How long the shop has to see the settlement. */
   readonly settleTimeoutMs?: number;
 }
@@ -230,8 +261,10 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
       ),
     );
     const paymentHash = own.body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
-    if (paymentHash !== undefined)
+    if (paymentHash !== undefined) {
       checks.push(await backToBackCheck(buyer, order, page, paymentHash));
+      checks.push(await reloadCheck(buyer, order, page, paymentHash));
+    }
     if (options.paid !== undefined && paymentHash !== undefined) {
       checks.push(...(await paidChecks(buyer, order, page, paymentHash, options.paid, options)));
     }
@@ -240,7 +273,61 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
       check("live_invoice", false, "The shop issued a Lightning invoice.", String(error)),
     );
   }
+  if (options.swap !== undefined) {
+    try {
+      checks.push(...(await swapChecks(base, options.swap, options)));
+    } catch (error) {
+      checks.push(
+        check("live_swap_paid", false, "The buyer paid an order by swap.", String(error)),
+      );
+    }
+  }
   return checks;
+}
+
+/**
+ * Every `reference` a page hands its checkout: the custom element's attribute,
+ * or a React prop in the page's serialized payload (escaped quotes included).
+ */
+export function pageReferences(html: string): string[] {
+  const found = new Set<string>();
+  for (const match of html.matchAll(/\breference\\?"?\s*[:=]\s*\\?"([^"\\<>]{1,200})\\?"/g)) {
+    if (match[1] !== undefined) found.add(match[1]);
+  }
+  return [...found].sort();
+}
+
+/**
+ * A reload resumes the checkout: the order page loads again, its checkout
+ * asks for the invoice again, and gets the one it had. Where the page names
+ * its checkout's reference, the reload names the same one, so a page that
+ * makes a new order on every load fails here even though each order would
+ * get an invoice of its own.
+ */
+async function reloadCheck(
+  buyer: Visitor,
+  order: string,
+  page: string,
+  paymentHash: string,
+): Promise<Check> {
+  const first = pageReferences(await buyer.reload(page));
+  const second = pageReferences(await buyer.reload(page));
+  const again = await buyer.createCheckout(order, page);
+  const hash = again.body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
+  const sameReference = first.join(",") === second.join(",");
+  const sameInvoice = again.status === 201 && hash === paymentHash;
+  const references =
+    first.length === 0 ? "the page names no reference" : `references ${first.join(", ")}`;
+  return check(
+    "live_reload",
+    sameReference && sameInvoice,
+    "A reload of the order page resumed the same checkout: the same reference and the same invoice.",
+    !sameReference
+      ? `the reference changed on reload: ${first.join(", ") || "(none)"} then ${second.join(", ") || "(none)"}`
+      : sameInvoice
+        ? `${references}; same payment hash`
+        : `${again.status} ${hash === undefined ? again.body.slice(0, 200) : `a new payment hash ${hash.slice(0, 12)}…`}`,
+  );
 }
 
 /**
@@ -277,6 +364,82 @@ async function backToBackCheck(
       )
       .join(", "),
   );
+}
+
+/**
+ * The swap the guide promises: USDT on Solana, on the $12 product, because the
+ * test provider prices BTC at a fixed $100,000 and takes at least 10 USDT.
+ */
+const SWAP_ASSET = "USDT_SOL";
+const SWAP_PRODUCT = 2;
+
+async function swapChecks(base: string, swap: SwapPath, options: LiveOptions): Promise<Check[]> {
+  const buyer = new Visitor(base, options.retryDelayMs ?? 5_000);
+  const order = await buyer.placeOrder(SWAP_PRODUCT);
+  const page = `/orders/${order}`;
+  const prepared = await buyer.prepareCheckout(order, page);
+  const available = (() => {
+    try {
+      const body = JSON.parse(prepared.body) as {
+        payment_methods?: { pay_in_asset: string; available: boolean }[];
+      };
+      return (body.payment_methods ?? [])
+        .filter((method) => method.available)
+        .map((method) => method.pay_in_asset);
+    } catch {
+      return [];
+    }
+  })();
+  const methods = check(
+    "live_swap_methods",
+    prepared.status === 200 && available.length > 0,
+    "The checkout offers swap pay-in methods from the test swap provider.",
+    prepared.status === 200
+      ? `available: ${available.join(", ") || "none"}`
+      : `${prepared.status} ${prepared.body.slice(0, 200)}`,
+  );
+  const paidSummary = `A ${SWAP_ASSET} swap the provider completed settled in the wallet, and the shop's own order left awaiting_payment.`;
+  if (!available.includes(SWAP_ASSET)) {
+    return [methods, check("live_swap_paid", false, paidSummary, `${SWAP_ASSET} is not on offer`)];
+  }
+  const created = await buyer.createSwap(order, SWAP_ASSET, page);
+  const paymentHash = created.body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
+  const bolt11 = created.body.match(/"bolt11"\s*:\s*"(ln[a-z0-9]+)"/i)?.[1];
+  if (created.status !== 201 || paymentHash === undefined || bolt11 === undefined) {
+    return [
+      methods,
+      check(
+        "live_swap_paid",
+        false,
+        paidSummary,
+        `${created.status} ${created.body.slice(0, 300)}`,
+      ),
+    ];
+  }
+  await swap.complete(bolt11);
+  await swap.settle(paymentHash);
+  const deadline = Date.now() + (options.settleTimeoutMs ?? 60_000);
+  let last: Answer = { status: 0, body: "", ms: 0 };
+  let settled = false;
+  while (!settled && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs ?? 4_000));
+    // The swap view polls both: the provider's state, and the payment.
+    await buyer.swapStatus(order, paymentHash, page);
+    last = await buyer.checkPayment(order, paymentHash, page);
+    settled = last.status === 200 && /"status"\s*:\s*"settled"/.test(last.body);
+  }
+  const status = settled ? await swap.orderStatus(order) : "";
+  return [
+    methods,
+    check(
+      "live_swap_paid",
+      settled && status.length > 0 && status !== "awaiting_payment",
+      paidSummary,
+      settled
+        ? `order ${order} status: ${status || "(unread)"}`
+        : `not settled: ${last.status} ${last.body.slice(0, 300)}`,
+    ),
+  ];
 }
 
 async function paidChecks(

@@ -973,18 +973,37 @@ test("a command that prints a code's value is a blocker on a dotenv shop", () =>
 /**
  * A Django-shaped shop: a session cookie, a CSRF cookie and form field, a
  * checkout that wants the token in X-CSRFToken and refuses another session.
+ * With `swaps`, it offers USDT on Solana and makes a swap whose invoice settles
+ * only after the provider completed it. `pageReference` is what the order
+ * page hands its checkout: the order id, or a new order on every load.
  */
 const HASH = "ab".repeat(32);
+const SWAP_HASH = "cd".repeat(32);
+const SWAP_BOLT11 = "lnbc120n1pswapexample";
 
 async function csrfShop(
   authorize,
-  { relayBlips = 0, onPaidWired = true, gateStaysShut = true } = {},
+  {
+    relayBlips = 0,
+    onPaidWired = true,
+    gateStaysShut = true,
+    swaps = false,
+    pageReference = "order",
+    newInvoiceEachTime = false,
+  } = {},
 ) {
   const orders = new Map();
   let sessions = 0;
   let blips = relayBlips;
-  let settled = false;
   let paymentChecks = 0;
+  let checkouts = 0;
+  let pageLoads = 0;
+  // payment hash -> the order it pays; settled hashes; completed swap invoices.
+  const hashOrder = new Map();
+  const settledHashes = new Set();
+  const completed = new Set();
+  const isSettled = (hash) =>
+    settledHashes.has(hash) && (hash !== SWAP_HASH || completed.has(SWAP_BOLT11));
   const server = createServer((request, response) => {
     const cookies = Object.fromEntries(
       (request.headers.cookie ?? "")
@@ -1008,8 +1027,16 @@ async function csrfShop(
       const csrfOk = cookies.csrftoken === "tok";
       if (request.url === "/health") return response.end("ok");
       if (request.method === "GET") {
+        const id = request.url.match(/^\/orders\/(\d+)$/)?.[1];
+        pageLoads += 1;
+        const reference =
+          id === undefined ? "" : pageReference === "order" ? id : `${id}-${pageLoads}`;
+        const element =
+          id === undefined
+            ? ""
+            : `<openreceive-checkout reference="${reference}"></openreceive-checkout>`;
         return response.end(
-          '<form><input type="hidden" name="csrfmiddlewaretoken" value="tok"></form>',
+          `<form><input type="hidden" name="csrfmiddlewaretoken" value="tok"></form>${element}`,
         );
       }
       if (request.url === "/orders") {
@@ -1029,8 +1056,31 @@ async function csrfShop(
         paymentChecks += 1;
         const scanned = paymentChecks === 1 || !gateStaysShut;
         const details = scanned ? '"details":{"observed_at":1},' : "";
+        const { payment_hash: hash } = JSON.parse(body);
         response.statusCode = 200;
-        return response.end(`{${details}"status":"${settled ? "settled" : "pending"}"}`);
+        return response.end(`{${details}"status":"${isSettled(hash) ? "settled" : "pending"}"}`);
+      }
+      if (request.url === "/openreceive/checkouts/prepare") {
+        const methods = swaps ? '[{"pay_in_asset":"USDT_SOL","available":true}]' : "[]";
+        response.statusCode = 200;
+        return response.end(`{"amount_msats":12000000,"payment_methods":${methods}}`);
+      }
+      if (request.url === "/openreceive/swaps") {
+        const { reference, pay_in_asset: asset } = JSON.parse(body);
+        if (!swaps || asset !== "USDT_SOL") {
+          response.statusCode = 400;
+          return response.end('{"code":"INVALID_REQUEST"}');
+        }
+        hashOrder.set(SWAP_HASH, reference);
+        response.statusCode = 201;
+        return response.end(
+          `{"swap":{"payment_hash":"${SWAP_HASH}","pay_in_asset":"USDT_SOL","checkout":{"bolt11":"${SWAP_BOLT11}","payment_hash":"${SWAP_HASH}"}}}`,
+        );
+      }
+      if (request.url === "/openreceive/swaps/status") {
+        response.statusCode = 200;
+        const state = completed.has(SWAP_BOLT11) ? "completed" : "awaiting_deposit";
+        return response.end(`{"swap":{"provider_state":"${state}"}}`);
       }
       if (request.url === "/openreceive/checkouts") {
         if (!csrfOk || request.headers["x-csrftoken"] !== "tok") {
@@ -1047,8 +1097,13 @@ async function csrfShop(
           response.statusCode = 403;
           return response.end('{"error":"forbidden"}');
         }
+        checkouts += 1;
+        // A shop that makes a new attempt on every request, the way a page
+        // that mints a new order on each load would look to its checkout.
+        const hash = newInvoiceEachTime ? String(checkouts).padStart(64, "e") : HASH;
+        hashOrder.set(hash, reference);
         response.statusCode = 201;
-        return response.end(`{"checkout":{"bolt11":"lnbc10n1pexample","payment_hash":"${HASH}"}}`);
+        return response.end(`{"checkout":{"bolt11":"lnbc10n1pexample","payment_hash":"${hash}"}}`);
       }
       response.statusCode = 404;
       response.end();
@@ -1061,9 +1116,17 @@ async function csrfShop(
     // The trial wallet's settle, and the shop's own order row afterwards.
     paid: {
       settle: async (hash) => {
-        settled = hash === HASH;
+        settledHashes.add(hash);
       },
-      orderStatus: async () => (settled && onPaidWired ? "paid" : "awaiting_payment"),
+      orderStatus: async (orderId) =>
+        onPaidWired &&
+        [...hashOrder].some(([hash, reference]) => reference === orderId && isSettled(hash))
+          ? "paid"
+          : "awaiting_payment",
+    },
+    // The test provider's control: complete the swap order for this invoice.
+    complete: async (bolt11) => {
+      completed.add(bolt11);
     },
   };
 }
@@ -1079,10 +1142,67 @@ test("the live check orders and pays through a CSRF-protected shop, as a browser
         ["live_invoice", true],
         ["live_refuses_stranger", true],
         ["live_one_scan_back_to_back", true],
+        ["live_reload", true],
       ],
     );
   } finally {
     shop.close();
+  }
+});
+
+test("a reload must resume the same checkout: same reference, same invoice", async () => {
+  // The order page names a new order on every load.
+  const renamed = await csrfShop(true, { pageReference: "new-each-load" });
+  try {
+    const checks = await liveShopChecks(renamed.base);
+    const reload = checks.find((item) => item.id === "live_reload");
+    assert.equal(reload?.pass, false);
+    assert.match(reload?.evidence ?? "", /reference changed on reload/);
+  } finally {
+    renamed.close();
+  }
+  // The checkout gets a new invoice on every request.
+  const fresh = await csrfShop(true, { newInvoiceEachTime: true });
+  try {
+    const checks = await liveShopChecks(fresh.base);
+    const reload = checks.find((item) => item.id === "live_reload");
+    assert.equal(reload?.pass, false);
+    assert.match(reload?.evidence ?? "", /a new payment hash/);
+  } finally {
+    fresh.close();
+  }
+});
+
+test("a swap the provider completed and the wallet settled turns the order paid", async () => {
+  const shop = await csrfShop(true, { swaps: true });
+  try {
+    const checks = await liveShopChecks(shop.base, {
+      retryDelayMs: 10,
+      settleTimeoutMs: 2_000,
+      paid: shop.paid,
+      swap: { ...shop.paid, complete: shop.complete },
+    });
+    assert.equal(checks.find((item) => item.id === "live_swap_methods")?.pass, true);
+    const swap = checks.find((item) => item.id === "live_swap_paid");
+    assert.equal(swap?.pass, true, swap?.evidence);
+    assert.match(swap?.evidence ?? "", /status: paid/);
+  } finally {
+    shop.close();
+  }
+  // No swap code wired: the picker offers nothing, and nothing can be paid by swap.
+  const bitcoinOnly = await csrfShop(true);
+  try {
+    const checks = await liveShopChecks(bitcoinOnly.base, {
+      retryDelayMs: 10,
+      settleTimeoutMs: 2_000,
+      swap: { ...bitcoinOnly.paid, complete: bitcoinOnly.complete },
+    });
+    assert.equal(checks.find((item) => item.id === "live_swap_methods")?.pass, false);
+    const swap = checks.find((item) => item.id === "live_swap_paid");
+    assert.equal(swap?.pass, false);
+    assert.match(swap?.evidence ?? "", /USDT_SOL is not on offer/);
+  } finally {
+    bitcoinOnly.close();
   }
 });
 
