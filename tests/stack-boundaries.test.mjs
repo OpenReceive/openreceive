@@ -94,3 +94,34 @@ test("stack close() resolves even when boot fails", async () => {
   await stack.ready.catch(() => {});
   await stack.close();
 });
+
+test("a failed boot answers 503 and leaves no unhandled rejection", async () => {
+  const unhandled = [];
+  const record = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", record);
+  try {
+    // The host never touches `ready`, as a server that only mounts the handler.
+    const stack = createStack({
+      wallet: { service: Promise.reject(new Error("boot failed")) },
+      storage: { payments: stubPayments(), onPaid: async () => {} },
+      amountFor: () => ({ sats: 1000 }),
+      authorize,
+      onBootFailure: () => {},
+    });
+    const response = await stack.handler(
+      new Request("http://localhost/openreceive/checkouts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reference: "order-1" }),
+      }),
+    );
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).code, "WALLET_UNAVAILABLE");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(unhandled, []);
+    await assert.rejects(stack.ready, /boot failed/);
+    await stack.close();
+  } finally {
+    process.off("unhandledRejection", record);
+  }
+});

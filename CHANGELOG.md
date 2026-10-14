@@ -10,6 +10,12 @@
   under the same 64 KB cap; a larger one answers 413. When something else
   already drained the body without setting `req.body`, the adapter still
   answers the 500 that names the missing body parser.
+- Fixed (Node): when the wallet was unreachable at boot, a stack built with
+  `createStack` (and every adapter's all-in-one form) answered each request
+  with the 503 `WALLET_UNAVAILABLE`, and then the process exited: the
+  stack's `ready` promise rejected with no handler, unless the host awaited
+  it. A Deno isolate ended the same way, before it could answer. `ready`
+  still rejects for a host that awaits it.
 - Fixed (Rails): a host without ActiveJob (`rails new --minimal`, or an app
   that loads only the railties it uses) could not boot in production. Eager
   loading reached `OpenReceive::ReconcileJob`, a subclass of

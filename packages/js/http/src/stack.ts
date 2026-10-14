@@ -146,9 +146,15 @@ export function createStack<Transaction = unknown>(
     handle: { value: handle, enumerable: true },
   });
 
+  // `ready` is a promise of its own: a host that never awaits it must not get
+  // an unhandled rejection when boot fails, which ends a Node process and a
+  // Deno isolate. Requests already answer that failure with a 503.
+  const ready = boot.then(() => undefined);
+  ready.catch(() => {});
+
   return {
     handler,
-    ready: boot.then(() => undefined),
+    ready,
     async close() {
       // An in-flight boot finishes constructing the service after a bare close
       // would have returned; wait for it so the relay socket never leaks.
