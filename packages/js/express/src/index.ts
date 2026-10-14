@@ -13,6 +13,7 @@ import {
   isUnderPrefix,
   webRequest,
 } from "@openreceive/http";
+import type { Readable } from "node:stream";
 import type {
   Request as ExpressRequest,
   Response as ExpressResponse,
@@ -163,7 +164,65 @@ function toWebRequest(req: ExpressRequest): Request {
     url: mountRelativeUrl(req),
     protocol: req.protocol,
     parsedBody: (req as { body?: unknown }).body,
+    unparsedBody: () => unreadBody(req),
   });
+}
+
+/**
+ * The raw body as a web stream, for a request no Express body parser read:
+ * none is mounted, or it is mounted after OpenReceive (NestJS adds its own at
+ * listen). It is pulled only when the handler reads the body, one chunk at a
+ * time. Cancelling it, as the handler's size cap does, drops the rest instead
+ * of destroying the request, so the 413 still reaches the client.
+ */
+function unreadBody(req: ExpressRequest): ReadableStream<Uint8Array> | undefined {
+  const stream = req as Partial<Readable>;
+  // Something else already read from it: what is left is not the client's body.
+  if (typeof stream.on !== "function" || stream.readableDidRead || stream.readableEnded) {
+    return undefined;
+  }
+  const source = stream as Readable;
+  let listening = false;
+  let finish = (): void => undefined;
+  return new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        if (!listening) {
+          listening = true;
+          const onData = (chunk: Buffer): void => {
+            controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+            source.pause();
+          };
+          const onEnd = (): void => {
+            finish();
+            controller.close();
+          };
+          // A client that hangs up mid-body may close the stream with no
+          // "end" or "error", which would leave the handler's read pending.
+          const onError = (): void => {
+            finish();
+            controller.error(new Error("The request body ended early."));
+          };
+          finish = () => {
+            source.off("data", onData);
+            source.off("end", onEnd);
+            source.off("error", onError);
+            source.off("close", onError);
+          };
+          source.on("data", onData);
+          source.on("end", onEnd);
+          source.on("error", onError);
+          source.on("close", onError);
+        }
+        source.resume();
+      },
+      cancel() {
+        finish();
+        source.resume();
+      },
+    },
+    { highWaterMark: 0 },
+  );
 }
 
 async function writeWebResponse(res: ExpressResponse, response: Response): Promise<void> {

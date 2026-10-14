@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import test from "node:test";
+import express from "express";
 import { memoryPaymentsDb } from "./helpers/factories.mjs";
 import { createOpenReceive } from "../packages/js/node/src/index.ts";
 import * as expressAdapter from "../packages/js/express/src/index.ts";
@@ -218,34 +220,115 @@ test("express middleware works sub-mounted under app.use('/api', ...)", async ()
   assert.equal(nextCalls, 1);
 });
 
-test("a JSON body no parser read names the missing body parser", async () => {
+async function serveExpress(app) {
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  return {
+    url: `http://127.0.0.1:${server.address().port}`,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+function postJson(url, body, headers = {}) {
+  return fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body,
+    ...(typeof body === "string" ? {} : { duplex: "half" }),
+  });
+}
+
+// NestJS adds its JSON parser only at listen, after anything main.ts mounts,
+// and an Express app may mount express.json() after OpenReceive or not at
+// all. The adapter reads such a body itself, under the handler's cap.
+test("express reads the body itself when no parser ran before it", async () => {
   const service = await newService();
   const { host } = testHost();
-  const middleware = openReceiveExpress({ service, authorize: () => true, host });
-  const res = fakeExpressResponse();
-  await middleware(
-    {
+  const app = express();
+  app.use(openReceiveExpress({ service, authorize: () => true, host }));
+  app.use(express.json());
+  app.post("/orders", (req, res) => res.json({ seen: req.body }));
+  const { url, close } = await serveExpress(app);
+  try {
+    const created = await postJson(
+      `${url}/openreceive/checkouts`,
+      JSON.stringify({ reference: "order-raw" }),
+    );
+    assert.equal(created.status, 201);
+    assert.equal((await created.json()).checkout.reference, "order-raw");
+
+    // A chunked body declares no content-length.
+    const chunked = await postJson(
+      `${url}/openreceive/checkouts`,
+      new Blob([JSON.stringify({ reference: "order-chunked" })]).stream(),
+    );
+    assert.equal(chunked.status, 201);
+    assert.equal((await chunked.json()).checkout.reference, "order-chunked");
+
+    // The app's own routes still get their parsed body.
+    const own = await postJson(`${url}/orders`, JSON.stringify({ item: 1 }));
+    assert.deepEqual(await own.json(), { seen: { item: 1 } });
+  } finally {
+    await close();
+  }
+});
+
+test("an unparsed express body over the cap answers 413, and other types 415", async () => {
+  const service = await newService();
+  const { host } = testHost();
+  const app = express();
+  app.use(openReceiveExpress({ service, authorize: () => true, host }));
+  const { url, close } = await serveExpress(app);
+  try {
+    const memo = "x".repeat(70 * 1024);
+    const large = await postJson(
+      `${url}/openreceive/checkouts`,
+      new Blob([JSON.stringify({ reference: "order-large", memo })]).stream(),
+    );
+    assert.equal(large.status, 413);
+    assert.match((await large.json()).message, /too large/);
+
+    const form = await fetch(`${url}/openreceive/checkouts`, {
       method: "POST",
-      originalUrl: "/openreceive/checkouts",
-      url: "/openreceive/checkouts",
-      protocol: "http",
-      // express.json() was never mounted, so req.body is absent while the raw
-      // stream still holds the JSON the client sent.
-      headers: {
-        host: "shop.example",
-        "content-type": "application/json",
-        "content-length": "27",
-      },
-    },
-    res,
-    () => {
-      throw new Error("must not fall through");
-    },
-  );
-  assert.equal(res.state.statusCode, 500);
-  const body = JSON.parse(res.state.body);
-  assert.match(body.message, /body parser/);
-  assert.doesNotMatch(body.message, /reference/);
+      headers: { "content-type": "text/plain" },
+      body: JSON.stringify({ reference: "order-form" }),
+    });
+    assert.equal(form.status, 415);
+
+    // The server still answers after both refusals.
+    const created = await postJson(
+      `${url}/openreceive/checkouts`,
+      JSON.stringify({ reference: "order-after" }),
+    );
+    assert.equal(created.status, 201);
+  } finally {
+    await close();
+  }
+});
+
+test("a JSON body something else already read names the missing body parser", async () => {
+  const service = await newService();
+  const { host } = testHost();
+  const app = express();
+  // A logger that drains the body without setting req.body.
+  app.use((req, _res, next) => {
+    req.on("data", () => undefined);
+    req.on("end", () => next());
+  });
+  app.use(openReceiveExpress({ service, authorize: () => true, host }));
+  const { url, close } = await serveExpress(app);
+  try {
+    const res = await postJson(
+      `${url}/openreceive/checkouts`,
+      JSON.stringify({ reference: "order-drained" }),
+    );
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.match(body.message, /no body parser had read/);
+    assert.doesNotMatch(body.message, /reference/);
+  } finally {
+    await close();
+  }
 });
 
 test("express native.ip drives rate limiting through the whole adapter path", async () => {

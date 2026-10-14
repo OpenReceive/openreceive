@@ -19,6 +19,13 @@ export interface NodeRequestParts {
   readonly protocol?: string;
   /** Body already parsed by the framework's body parser, when present. */
   readonly parsedBody?: unknown;
+  /**
+   * The request's own unread body, for a framework that leaves it on the
+   * stream when no parser ran (Express). Called only when `parsedBody` is
+   * undefined and the request declares a body; `undefined` when the stream
+   * can no longer give the client's body.
+   */
+  readonly unparsedBody?: () => ReadableStream<Uint8Array> | undefined;
 }
 
 /** Convert a parsed framework request into the Web Request the handler speaks. */
@@ -37,37 +44,46 @@ export function webRequest(parts: NodeRequestParts): Request {
   }
 
   const method = parts.method.toUpperCase();
-  let body: string | undefined;
+  let body: string | ReadableStream<Uint8Array> | undefined;
   if (method !== "GET" && method !== "HEAD") {
     const parsed = parts.parsedBody;
-    assertBodyWasParsed(parts, parsed);
-    if (typeof parsed === "string") {
+    if (parsed === undefined) {
+      body = unparsedBody(parts);
+    } else if (typeof parsed === "string") {
       body = parsed;
-    } else if (parsed !== undefined && parsed !== null && Object.keys(parsed).length > 0) {
+    } else if (parsed !== null && Object.keys(parsed).length > 0) {
       body = JSON.stringify(parsed);
       if (!headers.has("content-type")) headers.set("content-type", "application/json");
     }
   }
 
+  if (typeof body === "object") {
+    // Node's Request refuses a stream body without `duplex: "half"`, which
+    // the DOM RequestInit type does not declare.
+    return new Request(url, { method, headers, body, duplex: "half" } as RequestInit);
+  }
   return new Request(url, { method, headers, body });
 }
 
 /**
- * A JSON body arrived but nothing parsed it, so the raw stream is still
- * unread and the reconstructed request would look empty — every route would
- * then blame the client for a missing `reference`. Express leaves `req.body`
- * undefined only when no body parser ran at all (body-parser sets `{}` even
- * when it declines the content-type), so this names the real misconfiguration.
+ * Nothing parsed the body: no parser was mounted, or it runs after
+ * OpenReceive (NestJS adds its own only at listen). The adapter hands over
+ * the unread stream, and the handler reads it under its own size cap after
+ * the cross-site and content-type checks. With no stream to read, a JSON
+ * body would look empty and every route would blame the client for a
+ * missing `reference`, so this names the real misconfiguration instead.
  */
-function assertBodyWasParsed(parts: NodeRequestParts, parsed: unknown): void {
-  if (parsed !== undefined) return;
+function unparsedBody(parts: NodeRequestParts): ReadableStream<Uint8Array> | undefined {
   const header = (name: string): string | undefined => {
     const value = parts.headers[name];
     return Array.isArray(value) ? value[0] : value;
   };
   const declaresBody =
     Number(header("content-length") ?? "0") > 0 || header("transfer-encoding") !== undefined;
-  if (!declaresBody || !(header("content-type") ?? "").includes("json")) return;
+  if (!declaresBody) return undefined;
+  const stream = parts.unparsedBody?.();
+  if (stream !== undefined) return stream;
+  if (!(header("content-type") ?? "").includes("json")) return undefined;
   throw new HttpError(
     500,
     "INTERNAL",

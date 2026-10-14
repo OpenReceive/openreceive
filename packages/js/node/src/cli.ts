@@ -590,11 +590,13 @@ async function checkRoutesMounted(input: {
 }
 
 /**
- * A GET reaches the router even when no JSON body parser runs before it, but
- * then every checkout POST answers 500. POST a JSON body to the same unmatched
- * path: a parsed body gets the router's 404 (no route runs, so no wallet scan),
- * an unparsed one the adapter's own 500. Only that 500 fails; any other answer,
- * such as an app's CSRF refusal, says nothing about the parser.
+ * A GET reaches the router even when no JSON body parser runs before it.
+ * The Express adapter now reads such a body itself, but an older one, or a
+ * middleware that drains the body without setting `req.body`, makes every
+ * checkout POST answer 500. POST a JSON body to the same unmatched path: a
+ * readable body gets the router's 404 (no route runs, so no wallet scan), an
+ * unreadable one the adapter's own 500. Only that 500 fails; any other
+ * answer, such as an app's CSRF refusal, says nothing about the parser.
  */
 async function unparsedJsonBody(probe: string): Promise<string | undefined> {
   try {

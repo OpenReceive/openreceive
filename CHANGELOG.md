@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Changed (Express): the adapter reads the request body itself when no
+  Express body parser ran before it, so a checkout no longer answers 500 when
+  `express.json()` is missing or mounted after OpenReceive. NestJS no longer
+  needs `app.useBodyParser("json")` before the mount. The body is read only
+  when a route needs it, after the cross-site and content-type checks, and
+  under the same 64 KB cap; a larger one answers 413. When something else
+  already drained the body without setting `req.body`, the adapter still
+  answers the 500 that names the missing body parser.
 - Fixed (Rails): a host without ActiveJob (`rails new --minimal`, or an app
   that loads only the railties it uses) could not boot in production. Eager
   loading reached `OpenReceive::ReconcileJob`, a subclass of
