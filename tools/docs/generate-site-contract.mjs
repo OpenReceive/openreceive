@@ -488,7 +488,7 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node, checked with SvelteKit 3.0, adapter-node 6 and OpenReceive 0.4.25",
+      runtime: "Node 22: agent trials on SvelteKit 3.0 with adapter-node 6, and the recipe's own check",
       ...RECIPE_CAPABILITIES,
     },
   },
@@ -507,7 +507,7 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node, checked with Nuxt 4.6 (Nitro 2) and OpenReceive 0.4.25",
+      runtime: "Node 22: agent trials on Nuxt 4.6 (Nitro 2), and the recipe's own check",
       ...RECIPE_CAPABILITIES,
     },
   },
@@ -526,7 +526,7 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node, checked with Astro 7.3, @astrojs/node 11.1 and OpenReceive 0.4.25",
+      runtime: "Node 22: agent trials on Astro 7.3 with @astrojs/node 11.1, and the recipe's own check",
       ...RECIPE_CAPABILITIES,
     },
   },
@@ -545,7 +545,7 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node, checked with React Router 8.4 and OpenReceive 0.4.25",
+      runtime: "Node 22: agent trials on React Router 8.4 (react-router-serve), and the recipe's own check",
       ...RECIPE_CAPABILITIES,
     },
   },
@@ -566,7 +566,7 @@ const FRAMEWORKS = [
     shared_checkout_demo: true,
     capabilities: {
       runtime:
-        "Cloudflare Workers (workerd), checked with TanStack Start 1.168 and OpenReceive 0.4.19; CI runs its Supabase route as a Worker",
+        "Node 22: agent trials on TanStack Start 1.169 (Nitro node-server). Cloudflare Workers (workerd): checked with TanStack Start 1.168, and CI runs its Supabase route as a Worker",
       databases: "PostgreSQL through a transaction pooler, or Supabase over its HTTPS API",
       ...SERVER_CAPABILITIES,
       secrets:

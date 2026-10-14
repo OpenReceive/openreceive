@@ -142,6 +142,51 @@
       "agents": ["codex/default"],
       "mode": "candidate",
       "directions": "5ea3b3923831"
+    },
+    {
+      "trial": "sveltekit",
+      "date": "2026-10-14",
+      "release": "0.4.26",
+      "runs": 3,
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "83e5f0180a09"
+    },
+    {
+      "trial": "nuxt",
+      "date": "2026-10-14",
+      "release": "0.4.26",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "71aab1c1757a"
+    },
+    {
+      "trial": "astro",
+      "date": "2026-10-14",
+      "release": "0.4.26",
+      "runs": 3,
+      "agents": ["cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "fa46f433c684"
+    },
+    {
+      "trial": "react-router",
+      "date": "2026-10-14",
+      "release": "0.4.26",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "ca332430a9f2"
+    },
+    {
+      "trial": "tanstack-start",
+      "date": "2026-10-14",
+      "release": "0.4.26",
+      "runs": 3,
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "mode": "candidate",
+      "directions": "d3c59ced4fa6"
     }
   ]
 }

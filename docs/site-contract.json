@@ -1543,13 +1543,19 @@
       "video": null,
       "shared_checkout_demo": true,
       "capabilities": {
-        "runtime": "Node, checked with SvelteKit 3.0, adapter-node 6 and OpenReceive 0.4.25",
+        "runtime": "Node 22: agent trials on SvelteKit 3.0 with adapter-node 6, and the recipe's own check",
         "databases": "PostgreSQL",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-14",
+        "release": "0.4.26",
+        "agents": [
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "nuxt",
@@ -1572,13 +1578,20 @@
       "video": null,
       "shared_checkout_demo": true,
       "capabilities": {
-        "runtime": "Node, checked with Nuxt 4.6 (Nitro 2) and OpenReceive 0.4.25",
+        "runtime": "Node 22: agent trials on Nuxt 4.6 (Nitro 2), and the recipe's own check",
         "databases": "PostgreSQL",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-14",
+        "release": "0.4.26",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "astro",
@@ -1601,13 +1614,19 @@
       "video": null,
       "shared_checkout_demo": true,
       "capabilities": {
-        "runtime": "Node, checked with Astro 7.3, @astrojs/node 11.1 and OpenReceive 0.4.25",
+        "runtime": "Node 22: agent trials on Astro 7.3 with @astrojs/node 11.1, and the recipe's own check",
         "databases": "PostgreSQL",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-14",
+        "release": "0.4.26",
+        "agents": [
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "react-router",
@@ -1630,13 +1649,20 @@
       "video": null,
       "shared_checkout_demo": true,
       "capabilities": {
-        "runtime": "Node, checked with React Router 8.4 and OpenReceive 0.4.25",
+        "runtime": "Node 22: agent trials on React Router 8.4 (react-router-serve), and the recipe's own check",
         "databases": "PostgreSQL",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-14",
+        "release": "0.4.26",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     },
     {
       "id": "tanstack-start",
@@ -1659,13 +1685,20 @@
       "video": null,
       "shared_checkout_demo": true,
       "capabilities": {
-        "runtime": "Cloudflare Workers (workerd), checked with TanStack Start 1.168 and OpenReceive 0.4.19; CI runs its Supabase route as a Worker",
+        "runtime": "Node 22: agent trials on TanStack Start 1.169 (Nitro node-server). Cloudflare Workers (workerd): checked with TanStack Start 1.168, and CI runs its Supabase route as a Worker",
         "databases": "PostgreSQL through a transaction pooler, or Supabase over its HTTPS API",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, as server secrets (Worker secrets on Cloudflare), never with a VITE_ prefix",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-14",
+        "release": "0.4.26",
+        "agents": [
+          "codex/default",
+          "cursor/grok-4.7-medium-fast"
+        ]
+      }
     }
   ],
   "platforms_index": {
