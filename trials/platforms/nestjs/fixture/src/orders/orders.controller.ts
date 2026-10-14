@@ -16,6 +16,7 @@ import { OrdersService } from "./orders.service.js";
 
 interface ShopSession {
   visitorId?: string;
+  save(callback: (error?: unknown) => void): void;
 }
 
 @Controller("orders")
@@ -32,6 +33,12 @@ export class OrdersController {
     if (product === null) throw new NotFoundException("That product is not in the catalog.");
     session.visitorId ??= randomUUID();
     const order = await this.orders.place(session.visitorId, product);
+    // Store the session before the redirect goes out: express-session writes
+    // it as the response ends, and the browser can ask for the order page
+    // before a Postgres store has it, which answers that page with a 404.
+    await new Promise<void>((resolve, reject) =>
+      session.save((error) => (error ? reject(error) : resolve())),
+    );
     return { url: `/orders/${order.id}`, statusCode: 303 };
   }
 
