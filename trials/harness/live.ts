@@ -65,10 +65,14 @@ export class Visitor {
     return html;
   }
 
-  /** The shop's own order form: product 1, plus the form's CSRF field when it has one. */
-  async placeOrder(): Promise<string> {
+  /**
+   * The shop's own order form, plus the form's CSRF field when it has one.
+   * Every fixture seeds the same catalog: product 1 is the $7 Facet, product 2
+   * the $12 Bezel.
+   */
+  async placeOrder(productId = 1): Promise<string> {
     const home = await this.page("/");
-    const form = new URLSearchParams({ product_id: "1" });
+    const form = new URLSearchParams({ product_id: String(productId) });
     const token = formToken(home);
     if (token !== undefined) form.set(token.name, token.value);
     const response = await fetch(`${this.base}/orders`, {

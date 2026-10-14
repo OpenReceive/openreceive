@@ -28,7 +28,12 @@ export async function POST(request) {
     fresh = true;
   }
   const id = createOrder(userId, product);
-  const response = NextResponse.redirect(new URL(`/orders/${id}`, request.url), 303);
+  // A relative Location: request.url names the address `next start` bound
+  // (0.0.0.0:3000 in Docker), not the one the buyer's browser used.
+  const response = new NextResponse(null, {
+    status: 303,
+    headers: { location: `/orders/${id}` },
+  });
   if (fresh) {
     response.cookies.set("widget_user", userId, { httpOnly: true, path: "/", sameSite: "lax" });
   }

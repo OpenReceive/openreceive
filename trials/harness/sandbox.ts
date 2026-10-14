@@ -294,7 +294,12 @@ export async function inspectShop(directory: string, platform: Platform): Promis
     ],
     60_000,
   );
-  const env = await compose(directory, ["exec", "-T", "wordpress", "printenv"], 30_000);
+  // Names only, as for every other shop: compose() echoes its output.
+  const env = await compose(
+    directory,
+    ["exec", "-T", "wordpress", "sh", "-c", "env | cut -d= -f1"],
+    30_000,
+  );
   const lastLine = count.stdout.trim().split("\n").filter(Boolean).at(-1);
   return {
     baseUrl: `http://127.0.0.1:${port}`,

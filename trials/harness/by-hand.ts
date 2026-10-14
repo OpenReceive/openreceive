@@ -121,8 +121,12 @@ merchant prompt:  ${await openingFor(platform, directionsUrl)}
 doctor:           ${platform.doctor || "(none)"}
 codes go in:      ${platform.credential_store.where}
 NWC code file:    ${path.join(codes, "nwc")}
-LSC code file:    ${swaps ? path.join(codes, "lsc") : "(none: this shop is Bitcoin only)"}
-order status:     docker compose exec -T ${platform.service ?? "web"} ${(platform.probes?.orderStatus ?? []).slice(3).join(" ") || "node bin/order-status.js"} <order id>
+LSC code file:    ${swaps ? path.join(codes, "lsc") : "(none: this shop is Bitcoin only)"}${
+    platform.live === true
+      ? `
+order status:     docker compose exec -T ${platform.service ?? "web"} ${(platform.probes?.orderStatus ?? []).slice(3).join(" ") || "node bin/order-status.js"} <order id>`
+      : ""
+  }
 afterwards:       npm run trial:by-hand -- check --shop ${directory}`);
   if (plain.some((item) => item.severity === "blocker" && !item.pass)) process.exitCode = 2;
 }
@@ -131,10 +135,15 @@ async function readState(directory: string): Promise<State> {
   return JSON.parse(await readFile(stateFile(directory), "utf8")) as State;
 }
 
-/** The checkout's swap picker: with an LSC code, at least one method must be on offer. */
+/**
+ * The checkout's swap picker: with an LSC code, at least one method must be on
+ * offer. The order is the $12 product: the test swap provider prices BTC at a
+ * fixed $100,000 and takes at least 10 USDT, so the $7 one is too small
+ * whenever BTC trades above about $70,000.
+ */
 async function swapCheck(baseUrl: string): Promise<Check> {
   const buyer = new Visitor(baseUrl);
-  const order = await buyer.placeOrder();
+  const order = await buyer.placeOrder(2);
   const prepared = await buyer.prepareCheckout(order, `/orders/${order}`);
   const methods = (() => {
     try {

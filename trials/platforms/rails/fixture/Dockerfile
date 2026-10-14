@@ -5,7 +5,7 @@ WORKDIR /app
 COPY Gemfile Gemfile.lock ./
 RUN bundle config set --local without "" && bundle install
 COPY . .
-RUN mkdir -p /data tmp/pids tmp/cache log && chmod +x bin/product-count bin/openreceive-installed bin/order-status && chown -R nobody:nogroup /app /data
+RUN mkdir -p /data tmp/pids tmp/cache log && chmod +x bin/rails bin/product-count bin/openreceive-installed bin/order-status && chown -R nobody:nogroup /app /data
 USER nobody
 ENV RAILS_ENV=production
 ENV SECRET_KEY_BASE=widget-shop-local-secret-key-base-not-for-production-use-only-0123456789

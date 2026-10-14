@@ -59,6 +59,13 @@ These are not negotiable. Breaking one fails the whole run.
 7. **Repository untouched.** Apart from your results file, change nothing in
    this repository.
 
+## Before you start
+
+The `npm run trial:by-hand` commands run on this machine, not in Docker. They
+need Node 22 or later (check `node --version`) and the repository's
+dependencies: run `npm ci` once at the repository root. Docker runs everything
+else: the shops, the wallet and the swap provider.
+
 ## The platforms
 
 Do them in this order. Every one runs entirely in Docker, needs no account,
