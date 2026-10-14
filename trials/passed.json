@@ -48,12 +48,12 @@
     },
     {
       "trial": "php",
-      "date": "2026-10-10",
-      "release": "0.4.21",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "8c4c709d417d"
+      "mode": "released",
+      "directions": "4a39c0e756a4"
     },
     {
       "trial": "fastapi",
@@ -75,12 +75,12 @@
     },
     {
       "trial": "laravel",
-      "date": "2026-10-10",
-      "release": "0.4.22",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "b1404e770f24"
+      "mode": "released",
+      "directions": "c3440fb7f50a"
     },
     {
       "trial": "vercel",
