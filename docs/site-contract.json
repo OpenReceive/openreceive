@@ -1335,9 +1335,10 @@
         "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
       },
       "tested": {
-        "date": "2026-10-10",
-        "release": "0.4.22",
+        "date": "2026-10-14",
+        "release": "0.4.26",
         "agents": [
+          "codex/default",
           "cursor/grok-4.7-medium-fast"
         ]
       }
@@ -1370,8 +1371,8 @@
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
       "tested": {
-        "date": "2026-10-10",
-        "release": "0.4.22",
+        "date": "2026-10-14",
+        "release": "0.4.26",
         "agents": [
           "codex/default",
           "cursor/grok-4.7-medium-fast"
@@ -1441,8 +1442,8 @@
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
       "tested": {
-        "date": "2026-10-13",
-        "release": "0.4.24",
+        "date": "2026-10-14",
+        "release": "0.4.26",
         "agents": [
           "codex/default",
           "cursor/grok-4.7-medium-fast"
@@ -1784,11 +1785,10 @@
       "starter": null,
       "eval": "lovable",
       "tested": {
-        "date": "2026-10-12",
-        "release": "0.4.24",
+        "date": "2026-10-14",
+        "release": "0.4.26",
         "agents": [
-          "codex/default",
-          "cursor/grok-4.7-medium-fast"
+          "codex/default"
         ]
       }
     },
@@ -1812,9 +1812,10 @@
       "starter": null,
       "eval": "supabase",
       "tested": {
-        "date": "2026-10-13",
-        "release": "0.4.24",
+        "date": "2026-10-14",
+        "release": "0.4.26",
         "agents": [
+          "codex/default",
           "cursor/grok-4.7-medium-fast"
         ]
       }

@@ -66,12 +66,12 @@
     },
     {
       "trial": "django",
-      "date": "2026-10-10",
-      "release": "0.4.22",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "b4713abe1da4"
+      "directions": "a175e7a29e41"
     },
     {
       "trial": "laravel",
@@ -93,21 +93,21 @@
     },
     {
       "trial": "btcpay",
-      "date": "2026-10-10",
-      "release": "0.4.22",
-      "runs": 3,
-      "agents": ["cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "0da58e8adfc1"
-    },
-    {
-      "trial": "lovable",
-      "date": "2026-10-12",
-      "release": "0.4.24",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "98d71b73d3ee"
+      "directions": "215116e74c8b"
+    },
+    {
+      "trial": "lovable",
+      "date": "2026-10-14",
+      "release": "0.4.26",
+      "runs": 3,
+      "agents": ["codex/default"],
+      "mode": "released",
+      "directions": "882ac51087af"
     },
     {
       "trial": "replit",
@@ -118,21 +118,21 @@
     },
     {
       "trial": "supabase",
-      "date": "2026-10-13",
-      "release": "0.4.24",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
-      "agents": ["cursor/grok-4.7-medium-fast"],
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "8d9eac9d2fd5"
+      "directions": "66285d856e3d"
     },
     {
       "trial": "flask",
-      "date": "2026-10-13",
-      "release": "0.4.24",
+      "date": "2026-10-14",
+      "release": "0.4.26",
       "runs": 3,
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
-      "mode": "candidate",
-      "directions": "0f04d919ac28"
+      "mode": "released",
+      "directions": "9922066691c0"
     },
     {
       "trial": "nestjs",
