@@ -251,6 +251,12 @@ const UNLISTED_GUIDES = {
   "node-orms": "Node only; the Rails engine owns its tables",
   "tanstack-start-recipe":
     "TanStack Start only; the Next.js payload links it as the web-standard sibling, the other stacks have no use for it",
+  ...Object.fromEntries(
+    ["sveltekit-recipe", "nuxt-recipe", "astro-recipe", "react-router-recipe"].map((slug) => [
+      slug,
+      "one JavaScript framework each; the Node and Next.js payloads link them for an app that turns out to be that framework",
+    ]),
+  ),
 };
 
 /**

@@ -53,6 +53,14 @@ Each stack has an integration page and a quickstart on openreceive.org:
 | [Plain PHP](https://openreceive.org/integrations/php) | [PHP quickstart](https://openreceive.org/guides/quickstart-php) |
 | [BTCPay Server](https://openreceive.org/integrations/btcpay-server) | [BTCPay quickstart](https://openreceive.org/guides/quickstart-btcpay) |
 
+On SvelteKit, Nuxt, Astro, React Router or TanStack Start, a recipe mounts the
+same web-standard handler:
+[SvelteKit](https://openreceive.org/guides/sveltekit-recipe),
+[Nuxt](https://openreceive.org/guides/nuxt-recipe),
+[Astro](https://openreceive.org/guides/astro-recipe),
+[React Router](https://openreceive.org/guides/react-router-recipe),
+[TanStack Start](https://openreceive.org/guides/tanstack-start-recipe).
+
 Building on a platform? See [Vercel](https://openreceive.org/platforms/vercel),
 [v0](https://openreceive.org/platforms/v0),
 [Replit](https://openreceive.org/platforms/replit), or
@@ -311,6 +319,7 @@ Start with the [developer guides](docs/guides/README.md). Also on openreceive.or
 - [Security](docs/guides/security.md) ([on openreceive.org](https://openreceive.org/guides/security))
 - [API reference](docs/guides/api-reference.md) ([on openreceive.org](https://openreceive.org/guides/api-reference))
 - [React + Material UI recipe](docs/recipes/react-material-ui.md) ([on openreceive.org](https://openreceive.org/guides/react-material-ui-recipe))
+- Framework recipes: [SvelteKit](docs/recipes/sveltekit.md), [Nuxt](docs/recipes/nuxt.md), [Astro](docs/recipes/astro.md), [React Router](docs/recipes/react-router.md), [TanStack Start](docs/recipes/tanstack-start.md)
 - [Normative HTTP contract](spec/openapi/openreceive-http.v1.yaml)
 - [Contributor and operator docs](docs/internal/README.md)
 

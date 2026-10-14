@@ -13,7 +13,7 @@
       "slug": "guides",
       "title": "OpenReceive Guides",
       "category": "guide",
-      "bytes": 4707
+      "bytes": 4887
     },
     {
       "path": "/guides/quickstart-node",
@@ -419,6 +419,46 @@
       "bytes": 9973
     },
     {
+      "path": "/guides/sveltekit-recipe",
+      "markdown_path": "/guides/sveltekit-recipe.md",
+      "source": "docs/recipes/sveltekit.md",
+      "kind": "guide",
+      "slug": "sveltekit-recipe",
+      "title": "SvelteKit Recipe",
+      "category": "recipe",
+      "bytes": 8131
+    },
+    {
+      "path": "/guides/nuxt-recipe",
+      "markdown_path": "/guides/nuxt-recipe.md",
+      "source": "docs/recipes/nuxt.md",
+      "kind": "guide",
+      "slug": "nuxt-recipe",
+      "title": "Nuxt Recipe",
+      "category": "recipe",
+      "bytes": 6933
+    },
+    {
+      "path": "/guides/astro-recipe",
+      "markdown_path": "/guides/astro-recipe.md",
+      "source": "docs/recipes/astro.md",
+      "kind": "guide",
+      "slug": "astro-recipe",
+      "title": "Astro Recipe",
+      "category": "recipe",
+      "bytes": 7727
+    },
+    {
+      "path": "/guides/react-router-recipe",
+      "markdown_path": "/guides/react-router-recipe.md",
+      "source": "docs/recipes/react-router.md",
+      "kind": "guide",
+      "slug": "react-router-recipe",
+      "title": "React Router Recipe",
+      "category": "recipe",
+      "bytes": 7386
+    },
+    {
       "path": "/guides/custom-checkout-route",
       "markdown_path": "/guides/custom-checkout-route.md",
       "source": "docs/guides/custom-checkout-route.md",
@@ -436,7 +476,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 37822
+      "bytes": 38128
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -486,7 +526,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 41346
+      "bytes": 41652
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -663,7 +703,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37822,
+      "bytes": 38128,
       "copy_button": true,
       "self_contained": true
     },
@@ -705,7 +745,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41346,
+      "bytes": 41652,
       "copy_button": true,
       "self_contained": true
     },
@@ -1780,7 +1820,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 6572
+        "bytes": 6852
       },
       {
         "path": "/openapi.yaml",

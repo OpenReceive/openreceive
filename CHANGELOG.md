@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Docs: four new recipes mount `@openreceive/http` as a web-standard route
+  on Node: [SvelteKit](docs/recipes/sveltekit.md) (an endpoint, with
+  `@openreceive/svelte`), [Nuxt](docs/recipes/nuxt.md) (a Nitro server route,
+  with `@openreceive/vue`), [Astro](docs/recipes/astro.md) (an on-demand
+  endpoint, with the `<openreceive-checkout>` element) and
+  [React Router](docs/recipes/react-router.md) (a resource route, with
+  `@openreceive/react`). Each builds one stack per process on its first
+  request and reads the framework's own session and client address. Each was
+  checked by building a fresh app on the current major (SvelteKit 3.0, Nuxt
+  4.6, Astro 7.3, React Router 8.4) and running it on Node in Docker with
+  Postgres and the trial wallet: the buyer's page showed the invoice in
+  Chromium, a stranger got 403 and a 404 page, a payer-supplied amount got
+  400, and a settled invoice ran `onPaid` once. SvelteKit 3 and Astro keep
+  `.env` out of `process.env` in development, where OpenReceive reads the
+  swap settings, so those two recipes say how to load it. The Node and
+  Next.js directions link the four recipes.
+
 ## 0.4.25 - 2026-10-13
 
 - Fixed (all engines): the reconcile gate's interval now also runs from the

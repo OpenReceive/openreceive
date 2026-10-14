@@ -392,6 +392,7 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/api-reference.md — every route, option and error code
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
+- https://openreceive.org/guides/sveltekit-recipe.md, https://openreceive.org/guides/nuxt-recipe.md, https://openreceive.org/guides/astro-recipe.md and https://openreceive.org/guides/react-router-recipe.md — the same handler as a SvelteKit, Nuxt, Astro or React Router route, if this app is one of those
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:

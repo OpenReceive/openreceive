@@ -50,7 +50,10 @@ optional. The provider decides which assets and networks are available.
 32. [How we test platforms](how-we-test-platforms.md): what a Tested badge on openreceive.org means
 
 Recipes: [React + Material UI](../recipes/react-material-ui.md),
-[TanStack Start](../recipes/tanstack-start.md) (a server route, on Node or Cloudflare Workers)
+[TanStack Start](../recipes/tanstack-start.md) (a server route, on Node or Cloudflare Workers).
+On Node, the same handler mounts in [SvelteKit](../recipes/sveltekit.md),
+[Nuxt](../recipes/nuxt.md), [Astro](../recipes/astro.md) and
+[React Router](../recipes/react-router.md).
 
 Building this with a coding agent? Give it one of the agent-directions
 payloads instead of a reading list:

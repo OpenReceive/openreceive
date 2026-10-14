@@ -330,6 +330,38 @@
       "public": true
     },
     {
+      "slug": "sveltekit-recipe",
+      "title": "SvelteKit Recipe",
+      "source_path": "docs/recipes/sveltekit.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "nuxt-recipe",
+      "title": "Nuxt Recipe",
+      "source_path": "docs/recipes/nuxt.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "astro-recipe",
+      "title": "Astro Recipe",
+      "source_path": "docs/recipes/astro.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "react-router-recipe",
+      "title": "React Router Recipe",
+      "source_path": "docs/recipes/react-router.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "internal",
       "title": "OpenReceive Internal Docs",
       "source_path": "docs/internal/README.md",
