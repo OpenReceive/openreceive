@@ -212,9 +212,11 @@ settlement transaction, only for the first settled attempt for a reference.
 
 The engine's controllers inherit from `config.parent_controller`. The generated
 initializer sets it to `"ApplicationController"`. That is how the engine picks
-up your application's `protect_from_forgery`. Keep `csrf_meta_tags` in the
-layout that renders the checkout. The checkout client sends `X-CSRF-Token` from
-it automatically.
+up your application's `protect_from_forgery`. The layout that renders the
+checkout needs `<%= csrf_meta_tags %>` in its `<head>`: add it if it is not
+there. The checkout client sends `X-CSRF-Token` from it automatically; without
+it, every checkout answers 403 "Can't verify CSRF token authenticity". Do not
+skip forgery protection for the engine to get past that 403.
 
 The same inheritance also brings every global `before_action` that your
 `ApplicationController` declares. A filter that redirects signed-out users to a

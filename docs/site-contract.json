@@ -175,7 +175,7 @@
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "category": "quickstart",
-      "bytes": 17975
+      "bytes": 18170
     },
     {
       "path": "/guides/quickstart-php",
@@ -576,7 +576,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "category": "quickstart",
-      "bytes": 42913
+      "bytes": 43108
     },
     {
       "path": "/guides/agent-directions-php",
@@ -940,7 +940,7 @@
       "kind": "agent-directions-payload",
       "stack": "rails",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 42913,
+      "bytes": 43108,
       "copy_button": true,
       "self_contained": true
     },
