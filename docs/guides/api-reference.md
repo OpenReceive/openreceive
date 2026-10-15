@@ -1054,7 +1054,7 @@ hook that shuts the stack down with the app.
 | `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | The settlement pass that runs on every mounted payment route. `GET …/rates` never triggers it. On by default, through the durable `openreceive_meta` gate. `false` turns it off. `{ minIntervalSeconds }` tunes it. |
 | `clock` | `() => number` | no | Unix-seconds clock override. Used by the reconcile gate and the payment-methods cache TTL. |
 | `onBootFailure` | `(message: string) => void` | no | Where the single boot-failure line goes. Default `console.error`. Boot happens before any service exists, so this is the only place to send it. It receives only the message, never the raw cause. Requests during a failed boot answer `503 WALLET_UNAVAILABLE` either way. See [Deploying](deploying.md#where-boot-failures-go). |
-| `rateLimiting` / `rateLimitHook` / `prefix` | | no | As below. |
+| `rateLimiting` / `rateLimitHook` / `prefix` / `cors` | | no | As below. |
 | `trustProxyIpHeader` | `boolean \| string` | no | Extra option on all three adapters. It tells `rateLimiting` how to find the client IP behind a reverse proxy. `true` reads the first hop of `x-forwarded-for`. A string names another trusted header, e.g. `"cf-connecting-ip"`. Only safe when your own proxy sets the header. |
 
 **Composed form** (`CreateHttpHandlerOptions`), for shared wallet clients,
@@ -1071,6 +1071,7 @@ custom repositories, and tests:
 | `rateLimitHook` | `RateLimit` | no | Same context shape as `authorize`. Return `false` for a `429`. |
 | `rateLimiting` | `boolean \| IpRateLimitConfig` | no | Opt-in per-IP invoice cap. Off by default. `true` = 60/hour. Cannot be used with `rateLimitHook`. See [Rate limiting](rate-limiting.md). |
 | `prefix` | `string` | no | Mount prefix. Default `/openreceive`. |
+| `cors` | `{ origins: string[] }` | no | From 0.4.27. Exact origins (`https://shop.example`, no path) whose pages may call the routes from another site. A listed origin passes the cross-site check and gets its preflights answered, with no credentials allowed. Off by default. Construction fails on anything but an http(s) origin. See [Cross-site requests](authorization.md#cross-site-requests). |
 
 The same all-in-one form is available without a framework as
 `createStack(options)` in `@openreceive/http`. It returns
@@ -1158,7 +1159,8 @@ The error body and the per-route error statuses are generated from the spec.
 statuses before `authorize` runs:
 
 - `415` for a body that is not `application/json`, and
-- `403` for a request the browser labels `Sec-Fetch-Site: cross-site`. See
+- `403` for a request the browser labels `Sec-Fetch-Site: cross-site`,
+  unless the JavaScript handler's `cors` lists its origin. See
   [Cross-site requests](authorization.md#cross-site-requests).
 
 <!-- generated:error-codes -->

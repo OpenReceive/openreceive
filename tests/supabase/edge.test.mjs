@@ -40,6 +40,7 @@ const skip =
   (!dockerOk && "Docker is not available");
 
 const container = `openreceive-edge-test-${process.pid}`;
+const SHOP_ORIGIN = "https://shop.example";
 let gateway;
 let relay;
 let scratch;
@@ -107,6 +108,8 @@ before(async () => {
       `SUPABASE_URL=${gateway.url}`,
       `SUPABASE_SERVICE_ROLE_KEY=${SECRET_KEY}`,
       `SUPABASE_DB_URL=${databaseUrl}`,
+      // The shop's page, on another site than the function (cors in https.js).
+      `SHOP_ORIGIN=${SHOP_ORIGIN}`,
       "DENO_TLS_CA_STORE=system",
       "",
     ].join("\n"),
@@ -220,6 +223,45 @@ for (const fn of ["https", "postgres"]) {
     await payAndWait(fn, order, created.body.checkout.payment_hash);
   });
 }
+
+// Bolt's and Lovable's pages are on another site than the function, so the
+// browser's requests are cross-site and carry no cookies: the `cors` option
+// lets the shop's origin through, and the page sends a token instead.
+test("an Edge Function serves its shop's origin across sites on a bearer token", {
+  skip,
+}, async () => {
+  const order = await placeOrder();
+  const url = `${base}/https/openreceive/checkouts`;
+  const preflight = await fetch(url, {
+    method: "OPTIONS",
+    headers: {
+      origin: SHOP_ORIGIN,
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "authorization, content-type",
+    },
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), SHOP_ORIGIN);
+  const crossSite = (origin, token) =>
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "203.0.113.9",
+        origin,
+        "sec-fetch-site": "cross-site",
+        ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify({ reference: order.id }),
+    });
+  const created = await crossSite(SHOP_ORIGIN, order.buyer);
+  assert.equal(created.status, 201, await created.clone().text());
+  assert.equal(created.headers.get("access-control-allow-origin"), SHOP_ORIGIN);
+  assert.equal((await crossSite(SHOP_ORIGIN, randomUUID())).status, 403);
+  const stranger = await crossSite("https://evil.example", order.buyer);
+  assert.equal(stranger.status, 403);
+  assert.equal(stranger.headers.get("access-control-allow-origin"), null);
+});
 
 test("no Edge Function worker ran into the hosted CPU limit", { skip }, () => {
   const stopped = logs()

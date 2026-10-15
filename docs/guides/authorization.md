@@ -228,14 +228,26 @@ against cross-site request forgery. It does this before `authorize` runs:
 - The body must be `application/json`, or the handler returns `415`. A
   cross-site HTML form can only send urlencoded, multipart, or `text/plain`.
   A cross-origin `fetch` that sets a JSON content type triggers a CORS
-  preflight, and the library never answers one.
+  preflight, and the library answers one only for an origin you list in
+  `cors`.
 - The handler refuses (`403`) a request the browser labels
   `Sec-Fetch-Site: cross-site`. This also covers a `no-cors` fetch that
   forges the content type. `same-site` requests (a sibling subdomain) pass.
   So do requests without the header (non-browser clients).
 
 Mount OpenReceive on the origin that serves your pages, or on a sibling
-subdomain. Do not add CORS headers to its prefix.
+subdomain. Do not add CORS headers to its prefix yourself.
+
+When the routes cannot share a site with your pages, as with a
+[Supabase Edge Function](supabase.md#supabase-edge-functions), list your
+pages' exact origins in the handler's `cors` option (`@openreceive/http`,
+from 0.4.27): `cors: { origins: ["https://shop.example"] }`. A listed origin
+passes the `Sec-Fetch-Site` check, and its preflights are answered. Every
+other origin is refused as before, and the JSON rule still applies.
+OpenReceive never allows credentials across sites, so the browser sends no
+cookies, and a cookie-based `authorize` refuses every cross-site request. The
+page must send a token, such as a bearer header from the React
+`<Checkout fetch>`, and `authorize` must check it.
 
 `amountFor` is the other half of that boundary. The create body cannot
 contain `amount` or `amount_msats`. A payer-supplied amount could only ever be

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added (Node): a `cors: { origins }` option on `createStack` and the
+  `@openreceive/http` handler, for routes on another site than the shop's
+  pages, as on a Supabase Edge Function. A listed origin passes the
+  `Sec-Fetch-Site: cross-site` check and its preflights are answered; every
+  other origin is refused as before. Credentials are never allowed across
+  sites, so the page sends a token (the React `<Checkout fetch>`) and
+  `authorize` checks it. The Supabase guide gains an Edge Functions section,
+  and CI runs the engine in Supabase's edge-runtime on both storage routes.
+
 - Changed (Express): the adapter reads the request body itself when no
   Express body parser ran before it, so a checkout no longer answers 500 when
   `express.json()` is missing or mounted after OpenReceive. NestJS no longer

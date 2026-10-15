@@ -160,6 +160,40 @@ export interface CreateHttpHandlerOptions {
    */
   readonly clock?: () => number;
   readonly prefix?: string;
+  /**
+   * Cross-origin access, OFF by default: the routes serve the host's own pages
+   * and refuse a cross-site request. A checkout whose page is on another
+   * origin than these routes (a Supabase Edge Function on <ref>.supabase.co,
+   * with the shop elsewhere) lists that page's origins here, exactly
+   * (`https://shop.example`). A listed origin's preflight is answered, its
+   * cross-site requests pass, and each response names it in
+   * `Access-Control-Allow-Origin`. Credentials are never allowed, so the
+   * browser sends no cookies with them: `authorize` checks a token the page
+   * sends instead, such as `Authorization: Bearer <access token>`, and a
+   * cookie-based `authorize` refuses them. Every other origin stays refused.
+   */
+  readonly cors?: { readonly origins: readonly string[] };
+}
+
+/** The request headers a cross-origin checkout may send: its token, and Supabase's. */
+const CORS_ALLOW_HEADERS = "authorization, content-type, apikey, x-client-info";
+
+/** The listed origin this request comes from, or undefined. */
+function corsOrigin(runtime: Runtime, request: Request): string | undefined {
+  const origin = request.headers.get("origin");
+  return origin !== null && runtime.corsOrigins.has(origin) ? origin : undefined;
+}
+
+function withCorsHeaders(response: Response, origin: string): Response {
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", origin);
+  headers.set("access-control-expose-headers", "x-request-id, retry-after");
+  headers.append("vary", "Origin");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export interface HttpHandler {
@@ -181,6 +215,8 @@ interface Runtime extends CreateHttpHandlerOptions {
   }) => string | undefined;
   /** Resolved opportunistic-reconcile tuning; undefined means disabled. */
   readonly reconcile: { readonly minIntervalSeconds?: number } | undefined;
+  /** The `cors` option's origins; empty when cross-origin access is off. */
+  readonly corsOrigins: ReadonlySet<string>;
   /**
    * Handler-local warm cache for the payment_methods catalog echoed by
    * `checkouts` and `payments/check`: served from here while fresh, so neither
@@ -255,21 +291,45 @@ export function createHttpHandler(options: CreateHttpHandlerOptions): HttpHandle
     const ip = rawExtractClientIp(context);
     return ip === undefined || ip.length === 0 ? undefined : clientIpBucket(ip);
   };
+  const corsOrigins = new Set<string>();
+  for (const origin of options.cors?.origins ?? []) {
+    let normalized: string | undefined;
+    try {
+      normalized = new URL(origin).origin;
+    } catch {
+      normalized = undefined;
+    }
+    if (normalized !== origin || !/^https?:\/\//.test(origin)) {
+      throw new TypeError(
+        `cors.origins lists ${JSON.stringify(origin)}, which is not an origin: give the scheme, ` +
+          "host and port only, exactly as the browser sends it (https://shop.example). " +
+          "https://openreceive.org/guides/supabase.md",
+      );
+    }
+    corsOrigins.add(origin);
+  }
   const runtime: Runtime = {
     ...options,
     ...(rateLimit === undefined ? {} : { rateLimit }),
     extractClientIp,
     reconcile,
+    corsOrigins,
     paymentMethods: new Map(),
     prefix: normalizePrefix(options.prefix ?? "/openreceive"),
   };
   const handle = async (request: Request, extras?: { native?: unknown }): Promise<Response> => {
     const requestId = createRequestId();
+    const origin = corsOrigin(runtime, request);
+    let response: Response;
     try {
-      return await dispatch(runtime, request, requestId, extras?.native);
+      response =
+        request.method === "OPTIONS" && runtime.corsOrigins.size > 0
+          ? preflight(runtime, request, origin, requestId)
+          : await dispatch(runtime, request, requestId, extras?.native, origin !== undefined);
     } catch (error) {
-      return errorResponse(error, requestId);
+      response = errorResponse(error, requestId);
     }
+    return origin === undefined ? response : withCorsHeaders(response, origin);
   };
   const handler = handle as HttpHandler;
   Object.defineProperties(handler, {
@@ -279,11 +339,42 @@ export function createHttpHandler(options: CreateHttpHandlerOptions): HttpHandle
   return handler;
 }
 
+/** A CORS preflight, answered only for a listed origin and a route under the prefix. */
+function preflight(
+  runtime: Runtime,
+  request: Request,
+  origin: string | undefined,
+  requestId: string,
+): Response {
+  const url = new URL(request.url);
+  const method = request.headers.get("access-control-request-method") ?? "";
+  if (matchRoute(runtime.prefix, method, url.pathname) === null) {
+    throw new HttpError(404, "NOT_FOUND", "No OpenReceive route matched this method and path.");
+  }
+  if (origin === undefined) {
+    throw new HttpError(
+      403,
+      "FORBIDDEN",
+      "Cross-origin requests from this origin are not accepted.",
+    );
+  }
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "access-control-allow-methods": "GET, POST",
+      "access-control-allow-headers": CORS_ALLOW_HEADERS,
+      "access-control-max-age": "600",
+      "x-request-id": requestId,
+    },
+  });
+}
+
 async function dispatch(
   runtime: Runtime,
   request: Request,
   requestId: string,
   native?: unknown,
+  allowCrossSite = false,
 ): Promise<Response> {
   const url = new URL(request.url);
   const route = matchRoute(runtime.prefix, request.method, url.pathname);
@@ -306,7 +397,7 @@ async function dispatch(
   // crawlers-must-not-consume-the-scan-budget argument that exempts GET
   // /rates. An anonymous garbage POST is refused without a DB read, without
   // claiming the gate, and without triggering a wallet scan.
-  const body = await readJsonBody(request);
+  const body = await readJsonBody(request, { allowCrossSite });
   // Before the generic field whitelist, so a payer pricing attempt is refused
   // by name instead of as an unexpected field.
   rejectPayerAmount(body);

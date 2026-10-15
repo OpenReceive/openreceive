@@ -22,14 +22,18 @@ Deno.serve(async (request) => {
     wallet: { nwc: env("NWC_URI") },
     storage: { supabase: { url: env("SUPABASE_URL"), key: env("SUPABASE_SERVICE_ROLE_KEY") } },
     amountFor: async (reference) => orderAmount(await findOrder(reference)),
+    // The buyer's cookie on the same site, or, from the shop's own origin on
+    // another site, its token as a bearer header: cookies never cross sites.
     authorize: async ({ request: native, resource }) => {
       const order = resource.reference ? await findOrder(resource.reference) : undefined;
-      const buyer = currentBuyer(native);
+      const bearer = native.headers.get("authorization")?.replace(/^Bearer /, "");
+      const buyer = bearer ?? currentBuyer(native);
       return Boolean(order && buyer && order.buyer_token === buyer);
     },
     rateLimiting: {
       ip: ({ request: native }) => native.headers.get("x-forwarded-for") ?? undefined,
     },
+    cors: { origins: [env("SHOP_ORIGIN")] },
   });
   try {
     return await stack.handler(incoming, { native: incoming });

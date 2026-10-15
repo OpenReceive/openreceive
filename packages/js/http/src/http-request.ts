@@ -96,8 +96,16 @@ function assertNotCrossSite(request: Request): void {
   }
 }
 
-export async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
-  assertNotCrossSite(request);
+/**
+ * `allowCrossSite` is set only for a request whose Origin the host listed in
+ * the handler's `cors` option: that page is on another site by design, and the
+ * content-type gate still stands.
+ */
+export async function readJsonBody(
+  request: Request,
+  options: { readonly allowCrossSite?: boolean } = {},
+): Promise<Record<string, unknown>> {
+  if (options.allowCrossSite !== true) assertNotCrossSite(request);
   assertJsonContentType(request);
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {

@@ -12,9 +12,10 @@ provider you configure converts the payment to **BTC over Lightning**, and it
 settles into the same wallet. Available assets and networks depend on the
 provider.
 
-Use OpenReceive 0.4.19 or newer, or 0.4.24 or newer for
-[Supabase over HTTPS](#supabase-over-https). This guide adds the Supabase
-parts to a framework quickstart, so start from yours:
+Use OpenReceive 0.4.19 or newer, 0.4.24 or newer for
+[Supabase over HTTPS](#supabase-over-https), and 0.4.27 or newer for
+[Supabase Edge Functions](#supabase-edge-functions). This guide adds the
+Supabase parts to a framework quickstart, so start from yours:
 [Next.js](quickstart-next.md), [Express](quickstart-node.md),
 [Fastify](quickstart-fastify.md), [FastAPI](quickstart-fastapi.md) or
 [Django](quickstart-django.md).
@@ -30,9 +31,10 @@ What we test, and what we don't:
   TypeORM and Python has run through the same pooler, and the HTTPS route
   through the project's API gateway with a secret key.
 - **Not tested by an agent.** Next.js, Fastify, FastAPI and Django apps on
-  Supabase, Supabase Auth inside `authorize`, and Supabase Edge Functions,
-  which OpenReceive does not run on yet. If something on Supabase does not
-  work as this guide says,
+  Supabase, Supabase Auth inside `authorize`, and Supabase Edge Functions.
+  Edge Functions run in our tests in Supabase's own runtime, but not on
+  Supabase's hosted platform; see [what we test](#what-we-test-on-edge-functions).
+  If something on Supabase does not work as this guide says,
   [open an issue](https://github.com/OpenReceive/openreceive/issues/new).
 
 ## Where your server can run
@@ -42,15 +44,15 @@ What we test, and what we don't:
 | Node: Next.js (on Vercel or elsewhere), Express, Fastify | Yes |
 | Python: FastAPI, Django | Yes |
 | Cloudflare Workers, including Lovable's TanStack Start apps | Yes, [over HTTPS](#supabase-over-https); on Lovable, see [Lovable](lovable.md) |
-| Supabase Edge Functions (Deno), including Bolt's | Not yet |
+| Supabase Edge Functions (Deno) | From 0.4.27, [over HTTPS](#supabase-edge-functions) |
 
 Supabase signs its database certificate with its own certificate authority.
 A Node or Python server can be told to trust it. A Cloudflare Worker cannot:
 Workers check a database's certificate against public authorities only, so
 the connection fails. A Worker reaches Supabase through its HTTPS API
-instead, which [Supabase over HTTPS](#supabase-over-https) covers. Steps 1
-to 3 below are for servers with a Postgres connection; step 4 applies to
-both. OpenReceive's engine has not been tested on Deno.
+instead, which [Supabase over HTTPS](#supabase-over-https) covers, and so
+does an [Edge Function](#supabase-edge-functions). Steps 1 to 3 below are
+for servers with a Postgres connection; step 4 applies to both.
 
 ## 1. Get the connection strings
 
@@ -340,6 +342,111 @@ about 14. Run your Worker near your Supabase region.
 
 There is no repair report over HTTPS (`listRepairCandidates`,
 `requeueAttempt`). Use the SQL Editor for the rare attempt in `attention`.
+
+## Supabase Edge Functions
+
+An Edge Function runs on Deno at
+`https://<project-ref>.supabase.co/functions/v1/<name>`, while your shop's
+pages are on another site. From 0.4.27, a function can serve the payment
+routes. It keeps payments over Supabase's HTTPS API, as above, and lets your
+shop's origin call it with the `cors` option. A browser sends no cookies to
+another site, so the page sends the buyer's Supabase access token instead,
+and `authorize` checks it.
+
+1. Apply the migration and write `openreceive_on_paid`: steps
+   [1](#1-write-the-migration) and [2](#2-write-openreceive_on_paid) of
+   Supabase over HTTPS.
+2. Write the function in `supabase/functions/openreceive/index.ts`. Name it
+   `openreceive`: Supabase hands a function its requests under
+   `/<name>/`, and the routes live under `/openreceive/`.
+
+   ```ts
+   import { createStack } from "npm:@openreceive/http@^0.4.27";
+   import { createClient } from "npm:@supabase/supabase-js@2";
+
+   const env = (name: string) => Deno.env.get(name) ?? "";
+   const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
+
+   async function findOrder(id: string) {
+     const { data } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+     return data;
+   }
+
+   Deno.serve(async (request) => {
+     const stack = createStack({
+       wallet: { nwc: env("NWC_URI") },
+       storage: {
+         supabase: { url: env("SUPABASE_URL"), key: env("SUPABASE_SERVICE_ROLE_KEY") },
+       },
+       // The price comes from the order row, never from the request.
+       amountFor: async (reference) => {
+         const order = await findOrder(reference);
+         return order?.status === "pending"
+           ? { currency: order.currency, value: order.total, description: order.title }
+           : null;
+       },
+       // Only the signed-in buyer may pay for their order.
+       authorize: async ({ request, resource }) => {
+         const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
+         if (!token) return false;
+         const { data } = await supabase.auth.getUser(token);
+         const order = resource.reference ? await findOrder(resource.reference) : null;
+         return Boolean(data.user && order && order.user_id === data.user.id);
+       },
+       // Your shop's pages, exactly as the browser sends their origin.
+       cors: { origins: ["https://shop.example"] },
+     });
+     try {
+       return await stack.handler(request);
+     } finally {
+       await stack.close();
+     }
+   });
+   ```
+
+3. Set the wallet code and deploy:
+
+   ```sh
+   supabase secrets set NWC_URI="nostr+walletconnect://…"
+   supabase functions deploy openreceive
+   ```
+
+   Supabase gives every function `SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY` itself.
+
+4. On the page, point the checkout at the function and send the token with
+   the `fetch` from [step 4](#4-use-supabase-auth-in-authorize):
+
+   ```tsx
+   <Checkout
+     reference={order.id}
+     prefix="https://<project-ref>.supabase.co/functions/v1/openreceive"
+     fetch={withSupabaseToken}
+   />
+   ```
+
+`cors` lists exact origins: scheme, host and port, with no path or trailing
+slash. A listed origin passes the cross-site check, and the function answers
+its preflights. Every other origin is refused as before. OpenReceive never
+allows credentials across sites, so a cookie-based `authorize` refuses every
+cross-site request; check a token. The body must still be JSON. More:
+[Cross-site requests](authorization.md#cross-site-requests).
+
+The buyer must be signed in, since the token is their Supabase session. Only
+the React `<Checkout>` takes a `fetch`, so the page must use it.
+
+### What we test on Edge Functions
+
+CI runs OpenReceive in Supabase's edge-runtime, the Deno runtime Edge
+Functions run on, with the hosted limits on CPU time, memory and wall clock.
+It runs two functions: one on Supabase's HTTPS API, one on Postgres through
+`SUPABASE_DB_URL`. Each gets the buyer's invoice, refuses a stranger, and
+marks a paid order paid without reaching the CPU limit. The HTTPS function
+also serves a page on another origin through `cors` with a bearer token,
+and refuses an unlisted origin. We also loaded the published package through
+`npm:` imports in the same runtime, and it passed the same checks. We have
+not deployed to Supabase's hosted platform or run its API gateway, and we
+have not tested Bolt.
 
 ## How it runs on Supabase
 

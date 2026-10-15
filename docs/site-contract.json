@@ -125,7 +125,7 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 15122
+      "bytes": 19748
     },
     {
       "path": "/guides/supabase-migration",
@@ -256,7 +256,7 @@
       "slug": "authorization",
       "title": "Authorization",
       "category": "security",
-      "bytes": 13257
+      "bytes": 13997
     },
     {
       "path": "/guides/rate-limiting",
@@ -386,7 +386,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 132494
+      "bytes": 132960
     },
     {
       "path": "/guides/security",
@@ -696,7 +696,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 132494,
+      "bytes": 132960,
       "alias_of": "/guides/api-reference"
     },
     {
