@@ -258,6 +258,8 @@ const UNLISTED_GUIDES = {
   odoo: "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
   magento:
     "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
+  prestashop:
+    "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
   vercel: "for people who hand these directions to v0; it links them, not the reverse",
   lovable: "for people who build on Lovable; the Lovable payload links it, not the other stacks",
   "agent-directions-lovable": "this payload's own page",

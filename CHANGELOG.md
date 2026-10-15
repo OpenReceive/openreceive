@@ -19,7 +19,7 @@
   under the same 64 KB cap; a larger one answers 413. When something else
   already drained the body without setting `req.body`, the adapter still
   answers the 500 that names the missing body parser.
-- Docs: Odoo and Magento through BTCPay Server, each with a merchant guide
+- Docs: Odoo, Magento and PrestaShop through BTCPay Server, each with a merchant guide
   and a Tested badge from `npm run trial:btcpay-route`, which runs the store's
   own BTCPay module against BTCPay 2.4.5 with the published OpenReceive plugin
   end to end. Site contract v11 adds these `via-btcpay` rows.

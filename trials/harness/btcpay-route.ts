@@ -19,7 +19,7 @@ import { startTrialWallet, type TrialWallet, trialWalletOverride } from "./walle
 // the trial wallet, the store in Docker on BTCPay's network, one order paid
 // over Lightning, and the store's own order paid. No model is involved.
 //
-//   npm run trial:btcpay-route -- --store odoo|magento [--keep]
+//   npm run trial:btcpay-route -- --store odoo|magento|prestashop [--keep]
 
 const execFileAsync = promisify(execFile);
 const trialsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -280,15 +280,18 @@ async function runOdoo(btcpay: Btcpay, wallet: TrialWallet, keep: boolean): Prom
   }
 }
 
-const magentoDir = path.join(trialsRoot, "btcpay-route", "magento");
-
-async function magentoCompose(network: string, args: readonly string[]): Promise<string> {
+/** docker compose for a store's stack in trials/btcpay-route/<store>, on BTCPay's network. */
+async function storeCompose(
+  store: string,
+  network: string,
+  args: readonly string[],
+): Promise<string> {
   try {
     const { stdout, stderr } = await execFileAsync(
       "docker",
-      ["compose", "-p", "openreceive-btcpay-route-magento", ...args],
+      ["compose", "-p", `openreceive-btcpay-route-${store}`, ...args],
       {
-        cwd: magentoDir,
+        cwd: path.join(trialsRoot, "btcpay-route", store),
         env: { ...process.env, BTCPAY_NETWORK: network },
         timeout: 30 * 60_000,
         maxBuffer: 64 * 1024 * 1024,
@@ -305,18 +308,22 @@ async function magentoCompose(network: string, args: readonly string[]): Promise
   }
 }
 
-/** One of the image's PHP scripts, inside the store; its RESULT line as key=value pairs. */
-async function magentoScript(
+/**
+ * One of a PHP store image's scripts, run as www-data in the store's service
+ * (named after the store); its RESULT line as key=value pairs.
+ */
+async function storeScript(
+  store: string,
   network: string,
   script: string,
   ...args: string[]
 ): Promise<Record<string, string>> {
-  const output = await magentoCompose(network, [
+  const output = await storeCompose(store, network, [
     "exec",
     "-T",
     "-u",
     "www-data",
-    "magento",
+    store,
     "php",
     `/usr/local/share/btcpay-route/${script}`,
     ...args,
@@ -331,6 +338,14 @@ async function magentoScript(
       .map((pair) => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)]),
   );
 }
+
+const magentoCompose = (network: string, args: readonly string[]): Promise<string> =>
+  storeCompose("magento", network, args);
+const magentoScript = (
+  network: string,
+  script: string,
+  ...args: string[]
+): Promise<Record<string, string>> => storeScript("magento", network, script, ...args);
 
 /** Magento's REST API on the published port, as the store's own host name (its base URL). */
 function magentoRest<T>(method: string, route: string, body?: unknown, token?: string): Promise<T> {
@@ -571,6 +586,120 @@ async function runMagento(btcpay: Btcpay, wallet: TrialWallet, keep: boolean): P
   }
 }
 
+/**
+ * PrestaShop 9.2 with btcpayserver/prestashop-plugin (Greenfield): the
+ * merchant's key, store and webhook as the module's configuration page saves
+ * them, a guest's cart through the module's payment step, which creates the
+ * BTCPay invoice and the order in the default "before payment" mode, the
+ * payment, and the order paid from BTCPay's webhook.
+ */
+async function runPrestashop(btcpay: Btcpay, wallet: TrialWallet, keep: boolean): Promise<Check[]> {
+  const checks: Check[] = [];
+  const compose = (args: readonly string[]) => storeCompose("prestashop", btcpay.network, args);
+  const script = (name: string, ...args: string[]) =>
+    storeScript("prestashop", btcpay.network, name, ...args);
+  await compose(["down", "-v", "--remove-orphans"]);
+  try {
+    await compose(["build"]);
+    // The image installs the shop on its first start; --wait covers it.
+    await compose(["up", "-d", "--wait"]);
+    await compose([
+      "exec",
+      "-T",
+      "-u",
+      "www-data",
+      "prestashop",
+      "php",
+      "bin/console",
+      "prestashop:module",
+      "install",
+      "btcpay",
+    ]);
+    // The key BTCPay's authorize page hands the module: exactly the store
+    // permissions the module asks for, which its validation insists on.
+    const scoped = await greenfield<{ apiKey: string }>(btcpay, "POST", "/api-keys", {
+      label: "PrestaShop",
+      permissions: [
+        "btcpay.store.canmodifystoresettings",
+        "btcpay.store.webhooks.canmodifywebhooks",
+        "btcpay.store.canviewstoresettings",
+        "btcpay.store.cancreateinvoice",
+        "btcpay.store.canviewinvoices",
+        "btcpay.store.canmodifyinvoices",
+      ].map((permission) => `${permission}:${btcpay.storeId}`),
+    });
+    const connected = await script(
+      "connect-btcpay.php",
+      "http://btcpayserver:49392",
+      scoped.apiKey,
+      btcpay.storeId,
+    );
+    checks.push(
+      check(
+        "store_webhook",
+        Number(connected.methods) > 0 && (connected.webhook ?? "").length > 0,
+        "The module accepted the store's payment methods and created its webhook in BTCPay.",
+        `BTCPay ${connected.version}, ${connected.methods} payment method(s), webhook ${connected.webhook} to ${connected.url}`,
+      ),
+    );
+    const paying = await script("checkout.php");
+    checks.push(
+      check(
+        "store_offers_bitcoin",
+        Number(paying.offered) > 0,
+        "The guest's checkout offers Pay with BTCPay Server.",
+        `${paying.offered} payment option(s) from the module`,
+      ),
+    );
+    const invoiceId = paying.url?.match(/\/i\/([A-Za-z0-9]+)/)?.[1] ?? "";
+    checks.push(
+      check(
+        "store_invoice",
+        invoiceId.length > 0,
+        "The module's payment step created a BTCPay invoice for the cart and sent the buyer to it.",
+        `cart ${paying.cart} for ${paying.total} ${paying.currency}: ${paying.url}`,
+      ),
+    );
+    if (invoiceId.length === 0) return checks;
+    const settled = await payInvoice(btcpay, wallet, invoiceId);
+    checks.push(
+      check(
+        "btcpay_settled",
+        settled,
+        "The trial wallet paid the invoice's Lightning invoice and BTCPay marked it Settled.",
+        invoiceId,
+      ),
+    );
+    let state: Record<string, string> = {};
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      state = await script("order-state.php", paying.cart ?? "0");
+      if (state.order !== "0" && state.state === state.paid_state) break;
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+    }
+    const paid = state.order !== "0" && state.state === state.paid_state;
+    checks.push(
+      check(
+        "store_notified",
+        paid,
+        "BTCPay's webhook reached PrestaShop and the module moved the order to its paid state.",
+        `order ${state.order}: state ${state.state}, paid state ${state.paid_state}`,
+      ),
+    );
+    checks.push(
+      check(
+        "store_order_paid",
+        paid && state.valid === "1" && Number(state.paid) >= Number(state.total),
+        "PrestaShop's order is valid and its whole total paid.",
+        `order ${state.order}: valid ${state.valid}, paid ${state.paid} of ${state.total}`,
+      ),
+    );
+    return checks;
+  } finally {
+    if (!keep) await compose(["down", "-v", "--remove-orphans"]).catch(() => "");
+  }
+}
+
 const STORES: Record<string, Store> = {
   odoo: {
     label: "Odoo 19 Community with btcpayserver/odoo 19.0.1.1",
@@ -581,6 +710,11 @@ const STORES: Record<string, Store> = {
     label: "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12",
     ssrfException: "magento:80",
     run: runMagento,
+  },
+  prestashop: {
+    label: "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3",
+    ssrfException: "prestashop:80",
+    run: runPrestashop,
   },
 };
 

@@ -229,6 +229,16 @@
       "bytes": 4232
     },
     {
+      "path": "/guides/prestashop",
+      "markdown_path": "/guides/prestashop.md",
+      "source": "docs/guides/prestashop.md",
+      "kind": "guide",
+      "slug": "prestashop",
+      "title": "PrestaShop via BTCPay Server",
+      "category": "quickstart",
+      "bytes": 4449
+    },
+    {
       "path": "/guides/btcpay-reference",
       "markdown_path": "/guides/btcpay-reference.md",
       "source": "docs/guides/btcpay-reference.md",
@@ -1434,6 +1444,41 @@
       }
     },
     {
+      "id": "prestashop",
+      "label": "PrestaShop",
+      "family": "btcpay",
+      "type": "via-btcpay",
+      "heading": "Accept Bitcoin & Stablecoin Payments With PrestaShop",
+      "quickstart_slug": "prestashop",
+      "quickstart_path": "/guides/prestashop",
+      "quickstart_title": "PrestaShop via BTCPay Server",
+      "agent_stack": "btcpay",
+      "agent_payload_path": "/agent-directions/btcpay.md",
+      "agent_full_path": "/agent-directions/btcpay/full.md",
+      "adapter_package": "btcpayserver/prestashop-plugin",
+      "install": "Upload btcpay.zip from btcpayserver/prestashop-plugin in Modules → Module Manager",
+      "requires": "PrestaShop 8 or 9, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3, on BTCPay Server 2.4.5",
+        "databases": "PrestaShop's MySQL or MariaDB and BTCPay Server's own PostgreSQL",
+        "secrets": "The wallet code in BTCPay's OpenReceive settings; PrestaShop keeps only a BTCPay API key limited to one store's settings, invoices and webhooks",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": {
+        "date": "2026-10-15",
+        "release": "0.4.13",
+        "via": "btcpay-route",
+        "store": "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3",
+        "btcpay": "2.4.5"
+      }
+    },
+    {
       "id": "django",
       "label": "Django",
       "family": "python",
@@ -2334,7 +2379,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 7720
+        "bytes": 7799
       },
       {
         "path": "/openapi.yaml",

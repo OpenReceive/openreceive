@@ -205,6 +205,15 @@
       "mode": "btcpay-route",
       "store": "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12",
       "btcpay": "2.4.5"
+    },
+    {
+      "trial": "prestashop",
+      "date": "2026-10-15",
+      "release": "0.4.13",
+      "runs": 1,
+      "mode": "btcpay-route",
+      "store": "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3",
+      "btcpay": "2.4.5"
     }
   ]
 }

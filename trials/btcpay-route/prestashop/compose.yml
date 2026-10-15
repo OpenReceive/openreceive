@@ -1,0 +1,58 @@
+# PrestaShop with BTCPay Server's PrestaShop module, on the trial BTCPay's
+# Docker network (BTCPAY_NETWORK): trials/harness/btcpay-route.ts starts both.
+# The shop's domain is its alias there, so BTCPay reaches its webhook at
+# prestashop:80, which BTCPay 2.4.5 allows only with
+# BTCPAY_SSRFEXCEPTIONS=prestashop:80.
+services:
+  prestashop-db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: prestashop
+      MARIADB_ROOT_PASSWORD: prestashop
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+  prestashop:
+    build:
+      context: .
+      network: host
+    environment:
+      DB_SERVER: prestashop-db
+      DB_USER: root
+      DB_PASSWD: prestashop
+      DB_NAME: prestashop
+      PS_INSTALL_AUTO: "1"
+      PS_DOMAIN: prestashop
+      PS_COUNTRY: US
+      ADMIN_MAIL: owner@widget-shop.test
+      ADMIN_PASSWD: Widget-shop-local-1
+    ports:
+      - "127.0.0.1:18081:80"
+    # The installer renames admin/ to a random name, which overlayfs refuses
+    # for a directory from the image; on a volume it is an ordinary rename.
+    volumes:
+      - shop:/var/www/html
+    # The image installs the shop on its first start; it is ready once the
+    # installer has written its parameters and dropped its lock.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -f /var/www/html/app/config/parameters.php && test ! -f /var/www/html/install.lock
+      interval: 5s
+      timeout: 5s
+      retries: 180
+    depends_on:
+      prestashop-db:
+        condition: service_healthy
+    networks:
+      default: {}
+      btcpay:
+        aliases: [prestashop]
+volumes:
+  shop: {}
+networks:
+  btcpay:
+    external: true
+    name: ${BTCPAY_NETWORK:?the trial BTCPay's network}

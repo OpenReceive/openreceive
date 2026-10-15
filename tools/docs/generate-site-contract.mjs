@@ -443,6 +443,30 @@ const FRAMEWORKS = [
       mobile: STORE_MOBILE,
     },
   },
+  {
+    id: "prestashop",
+    label: "PrestaShop",
+    type: "via-btcpay",
+    family: "btcpay",
+    quickstart_slug: "prestashop",
+    agent_stack: "btcpay",
+    adapter_package: "btcpayserver/prestashop-plugin",
+    install: "Upload btcpay.zip from btcpayserver/prestashop-plugin in Modules → Module Manager",
+    requires: "PrestaShop 8 or 9, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3, on BTCPay Server 2.4.5",
+      databases: "PrestaShop's MySQL or MariaDB and BTCPay Server's own PostgreSQL",
+      secrets:
+        "The wallet code in BTCPay's OpenReceive settings; PrestaShop keeps only a BTCPay API key limited to one store's settings, invoices and webhooks",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
+      mobile: STORE_MOBILE,
+    },
+  },
   // The `python` family (contract v6): the install line is `pip install`, the
   // adapter is an extra of the one `openreceive` distribution.
   {
