@@ -76,6 +76,7 @@ const AGENT_PAYLOADS = [
     source: "docs/agents/tanstack-start.md",
     stack: "tanstack-start",
   },
+  { path: "/agent-directions/mobile.md", source: "docs/agents/mobile.md", stack: "mobile" },
 ];
 
 // Pages served under agent-discovery paths: site-owned names whose content is

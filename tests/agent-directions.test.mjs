@@ -239,7 +239,7 @@ test("the @openreceive/node payloads say doctor reads the env file and never to 
 // both called stablecoins unavailable on a $1–$7 shop over one swap minimum.
 test("every library payload ends with setup finished and keeps the agent in the app", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
+    ({ stack }) => !["woocommerce", "btcpay", "lovable", "mobile"].includes(stack),
   );
   assert.equal(libraries.length, 15);
   for (const { stack, text } of libraries) {
@@ -273,7 +273,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
 // a shared machine stops other people's servers.
 test("every library payload's Step 0 sends the swap walkthrough, checks codes by name, and restarts by pid", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
+    ({ stack }) => !["woocommerce", "btcpay", "lovable", "mobile"].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -300,7 +300,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
 // buyer got a 403: the quickstart's own example did the same.
 test("every library payload writes codes with the file tool, and Express, Fastify and NestJS read the session from native", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable"].includes(stack),
+    ({ stack }) => !["woocommerce", "btcpay", "lovable", "mobile"].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -370,6 +370,27 @@ test("the Lovable payload asks through the secret input and needs no terminal", 
 // pooler, the certificate and the Data API lock-down only through one line of
 // further reading. Each server stack that can sit on Supabase carries the
 // branch in its database step.
+// A mobile app pays on its server's checkout page: the payload sends the agent
+// to the server's own directions, and keeps codes and the paid decision there.
+test("the mobile payload keeps the codes and the paid decision on the server", () => {
+  const text = payloads.find(({ stack }) => stack === "mobile").text;
+  const step = stepZero(text);
+  assert.match(step, /What does the app sell\?/);
+  assert.match(step, /Find the app's server/);
+  assert.match(step, /https:\/\/openreceive\.org\/agent-directions\/node\/full\.md/);
+  assert.match(step, /Never put either in the app/);
+  assert.match(step, /EXPO_PUBLIC_/);
+  assert.match(text, /The app never decides "paid"/);
+  for (const opener of [
+    "expo-web-browser",
+    "url_launcher",
+    "SFSafariViewController",
+    "Custom Tabs",
+  ]) {
+    assert.ok(text.includes(opener), `mobile: no ${opener}`);
+  }
+});
+
 test("every server payload that can run on Supabase has the Supabase branch in its database step", () => {
   const stacks = [
     "node",

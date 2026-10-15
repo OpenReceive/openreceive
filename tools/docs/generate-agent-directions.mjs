@@ -76,6 +76,17 @@ const WOOCOMMERCE_BRIEF = [
   'Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
 ];
 
+// A mobile app takes the payment on its server's checkout page, so its list
+// is about where the codes may and may not go.
+const MOBILE_BRIEF = [
+  "Find the app's server first: OpenReceive runs there, and the app only opens its checkout page.",
+  ASK_NWC_FIRST,
+  ASK_LSC_NEXT,
+  "Write each code into the server's env file yourself. Never into the app, its config or an EXPO_PUBLIC_ name.",
+  "The app never decides paid: it asks the server. A link back to the app is navigation only.",
+  NO_ROTATION,
+];
+
 /** The library stacks: the agent writes both codes into the app's env file. */
 const libraryBrief = (envFile) => [
   ASK_NWC_FIRST,
@@ -235,6 +246,14 @@ const STACKS = [
     quickstartRole:
       "On Node, the one-stack module in the non-negotiables above replaces its per-request handleOpenReceive, and its On Supabase (Lovable) section does not apply.",
   },
+  {
+    stack: "mobile",
+    source: "docs/agents/src/mobile.md",
+    quickstart: "docs/guides/mobile-apps.md",
+    brief: MOBILE_BRIEF,
+    quickstartRole:
+      "Steps 1 and 2 above say when to use each part: its server code is an example in Express, for the server's own stack.",
+  },
 ];
 
 /**
@@ -283,6 +302,7 @@ const UNLISTED_GUIDES = {
   "agent-directions-astro": "this payload's own page",
   "agent-directions-react-router": "this payload's own page",
   "agent-directions-tanstack-start": "this payload's own page",
+  "agent-directions-mobile": "this payload's own page",
   guides: "linked as the index at the end of the reading list, not as an entry",
   "quickstart-node": "inlined in full below, or another stack's",
   "quickstart-fastify": "inlined in full below, or another stack's",
@@ -387,6 +407,24 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "the Supabase guide covers Node and Python servers",
     serverless: "the serverless guide covers Node and Python servers",
   },
+  // The app's server gets OpenReceive from its own directions, which link
+  // these; the mobile payload keeps to the app, the checkout link and the page.
+  mobile: Object.fromEntries(
+    [
+      "api-reference",
+      "automated-swaps",
+      "checkout-ux",
+      "custom-checkout-route",
+      "environment-variables",
+      "headless-checkout",
+      "payment-safety-upgrade",
+      "price-feeds",
+      "provider-registry",
+      "rate-limiting",
+      "react-material-ui-recipe",
+      "storage",
+    ].map((slug) => [slug, "the server's own directions link it"]),
+  ),
 };
 
 const GUIDE_URL = (slug) => `https://openreceive.org/guides/${slug}`;

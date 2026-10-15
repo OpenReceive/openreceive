@@ -669,6 +669,16 @@
       "bytes": 39000
     },
     {
+      "path": "/guides/agent-directions-mobile",
+      "markdown_path": "/guides/agent-directions-mobile.md",
+      "source": "docs/agents/mobile.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-mobile",
+      "title": "Agent Directions: Mobile Apps",
+      "category": "quickstart",
+      "bytes": 25726
+    },
+    {
       "path": "/guides/quickstart-woocommerce",
       "markdown_path": "/guides/quickstart-woocommerce.md",
       "source": "docs/guides/quickstart-woocommerce.md",
@@ -717,7 +727,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 4532
+      "bytes": 4757
     },
     {
       "path": "/wordpress",
@@ -1120,6 +1130,27 @@
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 39000,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/mobile.md",
+      "source": "docs/agents/cover/mobile.md",
+      "kind": "agent-directions-cover",
+      "stack": "mobile",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 294,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/mobile/full.md"
+    },
+    {
+      "path": "/agent-directions/mobile/full.md",
+      "source": "docs/agents/mobile.md",
+      "kind": "agent-directions-payload",
+      "stack": "mobile",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 25726,
       "copy_button": true,
       "self_contained": true
     }
@@ -2379,7 +2410,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 7799
+        "bytes": 7944
       },
       {
         "path": "/openapi.yaml",

@@ -6,7 +6,8 @@ description: >
   SvelteKit, Nuxt, Astro, React Router, TanStack Start, Rails,
   Python, Django, FastAPI, Flask, Laravel, plain PHP, WordPress/WooCommerce,
   Lovable, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
-  or connecting BTCPay Server to a receive-only NWC wallet. A configured swap provider
+  mobile apps (React Native, Expo, Flutter, Swift, Kotlin) through their
+  server, or connecting BTCPay Server to a receive-only NWC wallet. A configured swap provider
   converts these payments to BTC over Lightning in the merchant's connected
   wallet; asset and network availability depends on the provider.
 license: MIT
@@ -52,6 +53,10 @@ connected wallet; asset and network availability depends on the provider.
    - Lovable (TanStack Start on Cloudflare Workers, with Supabase):
      [references/lovable.md](references/lovable.md) — no terminal; codes are
      Lovable secrets and payments go through Supabase's HTTPS API.
+   - A mobile app (React Native or Expo, Flutter, Swift, Kotlin):
+     [references/mobile.md](references/mobile.md) — OpenReceive goes on the
+     app's server, through that server's reference; the app opens its checkout
+     page in a browser tab.
    - BTCPay Server: [references/btcpay.md](references/btcpay.md) — a plugin,
      configured in BTCPay's store UI or Greenfield API; no application code,
      no npm packages, no gem. The rest of this file is about the library.

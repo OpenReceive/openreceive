@@ -690,6 +690,14 @@
       "public": true
     },
     {
+      "slug": "agent-directions-mobile",
+      "title": "Agent Directions: Mobile Apps",
+      "source_path": "docs/agents/mobile.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "source_path": "docs/guides/quickstart-woocommerce.md",

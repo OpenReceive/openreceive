@@ -101,6 +101,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/astro.md",
   "/agent-directions/react-router.md",
   "/agent-directions/tanstack-start.md",
+  "/agent-directions/mobile.md",
 ];
 
 /** The full directions behind a cover: what the copy button copies and the cover's curl fetches. */

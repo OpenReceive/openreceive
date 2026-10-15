@@ -83,6 +83,10 @@ const GENERATED_REFERENCES = [
     source: "docs/agents/tanstack-start.md",
     target: "skills/integrate-openreceive/references/tanstack-start.md",
   },
+  {
+    source: "docs/agents/mobile.md",
+    target: "skills/integrate-openreceive/references/mobile.md",
+  },
 ];
 
 function mirrorRoots() {

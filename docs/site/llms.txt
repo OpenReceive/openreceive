@@ -42,6 +42,7 @@ markdown.
 - [Agent Directions: Astro](https://openreceive.org/agent-directions/astro/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: React Router](https://openreceive.org/agent-directions/react-router/full.md): self-contained agent directions, quickstart included
 - [Agent Directions: TanStack Start](https://openreceive.org/agent-directions/tanstack-start/full.md): self-contained agent directions, quickstart included
+- [Agent Directions: Mobile Apps](https://openreceive.org/agent-directions/mobile/full.md): self-contained agent directions, quickstart included
 
 ## Guides
 

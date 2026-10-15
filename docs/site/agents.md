@@ -50,7 +50,10 @@ your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.
 [React Router](https://openreceive.org/agent-directions/react-router/full.md) ·
 [TanStack Start](https://openreceive.org/agent-directions/tanstack-start/full.md) ·
 [BTCPay Server](https://openreceive.org/agent-directions/btcpay/full.md). Each
-is self-contained, quickstart included. To hand an agent a link instead, drop
+is self-contained, quickstart included. For a mobile app, use the
+[mobile directions](https://openreceive.org/agent-directions/mobile/full.md):
+they find the app's server, add OpenReceive there with that stack's
+directions, and make the app open the checkout page. To hand an agent a link instead, drop
 `/full` from the URL: that short page tells it to download the full file with
 its shell.
 
