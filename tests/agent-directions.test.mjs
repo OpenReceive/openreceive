@@ -318,20 +318,23 @@ test("every library payload writes codes with the file tool, and Express, Fastif
 });
 
 // Nest registers its JSON body parser when the app starts listening, after
-// anything main.ts mounts, so a plain app.use() of the Express adapter saw no
-// body and refused every checkout. Nest's guards never run for middleware.
-test("the NestJS payload parses JSON before the mount and checks ownership in authorize", () => {
+// anything main.ts mounts. Until 0.4.27 a plain app.use() of the Express
+// adapter saw no body and refused every checkout, so the directions added
+// app.useBodyParser("json"); the adapter now reads the body itself. Nest's
+// guards never run for middleware.
+test("the NestJS payload mounts with no body parser and checks ownership in authorize", () => {
   const text = payloads.find(({ stack }) => stack === "nestjs").text;
   const own = text.slice(0, text.indexOf("## The quickstart, in full"));
-  assert.match(own, /`app\.useBodyParser\("json"\)` right before it/);
+  assert.match(own, /needs\s+no `app\.useBodyParser\("json"\)`/);
   assert.match(own, /guards, interceptors and pipes do not run for middleware/);
   assert.match(own, /`app\.get\(DataSource\)`/);
   const quickstart = text.slice(text.indexOf("## The quickstart, in full"));
-  assert.ok(
-    quickstart.indexOf('app.useBodyParser("json");') <
-      quickstart.indexOf("app.use(\n    openReceiveExpress({"),
-    "the quickstart parses JSON after the mount",
+  assert.doesNotMatch(
+    quickstart,
+    /^\s*app\.useBodyParser\("json"\);$/m,
+    "the mount still adds a parser",
   );
+  assert.match(quickstart, /With 0\.4\.26 or older, add\s+`app\.useBodyParser\("json"\)`/);
 });
 
 // The 2026-10-10 WooCommerce trials ended on 10 to 14 lines that listed

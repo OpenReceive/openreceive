@@ -190,10 +190,9 @@ The quickstart below has the code. These are the rules it cannot state for
 itself, and they hold for every integration.
 
 - Mount OpenReceive with `app.use(openReceiveExpress(...))` in `src/main.ts`:
-  after the app's own session, cookie-parser or Passport middleware, before
-  `app.listen()`, with `app.useBodyParser("json")` right before it. Nest adds
-  its own JSON parser only at listen, after the mount, so without that line
-  every checkout request fails with a 500.
+  after the app's own session, cookie-parser or Passport middleware, and
+  before `app.listen()`. The adapter reads the JSON body itself, so it needs
+  no `app.useBodyParser("json")`.
 - Nest's guards, interceptors and pipes do not run for middleware. `authorize`
   makes the same ownership check the app's order page makes, by calling the
   service or helper its guard uses. Do not wrap OpenReceive in a controller to
@@ -468,16 +467,19 @@ NestJS on its default Express platform. Requires Node ≥ 22 and NestJS ≥ 10.
 
 OpenReceive mounts in `main.ts` as Express middleware, with
 `@openreceive/express`, the adapter the [Express quickstart](https://openreceive.org/guides/quickstart-node.md)
-uses. There is no Nest module to import. Three things differ from a plain
+uses. There is no Nest module to import. Two things differ from a plain
 Express app, and this page is about them:
 
-- Nest adds its JSON body parser only when the app starts listening, after
-  anything `main.ts` mounts. Add it before the mount with
-  `app.useBodyParser("json")`.
 - The hooks reach the app's own services through `app.get()`: the order
   service, and the TypeORM `DataSource` or the Prisma service.
 - Guards, interceptors and pipes run for controllers, not for middleware. So
   `authorize` makes the same check your guard makes.
+
+Nest adds its JSON body parser only when the app starts listening, after
+anything `main.ts` mounts. From 0.4.27 the adapter reads the body itself, so
+the mount needs nothing for it. With 0.4.26 or older, add
+`app.useBodyParser("json")` right before the mount, or every checkout answers
+500.
 
 ### 1. Install
 
@@ -582,9 +584,6 @@ async function bootstrap() {
   // stay above the mount, so the session is on the request when authorize runs.
   const orders = app.get(OrdersService);
   const auth = app.get(AuthService);
-  // Nest adds its JSON body parser only at listen, after this mount. Without
-  // this line every checkout request fails with a 500.
-  app.useBodyParser("json");
   app.use(
     openReceiveExpress({
       wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; your app refuses to start otherwise

@@ -171,10 +171,9 @@ The quickstart below has the code. These are the rules it cannot state for
 itself, and they hold for every integration.
 
 - Mount OpenReceive with `app.use(openReceiveExpress(...))` in `src/main.ts`:
-  after the app's own session, cookie-parser or Passport middleware, before
-  `app.listen()`, with `app.useBodyParser("json")` right before it. Nest adds
-  its own JSON parser only at listen, after the mount, so without that line
-  every checkout request fails with a 500.
+  after the app's own session, cookie-parser or Passport middleware, and
+  before `app.listen()`. The adapter reads the JSON body itself, so it needs
+  no `app.useBodyParser("json")`.
 - Nest's guards, interceptors and pipes do not run for middleware. `authorize`
   makes the same ownership check the app's order page makes, by calling the
   service or helper its guard uses. Do not wrap OpenReceive in a controller to

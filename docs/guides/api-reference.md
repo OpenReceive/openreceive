@@ -1244,6 +1244,13 @@ everything else. The original Express `req` is passed as `native`.
 status, swap, and rates route exists under `/openreceive`. Put your session
 middleware ahead of it so `authorize` can read `native.session`.
 
+- From 0.4.27 it reads the JSON body itself when no body parser ran before it,
+  so `express.json()` is optional and NestJS needs no
+  `app.useBodyParser("json")`. It reads the body only for a route that takes
+  one, after the cross-site and content-type checks, under the same 64 KB cap;
+  a larger body answers 413. If something else already read the body without
+  setting `req.body`, it answers a 500 that names the missing body parser.
+
 ### openReceiveFastify
 
 ```ts
