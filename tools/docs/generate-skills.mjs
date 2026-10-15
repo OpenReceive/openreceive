@@ -63,7 +63,8 @@ const GENERATED_REFERENCES = [
   {
     source: "docs/agents/lovable.md",
     target: "skills/integrate-openreceive/references/lovable.md",
-  },  {
+  },
+  {
     source: "docs/agents/sveltekit.md",
     target: "skills/integrate-openreceive/references/sveltekit.md",
   },

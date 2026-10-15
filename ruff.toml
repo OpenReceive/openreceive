@@ -13,3 +13,7 @@ extend-exclude = [
   # frameworks generate them; they keep the frameworks' style, not ours.
   "trials/platforms/*/fixture",
 ]
+
+# The BTCPay-route test runs these in `odoo shell`, which defines `env`.
+[lint.per-file-ignores]
+"trials/btcpay-route/odoo/*.py" = ["F821"]

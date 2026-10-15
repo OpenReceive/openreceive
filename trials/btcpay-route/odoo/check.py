@@ -8,4 +8,6 @@ state, status = tx.state, tx.btcpay_status
 tx._post_process()
 env.cr.commit()
 order = tx.sale_order_ids
-print(f"RESULT tx_state={state} btcpay_status={status} order_state={order.state} amount_paid={order.amount_paid}")
+print(
+    f"RESULT tx_state={state} btcpay_status={status} order_state={order.state} amount_paid={order.amount_paid}"
+)
