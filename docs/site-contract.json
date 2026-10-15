@@ -1,5 +1,5 @@
 {
-  "contract_version": 10,
+  "contract_version": 11,
   "release_version": "0.4.26",
   "docs_manifest_version": "0.2.0",
   "generated_by": "tools/docs/generate-site-contract.mjs",
@@ -207,6 +207,26 @@
       "category": "quickstart",
       "bytes": 4799,
       "assets_base": "/assets/"
+    },
+    {
+      "path": "/guides/odoo",
+      "markdown_path": "/guides/odoo.md",
+      "source": "docs/guides/odoo.md",
+      "kind": "guide",
+      "slug": "odoo",
+      "title": "Odoo via BTCPay Server",
+      "category": "quickstart",
+      "bytes": 4374
+    },
+    {
+      "path": "/guides/magento",
+      "markdown_path": "/guides/magento.md",
+      "source": "docs/guides/magento.md",
+      "kind": "guide",
+      "slug": "magento",
+      "title": "Magento via BTCPay Server",
+      "category": "quickstart",
+      "bytes": 4232
     },
     {
       "path": "/guides/btcpay-reference",
@@ -1344,6 +1364,76 @@
       }
     },
     {
+      "id": "odoo",
+      "label": "Odoo",
+      "family": "btcpay",
+      "type": "via-btcpay",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Odoo",
+      "quickstart_slug": "odoo",
+      "quickstart_path": "/guides/odoo",
+      "quickstart_title": "Odoo via BTCPay Server",
+      "agent_stack": "btcpay",
+      "agent_payload_path": "/agent-directions/btcpay.md",
+      "agent_full_path": "/agent-directions/btcpay/full.md",
+      "adapter_package": "payment_btcpayserver",
+      "install": "Install the Payment Provider: BTCPay Server add-on (btcpayserver/odoo) and pip install ecdsa",
+      "requires": "Odoo 17, 18 or 19, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "Odoo 19 Community with btcpayserver/odoo 19.0.1.1, on BTCPay Server 2.4.5",
+        "databases": "Odoo's PostgreSQL and BTCPay Server's own PostgreSQL",
+        "secrets": "The wallet code in BTCPay's OpenReceive settings; Odoo keeps only its BTCPay pairing token",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": {
+        "date": "2026-10-15",
+        "release": "0.4.13",
+        "via": "btcpay-route",
+        "store": "Odoo 19 Community with btcpayserver/odoo 19.0.1.1",
+        "btcpay": "2.4.5"
+      }
+    },
+    {
+      "id": "magento",
+      "label": "Magento",
+      "family": "btcpay",
+      "type": "via-btcpay",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Magento",
+      "quickstart_slug": "magento",
+      "quickstart_path": "/guides/magento",
+      "quickstart_title": "Magento via BTCPay Server",
+      "agent_stack": "btcpay",
+      "agent_payload_path": "/agent-directions/btcpay.md",
+      "agent_full_path": "/agent-directions/btcpay/full.md",
+      "adapter_package": "btcpayserver/magento2-btcpay-module",
+      "install": "composer require btcpayserver/magento2-btcpay-module",
+      "requires": "Magento 2.4 or Mage-OS, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
+      "example_path": null,
+      "example_url": null,
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12, on BTCPay Server 2.4.5",
+        "databases": "Magento's MySQL or MariaDB and BTCPay Server's own PostgreSQL",
+        "secrets": "The wallet code in BTCPay's OpenReceive settings; Magento keeps only a BTCPay API key limited to invoices and webhooks",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": {
+        "date": "2026-10-15",
+        "release": "0.4.13",
+        "via": "btcpay-route",
+        "store": "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12",
+        "btcpay": "2.4.5"
+      }
+    },
+    {
       "id": "django",
       "label": "Django",
       "family": "python",
@@ -2244,7 +2334,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 7580
+        "bytes": 7720
       },
       {
         "path": "/openapi.yaml",

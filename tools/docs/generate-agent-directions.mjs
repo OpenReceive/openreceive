@@ -195,7 +195,8 @@ const STACKS = [
       "Steps 0–6 above are the setup on Lovable and this recipe is their reference: follow its On Supabase (Lovable) section, not its pg pool, and skip its npm commands. Where the two differ, the steps win.",
     // Lovable's agent reads pages with its fetch tool and has no shell.
     fetchOnly: true,
-  },  {
+  },
+  {
     stack: "sveltekit",
     source: "docs/agents/src/sveltekit.md",
     quickstart: "docs/recipes/sveltekit.md",
@@ -254,6 +255,9 @@ const UNLISTED_GUIDES = {
   "agent-directions-woocommerce": "this payload’s own page",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
+  odoo: "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
+  magento:
+    "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
   vercel: "for people who hand these directions to v0; it links them, not the reverse",
   lovable: "for people who build on Lovable; the Lovable payload links it, not the other stacks",
   "agent-directions-lovable": "this payload's own page",

@@ -55,6 +55,8 @@ The index is [/guides.md](https://openreceive.org/guides.md).
 - [Bitcoin Checkout on Serverless Hosts](https://openreceive.org/guides/serverless.md)
 - [Bitcoin Checkout in Mobile Apps](https://openreceive.org/guides/mobile-apps.md)
 - [How We Test Platforms](https://openreceive.org/guides/how-we-test-platforms.md)
+- [Odoo via BTCPay Server](https://openreceive.org/guides/odoo.md)
+- [Magento via BTCPay Server](https://openreceive.org/guides/magento.md)
 - [BTCPay Plugin Reference](https://openreceive.org/guides/btcpay-reference.md)
 - [Node ORM Recipes](https://openreceive.org/guides/node-orms.md)
 - [Authorization](https://openreceive.org/guides/authorization.md)

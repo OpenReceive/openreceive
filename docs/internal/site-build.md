@@ -33,7 +33,7 @@ a `markdown_path` as well as a `path`, and the directions link the
 
 ## `contract_version`
 
-The contract is at **v10**. A site that reads it should refuse to publish a
+The contract is at **v11**. A site that reads it should refuse to publish a
 version it does not understand, rather than publish part of it. A half-honoured
 contract is how a payload ends up linking a page nobody serves.
 
@@ -136,6 +136,16 @@ contract is how a payload ends up linking a page nobody serves.
   A recipe row gains `tested` once its trials pass. The version bumps because
   a site on v9 hides the copy button on every recipe row, so it would publish
   the payloads with no way to copy them.
+- **v11**: `via-btcpay` rows: Odoo and Magento, stores that reach OpenReceive
+  through BTCPay Server. Their guide is the merchant's setup, their copy
+  button gives the BTCPay directions, and they have no example app and no
+  shared checkout demo, so `example_path` and `example_url` are null and
+  `shared_checkout_demo` is false. Their `tested` comes from a BTCPay-route
+  run (`npm run trial:btcpay-route`), not an agent trial: it carries
+  `via: "btcpay-route"`, the `store` and `btcpay` versions it ran, and the
+  BTCPay plugin's version as `release`. Label it "Tested via BTCPay · <date> ·
+  plugin <release>". The version bumps because a site on v10 requires an
+  example on every row that is not a recipe.
 
 `release_version` changes with every library release and says nothing about the
 shape of this file. `contract_version` changes only when the site has to do
@@ -395,7 +405,7 @@ Every `frameworks[]` row says which in `type`:
 | `plugin` | A store plugin, installed from the store's plugin directory | `woocommerce`, `btcpay-server` |
 | `guide` | A quickstart and agent directions over another row's package, with an example app and agent trials | `nestjs` (on `@openreceive/express`), `flask` (on the `openreceive` engine) |
 | `recipe` | A recipe page of code to copy, with no example app. Since v10, agent directions that inline the recipe, and agent trials | `sveltekit`, `nuxt`, `astro`, `react-router`, `tanstack-start` |
-| `via-btcpay` | A store that takes payments through BTCPay Server and its plugin | none yet |
+| `via-btcpay` | A store that takes payments through BTCPay Server and its plugin, tested end to end by `npm run trial:btcpay-route` (v11) | `odoo`, `magento` |
 
 Show the type on every framework card and at the top of every framework
 page, in words a merchant reads: "Package", "Plugin", "Guide", "Recipe" and

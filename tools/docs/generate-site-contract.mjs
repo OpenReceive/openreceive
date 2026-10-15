@@ -388,6 +388,61 @@ const FRAMEWORKS = [
       mobile: STORE_MOBILE,
     },
   },
+  // Stores on the BTCPay route (contract v11): the platform's own BTCPay
+  // module takes the order to BTCPay, and BTCPay takes the payment with the
+  // OpenReceive plugin. The copy button gives the BTCPay directions, for the
+  // BTCPay half; the guide covers the store's half. Tested by
+  // `npm run trial:btcpay-route`, not an agent trial.
+  {
+    id: "odoo",
+    label: "Odoo",
+    type: "via-btcpay",
+    family: "btcpay",
+    quickstart_slug: "odoo",
+    agent_stack: "btcpay",
+    adapter_package: "payment_btcpayserver",
+    install:
+      "Install the Payment Provider: BTCPay Server add-on (btcpayserver/odoo) and pip install ecdsa",
+    requires: "Odoo 17, 18 or 19, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "Odoo 19 Community with btcpayserver/odoo 19.0.1.1, on BTCPay Server 2.4.5",
+      databases: "Odoo's PostgreSQL and BTCPay Server's own PostgreSQL",
+      secrets:
+        "The wallet code in BTCPay's OpenReceive settings; Odoo keeps only its BTCPay pairing token",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
+      mobile: STORE_MOBILE,
+    },
+  },
+  {
+    id: "magento",
+    label: "Magento",
+    type: "via-btcpay",
+    family: "btcpay",
+    quickstart_slug: "magento",
+    agent_stack: "btcpay",
+    adapter_package: "btcpayserver/magento2-btcpay-module",
+    install: "composer require btcpayserver/magento2-btcpay-module",
+    requires: "Magento 2.4 or Mage-OS, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
+    demo: null,
+    example_path: null,
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime:
+        "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12, on BTCPay Server 2.4.5",
+      databases: "Magento's MySQL or MariaDB and BTCPay Server's own PostgreSQL",
+      secrets:
+        "The wallet code in BTCPay's OpenReceive settings; Magento keeps only a BTCPay API key limited to invoices and webhooks",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
+      mobile: STORE_MOBILE,
+    },
+  },
   // The `python` family (contract v6): the install line is `pip install`, the
   // adapter is an extra of the one `openreceive` distribution.
   {
@@ -488,7 +543,8 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node 22: agent trials on SvelteKit 3.0 with adapter-node 6, and the recipe's own check",
+      runtime:
+        "Node 22: agent trials on SvelteKit 3.0 with adapter-node 6, and the recipe's own check",
       ...RECIPE_CAPABILITIES,
     },
   },
@@ -526,7 +582,8 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node 22: agent trials on Astro 7.3 with @astrojs/node 11.1, and the recipe's own check",
+      runtime:
+        "Node 22: agent trials on Astro 7.3 with @astrojs/node 11.1, and the recipe's own check",
       ...RECIPE_CAPABILITIES,
     },
   },
@@ -545,7 +602,8 @@ const FRAMEWORKS = [
     video: null,
     shared_checkout_demo: true,
     capabilities: {
-      runtime: "Node 22: agent trials on React Router 8.4 (react-router-serve), and the recipe's own check",
+      runtime:
+        "Node 22: agent trials on React Router 8.4 (react-router-serve), and the recipe's own check",
       ...RECIPE_CAPABILITIES,
     },
   },
@@ -702,6 +760,32 @@ for (const asset of assets) {
 // the site; a `builder` entry is one trial on the platform itself.
 const passed = new Map(
   JSON.parse(readFileSync(path.join(root, "trials/passed.json"), "utf8")).passed.map((entry) => {
+    // A BTCPay-route entry (contract v11) is one run of
+    // `npm run trial:btcpay-route`: no agent, a store from trials/btcpay-route,
+    // and `release` is the published BTCPay plugin's version.
+    if (entry.mode === "btcpay-route") {
+      if (
+        !existsSync(path.join(root, "trials/btcpay-route", entry.trial)) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
+        !/^\d+\.\d+\.\d+$/.test(entry.release) ||
+        !/^\d+\.\d+\.\d+$/.test(entry.btcpay ?? "") ||
+        typeof entry.store !== "string" ||
+        !Number.isInteger(entry.runs) ||
+        entry.runs < 1
+      ) {
+        throw new Error(`${TARGET}: invalid trials/passed.json entry ${JSON.stringify(entry)}`);
+      }
+      return [
+        entry.trial,
+        {
+          date: entry.date,
+          release: entry.release,
+          via: "btcpay-route",
+          store: entry.store,
+          btcpay: entry.btcpay,
+        },
+      ];
+    }
     if (
       !existsSync(path.join(root, "trials/platforms", entry.trial, "platform.json")) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
@@ -767,6 +851,13 @@ const frameworks = FRAMEWORKS.map((framework) => {
   if (recipe && (demo || row.example_path !== null)) {
     fail("is a recipe, so its demo and example_path must be null");
   }
+  // A store on the BTCPay route (contract v11) has no example app either:
+  // BTCPay's checkout and the platform's own module do the work. Its Tested
+  // badge comes from its BTCPay-route run, never from an agent trial.
+  const viaBtcpay = row.type === "via-btcpay";
+  if (viaBtcpay && (demo || row.example_path !== null || row.shared_checkout_demo)) {
+    fail("is via-btcpay, so its demo and example_path are null and it has no shared checkout demo");
+  }
   if (!recipe && row.agent_stack === null) {
     fail(`has type ${row.type}, so it needs an agent_stack`);
   }
@@ -774,15 +865,18 @@ const frameworks = FRAMEWORKS.map((framework) => {
     fail(`has type ${row.type}, but ${row.quickstart_slug} is in category ${quickstart.category}`);
   }
   const payloadPath = row.agent_stack === null ? null : `/agent-directions/${row.agent_stack}.md`;
-  if (payloadPath !== null && !AGENT_PAYLOADS.some((payload) => payload.stack === row.agent_stack)) {
+  if (
+    payloadPath !== null &&
+    !AGENT_PAYLOADS.some((payload) => payload.stack === row.agent_stack)
+  ) {
     fail(`names agent stack ${row.agent_stack}, which has no payload in AGENT_PAYLOADS`);
   }
   if (payloadPath !== null && !AGENT_PAYLOAD_PATHS.includes(payloadPath)) {
     fail(`needs ${payloadPath} in AGENT_PAYLOAD_PATHS (tools/docs/site-paths.mjs)`);
   }
-  const example_path = recipe ? null : demo ? demo.dir : row.example_path;
+  const example_path = recipe || viaBtcpay ? null : demo ? demo.dir : row.example_path;
   if (
-    !recipe &&
+    example_path !== null &&
     !(
       existsSync(path.join(root, example_path)) &&
       statSync(path.join(root, example_path)).isDirectory()
@@ -823,7 +917,13 @@ const frameworks = FRAMEWORKS.map((framework) => {
     capabilities: Object.fromEntries(
       CAPABILITY_FIELDS.map((field) => [field, capabilities[field]]),
     ),
-    tested: (row.agent_stack && passed.get(row.agent_stack)) ?? null,
+    tested: viaBtcpay
+      ? passed.get(row.id)?.via === "btcpay-route"
+        ? passed.get(row.id)
+        : null
+      : ((row.agent_stack && passed.get(row.agent_stack)?.via === undefined
+          ? passed.get(row.agent_stack)
+          : null) ?? null),
   };
 });
 
@@ -1000,8 +1100,12 @@ const contract = {
   // recipe row carry agent directions: the five recipes get an agent_stack
   // and a payload that inlines the recipe, and still no example app. A bump
   // because a site on v9 treats every recipe row as having no directions, so
-  // it would publish the payloads but hide their copy buttons.
-  contract_version: 10,
+  // it would publish the payloads but hide their copy buttons. v11 adds
+  // via-btcpay rows (Odoo, Magento): no example app, no shared checkout
+  // demo, and a `tested` from a BTCPay-route run (`via: "btcpay-route"`, the
+  // `store` and `btcpay` versions, and the plugin's version as `release`). A
+  // bump because a site on v10 requires an example on every non-recipe row.
+  contract_version: 11,
   // The library release this documentation set belongs to. The site publishes
   // one release at a time; `docs_manifest_version` moves only when the shape of
   // the manifest itself changes.

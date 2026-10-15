@@ -1,5 +1,5 @@
 {
-  "_comment": "One entry per platform that passed its agent trials (npm run trial). A harness entry needs three trials in a row that exited 0, copied from that platform's summary.md: date, release, runs, mode and the directions file's hash. A builder entry is one builder trial on the platform itself, by its own agent. Reports stay gitignored; this is the public record openreceive.org shows as Tested badges.",
+  "_comment": "One entry per platform that passed its agent trials (npm run trial). A harness entry needs three trials in a row that exited 0, copied from that platform's summary.md: date, release, runs, mode and the directions file's hash. A builder entry is one builder trial on the platform itself, by its own agent. Reports stay gitignored; this is the public record openreceive.org shows as Tested badges. A btcpay-route entry is one run of npm run trial:btcpay-route for a store on the BTCPay route (trials/btcpay-route): its release is the published BTCPay plugin version.",
   "passed": [
     {
       "trial": "woocommerce",
@@ -187,6 +187,24 @@
       "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "candidate",
       "directions": "d3c59ced4fa6"
+    },
+    {
+      "trial": "odoo",
+      "date": "2026-10-15",
+      "release": "0.4.13",
+      "runs": 1,
+      "mode": "btcpay-route",
+      "store": "Odoo 19 Community with btcpayserver/odoo 19.0.1.1",
+      "btcpay": "2.4.5"
+    },
+    {
+      "trial": "magento",
+      "date": "2026-10-15",
+      "release": "0.4.13",
+      "runs": 1,
+      "mode": "btcpay-route",
+      "store": "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12",
+      "btcpay": "2.4.5"
     }
   ]
 }

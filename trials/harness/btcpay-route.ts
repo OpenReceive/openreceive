@@ -35,6 +35,8 @@ interface Btcpay {
 }
 
 interface Store {
+  /** What ran, for the passed.json entry. */
+  readonly label: string;
   /** BTCPay 2.4.5 refuses outbound HTTP to private addresses unless listed. */
   readonly ssrfException: string;
   readonly run: (btcpay: Btcpay, wallet: TrialWallet, keep: boolean) => Promise<Check[]>;
@@ -570,8 +572,16 @@ async function runMagento(btcpay: Btcpay, wallet: TrialWallet, keep: boolean): P
 }
 
 const STORES: Record<string, Store> = {
-  odoo: { ssrfException: "odoo:8069", run: runOdoo },
-  magento: { ssrfException: "magento:80", run: runMagento },
+  odoo: {
+    label: "Odoo 19 Community with btcpayserver/odoo 19.0.1.1",
+    ssrfException: "odoo:8069",
+    run: runOdoo,
+  },
+  magento: {
+    label: "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12",
+    ssrfException: "magento:80",
+    run: runMagento,
+  },
 };
 
 async function main(): Promise<void> {
@@ -624,7 +634,25 @@ async function main(): Promise<void> {
         `${item.pass ? "pass" : "FAIL"} ${item.id}: ${item.summary}${item.evidence ? ` (${item.evidence})` : ""}`,
       );
     }
-    process.exitCode = checks.every((item) => item.pass) ? 0 : 1;
+    const passed = checks.every((item) => item.pass);
+    if (passed) {
+      // The published plugin that ran, and the BTCPay it ran on: the badge's facts.
+      const receipt = JSON.parse(await readFile(`${directory}.plugin/download.json`, "utf8")) as {
+        version: string;
+        btcpayVersion: string;
+      };
+      const entry = {
+        trial: name,
+        date: new Date().toISOString().slice(0, 10),
+        release: receipt.version.split(".").slice(0, 3).join("."),
+        runs: 1,
+        mode: "btcpay-route",
+        store: store.label,
+        btcpay: receipt.btcpayVersion,
+      };
+      console.log(`\npassed.json entry:\n${JSON.stringify(entry)}`);
+    }
+    process.exitCode = passed ? 0 : 1;
   } finally {
     await sandbox.stop(keep);
   }
