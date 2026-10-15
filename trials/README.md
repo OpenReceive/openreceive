@@ -359,7 +359,7 @@ own BTCPay integration, and BTCPay takes the payment with the OpenReceive
 plugin. A platform is listed that way only after it runs end to end here:
 
 ```sh
-npm run trial:btcpay-route -- --store odoo [--keep]
+npm run trial:btcpay-route -- --store odoo|magento [--keep]
 ```
 
 No agent and no model take part. The harness starts the btcpay trial's
@@ -377,6 +377,17 @@ must too.
   BitPay-compatible API. The provider pairs with a code the store owner
   approves in BTCPay (Store Settings, Access Tokens), which only BTCPay's UI
   makes, so the harness does that step in a headless browser.
+- `magento`: Mage-OS 3.6 (Magento Open Source 2.4.9, without Adobe's
+  marketplace keys) with btcpayserver/magento2-plugin 2.0.12, on Greenfield.
+  The buyer checks out over Magento's REST API, and the module's
+  forward-to-payment step runs as it does after Place Order. Three things
+  this found, each in `btcpay-route/magento/install.sh` or the harness:
+  the module refuses an unrestricted API key and wants exactly five store
+  permissions; `bin/magento config:set` on the BTCPay store throws in the
+  module's admin observer (no current store on the command line), after
+  saving the value; and the module checks webhook signatures against the
+  config cache, which holds no secret until it is refreshed, so every
+  delivery answers 400 until the merchant refreshes the cache.
 
 ## Passed
 

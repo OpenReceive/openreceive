@@ -1,0 +1,48 @@
+# Mage-OS with BTCPay Server's Magento module, on the trial BTCPay's Docker
+# network (BTCPAY_NETWORK): trials/harness/btcpay-route.ts starts both. BTCPay
+# reaches the store as magento:80 for its webhook, which BTCPay 2.4.5 allows
+# only with BTCPAY_SSRFEXCEPTIONS=magento:80.
+services:
+  magento-db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: magento
+      MARIADB_USER: magento
+      MARIADB_PASSWORD: magento
+      MARIADB_ROOT_PASSWORD: magento
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+  opensearch:
+    image: opensearchproject/opensearch:2.19.2
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9200/_cluster/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+  magento:
+    build:
+      context: .
+      network: host
+    ports:
+      - "127.0.0.1:18080:80"
+    depends_on:
+      magento-db:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    networks:
+      default: {}
+      btcpay:
+        aliases: [magento]
+networks:
+  btcpay:
+    external: true
+    name: ${BTCPAY_NETWORK:?the trial BTCPay's network}

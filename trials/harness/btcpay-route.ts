@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { request } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -18,7 +19,7 @@ import { startTrialWallet, type TrialWallet, trialWalletOverride } from "./walle
 // the trial wallet, the store in Docker on BTCPay's network, one order paid
 // over Lightning, and the store's own order paid. No model is involved.
 //
-//   npm run trial:btcpay-route -- --store odoo [--keep]
+//   npm run trial:btcpay-route -- --store odoo|magento [--keep]
 
 const execFileAsync = promisify(execFile);
 const trialsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -277,8 +278,300 @@ async function runOdoo(btcpay: Btcpay, wallet: TrialWallet, keep: boolean): Prom
   }
 }
 
+const magentoDir = path.join(trialsRoot, "btcpay-route", "magento");
+
+async function magentoCompose(network: string, args: readonly string[]): Promise<string> {
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      "docker",
+      ["compose", "-p", "openreceive-btcpay-route-magento", ...args],
+      {
+        cwd: magentoDir,
+        env: { ...process.env, BTCPAY_NETWORK: network },
+        timeout: 30 * 60_000,
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    );
+    return `${stdout}\n${stderr}`;
+  } catch (error) {
+    const failed = error as { stdout?: string; stderr?: string };
+    // Head and tail: a PHP exception names itself at the top of a long trace.
+    const output = `${failed.stdout ?? ""}\n${failed.stderr ?? ""}`.trim();
+    const shown =
+      output.length <= 3000 ? output : `${output.slice(0, 2000)}\n…\n${output.slice(-800)}`;
+    throw new InfraError(`docker compose ${args.slice(0, 3).join(" ")} failed:\n${shown}`);
+  }
+}
+
+/** One of the image's PHP scripts, inside the store; its RESULT line as key=value pairs. */
+async function magentoScript(
+  network: string,
+  script: string,
+  ...args: string[]
+): Promise<Record<string, string>> {
+  const output = await magentoCompose(network, [
+    "exec",
+    "-T",
+    "-u",
+    "www-data",
+    "magento",
+    "php",
+    `/usr/local/share/btcpay-route/${script}`,
+    ...args,
+  ]);
+  const line = output.split("\n").find((text) => text.startsWith("RESULT "));
+  if (line === undefined)
+    throw new InfraError(`${script} printed no RESULT:\n${output.slice(-1500)}`);
+  return Object.fromEntries(
+    line
+      .slice("RESULT ".length)
+      .split(" ")
+      .map((pair) => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)]),
+  );
+}
+
+/** Magento's REST API on the published port, as the store's own host name (its base URL). */
+function magentoRest<T>(method: string, route: string, body?: unknown, token?: string): Promise<T> {
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const call = request(
+      {
+        host: "127.0.0.1",
+        port: 18080,
+        method,
+        path: `/rest/V1${route}`,
+        headers: {
+          host: "magento",
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        timeout: 120_000,
+      },
+      (response) => {
+        let text = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => {
+          text += chunk;
+        });
+        response.on("end", () => {
+          if ((response.statusCode ?? 0) >= 400) {
+            reject(
+              new InfraError(
+                `Magento ${method} ${route} answered ${response.statusCode}: ${text.slice(0, 300)}`,
+              ),
+            );
+            return;
+          }
+          resolve(JSON.parse(text) as T);
+        });
+      },
+    );
+    call.on("error", reject);
+    call.end(payload);
+  });
+}
+
+const BUYER_ADDRESS = {
+  firstname: "Widget",
+  lastname: "Buyer",
+  street: ["1 Main St"],
+  city: "Austin",
+  region_code: "TX",
+  region_id: 57,
+  postcode: "78701",
+  country_id: "US",
+  telephone: "5125550100",
+  email: "buyer@widget-shop.test",
+};
+
+/**
+ * Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin (Greenfield):
+ * the merchant's settings and webhook, a guest's order through the REST
+ * checkout with "Pay with Bitcoin", the module's forward-to-payment step that
+ * the buyer's browser takes after Place Order, the payment, and the order paid
+ * from BTCPay's webhook. The module's cron poll is the fallback, and the
+ * checks say which one marked the order.
+ */
+async function runMagento(btcpay: Btcpay, wallet: TrialWallet, keep: boolean): Promise<Check[]> {
+  const checks: Check[] = [];
+  await magentoCompose(btcpay.network, ["down", "-v", "--remove-orphans"]);
+  try {
+    await magentoCompose(btcpay.network, ["build"]);
+    await magentoCompose(btcpay.network, ["up", "-d", "--wait"]);
+    // The module refuses an unrestricted key: it wants exactly the store
+    // permissions its own "Generate API key" button asks BTCPay for.
+    const scoped = await greenfield<{ apiKey: string }>(btcpay, "POST", "/api-keys", {
+      label: "Magento",
+      permissions: [
+        "btcpay.store.cancreateinvoice",
+        "btcpay.store.canmodifyinvoices",
+        "btcpay.store.canviewinvoices",
+        "btcpay.store.canviewstoresettings",
+        "btcpay.store.webhooks.canmodifywebhooks",
+      ].map((permission) => `${permission}:${btcpay.storeId}`),
+    });
+    await magentoCompose(btcpay.network, [
+      "exec",
+      "-T",
+      "-u",
+      "www-data",
+      "-e",
+      `BTCPAY_API_KEY=${scoped.apiKey}`,
+      "-e",
+      `BTCPAY_STORE_ID=${btcpay.storeId}`,
+      "magento",
+      "install-store",
+    ]);
+    const webhook = await magentoScript(btcpay.network, "install-webhook.php");
+    // The module writes the webhook's new secret to the database and checks
+    // deliveries against the config cache, so until the cache is refreshed
+    // every delivery answers 400. A merchant refreshes it after setup.
+    await magentoCompose(btcpay.network, [
+      "exec",
+      "-T",
+      "-u",
+      "www-data",
+      "magento",
+      "bin/magento",
+      "cache:clean",
+      "config",
+    ]);
+    checks.push(
+      check(
+        "store_webhook",
+        webhook.webhook === "1",
+        "Saving the BTCPay store created the store's webhook in BTCPay.",
+        `webhook=${webhook.webhook}`,
+      ),
+    );
+    const token = await magentoRest<string>("POST", "/integration/admin/token", {
+      username: "owner",
+      password: "Widget-shop-local-1",
+    });
+    await magentoRest(
+      "POST",
+      "/products",
+      {
+        product: {
+          sku: "bezel",
+          name: "Bezel",
+          price: 12,
+          status: 1,
+          type_id: "simple",
+          attribute_set_id: 4,
+          visibility: 4,
+          weight: 1,
+          extension_attributes: { website_ids: [1], stock_item: { qty: 100, is_in_stock: true } },
+        },
+      },
+      token,
+    );
+    // The new product is salable once the inventory indexes know it.
+    await magentoCompose(btcpay.network, [
+      "exec",
+      "-T",
+      "-u",
+      "www-data",
+      "magento",
+      "bin/magento",
+      "indexer:reindex",
+    ]);
+    const cart = await magentoRest<string>("POST", "/guest-carts");
+    await magentoRest("POST", `/guest-carts/${cart}/items`, {
+      cartItem: { sku: "bezel", qty: 1, quote_id: cart },
+    });
+    await magentoRest("POST", `/guest-carts/${cart}/shipping-information`, {
+      addressInformation: {
+        shipping_address: BUYER_ADDRESS,
+        billing_address: BUYER_ADDRESS,
+        shipping_carrier_code: "flatrate",
+        shipping_method_code: "flatrate",
+      },
+    });
+    const orderId = await magentoRest<number>("POST", `/guest-carts/${cart}/payment-information`, {
+      email: BUYER_ADDRESS.email,
+      paymentMethod: { method: "btcpay" },
+      billingAddress: BUYER_ADDRESS,
+    });
+    const order = await magentoRest<{ increment_id: string; grand_total: number }>(
+      "GET",
+      `/orders/${orderId}`,
+      undefined,
+      token,
+    );
+    const forward = await magentoScript(
+      btcpay.network,
+      "forward-to-payment.php",
+      order.increment_id,
+    );
+    const invoiceId =
+      forward.url?.match(/\/i\/([A-Za-z0-9]+)/)?.[1] ??
+      new URL(forward.url || "http://x/").searchParams.get("id") ??
+      "";
+    checks.push(
+      check(
+        "store_invoice",
+        invoiceId.length > 0,
+        "After Place Order with Pay with Bitcoin, the module created a BTCPay invoice and sent the buyer to it.",
+        `order ${order.increment_id} for ${order.grand_total}: ${forward.url}`,
+      ),
+    );
+    if (invoiceId.length === 0) return checks;
+    const settled = await payInvoice(btcpay, wallet, invoiceId);
+    checks.push(
+      check(
+        "btcpay_settled",
+        settled,
+        "The trial wallet paid the invoice's Lightning invoice and BTCPay marked it Settled.",
+        invoiceId,
+      ),
+    );
+    let state: Record<string, string> = {};
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      state = await magentoScript(btcpay.network, "order-state.php", order.increment_id);
+      if (state.invoiced === "1") break;
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+    }
+    checks.push(
+      check(
+        "store_notified",
+        state.invoiced === "1",
+        "BTCPay's webhook reached Magento and the module invoiced the order.",
+        `order ${state.state}/${state.status}, invoiced ${state.invoiced}, paid ${state.paid}`,
+      ),
+    );
+    if (state.invoiced !== "1") {
+      // The module's 5-minute cron poll, run once by hand.
+      await magentoCompose(btcpay.network, [
+        "exec",
+        "-T",
+        "-u",
+        "www-data",
+        "magento",
+        "bin/magento",
+        "btcpay:invoices:update",
+      ]);
+      state = await magentoScript(btcpay.network, "order-state.php", order.increment_id);
+    }
+    checks.push(
+      check(
+        "store_order_paid",
+        state.invoiced === "1" && Number(state.paid) >= order.grand_total,
+        "Magento's order is invoiced and its whole total paid.",
+        `order ${state.state}/${state.status}, paid ${state.paid}`,
+      ),
+    );
+    return checks;
+  } finally {
+    if (!keep)
+      await magentoCompose(btcpay.network, ["down", "-v", "--remove-orphans"]).catch(() => "");
+  }
+}
+
 const STORES: Record<string, Store> = {
   odoo: { ssrfException: "odoo:8069", run: runOdoo },
+  magento: { ssrfException: "magento:80", run: runMagento },
 };
 
 async function main(): Promise<void> {
