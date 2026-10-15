@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.27 - 2026-10-15
+
+Release with the complete 0.4.27 package family. Fixed: a host without
+ActiveJob (`rails new --minimal`, or an app that loads only the railties it
+uses) could not boot in production, because eager loading reached
+`OpenReceive::ReconcileJob` and stopped with `uninitialized constant
+OpenReceive::ActiveJob`; so did `bin/rails generate openreceive:install`.
+The engine now skips its `app/jobs` when ActiveJob is not loaded.
+
 ## 0.4.26 - 2026-10-14
 
 Release with the complete 0.4.26 package family. No runtime changes from

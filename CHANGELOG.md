@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.27 - 2026-10-15
 
 - Added (Node): a `cors: { origins }` option on `createStack` and the
   `@openreceive/http` handler, for routes on another site than the shop's
@@ -10,7 +10,7 @@
   sites, so the page sends a token (the React `<Checkout fetch>`) and
   `authorize` checks it. The Supabase guide gains an Edge Functions section,
   and CI runs the engine in Supabase's edge-runtime on both storage routes.
-
+  Supabase's hosted platform and Bolt are not tested.
 - Changed (Express): the adapter reads the request body itself when no
   Express body parser ran before it, so a checkout no longer answers 500 when
   `express.json()` is missing or mounted after OpenReceive. NestJS no longer
@@ -18,7 +18,9 @@
   when a route needs it, after the cross-site and content-type checks, and
   under the same 64 KB cap; a larger one answers 413. When something else
   already drained the body without setting `req.body`, the adapter still
-  answers the 500 that names the missing body parser.
+  answers the 500 that names the missing body parser. The NestJS quickstart
+  and directions drop the rule; the API reference describes the behaviour
+  under `openReceiveExpress`.
 - Docs: agent directions for mobile apps (React Native or Expo, Flutter,
   Swift, Kotlin), at /agent-directions/mobile.md and in the skill as
   `references/mobile.md`. They check what the app sells against the store
@@ -70,6 +72,10 @@
   Next.js, the recipe stacks and Lovable were missing. The skill's own
   description adds Flask, Lovable and Supabase. /agents puts each install
   command in its own block with a copy button.
+- Docs (Rails): the quickstart and directions say to add `<%= csrf_meta_tags %>`
+  to the layout that renders the checkout when it is missing, since without
+  it every checkout answers 403, and never to skip forgery protection to get
+  past that.
 - Docs (Rails): slim images also need `libssl-dev`. `nwc-ruby`'s connection
   libraries need a newer `openssl` gem than Ruby ships, and Bundler compiles
   it against the OpenSSL headers.

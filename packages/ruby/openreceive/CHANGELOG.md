@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.27 - 2026-10-15
+
+Release with the complete 0.4.27 package family. The bundled agent skill
+adds mobile app directions and directions for SvelteKit, Nuxt, Astro, React
+Router and TanStack Start. Its Rails directions say to add `csrf_meta_tags`
+to the checkout's layout when it is missing, and that slim images need
+`libssl-dev`. No Ruby runtime changes from 0.4.26.
+
 ## 0.4.26 - 2026-10-14
 
 Release with the complete 0.4.26 package family. The bundled agent skill's
