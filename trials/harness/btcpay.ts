@@ -85,6 +85,13 @@ async function loadState(directory: string): Promise<BtcpayState> {
   return JSON.parse(await readFile(stateFile(directory), "utf8")) as BtcpayState;
 }
 
+/** The merchant's admin login and the harness's key, for the BTCPay-route stores. */
+export async function btcpayMerchant(
+  directory: string,
+): Promise<BtcpayState & { readonly email: string; readonly password: string }> {
+  return { ...(await loadState(directory)), email: ADMIN_EMAIL, password: ADMIN_PASSWORD };
+}
+
 /**
  * The merchant's own setup, before the agent starts: the first user (an
  * admin), a key for the harness, the store and its Point of Sale app, and a

@@ -1,0 +1,43 @@
+# Odoo 19 with BTCPay Server's payment addon, on the trial BTCPay's Docker
+# network (BTCPAY_NETWORK): trials/harness/btcpay-route.ts starts both. BTCPay
+# reaches the store as odoo:8069 for its notifications, which BTCPay 2.4.5
+# allows only with BTCPAY_SSRFEXCEPTIONS=odoo:8069.
+services:
+  odoo-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "odoo"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  odoo:
+    build:
+      context: .
+      network: host
+    command: ["odoo", "--database", "shop", "--db-filter", "^shop$"]
+    environment:
+      HOST: odoo-db
+      USER: odoo
+      PASSWORD: odoo
+    ports:
+      - "127.0.0.1:18069:8069"
+    volumes:
+      # The filestore: `run --rm` creates the database, and the server reads it.
+      - odoo-data:/var/lib/odoo
+    depends_on:
+      odoo-db:
+        condition: service_healthy
+    networks:
+      default: {}
+      btcpay:
+        aliases: [odoo]
+volumes:
+  odoo-data:
+networks:
+  btcpay:
+    external: true
+    name: ${BTCPAY_NETWORK:?the trial BTCPay's network}

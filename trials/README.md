@@ -352,6 +352,32 @@ npm run trial -- --platform btcpay --smoke
 npm run trial -- --platform btcpay --serve-directions
 ```
 
+## The BTCPay route
+
+Some platforms reach OpenReceive through BTCPay Server: the store runs its
+own BTCPay integration, and BTCPay takes the payment with the OpenReceive
+plugin. A platform is listed that way only after it runs end to end here:
+
+```sh
+npm run trial:btcpay-route -- --store odoo [--keep]
+```
+
+No agent and no model take part. The harness starts the btcpay trial's
+stock BTCPay with the published plugin installed and the trial wallet as the
+store's Lightning node, then starts the store from `btcpay-route/<store>`
+on BTCPay's Docker network. It sets the store up as its merchant would and
+buys one product: the store must send the buyer to a BTCPay invoice, BTCPay
+must settle it when the trial wallet pays, and the store must mark its own
+order paid from BTCPay's notification. BTCPay 2.4.5 refuses outbound HTTP to
+private addresses, so the harness lists the store's host in
+`BTCPAY_SSRFEXCEPTIONS`, as a merchant whose store sits on a private network
+must too.
+
+- `odoo`: Odoo 19 Community with btcpayserver/odoo v19.0.1.1, on BTCPay's
+  BitPay-compatible API. The provider pairs with a code the store owner
+  approves in BTCPay (Store Settings, Access Tokens), which only BTCPay's UI
+  makes, so the harness does that step in a headless browser.
+
 ## Passed
 
 A platform counts as passed after three live runs in a row exit 0
