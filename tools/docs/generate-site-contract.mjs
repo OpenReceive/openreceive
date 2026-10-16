@@ -58,6 +58,11 @@ const AGENT_PAYLOADS = [
   { path: "/agent-directions/php.md", source: "docs/agents/php.md", stack: "php" },
   { path: "/agent-directions/laravel.md", source: "docs/agents/laravel.md", stack: "laravel" },
   { path: "/agent-directions/btcpay.md", source: "docs/agents/btcpay.md", stack: "btcpay" },
+  {
+    path: "/agent-directions/paymenter.md",
+    source: "docs/agents/paymenter.md",
+    stack: "paymenter",
+  },
   { path: "/agent-directions/lovable.md", source: "docs/agents/lovable.md", stack: "lovable" },
   {
     path: "/agent-directions/sveltekit.md",
@@ -387,6 +392,33 @@ const FRAMEWORKS = [
       secrets: "The store's OpenReceive settings, in BTCPay Server's database",
       refunds:
         "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, so BTCPay's Lightning refunds are off. A payer reclaims a swap deposit that never converted from the invoice page.",
+      mobile: STORE_MOBILE,
+    },
+  },
+  // A billing panel for hosting companies. The extension is one folder from
+  // the GitHub release; its Tested badge comes from agent trials like the
+  // WooCommerce plugin's.
+  {
+    id: "paymenter",
+    label: "Paymenter",
+    type: "plugin",
+    family: "php",
+    quickstart_slug: "quickstart-paymenter",
+    agent_stack: "paymenter",
+    adapter_package: "openreceive-paymenter",
+    install:
+      "Unzip openreceive-paymenter-<version>.zip into extensions/Gateways, then php artisan app:extension:install gateway OpenReceive",
+    requires: "Paymenter ≥ 1.5, PHP ≥ 8.3, GMP and sodium",
+    demo: null,
+    example_path: "packages/php/paymenter",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "Paymenter 1.5.9, its official Docker image, on PHP 8.3",
+      databases: "MySQL or MariaDB, Paymenter's own database",
+      secrets: "The gateway's settings, encrypted by Paymenter with its APP_KEY",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment dialog.",
       mobile: STORE_MOBILE,
     },
   },

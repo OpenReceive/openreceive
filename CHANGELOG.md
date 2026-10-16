@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Added (Paymenter): a gateway extension for Paymenter 1.5+, the open-source
+  billing panel for hosting companies. Each GitHub release attaches
+  `openreceive-paymenter-<version>.zip`, one `OpenReceive` folder for
+  Paymenter's `extensions/Gateways/` with the engine and the checkout script
+  bundled. The client pays from the invoice's own payment dialog; the payment
+  is recorded on the invoice with Paymenter's own call, in the transaction
+  that settles it, with the payment hash as its transaction id. Artisan
+  commands save codes from stdin (`openreceive:configure`), check the install
+  (`openreceive:doctor`), mint a test invoice (`openreceive:test-invoice`) and
+  run a reconcile pass, which Paymenter's scheduler also runs every minute.
+  Docs: the Paymenter quickstart and agent directions
+  (/agent-directions/paymenter.md, `references/paymenter.md` in the skill).
 - Docs: a Bolt guide (/guides/bolt), agent directions for Bolt
   (/agent-directions/bolt.md, and `references/bolt.md` in the skill), and a
   Supabase Edge Functions recipe. Bolt apps are Vite React pages on one site

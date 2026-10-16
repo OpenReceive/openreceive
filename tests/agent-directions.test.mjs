@@ -253,7 +253,8 @@ test("the @openreceive/node payloads say doctor reads the env file and never to 
 // both called stablecoins unavailable on a $1–$7 shop over one swap minimum.
 test("every library payload ends with setup finished and keeps the agent in the app", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
+    ({ stack }) =>
+      !["woocommerce", "paymenter", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
   );
   assert.equal(libraries.length, 15);
   for (const { stack, text } of libraries) {
@@ -287,7 +288,8 @@ test("every library payload ends with setup finished and keeps the agent in the 
 // a shared machine stops other people's servers.
 test("every library payload's Step 0 sends the swap walkthrough, checks codes by name, and restarts by pid", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
+    ({ stack }) =>
+      !["woocommerce", "paymenter", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -314,7 +316,8 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
 // buyer got a 403: the quickstart's own example did the same.
 test("every library payload writes codes with the file tool, and Express, Fastify and NestJS read the session from native", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
+    ({ stack }) =>
+      !["woocommerce", "paymenter", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -360,6 +363,38 @@ test("the WooCommerce hand-over is short and never calls a coin unavailable", ()
   assert.match(ending, /starts "Setup is finished" and has at most six short lines/);
   assert.match(ending, /Do not list\s+each coin's availability, mention a minimum/);
   assert.match(ending, /Send nothing\s+after it/);
+});
+
+// Paymenter takes the WooCommerce shape: a release ZIP, codes through stdin,
+// a doctor and a test invoice. Its own trap is artisan as root, which leaves
+// Paymenter's log owned by root and fails every page after it.
+test("the Paymenter payload pins the release ZIP, runs artisan as the web user and ends at test-invoice", () => {
+  const text = payloads.find(({ stack }) => stack === "paymenter").text;
+  const step = stepZero(text);
+  const stepThree = text.match(/^## Step 3\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+  assert.ok(
+    text.includes(
+      `https://github.com/OpenReceive/openreceive/releases/download/v${release}/openreceive-paymenter-${release}.zip`,
+    ),
+    "the extension ZIP is pinned to this release",
+  );
+  assert.doesNotMatch(text, /\{\{release\}\}/);
+  assert.match(text, /php artisan app:extension:install gateway OpenReceive/);
+  assert.match(text, /openreceive:configure --nwc-uri=- < \/tmp\/openreceive-code/);
+  assert.match(text, /--lsc-uri-primary=-/);
+  assert.match(text, /file-editing tool, not a shell command/);
+  assert.match(text, /docker compose exec -T -u nginx paymenter php artisan/);
+  assert.match(text, /Run `php artisan` as the web server's user, never as root\./);
+  assert.match(step, /this message IS the walkthrough/);
+  assert.match(step, /do not tell them to revoke or replace a\s+code because it was pasted here/);
+  assert.match(stepThree, /php artisan openreceive:test-invoice --new/);
+  assert.match(stepThree, /You cannot pay the invoice/);
+  assert.match(stepThree, /Setup ends here\./);
+  assert.match(stepThree, /starts "Setup is finished" and has at most six short lines/);
+  assert.match(stepThree, /Do not\s+list each coin's availability, mention a minimum/);
+  assert.match(stepThree, /Do not add containers, services, workers or cron jobs/);
+  assert.match(text, /Never read or run anything from another project/);
+  assert.match(text, /`tinker` and reading the extension's source are not part of setup/);
 });
 
 // Lovable's agent has no terminal and Lovable keeps codes as project secrets:

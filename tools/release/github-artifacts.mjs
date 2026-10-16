@@ -23,6 +23,7 @@ export function releaseArtifacts(version, gemVersion = toGemVersion(root, versio
     `.release/pypi/${version}/openreceive-${pythonVersion}.tar.gz`,
     `dist/standalone-checkout-${version}.tar.gz`,
     `dist/openreceive-wordpress-${version}.zip`,
+    `dist/openreceive-paymenter-${version}.zip`,
     `dist/openreceive-docs-${version}.tar.gz`,
   ];
 }

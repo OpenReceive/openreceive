@@ -43,6 +43,7 @@ your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.
 [FastAPI](https://openreceive.org/agent-directions/fastapi/full.md) ·
 [Flask](https://openreceive.org/agent-directions/flask/full.md) ·
 [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) ·
+[Paymenter](https://openreceive.org/agent-directions/paymenter/full.md) ·
 [Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
 [Bolt](https://openreceive.org/agent-directions/bolt/full.md) ·
 [SvelteKit](https://openreceive.org/agent-directions/sveltekit/full.md) ·

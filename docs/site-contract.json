@@ -719,6 +719,16 @@
       "bytes": 10479
     },
     {
+      "path": "/guides/quickstart-paymenter",
+      "markdown_path": "/guides/quickstart-paymenter.md",
+      "source": "docs/guides/quickstart-paymenter.md",
+      "kind": "guide",
+      "slug": "quickstart-paymenter",
+      "title": "Paymenter Quickstart",
+      "category": "quickstart",
+      "bytes": 7123
+    },
+    {
       "path": "/guides/wordpress-hosting",
       "markdown_path": "/guides/wordpress-hosting.md",
       "source": "docs/guides/wordpress-hosting.md",
@@ -739,6 +749,16 @@
       "bytes": 23248
     },
     {
+      "path": "/guides/agent-directions-paymenter",
+      "markdown_path": "/guides/agent-directions-paymenter.md",
+      "source": "docs/agents/paymenter.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-paymenter",
+      "title": "Agent directions (Paymenter)",
+      "category": "agents",
+      "bytes": 18897
+    },
+    {
       "path": "/api_docs",
       "markdown_path": "/api_docs.md",
       "source": "docs/guides/api-reference.md",
@@ -757,7 +777,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 4822
+      "bytes": 4897
     },
     {
       "path": "/wordpress",
@@ -1034,6 +1054,27 @@
       "stack": "btcpay",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 15778,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/paymenter.md",
+      "source": "docs/agents/cover/paymenter.md",
+      "kind": "agent-directions-cover",
+      "stack": "paymenter",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 295,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/paymenter/full.md"
+    },
+    {
+      "path": "/agent-directions/paymenter/full.md",
+      "source": "docs/agents/paymenter.md",
+      "kind": "agent-directions-payload",
+      "stack": "paymenter",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 18897,
       "copy_button": true,
       "self_contained": true
     },
@@ -1454,6 +1495,35 @@
           "cursor/grok-4.7-medium-fast"
         ]
       }
+    },
+    {
+      "id": "paymenter",
+      "label": "Paymenter",
+      "family": "php",
+      "type": "plugin",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Paymenter",
+      "quickstart_slug": "quickstart-paymenter",
+      "quickstart_path": "/guides/quickstart-paymenter",
+      "quickstart_title": "Paymenter Quickstart",
+      "agent_stack": "paymenter",
+      "agent_payload_path": "/agent-directions/paymenter.md",
+      "agent_full_path": "/agent-directions/paymenter/full.md",
+      "adapter_package": "openreceive-paymenter",
+      "install": "Unzip openreceive-paymenter-<version>.zip into extensions/Gateways, then php artisan app:extension:install gateway OpenReceive",
+      "requires": "Paymenter ≥ 1.5, PHP ≥ 8.3, GMP and sodium",
+      "example_path": "packages/php/paymenter",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/php/paymenter",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "Paymenter 1.5.9, its official Docker image, on PHP 8.3",
+        "databases": "MySQL or MariaDB, Paymenter's own database",
+        "secrets": "The gateway's settings, encrypted by Paymenter with its APP_KEY",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment dialog.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": null
     },
     {
       "id": "odoo",
@@ -2489,7 +2559,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 8250
+        "bytes": 8478
       },
       {
         "path": "/openapi.yaml",

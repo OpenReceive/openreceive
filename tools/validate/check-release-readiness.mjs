@@ -333,6 +333,17 @@ for (const gemName of GEM_NAMES) {
     wordpressManifest.require["openreceive/openreceive"] === composerConstraint(releaseVersion),
     "WordPress engine constraint must match the workspace release",
   );
+  const paymenterManifest = readJson("packages/php/paymenter/composer.json");
+  expect(
+    paymenterManifest.require["openreceive/openreceive"] === composerConstraint(releaseVersion),
+    "Paymenter engine constraint must match the workspace release",
+  );
+  expect(
+    readFileSync(path.join(root, "packages/php/paymenter/Support/Runtime.php"), "utf8").includes(
+      `const VERSION = '${releaseVersion}';`,
+    ),
+    "Paymenter Runtime::VERSION must match the workspace release",
+  );
   const wordpressHeader = readFileSync(
     path.join(root, "packages/php/wordpress/openreceive.php"),
     "utf8",

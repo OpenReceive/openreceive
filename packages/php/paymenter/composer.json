@@ -1,0 +1,64 @@
+{
+  "name": "openreceive/paymenter",
+  "description": "Accept Bitcoin Lightning payments in Paymenter with your own wallet and existing database. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
+  "type": "project",
+  "license": "MIT",
+  "homepage": "https://openreceive.org/integrations/paymenter",
+  "support": {
+    "issues": "https://github.com/OpenReceive/openreceive/issues",
+    "source": "https://github.com/OpenReceive/openreceive",
+    "docs": "https://openreceive.org/guides/quickstart-paymenter"
+  },
+  "require": {
+    "php": "^8.2",
+    "ext-sodium": "*",
+    "ext-gmp": "*",
+    "nyholm/psr7": "^1.8",
+    "openreceive/openreceive": "~0.4.27"
+  },
+  "require-dev": {
+    "brianhenryie/strauss": "^0.26",
+    "illuminate/database": "^11.0 || ^12.0",
+    "phpunit/phpunit": "^11.5"
+  },
+  "replace": {
+    "paragonie/sodium_compat": "*"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Paymenter\\Extensions\\Gateways\\OpenReceive\\Support\\": "Support/",
+      "Paymenter\\Extensions\\Gateways\\OpenReceive\\Tests\\": "tests/"
+    }
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../openreceive",
+      "options": {
+        "symlink": false,
+        "versions": {
+          "openreceive/openreceive": "0.4.27"
+        }
+      }
+    }
+  ],
+  "extra": {
+    "strauss": {
+      "namespace_prefix": "OpenReceive\\Paymenter\\Vendor\\",
+      "classmap_prefix": "OpenReceive_Paymenter_Vendor_",
+      "constant_prefix": "",
+      "target_directory": "vendor-prefixed",
+      "update_call_sites": ["Support", "database"],
+      "include_modified_date": false
+    }
+  },
+  "config": {
+    "platform": {
+      "php": "8.2.0"
+    },
+    "sort-packages": true
+  },
+  "scripts": {
+    "test": "phpunit"
+  }
+}

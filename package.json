@@ -94,6 +94,8 @@
     "release:wordpress:plan": "node tools/release/wordpress-plugin.mjs plan",
     "release:wordpress:build": "node tools/release/wordpress-plugin.mjs build",
     "release:wordpress:publish": "node tools/release/wordpress-plugin.mjs publish",
+    "release:paymenter:plan": "node tools/release/paymenter-extension.mjs plan",
+    "release:paymenter:build": "node tools/release/paymenter-extension.mjs build",
     "test:e2e:wordpress": "playwright test --config tests/e2e-wordpress/playwright.config.ts",
     "test:wordpress": "bash tools/ci/wordpress-tests.sh",
     "trial": "node --import tsx trials/harness/run.ts",

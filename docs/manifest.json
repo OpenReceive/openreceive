@@ -730,6 +730,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-paymenter",
+      "title": "Paymenter Quickstart",
+      "source_path": "docs/guides/quickstart-paymenter.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "wordpress-hosting",
       "title": "WordPress Hosting Requirements",
       "source_path": "docs/guides/wordpress-hosting.md",
@@ -741,6 +749,14 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "source_path": "docs/agents/woocommerce.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-paymenter",
+      "title": "Agent directions (Paymenter)",
+      "source_path": "docs/agents/paymenter.md",
       "category": "agents",
       "audience": "developer",
       "public": true

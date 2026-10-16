@@ -76,6 +76,17 @@ const WOOCOMMERCE_BRIEF = [
   'Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
 ];
 
+// Paymenter's extension is one folder plus artisan commands, so Step 0 is the
+// plugin's: the same rules break first.
+const PAYMENTER_BRIEF = [
+  ASK_NWC_FIRST,
+  ASK_LSC_NEXT,
+  "The user only pastes codes into this chat. Never ask them to run a command, edit a file or use an admin page.",
+  "Store each code yourself as Step 2 says. Never put a code in a shell command.",
+  NO_ROTATION,
+  'Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
+];
+
 // A mobile app takes the payment on its server's checkout page, so its list
 // is about where the codes may and may not go.
 const MOBILE_BRIEF = [
@@ -140,6 +151,14 @@ const STACKS = [
     // screens read as a second procedure unless the payload says what they are for.
     quickstartRole:
       "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its wp-admin screens are only for a store with no WP-CLI.",
+  },
+  {
+    stack: "paymenter",
+    source: "docs/agents/src/paymenter.md",
+    quickstart: "docs/guides/quickstart-paymenter.md",
+    brief: PAYMENTER_BRIEF,
+    quickstartRole:
+      "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its admin-area screens are only for a Paymenter with no shell.",
   },
   {
     stack: "node",
@@ -295,6 +314,8 @@ const STACKS = [
  */
 const UNLISTED_GUIDES = {
   "agent-directions-woocommerce": "this payload’s own page",
+  "agent-directions-paymenter": "this payload's own page",
+  "quickstart-paymenter": "inlined in full below, or another stack's",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
   odoo: "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
@@ -388,6 +409,33 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "WordPress keeps its data in MySQL",
     serverless: "WordPress runs on an ordinary PHP host",
     "mobile-apps": "the WooCommerce store's own checkout is the payment page",
+  },
+  paymenter: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "frontend-checkout",
+        "checkout-ux",
+        "headless-checkout",
+        "custom-checkout-route",
+        "provider-registry",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "react-material-ui-recipe",
+        "node-orms",
+      ].map((slug) => [
+        slug,
+        "the Paymenter extension supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    supabase: "Paymenter keeps its data in MySQL or MariaDB",
+    serverless: "Paymenter runs on an ordinary PHP host",
+    "mobile-apps": "Paymenter's own invoice page is the payment page",
+    "wordpress-hosting": "WordPress hosts only",
   },
   btcpay: {
     authorization:

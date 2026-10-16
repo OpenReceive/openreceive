@@ -317,6 +317,8 @@ Run from the repo root on a clean, current `master`.
    uvx --from pip pip download --no-deps --no-binary=:all: --dest .release/pypi/<x.y.z> openreceive==<pep440-version>
    composer install --working-dir=packages/php/wordpress
    npm run release:wordpress:build
+   composer install --working-dir=packages/php/paymenter
+   npm run release:paymenter:build
    npm run build:docs
    npm run release:artifacts -- check
    npm run release:artifacts -- draft /path/to/release-notes.md
@@ -325,9 +327,9 @@ Run from the repo root on a clean, current `master`.
 
    The artifact tool derives filenames from the public npm and gem lists and
    registry version conversions. It refuses to create the draft when any of the
-   22 required assets is missing: 14 npm tarballs, 3 gems, Python wheel and sdist,
-   standalone checkout, WordPress ZIP, and docs bundle. It never substitutes an
-   older WordPress ZIP. The source-tag build is the documented fallback for
+   23 required assets is missing: 14 npm tarballs, 3 gems, Python wheel and sdist,
+   standalone checkout, WordPress ZIP, Paymenter ZIP, and docs bundle. It never
+   substitutes an older WordPress or Paymenter ZIP. The source-tag build is the documented fallback for
    historical releases with a missing ZIP. WordPress builds require PHP GMP,
    sodium, Composer and WP-CLI, in addition to the completed standalone build.
 

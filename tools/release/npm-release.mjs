@@ -377,13 +377,17 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     }
   }
 
-  const quickstart = "docs/guides/quickstart-woocommerce.md";
-  const quickstartPath = path.join(root, quickstart);
-  if (existsSync(quickstartPath)) {
+  // Both quickstarts link their release ZIP by version.
+  for (const [quickstart, zip] of [
+    ["docs/guides/quickstart-woocommerce.md", "wordpress"],
+    ["docs/guides/quickstart-paymenter.md", "paymenter"],
+  ]) {
+    const quickstartPath = path.join(root, quickstart);
+    if (!existsSync(quickstartPath)) continue;
     const source = readFileSync(quickstartPath, "utf8");
     const updated = source
       .replaceAll(`v${currentVersion}`, `v${targetVersion}`)
-      .replaceAll(`wordpress-${currentVersion}.zip`, `wordpress-${targetVersion}.zip`);
+      .replaceAll(`${zip}-${currentVersion}.zip`, `${zip}-${targetVersion}.zip`);
     if (updated !== source) {
       writeFileSync(quickstartPath, updated);
       changed.push(quickstart);
@@ -469,9 +473,13 @@ function dryRunPrepare(root, targetVersion) {
       "packages/php/wordpress/composer.lock",
       "packages/php/wordpress/openreceive.php",
       "packages/php/wordpress/readme.txt",
+      "packages/php/paymenter/composer.json",
+      "packages/php/paymenter/composer.lock",
+      "packages/php/paymenter/Support/Runtime.php",
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "docs/guides/quickstart-woocommerce.md",
+      "docs/guides/quickstart-paymenter.md",
       "package-lock.json",
     ]
       .filter((file, index, all) => all.indexOf(file) === index)

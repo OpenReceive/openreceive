@@ -34,6 +34,10 @@ const GENERATED_REFERENCES = [
     source: "docs/agents/woocommerce.md",
     target: "skills/integrate-openreceive/references/woocommerce.md",
   },
+  {
+    source: "docs/agents/paymenter.md",
+    target: "skills/integrate-openreceive/references/paymenter.md",
+  },
   { source: "docs/agents/node.md", target: "skills/integrate-openreceive/references/node.md" },
   {
     source: "docs/agents/fastify.md",
