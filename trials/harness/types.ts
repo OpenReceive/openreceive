@@ -132,6 +132,8 @@ export interface Platform {
    * FOSSBilling's shop and pays on its payment page in Chromium.
    */
   readonly host?: "btcpay" | "bolt" | "paymenter" | "fossbilling";
+  /** The WordPress post type the five seeded products are: WooCommerce's `product` when omitted, `download` for Easy Digital Downloads. */
+  readonly wordpress_post_type?: string;
   /** Compose service that publishes the shop. WordPress when omitted. */
   readonly service?: string;
   /** Port inside that service. 80 when omitted. */

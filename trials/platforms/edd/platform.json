@@ -1,0 +1,25 @@
+{
+  "slug": "edd",
+  "name": "WordPress + Easy Digital Downloads",
+  "directions": "docs/agents/edd.md",
+  "prompt_name": "WordPress store",
+  "doctor": "wp openreceive doctor",
+  "credential_store": {
+    "kind": "wp-option",
+    "where": "woocommerce_openreceive_settings"
+  },
+  "allowed_install_paths": ["release-zip"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "wp-content/plugins/openreceive",
+    "openreceive/v1"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "closing_max_lines": 8,
+  "wallet_services": ["wordpress", "cli"],
+  "wordpress_post_type": "download"
+}

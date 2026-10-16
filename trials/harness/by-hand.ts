@@ -44,6 +44,7 @@ const BY_HAND_PLATFORMS = [
   "php",
   "laravel",
   "woocommerce",
+  "edd",
   "paymenter",
   "fossbilling",
 ] as const;

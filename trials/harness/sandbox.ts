@@ -282,7 +282,7 @@ export async function inspectShop(directory: string, platform: Platform): Promis
       "wp",
       "post",
       "list",
-      "--post_type=product",
+      `--post_type=${platform.wordpress_post_type ?? "product"}`,
       "--format=count",
     ],
     120_000,
