@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveShopChecks } from "./live.ts";
 import { openingFor } from "./loop.ts";
+import { livePaymenterChecks } from "./paymenter.ts";
 import {
   inspectShop,
   orderStatus,
@@ -42,6 +43,7 @@ const BY_HAND_PLATFORMS = [
   "php",
   "laravel",
   "woocommerce",
+  "paymenter",
 ] as const;
 
 interface State {
@@ -129,7 +131,7 @@ NWC code file:    ${path.join(codes, "nwc")}
 LSC code file:    ${swaps ? path.join(codes, "lsc") : "(none: this shop is Bitcoin only)"}${
     platform.live === true
       ? `
-order status:     docker compose exec -T ${platform.service ?? "web"} ${(platform.probes?.orderStatus ?? []).slice(3).join(" ") || "node bin/order-status.js"} <order id>`
+order status:     docker compose ${platform.probes?.orderStatus?.map((part) => (/\s/.test(part) ? `'${part}'` : part)).join(" ") ?? `exec -T ${platform.service ?? "web"} node bin/order-status.js`} <order id>`
       : ""
   }
 afterwards:       npm run trial:by-hand -- check --shop ${directory}`);
@@ -152,13 +154,16 @@ async function checkShop(argv: readonly string[]): Promise<void> {
       settle: wallet.settle,
       orderStatus: (id: string) => orderStatus(directory, platform, id),
     };
+    const options = {
+      paid,
+      ...(platform.swap_provider !== "live"
+        ? { swap: { ...paid, complete: wallet.completeSwap } }
+        : {}),
+    };
     checks.push(
-      ...(await liveShopChecks(state.baseUrl, {
-        paid,
-        ...(platform.swap_provider !== "live"
-          ? { swap: { ...paid, complete: wallet.completeSwap } }
-          : {}),
-      })),
+      ...(platform.host === "paymenter"
+        ? await livePaymenterChecks(state.baseUrl, options)
+        : await liveShopChecks(state.baseUrl, options)),
     );
   } else {
     console.log(

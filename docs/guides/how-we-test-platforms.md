@@ -66,6 +66,11 @@ Every check must pass:
   order page's checkout gets its invoice from the function; another signed-in
   user, and the project's public key with no user, are refused; and an order
   the browser writes at a lower price is refused or charged the catalog price;
+- on a billing panel such as Paymenter: in a real browser, a signed-in client
+  orders through the panel's own shop and pays the new invoice from its
+  payment dialog; another client and a visitor who is not signed in are
+  refused; and once the test wallet pays, the invoice reads paid, by Lightning
+  and by swap;
 - on a database platform such as Supabase, OpenReceive's tables end up closed
   to the platform's public API, which every visitor's browser can reach;
 - on a hosting platform:

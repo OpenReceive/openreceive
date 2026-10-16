@@ -1,0 +1,62 @@
+{
+  "slug": "paymenter",
+  "name": "Paymenter",
+  "directions": "docs/agents/paymenter.md",
+  "prompt_name": "Paymenter billing panel",
+  "doctor": "php artisan openreceive:doctor",
+  "credential_store": {
+    "kind": "gateway-setting",
+    "where": "the OpenReceive gateway's encrypted settings (php artisan openreceive:configure)"
+  },
+  "allowed_install_paths": ["release-zip"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\btinker\\b",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "closing_max_lines": 8,
+  "live": true,
+  "host": "paymenter",
+  "service": "paymenter",
+  "container_port": 80,
+  "seed": false,
+  "wallet_services": ["paymenter"],
+  "logs": ["logs", "--no-color", "--tail", "60", "paymenter"],
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "-u",
+      "nginx",
+      "paymenter",
+      "php",
+      "artisan",
+      "tinker",
+      "--execute",
+      "echo App\\Models\\Product::count(), PHP_EOL;"
+    ],
+    "openreceive": [
+      "exec",
+      "-T",
+      "paymenter",
+      "sh",
+      "-c",
+      "test -e /app/extensions/Gateways/OpenReceive && echo yes || echo no"
+    ],
+    "orderStatus": [
+      "exec",
+      "-T",
+      "database",
+      "sh",
+      "-c",
+      "mariadb -upaymenter -ppaymenter-local -N paymenter -e \"select status from invoices where id = $1\"",
+      "sh"
+    ]
+  }
+}

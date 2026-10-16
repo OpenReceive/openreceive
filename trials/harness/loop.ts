@@ -1,6 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AgentAdapter } from "./agents.ts";
+import { liveBoltChecks } from "./bolt.ts";
+import { asksPluginInstall, btcpayChecks, installPlugin, liveBtcpayChecks } from "./btcpay.ts";
 import {
   blockersFailed,
   closingChecks,
@@ -12,14 +15,12 @@ import {
   scopeViolation,
 } from "./checks.ts";
 import type { MerchantCodes } from "./codes.ts";
-import type { AgentAdapter } from "./agents.ts";
-import { liveBoltChecks } from "./bolt.ts";
-import { asksPluginInstall, btcpayChecks, installPlugin, liveBtcpayChecks } from "./btcpay.ts";
 import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
 import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
+import { livePaymenterChecks } from "./paymenter.ts";
 import { redact } from "./redact.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { inspectShop, orderStatus, prepareShop, shopChecks, startShop } from "./sandbox.ts";
@@ -391,7 +392,9 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
           ? await liveBtcpayChecks(directory, request.wallet?.settle)
           : platform.host === "bolt"
             ? await liveBoltChecks(directory, sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
-            : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
+            : platform.host === "paymenter"
+              ? await livePaymenterChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
+              : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

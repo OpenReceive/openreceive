@@ -6,6 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { inspectBtcpay, removeBtcpayState, setupBtcpay } from "./btcpay.ts";
 import { compose, InfraError, platformOverrideFile, walletOverrideFile } from "./docker.ts";
+import { setupPaymenter } from "./paymenter.ts";
 import type { Check, Platform } from "./types.ts";
 
 const UP_TIMEOUT_MS = 6 * 60 * 1000;
@@ -189,6 +190,8 @@ export async function startShop(
     const baseUrl = `http://127.0.0.1:${await publishedPort(directory, service, containerPortOf(platform))}`;
     // A BTCPay merchant has an admin, a store and its products before the agent comes.
     if (platform.host === "btcpay") await setupBtcpay(directory, baseUrl);
+    // A Paymenter merchant has clients and products before the agent comes.
+    if (platform.host === "paymenter") await setupPaymenter(directory, baseUrl, seedDir);
     if (platform.seed === false) {
       return {
         id,

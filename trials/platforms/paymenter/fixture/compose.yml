@@ -1,0 +1,58 @@
+# Paymenter as its own docker-compose.example.yml runs it, pinned: the official
+# image, MariaDB and Redis, with no OpenReceive. ./extensions holds the
+# extensions, as in Paymenter's file. Its file mounts the project directory at
+# /app/var, where the image keeps the .env with the APP_KEY that encrypts
+# gateway settings; a trial's directory is private (mode 700), which the web
+# server's user could not read, so ./var stands in for it. The harness seeds
+# the owner, two clients and five products (seed/seed.php) and swaps 8080 for
+# a free port per run (sandbox.ts).
+services:
+  paymenter:
+    image: ghcr.io/paymenter/paymenter:v1.5.9
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - "./var:/app/var/"
+      - "./extensions:/app/extensions"
+    environment:
+      APP_ENV: production
+      CACHE_STORE: redis
+      REDIS_HOST: cache
+      DB_CONNECTION: mariadb
+      DB_HOST: database
+      DB_PORT: "3306"
+      DB_DATABASE: paymenter
+      DB_USERNAME: paymenter
+      DB_PASSWORD: paymenter-local
+      PAYMENTER_SKIP_DEFAULT: "false"
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_started
+    # Healthy once the entrypoint has migrated and nginx serves the shop.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+  database:
+    image: mariadb:11.8
+    environment:
+      MARIADB_DATABASE: paymenter
+      MARIADB_USER: paymenter
+      MARIADB_PASSWORD: paymenter-local
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  cache:
+    image: redis:7.4-alpine
+volumes:
+  database:

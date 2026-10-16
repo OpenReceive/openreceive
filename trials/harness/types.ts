@@ -124,8 +124,11 @@ export interface Platform {
    * `bolt`: a Vite React app whose payment routes are a Supabase Edge
    * Function on another site; bolt.ts buys through the page in Chromium and
    * calls the function with the buyer's token.
+   * `paymenter`: a Paymenter billing panel that paymenter.ts seeds with its
+   * owner, two clients and five products; the client orders through
+   * Paymenter's shop and pays from the invoice's payment dialog in Chromium.
    */
-  readonly host?: "btcpay" | "bolt";
+  readonly host?: "btcpay" | "bolt" | "paymenter";
   /** Compose service that publishes the shop. WordPress when omitted. */
   readonly service?: string;
   /** Port inside that service. 80 when omitted. */
