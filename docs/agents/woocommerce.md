@@ -235,7 +235,9 @@ The page it comes from is https://openreceive.org/guides/quickstart-woocommerce.
 
 The [WordPress integration entry point](https://openreceive.org/integrations/wordpress)
 redirects to the WooCommerce integration, which uses this same guide and agent
-directions. OpenReceive checkout on WordPress requires WooCommerce.
+directions. OpenReceive checkout on WordPress needs WooCommerce or Easy
+Digital Downloads; this guide covers WooCommerce, and the
+[Easy Digital Downloads quickstart](https://openreceive.org/guides/quickstart-edd.md) covers EDD.
 
 Activate WooCommerce first. Then install OpenReceive from the
 [WordPress.org plugin directory](https://wordpress.org/plugins/openreceive/):

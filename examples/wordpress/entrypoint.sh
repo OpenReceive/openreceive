@@ -20,7 +20,10 @@ if ! wp --allow-root core is-installed >/dev/null 2>&1; then
 fi
 # Refresh plugin code on rebuild even when the WordPress volume already exists.
 cp -a /usr/src/wordpress/wp-content/plugins/openreceive/. /var/www/html/wp-content/plugins/openreceive/
-wp --allow-root plugin activate woocommerce openreceive
+# A volume made before Easy Digital Downloads joined the image lacks it.
+[ -d /var/www/html/wp-content/plugins/easy-digital-downloads ] \
+  || cp -a /usr/src/wordpress/wp-content/plugins/easy-digital-downloads /var/www/html/wp-content/plugins/
+wp --allow-root plugin activate woocommerce easy-digital-downloads openreceive
 wp --allow-root eval-file /opt/demo/seed.php
 chown -R www-data:www-data /var/www/html/wp-content
 touch /tmp/openreceive-demo-ready

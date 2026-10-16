@@ -716,7 +716,17 @@
       "slug": "quickstart-woocommerce",
       "title": "WordPress + WooCommerce Quickstart",
       "category": "quickstart",
-      "bytes": 10479
+      "bytes": 10608
+    },
+    {
+      "path": "/guides/quickstart-edd",
+      "markdown_path": "/guides/quickstart-edd.md",
+      "source": "docs/guides/quickstart-edd.md",
+      "kind": "guide",
+      "slug": "quickstart-edd",
+      "title": "Easy Digital Downloads Quickstart",
+      "category": "quickstart",
+      "bytes": 8407
     },
     {
       "path": "/guides/quickstart-paymenter",
@@ -756,7 +766,17 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agents",
-      "bytes": 23248
+      "bytes": 23408
+    },
+    {
+      "path": "/guides/agent-directions-edd",
+      "markdown_path": "/guides/agent-directions-edd.md",
+      "source": "docs/agents/edd.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-edd",
+      "title": "Agent directions (Easy Digital Downloads)",
+      "category": "agents",
+      "bytes": 20870
     },
     {
       "path": "/guides/agent-directions-paymenter",
@@ -797,7 +817,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 4976
+      "bytes": 5058
     },
     {
       "path": "/wordpress",
@@ -842,7 +862,28 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 23248,
+      "bytes": 23408,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/edd.md",
+      "source": "docs/agents/cover/edd.md",
+      "kind": "agent-directions-cover",
+      "stack": "edd",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 314,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/edd/full.md"
+    },
+    {
+      "path": "/agent-directions/edd/full.md",
+      "source": "docs/agents/edd.md",
+      "kind": "agent-directions-payload",
+      "stack": "edd",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 20870,
       "copy_button": true,
       "self_contained": true
     },
@@ -1323,6 +1364,35 @@
           "codex/default"
         ]
       }
+    },
+    {
+      "id": "easy-digital-downloads",
+      "label": "WordPress + Easy Digital Downloads",
+      "family": "php",
+      "type": "plugin",
+      "heading": "Accept Bitcoin & Stablecoin Payments With WordPress + Easy Digital Downloads",
+      "quickstart_slug": "quickstart-edd",
+      "quickstart_path": "/guides/quickstart-edd",
+      "quickstart_title": "Easy Digital Downloads Quickstart",
+      "agent_stack": "edd",
+      "agent_payload_path": "/agent-directions/edd.md",
+      "agent_full_path": "/agent-directions/edd/full.md",
+      "adapter_package": "openreceive/wordpress",
+      "install": "wp plugin install openreceive --activate",
+      "requires": "WordPress ≥ 6.6, Easy Digital Downloads ≥ 3, PHP ≥ 8.2, GMP and sodium",
+      "example_path": "packages/php/wordpress",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/php/wordpress",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "WordPress 7.1 with Easy Digital Downloads 3.7, on PHP 8.2",
+        "databases": "MySQL 8, WordPress's own database",
+        "secrets": "The plugin's settings, encrypted with keys derived from WordPress's auth keys, or OPENRECEIVE_NWC_URI in wp-config.php",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's purchase confirmation page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": null
     },
     {
       "id": "express",
@@ -2629,7 +2699,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 8714
+        "bytes": 8956
       },
       {
         "path": "/openapi.yaml",

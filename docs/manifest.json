@@ -730,6 +730,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-edd",
+      "title": "Easy Digital Downloads Quickstart",
+      "source_path": "docs/guides/quickstart-edd.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-paymenter",
       "title": "Paymenter Quickstart",
       "source_path": "docs/guides/quickstart-paymenter.md",
@@ -757,6 +765,14 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "source_path": "docs/agents/woocommerce.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-edd",
+      "title": "Agent directions (Easy Digital Downloads)",
+      "source_path": "docs/agents/edd.md",
       "category": "agents",
       "audience": "developer",
       "public": true

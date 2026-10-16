@@ -42,6 +42,7 @@ Each stack has an integration page and a quickstart on openreceive.org:
 | Stack | Quickstart |
 | --- | --- |
 | [WooCommerce / WordPress](https://openreceive.org/integrations/woocommerce) | [WooCommerce quickstart](https://openreceive.org/guides/quickstart-woocommerce) |
+| [Easy Digital Downloads](https://openreceive.org/integrations/easy-digital-downloads) | [Easy Digital Downloads quickstart](https://openreceive.org/guides/quickstart-edd) |
 | [Paymenter](https://openreceive.org/integrations/paymenter) | [Paymenter quickstart](https://openreceive.org/guides/quickstart-paymenter) |
 | [FOSSBilling](https://openreceive.org/integrations/fossbilling) | [FOSSBilling quickstart](https://openreceive.org/guides/quickstart-fossbilling) |
 | [Express (Node.js)](https://openreceive.org/integrations/express) | [Express quickstart](https://openreceive.org/guides/quickstart-node) |

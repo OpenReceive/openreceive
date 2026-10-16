@@ -11,6 +11,7 @@ for hpos in yes no; do
   wp option update woocommerce_custom_orders_table_enabled "$hpos"
   wp eval-file /opt/demo/integration.php
 done
+wp eval-file /opt/demo/integration-edd.php
 
 # CLI failures are automation failures, and unsupported argv credentials are
 # never echoed. Opaque test text is deliberately not a wallet credential.
@@ -29,11 +30,15 @@ fi
 if [[ "$output" == *opaque-cli-test* || "$output" != *stdin* ]]; then
   echo "configure did not safely reject the argument" >&2; exit 1
 fi
-if output="$(wp --skip-plugins=woocommerce openreceive doctor 2>&1)"; then
-  echo "doctor succeeded without WooCommerce" >&2; exit 1
+if output="$(wp --skip-plugins=woocommerce,easy-digital-downloads openreceive doctor 2>&1)"; then
+  echo "doctor succeeded without a store" >&2; exit 1
 fi
-if [[ "$output" != *"WooCommerce: FAILED"* ]]; then
-  echo "doctor did not identify the failed dependency" >&2; exit 1
+if [[ "$output" != *"Store: FAILED"* ]]; then
+  echo "doctor did not identify the missing store" >&2; exit 1
+fi
+# Easy Digital Downloads alone runs it, with no WooCommerce.
+if ! output="$(wp --skip-plugins=woocommerce openreceive doctor 2>&1)" || [[ "$output" != *"Store: Easy Digital Downloads active"* ]]; then
+  echo "doctor did not pass on Easy Digital Downloads alone: $output" >&2; exit 1
 fi
 
 # The doctor a merchant runs prints no Node instructions.
@@ -62,3 +67,12 @@ if output="$(wp openreceive test-invoice 999999999 2>&1)"; then
   echo "test-invoice accepted a missing order" >&2; exit 1
 fi
 wp wc shop_order delete "$order" --force=true --user=demo >/dev/null
+
+# test-invoice --new makes a pending Easy Digital Downloads order and mints through its receipt page's route.
+output="$(wp openreceive test-invoice --new)"
+if [[ "$output" != *"Created test order #"* || "$output" != *"Invoice: ln"* || "$output" != *"Checkout methods on the receipt page:"* || "$output" != *"Receipt page"*"&order="* ]]; then
+  echo "test-invoice --new did not mint an EDD invoice: $output" >&2; exit 1
+fi
+if output="$(wp openreceive test-invoice edd-999999999 2>&1)"; then
+  echo "test-invoice accepted a missing EDD order" >&2; exit 1
+fi

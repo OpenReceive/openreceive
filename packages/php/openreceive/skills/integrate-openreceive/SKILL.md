@@ -5,6 +5,7 @@ description: >
   SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, NestJS,
   SvelteKit, Nuxt, Astro, React Router, TanStack Start, Rails,
   Python, Django, FastAPI, Flask, Laravel, plain PHP, WordPress/WooCommerce,
+  Easy Digital Downloads,
   Paymenter, FOSSBilling, Lovable, Bolt, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
   mobile apps (React Native, Expo, Flutter, Swift, Kotlin) through their
   server, or connecting BTCPay Server to a receive-only NWC wallet. A configured swap provider
@@ -50,6 +51,8 @@ connected wallet; asset and network availability depends on the provider.
      copied from the quickstart; there is no `openreceive.flask` package.
    - Laravel: [references/laravel.md](references/laravel.md)
    - WordPress + WooCommerce: [references/woocommerce.md](references/woocommerce.md) — the packaged gateway and merchant settings.
+   - WordPress + Easy Digital Downloads: [references/edd.md](references/edd.md) — the same
+     WordPress.org plugin, its EDD gateway and WP-CLI setup.
    - Paymenter: [references/paymenter.md](references/paymenter.md) — a gateway
      extension from the GitHub release, configured with artisan commands; no
      Composer or npm packages.

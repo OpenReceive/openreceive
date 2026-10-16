@@ -51,7 +51,7 @@ final class DemoWallet
     public static function service(): Service
     {
         $demo = self::$instance ??= new self();
-        return new Service($demo->wallet, new StaticPriceProvider(), [$demo->swap], [get_woocommerce_currency()]);
+        return new Service($demo->wallet, new StaticPriceProvider(), [$demo->swap], StoreHost::currencies());
     }
 
     public static function routes(): void

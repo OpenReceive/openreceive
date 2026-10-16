@@ -39,15 +39,19 @@ RUN composer install --working-dir=packages/php/wordpress --no-interaction --no-
 
 FROM php-base
 ARG WOOCOMMERCE_VERSION=11.1.0
+ARG EDD_VERSION=3.7.2
 RUN curl -fsSL "https://downloads.wordpress.org/plugin/woocommerce.${WOOCOMMERCE_VERSION}.zip" -o /tmp/woocommerce.zip \
     && unzip -q /tmp/woocommerce.zip -d /usr/src/wordpress/wp-content/plugins \
-    && rm /tmp/woocommerce.zip
+    && rm /tmp/woocommerce.zip \
+    && curl -fsSL "https://downloads.wordpress.org/plugin/easy-digital-downloads.${EDD_VERSION}.zip" -o /tmp/edd.zip \
+    && unzip -q /tmp/edd.zip -d /usr/src/wordpress/wp-content/plugins \
+    && rm /tmp/edd.zip
 COPY --from=plugin /build/dist/wordpress-build/openreceive /usr/src/wordpress/wp-content/plugins/openreceive
 COPY --from=plugin /build/dist/openreceive-wordpress-*.zip /opt/demo/
 COPY examples/wordpress/seed.php examples/wordpress/entrypoint.sh /opt/demo/
 COPY examples/buttons/shared/shop-catalog.json /opt/demo/shop-catalog.json
 COPY examples/buttons/images /opt/demo/images
-COPY packages/php/wordpress/tests/integration.php /opt/demo/integration.php
+COPY packages/php/wordpress/tests/integration.php packages/php/wordpress/tests/integration-edd.php /opt/demo/
 RUN chmod +x /opt/demo/entrypoint.sh \
     && sed -i 's/Listen 80/Listen 3009/' /etc/apache2/ports.conf \
     && sed -i 's/:80>/:3009>/' /etc/apache2/sites-available/000-default.conf

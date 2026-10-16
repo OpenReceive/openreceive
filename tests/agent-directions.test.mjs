@@ -254,9 +254,16 @@ test("the @openreceive/node payloads say doctor reads the env file and never to 
 test("every library payload ends with setup finished and keeps the agent in the app", () => {
   const libraries = payloads.filter(
     ({ stack }) =>
-      !["woocommerce", "paymenter", "fossbilling", "btcpay", "lovable", "bolt", "mobile"].includes(
-        stack,
-      ),
+      ![
+        "woocommerce",
+        "edd",
+        "paymenter",
+        "fossbilling",
+        "btcpay",
+        "lovable",
+        "bolt",
+        "mobile",
+      ].includes(stack),
   );
   assert.equal(libraries.length, 15);
   for (const { stack, text } of libraries) {
@@ -291,9 +298,16 @@ test("every library payload ends with setup finished and keeps the agent in the 
 test("every library payload's Step 0 sends the swap walkthrough, checks codes by name, and restarts by pid", () => {
   const libraries = payloads.filter(
     ({ stack }) =>
-      !["woocommerce", "paymenter", "fossbilling", "btcpay", "lovable", "bolt", "mobile"].includes(
-        stack,
-      ),
+      ![
+        "woocommerce",
+        "edd",
+        "paymenter",
+        "fossbilling",
+        "btcpay",
+        "lovable",
+        "bolt",
+        "mobile",
+      ].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -321,9 +335,16 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
 test("every library payload writes codes with the file tool, and Express, Fastify and NestJS read the session from native", () => {
   const libraries = payloads.filter(
     ({ stack }) =>
-      !["woocommerce", "paymenter", "fossbilling", "btcpay", "lovable", "bolt", "mobile"].includes(
-        stack,
-      ),
+      ![
+        "woocommerce",
+        "edd",
+        "paymenter",
+        "fossbilling",
+        "btcpay",
+        "lovable",
+        "bolt",
+        "mobile",
+      ].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -401,6 +422,40 @@ test("the Paymenter payload pins the release ZIP, runs artisan as the web user a
   assert.match(stepThree, /Do not add containers, services, workers or cron jobs/);
   assert.match(text, /Never read or run anything from another project/);
   assert.match(text, /`tinker` and reading the extension's source are not part of setup/);
+});
+
+// Easy Digital Downloads takes the WooCommerce shape, in the same plugin:
+// WP-CLI from stdin, --enable for EDD's active gateways, and a test order of
+// its own, since EDD has no order-create command an agent should reach for.
+test("the Easy Digital Downloads payload installs the WordPress plugin, enables the EDD gateway and ends at test-invoice", () => {
+  const text = payloads.find(({ stack }) => stack === "edd").text;
+  const step = stepZero(text);
+  const stepThree = text.match(/^## Step 3\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+  assert.match(
+    text,
+    new RegExp(
+      `wp plugin install openreceive --version=${release.replaceAll(".", "\\.")} --activate`,
+    ),
+  );
+  assert.ok(
+    text.includes(
+      `https://github.com/OpenReceive/openreceive/releases/download/v${release}/openreceive-wordpress-${release}.zip`,
+    ),
+  );
+  assert.doesNotMatch(text, /\{\{release\}\}/);
+  assert.match(text, /wp openreceive configure --nwc-uri=- < \/tmp\/openreceive-code/);
+  assert.match(
+    text,
+    /wp openreceive configure --enable`, which adds OpenReceive to EDD's\s+active gateways/,
+  );
+  assert.match(text, /Store: Easy Digital Downloads active/);
+  assert.match(text, /file-editing tool, not a shell command/);
+  assert.match(step, /this message IS the walkthrough/);
+  assert.match(stepThree, /wp openreceive test-invoice --new/);
+  assert.match(stepThree, /signed in\s+to WordPress as the shop manager/);
+  assert.match(stepThree, /You cannot pay the invoice/);
+  assert.match(stepThree, /starts "Setup is finished" and has at most six short lines/);
+  assert.match(text, /`wp eval` and reading the plugin's source are not part of setup/);
 });
 
 // FOSSBilling takes the Paymenter shape. Its own steps: the official image

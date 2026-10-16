@@ -89,14 +89,15 @@ final class Plugin
 
     /**
      * Admin notices appear only where a merchant manages OpenReceive: the
-     * Plugins screen and WooCommerce settings. $message returns escaped
-     * HTML, or null when there is nothing to report.
+     * Plugins screen, WooCommerce settings and Easy Digital Downloads
+     * settings. $message returns escaped HTML, or null when there is nothing
+     * to report.
      */
     private static function notice(string $capability, callable $message): void
     {
         add_action('admin_notices', static function () use ($capability, $message): void {
             $screen = get_current_screen();
-            if ($screen === null || !in_array($screen->id, ['plugins', 'woocommerce_page_wc-settings'], true) || !current_user_can($capability)) { return; }
+            if ($screen === null || !in_array($screen->id, ['plugins', 'woocommerce_page_wc-settings', 'download_page_edd-settings'], true) || !current_user_can($capability)) { return; }
             $html = $message();
             if ($html !== null) { echo '<div class="notice notice-error"><p>' . wp_kses_post($html) . '</p></div>'; }
         });
@@ -109,8 +110,9 @@ final class Plugin
                 switch_to_blog($id);
                 try { self::deactivate(); } finally { restore_current_blog(); }
             }
-        } elseif (function_exists('as_unschedule_all_actions')) {
-            as_unschedule_all_actions('openreceive_reconcile', [], 'openreceive');
+        } else {
+            if (function_exists('as_unschedule_all_actions')) { as_unschedule_all_actions('openreceive_reconcile', [], 'openreceive'); }
+            wp_clear_scheduled_hook('openreceive_reconcile');
         }
     }
 
@@ -127,40 +129,26 @@ final class Plugin
             return;
         }
         if (get_option(self::INSTALLED_OPTION) !== OPENRECEIVE_PLUGIN_VERSION) { self::install(); }
-        if (!class_exists('WC_Payment_Gateway')) {
-            self::notice('activate_plugins', static fn (): string => esc_html__('OpenReceive needs WooCommerce installed and active.', 'openreceive'));
+        $woocommerce = StoreHost::woocommerce();
+        $edd = StoreHost::edd();
+        if (!$woocommerce && !$edd) {
+            self::notice('activate_plugins', static fn (): string => esc_html__('OpenReceive needs WooCommerce or Easy Digital Downloads installed and active.', 'openreceive'));
             return;
         }
-        // Reject unsupported secret writes before WooCommerce mutates any settings.
-        add_filter('rest_pre_dispatch', static function ($result, $server, $request) {
-            if (in_array($request->get_method(), ['POST', 'PUT', 'PATCH'], true)
-                && preg_match('#^/wc/v[0-9]+/payment_gateways/openreceive/?$#', $request->get_route())) {
-                $settings = $request->get_param('settings');
-                if (is_array($settings) && array_intersect(array_keys($settings), array_keys(Secrets::FIELDS)) !== []) {
-                    return new \WP_Error('openreceive_credentials_cli_required', 'Use wp openreceive configure with stdin, or the OpenReceive admin settings form, to change encrypted credentials.', ['status' => 400]);
-                }
-            }
-            return $result;
-        }, 10, 3);
-        add_filter('woocommerce_payment_gateways', static function (array $gateways): array { $gateways[] = Gateway::class; return $gateways; });
+        if ($woocommerce) { self::bootWooCommerce(); }
+        if ($edd) { EddGateway::register(); }
         add_action('rest_api_init', [self::class, 'routes']);
-        self::notice('manage_woocommerce', static function (): ?string {
-            if ((get_option('woocommerce_openreceive_settings', [])['enabled'] ?? 'no') !== 'yes') { return null; }
-            try {
-                self::repository();
-                self::engine()->service()->listRates(['currencies' => [get_woocommerce_currency()]]);
-                return null;
-            } catch (\Throwable) {
-                return esc_html__('OpenReceive is unavailable. Check its Doctor panel for wallet permissions, database schema and a working price feed for the store currency.', 'openreceive');
-            }
-        });
-        add_action('template_redirect', [Gateway::class, 'prepareReceipt']);
-        add_action('woocommerce_blocks_loaded', static function (): void {
-            add_action('woocommerce_blocks_payment_method_type_registration', static function ($registry): void { $registry->register(new BlocksIntegration()); });
-        });
+        // WooCommerce bundles Action Scheduler; Easy Digital Downloads alone has WP-Cron.
         add_action('action_scheduler_init', static function (): void {
+            wp_clear_scheduled_hook('openreceive_reconcile');
             if (!as_has_scheduled_action('openreceive_reconcile', [], 'openreceive')) {
                 as_schedule_recurring_action(time() + 60, 60, 'openreceive_reconcile', [], 'openreceive', true);
+            }
+        });
+        add_filter('cron_schedules', static fn (array $schedules): array => $schedules + ['openreceive_minute' => ['interval' => 60, 'display' => 'Every minute (OpenReceive)']]);
+        add_action('init', static function (): void {
+            if (!function_exists('as_schedule_recurring_action') && !wp_next_scheduled('openreceive_reconcile')) {
+                wp_schedule_event(time() + 60, 'openreceive_minute', 'openreceive_reconcile');
             }
         });
         add_action('openreceive_reconcile', [self::class, 'reconcile']);
@@ -175,6 +163,36 @@ final class Plugin
             \WP_CLI::add_command('openreceive notifications', static function (): void { self::engine()->notificationsWorker()->run(); });
             \WP_CLI::add_command('openreceive test-invoice', [new Cli(), 'test_invoice']);
         }
+    }
+
+    private static function bootWooCommerce(): void
+    {
+        // Reject unsupported secret writes before WooCommerce mutates any settings.
+        add_filter('rest_pre_dispatch', static function ($result, $server, $request) {
+            if (in_array($request->get_method(), ['POST', 'PUT', 'PATCH'], true)
+                && preg_match('#^/wc/v[0-9]+/payment_gateways/openreceive/?$#', $request->get_route())) {
+                $settings = $request->get_param('settings');
+                if (is_array($settings) && array_intersect(array_keys($settings), array_keys(Secrets::FIELDS)) !== []) {
+                    return new \WP_Error('openreceive_credentials_cli_required', 'Use wp openreceive configure with stdin, or the OpenReceive admin settings form, to change encrypted credentials.', ['status' => 400]);
+                }
+            }
+            return $result;
+        }, 10, 3);
+        add_filter('woocommerce_payment_gateways', static function (array $gateways): array { $gateways[] = Gateway::class; return $gateways; });
+        self::notice('manage_woocommerce', static function (): ?string {
+            if ((get_option('woocommerce_openreceive_settings', [])['enabled'] ?? 'no') !== 'yes') { return null; }
+            try {
+                self::repository();
+                self::engine()->service()->listRates(['currencies' => [get_woocommerce_currency()]]);
+                return null;
+            } catch (\Throwable) {
+                return esc_html__('OpenReceive is unavailable. Check its Doctor panel for wallet permissions, database schema and a working price feed for the store currency.', 'openreceive');
+            }
+        });
+        add_action('template_redirect', [Gateway::class, 'prepareReceipt']);
+        add_action('woocommerce_blocks_loaded', static function (): void {
+            add_action('woocommerce_blocks_payment_method_type_registration', static function ($registry): void { $registry->register(new BlocksIntegration()); });
+        });
     }
 
     public static function resetEngine(): void { self::$engine = null; }
@@ -209,7 +227,7 @@ final class Plugin
     {
         if (self::testkit()) { return DemoWallet::service(); }
         $env = Secrets::environment($settings);
-        $currencies = [get_woocommerce_currency()];
+        $currencies = StoreHost::currencies();
         $key = static fn (): string => hash_hmac('sha256', trim($env['NWC_URI']), wp_salt('auth'));
         $cached = $live ? false : get_transient('openreceive_wallet_info');
         if (is_array($cached) && ($cached['key'] ?? null) === $key()) {
@@ -226,9 +244,10 @@ final class Plugin
     {
         if (self::$engine === null) {
             $settings = get_option('woocommerce_openreceive_settings', []);
-            self::$engine = new Engine(new OrderHost(), self::repository(), self::service(live: false),
+            self::$engine = new Engine(new StoreHost(), self::repository(), self::service(live: false),
                 rateLimiting: ($settings['rate_limiting'] ?? 'no') === 'yes',
                 clientIp: static fn (): ?string => isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : null,
+                logger: new WpLogger(),
                 prefix: '/openreceive/v1');
         }
         return self::$engine;
@@ -237,11 +256,11 @@ final class Plugin
     public static function reconcile(): void
     {
         // Repair does not need a working wallet connection.
-        OrderHost::repair();
+        StoreHost::repair();
         // Before a wallet is configured there is nothing to scan, and the scheduled run must not fail every minute.
         if (Secrets::environment()['NWC_URI'] === '' && !self::testkit()) { return; }
         self::engine()->maybeReconcile();
-        OrderHost::repair();
+        StoreHost::repair();
     }
 
     public static function routes(): void
@@ -271,19 +290,28 @@ final class Plugin
             foreach ($request->get_headers() as $key => $values) { $headers[str_replace('_', '-', $key)] = $values; }
             $psr = (new ServerRequest($request->get_method(), $uri, $headers, $request->get_body()))
                 ->withAttribute(RequestHandler::HOST_REQUEST_ATTRIBUTE, $request);
-            OrderHost::repair();
+            StoreHost::repair();
             $response = self::engine()->psr15Handler()->handle($psr);
-            OrderHost::repair();
+            StoreHost::repair();
             $result = new \WP_REST_Response(json_decode((string) $response->getBody(), true), $response->getStatusCode());
             foreach ($response->getHeaders() as $key => $values) { $result->header($key, implode(', ', $values)); }
             $result->header('Cache-Control', 'no-store');
             return $result;
         } catch (\Throwable $error) {
             $requestId = 'req_' . wp_generate_uuid4();
-            // The payer gets a generic 503; the merchant finds the redacted reason under WooCommerce → Status → Logs.
-            wc_get_logger()->error($requestId . ' ' . $request->get_route() . ' unavailable: ' . (new \ReflectionClass($error))->getShortName() . ': ' . Configuration::errorMessage($error), ['source' => 'openreceive']);
+            // The payer gets a generic 503; the merchant finds the redacted reason in the store's log.
+            self::logError($requestId . ' ' . $request->get_route() . ' unavailable: ' . (new \ReflectionClass($error))->getShortName() . ': ' . Configuration::errorMessage($error));
             return new \WP_REST_Response(['code' => 'UNAVAILABLE', 'message' => 'Payment service is unavailable. Ask the merchant to check OpenReceive settings.', 'request_id' => $requestId], 503, ['Cache-Control' => 'no-store']);
         }
+    }
+
+    /** WooCommerce → Status → Logs, else Easy Digital Downloads' debug log, else PHP's error log. */
+    public static function logError(string $message): void
+    {
+        if (function_exists('wc_get_logger')) { wc_get_logger()->error($message, ['source' => 'openreceive']); }
+        elseif (function_exists('edd_debug_log')) { edd_debug_log('OpenReceive: ' . $message, true); }
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- The last resort for a store with no log of its own; the message is redacted.
+        else { error_log('OpenReceive: ' . $message); }
     }
 
     public static function diagnostics(): array { return self::diagnosticReport()['lines']; }
@@ -311,9 +339,10 @@ final class Plugin
             try { $lines[] = $name . ': ' . $probe(); }
             catch (\Throwable $error) { $ok = false; $lines[] = $name . ': FAILED — ' . Configuration::errorMessage($error); }
         };
-        $check('WooCommerce', static function (): string {
-            if (!class_exists('WC_Payment_Gateway')) { throw new \RuntimeException('Install and activate WooCommerce.'); }
-            return 'active';
+        $check('Store', static function (): string {
+            $stores = array_keys(array_filter(['WooCommerce' => StoreHost::woocommerce(), 'Easy Digital Downloads' => StoreHost::edd()]));
+            if ($stores === []) { throw new \RuntimeException('Install and activate WooCommerce or Easy Digital Downloads.'); }
+            return implode(' and ', $stores) . ' active';
         });
         $check('Requirements', static function (): string {
             $missing = self::missingRequirements();
@@ -341,19 +370,23 @@ final class Plugin
             $lines[] = 'Last scan claim: ' . ($claimed ? gmdate('c', (int) $claimed) : 'none');
             return (string) $version;
         });
-        if (class_exists('WC_Payment_Gateway')) {
+        if (StoreHost::woocommerce() || StoreHost::edd()) {
             $service = null;
             $check('Wallet preflight', static function () use (&$service): string { $service = self::service(); return 'passed'; });
             if ($service !== null) {
-                $check('Price feed', static function () use ($service): string { $currency = get_woocommerce_currency(); $service->listRates(['currencies' => [$currency]]); return 'available for ' . $currency; });
+                $check('Price feed', static function () use ($service): string { $currencies = StoreHost::currencies(); $service->listRates(['currencies' => $currencies]); return 'available for ' . implode(', ', $currencies); });
                 // A set LSC code proves nothing about the provider, so ask each one for the catalog checkout lists.
                 foreach ($service->swapProviders() as $provider) {
                     $check('Swap provider ' . $provider->name(), static fn (): string => self::swapProviderStatus($provider));
                 }
             } else { $lines[] = 'Price feed: not checked because wallet configuration failed'; }
             $check('Reconcile scheduled', static function (): string {
-                if (!function_exists('as_has_scheduled_action') || !as_has_scheduled_action('openreceive_reconcile', [], 'openreceive')) { throw new \RuntimeException('No reconcile action is scheduled. Load WordPress with WooCommerce active.'); }
-                return 'yes';
+                if (function_exists('as_has_scheduled_action')) {
+                    if (!as_has_scheduled_action('openreceive_reconcile', [], 'openreceive')) { throw new \RuntimeException('No reconcile action is scheduled. Load any WordPress page with the store active.'); }
+                    return 'yes, every minute on Action Scheduler';
+                }
+                if (!wp_next_scheduled('openreceive_reconcile')) { throw new \RuntimeException('No reconcile event is scheduled. Load any WordPress page with the store active.'); }
+                return 'yes, every minute on WP-Cron';
             });
         }
         $lines[] = 'Settled orders awaiting completion are retried on checkout requests and scheduled reconciliation.';

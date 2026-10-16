@@ -42,7 +42,7 @@ final class OrderHost implements Host, AfterPaid
     {
         $order = self::order($reference);
         if (!$order || !$order->needs_payment()) { return null; }
-        // translators: %s is the WooCommerce order number.
+        // translators: %s is the store's order number.
         $description = sprintf(__('Order #%s', 'openreceive'), $order->get_order_number());
         return ['currency' => $order->get_currency(), 'value' => $order->get_total(), 'description' => $description];
     }

@@ -4,15 +4,14 @@ Tags: bitcoin, lightning, woocommerce, payment gateway, stablecoin
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Requires Plugins: woocommerce
 Stable tag: 0.4.27
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Accept Bitcoin Lightning payments in WooCommerce, paid straight into your own wallet. Optional USDT, USDC, SOL and ETH swaps settle as BTC.
+Accept Bitcoin Lightning payments in WooCommerce or Easy Digital Downloads, straight into your own wallet. Optional stablecoin swaps settle as BTC.
 
 == Description ==
-OpenReceive adds a Bitcoin Lightning payment method to WooCommerce. Customers pay a Lightning invoice, and the payment lands directly in a wallet you control. There is no OpenReceive account, no sign-up, and no processor in the middle.
+OpenReceive adds a Bitcoin Lightning payment method to WooCommerce and to Easy Digital Downloads. Customers pay a Lightning invoice, and the payment lands directly in a wallet you control. There is no OpenReceive account, no sign-up, and no processor in the middle.
 
 The plugin connects to your wallet with a receive-only Nostr Wallet Connect (NWC) code. That code can create invoices and read incoming payments; it cannot spend. The plugin refuses to save a code that can send payments unless you explicitly override that check.
 
@@ -25,13 +24,14 @@ Optional swaps let customers pay with USDT, USDC, SOL, and ETH through your conf
 * Stores payment attempts in two tables in your existing WordPress database. It needs no separate database, service or daemon.
 * Records each settlement exactly once, and finishes interrupted order completions on the next request or scheduled run.
 * Supports High-Performance Order Storage (HPOS).
+* In Easy Digital Downloads, adds a payment gateway whose checkout appears on the purchase confirmation page. EDD completes the order, sends its receipt and opens the downloads as it does for any other gateway.
 * Ships all checkout JavaScript, CSS and images inside the plugin. Nothing loads from a CDN.
 
 = What you need =
 * A Lightning wallet that issues a receive-only NWC code. See https://openreceive.org/get_a_nwc_code_to_receive_payments for wallets that do, or run your own, such as Alby Hub.
 * 64-bit PHP 8.2 or newer with the GMP and sodium extensions. Many hosts do not enable GMP by default; https://openreceive.org/guides/wordpress-hosting explains how to check and enable it.
 * MySQL 8 or MariaDB 10.5+. WordPress on SQLite is not supported.
-* WooCommerce 9 or newer.
+* WooCommerce 9 or newer, or Easy Digital Downloads 3 or newer.
 
 Overview: https://openreceive.org/integrations/woocommerce
 
@@ -49,6 +49,8 @@ Credentials are encrypted with keys derived from your WordPress authentication k
 
 With WP-CLI, run `wp openreceive doctor` to check the setup, and `wp openreceive configure --nwc-uri=-` to set a code from stdin.
 
+For Easy Digital Downloads, the codes go in Downloads > Settings > Payments > OpenReceive (or the same WP-CLI command), and the method is turned on under Downloads > Settings > Payments > General > Active Gateways. Easy Digital Downloads documentation: https://openreceive.org/guides/quickstart-edd
+
 == Frequently Asked Questions ==
 = Does OpenReceive charge a fee? =
 No. OpenReceive is free software and takes no cut. Your wallet operator's Lightning fees and, for swaps, your swap provider's fees still apply.
@@ -57,7 +59,7 @@ No. OpenReceive is free software and takes no cut. Your wallet operator's Lightn
 No. The wallet code is receive-only, so merchant refunds are manual: send them from your wallet. Payer swap refunds use the order-pay link and the configured swap provider.
 
 = What happens when the customer closes the page? =
-WooCommerce's Action Scheduler checks for payments every minute when WordPress runs scheduled work. On a low-traffic store, use a real cron runner, or run the optional `wp openreceive notifications` worker.
+WooCommerce's Action Scheduler (or WP-Cron, on a store with Easy Digital Downloads only) checks for payments every minute when WordPress runs scheduled work. On a low-traffic store, use a real cron runner, or run the optional `wp openreceive notifications` worker.
 
 = The Plugins screen says "OpenReceive is not running" =
 The plugin activates on any WordPress site, but it only runs with 64-bit PHP, the GMP and sodium extensions, and a MySQL or MariaDB database. The notice names what is missing. Until that is fixed, the plugin adds no payment method and makes no network requests. Most hosts can enable GMP and sodium in the control panel or on request. See https://openreceive.org/guides/wordpress-hosting .
@@ -66,7 +68,7 @@ The plugin activates on any WordPress site, but it only runs with 64-bit PHP, th
 Enter the encrypted payment credentials again. Values configured as constants are unaffected.
 
 = Does uninstalling delete payment records? =
-Deactivating keeps them. Deleting the plugin removes its two tables only if "Remove data on uninstall" is enabled. WooCommerce orders are always kept.
+Deactivating keeps them. Deleting the plugin removes its two tables only if "Remove data on uninstall" is enabled. WooCommerce and Easy Digital Downloads orders are always kept.
 
 == External services ==
 This plugin connects to the following services. It sends no telemetry.

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Added (WordPress): Easy Digital Downloads. The WordPress.org plugin now adds
+  an EDD gateway beside its WooCommerce one and runs with either store, or
+  both, so it no longer declares `Requires Plugins: woocommerce`. The
+  customer picks the method at EDD's checkout; EDD records a pending order and
+  its purchase confirmation page shows the checkout. The payment's completion
+  marker commits with the settled payment row, then EDD completes the order
+  with the payment hash as its transaction id, which sends the receipt and
+  opens the downloads; interrupted completions finish on the next request or
+  scheduled pass. EDD references are `edd-<order id>`, so they never meet a
+  WooCommerce order id. The codes are the same encrypted settings, saved from
+  Downloads → Settings → Payments → OpenReceive or with
+  `wp openreceive configure`; `--enable` also turns the gateway on in EDD,
+  and `wp openreceive test-invoice --new` mints an invoice for a pending test
+  order. Doctor's first line is now `Store:` and names the active stores. On a
+  site without Action Scheduler the reconcile pass runs on WP-Cron. The
+  engine's warnings now reach the store's log (WooCommerce's, else EDD's debug
+  log). Docs: the Easy Digital Downloads quickstart and agent directions
+  (/agent-directions/edd.md, `references/edd.md` in the skill). The WordPress
+  CI shop runs EDD beside WooCommerce: an EDD integration script and a guest
+  purchase in Chromium run on every push.
 - Added (Node): MySQL and MariaDB for the payment tables. `createHost({ db })`
   takes a mysql2 Pool or Connection (promise or callback API), and `knexDb`,
   `prismaDb`, `typeOrmDb` and `sequelizeDb` take `"mysql"`.

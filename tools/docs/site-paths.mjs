@@ -95,6 +95,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/laravel.md",
   "/agent-directions/btcpay.md",
   "/agent-directions/woocommerce.md",
+  "/agent-directions/edd.md",
   "/agent-directions/lovable.md",
   "/agent-directions/sveltekit.md",
   "/agent-directions/nuxt.md",

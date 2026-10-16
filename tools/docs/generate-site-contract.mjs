@@ -47,6 +47,11 @@ const AGENT_PAYLOADS = [
     source: "docs/agents/woocommerce.md",
     stack: "woocommerce",
   },
+  {
+    path: "/agent-directions/edd.md",
+    source: "docs/agents/edd.md",
+    stack: "edd",
+  },
   { path: "/agent-directions/node.md", source: "docs/agents/node.md", stack: "node" },
   { path: "/agent-directions/fastify.md", source: "docs/agents/fastify.md", stack: "fastify" },
   { path: "/agent-directions/next.md", source: "docs/agents/next.md", stack: "next" },
@@ -289,6 +294,31 @@ const FRAMEWORKS = [
         "The plugin's settings, encrypted with keys derived from WordPress's auth keys, or OPENRECEIVE_NWC_URI in wp-config.php",
       refunds:
         "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the order's pay link.",
+      mobile: STORE_MOBILE,
+    },
+  },
+  // Easy Digital Downloads, in the same WordPress.org plugin as WooCommerce.
+  {
+    id: "easy-digital-downloads",
+    label: "WordPress + Easy Digital Downloads",
+    type: "plugin",
+    family: "php",
+    quickstart_slug: "quickstart-edd",
+    agent_stack: "edd",
+    adapter_package: "openreceive/wordpress",
+    install: "wp plugin install openreceive --activate",
+    requires: "WordPress ≥ 6.6, Easy Digital Downloads ≥ 3, PHP ≥ 8.2, GMP and sodium",
+    demo: null,
+    example_path: "packages/php/wordpress",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "WordPress 7.1 with Easy Digital Downloads 3.7, on PHP 8.2",
+      databases: "MySQL 8, WordPress's own database",
+      secrets:
+        "The plugin's settings, encrypted with keys derived from WordPress's auth keys, or OPENRECEIVE_NWC_URI in wp-config.php",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's purchase confirmation page.",
       mobile: STORE_MOBILE,
     },
   },

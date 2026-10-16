@@ -143,6 +143,14 @@ const BTCPAY_BRIEF = [
 
 const STACKS = [
   {
+    stack: "edd",
+    source: "docs/agents/src/edd.md",
+    quickstart: "docs/guides/quickstart-edd.md",
+    brief: WOOCOMMERCE_BRIEF,
+    quickstartRole:
+      "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its wp-admin screens are only for a store with no WP-CLI.",
+  },
+  {
     stack: "woocommerce",
     source: "docs/agents/src/woocommerce.md",
     quickstart: "docs/guides/quickstart-woocommerce.md",
@@ -327,6 +335,8 @@ const UNLISTED_GUIDES = {
   "agent-directions-fossbilling": "this payload's own page",
   "quickstart-fossbilling": "inlined in full below, or another stack's",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
+  "agent-directions-edd": "this payload's own page",
+  "quickstart-edd": "inlined in full below, or another stack's",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
   odoo: "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
   magento:
@@ -419,6 +429,32 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "WordPress keeps its data in MySQL",
     serverless: "WordPress runs on an ordinary PHP host",
     "mobile-apps": "the WooCommerce store's own checkout is the payment page",
+  },
+  edd: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "frontend-checkout",
+        "checkout-ux",
+        "headless-checkout",
+        "custom-checkout-route",
+        "provider-registry",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "react-material-ui-recipe",
+      ].map((slug) => [
+        slug,
+        "the WordPress plugin supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    supabase: "WordPress keeps its data in MySQL",
+    serverless: "WordPress runs on an ordinary PHP host",
+    "mobile-apps": "the EDD store's own purchase confirmation page is the payment page",
+    "wordpress-hosting": "linked from the quickstart's GMP section",
   },
   paymenter: {
     ...Object.fromEntries(

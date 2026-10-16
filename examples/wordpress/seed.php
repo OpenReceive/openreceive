@@ -35,6 +35,22 @@ foreach (json_decode(file_get_contents('/opt/demo/shop-catalog.json'), true, 512
         $product->save();
     }
 }
+// Easy Digital Downloads beside WooCommerce: one download, paid with the same gateway.
+// EDD creates its tables on the first admin page; WP-CLI has none, so create them here.
+if (function_exists('EDD')) {
+    foreach (EDD()->components as $component) {
+        foreach (['table', 'meta'] as $interface) {
+            $object = $component->get_interface($interface);
+            if ($object && method_exists($object, 'maybe_upgrade')) { $object->maybe_upgrade(); }
+        }
+    }
+    edd_update_option('gateways', ['openreceive' => '1']);
+    edd_update_option('default_gateway', 'openreceive');
+    if (get_page_by_path('safety-orange-download', OBJECT, 'download') === null) {
+        $download = wp_insert_post(['post_type' => 'download', 'post_title' => 'Safety Orange Download', 'post_name' => 'safety-orange-download', 'post_status' => 'publish']);
+        update_post_meta($download, 'edd_price', '7.00');
+    }
+}
 $shop = wc_get_page_id('shop');
 update_option('show_on_front', 'page');
 update_option('page_on_front', $shop);
