@@ -120,6 +120,7 @@ export {
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   OPENRECEIVE_RECONCILE_BATCH_SIZE,
   paymentsSchemaSql,
+  paymentsSchemaStatements,
 } from "./sql-payments.ts";
 export type {
   SupabasePaymentRepository,

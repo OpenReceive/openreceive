@@ -1,5 +1,5 @@
 import { fulfillmentNote } from "@openreceive/core";
-import { canonicalPaymentsDdlStatements } from "../shared.ts";
+import { canonicalPaymentsDdlStatements, templateLiteral } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
 
@@ -9,7 +9,7 @@ export function renderKnexFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[
   // the exact statements the library's repository expects — CHECKs and the
   // schema_version seed row included.
   const body = canonicalPaymentsDdlStatements(options)
-    .map((statement) => `  await knex.raw(\`${statement}\`);`)
+    .map((statement) => `  await knex.raw(${templateLiteral(statement)});`)
     .join("\n");
 
   const migration = `/**

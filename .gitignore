@@ -73,6 +73,7 @@ trials/wallet/certs/
 # Prisma client for the test:orms lane; `npm run test:orms` regenerates it.
 tests/orms/generated/
 tests/orms/pooler/generated/
+tests/orms/mysql/generated/
 # wrangler dev state from the Cloudflare Workers lane.
 .wrangler/
 

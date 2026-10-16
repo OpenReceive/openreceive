@@ -13,7 +13,7 @@ URLs, function timeouts, and why no cron job is needed.
 
 | Stack | Floor |
 | --- | --- |
-| Node (Express, Fastify, Next.js) | Node ≥ 22; the App Router on Next.js ≥ 15 |
+| Node (Express, Fastify, Next.js) | Node ≥ 22; the App Router on Next.js ≥ 15; PostgreSQL, SQLite, or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 (InnoDB) |
 | Rails | Ruby ≥ 3.2, Rails ≥ 8.0; PostgreSQL, SQLite or MySQL (`mysql2`/`trilogy`) |
 | FastAPI | Python ≥ 3.10, FastAPI ≥ 0.115 (Starlette ≥ 0.40), a sync SQLAlchemy 2 `Engine`; PostgreSQL, SQLite or MySQL |
 | Django | Python ≥ 3.10, Django ≥ 5.2; PostgreSQL, SQLite (`transaction_mode: IMMEDIATE`) or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 |

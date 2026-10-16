@@ -2,7 +2,7 @@ export const OPENRECEIVE_ORMS = ["prisma", "drizzle", "typeorm", "sequelize", "k
 
 export type Orm = (typeof OPENRECEIVE_ORMS)[number];
 
-export const OPENRECEIVE_DIALECTS = ["postgres", "sqlite"] as const;
+export const OPENRECEIVE_DIALECTS = ["postgres", "sqlite", "mysql"] as const;
 
 export type Dialect = (typeof OPENRECEIVE_DIALECTS)[number];
 

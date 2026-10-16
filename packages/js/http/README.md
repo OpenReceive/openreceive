@@ -31,7 +31,7 @@ a payment attempt is committed before checkout instructions are returned.
 
 `createHost({ db, amountFor, onPaid })` builds the
 host integration on the library-owned payment repository inside the host
-application's existing database (pg, node:sqlite, better-sqlite3, or a custom
+application's existing database (pg, mysql2, node:sqlite, better-sqlite3, or a custom
 adapter). The library owns attempt selection, per-reference commit locking,
 write-once settlement with first-attempt-only fulfillment, and the
 `pending → settled | expired | failed | attention` reconciliation state

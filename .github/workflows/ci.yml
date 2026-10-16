@@ -81,12 +81,40 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 15
+      # The Node engine's MySQL dialect (tests/orms/mysql.test.mjs) on both
+      # servers it supports: the mysql2 binding, Knex, TypeORM and Prisma.
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: openreceive
+          MYSQL_DATABASE: openreceive_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -popenreceive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: openreceive
+          MARIADB_DATABASE: openreceive_test
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       NWC_URI: ""
       OPENRECEIVE_TEST_POSTGRES_URL: postgresql://openreceive:openreceive@127.0.0.1:5432/openreceive_test
       # Supabase, Neon and other serverless Postgres reach the database through
       # a transaction pooler; this lane runs the payments contract through one.
       OPENRECEIVE_TEST_POOLER_URL: postgresql://openreceive:openreceive@127.0.0.1:56432/openreceive_test
+      OPENRECEIVE_TEST_MYSQL_URL: mysql://root:openreceive@127.0.0.1:3306/openreceive_test
+      OPENRECEIVE_TEST_MARIADB_URL: mysql://root:openreceive@127.0.0.1:3307/openreceive_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

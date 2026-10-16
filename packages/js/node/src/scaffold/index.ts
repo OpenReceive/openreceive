@@ -26,7 +26,8 @@ Options:
   --supabase                supabase/migrations/<timestamp>_openreceive.sql:
                             the tables, locked away from the Data API, plus
                             the functions storage: { supabase } calls
-  --dialect <name>          postgres | sqlite (default: postgres)
+  --dialect <name>          postgres | sqlite | mysql (default: postgres);
+                            mysql covers MariaDB
   --table-name <name>       Payment attempts table (default: openreceive_payments)
   --meta-table-name <name>  Reconcile-gate table (default: openreceive_meta)
   --out-dir <path>          Output root (default: .)
@@ -38,6 +39,7 @@ Examples:
   npx openreceive scaffold payments
   npx openreceive scaffold payments --orm prisma
   npx openreceive scaffold payments --orm knex --dialect sqlite
+  npx openreceive scaffold payments --orm prisma --dialect mysql
   npx openreceive scaffold payments --orm drizzle --dialect sqlite --out-dir ./backend
   npx openreceive scaffold payments --supabase
 `.trim();
@@ -137,6 +139,11 @@ function printPlan(
   if (options.dialect === "sqlite") {
     stdout.write(
       "  note:         SQLite uses a single-writer transaction (no Postgres row locks)\n",
+    );
+  }
+  if (options.dialect === "mysql") {
+    stdout.write(
+      `  note:         MySQL and MariaDB lock each order through a row in ${options.metaTableName} (InnoDB)\n`,
     );
   }
   stdout.write("\nWriting files…\n");

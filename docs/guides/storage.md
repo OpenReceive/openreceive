@@ -49,7 +49,7 @@ or host-supplied timestamps cannot narrow the history the library checks.
 Never serialize or log `swap_data`.
 
 SQL you write in `onPaid` goes to your driver unchanged. Use `?` on SQLite and
-`$1` on Postgres.
+MySQL, and `$1` on Postgres.
 
 `client_ip` supports the opt-in [rate limiter](rate-limiting.md). Treat it as
 request-log metadata covered by your privacy policy.
@@ -83,6 +83,22 @@ application never deals with those terms. To your app, an order is either
 unpaid or paid.
 
 One row holds at most one provider swap order. A swap retry creates a new row.
+
+## MySQL and MariaDB
+
+Node apps on MySQL ≥ 8.0.16 or MariaDB ≥ 10.2.7 pass a mysql2 `Pool` as `db`,
+or an ORM factory with `"mysql"` ([Node ORM recipes](node-orms.md)). CI runs
+MySQL 8.4 and MariaDB 11.8. The tables must be InnoDB.
+`npx openreceive scaffold payments --dialect mysql` writes them with a binary
+collation. The library compares references exactly, so a table your ORM made
+with a case-insensitive collation still keeps `Order-1` and `order-1` apart.
+
+The library locks each order with a row in `openreceive_meta`, held until its
+transaction commits. It does not use `GET_LOCK`, which Vitess databases such as
+PlanetScale restrict. OpenReceive has not been tested on a Vitess database.
+
+MySQL has no `RETURNING` on `UPDATE`. In `onPaid`, run your guarded `UPDATE`,
+then `SELECT ROW_COUNT() AS claimed` through the same `query`.
 
 ## Supabase over HTTPS
 

@@ -14,6 +14,19 @@ export function isSqlite(options: ScaffoldPaymentsOptions): boolean {
 }
 
 /**
+ * One DDL statement as a JavaScript template literal for a generated
+ * migration. MySQL's DDL quotes the reserved `key` column with backticks,
+ * which would otherwise end the literal.
+ */
+export function templateLiteral(statement: string): string {
+  const escaped = statement
+    .replaceAll("\\", "\\\\")
+    .replaceAll("`", "\\`")
+    .replaceAll("${", "\\${");
+  return `\`${escaped}\``;
+}
+
+/**
  * The canonical `openreceive_payments` DDL — the same statements
  * `paymentsSchemaSql` in `@openreceive/http` renders — with only the
  * table names threaded through. Timestamps are unix-seconds integers. Every

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added (Node): MySQL and MariaDB for the payment tables. `createHost({ db })`
+  takes a mysql2 Pool or Connection (promise or callback API), and `knexDb`,
+  `prismaDb`, `typeOrmDb` and `sequelizeDb` take `"mysql"`.
+  `npx openreceive scaffold payments --dialect mysql` writes the migration for
+  every supported ORM, and `paymentsSchemaSql("mysql")` /
+  `paymentsSchemaStatements("mysql")` render the DDL: InnoDB tables with a
+  binary collation. Each order is locked by a row in `openreceive_meta` held
+  until commit, not by `GET_LOCK`, which Vitess databases such as PlanetScale
+  restrict; PlanetScale itself is not tested. References compare exactly even
+  in a table an ORM made with a case-insensitive collation. CI runs the
+  repository contract on MySQL 8.4 and MariaDB 11.8 through mysql2, Knex,
+  TypeORM and Prisma (`@prisma/adapter-mariadb`). Sequelize 6 on both servers
+  was checked by hand once; CI covers its MySQL mapping with unit tests.
 - Added (Paymenter): a gateway extension for Paymenter 1.5+, the open-source
   billing panel for hosting companies. Each GitHub release attaches
   `openreceive-paymenter-<version>.zip`, one `OpenReceive` folder for

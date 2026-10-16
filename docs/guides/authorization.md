@@ -28,7 +28,8 @@ async function onPaid({ reference, query }) {
   // `query(sql, params?)` runs on that same transaction and returns rows.
   // The SQL is yours: OpenReceive does not know about `orders` or `state`.
   // This UPDATE is an example of what *you* might write, not a required
-  // shape. Use `?` on sqlite, `$1` on postgres; the string is not rewritten.
+  // shape. Use `?` on sqlite and mysql, `$1` on postgres; the string is not
+  // rewritten.
   await query("UPDATE orders SET state = 'paid' WHERE id = ?", [reference]);
 }
 

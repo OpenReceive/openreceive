@@ -245,7 +245,7 @@ const STORE_MOBILE =
   "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout.";
 const NODE_CAPABILITIES = {
   runtime: "Node 22",
-  databases: "PostgreSQL, directly or through a transaction pooler, and SQLite",
+  databases: "PostgreSQL, directly or through a transaction pooler, MySQL 8, MariaDB 11 and SQLite",
   ...SERVER_CAPABILITIES,
 };
 const PYTHON_CAPABILITIES = {

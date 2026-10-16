@@ -244,8 +244,9 @@ test("raw-DDL migrations embed every canonical statement verbatim", () => {
       });
       const schema = schemaFile(renderScaffoldPaymentsFiles(options), orm).contents;
       for (const statement of canonicalPaymentsDdlStatements(options)) {
+        // Inside a template literal, MySQL's backtick-quoted `key` is escaped.
         assert.ok(
-          schema.includes(statement),
+          schema.includes(`\`${statement.replaceAll("`", "\\`")}\``),
           `${orm}/${dialect} migration missing canonical statement: ${statement.split("\n")[0]}`,
         );
       }
@@ -267,20 +268,22 @@ test("every ORM emits both CHECK constraints and the schema_version seed row", (
         /status IN \('pending', 'settled', 'expired', 'failed', 'attention'\)/,
         `${orm}/${dialect} missing the status CHECK`,
       );
-      assert.match(
-        emitted,
-        dialect === "postgres"
-          ? /payment_hash ~ '\^\[0-9a-f\]\{64\}\$'/
-          : /length\(payment_hash\) = 64 AND payment_hash NOT GLOB '\*\[\^0-9a-f\]\*'/,
-        `${orm}/${dialect} missing the payment_hash CHECK`,
-      );
+      const hashCheck = {
+        postgres: /payment_hash ~ '\^\[0-9a-f\]\{64\}\$'/,
+        sqlite: /length\(payment_hash\) = 64 AND payment_hash NOT GLOB '\*\[\^0-9a-f\]\*'/,
+        mysql: /payment_hash REGEXP '\(\?-i\)\^\[0-9a-f\]\{64\}\$'/,
+      }[dialect];
+      assert.match(emitted, hashCheck, `${orm}/${dialect} missing the payment_hash CHECK`);
       // The seed row is what lets the repository's newer-schema refusal probe
       // engage. Drizzle's schema DSL cannot express it, so its wiring guide
       // carries it as a custom migration instead.
-      const seed =
-        dialect === "postgres"
-          ? /INSERT INTO \w+ \(key, value, rev\) VALUES \('schema_version', '1', 0\) ON CONFLICT \(key\) DO NOTHING/
-          : /INSERT OR IGNORE INTO \w+ \(key, value, rev\) VALUES \('schema_version', '1', 0\)/;
+      const seed = {
+        postgres:
+          /INSERT INTO \w+ \(key, value, rev\) VALUES \('schema_version', '1', 0\) ON CONFLICT \(key\) DO NOTHING/,
+        sqlite: /INSERT OR IGNORE INTO \w+ \(key, value, rev\) VALUES \('schema_version', '1', 0\)/,
+        mysql:
+          /INSERT IGNORE INTO \w+ \(\\?`key\\?`, value, rev\) VALUES \('schema_version', '1', 0\)/,
+      }[dialect];
       assert.match(
         orm === "drizzle" ? guide : emitted,
         seed,
@@ -418,6 +421,39 @@ test("sqlite schemas use sqlite constructs", () => {
   assert.match(prisma, /Int\s+@id @default\(autoincrement\(\)\)/);
 });
 
+test("mysql schemas use MySQL types and the guide claims the order through ROW_COUNT()", () => {
+  const drizzle = schemaFile(renderFor("drizzle", "mysql"), "drizzle").contents;
+  assert.match(drizzle, /from "drizzle-orm\/mysql-core"/);
+  assert.match(drizzle, /checkoutData: mediumtext\("checkout_data"\)\.notNull\(\)/);
+  assert.match(drizzle, /key: varchar\("key", \{ length: 191 \}\)\.primaryKey\(\)/);
+
+  const prismaFiles = renderFor("prisma", "mysql");
+  const prisma = schemaFile(prismaFiles, "prisma").contents;
+  // Prisma's default String is VARCHAR(191): too short for these columns.
+  assert.match(prisma, /checkoutData String {2}@map\("checkout_data"\) @db\.MediumText/);
+  assert.match(prisma, /reference {6}String {2}@map\("reference"\) @db\.VarChar\(255\)/);
+  const constraints = prismaFiles.find(
+    (file) => file.path === "prisma/openreceive-constraints.sql",
+  ).contents;
+  assert.match(
+    constraints,
+    /ALTER TABLE `openreceive_payments` ADD CONSTRAINT `openreceive_payments_hash_check` CHECK/,
+  );
+
+  const typeorm = schemaFile(renderFor("typeorm", "mysql"), "typeorm").contents;
+  assert.match(typeorm, /AUTO_INCREMENT PRIMARY KEY/);
+  assert.match(typeorm, /\\`key\\` VARCHAR\(191\)/);
+
+  for (const orm of OPENRECEIVE_ORMS) {
+    const guide = guideFile(renderFor(orm, "mysql")).contents;
+    assert.match(guide, /SET state = 'paid', paid_at = \?\n {6}WHERE id = \?/);
+    assert.match(guide, /SELECT ROW_COUNT\(\) AS claimed/);
+    assert.doesNotMatch(guide, /RETURNING id|= \$1/);
+  }
+  assert.match(guideFile(renderFor("drizzle", "mysql")).contents, /drizzle-orm\/mysql2/);
+  assert.match(guideFile(renderFor("prisma", "mysql")).contents, /prismaDb\(prisma, "mysql"\)/);
+});
+
 // reference is text and nothing relates it to another table.
 test("no ORM emits a relation for reference", () => {
   for (const orm of OPENRECEIVE_ORMS) {
@@ -430,7 +466,7 @@ test("no ORM emits a relation for reference", () => {
       );
       assert.match(
         schema,
-        /reference TEXT NOT NULL|reference\s+String\s+@map\("reference"\)|reference: text\("reference"\)/,
+        /reference (?:TEXT|VARCHAR\(255\)) NOT NULL|reference\s+String\s+@map\("reference"\)|reference: (?:text\("reference"\)|varchar\("reference", \{ length: 255 \}\))/,
         `${orm}/${dialect} should type reference as text`,
       );
     }

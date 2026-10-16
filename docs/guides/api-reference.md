@@ -599,7 +599,7 @@ your application's existing database.
 
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `db` | `SqlDatabase` | yes | pg Pool/Client, `node:sqlite` DatabaseSync, better-sqlite3, or a custom [SqlAdapter](#sqladapter). |
+| `db` | `SqlDatabase` | yes | pg Pool/Client, mysql2 Pool/Connection, `node:sqlite` DatabaseSync, better-sqlite3, or a custom [SqlAdapter](#sqladapter). |
 | `amountFor` | `(reference, context) => amount \| null` | yes | The trusted price for a reference, from your data. Return `null` for a 404. Called only where a price is minted or quoted. You may return an optional `description` beside the price. It is one display string. It is echoed on the prepare and create responses, shown above the amount by both drop-ins, and used as the invoice memo so the payer's wallet shows it too. See [Frontend checkout → Show the payer what they are buying](frontend-checkout.md#show-the-payer-what-they-are-buying). |
 | `onPaid` | `PaymentSettlementHook` | yes | Fulfillment. See [onPaid](#onpaid). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
@@ -617,7 +617,7 @@ In db mode, `onPaid` receives a `PaymentSettlement`. This is the callback's argu
 | `paymentHash` | `string` | 64-character lowercase hex hash of the settled attempt. |
 | `paidAt` | `number` | Integer Unix seconds of settlement. Comes from `settled_at`, else the observation time. |
 | `details` | `PaymentDetails?` | Wallet row that proved settlement. See [PaymentDetails](#paymentdetails). |
-| `query` | `(sql, params?) => Promise<rows>` | Runs SQL inside the settlement transaction. Write it for your own dialect (`?` on sqlite, `$1`-style on postgres). It reaches the driver unchanged. Use it for writes that must commit together with settlement, such as an outbox row. |
+| `query` | `(sql, params?) => Promise<rows>` | Runs SQL inside the settlement transaction. Write it for your own dialect (`?` on sqlite and mysql, `$1`-style on postgres). It reaches the driver unchanged. Use it for writes that must commit together with settlement, such as an outbox row. |
 
 `onPaid` runs inside the settlement transaction, and only for the order's first
 settled attempt. It is write-once: a second settled attempt for the same order
@@ -1320,7 +1320,7 @@ and a test. `createHost({ db })` builds it for you otherwise.
 
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `db` | `SqlDatabase` | yes | pg Pool/Client, SQLite handle, or an [SqlAdapter](#sqladapter). |
+| `db` | `SqlDatabase` | yes | pg Pool/Client, mysql2 Pool/Connection, SQLite handle, or an [SqlAdapter](#sqladapter). |
 | `tableName` | `string` | no | Default `openreceive_payments`. |
 | `metaTableName` | `string` | no | Key/value table that holds the durable reconcile gate. Default `openreceive_meta`. |
 | `clock` | `() => number` | no | Unix-seconds clock override. Used by the reconcile gate and the payment-methods cache TTL. |
@@ -1328,7 +1328,8 @@ and a test. `createHost({ db })` builds it for you otherwise.
 This is the repository the library owns behind `createHost({ db })`, exposed for
 advanced integrations. It is responsible for:
 
-- locking commits per reference (SQLite `BEGIN IMMEDIATE`, postgres advisory lock),
+- locking commits per reference (SQLite `BEGIN IMMEDIATE`, postgres advisory
+  lock, a MySQL row lock in `openreceive_meta`),
 - deciding whether a new attempt replaces a live one or conflicts with it,
 - the `pending → settled | expired | failed | attention` state machine, and
 - `markPaidOnce`, the settlement transaction that is safe to replay. It
@@ -1391,19 +1392,23 @@ SQL-repository only.
 ### paymentsSchemaSql
 
 ```ts
-paymentsSchemaSql(dialect: "postgres" | "sqlite", tableName?, metaTableName?): string
+paymentsSchemaSql(dialect: "postgres" | "sqlite" | "mysql", tableName?, metaTableName?): string
+paymentsSchemaStatements(dialect, tableName?, metaTableName?): readonly string[]
 ```
 
 **Where it fits:** Use this when writing the migration that creates
 OpenReceive's two tables in your own migration tool. Call it and execute the
 string it returns. If you use one of the supported ORMs, `npx openreceive
 scaffold payments` writes the same DDL in that ORM's migration format instead.
+`paymentsSchemaStatements` returns the same DDL one statement at a time, for a
+driver that runs one statement per call, such as mysql2 without
+`multipleStatements`.
 
 **Parameters**
 
 | Name | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `dialect` | `"postgres" \| "sqlite"` | yes | Which SQL dialect to emit. |
+| `dialect` | `"postgres" \| "sqlite" \| "mysql"` | yes | Which SQL dialect to emit. `mysql` covers MariaDB. |
 | `tableName` | `string` | no | Payments table name. Default `openreceive_payments`. |
 | `metaTableName` | `string` | no | Reconcile-gate table name. Default `openreceive_meta`. |
 
@@ -1423,12 +1428,12 @@ Keep every column and constraint. `payment_hash` is globally unique.
 
 ### SqlAdapter
 
-The database interface to implement yourself when the built-in pg/SQLite
-bindings do not fit.
+The database interface to implement yourself when the built-in pg, mysql2 and
+SQLite bindings do not fit.
 
 ```ts
 interface SqlAdapter {
-  dialect: "postgres" | "sqlite";
+  dialect: "postgres" | "sqlite" | "mysql";
   query(sql: string, params?: readonly unknown[]): Promise<readonly Record<string, unknown>[]>;
   transaction<T>(run: (tx: { query }) => Promise<T>): Promise<T>;
 }
@@ -1442,7 +1447,7 @@ two methods, and the rules are simple: pass the SQL through unchanged, and make
 never write one.
 
 `query` receives each statement already written for the adapter's declared
-dialect (`?` on sqlite, `$1`-style on postgres). It must pass the statement to
+dialect (`?` on sqlite and mysql, `$1`-style on postgres). It must pass the statement to
 the driver EXACTLY as given. Nothing rewrites placeholders, in either direction.
 It returns SELECT rows (`Record<string, unknown>[]`), or `[]` for a non-SELECT.
 `transaction` must be truly atomic. Write-once settlement and fulfillment both
@@ -1686,7 +1691,7 @@ Every generated file includes the note about fulfilling each order exactly once.
 | --- | --- |
 | `--orm <name>` | `prisma \| drizzle \| typeorm \| sequelize \| knex`. |
 | `--supabase` | Instead of an ORM file, write `supabase/migrations/<timestamp>_openreceive.sql`: the tables, locked away from Supabase's Data API, the functions [Supabase over HTTPS](supabase.md#supabase-over-https) calls, and a placeholder `openreceive_on_paid`. Takes no other flag but `--out-dir` and `--force`. |
-| `--dialect <name>` | `postgres \| sqlite` (default `postgres`). |
+| `--dialect <name>` | `postgres \| sqlite \| mysql` (default `postgres`). `mysql` covers MariaDB. |
 | `--table-name <name>` | Payment attempts table (default `openreceive_payments`). |
 | `--meta-table-name <name>` | Reconcile-gate table (default `openreceive_meta`). |
 | `--out-dir <path>` | Output root (default `.`). |

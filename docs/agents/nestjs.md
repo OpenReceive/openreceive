@@ -330,7 +330,7 @@ products, and you do not join them.
   ORM. `reference` arrives as a string: convert it when the app's ids are
   numbers. Database writes
   only in the hook; emails, jobs, and pushes after commit. Placeholder style is
-  the dialect you declared: `?` on sqlite, `$1` on postgres.
+  the dialect you declared: `?` on sqlite and mysql, `$1` on postgres.
 
 ### If the database is Supabase
 
@@ -595,7 +595,7 @@ async function bootstrap() {
           // a reference. The WHERE clause is the lock: a second fulfillment
           // path of yours (admin action, replayed job) updates zero rows. Use
           // `query` here, not a repository: it runs in this same transaction.
-          // `$1` on postgres, `?` on sqlite.
+          // `$1` on postgres, `?` on sqlite and mysql.
           await query(
             "UPDATE orders SET status = 'paid', paid_at = $1 WHERE id = $2 AND status = 'awaiting_payment'",
             [paidAt, reference],

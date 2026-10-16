@@ -2,7 +2,9 @@ import {
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   type PaymentDetails,
+  type PaymentsDialect,
   paymentsDdlStatements,
+  paymentsMetaKeyColumn,
   redactSecrets,
   unixSeconds,
 } from "@openreceive/core";
@@ -26,6 +28,7 @@ import {
 } from "./payment-rows.ts";
 import {
   resolveSqlAdapter,
+  type SqlAdapter,
   type SqlClient,
   type SqlDatabase,
   type SqlQuery,
@@ -34,6 +37,13 @@ import {
 
 /** Namespacing seed for the postgres per-reference advisory lock. */
 const ADVISORY_LOCK_SEED = 8_210_223;
+
+/**
+ * MySQL's per-reference lock is a row in the meta table, one per bucket of
+ * references: every worker on the database must map a reference to the same
+ * row, so neither this count nor `mysqlLockKey` may ever change.
+ */
+const MYSQL_LOCK_BUCKETS = 1_024;
 
 /** The `openreceive_meta` row recording which schema generation is installed. */
 const SCHEMA_VERSION_META_KEY = "schema_version";
@@ -44,16 +54,37 @@ export { OPENRECEIVE_RECONCILE_BATCH_SIZE } from "./payment-rows.ts";
 /**
  * Dialect-aware "that table is absent" sniffing for the schema-version probe.
  * sqlite (node:sqlite and better-sqlite3) reports "no such table"; postgres
- * raises SQLSTATE 42P01 ("relation ... does not exist"). Everything else —
+ * raises SQLSTATE 42P01 ("relation ... does not exist"); MySQL and MariaDB
+ * raise error 1146 ("Table '...' doesn't exist"). Everything else —
  * connection refused, permissions — is not a migration diagnosis.
  */
-function isMissingTableError(error: unknown, dialect: "postgres" | "sqlite"): boolean {
+function isMissingTableError(error: unknown, dialect: SqlAdapter["dialect"]): boolean {
   const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
   if (dialect === "postgres") {
-    const code = (error as { code?: unknown } | null)?.code;
     return code === "42P01" || /relation .+ does not exist/i.test(message);
   }
+  if (dialect === "mysql") {
+    const errno = (error as { errno?: unknown } | null)?.errno;
+    return (
+      code === "ER_NO_SUCH_TABLE" ||
+      errno === 1146 ||
+      /\b1146\b|table .+ doesn't exist/i.test(message)
+    );
+  }
   return /no such table/i.test(message);
+}
+
+/**
+ * The meta-table row that serializes one reference's transactions on MySQL.
+ * A FNV-1a hash of the reference's UTF-8 bytes picks the bucket.
+ */
+function mysqlLockKey(reference: string): string {
+  let hash = 0x811c9dc5;
+  for (const byte of new TextEncoder().encode(reference)) {
+    hash = Math.imul(hash ^ byte, 0x01000193);
+  }
+  return `commit_lock:${(hash >>> 0) % MYSQL_LOCK_BUCKETS}`;
 }
 
 export interface SqlPaymentsOptions {
@@ -73,8 +104,8 @@ export interface PaymentSettlement {
   /**
    * Runs statements inside the settlement transaction. Use it to update the
    * host order or insert a transactional outbox row. Write the placeholders
-   * your database uses (`?` on sqlite, `$1`-style on postgres) — this SQL is
-   * yours and reaches the driver exactly as written.
+   * your database uses (`?` on sqlite and mysql, `$1`-style on postgres) —
+   * this SQL is yours and reaches the driver exactly as written.
    *
    * OpenReceive already guarantees this hook fires at most once per reference
    * across its own settlement paths. It cannot see fulfillment triggered
@@ -139,16 +170,27 @@ export interface SqlPaymentRepository extends PaymentRepository<SqlClient> {
  * The canonical payment-attempts DDL, rendered as one executable script. The
  * statements themselves live in `@openreceive/core`
  * (`paymentsDdlStatements`) so this helper and the scaffold CLI's
- * ORM migrations can never drift from each other.
+ * ORM migrations can never drift from each other. A mysql2 connection runs a
+ * script of several statements only when opened with `multipleStatements`;
+ * otherwise run `paymentsSchemaStatements` one at a time.
  */
 export function paymentsSchemaSql(
-  dialect: "postgres" | "sqlite",
+  dialect: PaymentsDialect,
   tableName = "openreceive_payments",
   metaTableName = "openreceive_meta",
 ): string {
-  return paymentsDdlStatements({ dialect, tableName, metaTableName })
+  return paymentsSchemaStatements(dialect, tableName, metaTableName)
     .map((statement) => `${statement};`)
     .join("\n");
+}
+
+/** The same DDL as `paymentsSchemaSql`, one statement per entry, without semicolons. */
+export function paymentsSchemaStatements(
+  dialect: PaymentsDialect,
+  tableName = "openreceive_payments",
+  metaTableName = "openreceive_meta",
+): readonly string[] {
+  return paymentsDdlStatements({ dialect, tableName, metaTableName });
 }
 
 /**
@@ -171,16 +213,26 @@ export function createSqlPayments(
   // in a literal, a comment, or a postgres JSON operator must survive.
   const statement = (sql: string): string =>
     adapter.dialect === "postgres" ? toPgPlaceholders(sql) : sql;
+  const key = paymentsMetaKeyColumn(adapter.dialect);
 
   const lockReference = async (tx: SqlClient, reference: string): Promise<void> => {
-    // SQLite transactions are single-writer (BEGIN IMMEDIATE); postgres needs a
-    // per-reference serialization boundary.
+    // SQLite transactions are single-writer (BEGIN IMMEDIATE); postgres and
+    // mysql need a per-reference serialization boundary.
     if (adapter.dialect === "postgres") {
       // The lock function returns void, a column type Prisma's raw queries
       // cannot read, so select a constant from it instead.
       await tx.query(
         statement("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(?, ?))"),
         [reference, ADVISORY_LOCK_SEED],
+      );
+    } else if (adapter.dialect === "mysql") {
+      // A row lock held until commit, not GET_LOCK, which Vitess (PlanetScale)
+      // restricts. The upsert creates the bucket's row on first use and takes
+      // its exclusive lock either way, so a second transaction on the same
+      // bucket waits here until the first commits or rolls back.
+      await tx.query(
+        `INSERT INTO ${metaTable} (${key}, value, rev) VALUES (?, '', 0) ON DUPLICATE KEY UPDATE rev = rev`,
+        [mysqlLockKey(reference)],
       );
     }
   };
@@ -195,7 +247,46 @@ export function createSqlPayments(
       ),
       [reference],
     );
-    return rows.map(recordFromRow);
+    // A MySQL table made by an ORM keeps the database's default collation,
+    // which matches "Order-1" to "order-1": only the exact reference counts.
+    return rows.filter((row) => row.reference === reference).map(recordFromRow);
+  };
+
+  const referenceOf = async (client: SqlClient, paymentHash: string) => {
+    const rows = await client.query(
+      statement(`SELECT reference FROM ${table} WHERE payment_hash = ?`),
+      [paymentHash],
+    );
+    return rows[0] === undefined ? undefined : asString(rows[0].reference, "reference");
+  };
+
+  /**
+   * Runs `run` in a transaction holding the lock of the attempt's reference,
+   * or returns `missing` when no attempt has this hash. On MySQL the
+   * reference is read before the transaction: REPEATABLE READ fixes a
+   * transaction's snapshot at its first read, and a read before the lock
+   * would hide a settlement committed while this transaction waited for it.
+   * A reference never changes, so reading it first is safe.
+   */
+  const withAttemptLock = async <T>(
+    paymentHash: string,
+    missing: T,
+    run: (tx: SqlClient, reference: string) => Promise<T>,
+  ): Promise<T> => {
+    if (adapter.dialect === "mysql") {
+      const reference = await referenceOf(adapter, paymentHash);
+      if (reference === undefined) return missing;
+      return adapter.transaction(async (tx) => {
+        await lockReference(tx, reference);
+        return run(tx, reference);
+      });
+    }
+    return adapter.transaction(async (tx) => {
+      const reference = await referenceOf(tx, paymentHash);
+      if (reference === undefined) return missing;
+      await lockReference(tx, reference);
+      return run(tx, reference);
+    });
   };
 
   // One probe per repository, on first use: a database written by a NEWER
@@ -211,7 +302,7 @@ export function createSqlPayments(
       let stored: number | undefined;
       try {
         const rows = await adapter.query(
-          statement(`SELECT value FROM ${metaTable} WHERE key = ? LIMIT 1`),
+          statement(`SELECT value FROM ${metaTable} WHERE ${key} = ? LIMIT 1`),
           [SCHEMA_VERSION_META_KEY],
         );
         const value = rows[0]?.value;
@@ -241,28 +332,26 @@ export function createSqlPayments(
 
   // Drivers report affected rows differently, so the gate reads its writes back.
   const metaStore: MetaStore = {
-    async read(key) {
+    async read(gateKey) {
       const rows = await adapter.query(
-        statement(`SELECT value, rev FROM ${metaTable} WHERE key = ? LIMIT 1`),
-        [key],
+        statement(`SELECT value, rev FROM ${metaTable} WHERE ${key} = ? LIMIT 1`),
+        [gateKey],
       );
       return rows[0] === undefined ? undefined : { value: rows[0].value, rev: rows[0].rev };
     },
-    async insertIfAbsent(key, value) {
-      await adapter.query(
-        statement(
-          adapter.dialect === "postgres"
-            ? `INSERT INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0) ON CONFLICT (key) DO NOTHING`
-            : `INSERT OR IGNORE INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0)`,
-        ),
-        [key, value],
-      );
+    async insertIfAbsent(gateKey, value) {
+      const insert = {
+        postgres: `INSERT INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0) ON CONFLICT (key) DO NOTHING`,
+        mysql: `INSERT IGNORE INTO ${metaTable} (${key}, value, rev) VALUES (?, ?, 0)`,
+        sqlite: `INSERT OR IGNORE INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0)`,
+      }[adapter.dialect];
+      await adapter.query(statement(insert), [gateKey, value]);
       return undefined;
     },
-    async compareAndSet(key, value, rev) {
+    async compareAndSet(gateKey, value, rev) {
       await adapter.query(
-        statement(`UPDATE ${metaTable} SET value = ?, rev = rev + 1 WHERE key = ? AND rev = ?`),
-        [value, key, rev],
+        statement(`UPDATE ${metaTable} SET value = ?, rev = rev + 1 WHERE ${key} = ? AND rev = ?`),
+        [value, gateKey, rev],
       );
       return undefined;
     },
@@ -345,14 +434,8 @@ export function createSqlPayments(
       await assertSupportedSchema();
       if (!input.reason.trim() || input.reason.length > 500)
         throw new TypeError("A reviewed repair reason of 1–500 characters is required.");
-      return adapter.transaction(async (tx) => {
-        const hash = input.paymentHash.toLowerCase();
-        const preliminary = await tx.query(
-          statement(`SELECT reference FROM ${table} WHERE payment_hash = ?`),
-          [hash],
-        );
-        if (preliminary[0] === undefined) return false;
-        await lockReference(tx, asString(preliminary[0].reference, "reference"));
+      const hash = input.paymentHash.toLowerCase();
+      return withAttemptLock(hash, false, async (tx) => {
         const rows = await tx.query(
           statement(
             `SELECT payment_hash, reference, status, status_reason, updated_at, expires_at, checkout_data, swap_data IS NOT NULL AS has_swap FROM ${table} WHERE payment_hash = ? AND paid_at IS NULL`,
@@ -369,9 +452,10 @@ export function createSqlPayments(
         const candidate = repairCandidate(row);
         if (candidate === null) return false;
         const auditKey = `payment_repair:${hash}:${input.expectedStatus}:${input.expectedUpdatedAt}`;
-        const prior = await tx.query(statement(`SELECT key FROM ${metaTable} WHERE key = ?`), [
-          auditKey,
-        ]);
+        const prior = await tx.query(
+          statement(`SELECT ${key} FROM ${metaTable} WHERE ${key} = ?`),
+          [auditKey],
+        );
         if (prior.length > 0) return false;
         const now = clock();
         // The reference lock also excludes a concurrent settlement. Audit and
@@ -382,10 +466,13 @@ export function createSqlPayments(
           ),
           [now, hash, input.expectedStatus, input.expectedUpdatedAt],
         );
-        await tx.query(statement(`INSERT INTO ${metaTable} (key, value, rev) VALUES (?, ?, 0)`), [
-          auditKey,
-          JSON.stringify({ ...candidate, reviewedAt: now, reason: redactSecrets(input.reason) }),
-        ]);
+        await tx.query(
+          statement(`INSERT INTO ${metaTable} (${key}, value, rev) VALUES (?, ?, 0)`),
+          [
+            auditKey,
+            JSON.stringify({ ...candidate, reviewedAt: now, reason: redactSecrets(input.reason) }),
+          ],
+        );
         return true;
       });
     },
@@ -468,13 +555,7 @@ export function createSqlPayments(
 
     async recordReconciliation(transition: ReconciliationTransition) {
       await assertSupportedSchema();
-      await adapter.transaction(async (tx) => {
-        const rows = await tx.query(
-          statement(`SELECT reference FROM ${table} WHERE payment_hash = ?`),
-          [transition.paymentHash.toLowerCase()],
-        );
-        if (rows[0] === undefined) return;
-        await lockReference(tx, asString(rows[0].reference, "reference"));
+      await withAttemptLock<void>(transition.paymentHash.toLowerCase(), undefined, async (tx) => {
         // Guarding on status = 'pending' makes the transition idempotent and
         // guarantees a settled attempt is never overwritten.
         await tx.query(
@@ -505,15 +586,8 @@ export function createSqlPayments(
   ): Promise<boolean> {
     await assertSupportedSchema();
     const paymentHash = input.paymentHash.toLowerCase();
-    return adapter.transaction(async (tx) => {
-      const preliminary = await tx.query(
-        statement(`SELECT reference FROM ${table} WHERE payment_hash = ?`),
-        [paymentHash],
-      );
-      const reference = preliminary[0]?.reference;
-      if (reference === undefined) return false;
-      await lockReference(tx, asString(reference, "reference"));
-      const rows = await rowsForReference(tx, asString(reference, "reference"));
+    return withAttemptLock(paymentHash, false, async (tx, reference) => {
+      const rows = await rowsForReference(tx, reference);
       const row = rows.find((candidate) => candidate.paymentHash === paymentHash);
       if (row === undefined || row.status !== "pending") return false;
       const firstForReference = !rows.some((candidate) => candidate.status === "settled");

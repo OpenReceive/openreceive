@@ -1,11 +1,10 @@
 import { fulfillmentNoteMarkdown, paymentsColumnNames, paymentsSeedSql } from "@openreceive/core";
-import { isSqlite } from "./shared.ts";
 import type { ScaffoldPaymentsOptions } from "./types.ts";
 
 const PLACEHOLDER_NOTE =
-  "Custom adapters receive SQL already written for their own dialect (`?` on sqlite, " +
-  "`$1`-style on postgres) — pass it to the driver verbatim — and must return SELECT rows " +
-  "as plain objects.";
+  "Custom adapters receive SQL already written for their own dialect (`?` on sqlite and " +
+  "mysql, `$1`-style on postgres) — pass it to the driver verbatim — and must return SELECT " +
+  "rows as plain objects.";
 
 /**
  * OPENRECEIVE_PAYMENTS.md: run the ORM migration, then wire
@@ -94,18 +93,7 @@ ${fulfillmentNoteMarkdown(options.tableName)}
 
 In this project's terms, the guarded write goes inside \`onPaid\`:
 
-\`\`\`ts
-const onPaid = async ({ reference, paidAt, query }) => {
-  // \`query\` runs in OpenReceive's settlement transaction, so the order
-  // transition and the payment record commit or roll back together.
-  const claimed = await query(
-    ${guardedUpdateSql(options)},
-    [paidAt, reference],
-  );
-  if (claimed.length === 0) return; // someone else already fulfilled it
-  await shipOrder(reference);
-};
-\`\`\`
+${claimSnippet(options)}
 
 ## 4. What to pass as \`db\`
 
@@ -119,19 +107,47 @@ Never expose \`swap_data\` / \`swapData\` from application APIs, logs, or browse
  * The guarded, idempotent order transition, written for this scaffold's
  * dialect. Postgres and modern SQLite both support RETURNING, so the host can
  * tell "I won the claim" from "someone already had it" by row count alone
- * rather than by a driver-specific affected-rows field.
+ * rather than by a driver-specific affected-rows field. MySQL has no
+ * RETURNING on UPDATE; its claim reads ROW_COUNT() instead (claimSnippet).
  */
 function guardedUpdateSql(options: ScaffoldPaymentsOptions): string {
-  const [paidAt, reference] = isSqlite(options) ? ["?", "?"] : ["$1", "$2"];
+  const [paidAt, reference] = options.dialect === "postgres" ? ["$1", "$2"] : ["?", "?"];
   // Indented to sit under the 4-space `query(` argument in the rendered
   // snippet, with the SQL keywords right-aligned into one river.
   return [
     "`UPDATE orders",
     `        SET state = 'paid', paid_at = ${paidAt}`,
     `      WHERE id = ${reference}`,
-    "        AND state = 'awaiting_payment'",
-    "     RETURNING id`",
+    options.dialect === "mysql"
+      ? "        AND state = 'awaiting_payment'`"
+      : "        AND state = 'awaiting_payment'",
+    ...(options.dialect === "mysql" ? [] : ["     RETURNING id`"]),
   ].join("\n");
+}
+
+function claimSnippet(options: ScaffoldPaymentsOptions): string {
+  const claim =
+    options.dialect === "mysql"
+      ? `  await query(
+    ${guardedUpdateSql(options)},
+    [paidAt, reference],
+  );
+  // ROW_COUNT() reads the UPDATE above: \`query\` keeps one connection.
+  const [{ claimed }] = await query("SELECT ROW_COUNT() AS claimed");
+  if (Number(claimed) === 0) return; // someone else already fulfilled it`
+      : `  const claimed = await query(
+    ${guardedUpdateSql(options)},
+    [paidAt, reference],
+  );
+  if (claimed.length === 0) return; // someone else already fulfilled it`;
+  return `\`\`\`ts
+const onPaid = async ({ reference, paidAt, query }) => {
+  // \`query\` runs in OpenReceive's settlement transaction, so the order
+  // transition and the payment record commit or roll back together.
+${claim}
+  await shipOrder(reference);
+};
+\`\`\``;
 }
 
 function migrationStep(options: ScaffoldPaymentsOptions): string {
@@ -196,8 +212,7 @@ export const db = prismaDb(prisma, "${options.dialect}");
 
 function knexDbSection(options: ScaffoldPaymentsOptions): string {
   return `Knex needs an adapter — \`knexDb\` is the shipped one, and it
-already handles the sqlite-versus-postgres difference in what \`raw\`
-returns. ${PLACEHOLDER_NOTE}
+already handles what each driver returns. ${PLACEHOLDER_NOTE}
 
 \`\`\`ts
 import { knexDb } from "@openreceive/http";
@@ -220,26 +235,38 @@ export const db = typeOrmDb(dataSource, "${options.dialect}");
 }
 
 function drizzleDbSection(options: ScaffoldPaymentsOptions): string {
-  const snippet = isSqlite(options)
-    ? `\`\`\`ts
+  const snippets = {
+    sqlite: `\`\`\`ts
 import Database from "better-sqlite3"; // or DatabaseSync from "node:sqlite"
 import { drizzle } from "drizzle-orm/better-sqlite3"; // node:sqlite users: drizzle-orm/node-sqlite
 
 const sqlite = new Database("app.db");
 const orm = drizzle(sqlite);
 const host = createHost({ db: sqlite, amountFor, onPaid });
-\`\`\``
-    : `\`\`\`ts
+\`\`\``,
+    postgres: `\`\`\`ts
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const orm = drizzle(pool);
 const host = createHost({ db: pool, amountFor, onPaid });
-\`\`\``;
-  const handle = isSqlite(options)
-    ? "the better-sqlite3 / `node:sqlite` Database"
-    : "the `pg` Pool";
+\`\`\``,
+    mysql: `\`\`\`ts
+import mysql from "mysql2/promise";
+import { drizzle } from "drizzle-orm/mysql2";
+
+const pool = mysql.createPool(process.env.DATABASE_URL);
+const orm = drizzle(pool);
+const host = createHost({ db: pool, amountFor, onPaid });
+\`\`\``,
+  };
+  const snippet = snippets[options.dialect];
+  const handle = {
+    sqlite: "the better-sqlite3 / `node:sqlite` Database",
+    postgres: "the `pg` Pool",
+    mysql: "the mysql2 Pool",
+  }[options.dialect];
   return `Pass the underlying driver handle you already give \`drizzle(...)\` —
 ${handle} — straight through as \`db\`. The library binds to the driver, so no
 adapter is needed.

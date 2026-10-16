@@ -778,6 +778,71 @@ test("a missing meta table is diagnosed on postgres by its 42P01 error code", as
   await assert.rejects(payments.listReconcilableAttempts(), /have not been migrated/);
 });
 
+test("a missing meta table is diagnosed on mysql by its error 1146", async () => {
+  const missing = Object.assign(new Error("Table 'shop.openreceive_meta' doesn't exist"), {
+    code: "ER_NO_SUCH_TABLE",
+    errno: 1146,
+  });
+  const adapter = {
+    dialect: "mysql",
+    query: async () => {
+      throw missing;
+    },
+    transaction: async (run) => run(adapter),
+  };
+  const payments = createSqlPayments(adapter, { clock: () => 1_000 });
+  await assert.rejects(payments.listReconcilableAttempts(), /have not been migrated/);
+});
+
+test("the mysql schema quotes the reserved key column and keeps its indexes in the table", () => {
+  const sql = paymentsSchemaSql("mysql");
+  assert.match(sql, /`key` VARCHAR\(191\) NOT NULL PRIMARY KEY/);
+  assert.match(sql, /INSERT IGNORE INTO openreceive_meta \(`key`, value, rev\)/);
+  assert.match(sql, /CHECK \(payment_hash REGEXP '\(\?-i\)\^\[0-9a-f\]\{64\}\$'\)/);
+  // MySQL has no CREATE INDEX IF NOT EXISTS, so the script stays re-runnable.
+  assert.doesNotMatch(sql, /CREATE INDEX/);
+  assert.equal([...sql.matchAll(/^\s+INDEX \S+ \(/gm)].length, 3);
+  assert.equal(
+    [...sql.matchAll(/ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin/g)].length,
+    2,
+  );
+});
+
+test("mysql reads an attempt's reference before the transaction and locks first inside it", async () => {
+  // REPEATABLE READ fixes a transaction's snapshot at its first read, so the
+  // lock must be the transaction's first statement.
+  const log = [];
+  const adapter = {
+    dialect: "mysql",
+    query: async (sql, params) => {
+      log.push({ where: "outside", sql, params });
+      return /SELECT reference/.test(sql) ? [{ reference: "order" }] : [];
+    },
+    transaction: async (run) =>
+      run({
+        query: async (sql, params) => {
+          log.push({ where: "inside", sql, params });
+          return [];
+        },
+      }),
+  };
+  const payments = createSqlPayments(adapter, { clock: () => 1_000 });
+  assert.equal(await payments.markPaidOnce({ paymentHash: hash("a"), paidAt: 1 }, () => {}), false);
+  const firstInside = log.find((entry) => entry.where === "inside");
+  assert.match(
+    firstInside.sql,
+    /^INSERT INTO openreceive_meta \(`key`, value, rev\) .* ON DUPLICATE KEY UPDATE/,
+  );
+  assert.match(firstInside.params[0], /^commit_lock:\d+$/);
+  assert.ok(
+    log.findIndex((entry) => /SELECT reference/.test(entry.sql)) < log.indexOf(firstInside),
+  );
+  // The same reference maps to the same lock row on every worker.
+  log.length = 0;
+  await payments.markPaidOnce({ paymentHash: hash("b"), paidAt: 1 }, () => {});
+  assert.equal(log.find((entry) => entry.where === "inside").params[0], firstInside.params[0]);
+});
+
 test("a schema probe failing for any other reason stays silent, as before versioning", async () => {
   // Connection refused on the meta read must not masquerade as "not migrated";
   // the probe is swallowed and the real query decides.

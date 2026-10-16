@@ -117,13 +117,14 @@ const app = Fastify({ trustProxy: true });
 await app.register(openReceiveFastify, {
   wallet: { nwc: process.env.NWC_URI! }, // receive-only NWC code; your app refuses to start otherwise
   storage: {
-    db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+    db, // pg Pool/Client, mysql2 Pool, node:sqlite, better-sqlite3, or a custom adapter
     onPaid: async ({ reference, paidAt, query }) => {
       // Settlement transaction; runs only for the first settled attempt for a
       // reference. The WHERE clause is the lock: a second fulfillment path of
       // yours (admin action, replayed job) updates zero rows and does nothing.
-      // Use `query` here, not your ORM's other connection. `?` on sqlite, `$1`
-      // on postgres.
+      // Use `query` here, not your ORM's other connection. `?` on sqlite and
+      // mysql, `$1` on postgres. MySQL has no RETURNING: after the UPDATE,
+      // `SELECT ROW_COUNT() AS claimed` tells you the same thing.
       const claimed = await query(
         "UPDATE orders SET state = 'paid', paid_at = ? WHERE id = ? AND state = 'awaiting_payment' RETURNING id",
         [paidAt, reference],

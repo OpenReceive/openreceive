@@ -4,7 +4,7 @@ You never write a payment repository by hand. OpenReceive owns the
 `openreceive_payments` logic. Your ORM provides two things:
 
 1. **The migration.** `npx openreceive scaffold payments --orm prisma`
-   (or `drizzle | typeorm | sequelize | knex`, `--dialect postgres | sqlite`)
+   (or `drizzle | typeorm | sequelize | knex`, `--dialect postgres | sqlite | mysql`)
    writes one migration or schema file and a wiring guide. The file creates two
    tables, `openreceive_payments` and `openreceive_meta`. Run it with your
    normal migration workflow.
@@ -15,9 +15,10 @@ You never write a payment repository by hand. OpenReceive owns the
 | Stack                  | Pass                                                        |
 | ---------------------- | ----------------------------------------------------------- |
 | pg (node-postgres)     | the `Pool` or `Client` directly                             |
+| mysql2 (MySQL, MariaDB) | the `Pool` or `Connection` directly                        |
 | node:sqlite            | the `DatabaseSync` directly                                 |
 | better-sqlite3         | the `Database` directly                                     |
-| Drizzle                | the underlying driver (`pg` Pool or better-sqlite3) directly |
+| Drizzle                | the underlying driver (`pg` Pool, mysql2 Pool or better-sqlite3) directly |
 | Prisma                 | `prismaDb(prisma, dialect)` from `@openreceive/http`        |
 | Knex                   | `knexDb(knex, dialect)` from `@openreceive/http`            |
 | TypeORM                | `typeOrmDb(dataSource, dialect)` from `@openreceive/http`   |
@@ -25,13 +26,14 @@ You never write a payment repository by hand. OpenReceive owns the
 
 A custom adapter is `{ dialect, query, transaction }` (`SqlAdapter`):
 
-- `dialect` is `"postgres"` or `"sqlite"`.
+- `dialect` is `"postgres"`, `"sqlite"` or `"mysql"` (MySQL and MariaDB).
 - `query` runs one statement and returns the SELECT rows (`[]` for other
   statements).
 - `transaction` runs a callback against a transactional client.
 
 **Host SQL reaches the driver unchanged.** The library writes each of its own
-statements in the dialect you declared: `?` on sqlite, `$1`-style on postgres.
+statements in the dialect you declared: `?` on sqlite and mysql, `$1`-style on
+postgres.
 So an adapter passes SQL through exactly as written. A custom adapter must not
 rewrite placeholders either. Renumbering `?` to `$1` would break statements
 that were already correct. `prismaDb`'s statement router exists to prevent
@@ -56,7 +58,8 @@ createHost({ db: sequelizeDb(sequelize, "postgres"), ... });
 ```
 
 Use the factory for your ORM. Each one makes settlement SQL run in the same
-transaction as `onPaid`.
+transaction as `onPaid`. On MySQL and MariaDB, Prisma 7 reaches the database
+through `@prisma/adapter-mariadb`.
 
 A Prisma trap: the Prisma CLI loads `.env` automatically for every command. If
 that file holds a `DATABASE_URL` that points to a container path, migrations run
@@ -115,6 +118,15 @@ const onPaid = async ({ reference, paidAt, query }) => {
   // and runs again on the retry.
   await query("INSERT INTO outbox (kind, reference) VALUES ($1, $2)", ["order_paid", reference]);
 };
+```
+
+MySQL has no `RETURNING` on `UPDATE`. Run the same guarded `UPDATE` with `?`
+placeholders, then read the result through the same `query`, which stays on
+one connection:
+
+```ts
+const [{ claimed }] = await query("SELECT ROW_COUNT() AS claimed");
+if (Number(claimed) === 0) return; // someone else already fulfilled it
 ```
 
 Every scaffolded file includes a longer version of this note.

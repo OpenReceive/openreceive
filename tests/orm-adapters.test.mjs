@@ -47,6 +47,30 @@ test("knexDb sqlite passes the driver's rows array through", async () => {
   assert.deepEqual(rows, [{ id: 1 }, { id: 2 }]);
 });
 
+test("knexDb mysql sends SQL verbatim to Knex's callback-API mysql2 connection", async () => {
+  const calls = [];
+  const connection = {
+    query(sql, values, callback) {
+      calls.push({ sql, values });
+      callback(null, /^select/i.test(sql) ? [{ id: 1 }] : { affectedRows: 1 });
+    },
+  };
+  const knex = {
+    raw: async () => {
+      throw new Error("raw() would rewrite `??` and `\\?`");
+    },
+    client: { acquireConnection: async () => connection, releaseConnection: async () => {} },
+    transaction: (run) => run(knex),
+  };
+  const adapter = knexDb(knex, "mysql");
+  assert.deepEqual(await adapter.query("SELECT '??' AS x"), [{ id: 1 }]);
+  assert.deepEqual(await adapter.query("UPDATE t SET x = ?", [1]), []);
+  assert.deepEqual(calls, [
+    { sql: "SELECT '??' AS x", values: undefined },
+    { sql: "UPDATE t SET x = ?", values: [1] },
+  ]);
+});
+
 test("knexDb transactions query through the trx executor, not the root", async () => {
   const knex = fakeKnex({ rows: [] });
   await knexDb(knex, "postgres").transaction((tx) => tx.query("UPDATE t SET x = $1", [1]));
@@ -151,6 +175,14 @@ test("typeOrmDb returns rows verbatim and [] for a nullish driver result", async
   assert.deepEqual(await adapter.transaction((tx) => tx.query("UPDATE t SET x = $1", [1])), []);
 });
 
+test("typeOrmDb reads MySQL's write result header as no rows", async () => {
+  const adapter = typeOrmDb(
+    { query: async () => ({ affectedRows: 1, insertId: 0 }), transaction: (run) => run({}) },
+    "mysql",
+  );
+  assert.deepEqual(await adapter.query("UPDATE t SET x = ?", [1]), []);
+});
+
 test("typeOrmDb transactions query through the manager, never the DataSource", async () => {
   const dataSource = fakeDataSource();
   await typeOrmDb(dataSource, "postgres").transaction((tx) => tx.query("SELECT 1"));
@@ -246,6 +278,13 @@ test("sequelizeDb binds parameters through `bind`, never positionally", async ()
   assert.deepEqual(rows, [{ id: 1 }]);
   assert.deepEqual(sequelize.calls[0].options.bind, [7]);
   assert.equal(sequelize.calls[0].options.transaction, undefined);
+});
+
+test("sequelizeDb passes MySQL's `?` placeholders as replacements", async () => {
+  const sequelize = sequelizeShim([{ id: 1 }]);
+  await sequelizeDb(sequelize, "mysql").query("SELECT 1 WHERE id = ?", [7]);
+  assert.deepEqual(sequelize.calls[0].options.replacements, [7]);
+  assert.equal(sequelize.calls[0].options.bind, undefined);
 });
 
 test("sequelizeDb reads rows out of Sequelize's [rows, metadata] pair", async () => {

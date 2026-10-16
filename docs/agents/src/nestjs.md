@@ -311,7 +311,7 @@ products, and you do not join them.
   ORM. `reference` arrives as a string: convert it when the app's ids are
   numbers. Database writes
   only in the hook; emails, jobs, and pushes after commit. Placeholder style is
-  the dialect you declared: `?` on sqlite, `$1` on postgres.
+  the dialect you declared: `?` on sqlite and mysql, `$1` on postgres.
 
 ### If the database is Supabase
 

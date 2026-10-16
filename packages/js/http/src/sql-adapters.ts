@@ -1,16 +1,16 @@
 // The database boundary for the library-owned payment repository: the adapter
 // contract every query goes through, and the built-in bindings that wrap a `pg`
-// Pool/Client or a SQLite handle (node:sqlite or better-sqlite3) in it without
-// adding dependencies. The repository itself — the tables, the SQL, the
-// settlement and reconciliation transitions — lives in sql-payments.ts and only
-// ever talks to an SqlAdapter.
+// Pool/Client, a mysql2 Pool/Connection or a SQLite handle (node:sqlite or
+// better-sqlite3) in it without adding dependencies. The repository itself —
+// the tables, the SQL, the settlement and reconciliation transitions — lives in
+// sql-payments.ts and only ever talks to an SqlAdapter.
 
 /**
  * Runs one SQL statement and returns SELECT rows (`[]` otherwise). The SQL
- * arrives written for the adapter's own dialect — `?` placeholders on sqlite,
- * `$1`-style on postgres — so pass it to the driver verbatim. Nothing rewrites
- * it: a `?` inside a string literal, a comment, or a postgres JSON operator
- * (`data ? 'field'`) must survive untouched.
+ * arrives written for the adapter's own dialect — `?` placeholders on sqlite
+ * and mysql, `$1`-style on postgres — so pass it to the driver verbatim.
+ * Nothing rewrites it: a `?` inside a string literal, a comment, or a postgres
+ * JSON operator (`data ? 'field'`) must survive untouched.
  */
 export type SqlQuery = (
   sql: string,
@@ -23,11 +23,12 @@ export interface SqlClient {
 
 /**
  * The escape-hatch database boundary: a dialect, a query function, and a
- * transaction wrapper. The built-in bindings cover `pg` pools/clients and
- * SQLite (`node:sqlite` or better-sqlite3) without adding dependencies.
+ * transaction wrapper. The built-in bindings cover `pg` pools/clients, mysql2
+ * pools/connections and SQLite (`node:sqlite` or better-sqlite3) without
+ * adding dependencies. `mysql` covers MariaDB too.
  */
 export interface SqlAdapter extends SqlClient {
-  readonly dialect: "postgres" | "sqlite";
+  readonly dialect: "postgres" | "sqlite" | "mysql";
   transaction<T>(run: (tx: SqlClient) => Promise<T>): Promise<T>;
 }
 
@@ -57,8 +58,32 @@ interface SqliteLike {
   exec(sql: string): void;
 }
 
+/**
+ * Structural view of a mysql2/promise Pool or Connection. A Pool checks out a
+ * connection per transaction with `getConnection()`; a Connection is one
+ * session whose transactions serialize in-process, like a pg Client. The
+ * callback API's Pool and Connection reach this shape through `promise()`.
+ */
+interface MysqlLike extends MysqlSessionLike {
+  execute(sql: string, values?: unknown[]): Promise<unknown>;
+  getConnection?(): Promise<MysqlSessionLike>;
+}
+
+interface MysqlSessionLike {
+  query(sql: string, values?: unknown[]): Promise<readonly unknown[]>;
+  beginTransaction?(): Promise<void>;
+  commit?(): Promise<void>;
+  rollback?(): Promise<void>;
+  release?(): void;
+}
+
+/** A mysql2 callback-API Pool or Connection. */
+interface MysqlCallbackLike {
+  promise(): MysqlLike;
+}
+
 /** Any database handle `createSqlPayments` accepts. */
-export type SqlDatabase = SqlAdapter | PgLike | SqliteLike;
+export type SqlDatabase = SqlAdapter | PgLike | MysqlLike | MysqlCallbackLike | SqliteLike;
 
 /**
  * How long SQLite waits for another connection's write lock before reporting
@@ -70,20 +95,45 @@ const SQLITE_BUSY_TIMEOUT_MS = 5_000;
 /** Wrap a supported database handle in the uniform adapter interface. */
 export function resolveSqlAdapter(db: SqlDatabase): SqlAdapter {
   if (isSqlAdapter(db)) return db;
+  // Before pg, which is recognized by query() alone.
+  if (isMysqlLike(db)) {
+    return mysqlAdapter(isMysqlCallbackLike(db) ? db.promise() : (db as MysqlLike));
+  }
   if (isSqliteLike(db)) return sqliteAdapter(db);
   if (isPgLike(db)) return pgAdapter(db);
   throw new TypeError(
-    "Unsupported database handle. Pass a pg Pool/Client, a SQLite database (node:sqlite or better-sqlite3), or an SqlAdapter.",
+    "Unsupported database handle. Pass a pg Pool/Client, a mysql2 Pool/Connection, a SQLite database (node:sqlite or better-sqlite3), or an SqlAdapter.",
   );
 }
 
 function isSqlAdapter(db: SqlDatabase): db is SqlAdapter {
   const candidate = db as Partial<SqlAdapter>;
   return (
-    (candidate.dialect === "postgres" || candidate.dialect === "sqlite") &&
+    (candidate.dialect === "postgres" ||
+      candidate.dialect === "sqlite" ||
+      candidate.dialect === "mysql") &&
     typeof candidate.transaction === "function" &&
     typeof candidate.query === "function"
   );
+}
+
+/**
+ * mysql2 Pools and Connections, promise or callback API, carry `execute`
+ * beside `query`, plus `getConnection` (a Pool) or `beginTransaction` (a
+ * Connection). pg and SQLite handles have neither `execute` nor those.
+ */
+function isMysqlLike(db: SqlDatabase): boolean {
+  const candidate = db as Partial<MysqlLike>;
+  return (
+    typeof candidate.query === "function" &&
+    typeof candidate.execute === "function" &&
+    (typeof candidate.getConnection === "function" ||
+      typeof candidate.beginTransaction === "function")
+  );
+}
+
+function isMysqlCallbackLike(db: SqlDatabase): db is MysqlCallbackLike {
+  return typeof (db as Partial<MysqlCallbackLike>).promise === "function";
 }
 
 function isSqliteLike(db: SqlDatabase): db is SqliteLike {
@@ -306,6 +356,62 @@ function pgAdapter(db: PgLike): SqlAdapter {
         }
       }
       return enqueue(() => runTransaction(directQuery, run));
+    },
+  };
+}
+
+function mysqlAdapter(db: MysqlLike): SqlAdapter {
+  const queryOn =
+    (session: MysqlSessionLike): SqlQuery =>
+    async (sql, params = []) => {
+      // Verbatim, like pg: `?` is already MySQL's placeholder, and host SQL
+      // must not be rewritten. query() resolves [rows, fields] for a SELECT
+      // and [ResultSetHeader] for a write; no values means no formatting.
+      const [result] = await session.query(sql, params.length === 0 ? undefined : [...params]);
+      return Array.isArray(result) ? (result as Record<string, unknown>[]) : [];
+    };
+  const directQuery = queryOn(db);
+  const enqueue = createSerialQueue();
+  const pooled = typeof db.getConnection === "function";
+
+  const runTransaction = async <T>(
+    session: MysqlSessionLike,
+    run: (tx: SqlClient) => Promise<T>,
+  ): Promise<T> => {
+    if (session.beginTransaction === undefined || session.commit === undefined) {
+      throw new TypeError("A mysql2 connection needs beginTransaction() and commit().");
+    }
+    await session.beginTransaction();
+    try {
+      const result = await run({ query: queryOn(session) });
+      await session.commit();
+      return result;
+    } catch (error) {
+      try {
+        await session.rollback?.();
+      } catch {
+        // Connection-level failures surface via the original error.
+      }
+      throw error;
+    }
+  };
+
+  return {
+    dialect: "mysql",
+    // Pooled reads run on any free connection; a single Connection's reads
+    // join the transaction queue so they never see uncommitted state.
+    query: (sql, params) =>
+      pooled ? directQuery(sql, params) : enqueue(() => directQuery(sql, params)),
+    async transaction(run) {
+      if (db.getConnection !== undefined) {
+        const session = await db.getConnection();
+        try {
+          return await runTransaction(session, run);
+        } finally {
+          session.release?.();
+        }
+      }
+      return enqueue(() => runTransaction(db, run));
     },
   };
 }

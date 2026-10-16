@@ -92,6 +92,7 @@ export {
   paymentsDdlStatements,
   paymentsHashCheckSql,
   paymentsIndexName,
+  paymentsMetaKeyColumn,
   paymentsSeedSql,
   paymentsStatusCheckSql,
 } from "./payments-ddl.ts";

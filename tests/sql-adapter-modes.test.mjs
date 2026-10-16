@@ -133,3 +133,100 @@ test("sqlite adapter trusts better-sqlite3's reader flag over statement shape", 
   assert.deepEqual(rows, []);
   assert.equal(runs.length, 1);
 });
+
+// mysql2 stand-ins: a promise Pool checks out a connection per transaction, a
+// promise Connection is one session, and the callback API reaches the promise
+// shape through promise(). query() resolves [rows, fields] for a SELECT and
+// [ResultSetHeader] for a write.
+function fakeMysqlSession(log, name) {
+  return {
+    async query(sql, values) {
+      log.push({ name, sql, values });
+      return /^\s*select/i.test(sql) ? [[{ sql }], []] : [{ affectedRows: 1 }];
+    },
+    async execute() {},
+    async beginTransaction() {
+      log.push({ name, sql: "BEGIN" });
+    },
+    async commit() {
+      log.push({ name, sql: "COMMIT" });
+    },
+    async rollback() {
+      log.push({ name, sql: "ROLLBACK" });
+    },
+    release() {
+      log.push({ name, sql: "RELEASE" });
+    },
+  };
+}
+
+test("a mysql2 Pool runs each transaction on its own checked-out connection", async () => {
+  const log = [];
+  let checkouts = 0;
+  const pool = {
+    ...fakeMysqlSession(log, "pool"),
+    beginTransaction: undefined,
+    async getConnection() {
+      checkouts += 1;
+      return fakeMysqlSession(log, `conn-${checkouts}`);
+    },
+  };
+  const adapter = resolveSqlAdapter(pool);
+  assert.equal(adapter.dialect, "mysql");
+  // Verbatim, and no values means no formatting at all.
+  assert.deepEqual(await adapter.query("SELECT '?' AS literal"), [
+    { sql: "SELECT '?' AS literal" },
+  ]);
+  assert.equal(log[0].values, undefined);
+  assert.deepEqual(await adapter.query("UPDATE t SET x = ?", [1]), []);
+  await assert.rejects(
+    adapter.transaction(async (tx) => {
+      await tx.query("UPDATE t SET x = ?", [2]);
+      throw new Error("boom");
+    }),
+    /boom/,
+  );
+  assert.deepEqual(
+    log.slice(2).map((entry) => `${entry.name}:${entry.sql}`),
+    ["conn-1:BEGIN", "conn-1:UPDATE t SET x = ?", "conn-1:ROLLBACK", "conn-1:RELEASE"],
+  );
+});
+
+test("a mysql2 Connection serializes transactions and reads in-process", async () => {
+  const log = [];
+  const adapter = resolveSqlAdapter(fakeMysqlSession(log, "conn"));
+  assert.equal(adapter.dialect, "mysql");
+  let releaseFirst;
+  const first = adapter.transaction(async (tx) => {
+    await tx.query("UPDATE t SET x = ?", [1]);
+    await new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+  });
+  const read = adapter.query("SELECT x FROM t");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(!log.some((entry) => entry.sql === "SELECT x FROM t"), "the read waited");
+  releaseFirst();
+  await first;
+  await read;
+  assert.deepEqual(
+    log.map((entry) => entry.sql),
+    ["BEGIN", "UPDATE t SET x = ?", "COMMIT", "SELECT x FROM t"],
+  );
+});
+
+test("a callback-API mysql2 handle binds through its promise() wrapper", async () => {
+  const log = [];
+  const promised = fakeMysqlSession(log, "promised");
+  const callbackPool = {
+    query() {
+      throw new Error("callback API used without promise()");
+    },
+    execute() {},
+    getConnection() {},
+    promise: () => ({ ...promised, getConnection: async () => promised }),
+  };
+  const adapter = resolveSqlAdapter(callbackPool);
+  assert.equal(adapter.dialect, "mysql");
+  assert.deepEqual(await adapter.query("SELECT 1"), [{ sql: "SELECT 1" }]);
+});

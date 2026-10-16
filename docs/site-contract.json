@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 13740
+      "bytes": 13872
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 14706
+      "bytes": 14838
     },
     {
       "path": "/guides/quickstart-nestjs",
@@ -43,7 +43,7 @@
       "slug": "quickstart-nestjs",
       "title": "NestJS Quickstart",
       "category": "quickstart",
-      "bytes": 15984
+      "bytes": 15994
     },
     {
       "path": "/guides/quickstart-fastapi",
@@ -83,7 +83,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 16435
+      "bytes": 16567
     },
     {
       "path": "/guides/vercel",
@@ -266,7 +266,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "category": "quickstart",
-      "bytes": 7065
+      "bytes": 7624
     },
     {
       "path": "/guides/authorization",
@@ -276,7 +276,7 @@
       "slug": "authorization",
       "title": "Authorization",
       "category": "security",
-      "bytes": 13997
+      "bytes": 14012
     },
     {
       "path": "/guides/rate-limiting",
@@ -366,7 +366,7 @@
       "slug": "storage",
       "title": "Payment Storage",
       "category": "operations",
-      "bytes": 6533
+      "bytes": 7390
     },
     {
       "path": "/guides/payment-safety-upgrade",
@@ -386,7 +386,7 @@
       "slug": "deploying",
       "title": "Deploying OpenReceive",
       "category": "operations",
-      "bytes": 12736
+      "bytes": 12807
     },
     {
       "path": "/guides/host-testing",
@@ -406,7 +406,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 133402
+      "bytes": 133858
     },
     {
       "path": "/guides/security",
@@ -526,7 +526,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "quickstart",
-      "bytes": 40019
+      "bytes": 40161
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -536,7 +536,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "quickstart",
-      "bytes": 40658
+      "bytes": 40800
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -576,7 +576,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "quickstart",
-      "bytes": 43477
+      "bytes": 43619
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -586,7 +586,7 @@
       "slug": "agent-directions-nestjs",
       "title": "Agent Directions: NestJS",
       "category": "quickstart",
-      "bytes": 43062
+      "bytes": 43082
     },
     {
       "path": "/guides/agent-directions-rails",
@@ -656,7 +656,7 @@
       "slug": "agent-directions-sveltekit",
       "title": "Agent Directions: SvelteKit",
       "category": "quickstart",
-      "bytes": 35306
+      "bytes": 35316
     },
     {
       "path": "/guides/agent-directions-nuxt",
@@ -666,7 +666,7 @@
       "slug": "agent-directions-nuxt",
       "title": "Agent Directions: Nuxt",
       "category": "quickstart",
-      "bytes": 33393
+      "bytes": 33403
     },
     {
       "path": "/guides/agent-directions-astro",
@@ -676,7 +676,7 @@
       "slug": "agent-directions-astro",
       "title": "Agent Directions: Astro",
       "category": "quickstart",
-      "bytes": 35055
+      "bytes": 35065
     },
     {
       "path": "/guides/agent-directions-react-router",
@@ -686,7 +686,7 @@
       "slug": "agent-directions-react-router",
       "title": "Agent Directions: React Router",
       "category": "quickstart",
-      "bytes": 34052
+      "bytes": 34062
     },
     {
       "path": "/guides/agent-directions-tanstack-start",
@@ -696,7 +696,7 @@
       "slug": "agent-directions-tanstack-start",
       "title": "Agent Directions: TanStack Start",
       "category": "quickstart",
-      "bytes": 39000
+      "bytes": 39010
     },
     {
       "path": "/guides/agent-directions-mobile",
@@ -766,7 +766,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 133402,
+      "bytes": 133858,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -843,7 +843,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40019,
+      "bytes": 40161,
       "copy_button": true,
       "self_contained": true
     },
@@ -864,7 +864,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40658,
+      "bytes": 40800,
       "copy_button": true,
       "self_contained": true
     },
@@ -885,7 +885,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 43477,
+      "bytes": 43619,
       "copy_button": true,
       "self_contained": true
     },
@@ -906,7 +906,7 @@
       "kind": "agent-directions-payload",
       "stack": "nestjs",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 43062,
+      "bytes": 43082,
       "copy_button": true,
       "self_contained": true
     },
@@ -1116,7 +1116,7 @@
       "kind": "agent-directions-payload",
       "stack": "sveltekit",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35306,
+      "bytes": 35316,
       "copy_button": true,
       "self_contained": true
     },
@@ -1137,7 +1137,7 @@
       "kind": "agent-directions-payload",
       "stack": "nuxt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 33393,
+      "bytes": 33403,
       "copy_button": true,
       "self_contained": true
     },
@@ -1158,7 +1158,7 @@
       "kind": "agent-directions-payload",
       "stack": "astro",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35055,
+      "bytes": 35065,
       "copy_button": true,
       "self_contained": true
     },
@@ -1179,7 +1179,7 @@
       "kind": "agent-directions-payload",
       "stack": "react-router",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34052,
+      "bytes": 34062,
       "copy_button": true,
       "self_contained": true
     },
@@ -1200,7 +1200,7 @@
       "kind": "agent-directions-payload",
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 39000,
+      "bytes": 39010,
       "copy_button": true,
       "self_contained": true
     },
@@ -1305,7 +1305,7 @@
       "shared_checkout_demo": true,
       "capabilities": {
         "runtime": "Node 22",
-        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8, MariaDB 11 and SQLite",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
@@ -1340,7 +1340,7 @@
       "shared_checkout_demo": true,
       "capabilities": {
         "runtime": "Node 22",
-        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8, MariaDB 11 and SQLite",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
@@ -1376,7 +1376,7 @@
       "shared_checkout_demo": true,
       "capabilities": {
         "runtime": "Node 22",
-        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8, MariaDB 11 and SQLite",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
@@ -1411,7 +1411,7 @@
       "shared_checkout_demo": true,
       "capabilities": {
         "runtime": "Node 22",
-        "databases": "PostgreSQL, directly or through a transaction pooler, and SQLite",
+        "databases": "PostgreSQL, directly or through a transaction pooler, MySQL 8, MariaDB 11 and SQLite",
         "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the server's environment or .env file, never in browser code",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A swap deposit that never converted goes back to the payer through the checkout's refund form.",
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."

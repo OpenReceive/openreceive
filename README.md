@@ -144,7 +144,7 @@ const service = await createOpenReceive();
 
 // 2. The host: your database and your price.
 const host = createHost({
-  db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+  db, // pg Pool/Client, mysql2 Pool, node:sqlite, better-sqlite3, or a custom adapter
   // The authoritative price for a reference (here, your order id) — never
   // taken from payer input.
   // OpenReceive converts this exact decimal into the invoice amount; null

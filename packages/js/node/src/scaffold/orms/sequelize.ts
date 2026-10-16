@@ -1,5 +1,5 @@
 import { fulfillmentNote } from "@openreceive/core";
-import { canonicalPaymentsDdlStatements } from "../shared.ts";
+import { canonicalPaymentsDdlStatements, templateLiteral } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
 
@@ -9,7 +9,7 @@ export function renderSequelizeFiles(options: ScaffoldPaymentsOptions): Scaffold
   // keeps this migration pinned to the exact statements the library's
   // repository expects.
   const body = canonicalPaymentsDdlStatements(options)
-    .map((statement) => `    await queryInterface.sequelize.query(\`${statement}\`);`)
+    .map((statement) => `    await queryInterface.sequelize.query(${templateLiteral(statement)});`)
     .join("\n");
 
   const migration = `"use strict";

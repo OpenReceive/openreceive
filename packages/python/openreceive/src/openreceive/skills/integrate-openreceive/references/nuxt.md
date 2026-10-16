@@ -325,7 +325,7 @@ products, and you do not join them.
   app's equivalent) through the `query` the library hands you, on that same
   settlement transaction, not a second connection from your ORM. Database writes
   only in the hook; emails, jobs, and pushes after commit. Placeholder style is
-  the dialect you declared: `?` on sqlite, `$1` on postgres.
+  the dialect you declared: `?` on sqlite and mysql, `$1` on postgres.
 
 ## If you build your own checkout UI
 

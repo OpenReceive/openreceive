@@ -32,6 +32,7 @@
       "!tests/e2e-wordpress/test-results",
       "!tests/orms/generated",
       "!tests/orms/pooler/generated",
+      "!tests/orms/mysql/generated",
       "!trials/platforms/*/fixture",
       "!**/tmp",
       "!**/log",

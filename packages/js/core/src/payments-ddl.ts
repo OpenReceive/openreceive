@@ -10,7 +10,14 @@ const MAX_IDENTIFIER_BYTES = 63;
  */
 export const OPENRECEIVE_PAYMENTS_SCHEMA_VERSION = 1 as const;
 
-export type PaymentsDialect = "postgres" | "sqlite";
+export type PaymentsDialect = "postgres" | "sqlite" | "mysql";
+
+/**
+ * MySQL and MariaDB table options. InnoDB gives the row locks the repository
+ * relies on, and a binary collation compares references exactly, as postgres
+ * and sqlite do, instead of ignoring case and accents.
+ */
+const MYSQL_TABLE_OPTIONS = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin";
 
 /** Every status an attempt row may hold, as a SQL list for the CHECK constraint. */
 const ATTEMPT_STATUS_SQL_LIST = "'pending', 'settled', 'expired', 'failed', 'attention'";
@@ -28,11 +35,23 @@ export function paymentsStatusCheckSql(): string {
   return `status IN (${ATTEMPT_STATUS_SQL_LIST})`;
 }
 
-/** Dialect predicate for "64 lowercase hexadecimal characters". */
+/**
+ * Dialect predicate for "64 lowercase hexadecimal characters". On MySQL and
+ * MariaDB, `(?-i)` keeps the match case-sensitive even in a table an ORM made
+ * with a case-insensitive collation.
+ */
 export function paymentsHashCheckSql(dialect: PaymentsDialect): string {
-  return dialect === "postgres"
-    ? "payment_hash ~ '^[0-9a-f]{64}$'"
-    : "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'";
+  if (dialect === "postgres") return "payment_hash ~ '^[0-9a-f]{64}$'";
+  if (dialect === "mysql") return "payment_hash REGEXP '(?-i)^[0-9a-f]{64}$'";
+  return "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'";
+}
+
+/**
+ * The meta table's `key` column as a statement must name it: `key` is a
+ * reserved word in MySQL and MariaDB, and a plain identifier elsewhere.
+ */
+export function paymentsMetaKeyColumn(dialect: PaymentsDialect): string {
+  return dialect === "mysql" ? "`key`" : "key";
 }
 
 /**
@@ -61,10 +80,12 @@ export function paymentsSeedSql(
   metaTableName = "openreceive_meta",
 ): string {
   assertDdlIdentifier(metaTableName);
-  const values = `(key, value, rev) VALUES ('schema_version', '${OPENRECEIVE_PAYMENTS_SCHEMA_VERSION}', 0)`;
-  return dialect === "postgres"
-    ? `INSERT INTO ${metaTableName} ${values} ON CONFLICT (key) DO NOTHING`
-    : `INSERT OR IGNORE INTO ${metaTableName} ${values}`;
+  const values = `(${paymentsMetaKeyColumn(dialect)}, value, rev) VALUES ('schema_version', '${OPENRECEIVE_PAYMENTS_SCHEMA_VERSION}', 0)`;
+  if (dialect === "postgres") {
+    return `INSERT INTO ${metaTableName} ${values} ON CONFLICT (key) DO NOTHING`;
+  }
+  if (dialect === "mysql") return `INSERT IGNORE INTO ${metaTableName} ${values}`;
+  return `INSERT OR IGNORE INTO ${metaTableName} ${values}`;
 }
 
 interface PaymentsColumn {
@@ -73,6 +94,7 @@ interface PaymentsColumn {
 }
 
 function paymentsColumns(options: PaymentsDdlOptions): readonly PaymentsColumn[] {
+  if (options.dialect === "mysql") return MYSQL_PAYMENTS_COLUMNS;
   const bigint = options.dialect === "postgres" ? "BIGINT" : "INTEGER";
   return [
     {
@@ -96,6 +118,28 @@ function paymentsColumns(options: PaymentsDdlOptions): readonly PaymentsColumn[]
     { name: "client_ip", definition: "TEXT" },
   ];
 }
+
+/**
+ * MySQL can neither index nor default a TEXT column, so the indexed and
+ * defaulted columns are VARCHARs: 255 characters holds the HTTP layer's
+ * 200-character reference. The JSON columns are MEDIUMTEXT, so a large
+ * snapshot is never cut at TEXT's 64 KB.
+ */
+const MYSQL_PAYMENTS_COLUMNS: readonly PaymentsColumn[] = [
+  { name: "id", definition: "BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY" },
+  { name: "reference", definition: "VARCHAR(255) NOT NULL" },
+  { name: "payment_hash", definition: "VARCHAR(64) NOT NULL UNIQUE" },
+  { name: "status", definition: "VARCHAR(32) NOT NULL DEFAULT 'pending'" },
+  { name: "status_reason", definition: "VARCHAR(255)" },
+  { name: "paid_at", definition: "BIGINT" },
+  { name: "expires_at", definition: "BIGINT NOT NULL" },
+  { name: "created_at", definition: "BIGINT NOT NULL" },
+  { name: "updated_at", definition: "BIGINT NOT NULL" },
+  { name: "inserted_at", definition: "BIGINT NOT NULL" },
+  { name: "checkout_data", definition: "MEDIUMTEXT NOT NULL" },
+  { name: "swap_data", definition: "MEDIUMTEXT" },
+  { name: "client_ip", definition: "VARCHAR(255)" },
+];
 
 /**
  * Every column of the canonical `openreceive_payments` table, in DDL order.
@@ -128,6 +172,7 @@ export function paymentsDdlStatements(options: PaymentsDdlOptions): readonly str
   const metaTableName = options.metaTableName ?? "openreceive_meta";
   assertDdlIdentifier(tableName);
   assertDdlIdentifier(metaTableName);
+  if (options.dialect === "mysql") return mysqlDdlStatements(tableName, metaTableName);
   const bigint = options.dialect === "postgres" ? "BIGINT" : "INTEGER";
   const columns = paymentsColumns(options).map(
     (column) => `  ${column.name} ${column.definition},`,
@@ -151,6 +196,37 @@ export function paymentsDdlStatements(options: PaymentsDdlOptions): readonly str
       ")",
     ].join("\n"),
     paymentsSeedSql(options.dialect, metaTableName),
+  ];
+}
+
+/**
+ * MySQL has no CREATE INDEX IF NOT EXISTS (MariaDB does), so the indexes sit
+ * inside CREATE TABLE IF NOT EXISTS and the script stays re-runnable on both.
+ * MySQL enforces the CHECK constraints from 8.0.16, MariaDB from 10.2.
+ */
+function mysqlDdlStatements(tableName: string, metaTableName: string): readonly string[] {
+  const columns = MYSQL_PAYMENTS_COLUMNS.map((column) => `  ${column.name} ${column.definition},`);
+  const index = (suffix: string, columnList: string): string =>
+    `  INDEX ${paymentsIndexName(tableName, suffix)} (${columnList}),`;
+  return [
+    [
+      `CREATE TABLE IF NOT EXISTS ${tableName} (`,
+      ...columns,
+      index("reference_created_idx", "reference, created_at"),
+      index("status_created_idx", "status, created_at"),
+      index("client_ip_inserted_idx", "client_ip, inserted_at"),
+      `  CHECK (${paymentsStatusCheckSql()}),`,
+      `  CHECK (${paymentsHashCheckSql("mysql")})`,
+      `) ${MYSQL_TABLE_OPTIONS}`,
+    ].join("\n"),
+    [
+      `CREATE TABLE IF NOT EXISTS ${metaTableName} (`,
+      `  ${paymentsMetaKeyColumn("mysql")} VARCHAR(191) NOT NULL PRIMARY KEY,`,
+      "  value MEDIUMTEXT NOT NULL,",
+      "  rev BIGINT NOT NULL DEFAULT 0",
+      `) ${MYSQL_TABLE_OPTIONS}`,
+    ].join("\n"),
+    paymentsSeedSql("mysql", metaTableName),
   ];
 }
 

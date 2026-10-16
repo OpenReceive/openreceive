@@ -36,8 +36,11 @@ ${fulfillmentNote("// ", options.tableName)}
 import { sql } from "drizzle-orm";
 `;
 
-  const schema = sqlite
-    ? `${header}import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+  const schema =
+    options.dialect === "mysql"
+      ? mysqlSchema(header, table, options.metaTableName, constraints)
+      : sqlite
+        ? `${header}import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const payments = sqliteTable(
   "${table}",
@@ -69,7 +72,7 @@ export const meta = sqliteTable("${options.metaTableName}", {
   rev: integer("rev").notNull().default(0),
 });
 `
-    : `${header}import { ${pgImports()} } from "drizzle-orm/pg-core";
+        : `${header}import { ${pgImports()} } from "drizzle-orm/pg-core";
 
 export const payments = pgTable(
   "${table}",
@@ -110,4 +113,58 @@ export const meta = pgTable("${options.metaTableName}", {
 
 function pgImports(): string {
   return ["bigint", "check", "index", "pgTable", "text", "uniqueIndex"].join(", ");
+}
+
+/**
+ * MySQL can neither index nor default a TEXT column, so the indexed and
+ * defaulted columns are VARCHARs and the JSON columns MEDIUMTEXT, as in the
+ * canonical MySQL DDL.
+ */
+function mysqlSchema(
+  header: string,
+  table: string,
+  metaTableName: string,
+  constraints: string,
+): string {
+  const imports = [
+    "bigint",
+    "check",
+    "index",
+    "mediumtext",
+    "mysqlTable",
+    "uniqueIndex",
+    "varchar",
+  ];
+  return `${header}import { ${imports.join(", ")} } from "drizzle-orm/mysql-core";
+
+export const payments = mysqlTable(
+  "${table}",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    reference: varchar("reference", { length: 255 }).notNull(),
+    paymentHash: varchar("payment_hash", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("pending"),
+    statusReason: varchar("status_reason", { length: 255 }),
+    paidAt: bigint("paid_at", { mode: "number" }),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    insertedAt: bigint("inserted_at", { mode: "number" }).notNull(),
+    checkoutData: mediumtext("checkout_data").notNull(),
+    swapData: mediumtext("swap_data"),
+    clientIp: varchar("client_ip", { length: 255 }),
+  },
+  (table) => [
+${constraints}
+  ],
+);
+
+// The durable reconcile gate every worker on this database shares
+// (key/value/rev compare-and-set). Same host database, never a second one.
+export const meta = mysqlTable("${metaTableName}", {
+  key: varchar("key", { length: 191 }).primaryKey(),
+  value: mediumtext("value").notNull(),
+  rev: bigint("rev", { mode: "number" }).notNull().default(0),
+});
+`;
 }
