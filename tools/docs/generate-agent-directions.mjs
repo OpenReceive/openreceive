@@ -76,9 +76,9 @@ const WOOCOMMERCE_BRIEF = [
   'Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".',
 ];
 
-// Paymenter's extension is one folder plus artisan commands, so Step 0 is the
-// plugin's: the same rules break first.
-const PAYMENTER_BRIEF = [
+// A billing panel's extension (Paymenter, FOSSBilling) is a release ZIP plus
+// console commands, so Step 0 is the plugin's: the same rules break first.
+const BILLING_PANEL_BRIEF = [
   ASK_NWC_FIRST,
   ASK_LSC_NEXT,
   "The user only pastes codes into this chat. Never ask them to run a command, edit a file or use an admin page.",
@@ -156,9 +156,17 @@ const STACKS = [
     stack: "paymenter",
     source: "docs/agents/src/paymenter.md",
     quickstart: "docs/guides/quickstart-paymenter.md",
-    brief: PAYMENTER_BRIEF,
+    brief: BILLING_PANEL_BRIEF,
     quickstartRole:
       "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its admin-area screens are only for a Paymenter with no shell.",
+  },
+  {
+    stack: "fossbilling",
+    source: "docs/agents/src/fossbilling.md",
+    quickstart: "docs/guides/quickstart-fossbilling.md",
+    brief: BILLING_PANEL_BRIEF,
+    quickstartRole:
+      "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its admin-area screens are only for a FOSSBilling with no shell.",
   },
   {
     stack: "node",
@@ -316,6 +324,8 @@ const UNLISTED_GUIDES = {
   "agent-directions-woocommerce": "this payload’s own page",
   "agent-directions-paymenter": "this payload's own page",
   "quickstart-paymenter": "inlined in full below, or another stack's",
+  "agent-directions-fossbilling": "this payload's own page",
+  "quickstart-fossbilling": "inlined in full below, or another stack's",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
   odoo: "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
@@ -435,6 +445,33 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "Paymenter keeps its data in MySQL or MariaDB",
     serverless: "Paymenter runs on an ordinary PHP host",
     "mobile-apps": "Paymenter's own invoice page is the payment page",
+    "wordpress-hosting": "WordPress hosts only",
+  },
+  fossbilling: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "frontend-checkout",
+        "checkout-ux",
+        "headless-checkout",
+        "custom-checkout-route",
+        "provider-registry",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "react-material-ui-recipe",
+        "node-orms",
+      ].map((slug) => [
+        slug,
+        "the FOSSBilling extension supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    supabase: "FOSSBilling keeps its data in MySQL or MariaDB",
+    serverless: "FOSSBilling runs on an ordinary PHP host",
+    "mobile-apps": "FOSSBilling's own invoice page is the payment page",
     "wordpress-hosting": "WordPress hosts only",
   },
   btcpay: {

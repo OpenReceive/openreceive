@@ -175,7 +175,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 5860
+      "bytes": 5871
     },
     {
       "path": "/guides/quickstart-rails",
@@ -729,6 +729,16 @@
       "bytes": 7123
     },
     {
+      "path": "/guides/quickstart-fossbilling",
+      "markdown_path": "/guides/quickstart-fossbilling.md",
+      "source": "docs/guides/quickstart-fossbilling.md",
+      "kind": "guide",
+      "slug": "quickstart-fossbilling",
+      "title": "FOSSBilling Quickstart",
+      "category": "quickstart",
+      "bytes": 9577
+    },
+    {
       "path": "/guides/wordpress-hosting",
       "markdown_path": "/guides/wordpress-hosting.md",
       "source": "docs/guides/wordpress-hosting.md",
@@ -759,6 +769,16 @@
       "bytes": 18897
     },
     {
+      "path": "/guides/agent-directions-fossbilling",
+      "markdown_path": "/guides/agent-directions-fossbilling.md",
+      "source": "docs/agents/fossbilling.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-fossbilling",
+      "title": "Agent directions (FOSSBilling)",
+      "category": "agents",
+      "bytes": 22636
+    },
+    {
       "path": "/api_docs",
       "markdown_path": "/api_docs.md",
       "source": "docs/guides/api-reference.md",
@@ -777,7 +797,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 4897
+      "bytes": 4976
     },
     {
       "path": "/wordpress",
@@ -1075,6 +1095,27 @@
       "stack": "paymenter",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 18897,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/fossbilling.md",
+      "source": "docs/agents/cover/fossbilling.md",
+      "kind": "agent-directions-cover",
+      "stack": "fossbilling",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 299,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/fossbilling/full.md"
+    },
+    {
+      "path": "/agent-directions/fossbilling/full.md",
+      "source": "docs/agents/fossbilling.md",
+      "kind": "agent-directions-payload",
+      "stack": "fossbilling",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 22636,
       "copy_button": true,
       "self_contained": true
     },
@@ -1521,6 +1562,35 @@
         "databases": "MySQL or MariaDB, Paymenter's own database",
         "secrets": "The gateway's settings, encrypted by Paymenter with its APP_KEY",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment dialog.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": null
+    },
+    {
+      "id": "fossbilling",
+      "label": "FOSSBilling",
+      "family": "php",
+      "type": "plugin",
+      "heading": "Accept Bitcoin & Stablecoin Payments With FOSSBilling",
+      "quickstart_slug": "quickstart-fossbilling",
+      "quickstart_path": "/guides/quickstart-fossbilling",
+      "quickstart_title": "FOSSBilling Quickstart",
+      "agent_stack": "fossbilling",
+      "agent_payload_path": "/agent-directions/fossbilling.md",
+      "agent_full_path": "/agent-directions/fossbilling/full.md",
+      "adapter_package": "openreceive-fossbilling",
+      "install": "Unzip openreceive-fossbilling-<version>.zip in FOSSBilling's folder, then php modules/Openreceive/activate.php",
+      "requires": "FOSSBilling ≥ 0.8, PHP ≥ 8.3, GMP and sodium",
+      "example_path": "packages/php/fossbilling",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/php/fossbilling",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "FOSSBilling 0.8.8, its official Docker image with GMP added, on PHP 8.5",
+        "databases": "MySQL or MariaDB, FOSSBilling's own database",
+        "secrets": "The module's settings, encrypted by FOSSBilling with its install's salt",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment page.",
         "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
       },
       "tested": null
@@ -2559,7 +2629,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 8478
+        "bytes": 8714
       },
       {
         "path": "/openapi.yaml",

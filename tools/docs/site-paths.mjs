@@ -104,6 +104,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/mobile.md",
   "/agent-directions/bolt.md",
   "/agent-directions/paymenter.md",
+  "/agent-directions/fossbilling.md",
 ];
 
 /** The full directions behind a cover: what the copy button copies and the cover's curl fetches. */

@@ -1,0 +1,67 @@
+{% extends request.ajax ? 'layout_blank.html.twig' : 'layout_default.html.twig' %}
+
+{% block meta_title %}OpenReceive{% endblock %}
+
+{% set active_menu = 'system' %}
+
+{% block breadcrumbs %}
+    <ul class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{{ '/'|url(area: 'admin') }}">
+                <svg class="icon">
+                    <use href="#home"/>
+                </svg>
+            </a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{{ 'extension'|url(area: 'admin') }}">{{ 'Extensions'|trans }}</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">OpenReceive</li>
+    </ul>
+{% endblock %}
+
+{% block content %}
+    {% set status = admin.openreceive_status %}
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3 class="card-title">OpenReceive</h3>
+                <p class="card-subtitle">Bitcoin Lightning payments straight into your own wallet. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.</p>
+            </div>
+            <div class="card-actions">
+                <a href="https://openreceive.org/guides/quickstart-fossbilling" target="_blank" rel="noopener" class="btn btn-outline-primary">Read the guide</a>
+            </div>
+        </div>
+
+        <form method="post" action="{{ 'openreceive/save'|api_url(role: 'admin') }}" {{ fb_api_form({message: 'Saved'|trans, reload: true}) }} autocomplete="off">
+            <div class="card-body">
+                <div class="alert alert-info" role="alert">
+                    The codes are stored encrypted and never shown again. Leave a field blank to keep the saved code.
+                    Payment method: <strong>{{ status.gateway_name|default('not created yet') }}</strong>, {{ status.gateway_enabled ? 'offered on unpaid invoices' : 'not offered until a wallet code is saved' }}.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="openreceive_nwc_uri">Receive-only NWC code ({{ status.nwc_uri_set ? 'set' : 'not set' }})</label>
+                    <input class="form-control" type="password" id="openreceive_nwc_uri" name="nwc_uri" value="" autocomplete="new-password" spellcheck="false">
+                    <small class="form-hint">A Nostr Wallet Connect code that can only create invoices and read payments. Every payment goes straight to this wallet. It is checked with the wallet before it is saved.</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="openreceive_lsc_uri_primary">Swap provider code, optional ({{ status.lsc_uri_primary_set ? 'set' : 'not set' }})</label>
+                    <input class="form-control" type="password" id="openreceive_lsc_uri_primary" name="lsc_uri_primary" value="" autocomplete="new-password" spellcheck="false">
+                    <small class="form-hint">Lets buyers pay with USDT, USDC, SOL or ETH. The provider converts the payment to BTC over Lightning into the wallet above.</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="openreceive_name">Payment method name</label>
+                    <input class="form-control" type="text" id="openreceive_name" name="name" value="" placeholder="{{ status.gateway_name|default('Bitcoin Lightning') }}">
+                    <small class="form-hint">What clients see on the invoice. Leave blank to keep it.</small>
+                </div>
+            </div>
+
+            <div class="card-footer text-end">
+                <button type="submit" class="btn btn-primary">{{ 'Save'|trans }}</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}

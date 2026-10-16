@@ -738,6 +738,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-fossbilling",
+      "title": "FOSSBilling Quickstart",
+      "source_path": "docs/guides/quickstart-fossbilling.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "wordpress-hosting",
       "title": "WordPress Hosting Requirements",
       "source_path": "docs/guides/wordpress-hosting.md",
@@ -757,6 +765,14 @@
       "slug": "agent-directions-paymenter",
       "title": "Agent directions (Paymenter)",
       "source_path": "docs/agents/paymenter.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-fossbilling",
+      "title": "Agent directions (FOSSBilling)",
+      "source_path": "docs/agents/fossbilling.md",
       "category": "agents",
       "audience": "developer",
       "public": true

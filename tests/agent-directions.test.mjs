@@ -254,7 +254,9 @@ test("the @openreceive/node payloads say doctor reads the env file and never to 
 test("every library payload ends with setup finished and keeps the agent in the app", () => {
   const libraries = payloads.filter(
     ({ stack }) =>
-      !["woocommerce", "paymenter", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
+      !["woocommerce", "paymenter", "fossbilling", "btcpay", "lovable", "bolt", "mobile"].includes(
+        stack,
+      ),
   );
   assert.equal(libraries.length, 15);
   for (const { stack, text } of libraries) {
@@ -289,7 +291,9 @@ test("every library payload ends with setup finished and keeps the agent in the 
 test("every library payload's Step 0 sends the swap walkthrough, checks codes by name, and restarts by pid", () => {
   const libraries = payloads.filter(
     ({ stack }) =>
-      !["woocommerce", "paymenter", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
+      !["woocommerce", "paymenter", "fossbilling", "btcpay", "lovable", "bolt", "mobile"].includes(
+        stack,
+      ),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -317,7 +321,9 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
 test("every library payload writes codes with the file tool, and Express, Fastify and NestJS read the session from native", () => {
   const libraries = payloads.filter(
     ({ stack }) =>
-      !["woocommerce", "paymenter", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
+      !["woocommerce", "paymenter", "fossbilling", "btcpay", "lovable", "bolt", "mobile"].includes(
+        stack,
+      ),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -395,6 +401,39 @@ test("the Paymenter payload pins the release ZIP, runs artisan as the web user a
   assert.match(stepThree, /Do not add containers, services, workers or cron jobs/);
   assert.match(text, /Never read or run anything from another project/);
   assert.match(text, /`tinker` and reading the extension's source are not part of setup/);
+});
+
+// FOSSBilling takes the Paymenter shape. Its own steps: the official image
+// lacks GMP, the console commands exist only once the module is active, and
+// the test invoice opens for an admin, not for its test client.
+test("the FOSSBilling payload pins the release ZIP, adds GMP, activates the module and ends at test-invoice", () => {
+  const text = payloads.find(({ stack }) => stack === "fossbilling").text;
+  const step = stepZero(text);
+  const stepThree = text.match(/^## Step 3\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+  assert.ok(
+    text.includes(
+      `https://github.com/OpenReceive/openreceive/releases/download/v${release}/openreceive-fossbilling-${release}.zip`,
+    ),
+    "the extension ZIP is pinned to this release",
+  );
+  assert.doesNotMatch(text, /\{\{release\}\}/);
+  assert.match(text, /docker-php-ext-install gmp/);
+  assert.match(text, /php modules\/Openreceive\/activate\.php/);
+  assert.match(text, /openreceive:configure --nwc-uri=- < \/tmp\/openreceive-code/);
+  assert.match(text, /--lsc-uri-primary=-/);
+  assert.match(text, /file-editing tool, not a shell command/);
+  assert.match(text, /docker compose exec -T -u www-data fossbilling php console\.php/);
+  assert.match(text, /Run `php` as the web server's user, never as root\./);
+  assert.match(step, /this message IS the walkthrough/);
+  assert.match(step, /do not tell them to revoke or replace a\s+code because it was pasted here/);
+  assert.match(stepThree, /php console\.php openreceive:test-invoice --new/);
+  assert.match(stepThree, /signed in\s+to FOSSBilling's admin area/);
+  assert.match(stepThree, /You cannot pay the invoice/);
+  assert.match(stepThree, /Setup ends here\./);
+  assert.match(stepThree, /starts "Setup is finished" and has at most six short lines/);
+  assert.match(stepThree, /Do not\s+list each coin's availability, mention a minimum/);
+  assert.match(stepThree, /Do not add containers, services, workers or cron jobs/);
+  assert.match(text, /Never read or run anything from another\s+project/);
 });
 
 // Lovable's agent has no terminal and Lovable keeps codes as project secrets:

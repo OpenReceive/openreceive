@@ -344,6 +344,23 @@ for (const gemName of GEM_NAMES) {
     ),
     "Paymenter Runtime::VERSION must match the workspace release",
   );
+  const fossbillingManifest = readJson("packages/php/fossbilling/composer.json");
+  expect(
+    fossbillingManifest.require["openreceive/openreceive"] === composerConstraint(releaseVersion),
+    "FOSSBilling engine constraint must match the workspace release",
+  );
+  expect(
+    readFileSync(
+      path.join(root, "packages/php/fossbilling/src/modules/Openreceive/Support/Runtime.php"),
+      "utf8",
+    ).includes(`const VERSION = '${releaseVersion}';`),
+    "FOSSBilling Runtime::VERSION must match the workspace release",
+  );
+  expect(
+    readJson("packages/php/fossbilling/src/modules/Openreceive/manifest.json").version ===
+      releaseVersion,
+    "FOSSBilling module manifest version must match the workspace release",
+  );
   const wordpressHeader = readFileSync(
     path.join(root, "packages/php/wordpress/openreceive.php"),
     "utf8",

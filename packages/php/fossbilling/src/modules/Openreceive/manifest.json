@@ -1,0 +1,13 @@
+{
+  "id": "openreceive",
+  "type": "mod",
+  "name": "OpenReceive",
+  "description": "Bitcoin Lightning payments straight into your own wallet. Optional USDT, USDC, SOL and ETH swaps settle as BTC over Lightning.",
+  "icon_url": "icon.svg",
+  "homepage_url": "https://openreceive.org/integrations/fossbilling",
+  "author": "OpenReceive",
+  "author_url": "https://openreceive.org",
+  "license": "MIT",
+  "version": "0.4.27",
+  "minimum_fossbilling_version": "0.8.0"
+}

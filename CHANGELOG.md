@@ -27,6 +27,26 @@
   run a reconcile pass, which Paymenter's scheduler also runs every minute.
   Docs: the Paymenter quickstart and agent directions
   (/agent-directions/paymenter.md, `references/paymenter.md` in the skill).
+- Added (FOSSBilling): an extension for FOSSBilling 0.8+, the other
+  open-source billing panel. Each GitHub release attaches
+  `openreceive-fossbilling-<version>.zip`, which unzips into FOSSBilling's own
+  folder: a module (`modules/Openreceive`: encrypted settings page, routes,
+  console commands, a cron hook) and a payment gateway
+  (`library/Payment/Adapter/OpenReceive`), with the engine and the checkout
+  script bundled. The client pays on FOSSBilling's own payment page. A
+  settled payment is recorded as FOSSBilling's gateways record one: a
+  transaction with the payment hash as its id and the amount on the client's
+  balance, in the transaction that settles it; the balance then pays the
+  invoice. `php modules/Openreceive/activate.php` activates the module from a
+  shell, and console commands save codes from stdin
+  (`openreceive:configure`), check the install (`openreceive:doctor`), mint a
+  test invoice (`openreceive:test-invoice`) and run a reconcile pass, which
+  every FOSSBilling cron run also runs. FOSSBilling's official Docker image
+  lacks GMP; the quickstart adds it with a two-line Dockerfile. Docs: the
+  FOSSBilling quickstart and agent directions
+  (/agent-directions/fossbilling.md, `references/fossbilling.md` in the
+  skill). The Paymenter and FOSSBilling builds share one bundling step
+  (`tools/release/php-extension-bundle.mjs`).
 - Docs: a Bolt guide (/guides/bolt), agent directions for Bolt
   (/agent-directions/bolt.md, and `references/bolt.md` in the skill), and a
   Supabase Edge Functions recipe. Bolt apps are Vite React pages on one site

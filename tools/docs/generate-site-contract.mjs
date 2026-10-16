@@ -63,6 +63,11 @@ const AGENT_PAYLOADS = [
     source: "docs/agents/paymenter.md",
     stack: "paymenter",
   },
+  {
+    path: "/agent-directions/fossbilling.md",
+    source: "docs/agents/fossbilling.md",
+    stack: "fossbilling",
+  },
   { path: "/agent-directions/lovable.md", source: "docs/agents/lovable.md", stack: "lovable" },
   {
     path: "/agent-directions/sveltekit.md",
@@ -419,6 +424,32 @@ const FRAMEWORKS = [
       secrets: "The gateway's settings, encrypted by Paymenter with its APP_KEY",
       refunds:
         "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment dialog.",
+      mobile: STORE_MOBILE,
+    },
+  },
+  // The other open-source billing panel. The release ZIP adds a FOSSBilling
+  // module and a payment gateway; its Tested badge comes from agent trials.
+  {
+    id: "fossbilling",
+    label: "FOSSBilling",
+    type: "plugin",
+    family: "php",
+    quickstart_slug: "quickstart-fossbilling",
+    agent_stack: "fossbilling",
+    adapter_package: "openreceive-fossbilling",
+    install:
+      "Unzip openreceive-fossbilling-<version>.zip in FOSSBilling's folder, then php modules/Openreceive/activate.php",
+    requires: "FOSSBilling ≥ 0.8, PHP ≥ 8.3, GMP and sodium",
+    demo: null,
+    example_path: "packages/php/fossbilling",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "FOSSBilling 0.8.8, its official Docker image with GMP added, on PHP 8.5",
+      databases: "MySQL or MariaDB, FOSSBilling's own database",
+      secrets: "The module's settings, encrypted by FOSSBilling with its install's salt",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment page.",
       mobile: STORE_MOBILE,
     },
   },

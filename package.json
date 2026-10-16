@@ -96,6 +96,8 @@
     "release:wordpress:publish": "node tools/release/wordpress-plugin.mjs publish",
     "release:paymenter:plan": "node tools/release/paymenter-extension.mjs plan",
     "release:paymenter:build": "node tools/release/paymenter-extension.mjs build",
+    "release:fossbilling:plan": "node tools/release/fossbilling-extension.mjs plan",
+    "release:fossbilling:build": "node tools/release/fossbilling-extension.mjs build",
     "test:e2e:wordpress": "playwright test --config tests/e2e-wordpress/playwright.config.ts",
     "test:wordpress": "bash tools/ci/wordpress-tests.sh",
     "trial": "node --import tsx trials/harness/run.ts",

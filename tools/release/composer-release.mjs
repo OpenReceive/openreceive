@@ -190,11 +190,20 @@ export function updatePhpVersions(root, targetVersion) {
       }
     }
   }
-  // The Paymenter extension bundles the engine like the WordPress plugin, and
-  // declares its own version in Runtime::VERSION, which its build checks.
-  const paymenterDir = path.join(root, "packages/php/paymenter");
-  if (existsSync(path.join(paymenterDir, "composer.json"))) {
-    const file = path.join(paymenterDir, "composer.json");
+  // The billing-panel extensions bundle the engine like the WordPress plugin,
+  // and declare their own version in Runtime::VERSION (and FOSSBilling's
+  // module manifest), which their builds check.
+  for (const [name, runtimePath, manifestPath] of [
+    ["paymenter", "Support/Runtime.php", null],
+    [
+      "fossbilling",
+      "src/modules/Openreceive/Support/Runtime.php",
+      "src/modules/Openreceive/manifest.json",
+    ],
+  ]) {
+    const extensionDir = path.join(root, "packages/php", name);
+    if (!existsSync(path.join(extensionDir, "composer.json"))) continue;
+    const file = path.join(extensionDir, "composer.json");
     const manifest = JSON.parse(readFileSync(file, "utf8"));
     const previousVersion = manifest.require["openreceive/openreceive"];
     manifest.require["openreceive/openreceive"] = composerConstraint(targetVersion);
@@ -202,22 +211,31 @@ export function updatePhpVersions(root, targetVersion) {
     if (previousVersion !== manifest.require["openreceive/openreceive"]) {
       writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
       execFileSync("npx", ["biome", "format", "--write", file], { cwd: root, stdio: "ignore" });
-      changed.push("packages/php/paymenter/composer.json");
-      if (existsSync(path.join(paymenterDir, "composer.lock"))) {
+      changed.push(`packages/php/${name}/composer.json`);
+      if (existsSync(path.join(extensionDir, "composer.lock"))) {
         execFileSync(
           "composer",
           ["update", "openreceive/openreceive", "--no-install", "--no-interaction"],
-          { cwd: paymenterDir, stdio: "inherit" },
+          { cwd: extensionDir, stdio: "inherit" },
         );
-        changed.push("packages/php/paymenter/composer.lock");
+        changed.push(`packages/php/${name}/composer.lock`);
       }
     }
-    const runtime = path.join(paymenterDir, "Support/Runtime.php");
+    const runtime = path.join(extensionDir, runtimePath);
     const before = readFileSync(runtime, "utf8");
     const after = before.replace(/const VERSION = '[^']+'/, `const VERSION = '${targetVersion}'`);
     if (before !== after) {
       writeFileSync(runtime, after);
-      changed.push("packages/php/paymenter/Support/Runtime.php");
+      changed.push(`packages/php/${name}/${runtimePath}`);
+    }
+    if (manifestPath !== null) {
+      const moduleManifest = path.join(extensionDir, manifestPath);
+      const json = JSON.parse(readFileSync(moduleManifest, "utf8"));
+      if (json.version !== targetVersion) {
+        json.version = targetVersion;
+        writeFileSync(moduleManifest, `${JSON.stringify(json, null, 2)}\n`);
+        changed.push(`packages/php/${name}/${manifestPath}`);
+      }
     }
   }
   // The Laravel demo installs both packages from their monorepo paths. Their

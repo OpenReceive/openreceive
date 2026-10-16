@@ -377,10 +377,11 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     }
   }
 
-  // Both quickstarts link their release ZIP by version.
+  // These quickstarts link their release ZIP by version.
   for (const [quickstart, zip] of [
     ["docs/guides/quickstart-woocommerce.md", "wordpress"],
     ["docs/guides/quickstart-paymenter.md", "paymenter"],
+    ["docs/guides/quickstart-fossbilling.md", "fossbilling"],
   ]) {
     const quickstartPath = path.join(root, quickstart);
     if (!existsSync(quickstartPath)) continue;
@@ -476,10 +477,15 @@ function dryRunPrepare(root, targetVersion) {
       "packages/php/paymenter/composer.json",
       "packages/php/paymenter/composer.lock",
       "packages/php/paymenter/Support/Runtime.php",
+      "packages/php/fossbilling/composer.json",
+      "packages/php/fossbilling/composer.lock",
+      "packages/php/fossbilling/src/modules/Openreceive/Support/Runtime.php",
+      "packages/php/fossbilling/src/modules/Openreceive/manifest.json",
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "docs/guides/quickstart-woocommerce.md",
       "docs/guides/quickstart-paymenter.md",
+      "docs/guides/quickstart-fossbilling.md",
       "package-lock.json",
     ]
       .filter((file, index, all) => all.indexOf(file) === index)
