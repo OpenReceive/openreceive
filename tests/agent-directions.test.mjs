@@ -259,6 +259,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
         "edd",
         "paymenter",
         "fossbilling",
+        "medusa",
         "btcpay",
         "lovable",
         "bolt",
@@ -303,6 +304,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
         "edd",
         "paymenter",
         "fossbilling",
+        "medusa",
         "btcpay",
         "lovable",
         "bolt",
@@ -340,6 +342,7 @@ test("every library payload writes codes with the file tool, and Express, Fastif
         "edd",
         "paymenter",
         "fossbilling",
+        "medusa",
         "btcpay",
         "lovable",
         "bolt",
@@ -489,6 +492,44 @@ test("the FOSSBilling payload pins the release ZIP, adds GMP, activates the modu
   assert.match(stepThree, /Do not\s+list each coin's availability, mention a minimum/);
   assert.match(stepThree, /Do not add containers, services, workers or cron jobs/);
   assert.match(text, /Never read or run anything from another\s+project/);
+});
+
+// Medusa takes the library shape for its codes (the Medusa server's .env, by
+// name, with the file tool) and the billing panels' for the rest: a plugin
+// from npm, a script that offers it in the regions, and no hooks to write.
+// The starter's Tailwind v3 build refuses the checkout's stylesheet, so the
+// storefront's route serves it instead of an import.
+test("the Medusa payload installs the plugin, offers it in the regions, proves the routes and stops", () => {
+  const text = payloads.find(({ stack }) => stack === "medusa").text;
+  const step = stepZero(text);
+  assert.ok(
+    step.includes("`grep -E '^(NWC_URI|LSC_URI_PRIMARY)=.' .env | cut -d= -f1`"),
+    "Step 0 checks the Medusa server's .env by name",
+  );
+  assert.match(step, /with your file-editing\s+tool/);
+  assert.match(step, /Never write it with a shell command/);
+  assert.match(step, /this message IS the walkthrough/);
+  assert.match(step, /do not tell them to revoke or replace a\s+code because it was pasted here/);
+  assert.match(text, /npm install @openreceive\/medusa/);
+  assert.match(text, /@openreceive\/medusa\/providers\/openreceive/);
+  assert.match(text, /npx medusa db:migrate/);
+  assert.match(
+    text,
+    /npx medusa exec \.\/node_modules\/@openreceive\/medusa\/dist\/enable-openreceive\.js/,
+  );
+  assert.match(text, /npx openreceive doctor/);
+  assert.match(text, /Do not import\s+`@openreceive\/react\/styles\.css`/);
+  assert.match(text, /x-publishable-api-key/);
+  assert.match(text, /"code":"FORBIDDEN"/);
+  assert.match(text, /Never `pkill` or `killall` by name/);
+  assert.match(text, /You cannot pay an invoice/);
+  assert.match(
+    text,
+    /Your last message starts "Setup is finished" and has at most five short\s+lines/,
+  );
+  assert.match(text, /Do not add\s+containers, services, workers or cron jobs/);
+  assert.match(text, /Never read or run anything from another\s+project/);
+  assert.match(text, /Do not write your own payment provider/);
 });
 
 // Lovable's agent has no terminal and Lovable keeps codes as project secrets:

@@ -177,6 +177,14 @@ const STACKS = [
       "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its admin-area screens are only for a FOSSBilling with no shell.",
   },
   {
+    stack: "medusa",
+    source: "docs/agents/src/medusa.md",
+    quickstart: "docs/guides/quickstart-medusa.md",
+    brief: libraryBrief(".env"),
+    quickstartRole:
+      "Steps 0–4 above are the setup and this is their reference: it has the code they name. Where the two differ, the steps win, and its admin screens are only for a store whose Medusa server has no shell.",
+  },
+  {
     stack: "node",
     source: "docs/agents/src/node.md",
     quickstart: "docs/guides/quickstart-node.md",
@@ -334,6 +342,8 @@ const UNLISTED_GUIDES = {
   "quickstart-paymenter": "inlined in full below, or another stack's",
   "agent-directions-fossbilling": "this payload's own page",
   "quickstart-fossbilling": "inlined in full below, or another stack's",
+  "agent-directions-medusa": "this payload's own page",
+  "quickstart-medusa": "inlined in full below, or another stack's",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
   "agent-directions-edd": "this payload's own page",
   "quickstart-edd": "inlined in full below, or another stack's",
@@ -508,6 +518,33 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "FOSSBilling keeps its data in MySQL or MariaDB",
     serverless: "FOSSBilling runs on an ordinary PHP host",
     "mobile-apps": "FOSSBilling's own invoice page is the payment page",
+    "wordpress-hosting": "WordPress hosts only",
+  },
+  medusa: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "custom-checkout-route",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "node-orms",
+      ].map((slug) => [
+        slug,
+        "the Medusa plugin supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    "frontend-checkout": "the quickstart has the storefront's checkout code",
+    "checkout-ux": "the storefront shows the shipped checkout, as the quickstart does",
+    "headless-checkout": "the storefront shows the shipped checkout, as the quickstart does",
+    "provider-registry": "the shipped checkout carries the provider registry",
+    "react-material-ui-recipe": "the Next.js starter's checkout is Medusa UI, not Material UI",
+    supabase: "Medusa keeps its data in its own PostgreSQL database",
+    serverless: "a Medusa server is a long-running Node process",
+    "mobile-apps": "the storefront's own checkout is the payment page",
     "wordpress-hosting": "WordPress hosts only",
   },
   btcpay: {

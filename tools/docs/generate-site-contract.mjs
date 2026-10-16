@@ -73,6 +73,11 @@ const AGENT_PAYLOADS = [
     source: "docs/agents/fossbilling.md",
     stack: "fossbilling",
   },
+  {
+    path: "/agent-directions/medusa.md",
+    source: "docs/agents/medusa.md",
+    stack: "medusa",
+  },
   { path: "/agent-directions/lovable.md", source: "docs/agents/lovable.md", stack: "lovable" },
   {
     path: "/agent-directions/sveltekit.md",
@@ -480,6 +485,33 @@ const FRAMEWORKS = [
       secrets: "The module's settings, encrypted by FOSSBilling with its install's salt",
       refunds:
         "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment page.",
+      mobile: STORE_MOBILE,
+    },
+  },
+  // A Node commerce platform. The npm package is a Medusa plugin with a
+  // payment provider; the storefront shows the React checkout.
+  {
+    id: "medusa",
+    label: "Medusa",
+    type: "plugin",
+    family: "node",
+    quickstart_slug: "quickstart-medusa",
+    agent_stack: "medusa",
+    adapter_package: "@openreceive/medusa",
+    install:
+      "npm install @openreceive/medusa, register it in medusa-config, then npx medusa db:migrate",
+    requires: "Medusa ≥ 2, Node ≥ 22.12, PostgreSQL",
+    demo: null,
+    example_path: "packages/js/medusa",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "Medusa 2.21.2 on Node 22, with Medusa's Next.js starter",
+      databases: "PostgreSQL, Medusa's own database",
+      secrets:
+        "NWC_URI, and LSC_URI_PRIMARY for swaps, in the Medusa server's environment or .env file, never in the storefront",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, and a refund made in the Medusa admin is recorded only. A buyer reclaims a swap deposit that never converted from the same checkout.",
       mobile: STORE_MOBILE,
     },
   },

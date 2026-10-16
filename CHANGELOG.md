@@ -47,6 +47,21 @@
   run a reconcile pass, which Paymenter's scheduler also runs every minute.
   Docs: the Paymenter quickstart and agent directions
   (/agent-directions/paymenter.md, `references/paymenter.md` in the skill).
+- Added (Medusa): `@openreceive/medusa`, a plugin and payment provider for
+  Medusa 2 (Node 22.12+). The buyer pays at the storefront's checkout before
+  the order is placed: the provider answers a settled payment as captured and
+  an unsettled one as pending, so Medusa will not complete the cart before it
+  settles. Each Medusa payment session is the payment's reference, and the
+  plugin keeps its attempts in Medusa's own database over Medusa's own
+  connection. A payment settled after the buyer left is placed through
+  Medusa's process-payment workflow by the plugin's job, every minute. The
+  checkout's routes sit under `/store/openreceive` behind the publishable key;
+  `npx medusa db:migrate` creates the tables, and
+  `npx medusa exec ./node_modules/@openreceive/medusa/dist/enable-openreceive.js`
+  offers the provider in every region. A refund made in the Medusa admin is
+  recorded only, as for Medusa's manual payments. Docs: the Medusa quickstart
+  with the code for Medusa's Next.js starter, and agent directions
+  (/agent-directions/medusa.md, `references/medusa.md` in the skill).
 - Added (FOSSBilling): an extension for FOSSBilling 0.8+, the other
   open-source billing panel. Each GitHub release attaches
   `openreceive-fossbilling-<version>.zip`, which unzips into FOSSBilling's own

@@ -739,6 +739,16 @@
       "bytes": 7123
     },
     {
+      "path": "/guides/quickstart-medusa",
+      "markdown_path": "/guides/quickstart-medusa.md",
+      "source": "docs/guides/quickstart-medusa.md",
+      "kind": "guide",
+      "slug": "quickstart-medusa",
+      "title": "Medusa Quickstart",
+      "category": "quickstart",
+      "bytes": 10184
+    },
+    {
       "path": "/guides/quickstart-fossbilling",
       "markdown_path": "/guides/quickstart-fossbilling.md",
       "source": "docs/guides/quickstart-fossbilling.md",
@@ -789,6 +799,16 @@
       "bytes": 18897
     },
     {
+      "path": "/guides/agent-directions-medusa",
+      "markdown_path": "/guides/agent-directions-medusa.md",
+      "source": "docs/agents/medusa.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-medusa",
+      "title": "Agent directions (Medusa)",
+      "category": "agents",
+      "bytes": 21199
+    },
+    {
       "path": "/guides/agent-directions-fossbilling",
       "markdown_path": "/guides/agent-directions-fossbilling.md",
       "source": "docs/agents/fossbilling.md",
@@ -817,7 +837,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 5058
+      "bytes": 5127
     },
     {
       "path": "/wordpress",
@@ -1157,6 +1177,27 @@
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 22636,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/medusa.md",
+      "source": "docs/agents/cover/medusa.md",
+      "kind": "agent-directions-cover",
+      "stack": "medusa",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 289,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/medusa/full.md"
+    },
+    {
+      "path": "/agent-directions/medusa/full.md",
+      "source": "docs/agents/medusa.md",
+      "kind": "agent-directions-payload",
+      "stack": "medusa",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 21199,
       "copy_button": true,
       "self_contained": true
     },
@@ -1661,6 +1702,35 @@
         "databases": "MySQL or MariaDB, FOSSBilling's own database",
         "secrets": "The module's settings, encrypted by FOSSBilling with its install's salt",
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": null
+    },
+    {
+      "id": "medusa",
+      "label": "Medusa",
+      "family": "node",
+      "type": "plugin",
+      "heading": "Accept Bitcoin & Stablecoin Payments With Medusa",
+      "quickstart_slug": "quickstart-medusa",
+      "quickstart_path": "/guides/quickstart-medusa",
+      "quickstart_title": "Medusa Quickstart",
+      "agent_stack": "medusa",
+      "agent_payload_path": "/agent-directions/medusa.md",
+      "agent_full_path": "/agent-directions/medusa/full.md",
+      "adapter_package": "@openreceive/medusa",
+      "install": "npm install @openreceive/medusa, register it in medusa-config, then npx medusa db:migrate",
+      "requires": "Medusa ≥ 2, Node ≥ 22.12, PostgreSQL",
+      "example_path": "packages/js/medusa",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/js/medusa",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "Medusa 2.21.2 on Node 22, with Medusa's Next.js starter",
+        "databases": "PostgreSQL, Medusa's own database",
+        "secrets": "NWC_URI, and LSC_URI_PRIMARY for swaps, in the Medusa server's environment or .env file, never in the storefront",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, and a refund made in the Medusa admin is recorded only. A buyer reclaims a swap deposit that never converted from the same checkout.",
         "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
       },
       "tested": null
@@ -2699,7 +2769,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 8956
+        "bytes": 9172
       },
       {
         "path": "/openapi.yaml",

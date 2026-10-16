@@ -746,6 +746,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-medusa",
+      "title": "Medusa Quickstart",
+      "source_path": "docs/guides/quickstart-medusa.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-fossbilling",
       "title": "FOSSBilling Quickstart",
       "source_path": "docs/guides/quickstart-fossbilling.md",
@@ -781,6 +789,14 @@
       "slug": "agent-directions-paymenter",
       "title": "Agent directions (Paymenter)",
       "source_path": "docs/agents/paymenter.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-medusa",
+      "title": "Agent directions (Medusa)",
+      "source_path": "docs/agents/medusa.md",
       "category": "agents",
       "audience": "developer",
       "public": true
