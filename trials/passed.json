@@ -39,12 +39,12 @@
     },
     {
       "trial": "rails",
-      "date": "2026-10-14",
-      "release": "0.4.26",
+      "date": "2026-10-16",
+      "release": "0.4.27",
       "runs": 3,
-      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
+      "agents": ["codex/default"],
       "mode": "released",
-      "directions": "0cbdc78e5a6c"
+      "directions": "a5251dc6896f"
     },
     {
       "trial": "php",
@@ -145,12 +145,12 @@
     },
     {
       "trial": "nestjs",
-      "date": "2026-10-14",
-      "release": "0.4.26",
+      "date": "2026-10-16",
+      "release": "0.4.27",
       "runs": 3,
-      "agents": ["cursor/grok-4.7-medium-fast"],
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
       "mode": "released",
-      "directions": "b3d4e3177022"
+      "directions": "15937afee58f"
     },
     {
       "trial": "sveltekit",

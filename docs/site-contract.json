@@ -1376,10 +1376,11 @@
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
       "tested": {
-        "date": "2026-10-14",
-        "release": "0.4.26",
+        "date": "2026-10-16",
+        "release": "0.4.27",
         "agents": [
-          "cursor/grok-4.7-medium-fast"
+          "claude/claude-opus-5-5",
+          "codex/default"
         ]
       }
     },
@@ -1411,11 +1412,10 @@
         "mobile": "No app SDK. A mobile app opens your checkout page in a browser tab, which the app stores allow for physical goods and real-world services; digital goods need a link-out program."
       },
       "tested": {
-        "date": "2026-10-14",
-        "release": "0.4.26",
+        "date": "2026-10-16",
+        "release": "0.4.27",
         "agents": [
-          "codex/default",
-          "cursor/grok-4.7-medium-fast"
+          "codex/default"
         ]
       }
     },
