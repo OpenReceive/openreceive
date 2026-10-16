@@ -20,6 +20,7 @@ import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
 import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
+import { liveFossbillingChecks } from "./fossbilling.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
 import { redact } from "./redact.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
@@ -394,7 +395,9 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
             ? await liveBoltChecks(directory, sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
             : platform.host === "paymenter"
               ? await livePaymenterChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
-              : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
+              : platform.host === "fossbilling"
+                ? await liveFossbillingChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
+                : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

@@ -127,8 +127,11 @@ export interface Platform {
    * `paymenter`: a Paymenter billing panel that paymenter.ts seeds with its
    * owner, two clients and five products; the client orders through
    * Paymenter's shop and pays from the invoice's payment dialog in Chromium.
+   * `fossbilling`: a FOSSBilling billing panel that fossbilling.ts installs
+   * and seeds with two clients and five products; the client orders through
+   * FOSSBilling's shop and pays on its payment page in Chromium.
    */
-  readonly host?: "btcpay" | "bolt" | "paymenter";
+  readonly host?: "btcpay" | "bolt" | "paymenter" | "fossbilling";
   /** Compose service that publishes the shop. WordPress when omitted. */
   readonly service?: string;
   /** Port inside that service. 80 when omitted. */

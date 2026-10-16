@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveShopChecks } from "./live.ts";
 import { openingFor } from "./loop.ts";
+import { liveFossbillingChecks } from "./fossbilling.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
 import {
   inspectShop,
@@ -44,6 +45,7 @@ const BY_HAND_PLATFORMS = [
   "laravel",
   "woocommerce",
   "paymenter",
+  "fossbilling",
 ] as const;
 
 interface State {
@@ -163,7 +165,9 @@ async function checkShop(argv: readonly string[]): Promise<void> {
     checks.push(
       ...(platform.host === "paymenter"
         ? await livePaymenterChecks(state.baseUrl, options)
-        : await liveShopChecks(state.baseUrl, options)),
+        : platform.host === "fossbilling"
+          ? await liveFossbillingChecks(state.baseUrl, options)
+          : await liveShopChecks(state.baseUrl, options)),
     );
   } else {
     console.log(

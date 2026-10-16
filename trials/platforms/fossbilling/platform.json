@@ -1,0 +1,57 @@
+{
+  "slug": "fossbilling",
+  "name": "FOSSBilling",
+  "directions": "docs/agents/fossbilling.md",
+  "prompt_name": "FOSSBilling billing panel",
+  "doctor": "php console.php openreceive:doctor",
+  "credential_store": {
+    "kind": "module-setting",
+    "where": "the OpenReceive module's encrypted settings (php console.php openreceive:configure)"
+  },
+  "allowed_install_paths": ["release-zip"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "closing_max_lines": 8,
+  "live": true,
+  "host": "fossbilling",
+  "service": "fossbilling",
+  "container_port": 80,
+  "seed": false,
+  "wallet_services": ["fossbilling"],
+  "logs": ["logs", "--no-color", "--tail", "60", "fossbilling"],
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "mariadb",
+      "sh",
+      "-c",
+      "mariadb -ufossbilling -pfossbilling-local -N fossbilling -e \"select count(*) from product where type = 'custom'\""
+    ],
+    "openreceive": [
+      "exec",
+      "-T",
+      "fossbilling",
+      "sh",
+      "-c",
+      "test -e /var/www/html/modules/Openreceive && echo yes || echo no"
+    ],
+    "orderStatus": [
+      "exec",
+      "-T",
+      "mariadb",
+      "sh",
+      "-c",
+      "mariadb -ufossbilling -pfossbilling-local -N fossbilling -e \"select status from invoice where id = $1\"",
+      "sh"
+    ]
+  }
+}

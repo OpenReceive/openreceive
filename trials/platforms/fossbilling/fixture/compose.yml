@@ -1,0 +1,41 @@
+# FOSSBilling as its own Docker guide runs it, pinned: the official image with
+# its files in a named volume, and MariaDB, with no OpenReceive. The image has
+# no GMP, which OpenReceive needs; adding it is the agent's step, as the
+# directions say. The harness runs FOSSBilling's web installer, turns off its
+# per-IP rate limits (every check comes from one address), seeds two clients
+# and five products (seed/seed.php), and swaps 8080 for a free port per run
+# (sandbox.ts).
+services:
+  fossbilling:
+    image: fossbilling/fossbilling:0.8.8
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - fossbilling:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+  mariadb:
+    image: mariadb:11.8
+    environment:
+      MARIADB_DATABASE: fossbilling
+      MARIADB_USER: fossbilling
+      MARIADB_PASSWORD: fossbilling-local
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  fossbilling:
+  mariadb:

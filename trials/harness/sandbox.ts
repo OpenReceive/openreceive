@@ -6,6 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { inspectBtcpay, removeBtcpayState, setupBtcpay } from "./btcpay.ts";
 import { compose, InfraError, platformOverrideFile, walletOverrideFile } from "./docker.ts";
+import { setupFossbilling } from "./fossbilling.ts";
 import { setupPaymenter } from "./paymenter.ts";
 import type { Check, Platform } from "./types.ts";
 
@@ -192,6 +193,8 @@ export async function startShop(
     if (platform.host === "btcpay") await setupBtcpay(directory, baseUrl);
     // A Paymenter merchant has clients and products before the agent comes.
     if (platform.host === "paymenter") await setupPaymenter(directory, baseUrl, seedDir);
+    // A FOSSBilling merchant has run its installer and has clients and products.
+    if (platform.host === "fossbilling") await setupFossbilling(directory, baseUrl, seedDir);
     if (platform.seed === false) {
       return {
         id,
