@@ -1,0 +1,71 @@
+{
+  "name": "@openreceive/medusa",
+  "version": "0.4.27",
+  "description": "Accept Bitcoin Lightning payments in Medusa with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "medusa",
+    "medusa-plugin",
+    "medusa-plugin-payment"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@openreceive/http": "0.4.27",
+    "@openreceive/node": "0.4.27"
+  },
+  "peerDependencies": {
+    "@medusajs/framework": "^2.0.0",
+    "@medusajs/medusa": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@medusajs/framework": {
+      "optional": true
+    },
+    "@medusajs/medusa": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./providers/openreceive": "./.medusa/server/src/providers/openreceive/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    ".medusa/server",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/medusa"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org/integrations/medusa",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

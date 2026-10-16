@@ -43,6 +43,8 @@ const importChecks = {
     "typeof mod.openReceiveFastify === 'function' && typeof mod.createStack === 'function' && typeof mod.HttpError === 'function' && mod.createSqlPayments === undefined && mod.maybeReconcilePayments === undefined",
   "@openreceive/http":
     "typeof mod.createHttpHandler === 'function' && typeof mod.HttpError === 'function'",
+  "@openreceive/medusa":
+    "typeof mod.openReceiveProviderId === 'function' && typeof mod.isOpenReceiveProvider === 'function' && mod.OPENRECEIVE_MEDUSA_ROUTE_PREFIX === '/store/openreceive' && mod.isOpenReceiveProvider(mod.openReceiveProviderId())",
   "@openreceive/next":
     "typeof mod.openReceiveNextHandlers === 'function' && typeof mod.createStack === 'function' && typeof mod.HttpError === 'function' && mod.createSqlPayments === undefined && mod.maybeReconcilePayments === undefined",
   "@openreceive/node":

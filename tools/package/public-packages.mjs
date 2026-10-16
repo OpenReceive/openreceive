@@ -11,6 +11,7 @@ export const OPENRECEIVE_PUBLIC_PACKAGE_NAMES = [
   "@openreceive/express",
   "@openreceive/fastify",
   "@openreceive/http",
+  "@openreceive/medusa",
   "@openreceive/next",
   "@openreceive/node",
   "@openreceive/provider-data",

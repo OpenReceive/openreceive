@@ -815,6 +815,17 @@
       ]
     }
   },
+  "@openreceive/medusa": {
+    ".": {
+      "values": [
+        "isOpenReceiveProvider",
+        "OPENRECEIVE_MEDUSA_IDENTIFIER",
+        "OPENRECEIVE_MEDUSA_ROUTE_PREFIX",
+        "openReceiveProviderId"
+      ],
+      "types": []
+    }
+  },
   "@openreceive/next": {
     ".": {
       "values": [

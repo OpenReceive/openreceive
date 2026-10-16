@@ -25,6 +25,8 @@ packages/ruby/*/Gemfile.lock
 node_modules/
 coverage/
 dist/
+# The Medusa plugin's build: the routes, job and provider Medusa loads.
+.medusa/
 .turbo/
 .vite/
 .next/
