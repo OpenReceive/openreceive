@@ -1,0 +1,52 @@
+{
+  "slug": "bolt",
+  "name": "Bolt (Vite React with Supabase Edge Functions)",
+  "directions": "docs/agents/bolt.md",
+  "directions_slug": "bolt",
+  "prompt_name": "Vite React shop built with Bolt",
+  "opening_guide": "docs/guides/bolt.md",
+  "opening_context": "This is a shop built with Bolt: a Vite React app on Bolt Cloud, with Bolt Database and server functions. As on Bolt, you edit files and add npm packages; you do not run SQL, deploy functions or manage the containers. I apply the migrations you write, Bolt deploys what is in supabase/functions, and Bolt rebuilds the preview.",
+  "doctor": "",
+  "credential_store": {
+    "kind": "platform",
+    "where": "Bolt's Secrets"
+  },
+  "platform_env_service": "functions",
+  "live": true,
+  "host": "bolt",
+  "before_live": [
+    ["run", "--rm", "migrate"],
+    ["up", "-d", "--force-recreate", "functions"],
+    ["up", "-d", "--build", "--wait", "--wait-timeout", "300", "web"]
+  ],
+  "allowed_install_paths": ["npm"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "\\bpsql\\b",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "wallet_services": ["functions"],
+  "logs": ["logs", "--no-color", "--tail", "60", "functions", "gateway"],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": false,
+  "service": "web",
+  "container_port": 3000,
+  "seed": false,
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "db",
+      "psql",
+      "-U",
+      "postgres",
+      "-tAc",
+      "select count(*) from public.products"
+    ],
+    "openreceive": ["exec", "-T", "web", "node", "infra/web/openreceive-installed.mjs"],
+    "orderStatus": ["exec", "-T", "db", "sh", "/order-status.sh"]
+  }
+}

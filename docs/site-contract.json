@@ -118,6 +118,16 @@
       "bytes": 6606
     },
     {
+      "path": "/guides/bolt",
+      "markdown_path": "/guides/bolt.md",
+      "source": "docs/guides/bolt.md",
+      "kind": "guide",
+      "slug": "bolt",
+      "title": "Bitcoin Checkout on Bolt",
+      "category": "guide",
+      "bytes": 7837
+    },
+    {
       "path": "/guides/supabase",
       "markdown_path": "/guides/supabase.md",
       "source": "docs/guides/supabase.md",
@@ -125,7 +135,7 @@
       "slug": "supabase",
       "title": "Bitcoin Checkout with Supabase",
       "category": "guide",
-      "bytes": 19748
+      "bytes": 17641
     },
     {
       "path": "/guides/supabase-migration",
@@ -165,7 +175,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 4804
+      "bytes": 5544
     },
     {
       "path": "/guides/quickstart-rails",
@@ -449,6 +459,16 @@
       "bytes": 10300
     },
     {
+      "path": "/guides/supabase-edge-functions-recipe",
+      "markdown_path": "/guides/supabase-edge-functions-recipe.md",
+      "source": "docs/recipes/supabase-edge-functions.md",
+      "kind": "guide",
+      "slug": "supabase-edge-functions-recipe",
+      "title": "Supabase Edge Functions Recipe",
+      "category": "recipe",
+      "bytes": 11284
+    },
+    {
       "path": "/guides/sveltekit-recipe",
       "markdown_path": "/guides/sveltekit-recipe.md",
       "source": "docs/recipes/sveltekit.md",
@@ -619,6 +639,16 @@
       "bytes": 26191
     },
     {
+      "path": "/guides/agent-directions-bolt",
+      "markdown_path": "/guides/agent-directions-bolt.md",
+      "source": "docs/agents/bolt.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-bolt",
+      "title": "Agent Directions: Bolt",
+      "category": "quickstart",
+      "bytes": 28126
+    },
+    {
       "path": "/guides/agent-directions-sveltekit",
       "markdown_path": "/guides/agent-directions-sveltekit.md",
       "source": "docs/agents/sveltekit.md",
@@ -727,7 +757,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 4757
+      "bytes": 4822
     },
     {
       "path": "/wordpress",
@@ -1151,6 +1181,27 @@
       "stack": "mobile",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 25726,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/bolt.md",
+      "source": "docs/agents/cover/bolt.md",
+      "kind": "agent-directions-cover",
+      "stack": "bolt",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 252,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/bolt/full.md"
+    },
+    {
+      "path": "/agent-directions/bolt/full.md",
+      "source": "docs/agents/bolt.md",
+      "kind": "agent-directions-payload",
+      "stack": "bolt",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 28126,
       "copy_button": true,
       "self_contained": true
     }
@@ -1990,6 +2041,34 @@
       }
     },
     {
+      "id": "bolt",
+      "label": "Bolt",
+      "kind": "ai-builder",
+      "summary": "Bolt builds Vite React apps on Bolt Cloud, with Bolt Database and server functions. Save your wallet code as a secret, paste one prompt, and Bolt adds checkout to your app.",
+      "framework": null,
+      "framework_path": null,
+      "status": "tested",
+      "path": "/platforms/bolt",
+      "markdown_path": "/platforms/bolt.md",
+      "database": "Bolt Database, or your connected Supabase project, over Supabase's HTTPS API from a server function",
+      "secrets": "Bolt's Secrets, read by server functions; Supabase gives each function its URL and service role key",
+      "settlement": "On checkout requests to the server function, with no worker or cron job",
+      "guide_slug": "bolt",
+      "guide_path": "/guides/bolt",
+      "guide_source": "docs/guides/bolt.md",
+      "prompt": "Add Bitcoin Lightning checkout to this app with OpenReceive. Fetch https://openreceive.org/agent-directions/bolt/full.md and follow it exactly: it has the migrations, the server function and the checkout page. NWC_URI and LSC_URI_PRIMARY are already saved as this project's secrets, so do not ask me for them. Use @openreceive packages 0.4.27 or newer.",
+      "starter": null,
+      "eval": "bolt",
+      "tested": {
+        "date": "2026-10-16",
+        "release": "0.4.27",
+        "agents": [
+          "claude/claude-opus-5-5",
+          "codex/default"
+        ]
+      }
+    },
+    {
       "id": "supabase",
       "label": "Supabase",
       "kind": "database",
@@ -2410,7 +2489,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 7944
+        "bytes": 8250
       },
       {
         "path": "/openapi.yaml",

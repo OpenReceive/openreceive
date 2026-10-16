@@ -108,6 +108,17 @@ const LOVABLE_BRIEF = [
   'Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".',
 ];
 
+// Bolt's agent cannot store a secret: the user adds each code in Bolt's
+// Secrets tab, so its list asks for that and never for a pasted code's home.
+const BOLT_BRIEF = [
+  "Before adding packages or editing anything, ask the user to add a receive-only NWC code as a secret.",
+  ASK_LSC_NEXT,
+  "The user adds NWC_URI and LSC_URI_PRIMARY in Bolt's Secrets tab. Never put a code in .env, code or a VITE_ name.",
+  "Never ask the user to run a command. Every step is a file, a package, a migration, a function or a secret.",
+  NO_ROTATION,
+  'Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".',
+];
+
 // BTCPay checks the deployment first, and its own store page is a supported
 // place to save a code, so it gets its own list.
 const BTCPAY_BRIEF = [
@@ -208,6 +219,18 @@ const STACKS = [
     fetchOnly: true,
   },
   {
+    stack: "bolt",
+    source: "docs/agents/src/bolt.md",
+    quickstart: "docs/recipes/supabase-edge-functions.md",
+    quickstartSlug: "supabase-edge-functions-recipe",
+    brief: BOLT_BRIEF,
+    quickstartRole:
+      "Steps 0–6 above are the setup on Bolt and this recipe is their reference: its function and page are the code to write, and its supabase CLI commands are Bolt's Secrets tab and Bolt's own deploy. Where the two differ, the steps win.",
+    // Bolt's agent reads pages with its fetch tool; the WebContainer it runs
+    // commands in cannot reach every host.
+    fetchOnly: true,
+  },
+  {
     stack: "sveltekit",
     source: "docs/agents/src/sveltekit.md",
     quickstart: "docs/recipes/sveltekit.md",
@@ -282,6 +305,10 @@ const UNLISTED_GUIDES = {
   vercel: "for people who hand these directions to v0; it links them, not the reverse",
   lovable: "for people who build on Lovable; the Lovable payload links it, not the other stacks",
   "agent-directions-lovable": "this payload's own page",
+  bolt: "for people who build on Bolt; the Bolt payload links it, not the other stacks",
+  "agent-directions-bolt": "this payload's own page",
+  "supabase-edge-functions-recipe":
+    "an Edge Function on another site than its page; the Bolt payload inlines it and the Supabase guide links it",
   "supabase-migration":
     "the Supabase over HTTPS migration, for agents with no terminal; the Lovable payload and the Supabase guide link it",
   replit: "for people who hand these directions to Replit Agent; it links them, not the reverse",
@@ -394,6 +421,18 @@ const UNLISTED_GUIDES_BY_STACK = {
       "Lovable apps use the drop-in; the directions forbid a custom checkout UI",
     serverless: "the Lovable directions already cover Cloudflare Workers, Lovable's only host",
     "mobile-apps": "Lovable builds web apps",
+  },
+  bolt: {
+    "node-orms": "no ORM: payments go through Supabase's HTTPS API",
+    "headless-checkout": "Bolt apps use the drop-in; the directions forbid a custom checkout UI",
+    "custom-checkout-route": "the recipe's function is the integration",
+    "host-testing": "the server function has no host hooks to test outside Supabase",
+    "payment-safety-upgrade": "a new integration has no existing attempts to upgrade",
+    "react-material-ui-recipe":
+      "Bolt apps use the drop-in; the directions forbid a custom checkout UI",
+    serverless: "the recipe already covers Supabase Edge Functions, Bolt's server functions",
+    "mobile-apps":
+      "Bolt's mobile apps are Expo apps; their payments go through the mobile directions",
   },
   rails: {
     supabase: "the Supabase guide covers Node and Python servers",

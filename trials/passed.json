@@ -110,6 +110,15 @@
       "directions": "882ac51087af"
     },
     {
+      "trial": "bolt",
+      "date": "2026-10-16",
+      "release": "0.4.27",
+      "runs": 3,
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "mode": "candidate",
+      "directions": "5a507e9e1e98"
+    },
+    {
       "trial": "replit",
       "date": "2026-10-08",
       "release": "0.4.19",

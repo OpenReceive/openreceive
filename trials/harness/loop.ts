@@ -13,6 +13,7 @@ import {
 } from "./checks.ts";
 import type { MerchantCodes } from "./codes.ts";
 import type { AgentAdapter } from "./agents.ts";
+import { liveBoltChecks } from "./bolt.ts";
 import { asksPluginInstall, btcpayChecks, installPlugin, liveBtcpayChecks } from "./btcpay.ts";
 import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
@@ -165,7 +166,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       ...supabase?.env,
       ...(platformCodes ? { NWC_URI: shopNwc, LSC_URI_PRIMARY: request.codes.lsc } : {}),
     },
-    platform.service,
+    platform.platform_env_service ?? platform.service,
     // The test swap provider is the only part of the trial wallet the shop
     // reaches over the private network; the NWC relay is public.
     request.wallet === undefined || platform.swap_provider === "live"
@@ -270,7 +271,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
         reason = `stopped after ${platform.max_minutes} minutes`;
         break;
       }
-      console.log(`${sandbox.id} cursor turn ${turn}`);
+      console.log(`${sandbox.id} ${request.agent.name} turn ${turn}`);
       const response = await request.agent.turn({
         workspace: directory,
         prompt: nextPrompt,
@@ -388,7 +389,9 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       const live =
         platform.host === "btcpay"
           ? await liveBtcpayChecks(directory, request.wallet?.settle)
-          : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
+          : platform.host === "bolt"
+            ? await liveBoltChecks(directory, sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
+            : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

@@ -1,0 +1,138 @@
+# The Widget Shop as Bolt runs it: a Vite React app whose pages talk to the
+# project's Supabase database (Bolt Database, or a connected Supabase project)
+# with supabase-js and the anon key, and whose server code is Supabase Edge
+# Functions on Deno. Supabase here is its own Postgres image, Supabase Auth,
+# PostgREST, edge-runtime and a stand-in for its API gateway (infra/).
+# Bolt gives server functions SUPABASE_URL, SUPABASE_ANON_KEY,
+# SUPABASE_SERVICE_ROLE_KEY and the project's secrets from outside the code;
+# so does this setup. `docker compose run --rm migrate` applies new
+# supabase/migrations files, as Bolt does; the functions service runs whatever
+# is in supabase/functions, as Bolt deploys it.
+# The Compose project name is the directory name. The harness swaps 8080 for a
+# free port per run.
+x-keys: &keys
+  SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZGdldHNob3Bib2x0ZGVtb2FiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyMjU2MDAsImV4cCI6MjA4Mjc1ODQwMH0.hyILh6koYkngXk5PoqfpqUmZN04ZobUERVv-43x3Bfs
+  SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZGdldHNob3Bib2x0ZGVtb2FiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NzIyNTYwMCwiZXhwIjoyMDgyNzU4NDAwfQ.0QhNFQoDn6bhqV-jFDFjvuvDo1AA4TzQlcSb_LxdmuM
+services:
+  db:
+    image: supabase/postgres:17.11.0.004
+    environment:
+      POSTGRES_PASSWORD: shop
+    volumes:
+      - ./infra/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-widget-shop.sql:ro
+      - ./infra/order-status.sh:/order-status.sh:ro
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "127.0.0.1"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+  auth:
+    image: supabase/gotrue:v2.197.0
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: https://widgetshopboltdemoab.supabase.co/auth/v1
+      GOTRUE_SITE_URL: https://widget-shop.bolt.host
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:shop@db:5432/postgres
+      GOTRUE_JWT_SECRET: widget-shop-bolt-local-jwt-secret-0123456789abcdef
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "1000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9999/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+    restart: on-failure
+  migrate:
+    image: supabase/postgres:17.11.0.004
+    entrypoint: ["sh", "/infra/migrate.sh"]
+    volumes:
+      - ./infra:/infra:ro
+      - ./supabase/migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    restart: "no"
+  rest:
+    image: postgrest/postgrest:v14.18
+    environment:
+      PGRST_DB_URI: postgres://authenticator:shop@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public, extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: widget-shop-bolt-local-jwt-secret-0123456789abcdef
+      PGRST_DB_CHANNEL_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+  functions:
+    image: supabase/edge-runtime:v1.77.4
+    command: ["start", "--main-service", "/infra/functions-main", "--port", "9000"]
+    environment:
+      <<: *keys
+      SUPABASE_URL: http://gateway:8000
+      SUPABASE_DB_URL: postgresql://postgres:shop@db:5432/postgres
+    volumes:
+      - ./infra:/infra:ro
+      - ./supabase/functions:/srv/functions:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  gateway:
+    image: node:22-alpine
+    command: ["node", "/infra/gateway.mjs"]
+    environment:
+      REST_URL: http://rest:3000
+      AUTH_URL: http://auth:9999
+      FUNCTIONS_URL: http://functions:9000
+      JWT_SECRET: widget-shop-bolt-local-jwt-secret-0123456789abcdef
+    volumes:
+      - ./infra:/infra:ro
+    ports:
+      - "127.0.0.1::8000"
+    depends_on:
+      - rest
+      - auth
+      - functions
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:8080:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+volumes:
+  db:

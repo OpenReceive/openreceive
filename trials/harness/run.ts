@@ -28,7 +28,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 }
 
 function help(): void {
-  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|nestjs|sveltekit|nuxt|astro|react-router|tanstack-start|vercel|replit|lovable|supabase|rails|django|fastapi|flask|php|laravel|btcpay [--smoke] [--runs 1] [--parallel 1] [--keep]
+  console.log(`Usage: npm run trial -- --platform woocommerce|node|fastify|next|nestjs|sveltekit|nuxt|astro|react-router|tanstack-start|vercel|replit|lovable|bolt|supabase|rails|django|fastapi|flask|php|laravel|btcpay [--smoke] [--runs 1] [--parallel 1] [--keep]
        [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,
@@ -115,7 +115,7 @@ async function smokeOne(platform: Platform, keep: boolean): Promise<void> {
     fixture,
     platform.slug,
     { ...platform.platform_env, ...supabase?.env },
-    platform.service,
+    platform.platform_env_service ?? platform.service,
   );
   if (supabase !== undefined) await resetSupabase(supabase);
   const sandbox = await startShop(directory, seed, platform);

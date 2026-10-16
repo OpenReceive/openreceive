@@ -247,7 +247,7 @@ export async function startShop(
   }
 }
 
-async function publishedPort(
+export async function publishedPort(
   directory: string,
   service: string,
   containerPort: number,
@@ -347,7 +347,7 @@ async function inspectContainerShop(
   // variables can hold a real database's password.
   const env = await compose(
     directory,
-    ["exec", "-T", service, "sh", "-c", "env | cut -d= -f1"],
+    ["exec", "-T", platform.platform_env_service ?? service, "sh", "-c", "env | cut -d= -f1"],
     30_000,
   );
   const lastLine = count.stdout.trim().split("\n").filter(Boolean).at(-1);

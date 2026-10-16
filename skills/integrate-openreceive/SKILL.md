@@ -5,7 +5,7 @@ description: >
   SOL, and ETH swaps. Use for Node.js, Express, Fastify, Next.js, NestJS,
   SvelteKit, Nuxt, Astro, React Router, TanStack Start, Rails,
   Python, Django, FastAPI, Flask, Laravel, plain PHP, WordPress/WooCommerce,
-  Lovable, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
+  Lovable, Bolt, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
   mobile apps (React Native, Expo, Flutter, Swift, Kotlin) through their
   server, or connecting BTCPay Server to a receive-only NWC wallet. A configured swap provider
   converts these payments to BTC over Lightning in the merchant's connected
@@ -53,6 +53,11 @@ connected wallet; asset and network availability depends on the provider.
    - Lovable (TanStack Start on Cloudflare Workers, with Supabase):
      [references/lovable.md](references/lovable.md) — no terminal; codes are
      Lovable secrets and payments go through Supabase's HTTPS API.
+   - Bolt (a Vite React app with Bolt Database or Supabase, and Supabase
+     Edge Functions as server functions):
+     [references/bolt.md](references/bolt.md) — codes are Bolt secrets; one
+     server function serves the payment routes, and the page sends the
+     buyer's Supabase token.
    - A mobile app (React Native or Expo, Flutter, Swift, Kotlin):
      [references/mobile.md](references/mobile.md) — OpenReceive goes on the
      app's server, through that server's reference; the app opens its checkout

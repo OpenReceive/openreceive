@@ -29,10 +29,13 @@ What we test, and what we don't:
   Data API, gets a real Lightning invoice for the buyer, refuses a stranger,
   and marks a paid order paid. The storage code for `pg`, Knex, Prisma,
   TypeORM and Python has run through the same pooler, and the HTTPS route
-  through the project's API gateway with a secret key.
+  through the project's API gateway with a secret key. Coding agents given
+  the [Bolt](bolt.md) directions serve the payment routes from a Supabase Edge
+  Function, with Supabase Auth checking the buyer's token, three runs in a
+  row, on a local Supabase stack.
 - **Not tested by an agent.** Next.js, Fastify, FastAPI and Django apps on
-  Supabase, Supabase Auth inside `authorize`, and Supabase Edge Functions.
-  Edge Functions run in our tests in Supabase's own runtime, but not on
+  Supabase, and Supabase Auth inside a cookie-based `authorize`. Edge
+  Functions run in our tests in Supabase's own runtime, but not on
   Supabase's hosted platform; see [what we test](#what-we-test-on-edge-functions).
   If something on Supabase does not work as this guide says,
   [open an issue](https://github.com/OpenReceive/openreceive/issues/new).
@@ -351,79 +354,15 @@ pages are on another site. From 0.4.27, a function can serve the payment
 routes. It keeps payments over Supabase's HTTPS API, as above, and lets your
 shop's origin call it with the `cors` option. A browser sends no cookies to
 another site, so the page sends the buyer's Supabase access token instead,
-and `authorize` checks it.
+and `authorize` checks it. This is how Bolt apps take payments: see
+[Bolt](bolt.md).
 
-1. Apply the migration and write `openreceive_on_paid`: steps
-   [1](#1-write-the-migration) and [2](#2-write-openreceive_on_paid) of
-   Supabase over HTTPS.
-2. Write the function in `supabase/functions/openreceive/index.ts`. Name it
-   `openreceive`: Supabase hands a function its requests under
-   `/<name>/`, and the routes live under `/openreceive/`.
-
-   ```ts
-   import { createStack } from "npm:@openreceive/http@^0.4.27";
-   import { createClient } from "npm:@supabase/supabase-js@2";
-
-   const env = (name: string) => Deno.env.get(name) ?? "";
-   const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
-
-   async function findOrder(id: string) {
-     const { data } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
-     return data;
-   }
-
-   Deno.serve(async (request) => {
-     const stack = createStack({
-       wallet: { nwc: env("NWC_URI") },
-       storage: {
-         supabase: { url: env("SUPABASE_URL"), key: env("SUPABASE_SERVICE_ROLE_KEY") },
-       },
-       // The price comes from the order row, never from the request.
-       amountFor: async (reference) => {
-         const order = await findOrder(reference);
-         return order?.status === "pending"
-           ? { currency: order.currency, value: order.total, description: order.title }
-           : null;
-       },
-       // Only the signed-in buyer may pay for their order.
-       authorize: async ({ request, resource }) => {
-         const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
-         if (!token) return false;
-         const { data } = await supabase.auth.getUser(token);
-         const order = resource.reference ? await findOrder(resource.reference) : null;
-         return Boolean(data.user && order && order.user_id === data.user.id);
-       },
-       // Your shop's pages, exactly as the browser sends their origin.
-       cors: { origins: ["https://shop.example"] },
-     });
-     try {
-       return await stack.handler(request);
-     } finally {
-       await stack.close();
-     }
-   });
-   ```
-
-3. Set the wallet code and deploy:
-
-   ```sh
-   supabase secrets set NWC_URI="nostr+walletconnect://…"
-   supabase functions deploy openreceive
-   ```
-
-   Supabase gives every function `SUPABASE_URL` and
-   `SUPABASE_SERVICE_ROLE_KEY` itself.
-
-4. On the page, point the checkout at the function and send the token with
-   the `fetch` from [step 4](#4-use-supabase-auth-in-authorize):
-
-   ```tsx
-   <Checkout
-     reference={order.id}
-     prefix="https://<project-ref>.supabase.co/functions/v1/openreceive"
-     fetch={withSupabaseToken}
-   />
-   ```
+The [Supabase Edge Functions recipe](../recipes/supabase-edge-functions.md)
+has the code: the migration and `openreceive_on_paid` from steps
+[1](#1-write-the-migration) and [2](#2-write-openreceive_on_paid) above, a
+trigger that keeps the order's price out of the browser's hands, the
+function `openreceive`, its secrets, and the React `<Checkout>` with an
+absolute `prefix` and a `fetch` that sends the token.
 
 `cors` lists exact origins: scheme, host and port, with no path or trailing
 slash. A listed origin passes the cross-site check, and the function answers
@@ -431,9 +370,6 @@ its preflights. Every other origin is refused as before. OpenReceive never
 allows credentials across sites, so a cookie-based `authorize` refuses every
 cross-site request; check a token. The body must still be JSON. More:
 [Cross-site requests](authorization.md#cross-site-requests).
-
-The buyer must be signed in, since the token is their Supabase session. Only
-the React `<Checkout>` takes a `fetch`, so the page must use it.
 
 ### What we test on Edge Functions
 
@@ -443,10 +379,10 @@ It runs two functions: one on Supabase's HTTPS API, one on Postgres through
 `SUPABASE_DB_URL`. Each gets the buyer's invoice, refuses a stranger, and
 marks a paid order paid without reaching the CPU limit. The HTTPS function
 also serves a page on another origin through `cors` with a bearer token,
-and refuses an unlisted origin. We also loaded the published package through
-`npm:` imports in the same runtime, and it passed the same checks. We have
-not deployed to Supabase's hosted platform or run its API gateway, and we
-have not tested Bolt.
+and refuses an unlisted origin. The Bolt agent trials run the recipe's shape
+end to end on a local Supabase stack, with Supabase Auth and a stand-in for
+its API gateway. We have not deployed to Supabase's hosted platform or run
+its API gateway.
 
 ## How it runs on Supabase
 

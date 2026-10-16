@@ -671,6 +671,7 @@ test("the trial wallet override joins each service to the trial network and trus
       SSL_CERT_FILE: bundle,
       REQUESTS_CA_BUNDLE: bundle,
       CURL_CA_BUNDLE: bundle,
+      DENO_TLS_CA_STORE: "system",
     });
   }
   assert.throws(() => trialWalletOverride([], wallet), InfraError);
@@ -1229,10 +1230,30 @@ test("back-to-back checks that each run a wallet scan fail the live check", asyn
     const checks = await liveShopChecks(shop.base);
     const backToBack = checks.find((item) => item.id === "live_one_scan_back_to_back");
     assert.equal(backToBack?.pass, false);
-    assert.match(backToBack?.evidence ?? "", /^\d+ ms \(scan\), \d+ ms \(scan\)/);
+    assert.match(backToBack?.evidence ?? "", /^\+0 ms: \d+ ms \(scan\), \+\d+ ms: \d+ ms \(scan\)/);
   } finally {
     shop.close();
   }
+});
+
+// A Bolt server function boots a stack per request, about a second each, so
+// its fourth back-to-back check can start after the gate's 3 s interval and
+// rightly scan again.
+test("a second scan a full gate interval after the first passes the back-to-back check", async () => {
+  const { backToBackCheck } = await import("../trials/harness/live.ts");
+  let calls = 0;
+  const slow = {
+    async checkPayment() {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 1_050));
+      const body =
+        calls === 1 || calls === 4 ? '{"status":"pending","details":{}}' : '{"status":"pending"}';
+      return { status: 200, body, ms: 1_050 };
+    },
+  };
+  const result = await backToBackCheck(slow, "order-1", "", "a".repeat(64));
+  assert.equal(result.pass, true, result.evidence);
+  assert.match(result.evidence ?? "", /\(scan\).*\(scan\)/);
 });
 
 test("a 503 the API marks retryable is tried again, as the browser checkout would", async () => {

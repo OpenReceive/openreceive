@@ -63,6 +63,11 @@ export interface Platform {
   /** Variables the platform gives the shop's web service, before any code. */
   readonly platform_env?: Readonly<Record<string, string>>;
   /**
+   * The service that gets `platform_env` and, on a platform that holds them,
+   * the codes. `service` when omitted; Bolt's go to its server functions.
+   */
+  readonly platform_env_service?: string;
+  /**
    * After the agent finishes, deploy the shop and check it live: `vercel`
    * deploys to the `openreceive-eval` project on Vercel; `local` plays a Replit publish on
    * this machine (an empty production database, a rebuild and a restart).
@@ -116,8 +121,11 @@ export interface Platform {
    * A server product rather than an app. `btcpay`: a BTCPay Server that
    * btcpay.ts sets up, inspects and checks through Greenfield, whose merchant
    * installs the plugin when asked, and which shares the trial chain's node.
+   * `bolt`: a Vite React app whose payment routes are a Supabase Edge
+   * Function on another site; bolt.ts buys through the page in Chromium and
+   * calls the function with the buyer's token.
    */
-  readonly host?: "btcpay";
+  readonly host?: "btcpay" | "bolt";
   /** Compose service that publishes the shop. WordPress when omitted. */
   readonly service?: string;
   /** Port inside that service. 80 when omitted. */

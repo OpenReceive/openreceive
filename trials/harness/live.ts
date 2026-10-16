@@ -35,7 +35,7 @@ export async function sourceTexts(directory: string): Promise<Map<string, string
  * Django, Rails, Laravel and Flask-WTF shops refuse a POST without the token;
  * the others ignore it.
  */
-export class Visitor {
+export class Visitor implements CheckoutClient {
   private readonly cookies = new Map<string, string>();
   /** The last CSRF token a page carried, in a meta tag or a form field. */
   private token: string | undefined;
@@ -179,6 +179,20 @@ export interface Answer {
   readonly status: number;
   readonly body: string;
   readonly ms: number;
+}
+
+/**
+ * A buyer's checkout calls, as the page's checkout makes them. `Visitor`
+ * sends the page's cookies to the shop's own routes; bolt.ts sends a bearer
+ * token to a server function on another site. `pagePath` is the page the
+ * call comes from, for a buyer whose session rides on it.
+ */
+export interface CheckoutClient {
+  createCheckout(reference: string, pagePath: string): Promise<Answer>;
+  prepareCheckout(reference: string, pagePath: string): Promise<Answer>;
+  createSwap(reference: string, payInAsset: string, pagePath: string): Promise<Answer>;
+  swapStatus(reference: string, paymentHash: string, pagePath: string): Promise<Answer>;
+  checkPayment(reference: string, paymentHash: string, pagePath: string): Promise<Answer>;
 }
 
 // Django, Laravel, Rails, and Flask-WTF's field, in that order.
@@ -339,28 +353,41 @@ async function reloadCheck(
  * reload on the 0.4.24 PHP checkout. A payments/check that ran the scan
  * answers with the wallet's `details`; one the gate turned away answers from
  * the shop's row, without them.
+ *
+ * The gate opens again after its interval, 3 s while the invoice is young
+ * (OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS). A shop that answers in tens of
+ * milliseconds sends all four checks inside it; a server function that boots
+ * a stack per request takes about a second each, so its fourth may rightly
+ * scan again. A scan passes when it starts a full interval after the last.
  */
-async function backToBackCheck(
-  buyer: Visitor,
+const GATE_INTERVAL_MS = 3_000;
+
+export async function backToBackCheck(
+  buyer: CheckoutClient,
   order: string,
   page: string,
   paymentHash: string,
 ): Promise<Check> {
-  const answers: Answer[] = [];
+  const answers: (Answer & { readonly at: number })[] = [];
+  const first = performance.now();
   for (let request = 0; request < 4; request += 1) {
-    answers.push(await buyer.checkPayment(order, paymentHash, page));
+    const at = Math.round(performance.now() - first);
+    answers.push({ ...(await buyer.checkPayment(order, paymentHash, page)), at });
   }
   const scanned = (answer: Answer) => /"details"\s*:/.test(answer.body);
-  const scans = answers.filter(scanned).length;
+  const scans = answers.filter(scanned);
+  const gateHeld = scans.every(
+    (scan, index) => index === 0 || scan.at - (scans[index - 1]?.at ?? 0) >= GATE_INTERVAL_MS,
+  );
   return check(
     "live_one_scan_back_to_back",
-    answers.every((answer) => answer.status === 200) && scans <= 1,
-    "Four back-to-back payment checks ran at most one wallet scan: the gate stayed shut after it.",
+    answers.every((answer) => answer.status === 200) && gateHeld,
+    "Back-to-back payment checks ran at most one wallet scan per gate interval: the gate stayed shut after a scan.",
     answers
       .map((answer) =>
         answer.status !== 200
           ? `${answer.status} ${answer.body.slice(0, 120)}`
-          : `${answer.ms} ms${scanned(answer) ? " (scan)" : ""}`,
+          : `+${answer.at} ms: ${answer.ms} ms${scanned(answer) ? " (scan)" : ""}`,
       )
       .join(", "),
   );
@@ -371,12 +398,22 @@ async function backToBackCheck(
  * test provider prices BTC at a fixed $100,000 and takes at least 10 USDT.
  */
 const SWAP_ASSET = "USDT_SOL";
-const SWAP_PRODUCT = 2;
+export const SWAP_PRODUCT = 2;
 
 async function swapChecks(base: string, swap: SwapPath, options: LiveOptions): Promise<Check[]> {
   const buyer = new Visitor(base, options.retryDelayMs ?? 5_000);
   const order = await buyer.placeOrder(SWAP_PRODUCT);
-  const page = `/orders/${order}`;
+  return swapOrderChecks(buyer, order, `/orders/${order}`, swap, options);
+}
+
+/** The swap checks on an order the buyer already placed: the $12.50 product, by SWAP_PRODUCT. */
+export async function swapOrderChecks(
+  buyer: CheckoutClient,
+  order: string,
+  page: string,
+  swap: SwapPath,
+  options: LiveOptions,
+): Promise<Check[]> {
   const prepared = await buyer.prepareCheckout(order, page);
   const available = (() => {
     try {
@@ -442,8 +479,8 @@ async function swapChecks(base: string, swap: SwapPath, options: LiveOptions): P
   ];
 }
 
-async function paidChecks(
-  buyer: Visitor,
+export async function paidChecks(
+  buyer: CheckoutClient,
   order: string,
   page: string,
   paymentHash: string,

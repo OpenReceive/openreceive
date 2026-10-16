@@ -14,7 +14,11 @@ Grok or Claude Code.
 1. **A plain app.** We start from a small shop with five products and orders in
    its own database, built the usual way for that framework or platform, on its
    current major version. It has no OpenReceive in it. For a database such as
-   Supabase, the shop's data is already in a real project there.
+   Supabase, the shop's data is already in a real project there. For an AI
+   builder whose own agent we do not drive, such as Lovable or Bolt, the shop
+   is built the way that builder builds one, and runs on a local copy of its
+   stack: for Bolt, a Vite React app on Supabase's own Postgres, Auth, API
+   server and Edge Functions runtime.
 2. **An agent and our published directions.** A coding agent gets the same
    message a merchant would send, with a link to the directions on
    openreceive.org. It works on its own; a script plays the merchant and answers
@@ -56,6 +60,12 @@ Every check must pass:
   provider's coins, and a buyer pays a second order by swap, USDT on Solana:
   the test provider completes the swap, its Lightning invoice settles in the
   test wallet, and the shop marks that order paid too;
+- on a builder whose payment routes are a server function on another site
+  than its pages, such as Bolt: in a real browser, the buyer signs up and buys
+  through the shop's own pages, served under the builder's domain, and the
+  order page's checkout gets its invoice from the function; another signed-in
+  user, and the project's public key with no user, are refused; and an order
+  the browser writes at a lower price is refused or charged the catalog price;
 - on a database platform such as Supabase, OpenReceive's tables end up closed
   to the platform's public API, which every visitor's browser can reach;
 - on a hosting platform:

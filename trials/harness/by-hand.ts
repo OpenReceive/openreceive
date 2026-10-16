@@ -93,7 +93,7 @@ async function prepare(argv: readonly string[]): Promise<void> {
     path.join(trialsRoot, "platforms", slug, "fixture"),
     slug,
     undefined,
-    platform.service,
+    platform.platform_env_service ?? platform.service,
     swaps
       ? trialWalletOverride(platform.wallet_services ?? [platform.service ?? "wordpress"], wallet)
       : undefined,

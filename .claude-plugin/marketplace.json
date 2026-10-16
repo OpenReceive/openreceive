@@ -1,7 +1,7 @@
 {
   "name": "openreceive",
   "metadata": {
-    "description": "Agent skills to integrate and debug OpenReceive Bitcoin Lightning checkout in Node.js (Express, Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start), Rails, Python (Django, FastAPI, Flask), PHP (Laravel or plain PHP), WordPress/WooCommerce, Lovable, mobile apps through their server, and BTCPay Server. Optional USDT, USDC, SOL, and ETH swaps are converted by a configured provider to BTC over Lightning in the merchant's connected wallet; asset and network availability depends on the provider."
+    "description": "Agent skills to integrate and debug OpenReceive Bitcoin Lightning checkout in Node.js (Express, Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start), Rails, Python (Django, FastAPI, Flask), PHP (Laravel or plain PHP), WordPress/WooCommerce, Lovable, Bolt, mobile apps through their server, and BTCPay Server. Optional USDT, USDC, SOL, and ETH swaps are converted by a configured provider to BTC over Lightning in the merchant's connected wallet; asset and network availability depends on the provider."
   },
   "owner": {
     "name": "OpenReceive",
@@ -11,7 +11,7 @@
     {
       "name": "openreceive",
       "source": "./",
-      "description": "Agent skills to integrate and debug OpenReceive Bitcoin Lightning checkout in Node.js (Express, Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start), Rails, Python (Django, FastAPI, Flask), PHP (Laravel or plain PHP), WordPress/WooCommerce, Lovable, mobile apps through their server, and BTCPay Server. Optional USDT, USDC, SOL, and ETH swaps are converted by a configured provider to BTC over Lightning in the merchant's connected wallet; asset and network availability depends on the provider."
+      "description": "Agent skills to integrate and debug OpenReceive Bitcoin Lightning checkout in Node.js (Express, Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start), Rails, Python (Django, FastAPI, Flask), PHP (Laravel or plain PHP), WordPress/WooCommerce, Lovable, Bolt, mobile apps through their server, and BTCPay Server. Optional USDT, USDC, SOL, and ETH swaps are converted by a configured provider to BTC over Lightning in the merchant's connected wallet; asset and network availability depends on the provider."
     }
   ]
 }

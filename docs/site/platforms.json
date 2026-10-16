@@ -70,6 +70,20 @@
       "trial": "lovable"
     },
     {
+      "id": "bolt",
+      "label": "Bolt",
+      "kind": "ai-builder",
+      "summary": "Bolt builds Vite React apps on Bolt Cloud, with Bolt Database and server functions. Save your wallet code as a secret, paste one prompt, and Bolt adds checkout to your app.",
+      "framework": null,
+      "database": "Bolt Database, or your connected Supabase project, over Supabase's HTTPS API from a server function",
+      "secrets": "Bolt's Secrets, read by server functions; Supabase gives each function its URL and service role key",
+      "settlement": "On checkout requests to the server function, with no worker or cron job",
+      "guide": "bolt",
+      "prompt": true,
+      "starter": null,
+      "trial": "bolt"
+    },
+    {
       "id": "supabase",
       "label": "Supabase",
       "kind": "database",

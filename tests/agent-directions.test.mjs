@@ -22,9 +22,14 @@ const covers = readdirSync(coverDir)
     text: readFileSync(new URL(name, coverDir), "utf8"),
   }));
 const fullUrl = (stack) => `https://openreceive.org/agent-directions/${stack}/full.md`;
-// Lovable's agent has no shell: its payload and cover name the full file for
-// its fetch tool instead of a curl line, and it keeps codes as Lovable secrets.
-const FETCH_ONLY = new Set(["lovable"]);
+// Lovable's agent has no shell, and Bolt's runs commands in a browser sandbox
+// that cannot reach every host: their payloads and covers name the full file
+// for the agent's fetch tool instead of a curl line, and they keep codes as
+// the platform's secrets.
+const FETCH_ONLY = new Set(["lovable", "bolt"]);
+// Bolt's agent cannot store a secret: the user adds each code in Bolt's
+// Secrets tab, so a code pasted into the chat has nowhere to go.
+const SECRETS_TAB_ONLY = new Set(["bolt"]);
 
 function stepZero(text) {
   const match = text.match(/^## Step 0\b[^\n]*\n([\s\S]*?)(?=^## )/m);
@@ -144,6 +149,14 @@ test("every payload has a cover: one curl line to its full.md and nothing else t
 
 test("every payload's Non-negotiables call the chat paste the supported path", () => {
   for (const { stack, text } of payloads) {
+    if (SECRETS_TAB_ONLY.has(stack)) {
+      assert.match(
+        text,
+        /^- Do not suggest rotating, revoking or replacing a code because it was pasted\n {2}into this chat; ask the user to save it as a secret instead\.$/m,
+        stack,
+      );
+      continue;
+    }
     assert.match(
       text,
       /^- Do not suggest rotating, revoking or replacing a code because it was pasted\n {2}into this chat; that is the supported path\.$/m,
@@ -156,7 +169,8 @@ test("every payload makes the first question a hard rule", () => {
   for (const { stack, text } of payloads) {
     const step = stepZero(text);
     assert.match(step, /your next action is a question to the user/, stack);
-    assert.match(step, /paste each code\s+into (the|this) chat/, stack);
+    if (SECRETS_TAB_ONLY.has(stack)) assert.match(step, /Only the user can add a secret/, stack);
+    else assert.match(step, /paste each code\s+into (the|this) chat/, stack);
     assert.match(step, /stablecoins/, `${stack}: Step 0 never mentions stablecoins`);
   }
 });
@@ -239,7 +253,7 @@ test("the @openreceive/node payloads say doctor reads the env file and never to 
 // both called stablecoins unavailable on a $1–$7 shop over one swap minimum.
 test("every library payload ends with setup finished and keeps the agent in the app", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable", "mobile"].includes(stack),
+    ({ stack }) => !["woocommerce", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
   );
   assert.equal(libraries.length, 15);
   for (const { stack, text } of libraries) {
@@ -273,7 +287,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
 // a shared machine stops other people's servers.
 test("every library payload's Step 0 sends the swap walkthrough, checks codes by name, and restarts by pid", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable", "mobile"].includes(stack),
+    ({ stack }) => !["woocommerce", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -300,7 +314,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
 // buyer got a 403: the quickstart's own example did the same.
 test("every library payload writes codes with the file tool, and Express, Fastify and NestJS read the session from native", () => {
   const libraries = payloads.filter(
-    ({ stack }) => !["woocommerce", "btcpay", "lovable", "mobile"].includes(stack),
+    ({ stack }) => !["woocommerce", "btcpay", "lovable", "bolt", "mobile"].includes(stack),
   );
   for (const { stack, text } of libraries) {
     const step = stepZero(text);
@@ -365,6 +379,37 @@ test("the Lovable payload asks through the secret input and needs no terminal", 
   assert.match(own, /Your last message starts "Setup is finished"/);
   for (const command of [/\bcurl\b/, /\bnpx\b/, /\bdoctor\b/, /docker compose/, /\bpkill\b/]) {
     assert.doesNotMatch(own, command, `the Lovable steps mention ${command}`);
+  }
+});
+
+// Bolt's pages are a Vite React app and its payment routes a Supabase Edge
+// Function on another site: the payload asks for codes through Bolt's Secrets
+// tab, sends the buyer's token, lets Bolt's changing preview host through, and
+// keeps the price out of the browser's hands. Bolt functions open with a
+// corsHeaders boilerplate that would answer for OpenReceive; the payload
+// forbids it.
+test("the Bolt payload keeps codes in Secrets, the buyer in a token and the price in the database", () => {
+  const text = payloads.find(({ stack }) => stack === "bolt").text;
+  const own = text.slice(0, text.indexOf("## The quickstart, in full"));
+  const step = stepZero(text);
+  assert.match(step, /database\s+icon at the top → \*\*Secrets\*\*/);
+  assert.match(step, /do not write it into\s+any file, code or log/);
+  assert.match(step, /`SUPABASE_SERVICE_ROLE_KEY`\. Do not ask for them/);
+  assert.match(own, /never put a code in `\.env`/i);
+  assert.match(own, /https:\/\/openreceive\.org\/guides\/supabase-migration\.md/);
+  assert.match(own, /before insert` trigger/);
+  assert.match(own, /never update an order's total or status/);
+  assert.match(own, /No `onPaid` and no `db`/);
+  assert.match(own, /never wrap the\s+handler in the usual `corsHeaders` boilerplate/);
+  assert.match(own, /`withSupabaseToken`/);
+  assert.match(own, /Your last message starts "Setup is finished"/);
+  assert.match(text, /npm:@openreceive\/http@\^/);
+  assert.match(text, /local-credentialless\\\.webcontainer-api\\\.io/);
+  assert.match(text, /cors: \{ origins: shopOrigins\(request\) \}/);
+  assert.match(text, /supabase\.auth\.getUser\(token\)/);
+  assert.match(text, /total::text/);
+  for (const command of [/\bcurl\b/, /\bnpx\b/, /\bdoctor\b/, /docker compose/, /\bpkill\b/]) {
+    assert.doesNotMatch(own, command, `the Bolt steps mention ${command}`);
   }
 });
 

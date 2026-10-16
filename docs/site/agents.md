@@ -44,6 +44,7 @@ your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.
 [Flask](https://openreceive.org/agent-directions/flask/full.md) ·
 [WordPress + WooCommerce](https://openreceive.org/agent-directions/woocommerce/full.md) ·
 [Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
+[Bolt](https://openreceive.org/agent-directions/bolt/full.md) ·
 [SvelteKit](https://openreceive.org/agent-directions/sveltekit/full.md) ·
 [Nuxt](https://openreceive.org/agent-directions/nuxt/full.md) ·
 [Astro](https://openreceive.org/agent-directions/astro/full.md) ·

@@ -88,6 +88,10 @@ const GENERATED_REFERENCES = [
     source: "docs/agents/mobile.md",
     target: "skills/integrate-openreceive/references/mobile.md",
   },
+  {
+    source: "docs/agents/bolt.md",
+    target: "skills/integrate-openreceive/references/bolt.md",
+  },
 ];
 
 function mirrorRoots() {

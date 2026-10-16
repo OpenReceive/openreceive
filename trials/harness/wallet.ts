@@ -250,7 +250,8 @@ export async function stopTrialWallet(): Promise<void> {
  * network beside its own default one, to reach fake-lsc, and trusts the
  * private CA. Node reads
  * NODE_EXTRA_CA_CERTS; OpenSSL (Python, PHP, Ruby, curl) reads the bundle,
- * mounted over the Debian path and named by SSL_CERT_FILE.
+ * mounted over the Debian path and named by SSL_CERT_FILE; Deno (Supabase's
+ * edge-runtime) reads that bundle only with DENO_TLS_CA_STORE=system.
  */
 export function trialWalletOverride(
   services: readonly string[],
@@ -286,6 +287,7 @@ export function trialWalletOverride(
       `      SSL_CERT_FILE: ${BUNDLE_IN_SHOP}`,
       `      REQUESTS_CA_BUNDLE: ${BUNDLE_IN_SHOP}`,
       `      CURL_CA_BUNDLE: ${BUNDLE_IN_SHOP}`,
+      "      DENO_TLS_CA_STORE: system",
     );
   }
   lines.push("networks:", `  ${wallet.network}:`, "    external: true", "");

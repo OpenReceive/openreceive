@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Docs: a Bolt guide (/guides/bolt), agent directions for Bolt
+  (/agent-directions/bolt.md, and `references/bolt.md` in the skill), and a
+  Supabase Edge Functions recipe. Bolt apps are Vite React pages on one site
+  with Supabase Edge Functions on another: one server function, `openreceive`,
+  serves the payment routes with 0.4.27's `cors` option, letting through
+  Bolt's preview hosts and `bolt.host` sites; the page's React `<Checkout>`
+  sends the buyer's Supabase token, and `authorize` checks it. Because Bolt
+  pages insert orders themselves, a trigger takes each order's price from the
+  products table. The Supabase guide's Edge Functions section now links the
+  recipe for its code. Agent trials run a Bolt-shaped shop on a local Supabase
+  stack, with a real browser as the buyer. Bolt's own agent and Supabase's
+  hosted gateway are not tested.
+
 ## 0.4.27 - 2026-10-15
 
 - Added (Node): a `cors: { origins }` option on `createStack` and the
