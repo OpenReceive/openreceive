@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (FOSSBilling)
 
 ```sh
-# READ THIS FIRST: this file is 23 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 24 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/fossbilling/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -126,11 +126,13 @@ docker compose exec -T -u www-data fossbilling php modules/Openreceive/activate.
 ```
 
 On a server, unpack it in FOSSBilling's folder the same way, make the two
-folders the web user's, and run the same `activate.php`. Activation creates
-the extension's two tables in FOSSBilling's database and its payment gateway,
-"Bitcoin Lightning", hooks its reconcile pass into FOSSBilling's cron, and
-makes the `openreceive:*` console commands appear. The gateway stays off until
-a wallet code is saved.
+folders the web user's, and run the same `activate.php`. Activation writes the
+payment gateway's files into `library/Payment/Adapter/OpenReceive` from the
+module's own copy, creates the extension's two tables in FOSSBilling's
+database and its payment gateway, "Bitcoin Lightning", hooks its reconcile
+pass into FOSSBilling's cron, and makes the `openreceive:*` console commands
+appear. The gateway stays off until a wallet code is saved. If `activate.php`
+says that folder holds another gateway, report that and stop.
 
 ## Step 2 — store the codes
 
@@ -288,10 +290,25 @@ either. Activation creates the extension's two tables and its payment
 gateway, "Bitcoin Lightning", and hooks its reconcile pass into FOSSBilling's
 cron. The gateway stays off until a wallet code is saved.
 
+The module carries its own copy of the payment gateway and writes it into
+`library/Payment/Adapter/OpenReceive` each time it is activated, so running
+`activate.php` again after an update brings the gateway up to date with the
+module. It replaces only OpenReceive's own gateway files: if that folder holds
+anything else, activation stops and says so.
+
 The ZIP already bundles the extension's dependencies and the checkout's
 script, under their own prefixed names, so Composer never runs and nothing in
 FOSSBilling's own `vendor/` changes. The GitHub source-code ZIP is not an
 installable extension.
+
+#### The module-only ZIP
+
+Each release also attaches `openreceive-fossbilling-module-<version>.zip`:
+the module alone, with its files at the top of the ZIP rather than inside
+`modules/Openreceive`. That is the package FOSSBilling's extension directory
+installs. Its **Install** button unpacks the ZIP into `modules/Openreceive`,
+and activating OpenReceive under **Extensions** then writes the payment
+gateway, as above. Both ZIPs hold the same module.
 
 #### FOSSBilling in Docker
 
@@ -349,7 +366,8 @@ Lightning" to "Bitcoin & stablecoins"; the settings page's name field, or
 `--name="…"`, sets your own. Skip the swap code for Bitcoin-only checkout.
 
 `doctor` checks the module, GMP and sodium, each code as set or unset (never
-its value), the payment gateway, the tables, the checkout's files, the wallet,
+its value), the payment gateway's files and row, the tables, the checkout's
+files, the wallet,
 the price feed for every FOSSBilling currency, each swap provider and the cron
 hook with FOSSBilling's last cron run. It exits nonzero when a check fails.
 
@@ -413,8 +431,14 @@ converted reclaims it from the same invoice's payment page, while the invoice
 is still unpaid. If you turn on swaps, you commit to keeping that path
 available. See [swap refunds](https://openreceive.org/guides/swap-refunds.md).
 
-Deactivating or uninstalling the module keeps the two tables: they are a
-record of payments received.
+Deactivating the module turns its payment gateway off, because a deactivated
+module serves no checkout. Activating it again turns the gateway back on when
+a wallet code is saved.
+
+Uninstalling the module keeps the two tables, which are a record of payments
+received, and leaves the gateway off. Its row and its files in
+`library/Payment/Adapter/OpenReceive` stay too, since FOSSBilling's invoices
+and transactions refer to the gateway.
 
 ### Tested, and not tested
 
@@ -426,6 +450,12 @@ USDT on Solana in Chromium, after which the invoice reads paid and the
 service is active. A payment whose page was closed was recorded by
 FOSSBilling's cron. Another client, a visitor and a request without the page's
 security token were refused.
+
+Tested on 2026-10-18 in the same setup: the module-only ZIP installed through
+FOSSBilling's own **Install** and **Activate** buttons in the admin area, with
+the extension directory's answer for OpenReceive supplied locally, then the
+same checks. Deactivating, activating again, uninstalling, reinstalling and
+updating a 0.4.28 install with `activate.php` were checked too.
 
 Not tested: FOSSBilling behind nginx rather than its image's Apache, shared
 hosting without a shell, and FOSSBilling's subscription payments. Lightning

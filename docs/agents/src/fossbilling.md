@@ -107,11 +107,13 @@ docker compose exec -T -u www-data fossbilling php modules/Openreceive/activate.
 ```
 
 On a server, unpack it in FOSSBilling's folder the same way, make the two
-folders the web user's, and run the same `activate.php`. Activation creates
-the extension's two tables in FOSSBilling's database and its payment gateway,
-"Bitcoin Lightning", hooks its reconcile pass into FOSSBilling's cron, and
-makes the `openreceive:*` console commands appear. The gateway stays off until
-a wallet code is saved.
+folders the web user's, and run the same `activate.php`. Activation writes the
+payment gateway's files into `library/Payment/Adapter/OpenReceive` from the
+module's own copy, creates the extension's two tables in FOSSBilling's
+database and its payment gateway, "Bitcoin Lightning", hooks its reconcile
+pass into FOSSBilling's cron, and makes the `openreceive:*` console commands
+appear. The gateway stays off until a wallet code is saved. If `activate.php`
+says that folder holds another gateway, report that and stop.
 
 ## Step 2 — store the codes
 

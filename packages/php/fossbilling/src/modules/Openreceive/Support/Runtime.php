@@ -28,7 +28,7 @@ final class Runtime
     /** The key FOSSBilling stores the module's settings under, encrypted with the install's salt. */
     public const CONFIG = 'mod_openreceive';
 
-    /** The payment adapter's code: library/Payment/Adapter/OpenReceive, and the `gateway` column of its row. */
+    /** The payment adapter's code: library/Payment/Adapter/OpenReceive (the module's Gateway/, see GatewayFiles), and the `gateway` column of its row. */
     public const GATEWAY = 'OpenReceive';
 
     /** Where the payment routes mount, relative to FOSSBilling's root URL. */
@@ -42,6 +42,9 @@ final class Runtime
     public const DEFAULT_NAME = 'Bitcoin Lightning';
 
     public const SWAP_NAME = 'Bitcoin & stablecoins';
+
+    /** The key in the gateway row's config that says the module turned its own gateway off. */
+    private const PAUSED = 'openreceive_paused';
 
     /** The invoices this browser session opened the checkout for, after FOSSBilling allowed it. */
     public const SESSION_GRANTS = 'openreceive_invoices';
@@ -107,6 +110,45 @@ final class Runtime
         $gateway->allow_recurrent = 0;
         self::di()['db']->store($gateway);
         return $gateway;
+    }
+
+    /**
+     * Stops offering the gateway while the module is deactivated or
+     * uninstalled, and marks it in the gateway's row, so activating the
+     * module again turns back on only a gateway the module itself turned off.
+     */
+    public static function pauseGateway(): void
+    {
+        $gateway = self::gateway();
+        if ($gateway === null || !$gateway->enabled) {
+            return;
+        }
+        $gateway->config = json_encode([self::PAUSED => true] + self::gatewayConfig($gateway));
+        $gateway->enabled = 0;
+        self::di()['db']->store($gateway);
+    }
+
+    /** Offers the gateway again after pauseGateway(), when a wallet code is saved. */
+    public static function resumeGateway(): void
+    {
+        $gateway = self::gateway();
+        $config = $gateway === null ? [] : self::gatewayConfig($gateway);
+        if ($gateway === null || !array_key_exists(self::PAUSED, $config)) {
+            return;
+        }
+        unset($config[self::PAUSED]);
+        $gateway->config = $config === [] ? null : json_encode($config);
+        if (trim((string) (self::settings()['nwc_uri'] ?? '')) !== '') {
+            $gateway->enabled = 1;
+        }
+        self::di()['db']->store($gateway);
+    }
+
+    /** @return array<string, mixed> */
+    private static function gatewayConfig(\Model_PayGateway $gateway): array
+    {
+        $config = json_decode((string) ($gateway->config ?? ''), true);
+        return is_array($config) ? $config : [];
     }
 
     /** Offers the gateway on unpaid invoices. */

@@ -5,10 +5,12 @@ declare(strict_types=1);
 /*
  * `php modules/Openreceive/activate.php`, from FOSSBilling's folder, as the
  * web server's user: activates the OpenReceive module the way the admin
- * area's Extensions page does. That creates the payment tables and the
- * payment gateway (off until a wallet code is saved), hooks the reconcile
+ * area's Extensions page does. That writes the payment gateway into
+ * library/Payment/Adapter/OpenReceive, creates the payment tables and the
+ * gateway's row (off until a wallet code is saved), hooks the reconcile
  * pass into FOSSBilling's cron, and makes the openreceive:* console commands
- * available. Safe to run again.
+ * available. Safe to run again: it also brings the gateway's files up to
+ * date after the module was updated.
  */
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -41,5 +43,5 @@ if (!$di['mod_service']('hook')->batchConnect()) {
     exit(1);
 }
 
-echo "OpenReceive is active: its tables and its payment gateway exist, and FOSSBilling's cron runs its reconcile pass.\n";
+echo "OpenReceive is active: its payment gateway, its tables and the gateway's row exist, and FOSSBilling's cron runs its reconcile pass.\n";
 echo "Next, save the receive-only wallet code: php console.php openreceive:configure --nwc-uri=- < /path/to/code-file\n";

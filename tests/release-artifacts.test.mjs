@@ -5,7 +5,7 @@ import { assertReleaseAssets, releaseArtifacts } from "../tools/release/github-a
 
 test("general release requires every public platform, including matching WordPress, Paymenter and FOSSBilling ZIPs", () => {
   const names = releaseArtifacts("1.2.3", "1.2.3").map((file) => path.basename(file));
-  assert.equal(names.length, 25);
+  assert.equal(names.length, 26);
   assert.doesNotThrow(() => assertReleaseAssets("1.2.3", names, "1.2.3"));
   for (const omitted of names) {
     assert.throws(
@@ -48,6 +48,17 @@ test("general release requires every public platform, including matching WordPre
         "1.2.3",
       ),
     /fossbilling-1.2.3.zip/,
+  );
+  assert.throws(
+    () =>
+      assertReleaseAssets(
+        "1.2.3",
+        names
+          .filter((name) => !name.startsWith("openreceive-fossbilling-module-"))
+          .concat("openreceive-fossbilling-module-1.2.2.zip"),
+        "1.2.3",
+      ),
+    /fossbilling-module-1.2.3.zip/,
   );
   assert(!names.some((name) => /btcpay|testkit/i.test(name)));
 });

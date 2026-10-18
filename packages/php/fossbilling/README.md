@@ -28,9 +28,14 @@ Each GitHub release attaches `openreceive-fossbilling-<version>.zip`. Unzip it
 in FOSSBilling's folder, the one that holds `console.php`. It adds two folders:
 `modules/Openreceive` (the module: settings, routes, console commands and the
 cron hook) and `library/Payment/Adapter/OpenReceive` (the payment gateway).
+The release also attaches `openreceive-fossbilling-module-<version>.zip`, the
+module alone with its files at the top: the package FOSSBilling's extension
+directory unpacks into `modules/Openreceive`.
 
 Then activate **OpenReceive** under **Extensions** in the admin area, and save
-the receive-only NWC code on its settings page. Or, as the web server's user:
+the receive-only NWC code on its settings page. Activating writes the payment
+gateway into `library/Payment/Adapter/OpenReceive` from the module's own copy,
+so the module-only ZIP needs nothing else. Or, as the web server's user:
 
 ```sh
 php console.php openreceive:configure --nwc-uri=- < /path/to/code-file
@@ -64,6 +69,7 @@ composer install --working-dir=packages/php/fossbilling
 npm run release:fossbilling:build
 ```
 
-The result is `dist/openreceive-fossbilling-<version>.zip`.
+The results are `dist/openreceive-fossbilling-<version>.zip` and
+`dist/openreceive-fossbilling-module-<version>.zip`.
 
 Part of [OpenReceive](https://openreceive.org). MIT licensed.

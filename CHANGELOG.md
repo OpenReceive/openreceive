@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Added (FOSSBilling): the module installs its own payment gateway, so
+  FOSSBilling's extension directory can install OpenReceive with one click.
+  The module now carries the gateway (`modules/Openreceive/Gateway`) and
+  writes it into `library/Payment/Adapter/OpenReceive` each time it is
+  activated, replacing only OpenReceive's own gateway files from another
+  version; any other file there stops the activation with a message. Each
+  release attaches a second ZIP, `openreceive-fossbilling-module-<version>.zip`:
+  the module alone, its files at the top, the shape FOSSBilling's directory
+  unpacks into `modules/Openreceive`. The whole-extension ZIP is unchanged.
+  Deactivating the module now turns its gateway off, since a deactivated
+  module serves no checkout, and activating it again turns the gateway back on
+  when a wallet code is saved; uninstalling leaves the gateway off and keeps
+  its row, files and the payment tables. Doctor has a new line, `Payment
+  gateway files`. Tested with FOSSBilling 0.8.8's own Install and Activate
+  buttons in the admin area, then the live payment checks.
+
 ## 0.4.28 - 2026-10-18
 
 - Added (WordPress): Easy Digital Downloads. The WordPress.org plugin now adds

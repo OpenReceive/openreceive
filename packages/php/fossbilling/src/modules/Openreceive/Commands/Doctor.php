@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Box\Mod\Openreceive\Commands;
 
+use Box\Mod\Openreceive\Support\GatewayFiles;
 use Box\Mod\Openreceive\Support\Runtime;
 use OpenReceive\Server\Service;
 use OpenReceive\Storage\PaymentsSchema;
@@ -15,10 +16,10 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * `php console.php openreceive:doctor` — the install state in one command:
- * the module, the PHP requirements, the payment gateway, each code as set
- * or unset (never its value), the tables, the checkout files, the wallet,
- * the price feed, each swap provider and the cron hook. Exits 1 when a
- * check fails.
+ * the module, the PHP requirements, the payment gateway's files and row,
+ * each code as set or unset (never its value), the tables, the checkout
+ * files, the wallet, the price feed, each swap provider and the cron hook.
+ * Exits 1 when a check fails.
  */
 #[AsCommand(name: 'openreceive:doctor', description: 'Check OpenReceive\'s install: module, gateway, codes (set or unset only), tables, wallet, prices, swaps, cron')]
 class Doctor extends Command implements \FOSSBilling\InjectionAwareInterface
@@ -67,6 +68,13 @@ class Doctor extends Command implements \FOSSBilling\InjectionAwareInterface
                 throw new \RuntimeException('NWC_URI is not set. Save it under Extensions > OpenReceive, or pipe it in: php console.php openreceive:configure --nwc-uri=- < /path/to/code-file');
             }
             return 'readable';
+        });
+        $this->check('Payment gateway files', static function (): string {
+            return match (GatewayFiles::status()) {
+                GatewayFiles::CURRENT => 'library/Payment/Adapter/' . Runtime::GATEWAY . ', version ' . Runtime::VERSION,
+                GatewayFiles::FOREIGN => throw new \RuntimeException('library/Payment/Adapter/' . Runtime::GATEWAY . '/OpenReceive.php is not OpenReceive\'s. Move that folder elsewhere, then run php modules/Openreceive/activate.php.'),
+                default => throw new \RuntimeException('library/Payment/Adapter/' . Runtime::GATEWAY . ' is missing or from another version. Run php modules/Openreceive/activate.php, which writes it.'),
+            };
         });
         $this->check('Payment gateway', static function (): string {
             $gateway = Runtime::gateway();

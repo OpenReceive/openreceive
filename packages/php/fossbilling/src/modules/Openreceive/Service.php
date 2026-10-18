@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Box\Mod\Openreceive;
 
+use Box\Mod\Openreceive\Support\GatewayFiles;
 use Box\Mod\Openreceive\Support\Runtime;
 
 /**
- * FOSSBilling calls install() when the module is activated: it creates the
+ * FOSSBilling calls install() each time the module is activated: it writes
+ * the payment gateway into library/Payment/Adapter/OpenReceive, creates the
  * engine's tables and the payment gateway row, which stays disabled until a
  * wallet code is saved. Its hook runs a reconcile pass on every FOSSBilling
  * cron run, which finds a payment whose buyer closed the page before it
@@ -36,15 +38,45 @@ class Service implements \FOSSBilling\InjectionAwareInterface
 
     public function install(): bool
     {
+        // FOSSBilling creates a gateway row only for a gateway it finds in
+        // library/Payment/Adapter, so the files go first.
+        try {
+            $found = GatewayFiles::install();
+        } catch (\RuntimeException $error) {
+            throw new \FOSSBilling\InformationException($error->getMessage());
+        }
+        if ($found === GatewayFiles::OUTDATED) {
+            $this->di['logger']->setChannel('billing')->info('OpenReceive updated its payment gateway in library/Payment/Adapter/OpenReceive to version ' . Runtime::VERSION);
+        }
         Runtime::migrate();
         Runtime::ensureGateway();
+        Runtime::resumeGateway();
         return true;
     }
 
-    /** Uninstalling keeps the payment records: they are the shop's accounts. */
+    /**
+     * Uninstalling leaves the gateway off and keeps the payment records, the
+     * gateway's row and its files in library/Payment/Adapter: FOSSBilling's
+     * invoices and transactions refer to them.
+     */
     public function uninstall(): bool
     {
+        Runtime::pauseGateway();
         return true;
+    }
+
+    /**
+     * A deactivated module serves no checkout routes, so its gateway stops
+     * being offered first. Activating the module again offers it again.
+     */
+    public static function onBeforeAdminDeactivateExtension(\Box_Event $event): void
+    {
+        $di = $event->getDi();
+        $extension = $di['mod_service']('extension')->getExtensionRepository()->find((int) ($event->getParameters()['id'] ?? 0));
+        if ($extension instanceof \Box\Mod\Extension\Entity\Extension && $extension->getType() === 'mod' && $extension->getName() === Runtime::MODULE) {
+            Runtime::setDi($di);
+            Runtime::pauseGateway();
+        }
     }
 
     public static function onAfterAdminCronRun(\Box_Event $event): void

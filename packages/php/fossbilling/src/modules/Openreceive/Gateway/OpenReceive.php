@@ -10,6 +10,9 @@ use Box\Mod\Openreceive\Support\Runtime;
  * routes and the engine, which keeps payment attempts in FOSSBilling's own
  * database. The buyer pays on the invoice's payment page; a settled payment
  * is recorded by the module itself, never through ipn.php.
+ *
+ * FOSSBilling loads it from library/Payment/Adapter/OpenReceive. The module
+ * keeps this copy and writes it there each time it is activated.
  */
 class Payment_Adapter_OpenReceive
 {
@@ -61,7 +64,7 @@ class Payment_Adapter_OpenReceive
     private static function loadModule(): void
     {
         if (!class_exists(Runtime::class)) {
-            throw new Payment_Exception('The OpenReceive module is missing: unzip the whole release into FOSSBilling\'s folder, so modules/Openreceive exists too.');
+            throw new Payment_Exception('The OpenReceive module is missing from modules/Openreceive. Install and activate it again.');
         }
     }
 }

@@ -756,7 +756,7 @@
       "slug": "quickstart-fossbilling",
       "title": "FOSSBilling Quickstart",
       "category": "quickstart",
-      "bytes": 9577
+      "bytes": 11104
     },
     {
       "path": "/guides/wordpress-hosting",
@@ -816,7 +816,7 @@
       "slug": "agent-directions-fossbilling",
       "title": "Agent directions (FOSSBilling)",
       "category": "agents",
-      "bytes": 22636
+      "bytes": 24350
     },
     {
       "path": "/api_docs",
@@ -1176,7 +1176,7 @@
       "kind": "agent-directions-payload",
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22636,
+      "bytes": 24350,
       "copy_button": true,
       "self_contained": true
     },
