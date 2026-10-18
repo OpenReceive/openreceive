@@ -2,6 +2,6 @@
 
 module OpenReceive
   module Server
-    VERSION = "0.4.27"
+    VERSION = "0.4.28"
   end
 end

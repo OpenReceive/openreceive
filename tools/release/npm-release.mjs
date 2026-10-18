@@ -380,6 +380,7 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
   // These quickstarts link their release ZIP by version.
   for (const [quickstart, zip] of [
     ["docs/guides/quickstart-woocommerce.md", "wordpress"],
+    ["docs/guides/quickstart-edd.md", "wordpress"],
     ["docs/guides/quickstart-paymenter.md", "paymenter"],
     ["docs/guides/quickstart-fossbilling.md", "fossbilling"],
   ]) {
@@ -484,6 +485,7 @@ function dryRunPrepare(root, targetVersion) {
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "docs/guides/quickstart-woocommerce.md",
+      "docs/guides/quickstart-edd.md",
       "docs/guides/quickstart-paymenter.md",
       "docs/guides/quickstart-fossbilling.md",
       "package-lock.json",

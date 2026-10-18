@@ -2,7 +2,7 @@
 
 These packages make up the general release. They all share one version number:
 
-- OpenReceive `0.4.27`
+- OpenReceive `0.4.28`
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
@@ -10,6 +10,7 @@ These packages make up the general release. They all share one version number:
 - `@openreceive/express`
 - `@openreceive/fastify`
 - `@openreceive/next`
+- `@openreceive/medusa`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
 - `@openreceive/elements`
@@ -34,6 +35,7 @@ packages are:
 - the shipped HTTP route handler, `@openreceive/http`
 - its framework adapters: `@openreceive/express`, `@openreceive/fastify` and
   `@openreceive/next`
+- the Medusa plugin and payment provider, `@openreceive/medusa`
 - core contracts and helpers, browser checkout helpers, provider-data assets,
   elements, and the frontend adapters
 
@@ -668,7 +670,7 @@ the publisher already does. Do not weaken or skip release coverage.
 
 ## Tagging
 
-Tag the prepared release commit once, as `v0.4.27`. We do not use per-package
+Tag the prepared release commit once, as `v0.4.28`. We do not use per-package
 tags while the general package family releases in lockstep with the workspace
 version. Add per-package tags only if versions ever diverge, and only after the
 contract is stable enough that they will not confuse SDK consumers.

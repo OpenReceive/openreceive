@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.28 - 2026-10-18
 
 - Added (WordPress): Easy Digital Downloads. The WordPress.org plugin now adds
   an EDD gateway beside its WooCommerce one and runs with either store, or

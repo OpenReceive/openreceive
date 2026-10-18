@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.28 - 2026-10-18
+
+Release with the complete 0.4.28 package family. The bundled agent skill adds
+references for Paymenter, FOSSBilling, Easy Digital Downloads and Medusa. No
+Ruby runtime changes from 0.4.27.
+
 ## 0.4.27 - 2026-10-15
 
 Release with the complete 0.4.27 package family. The bundled agent skill
