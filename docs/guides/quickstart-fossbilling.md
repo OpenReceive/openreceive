@@ -209,7 +209,10 @@ Tested on 2026-10-18 in the same setup: the module-only ZIP installed through
 FOSSBilling's own **Install** and **Activate** buttons in the admin area, with
 the extension directory's answer for OpenReceive supplied locally, then the
 same checks. Deactivating, activating again, uninstalling, reinstalling and
-updating a 0.4.28 install with `activate.php` were checked too.
+updating a 0.4.28 install with `activate.php` were checked too. On
+FOSSBilling 0.8.0, the oldest release the module accepts: the same install
+and activation, `configure`, the doctor, `test-invoice --new`, deactivating
+and activating again.
 
 Not tested: FOSSBilling behind nginx rather than its image's Apache, shared
 hosting without a shell, and FOSSBilling's subscription payments. Lightning

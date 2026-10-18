@@ -16,7 +16,8 @@
   when a wallet code is saved; uninstalling leaves the gateway off and keeps
   its row, files and the payment tables. Doctor has a new line, `Payment
   gateway files`. Tested with FOSSBilling 0.8.8's own Install and Activate
-  buttons in the admin area, then the live payment checks.
+  buttons in the admin area, then the live payment checks; on FOSSBilling
+  0.8.0, install, activation, the doctor and a test invoice.
 
 ## 0.4.28 - 2026-10-18
 

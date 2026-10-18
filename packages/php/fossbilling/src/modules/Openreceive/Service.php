@@ -72,8 +72,10 @@ class Service implements \FOSSBilling\InjectionAwareInterface
     public static function onBeforeAdminDeactivateExtension(\Box_Event $event): void
     {
         $di = $event->getDi();
-        $extension = $di['mod_service']('extension')->getExtensionRepository()->find((int) ($event->getParameters()['id'] ?? 0));
-        if ($extension instanceof \Box\Mod\Extension\Entity\Extension && $extension->getType() === 'mod' && $extension->getName() === Runtime::MODULE) {
+        // The event names the extension's row id. Read the row itself: its
+        // repository class only exists from FOSSBilling 0.8.5.
+        $name = $di['dbal']->fetchOne("SELECT name FROM extension WHERE id = ? AND type = 'mod'", [(int) ($event->getParameters()['id'] ?? 0)]);
+        if ($name === Runtime::MODULE) {
             Runtime::setDi($di);
             Runtime::pauseGateway();
         }
