@@ -1,6 +1,6 @@
-=== OpenReceive ===
+=== OpenReceive – Bitcoin Lightning Payments for WooCommerce & Easy Digital Downloads ===
 Contributors: openreceive
-Tags: bitcoin, lightning, woocommerce, payment gateway, stablecoin
+Tags: bitcoin, lightning, woocommerce, easy digital downloads, payment gateway
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2

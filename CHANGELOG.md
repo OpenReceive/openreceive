@@ -4,7 +4,9 @@
 
 - Added (WordPress): Easy Digital Downloads. The WordPress.org plugin now adds
   an EDD gateway beside its WooCommerce one and runs with either store, or
-  both, so it no longer declares `Requires Plugins: woocommerce`. The
+  both, so it no longer declares `Requires Plugins: woocommerce`, and its
+  WordPress.org listing is now "OpenReceive – Bitcoin Lightning Payments for
+  WooCommerce & Easy Digital Downloads", tagged for both stores. The
   customer picks the method at EDD's checkout; EDD records a pending order and
   its purchase confirmation page shows the checkout. The payment's completion
   marker commits with the settled payment row, then EDD completes the order
