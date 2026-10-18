@@ -223,6 +223,33 @@
       "mode": "btcpay-route",
       "store": "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3",
       "btcpay": "2.4.5"
+    },
+    {
+      "trial": "paymenter",
+      "date": "2026-10-18",
+      "release": "0.4.28",
+      "runs": 3,
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "mode": "released",
+      "directions": "497633f75735"
+    },
+    {
+      "trial": "fossbilling",
+      "date": "2026-10-18",
+      "release": "0.4.28",
+      "runs": 3,
+      "agents": ["codex/default"],
+      "mode": "released",
+      "directions": "da23cb06a81c"
+    },
+    {
+      "trial": "edd",
+      "date": "2026-10-18",
+      "release": "0.4.28",
+      "runs": 3,
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "mode": "released",
+      "directions": "29544aedc08b"
     }
   ]
 }

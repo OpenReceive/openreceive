@@ -1433,7 +1433,14 @@
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's purchase confirmation page.",
         "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-18",
+        "release": "0.4.28",
+        "agents": [
+          "claude/claude-opus-5-5",
+          "codex/default"
+        ]
+      }
     },
     {
       "id": "express",
@@ -1675,7 +1682,14 @@
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment dialog.",
         "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-18",
+        "release": "0.4.28",
+        "agents": [
+          "claude/claude-opus-5-5",
+          "codex/default"
+        ]
+      }
     },
     {
       "id": "fossbilling",
@@ -1704,7 +1718,13 @@
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A client reclaims a swap deposit that never converted from the invoice's payment page.",
         "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-18",
+        "release": "0.4.28",
+        "agents": [
+          "codex/default"
+        ]
+      }
     },
     {
       "id": "medusa",
