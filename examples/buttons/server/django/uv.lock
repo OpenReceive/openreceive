@@ -782,7 +782,7 @@ django = [
 [package.metadata]
 requires-dist = [
     { name = "coincurve", specifier = ">=20" },
-    { name = "cryptography", specifier = ">=42" },
+    { name = "cryptography", specifier = ">=41" },
     { name = "django", marker = "extra == 'django'", specifier = ">=5.2" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.115" },
     { name = "flask", marker = "extra == 'flask'", specifier = ">=3" },

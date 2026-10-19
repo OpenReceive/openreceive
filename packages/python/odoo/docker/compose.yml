@@ -1,0 +1,27 @@
+# The module's test database: tools/ci/odoo-tests.sh runs Odoo's own test
+# runner against it, with the module mounted from this checkout.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "odoo"]
+      interval: 3s
+      retries: 30
+  odoo:
+    build:
+      context: .
+      args:
+        ODOO: "${ODOO:-19.0}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    volumes:
+      - ../payment_openreceive:/mnt/extra-addons/payment_openreceive:ro

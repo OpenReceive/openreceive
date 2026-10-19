@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Odoo's payment form submits this form once the transaction exists. -->
+    <template id="redirect_form">
+        <form t-att-action="api_url" method="get">
+            <input type="hidden" name="reference" t-att-value="reference"/>
+        </form>
+    </template>
+
+    <!-- The checkout for one transaction, on the shop's own pages. -->
+    <template id="checkout_page" name="OpenReceive checkout">
+        <t t-set="head">
+            <t t-out="head"/>
+            <meta name="csrf-token" t-att-content="csrf_value"/>
+            <link rel="stylesheet" t-attf-href="#{asset_path}/openreceive-checkout.css"/>
+            <script type="module" t-attf-src="#{asset_path}/openreceive-checkout.js"/>
+        </t>
+        <t t-set="page_title">Payment</t>
+        <t t-set="additional_title"><t t-out="page_title"/></t>
+        <t t-call="portal.frontend_layout">
+            <div class="wrap">
+                <div class="container">
+                    <div class="row justify-content-center my-5">
+                        <div class="col-12 col-lg-8">
+                            <h1 class="h3 mb-3">
+                                Pay
+                                <span t-out="tx.amount" t-options="{'widget': 'monetary', 'display_currency': tx.currency_id}"/>
+                            </h1>
+                            <p class="text-muted mb-4">Reference <span t-out="tx.reference"/></p>
+                            <openreceive-checkout
+                                t-att-reference="reference"
+                                t-att-prefix="prefix"
+                                resumable="true"
+                                t-att-data-return-url="return_url"
+                            />
+                            <script>
+                                // The payment is recorded when the checkout reports it settled. The
+                                // event does not bubble; a capturing listener still sees it.
+                                document.addEventListener("openreceive-settled", (event) => {
+                                    const url = event.target?.dataset?.returnUrl;
+                                    if (url) window.location.assign(url);
+                                }, true);
+                            </script>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>

@@ -95,3 +95,8 @@ tests/e2e-wordpress/test-results/
 
 # The standalone checkout build copied in by hatch_build.py at wheel/sdist build time.
 packages/python/openreceive/src/openreceive/django/static/
+
+# The standalone checkout build the Odoo module carries, copied in by npm run release:odoo:build.
+packages/python/odoo/payment_openreceive/static/lib/
+# The wheel tools/ci/odoo-tests.sh builds for the module's test image.
+packages/python/odoo/docker/wheel/

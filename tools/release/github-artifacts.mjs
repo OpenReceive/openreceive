@@ -28,6 +28,8 @@ export function releaseArtifacts(version, gemVersion = toGemVersion(root, versio
     // The module alone: the package FOSSBilling's extension directory installs.
     `dist/openreceive-fossbilling-module-${version}.zip`,
     `dist/openreceive-prestashop-${version}.zip`,
+    // The Odoo module, its folder at the top: unzips into an addons folder.
+    `dist/openreceive-odoo-${version}.zip`,
     `dist/openreceive-docs-${version}.tar.gz`,
   ];
 }

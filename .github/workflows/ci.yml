@@ -522,6 +522,29 @@ jobs:
   # OPENRECEIVE_TEST_*_DSN the tests read, on Postgres and MySQL too — the
   # per-dialect lock paths. ext-gmp is what the NWC transport needs; the
   # remaining extensions are the engine's floor.
+  # The Odoo module (packages/python/odoo) in Odoo's official image, on both
+  # supported series: its own tests against PostgreSQL with a fake wallet,
+  # plus the check that its copy of the payment tables matches the library's.
+  odoo-module:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        odoo:
+          - "19.0"
+          - "20.0"
+    env:
+      NWC_URI: ""
+      ODOO: ${{ matrix.odoo }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: packages/python/openreceive/uv.lock
+      - run: ./tools/ci/odoo-tests.sh
+
   php-engine:
     runs-on: ubuntu-latest
     timeout-minutes: 20

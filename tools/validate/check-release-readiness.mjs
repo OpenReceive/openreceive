@@ -380,6 +380,13 @@ for (const gemName of GEM_NAMES) {
     ).includes(`$this->version = '${releaseVersion}';`),
     "PrestaShop module version must match the workspace release",
   );
+  expect(
+    readFileSync(
+      path.join(root, "packages/python/odoo/payment_openreceive/__manifest__.py"),
+      "utf8",
+    ).includes(`"version": "${releaseVersion.split("-")[0]}"`),
+    "Odoo module manifest version must match the workspace release",
+  );
   const wordpressHeader = readFileSync(
     path.join(root, "packages/php/wordpress/openreceive.php"),
     "utf8",

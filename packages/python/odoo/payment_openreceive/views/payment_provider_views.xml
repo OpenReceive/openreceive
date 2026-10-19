@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_provider_form" model="ir.ui.view">
+        <field name="name">OpenReceive Provider Form</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <group name="provider_credentials" position="inside">
+                <field
+                    name="openreceive_nwc_set"
+                    string="Wallet code saved"
+                    invisible="code != 'openreceive'"
+                    readonly="1"
+                    groups="base.group_system"
+                />
+                <field
+                    name="openreceive_nwc_uri"
+                    string="Receive-only NWC code"
+                    invisible="code != 'openreceive'"
+                    widget="password"
+                    placeholder="nostr+walletconnect://… (a new code replaces the saved one)"
+                    groups="base.group_system"
+                />
+                <field
+                    name="openreceive_lsc_set"
+                    string="Swap code saved"
+                    invisible="code != 'openreceive'"
+                    readonly="1"
+                    groups="base.group_system"
+                />
+                <field
+                    name="openreceive_lsc_uri_primary"
+                    string="Swap provider code"
+                    invisible="code != 'openreceive'"
+                    widget="password"
+                    placeholder="Optional: lightning+swapconnect://… for USDT, USDC, SOL and ETH"
+                    groups="base.group_system"
+                />
+                <field
+                    name="openreceive_lsc_uri_backup"
+                    string="Backup swap provider code"
+                    invisible="code != 'openreceive'"
+                    widget="password"
+                    placeholder="Optional"
+                    groups="base.group_system"
+                />
+                <div colspan="2" class="text-muted" invisible="code != 'openreceive'" groups="base.group_system">
+                    Saving a code asks the wallet first: only a receive-only code is kept,
+                    and it is never shown again.
+                    <a href="https://openreceive.org/get_a_nwc_code_to_receive_payments" target="_blank">Get a receive-only code</a>
+                    ·
+                    <a href="https://openreceive.org/guides/quickstart-odoo" target="_blank">Guide</a>
+                    <button
+                        name="action_openreceive_remove_swap_codes"
+                        type="object"
+                        string="Remove the swap codes"
+                        class="btn-link p-0 ms-2"
+                        invisible="not openreceive_lsc_set"
+                    />
+                </div>
+            </group>
+        </field>
+    </record>
+
+</odoo>

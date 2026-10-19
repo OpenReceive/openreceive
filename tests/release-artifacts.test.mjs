@@ -3,9 +3,9 @@ import path from "node:path";
 import test from "node:test";
 import { assertReleaseAssets, releaseArtifacts } from "../tools/release/github-artifacts.mjs";
 
-test("general release requires every public platform, including matching WordPress, Paymenter, FOSSBilling and PrestaShop ZIPs", () => {
+test("general release requires every public platform, including matching WordPress, Paymenter, FOSSBilling, PrestaShop and Odoo ZIPs", () => {
   const names = releaseArtifacts("1.2.3", "1.2.3").map((file) => path.basename(file));
-  assert.equal(names.length, 28);
+  assert.equal(names.length, 29);
   assert.doesNotThrow(() => assertReleaseAssets("1.2.3", names, "1.2.3"));
   for (const omitted of names) {
     assert.throws(
@@ -70,6 +70,17 @@ test("general release requires every public platform, including matching WordPre
         "1.2.3",
       ),
     /prestashop-1.2.3.zip/,
+  );
+  assert.throws(
+    () =>
+      assertReleaseAssets(
+        "1.2.3",
+        names
+          .filter((name) => !name.startsWith("openreceive-odoo-"))
+          .concat("openreceive-odoo-1.2.2.zip"),
+        "1.2.3",
+      ),
+    /odoo-1.2.3.zip/,
   );
   assert(!names.some((name) => /btcpay|testkit/i.test(name)));
 });

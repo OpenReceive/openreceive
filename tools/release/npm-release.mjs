@@ -26,7 +26,7 @@ import { OPENRECEIVE_PUBLIC_PACKAGE_NAMES } from "../package/public-packages.mjs
 import { smokePackageTarballs } from "../validate/package-smoke.mjs";
 import { LARAVEL_COMPOSER_JSON, PHP_VERSION_FILE, updatePhpVersions } from "./composer-release.mjs";
 import { GEM_NAMES, gemDir, gemVersionFilePath } from "./gem-release.mjs";
-import { PYTHON_VERSION_FILE, updatePythonVersion } from "./pypi-release.mjs";
+import { PYTHON_VERSION_FILE, pep440Version, updatePythonVersion } from "./pypi-release.mjs";
 
 const PUBLIC_PACKAGE_NAMES = OPENRECEIVE_PUBLIC_PACKAGE_NAMES;
 const PUBLIC_PACKAGE_SET = new Set(PUBLIC_PACKAGE_NAMES);
@@ -384,6 +384,7 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     ["docs/guides/quickstart-paymenter.md", "paymenter"],
     ["docs/guides/quickstart-fossbilling.md", "fossbilling"],
     ["docs/guides/quickstart-prestashop.md", "prestashop"],
+    ["docs/guides/quickstart-odoo.md", "odoo"],
   ]) {
     const quickstartPath = path.join(root, quickstart);
     if (!existsSync(quickstartPath)) continue;
@@ -394,6 +395,30 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     if (updated !== source) {
       writeFileSync(quickstartPath, updated);
       changed.push(quickstart);
+    }
+  }
+
+  // The Odoo module's manifest, and the pip pin its README and quickstart give.
+  // Odoo takes a module version of digits only.
+  const odooFrom = currentVersion.split("-")[0];
+  const odooTo = targetVersion.split("-")[0];
+  for (const file of [
+    "packages/python/odoo/payment_openreceive/__manifest__.py",
+    "packages/python/odoo/README.md",
+    "docs/guides/quickstart-odoo.md",
+  ]) {
+    const filePath = path.join(root, file);
+    if (!existsSync(filePath)) continue;
+    const source = readFileSync(filePath, "utf8");
+    const updated = source
+      .replaceAll(`"version": "${odooFrom}"`, `"version": "${odooTo}"`)
+      .replaceAll(
+        `openreceive==${pep440Version(currentVersion)}`,
+        `openreceive==${pep440Version(targetVersion)}`,
+      );
+    if (updated !== source) {
+      writeFileSync(filePath, updated);
+      changed.push(file);
     }
   }
 
@@ -487,6 +512,8 @@ function dryRunPrepare(root, targetVersion) {
       "packages/php/prestashop/composer.lock",
       "packages/php/prestashop/openreceive/src/Runtime.php",
       "packages/php/prestashop/openreceive/openreceive.php",
+      "packages/python/odoo/payment_openreceive/__manifest__.py",
+      "packages/python/odoo/README.md",
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "docs/guides/quickstart-woocommerce.md",
@@ -494,6 +521,7 @@ function dryRunPrepare(root, targetVersion) {
       "docs/guides/quickstart-paymenter.md",
       "docs/guides/quickstart-fossbilling.md",
       "docs/guides/quickstart-prestashop.md",
+      "docs/guides/quickstart-odoo.md",
       "package-lock.json",
     ]
       .filter((file, index, all) => all.indexOf(file) === index)

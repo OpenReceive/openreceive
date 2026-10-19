@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- A buyer who closed the checkout before the wallet reported the payment
+         is paid here. Every pass goes through the engine's shared gate, so a
+         busy checkout and this job never scan the wallet twice in a row. -->
+    <record id="cron_reconcile" model="ir.cron">
+        <field name="name">OpenReceive: record payments made after the checkout closed</field>
+        <field name="model_id" ref="payment.model_payment_provider"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_openreceive_reconcile()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+
+</odoo>
