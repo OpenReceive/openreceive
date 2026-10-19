@@ -250,6 +250,15 @@
       "agents": ["claude/claude-opus-5-5", "codex/default"],
       "mode": "released",
       "directions": "29544aedc08b"
+    },
+    {
+      "trial": "medusa",
+      "date": "2026-10-19",
+      "release": "0.4.29",
+      "runs": 3,
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "mode": "released",
+      "directions": "2ed53101bf16"
     }
   ]
 }

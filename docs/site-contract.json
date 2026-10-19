@@ -1934,7 +1934,14 @@
         "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, and a refund made in the Medusa admin is recorded only. A buyer reclaims a swap deposit that never converted from the same checkout.",
         "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
       },
-      "tested": null
+      "tested": {
+        "date": "2026-10-19",
+        "release": "0.4.29",
+        "agents": [
+          "claude/claude-opus-5-5",
+          "codex/default"
+        ]
+      }
     },
     {
       "id": "vendure",
