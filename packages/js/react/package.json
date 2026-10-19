@@ -23,7 +23,7 @@
     "@openreceive/core": "0.4.29"
   },
   "peerDependencies": {
-    "react": ">=18.0.0"
+    "react": "^19.3.1"
   },
   "exports": {
     ".": {
