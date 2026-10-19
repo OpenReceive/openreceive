@@ -45,6 +45,30 @@
   3.8, its worker and the Next.js starter, and a CI lane runs the plugin
   against a real Vendure server on PostgreSQL.
 
+- Added (Odoo): a payment provider module for Odoo 19 and 20, self-hosted or
+  on Odoo.sh. Each release attaches `openreceive-odoo-<version>.zip`, the
+  module folder `payment_openreceive`; its Python side is the `openreceive`
+  package at the same version. The customer picks OpenReceive on Odoo's
+  payment step, at checkout or on an invoice's payment link, and pays on the
+  module's checkout page; only the browser session that started the payment
+  may pay it. The amount is the payment transaction's, read on the server.
+  Settlement marks Odoo's transaction done and runs Odoo's post-processing in
+  the same database transaction, so the order is confirmed when the checkout
+  reports the payment; a post-processing failure leaves the transaction done
+  for Odoo's cron. The payment tables live in Odoo's own PostgreSQL, through a
+  repository on Odoo's cursors that switches each transaction to READ
+  COMMITTED for the per-reference lock. Codes are saved from the provider form
+  or `odoo openreceive configure` (stdin), in the module's own table, only
+  after the wallet answers as receive-only. `odoo openreceive doctor`,
+  `test-invoice` and `reconcile`, and a one-minute scheduled action for
+  customers who left. Odoo's integration page is now this module; Odoo through
+  BTCPay Server stays a guide that the quickstart links. Tested on Odoo 19 and
+  20 with the live payment checks; a trial platform, `odoo`, and a CI lane on
+  both series.
+- Changed (Python): `openreceive` accepts `cryptography` 41 and newer (was 42),
+  so it installs beside the system packages of Odoo's official Docker image,
+  whose Ubuntu ships 41. The library uses nothing newer.
+
 ## 0.4.29 - 2026-10-19
 
 - Added (FOSSBilling): the module installs its own payment gateway, so

@@ -778,6 +778,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-odoo",
+      "title": "Odoo Quickstart",
+      "source_path": "docs/guides/quickstart-odoo.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "wordpress-hosting",
       "title": "WordPress Hosting Requirements",
       "source_path": "docs/guides/wordpress-hosting.md",
@@ -837,6 +845,14 @@
       "slug": "agent-directions-prestashop",
       "title": "Agent directions (PrestaShop)",
       "source_path": "docs/agents/prestashop.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-odoo",
+      "title": "Agent directions (Odoo)",
+      "source_path": "docs/agents/odoo.md",
       "category": "agents",
       "audience": "developer",
       "public": true

@@ -46,6 +46,7 @@ Each stack has an integration page and a quickstart on openreceive.org:
 | [Paymenter](https://openreceive.org/integrations/paymenter) | [Paymenter quickstart](https://openreceive.org/guides/quickstart-paymenter) |
 | [FOSSBilling](https://openreceive.org/integrations/fossbilling) | [FOSSBilling quickstart](https://openreceive.org/guides/quickstart-fossbilling) |
 | [PrestaShop](https://openreceive.org/integrations/prestashop) | [PrestaShop quickstart](https://openreceive.org/guides/quickstart-prestashop) |
+| [Odoo](https://openreceive.org/integrations/odoo) | [Odoo quickstart](https://openreceive.org/guides/quickstart-odoo) |
 | [Medusa](https://openreceive.org/integrations/medusa) | [Medusa quickstart](https://openreceive.org/guides/quickstart-medusa) |
 | [Vendure](https://openreceive.org/integrations/vendure) | [Vendure quickstart](https://openreceive.org/guides/quickstart-vendure) |
 | [Express (Node.js)](https://openreceive.org/integrations/express) | [Express quickstart](https://openreceive.org/guides/quickstart-node) |

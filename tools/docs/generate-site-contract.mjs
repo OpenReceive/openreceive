@@ -79,6 +79,11 @@ const AGENT_PAYLOADS = [
     stack: "prestashop",
   },
   {
+    path: "/agent-directions/odoo.md",
+    source: "docs/agents/odoo.md",
+    stack: "odoo",
+  },
+  {
     path: "/agent-directions/medusa.md",
     source: "docs/agents/medusa.md",
     stack: "medusa",
@@ -526,6 +531,36 @@ const FRAMEWORKS = [
       mobile: STORE_MOBILE,
     },
   },
+  // Odoo's own payment provider: a module from the GitHub release plus the
+  // openreceive package from PyPI. Its Tested badge comes from agent trials.
+  // Odoo through BTCPay Server stays a guide (docs/guides/odoo.md) that the
+  // quickstart links, and its BTCPay-route run stays in trials/passed.json
+  // under its own key.
+  {
+    id: "odoo",
+    label: "Odoo",
+    type: "plugin",
+    family: "python",
+    quickstart_slug: "quickstart-odoo",
+    agent_stack: "odoo",
+    adapter_package: "openreceive-odoo",
+    install:
+      "Unzip openreceive-odoo-<version>.zip into an addons folder, pip install openreceive, then odoo -i payment_openreceive",
+    requires: "Odoo 19 or 20, self-hosted or Odoo.sh, and the openreceive Python package",
+    demo: null,
+    example_path: "packages/python/odoo",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "Odoo 19 and 20, their official Docker images, on Python 3.12",
+      databases: "PostgreSQL, Odoo's own database",
+      secrets:
+        "The module's own settings table in Odoo's database, saved from the provider form or odoo openreceive configure",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the transaction's checkout page.",
+      mobile: STORE_MOBILE,
+    },
+  },
   // A Node commerce platform. The npm package is a Medusa plugin with a
   // payment provider; the storefront shows the React checkout.
   {
@@ -585,31 +620,6 @@ const FRAMEWORKS = [
   // OpenReceive plugin. The copy button gives the BTCPay directions, for the
   // BTCPay half; the guide covers the store's half. Tested by
   // `npm run trial:btcpay-route`, not an agent trial.
-  {
-    id: "odoo",
-    label: "Odoo",
-    type: "via-btcpay",
-    family: "btcpay",
-    quickstart_slug: "odoo",
-    agent_stack: "btcpay",
-    adapter_package: "payment_btcpayserver",
-    install:
-      "Install the Payment Provider: BTCPay Server add-on (btcpayserver/odoo) and pip install ecdsa",
-    requires: "Odoo 17, 18 or 19, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
-    demo: null,
-    example_path: null,
-    video: null,
-    shared_checkout_demo: false,
-    capabilities: {
-      runtime: "Odoo 19 Community with btcpayserver/odoo 19.0.1.1, on BTCPay Server 2.4.5",
-      databases: "Odoo's PostgreSQL and BTCPay Server's own PostgreSQL",
-      secrets:
-        "The wallet code in BTCPay's OpenReceive settings; Odoo keeps only its BTCPay pairing token",
-      refunds:
-        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
-      mobile: STORE_MOBILE,
-    },
-  },
   {
     id: "magento",
     label: "Magento",

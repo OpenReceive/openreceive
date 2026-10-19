@@ -10,7 +10,9 @@ provider you configure in BTCPay converts the payment to **BTC over
 Lightning**, and it settles into the same wallet. Available assets and
 networks depend on the provider.
 
-You run, or rent, a BTCPay Server.
+You run, or rent, a BTCPay Server. Without one, OpenReceive's own Odoo
+module takes the payment in Odoo itself: see the
+[Odoo quickstart](quickstart-odoo.md).
 
 ## What we test
 

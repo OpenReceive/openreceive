@@ -185,6 +185,14 @@ const STACKS = [
       "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its back-office screens are only for a PrestaShop with no shell.",
   },
   {
+    stack: "odoo",
+    source: "docs/agents/src/odoo.md",
+    quickstart: "docs/guides/quickstart-odoo.md",
+    brief: BILLING_PANEL_BRIEF,
+    quickstartRole:
+      "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its provider-form screens are only for an Odoo with no shell.",
+  },
+  {
     stack: "medusa",
     source: "docs/agents/src/medusa.md",
     quickstart: "docs/guides/quickstart-medusa.md",
@@ -360,6 +368,8 @@ const UNLISTED_GUIDES = {
   "quickstart-fossbilling": "inlined in full below, or another stack's",
   "agent-directions-prestashop": "this payload's own page",
   "quickstart-prestashop": "inlined in full below, or another stack's",
+  "agent-directions-odoo": "this payload's own page",
+  "quickstart-odoo": "inlined in full below, or another stack's",
   "agent-directions-medusa": "this payload's own page",
   "quickstart-medusa": "inlined in full below, or another stack's",
   "agent-directions-vendure": "this payload's own page",
@@ -368,7 +378,7 @@ const UNLISTED_GUIDES = {
   "agent-directions-edd": "this payload's own page",
   "quickstart-edd": "inlined in full below, or another stack's",
   "wordpress-hosting": "WordPress hosts only; the WooCommerce quickstart links it",
-  odoo: "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
+  odoo: "Odoo through BTCPay Server, the other way in; the Odoo quickstart links it",
   magento:
     "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
   prestashop:
@@ -565,6 +575,33 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "PrestaShop keeps its data in MySQL or MariaDB",
     serverless: "PrestaShop runs on an ordinary PHP host",
     "mobile-apps": "PrestaShop's own order confirmation page is the payment page",
+    "wordpress-hosting": "WordPress hosts only",
+  },
+  odoo: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "frontend-checkout",
+        "checkout-ux",
+        "headless-checkout",
+        "custom-checkout-route",
+        "provider-registry",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "react-material-ui-recipe",
+        "node-orms",
+      ].map((slug) => [
+        slug,
+        "the Odoo module supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    supabase: "Odoo keeps its data in its own PostgreSQL",
+    serverless: "Odoo runs as a long-lived server",
+    "mobile-apps": "the module's checkout page on the shop is the payment page",
     "wordpress-hosting": "WordPress hosts only",
   },
   medusa: {

@@ -47,6 +47,7 @@ your agent: [Node (Express)](https://openreceive.org/agent-directions/node/full.
 [Paymenter](https://openreceive.org/agent-directions/paymenter/full.md) ·
 [FOSSBilling](https://openreceive.org/agent-directions/fossbilling/full.md) ·
 [PrestaShop](https://openreceive.org/agent-directions/prestashop/full.md) ·
+[Odoo](https://openreceive.org/agent-directions/odoo/full.md) ·
 [Medusa](https://openreceive.org/agent-directions/medusa/full.md) ·
 [Vendure](https://openreceive.org/agent-directions/vendure/full.md) ·
 [Lovable](https://openreceive.org/agent-directions/lovable/full.md) ·
