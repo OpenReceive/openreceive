@@ -1,0 +1,62 @@
+{
+  "slug": "vendure",
+  "name": "Vendure",
+  "directions": "docs/agents/vendure.md",
+  "prompt_name": "Vendure shop",
+  "doctor": "npx openreceive doctor",
+  "credential_store": {
+    "kind": "dotenv",
+    "where": "server/.env, the Vendure server's .env"
+  },
+  "allowed_install_paths": ["npm"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b",
+    "\\bsource\\s+\\S*\\.env\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "closing_max_lines": 6,
+  "live": true,
+  "host": "vendure",
+  "service": "storefront",
+  "container_port": 3000,
+  "seed": false,
+  "wallet_services": ["server", "worker", "seed"],
+  "logs": ["logs", "--no-color", "--tail", "60", "server", "worker", "storefront"],
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "db",
+      "psql",
+      "-U",
+      "vendure",
+      "-d",
+      "vendure",
+      "-tAc",
+      "select count(*) from product where \"deletedAt\" is null"
+    ],
+    "openreceive": [
+      "exec",
+      "-T",
+      "server",
+      "sh",
+      "-c",
+      "test -d node_modules/@openreceive/vendure && echo yes || echo no"
+    ],
+    "orderStatus": [
+      "exec",
+      "-T",
+      "db",
+      "sh",
+      "-c",
+      "psql -U vendure -d vendure -tAc \"select state from \\\"order\\\" where code = '$1'\"",
+      "sh"
+    ]
+  }
+}

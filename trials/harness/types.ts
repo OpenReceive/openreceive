@@ -133,8 +133,11 @@ export interface Platform {
    * `prestashop`: a PrestaShop store that prestashop.ts installs and seeds
    * with two customers and five products; the customer checks out in
    * PrestaShop's shop and pays on its order confirmation page in Chromium.
+   * `vendure`: a Vendure server, worker and its Next.js storefront starter;
+   * vendure.ts fills a guest's cart through the Shop API, and the guest pays
+   * at the storefront's checkout in Chromium.
    */
-  readonly host?: "btcpay" | "bolt" | "paymenter" | "fossbilling" | "prestashop";
+  readonly host?: "btcpay" | "bolt" | "paymenter" | "fossbilling" | "prestashop" | "vendure";
   /** The WordPress post type the five seeded products are: WooCommerce's `product` when omitted, `download` for Easy Digital Downloads. */
   readonly wordpress_post_type?: string;
   /** Compose service that publishes the shop. WordPress when omitted. */

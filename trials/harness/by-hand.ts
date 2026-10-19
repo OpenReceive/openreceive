@@ -2,9 +2,9 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
+import { liveFossbillingChecks } from "./fossbilling.ts";
 import { liveShopChecks } from "./live.ts";
 import { openingFor } from "./loop.ts";
-import { liveFossbillingChecks } from "./fossbilling.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
 import { livePrestashopChecks } from "./prestashop.ts";
 import {
@@ -17,6 +17,7 @@ import {
 } from "./sandbox.ts";
 import { scanTrackedSecrets } from "./scan.ts";
 import type { Check, Platform } from "./types.ts";
+import { liveVendureChecks } from "./vendure.ts";
 import { startTrialWallet, trialWalletOverride } from "./wallet.ts";
 
 // A trial run by hand: any coding agent integrates the shop itself, following
@@ -49,6 +50,7 @@ const BY_HAND_PLATFORMS = [
   "paymenter",
   "fossbilling",
   "prestashop",
+  "vendure",
 ] as const;
 
 interface State {
@@ -172,6 +174,8 @@ async function checkShop(argv: readonly string[]): Promise<void> {
           ? await liveFossbillingChecks(state.baseUrl, options)
           : platform.host === "prestashop"
             ? await livePrestashopChecks(state.baseUrl, options)
+          : platform.host === "vendure"
+            ? await liveVendureChecks(directory, state.baseUrl, options)
             : await liveShopChecks(state.baseUrl, options)),
     );
   } else {

@@ -1,0 +1,19 @@
+{
+  "name": "widget-shop-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start:server": "node ./dist/index.js",
+    "start:worker": "node ./dist/index-worker.js",
+    "populate": "node ./dist/populate.js"
+  },
+  "dependencies": {
+    "@vendure/core": "3.8.0",
+    "dotenv": "17.2.3",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "typescript": "5.8.2"
+  }
+}

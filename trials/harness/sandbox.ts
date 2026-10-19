@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -87,6 +87,39 @@ function freePort(): Promise<number> {
   });
 }
 
+/** One part of a shop that is someone else's project: a tarball at a pinned commit. */
+interface FixtureSource {
+  /** A .tar.gz of the project, such as GitHub's archive of one commit. */
+  readonly url: string;
+  /** The directory in the shop it unpacks into, without the archive's top folder. */
+  readonly into: string;
+}
+
+/**
+ * A fixture's `sources.json` names projects too large to keep in this repo,
+ * such as Vendure's storefront starter. They are unpacked into the copy
+ * before its first commit, so the agent sees them as part of the shop.
+ */
+async function fetchSources(directory: string): Promise<void> {
+  const file = path.join(directory, "sources.json");
+  const listed = await readFile(file, "utf8").catch(() => undefined);
+  if (listed === undefined) return;
+  for (const source of JSON.parse(listed) as FixtureSource[]) {
+    const into = path.resolve(directory, source.into);
+    if (!into.startsWith(`${directory}${path.sep}`)) {
+      throw new InfraError(`sources.json unpacks outside the shop: ${source.into}`);
+    }
+    const response = await fetch(source.url);
+    if (!response.ok) throw new InfraError(`${source.url} answered ${response.status}`);
+    const archive = path.join(directory, ".source.tar.gz");
+    await writeFile(archive, new Uint8Array(await response.arrayBuffer()));
+    await mkdir(into, { recursive: true });
+    await run("tar", ["-xzf", archive, "-C", into, "--strip-components=1"], directory);
+    await rm(archive);
+  }
+  await rm(file);
+}
+
 /**
  * Copy the fixture to a unique directory. Its basename is the Compose project name.
  * The copy gets its own fixed host port: a random one ("127.0.0.1::80") changes
@@ -103,6 +136,7 @@ export async function prepareShop(
   const id = Math.random().toString(16).slice(2, 10);
   const directory = await mkdtemp(path.join(tmpdir(), `ortrial-${slug}-${id}-`));
   await cp(fixtureDir, directory, { recursive: true });
+  await fetchSources(directory);
   const composeFile = path.join(directory, "compose.yml");
   let fixture = await readFile(composeFile, "utf8");
   if (!fixture.includes(FIXTURE_PORT))

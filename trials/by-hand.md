@@ -88,6 +88,7 @@ and has a plain "Widget Shop" with five products and no OpenReceive:
 | 13 | `paymenter` | Paymenter billing panel (heavy) |
 | 14 | `fossbilling` | FOSSBilling billing panel (heavy) |
 | 15 | `prestashop` | PrestaShop store (heavy) |
+| 16 | `vendure` | Vendure server, worker and its Next.js starter (heavy) |
 
 Left out on purpose: Replit, Vercel, Lovable, v0 and Supabase need an account
 or a real project, BTCPay Server needs a synced Bitcoin node, and mobile apps

@@ -1,0 +1,6 @@
+name,slug,description,assets,facets,optionGroups,optionValues,sku,price,taxCategory,stockOnHand,trackInventory,variantAssets,variantFacets
+Facet,facet,"A small brass facet for the Widget range.",,category:Widgets,,,facet,7.00,standard,100,false,,
+Bezel,bezel,"A brushed steel bezel.",,category:Widgets,,,bezel,12.00,standard,100,false,,
+Hinge,hinge,"A quiet hinge.",,category:Widgets,,,hinge,4.00,standard,100,false,,
+Latch,latch,"A latch that stays shut.",,category:Widgets,,,latch,9.00,standard,100,false,,
+Knob,knob,"A round walnut knob.",,category:Widgets,,,knob,3.00,standard,100,false,,

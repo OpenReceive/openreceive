@@ -1,0 +1,92 @@
+# A plain Vendure 3 shop, on purpose: no OpenReceive, no wallet codes. The
+# server and its worker are a Vendure project laid out as `@vendure/create`
+# makes one (migrations run at startup, the worker runs the job queue and the
+# scheduled tasks), on PostgreSQL. `seed` adds the five widgets once
+# (server/src/populate.ts). The storefront is Vendure's official Next.js
+# starter, which the harness downloads into ./storefront at a pinned commit
+# (sources.json); it builds when it starts, because its pages read the
+# server. Only the storefront is published: the harness swaps 8080 for a free
+# port per run (sandbox.ts).
+services:
+  server:
+    build: ./server
+    environment: &vendure-env
+      PORT: "3000"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: vendure
+      DB_USERNAME: vendure
+      DB_PASSWORD: vendure-local
+      SUPERADMIN_USERNAME: superadmin
+      SUPERADMIN_PASSWORD: widget-shop-local
+      COOKIE_SECRET: widget-shop-cookie-secret
+      VENDURE_DISABLE_TELEMETRY: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+  worker:
+    build: ./server
+    command: ["node", "./dist/index-worker.js"]
+    environment: *vendure-env
+    depends_on:
+      server:
+        condition: service_healthy
+  seed:
+    build: ./server
+    command: ["node", "./dist/populate.js"]
+    environment: *vendure-env
+    depends_on:
+      server:
+        condition: service_healthy
+  storefront:
+    build: ./storefront
+    ports:
+      - "127.0.0.1:8080:3000"
+    environment:
+      VENDURE_SHOP_API_URL: http://server:3000/shop-api
+      VENDURE_CHANNEL_TOKEN: __default_channel__
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_NAME: Widget Shop
+      REVALIDATION_SECRET: widget-shop-revalidation-secret
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 90
+      start_period: 240s
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: vendure
+      POSTGRES_USER: vendure
+      POSTGRES_PASSWORD: vendure-local
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "vendure"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  db:

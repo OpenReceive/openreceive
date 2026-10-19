@@ -17,10 +17,10 @@ import {
 import type { MerchantCodes } from "./codes.ts";
 import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
+import { liveFossbillingChecks } from "./fossbilling.ts";
 import { liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
 import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
-import { liveFossbillingChecks } from "./fossbilling.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
 import { livePrestashopChecks } from "./prestashop.ts";
 import { redact } from "./redact.ts";
@@ -29,6 +29,7 @@ import { inspectShop, orderStatus, prepareShop, shopChecks, startShop } from "./
 import { scanTrackedSecrets } from "./scan.ts";
 import { loadSupabaseProject, resetSupabase, supabaseChecks } from "./supabase.ts";
 import type { Check, Platform, Scenario, Turn } from "./types.ts";
+import { liveVendureChecks } from "./vendure.ts";
 import { loadVercelConfig, vercelChecks, vercelCodeChecks } from "./vercel.ts";
 import { type TrialWallet, trialWalletOverride } from "./wallet.ts";
 
@@ -400,6 +401,11 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
                 ? await liveFossbillingChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
                 : platform.host === "prestashop"
                   ? await livePrestashopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
+                : platform.host === "vendure"
+                  ? await liveVendureChecks(directory, sandbox.baseUrl, {
+                      paid,
+                      ...(swap ? { swap } : {}),
+                    })
                   : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
