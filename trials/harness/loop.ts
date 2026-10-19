@@ -401,12 +401,12 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
                 ? await liveFossbillingChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
                 : platform.host === "prestashop"
                   ? await livePrestashopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
-                : platform.host === "vendure"
-                  ? await liveVendureChecks(directory, sandbox.baseUrl, {
-                      paid,
-                      ...(swap ? { swap } : {}),
-                    })
-                  : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
+                  : platform.host === "vendure"
+                    ? await liveVendureChecks(directory, sandbox.baseUrl, {
+                        paid,
+                        ...(swap ? { swap } : {}),
+                      })
+                    : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

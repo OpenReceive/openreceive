@@ -174,9 +174,9 @@ async function checkShop(argv: readonly string[]): Promise<void> {
           ? await liveFossbillingChecks(state.baseUrl, options)
           : platform.host === "prestashop"
             ? await livePrestashopChecks(state.baseUrl, options)
-          : platform.host === "vendure"
-            ? await liveVendureChecks(directory, state.baseUrl, options)
-            : await liveShopChecks(state.baseUrl, options)),
+            : platform.host === "vendure"
+              ? await liveVendureChecks(directory, state.baseUrl, options)
+              : await liveShopChecks(state.baseUrl, options)),
     );
   } else {
     console.log(
