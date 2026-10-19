@@ -1,0 +1,10 @@
+{
+  "name": "openreceive-vendure-test",
+  "private": true,
+  "type": "module",
+  "description": "Vendure for tests/vendure, kept out of the root install so other jobs skip it.",
+  "dependencies": {
+    "@vendure/core": "3.8.0",
+    "pg": "8.16.3"
+  }
+}

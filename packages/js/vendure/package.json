@@ -1,0 +1,80 @@
+{
+  "name": "@openreceive/vendure",
+  "version": "0.4.29",
+  "description": "Accept Bitcoin Lightning payments in Vendure with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "vendure",
+    "vendure-plugin",
+    "payment-method"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "plugin": [
+        "./dist/plugin.d.ts"
+      ]
+    }
+  },
+  "dependencies": {
+    "@openreceive/http": "0.4.29",
+    "@openreceive/node": "0.4.29"
+  },
+  "peerDependencies": {
+    "@nestjs/common": ">=10",
+    "@vendure/core": "^3.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@vendure/core": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "default": "./dist/plugin.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/vendure"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org/integrations/vendure",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

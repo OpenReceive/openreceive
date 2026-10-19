@@ -11,6 +11,7 @@ These packages make up the general release. They all share one version number:
 - `@openreceive/fastify`
 - `@openreceive/next`
 - `@openreceive/medusa`
+- `@openreceive/vendure`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
 - `@openreceive/elements`
@@ -36,6 +37,7 @@ packages are:
 - its framework adapters: `@openreceive/express`, `@openreceive/fastify` and
   `@openreceive/next`
 - the Medusa plugin and payment provider, `@openreceive/medusa`
+- the Vendure plugin and payment method handler, `@openreceive/vendure`
 - core contracts and helpers, browser checkout helpers, provider-data assets,
   elements, and the frontend adapters
 
@@ -51,7 +53,7 @@ Five registries, five publishers:
 
 | Registry | Who publishes | Credential |
 | --- | --- | --- |
-| npm (15 packages) | the maintainer's machine, `npm run release:publish` | granular token with "Bypass 2FA", loaded from `.env.release` |
+| npm (16 packages) | the maintainer's machine, `npm run release:publish` | granular token with "Bypass 2FA", loaded from `.env.release` |
 | RubyGems (3 gems) | GitHub Actions, `.github/workflows/publish-gems.yml` | none stored: OIDC Trusted Publishing, approved per run in the `rubygems` environment |
 | PyPI (1 distribution) | GitHub Actions, `.github/workflows/publish-pypi.yml` | none stored: OIDC Trusted Publishing, approved per run in the `pypi` environment |
 | Packagist (2 packages) | GitHub Actions, `.github/workflows/publish-composer.yml`. It pushes the split repositories that Packagist watches. | separate write-enabled deploy keys: `COMPOSER_OPENRECEIVE_SSH_KEY` for `OpenReceive/openreceive-php`, `COMPOSER_LARAVEL_SSH_KEY` for `OpenReceive/openreceive-laravel`, both in the protected `packagist` environment |
@@ -333,7 +335,7 @@ Run from the repo root on a clean, current `master`.
 
    The artifact tool derives filenames from the public npm and gem lists and
    registry version conversions. It refuses to create the draft when any of the
-   27 required assets is missing: 15 npm tarballs, 3 gems, Python wheel and sdist,
+   28 required assets is missing: 16 npm tarballs, 3 gems, Python wheel and sdist,
    standalone checkout, WordPress ZIP, Paymenter ZIP, the two FOSSBilling ZIPs
    (the whole extension, and the module alone that FOSSBilling's extension
    directory installs), PrestaShop ZIP, and docs bundle. It never substitutes an older

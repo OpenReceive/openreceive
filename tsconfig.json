@@ -33,6 +33,8 @@
       "@openreceive/react": ["packages/js/react/src/index.ts"],
       "@openreceive/svelte": ["packages/js/svelte/src/index.ts"],
       "@openreceive/testkit": ["packages/js/testkit/src/index.ts"],
+      "@openreceive/vendure": ["packages/js/vendure/src/index.ts"],
+      "@openreceive/vendure/plugin": ["packages/js/vendure/src/plugin.ts"],
       "@openreceive/vue": ["packages/js/vue/src/index.ts"]
     },
     "types": ["node"]

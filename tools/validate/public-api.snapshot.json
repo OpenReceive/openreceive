@@ -1116,6 +1116,32 @@
       ]
     }
   },
+  "@openreceive/vendure": {
+    ".": {
+      "values": [
+        "OPENRECEIVE_VENDURE_HANDLER_CODE",
+        "OPENRECEIVE_VENDURE_ORDER_ROUTE",
+        "OPENRECEIVE_VENDURE_ROUTE_PREFIX",
+        "orderReference",
+        "parseOrderReference"
+      ],
+      "types": [
+        "OrderReference"
+      ]
+    },
+    "./plugin": {
+      "values": [
+        "OPENRECEIVE_VENDURE_HANDLER_CODE",
+        "OPENRECEIVE_VENDURE_ORDER_ROUTE",
+        "OPENRECEIVE_VENDURE_ROUTE_PREFIX",
+        "openReceivePaymentHandler",
+        "OpenReceivePaymentTables1760918400000",
+        "OpenReceivePlugin",
+        "openReceiveReconcileTask"
+      ],
+      "types": []
+    }
+  },
   "@openreceive/vue": {
     ".": {
       "values": [

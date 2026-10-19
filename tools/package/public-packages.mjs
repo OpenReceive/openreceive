@@ -17,5 +17,6 @@ export const OPENRECEIVE_PUBLIC_PACKAGE_NAMES = [
   "@openreceive/provider-data",
   "@openreceive/react",
   "@openreceive/svelte",
+  "@openreceive/vendure",
   "@openreceive/vue",
 ];
