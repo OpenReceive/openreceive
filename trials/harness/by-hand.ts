@@ -6,6 +6,7 @@ import { liveShopChecks } from "./live.ts";
 import { openingFor } from "./loop.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
+import { livePrestashopChecks } from "./prestashop.ts";
 import {
   inspectShop,
   orderStatus,
@@ -47,6 +48,7 @@ const BY_HAND_PLATFORMS = [
   "edd",
   "paymenter",
   "fossbilling",
+  "prestashop",
 ] as const;
 
 interface State {
@@ -168,7 +170,9 @@ async function checkShop(argv: readonly string[]): Promise<void> {
         ? await livePaymenterChecks(state.baseUrl, options)
         : platform.host === "fossbilling"
           ? await liveFossbillingChecks(state.baseUrl, options)
-          : await liveShopChecks(state.baseUrl, options)),
+          : platform.host === "prestashop"
+            ? await livePrestashopChecks(state.baseUrl, options)
+            : await liveShopChecks(state.baseUrl, options)),
     );
   } else {
     console.log(

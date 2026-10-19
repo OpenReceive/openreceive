@@ -1,0 +1,57 @@
+{
+  "slug": "prestashop",
+  "name": "PrestaShop",
+  "directions": "docs/agents/prestashop.md",
+  "prompt_name": "PrestaShop store",
+  "doctor": "php bin/console openreceive:doctor",
+  "credential_store": {
+    "kind": "module-setting",
+    "where": "the OpenReceive module's encrypted configuration (php bin/console openreceive:configure)"
+  },
+  "allowed_install_paths": ["release-zip"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "closing_max_lines": 8,
+  "live": true,
+  "host": "prestashop",
+  "service": "prestashop",
+  "container_port": 80,
+  "seed": false,
+  "wallet_services": ["prestashop"],
+  "logs": ["logs", "--no-color", "--tail", "60", "prestashop"],
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "mariadb",
+      "sh",
+      "-c",
+      "mariadb -uprestashop -pprestashop-local -N prestashop -e \"select count(*) from ps_product where active = 1\""
+    ],
+    "openreceive": [
+      "exec",
+      "-T",
+      "prestashop",
+      "sh",
+      "-c",
+      "test -e /var/www/html/modules/openreceive && echo yes || echo no"
+    ],
+    "orderStatus": [
+      "exec",
+      "-T",
+      "mariadb",
+      "sh",
+      "-c",
+      "mariadb -uprestashop -pprestashop-local -N prestashop -e \"select if(s.module_name = 'openreceive' and s.paid = 0, 'awaiting_payment', l.name) from ps_orders o join ps_order_state s on s.id_order_state = o.current_state join ps_order_state_lang l on l.id_order_state = s.id_order_state and l.id_lang = o.id_lang where o.id_order = $1\"",
+      "sh"
+    ]
+  }
+}

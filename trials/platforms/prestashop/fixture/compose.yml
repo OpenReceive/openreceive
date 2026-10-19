@@ -1,0 +1,47 @@
+# PrestaShop as its official image runs it, pinned: the image with its files
+# in a named volume, and MariaDB, with no OpenReceive. The image has no GMP,
+# which OpenReceive needs; adding it is the agent's step, as the directions
+# say. The harness runs PrestaShop's own command-line installer for the
+# shop's published address, moves the back office to /admin-shop, seeds two
+# customers and five products (seed/seed.php), and swaps 8080 for a free
+# port per run (sandbox.ts).
+services:
+  prestashop:
+    image: prestashop/prestashop:9.2.0-apache
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      DB_SERVER: mariadb
+      DB_NAME: prestashop
+      DB_USER: prestashop
+      DB_PASSWD: prestashop-local
+      PS_INSTALL_AUTO: "0"
+    volumes:
+      - prestashop:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sS", "-o", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+  mariadb:
+    image: mariadb:11.8
+    environment:
+      MARIADB_DATABASE: prestashop
+      MARIADB_USER: prestashop
+      MARIADB_PASSWORD: prestashop-local
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  prestashop:
+  mariadb:

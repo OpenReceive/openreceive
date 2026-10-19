@@ -130,8 +130,11 @@ export interface Platform {
    * `fossbilling`: a FOSSBilling billing panel that fossbilling.ts installs
    * and seeds with two clients and five products; the client orders through
    * FOSSBilling's shop and pays on its payment page in Chromium.
+   * `prestashop`: a PrestaShop store that prestashop.ts installs and seeds
+   * with two customers and five products; the customer checks out in
+   * PrestaShop's shop and pays on its order confirmation page in Chromium.
    */
-  readonly host?: "btcpay" | "bolt" | "paymenter" | "fossbilling";
+  readonly host?: "btcpay" | "bolt" | "paymenter" | "fossbilling" | "prestashop";
   /** The WordPress post type the five seeded products are: WooCommerce's `product` when omitted, `download` for Easy Digital Downloads. */
   readonly wordpress_post_type?: string;
   /** Compose service that publishes the shop. WordPress when omitted. */

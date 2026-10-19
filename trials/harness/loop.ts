@@ -22,6 +22,7 @@ import { localPublishChecks } from "./local-publish.ts";
 import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
+import { livePrestashopChecks } from "./prestashop.ts";
 import { redact } from "./redact.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { inspectShop, orderStatus, prepareShop, shopChecks, startShop } from "./sandbox.ts";
@@ -397,7 +398,9 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
               ? await livePaymenterChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
               : platform.host === "fossbilling"
                 ? await liveFossbillingChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
-                : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
+                : platform.host === "prestashop"
+                  ? await livePrestashopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) })
+                  : await liveShopChecks(sandbox.baseUrl, { paid, ...(swap ? { swap } : {}) });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""

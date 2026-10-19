@@ -45,7 +45,7 @@ npm run trial -- --platform woocommerce --runs 1 --parallel 1 \
   --directions-url https://raw.githubusercontent.com/OpenReceive/openreceive/v0.4.16/docs/agents/woocommerce.md
 ```
 
-That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Easy Digital Downloads (`edd`, the same plugin on a stock WordPress with EDD), Express (`node`), Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start on Node (`tanstack-start`), Vercel (Next.js on Neon), Replit (Express on Postgres), Supabase (Express on a real Supabase project), Rails, Django, FastAPI, Flask, plain PHP, Laravel, Paymenter (its official image, seeded with clients and five products), and FOSSBilling (its official image, installed and seeded the same way). None of them include OpenReceive.
+That URL is the 0.4.16 directions, which the dry run saw fail. To test this working tree instead, serve its directions. Wired shops besides WooCommerce: Easy Digital Downloads (`edd`, the same plugin on a stock WordPress with EDD), Express (`node`), Fastify, Next.js, NestJS, SvelteKit, Nuxt, Astro, React Router, TanStack Start on Node (`tanstack-start`), Vercel (Next.js on Neon), Replit (Express on Postgres), Supabase (Express on a real Supabase project), Rails, Django, FastAPI, Flask, plain PHP, Laravel, Paymenter (its official image, seeded with clients and five products), FOSSBilling (its official image, installed and seeded the same way), and PrestaShop (its official image, installed by its own command-line installer and seeded with two customers and five downloadable widgets). None of them include OpenReceive.
 
 ```sh
 npm run trial -- --platform php --smoke

@@ -71,6 +71,12 @@ Every check must pass:
   invoice on its payment page; another client and a visitor who is not signed in are
   refused; and once the test wallet pays, the invoice reads paid, by Lightning
   and by swap;
+- on a store with its own checkout, such as PrestaShop: in a real browser, a
+  signed-in customer checks out with OpenReceive and pays on the order
+  confirmation page; another customer, with an order of their own, and a
+  visitor who is not signed in are refused; coming back to the order from the
+  account resumes the same invoice; and once the test wallet pays, the order
+  reads paid, by Lightning and by swap;
 - on a database platform such as Supabase, OpenReceive's tables end up closed
   to the platform's public API, which every visitor's browser can reach;
 - on a hosting platform:

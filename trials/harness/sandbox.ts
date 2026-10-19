@@ -8,6 +8,7 @@ import { inspectBtcpay, removeBtcpayState, setupBtcpay } from "./btcpay.ts";
 import { compose, InfraError, platformOverrideFile, walletOverrideFile } from "./docker.ts";
 import { setupFossbilling } from "./fossbilling.ts";
 import { setupPaymenter } from "./paymenter.ts";
+import { setupPrestashop } from "./prestashop.ts";
 import type { Check, Platform } from "./types.ts";
 
 const UP_TIMEOUT_MS = 6 * 60 * 1000;
@@ -195,6 +196,8 @@ export async function startShop(
     if (platform.host === "paymenter") await setupPaymenter(directory, baseUrl, seedDir);
     // A FOSSBilling merchant has run its installer and has clients and products.
     if (platform.host === "fossbilling") await setupFossbilling(directory, baseUrl, seedDir);
+    // A PrestaShop merchant has run its installer and has customers and products.
+    if (platform.host === "prestashop") await setupPrestashop(directory, baseUrl, seedDir);
     if (platform.seed === false) {
       return {
         id,
