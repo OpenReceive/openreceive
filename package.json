@@ -132,7 +132,7 @@
     "@happy-dom/global-registrator": "^20.14.5",
     "@playwright/test": "1.63.0",
     "@prisma/adapter-better-sqlite3": "^7.10.0",
-    "@prisma/adapter-mariadb": "^7.10.0",
+    "@prisma/adapter-mariadb": "^7.10.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@types/express": "^5.0.6",
