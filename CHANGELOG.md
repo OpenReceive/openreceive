@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.29 - 2026-10-19
 
 - Added (FOSSBilling): the module installs its own payment gateway, so
   FOSSBilling's extension directory can install OpenReceive with one click.

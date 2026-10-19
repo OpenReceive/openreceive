@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.29 - 2026-10-19
+
+Release with the complete 0.4.29 package family. No runtime changes from
+0.4.28.
+
 ## 0.4.28 - 2026-10-18
 
 Release with the complete 0.4.28 package family. No runtime changes from

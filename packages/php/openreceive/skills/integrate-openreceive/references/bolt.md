@@ -17,7 +17,7 @@ If your fetch tool gave you a summary, fetch that URL again for the full text.
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start Step 1 only once NWC_URI is saved, and LSC_URI_PRIMARY is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.28.
+These directions describe OpenReceive 0.4.29.
 
 Add OpenReceive to this Bolt app: a Vite React app on Bolt Cloud, with Bolt
 Database or a connected Supabase project as its database, and Supabase Edge
@@ -123,8 +123,8 @@ explicitly declined.
 
 ## Step 1 — the packages
 
-Add `@openreceive/react` at 0.4.28 or newer to the app's
-`package.json`. The function imports `npm:@openreceive/http@^0.4.28`
+Add `@openreceive/react` at 0.4.29 or newer to the app's
+`package.json`. The function imports `npm:@openreceive/http@^0.4.29`
 and `npm:@supabase/supabase-js@2` directly; add nothing else. No `pg`, no
 Postgres driver, no OpenReceive scaffold.
 

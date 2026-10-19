@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.29 - 2026-10-19
+
+Release with the complete 0.4.29 package family. The bundled agent skill's
+FOSSBilling reference covers the extension directory install. No Ruby runtime
+changes from 0.4.28.
+
 ## 0.4.28 - 2026-10-18
 
 Release with the complete 0.4.28 package family. The bundled agent skill adds
