@@ -1,0 +1,23 @@
+# PostgreSQL and a nostr relay for the Medusa lane of `npm run test:medusa`;
+# medusa.test.mjs has the full commands.
+name: openreceive-medusa-test
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: medusa
+      POSTGRES_PASSWORD: medusa
+      POSTGRES_DB: medusa
+    ports:
+      - "127.0.0.1:19154:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "medusa"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  relay:
+    image: scsibug/nostr-rs-relay:0.9.0
+    volumes:
+      - ../workers/relay/config.toml:/usr/src/app/config.toml:ro
+    ports:
+      - "127.0.0.1:19177:8080"

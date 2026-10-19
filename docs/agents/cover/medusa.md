@@ -1,6 +1,6 @@
 # OpenReceive agent directions: Medusa (0.4.29)
 
-These directions are 21 KB. Download them with your shell and follow them from Step 0:
+These directions are 22 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/medusa/full.md
 

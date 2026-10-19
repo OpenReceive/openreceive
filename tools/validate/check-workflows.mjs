@@ -32,6 +32,8 @@ const requiredWorkflows = {
     "npm run test:orms",
     // The Supabase repository over PostgREST, the storage Lovable apps use.
     "npm run test:supabase",
+    // @openreceive/medusa in a real Medusa 2 server.
+    "npm run test:medusa",
     "tools/ci/ruby-tests.sh",
     "tools/ci/ruby-gem-build.sh",
     // The Python engine (packages/python/openreceive): pytest on 3.10 and 3.13

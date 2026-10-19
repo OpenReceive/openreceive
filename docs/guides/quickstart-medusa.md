@@ -251,7 +251,14 @@ and a buyer paying an order by Lightning and by USDT on Solana in Chromium,
 after which the order is placed with its payment captured. A payment whose
 buyer never placed the order was placed by the plugin's job. An unknown
 session, another provider's session and a request without the publishable
-key were refused, and an admin refund was recorded.
+key were refused, and an admin refund was recorded. The repository's CI runs
+the plugin in a real Medusa 2.21.2 on PostgreSQL on every push: those payments
+through the store API, the refusals, the refund and the job.
+
+Tested on 2026-10-19 with the starter's production build (`next build`, then
+`next start`): a buyer paid by Lightning and by USDT on Solana as above, and
+the route served the checkout's stylesheet, as it also does under
+`next dev --turbopack`.
 
 Not tested: Medusa split into a server and a worker, Medusa Cloud, storefronts
 other than the Next.js starter, and a storefront calling Medusa from the

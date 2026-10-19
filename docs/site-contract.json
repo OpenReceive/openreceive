@@ -746,7 +746,7 @@
       "slug": "quickstart-medusa",
       "title": "Medusa Quickstart",
       "category": "quickstart",
-      "bytes": 10299
+      "bytes": 10709
     },
     {
       "path": "/guides/quickstart-vendure",
@@ -836,7 +836,7 @@
       "slug": "agent-directions-medusa",
       "title": "Agent directions (Medusa)",
       "category": "agents",
-      "bytes": 21314
+      "bytes": 21724
     },
     {
       "path": "/guides/agent-directions-vendure",
@@ -1299,7 +1299,7 @@
       "kind": "agent-directions-payload",
       "stack": "medusa",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 21314,
+      "bytes": 21724,
       "copy_button": true,
       "self_contained": true
     },

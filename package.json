@@ -64,6 +64,7 @@
     "test:e2e": "playwright test --config tests/e2e",
     "test:workers": "node --test tests/workers/*.test.mjs",
     "test:vendure": "node --test tests/vendure/*.test.mjs",
+    "test:medusa": "node --test tests/medusa/*.test.mjs",
     "test:supabase": "node --import tsx --test --test-concurrency=1 tests/supabase/*.test.mjs",
     "test:orms": "prisma generate --schema tests/orms/schema.prisma && prisma generate --schema tests/orms/pooler/schema.prisma && prisma generate --schema tests/orms/mysql/schema.prisma && node --import tsx --test tests/orms/*.test.mjs",
     "test:e2e:smoke": "playwright test --config tests/e2e lightning.spec.ts --grep @smoke",

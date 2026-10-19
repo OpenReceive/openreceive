@@ -217,6 +217,32 @@ jobs:
       - run: npm run build:packages
       - run: npm run test:supabase
 
+  js-medusa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NWC_URI: ""
+      # @openreceive/medusa in a real Medusa 2 (the Medusa trial's server, with
+      # the plugin packed from this tree) on PostgreSQL, against a wallet on a
+      # local relay: an invoice per payment session, refusals, the order
+      # placed once the payment settles, an admin refund, and the plugin's
+      # job placing the order of a buyer who left.
+      OPENRECEIVE_TEST_MEDUSA_DB_URL: postgres://medusa:medusa@127.0.0.1:19154/medusa
+      OPENRECEIVE_TEST_RELAY_URL: ws://127.0.0.1:19177
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            trials/platforms/medusa/fixture/medusa/package-lock.json
+      - run: docker compose -f tests/medusa/compose.yml up -d --wait
+      - run: npm ci
+      - run: npm run build:packages
+      - run: npm run test:medusa
+
   ruby-engine:
     runs-on: ubuntu-latest
     timeout-minutes: 20
