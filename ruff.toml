@@ -17,3 +17,7 @@ extend-exclude = [
 # The BTCPay-route test runs these in `odoo shell`, which defines `env`.
 [lint.per-file-ignores]
 "trials/btcpay-route/odoo/*.py" = ["F821"]
+# Odoo's module conventions: the manifest is a bare dict expression, and each
+# package's __init__.py imports its submodules only to register them.
+"packages/python/odoo/payment_openreceive/__manifest__.py" = ["B018"]
+"packages/python/odoo/**/__init__.py" = ["F401"]

@@ -37,7 +37,10 @@ for name, price, code in catalog:
 
 portal = env.ref("base.group_portal")  # noqa: F821
 Users = env["res.users"].with_context(no_reset_password=True)  # noqa: F821
-for login, name in (("buyer@example.test", "Demo Buyer"), ("stranger@example.test", "Other Customer")):
+for login, name in (
+    ("buyer@example.test", "Demo Buyer"),
+    ("stranger@example.test", "Other Customer"),
+):
     user = Users.search([("login", "=", login)], limit=1)
     if not user:
         user = Users.create(
@@ -61,4 +64,8 @@ for login, name in (("buyer@example.test", "Demo Buyer"), ("stranger@example.tes
     )
 
 env.cr.commit()  # noqa: F821
-print(Product.search_count([("is_published", "=", True), ("default_code", "in", [c for _, _, c in catalog])]))
+print(
+    Product.search_count(
+        [("is_published", "=", True), ("default_code", "in", [c for _, _, c in catalog])]
+    )
+)
