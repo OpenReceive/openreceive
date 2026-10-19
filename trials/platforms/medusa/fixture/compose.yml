@@ -1,0 +1,76 @@
+# A plain Medusa store, on purpose: no OpenReceive, no wallet codes. The
+# Medusa server (Medusa's default starter, 2.21.2) on PostgreSQL, and Medusa's
+# Next.js starter as its storefront. The server's start script migrates,
+# seeds Widget Shop once (medusa/src/scripts/seed.ts) and serves. The
+# Compose project name is the directory name; the harness swaps 8080 for a
+# free port per run (sandbox.ts), and that address stays across a rebuild.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: medusa
+      POSTGRES_PASSWORD: medusa-local
+      POSTGRES_DB: medusa
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "medusa"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  medusa:
+    build: ./medusa
+    ports:
+      - "127.0.0.1::9000"
+    environment:
+      DATABASE_URL: postgres://medusa:medusa-local@postgres:5432/medusa?sslmode=disable
+      STORE_CORS: http://localhost:8000
+      ADMIN_CORS: http://localhost:9000
+      AUTH_CORS: http://localhost:9000
+      JWT_SECRET: widget-shop-local-jwt
+      COOKIE_SECRET: widget-shop-local-cookie
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:9000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 120s
+  storefront:
+    build:
+      context: ./storefront
+      args:
+        NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: pk_0e9eeb38c05b76885bb8b6cfc93b6f95f7e7d7311364198ae780ae12add65e85
+    ports:
+      - "127.0.0.1:8080:8000"
+    environment:
+      MEDUSA_BACKEND_URL: http://medusa:9000
+      NEXT_PUBLIC_BASE_URL: http://localhost:8000
+      REVALIDATE_SECRET: widget-shop-local-revalidate
+    depends_on:
+      medusa:
+        condition: service_healthy
+    # The starter's middleware sends a visitor without its cache cookie back
+    # to the same page once, to set it.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8000/us',{headers:{cookie:'_medusa_cache_id=health'}}).then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 180s
+volumes:
+  database:

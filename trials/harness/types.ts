@@ -139,6 +139,9 @@ export interface Platform {
    * `odoo`: an Odoo eCommerce shop that odoo.ts creates and seeds with two
    * customers and five products; the customer checks out through Odoo's
    * shop and pays on the module's checkout page in Chromium.
+   * `medusa`: a Medusa server that seeds itself with five products, and
+   * Medusa's Next.js starter as its storefront; the buyer checks out on the
+   * storefront in Chromium and pays at its review step (medusa.ts).
    */
   readonly host?:
     | "btcpay"
@@ -147,7 +150,8 @@ export interface Platform {
     | "fossbilling"
     | "prestashop"
     | "vendure"
-    | "odoo";
+    | "odoo"
+    | "medusa";
   /** The WordPress post type the five seeded products are: WooCommerce's `product` when omitted, `download` for Easy Digital Downloads. */
   readonly wordpress_post_type?: string;
   /** Compose service that publishes the shop. WordPress when omitted. */

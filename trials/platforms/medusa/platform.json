@@ -1,0 +1,58 @@
+{
+  "slug": "medusa",
+  "name": "Medusa",
+  "directions": "docs/agents/medusa.md",
+  "prompt_name": "Medusa store with Medusa's Next.js storefront",
+  "doctor": "npx openreceive doctor",
+  "credential_store": { "kind": "dotenv", "where": "the Medusa server's .env (medusa/.env)" },
+  "allowed_install_paths": ["npm"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b",
+    "\\bsource\\s+\\S*\\.env\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "live": true,
+  "host": "medusa",
+  "service": "storefront",
+  "container_port": 8000,
+  "seed": false,
+  "wallet_services": ["medusa"],
+  "logs": ["logs", "--no-color", "--tail", "40", "medusa", "storefront"],
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-U",
+      "medusa",
+      "-d",
+      "medusa",
+      "-tAc",
+      "SELECT count(*) FROM product WHERE deleted_at IS NULL"
+    ],
+    "openreceive": [
+      "exec",
+      "-T",
+      "medusa",
+      "node",
+      "-e",
+      "const p = require('/app/package.json'); console.log(Object.keys({ ...p.dependencies, ...p.devDependencies }).some((n) => n.startsWith('@openreceive/')) ? 'yes' : 'no')"
+    ],
+    "orderStatus": [
+      "exec",
+      "-T",
+      "postgres",
+      "sh",
+      "-c",
+      "psql -U medusa -d medusa -tAc \"SELECT CASE WHEN EXISTS (SELECT 1 FROM cart_payment_collection c JOIN order_cart o ON o.cart_id = c.cart_id AND o.deleted_at IS NULL WHERE c.payment_collection_id = s.payment_collection_id AND c.deleted_at IS NULL) AND EXISTS (SELECT 1 FROM payment p WHERE p.payment_session_id = s.id AND p.captured_at IS NOT NULL) THEN 'paid' ELSE 'awaiting_payment' END FROM payment_session s WHERE s.id = '$1'\"",
+      "sh"
+    ]
+  }
+}
