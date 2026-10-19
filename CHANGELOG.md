@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+- Added (PrestaShop): a native payment module for PrestaShop 9, built as a
+  release ZIP, `openreceive-prestashop-<version>.zip`, with one `openreceive`
+  folder for the back office's **Upload a module** or for `modules/` and
+  `php bin/console prestashop:module install openreceive`. Its dependencies
+  are prefixed inside the module's `vendor.phar`, and the checkout's script
+  ships in `views/assets`. The customer picks the option at checkout;
+  PrestaShop creates the order in the module's "Awaiting Bitcoin payment"
+  state and its order confirmation page shows the checkout, as do the order's
+  page in the customer's account and guest order tracking. A settled payment
+  is recorded as an order payment whose transaction id is the payment hash,
+  in the settlement transaction on PrestaShop's own database connection;
+  after the commit the order moves to "Payment accepted", with PrestaShop's
+  invoice and email, and every checkout request and reconcile pass finishes
+  an order that missed that step. Only the order's customer, or a browser
+  PrestaShop showed the order's page to, may pay it, and every write needs
+  the page's token. Codes are saved on the module's Configure page or from
+  stdin with `bin/console openreceive:configure`, encrypted with the shop's
+  key; `openreceive:doctor`, `openreceive:test-invoice [--new]` and
+  `openreceive:reconcile` (a cron line every five minutes, since PrestaShop
+  has no scheduler) complete the commands. PrestaShop's integration page now
+  shows this module; the BTCPay Server route stays as its own guide.
+
 ## 0.4.29 - 2026-10-19
 
 - Added (FOSSBilling): the module installs its own payment gateway, so

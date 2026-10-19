@@ -383,6 +383,7 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     ["docs/guides/quickstart-edd.md", "wordpress"],
     ["docs/guides/quickstart-paymenter.md", "paymenter"],
     ["docs/guides/quickstart-fossbilling.md", "fossbilling"],
+    ["docs/guides/quickstart-prestashop.md", "prestashop"],
   ]) {
     const quickstartPath = path.join(root, quickstart);
     if (!existsSync(quickstartPath)) continue;
@@ -482,12 +483,17 @@ function dryRunPrepare(root, targetVersion) {
       "packages/php/fossbilling/composer.lock",
       "packages/php/fossbilling/src/modules/Openreceive/Support/Runtime.php",
       "packages/php/fossbilling/src/modules/Openreceive/manifest.json",
+      "packages/php/prestashop/composer.json",
+      "packages/php/prestashop/composer.lock",
+      "packages/php/prestashop/openreceive/src/Runtime.php",
+      "packages/php/prestashop/openreceive/openreceive.php",
       "CHANGELOG.md",
       "docs/internal/release-process.md",
       "docs/guides/quickstart-woocommerce.md",
       "docs/guides/quickstart-edd.md",
       "docs/guides/quickstart-paymenter.md",
       "docs/guides/quickstart-fossbilling.md",
+      "docs/guides/quickstart-prestashop.md",
       "package-lock.json",
     ]
       .filter((file, index, all) => all.indexOf(file) === index)

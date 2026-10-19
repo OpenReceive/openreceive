@@ -190,9 +190,10 @@ export function updatePhpVersions(root, targetVersion) {
       }
     }
   }
-  // The billing-panel extensions bundle the engine like the WordPress plugin,
-  // and declare their own version in Runtime::VERSION (and FOSSBilling's
-  // module manifest), which their builds check.
+  // The billing-panel extensions and the PrestaShop module bundle the engine
+  // like the WordPress plugin, and declare their own version in
+  // Runtime::VERSION (and FOSSBilling's module manifest), which their builds
+  // check.
   for (const [name, runtimePath, manifestPath] of [
     ["paymenter", "Support/Runtime.php", null],
     [
@@ -200,6 +201,7 @@ export function updatePhpVersions(root, targetVersion) {
       "src/modules/Openreceive/Support/Runtime.php",
       "src/modules/Openreceive/manifest.json",
     ],
+    ["prestashop", "openreceive/src/Runtime.php", null],
   ]) {
     const extensionDir = path.join(root, "packages/php", name);
     if (!existsSync(path.join(extensionDir, "composer.json"))) continue;
@@ -236,6 +238,19 @@ export function updatePhpVersions(root, targetVersion) {
         writeFileSync(moduleManifest, `${JSON.stringify(json, null, 2)}\n`);
         changed.push(`packages/php/${name}/${manifestPath}`);
       }
+    }
+  }
+  // PrestaShop reads a module's version from its main class.
+  const prestashopModule = path.join(root, "packages/php/prestashop/openreceive/openreceive.php");
+  if (existsSync(prestashopModule)) {
+    const before = readFileSync(prestashopModule, "utf8");
+    const after = before.replace(
+      /\$this->version = '[^']+'/,
+      `$this->version = '${targetVersion}'`,
+    );
+    if (before !== after) {
+      writeFileSync(prestashopModule, after);
+      changed.push("packages/php/prestashop/openreceive/openreceive.php");
     }
   }
   // The Laravel demo installs both packages from their monorepo paths. Their

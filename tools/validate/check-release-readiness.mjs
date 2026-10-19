@@ -361,6 +361,25 @@ for (const gemName of GEM_NAMES) {
       releaseVersion,
     "FOSSBilling module manifest version must match the workspace release",
   );
+  const prestashopManifest = readJson("packages/php/prestashop/composer.json");
+  expect(
+    prestashopManifest.require["openreceive/openreceive"] === composerConstraint(releaseVersion),
+    "PrestaShop engine constraint must match the workspace release",
+  );
+  expect(
+    readFileSync(
+      path.join(root, "packages/php/prestashop/openreceive/src/Runtime.php"),
+      "utf8",
+    ).includes(`const VERSION = '${releaseVersion}';`),
+    "PrestaShop Runtime::VERSION must match the workspace release",
+  );
+  expect(
+    readFileSync(
+      path.join(root, "packages/php/prestashop/openreceive/openreceive.php"),
+      "utf8",
+    ).includes(`$this->version = '${releaseVersion}';`),
+    "PrestaShop module version must match the workspace release",
+  );
   const wordpressHeader = readFileSync(
     path.join(root, "packages/php/wordpress/openreceive.php"),
     "utf8",

@@ -45,6 +45,7 @@ Each stack has an integration page and a quickstart on openreceive.org:
 | [Easy Digital Downloads](https://openreceive.org/integrations/easy-digital-downloads) | [Easy Digital Downloads quickstart](https://openreceive.org/guides/quickstart-edd) |
 | [Paymenter](https://openreceive.org/integrations/paymenter) | [Paymenter quickstart](https://openreceive.org/guides/quickstart-paymenter) |
 | [FOSSBilling](https://openreceive.org/integrations/fossbilling) | [FOSSBilling quickstart](https://openreceive.org/guides/quickstart-fossbilling) |
+| [PrestaShop](https://openreceive.org/integrations/prestashop) | [PrestaShop quickstart](https://openreceive.org/guides/quickstart-prestashop) |
 | [Medusa](https://openreceive.org/integrations/medusa) | [Medusa quickstart](https://openreceive.org/guides/quickstart-medusa) |
 | [Express (Node.js)](https://openreceive.org/integrations/express) | [Express quickstart](https://openreceive.org/guides/quickstart-node) |
 | [Fastify](https://openreceive.org/integrations/fastify) | [Fastify quickstart](https://openreceive.org/guides/quickstart-fastify) |

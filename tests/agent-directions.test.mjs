@@ -259,6 +259,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
         "edd",
         "paymenter",
         "fossbilling",
+        "prestashop",
         "medusa",
         "btcpay",
         "lovable",
@@ -304,6 +305,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
         "edd",
         "paymenter",
         "fossbilling",
+        "prestashop",
         "medusa",
         "btcpay",
         "lovable",
@@ -342,6 +344,7 @@ test("every library payload writes codes with the file tool, and Express, Fastif
         "edd",
         "paymenter",
         "fossbilling",
+        "prestashop",
         "medusa",
         "btcpay",
         "lovable",
@@ -459,6 +462,37 @@ test("the Easy Digital Downloads payload installs the WordPress plugin, enables 
   assert.match(stepThree, /You cannot pay the invoice/);
   assert.match(stepThree, /starts "Setup is finished" and has at most six short lines/);
   assert.match(text, /`wp eval` and reading the plugin's source are not part of setup/);
+});
+
+// PrestaShop takes the FOSSBilling shape. Its own steps: the ZIP unzips into
+// modules/, PrestaShop's console installs it, and PrestaShop has no
+// scheduler, so the last message gives the merchant the reconcile cron line.
+test("the PrestaShop payload pins the release ZIP, adds GMP, installs with bin/console and ends at test-invoice", () => {
+  const text = payloads.find(({ stack }) => stack === "prestashop").text;
+  const step = stepZero(text);
+  const stepThree = text.match(/^## Step 3\b[^\n]*\n([\s\S]*?)(?=^## )/m)?.[1] ?? "";
+  assert.ok(
+    text.includes(
+      `https://github.com/OpenReceive/openreceive/releases/download/v${release}/openreceive-prestashop-${release}.zip`,
+    ),
+    "the module ZIP is pinned to this release",
+  );
+  assert.doesNotMatch(text, /\{\{release\}\}/);
+  assert.match(text, /docker-php-ext-install gmp/);
+  assert.match(text, /unzip -oq openreceive-prestashop-[^ ]+\.zip -d modules/);
+  assert.match(text, /php bin\/console prestashop:module install openreceive/);
+  assert.match(text, /openreceive:configure --nwc-uri=- < \/tmp\/openreceive-code/);
+  assert.match(text, /--lsc-uri-primary=-/);
+  assert.match(text, /file-editing tool, not a shell command/);
+  assert.match(text, /docker compose exec -T -u www-data prestashop php bin\/console/);
+  assert.match(text, /Run `php` as the web server's user, never as root\./);
+  assert.match(step, /this message IS the walkthrough/);
+  assert.match(stepThree, /php bin\/console openreceive:test-invoice --new/);
+  assert.match(stepThree, /You cannot pay the invoice/);
+  assert.match(stepThree, /starts "Setup is finished" and has at most six short lines/);
+  assert.match(stepThree, /php bin\/console openreceive:reconcile/);
+  assert.match(stepThree, /do not add it yourself/);
+  assert.match(text, /Never read or run anything from another\s+project/);
 });
 
 // FOSSBilling takes the Paymenter shape. Its own steps: the official image

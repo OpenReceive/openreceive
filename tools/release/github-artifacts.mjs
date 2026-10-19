@@ -27,6 +27,7 @@ export function releaseArtifacts(version, gemVersion = toGemVersion(root, versio
     `dist/openreceive-fossbilling-${version}.zip`,
     // The module alone: the package FOSSBilling's extension directory installs.
     `dist/openreceive-fossbilling-module-${version}.zip`,
+    `dist/openreceive-prestashop-${version}.zip`,
     `dist/openreceive-docs-${version}.tar.gz`,
   ];
 }

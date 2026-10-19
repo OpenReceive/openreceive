@@ -47,6 +47,10 @@ const GENERATED_REFERENCES = [
     target: "skills/integrate-openreceive/references/fossbilling.md",
   },
   {
+    source: "docs/agents/prestashop.md",
+    target: "skills/integrate-openreceive/references/prestashop.md",
+  },
+  {
     source: "docs/agents/medusa.md",
     target: "skills/integrate-openreceive/references/medusa.md",
   },

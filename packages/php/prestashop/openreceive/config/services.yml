@@ -1,0 +1,17 @@
+# The module's console commands, for PrestaShop's bin/console. PrestaShop
+# loads this file for an enabled module and its vendor/autoload.php before.
+services:
+  _defaults:
+    public: false
+
+  PrestaShop\Module\OpenReceive\Commands\Configure:
+    tags: [console.command]
+
+  PrestaShop\Module\OpenReceive\Commands\Doctor:
+    tags: [console.command]
+
+  PrestaShop\Module\OpenReceive\Commands\TestInvoice:
+    tags: [console.command]
+
+  PrestaShop\Module\OpenReceive\Commands\Reconcile:
+    tags: [console.command]

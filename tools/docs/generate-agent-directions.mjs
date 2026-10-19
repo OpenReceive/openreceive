@@ -177,6 +177,14 @@ const STACKS = [
       "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its admin-area screens are only for a FOSSBilling with no shell.",
   },
   {
+    stack: "prestashop",
+    source: "docs/agents/src/prestashop.md",
+    quickstart: "docs/guides/quickstart-prestashop.md",
+    brief: BILLING_PANEL_BRIEF,
+    quickstartRole:
+      "Steps 0–3 above are the setup and this is their reference: where the two differ, the steps win, and its back-office screens are only for a PrestaShop with no shell.",
+  },
+  {
     stack: "medusa",
     source: "docs/agents/src/medusa.md",
     quickstart: "docs/guides/quickstart-medusa.md",
@@ -342,6 +350,8 @@ const UNLISTED_GUIDES = {
   "quickstart-paymenter": "inlined in full below, or another stack's",
   "agent-directions-fossbilling": "this payload's own page",
   "quickstart-fossbilling": "inlined in full below, or another stack's",
+  "agent-directions-prestashop": "this payload's own page",
+  "quickstart-prestashop": "inlined in full below, or another stack's",
   "agent-directions-medusa": "this payload's own page",
   "quickstart-medusa": "inlined in full below, or another stack's",
   "quickstart-woocommerce": "inlined in full below, or another stack’s",
@@ -352,7 +362,7 @@ const UNLISTED_GUIDES = {
   magento:
     "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
   prestashop:
-    "a store that takes payments through BTCPay Server; the merchant's guide, on its integration page",
+    "PrestaShop through BTCPay Server, the other way in; the PrestaShop quickstart links it",
   vercel: "for people who hand these directions to v0; it links them, not the reverse",
   lovable: "for people who build on Lovable; the Lovable payload links it, not the other stacks",
   "agent-directions-lovable": "this payload's own page",
@@ -518,6 +528,33 @@ const UNLISTED_GUIDES_BY_STACK = {
     supabase: "FOSSBilling keeps its data in MySQL or MariaDB",
     serverless: "FOSSBilling runs on an ordinary PHP host",
     "mobile-apps": "FOSSBilling's own invoice page is the payment page",
+    "wordpress-hosting": "WordPress hosts only",
+  },
+  prestashop: {
+    ...Object.fromEntries(
+      [
+        "authorization",
+        "storage",
+        "frontend-checkout",
+        "checkout-ux",
+        "headless-checkout",
+        "custom-checkout-route",
+        "provider-registry",
+        "host-testing",
+        "rate-limiting",
+        "environment-variables",
+        "deploying",
+        "api-reference",
+        "react-material-ui-recipe",
+        "node-orms",
+      ].map((slug) => [
+        slug,
+        "the PrestaShop module supplies these internals; its quickstart documents the merchant setup",
+      ]),
+    ),
+    supabase: "PrestaShop keeps its data in MySQL or MariaDB",
+    serverless: "PrestaShop runs on an ordinary PHP host",
+    "mobile-apps": "PrestaShop's own order confirmation page is the payment page",
     "wordpress-hosting": "WordPress hosts only",
   },
   medusa: {

@@ -762,6 +762,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-prestashop",
+      "title": "PrestaShop Quickstart",
+      "source_path": "docs/guides/quickstart-prestashop.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "wordpress-hosting",
       "title": "WordPress Hosting Requirements",
       "source_path": "docs/guides/wordpress-hosting.md",
@@ -805,6 +813,14 @@
       "slug": "agent-directions-fossbilling",
       "title": "Agent directions (FOSSBilling)",
       "source_path": "docs/agents/fossbilling.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-prestashop",
+      "title": "Agent directions (PrestaShop)",
+      "source_path": "docs/agents/prestashop.md",
       "category": "agents",
       "audience": "developer",
       "public": true

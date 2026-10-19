@@ -74,6 +74,11 @@ const AGENT_PAYLOADS = [
     stack: "fossbilling",
   },
   {
+    path: "/agent-directions/prestashop.md",
+    source: "docs/agents/prestashop.md",
+    stack: "prestashop",
+  },
+  {
     path: "/agent-directions/medusa.md",
     source: "docs/agents/medusa.md",
     stack: "medusa",
@@ -488,6 +493,34 @@ const FRAMEWORKS = [
       mobile: STORE_MOBILE,
     },
   },
+  // A PHP store. The release ZIP is a PrestaShop payment module; its Tested
+  // badge comes from agent trials. PrestaShop through BTCPay Server stays a
+  // guide (docs/guides/prestashop.md) that the quickstart links, and its
+  // BTCPay-route run stays in trials/passed.json under its own key.
+  {
+    id: "prestashop",
+    label: "PrestaShop",
+    type: "plugin",
+    family: "php",
+    quickstart_slug: "quickstart-prestashop",
+    agent_stack: "prestashop",
+    adapter_package: "openreceive-prestashop",
+    install:
+      "Upload openreceive-prestashop-<version>.zip in Modules → Module Manager → Upload a module, or unzip it into modules/ and run php bin/console prestashop:module install openreceive",
+    requires: "PrestaShop ≥ 9, PHP ≥ 8.2, GMP and sodium",
+    demo: null,
+    example_path: "packages/php/prestashop",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "PrestaShop 9.2.0, its official Docker image with GMP added, on PHP 8.5",
+      databases: "MySQL or MariaDB, PrestaShop's own database",
+      secrets: "The module's configuration, encrypted by PrestaShop with the shop's own key",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's page.",
+      mobile: STORE_MOBILE,
+    },
+  },
   // A Node commerce platform. The npm package is a Medusa plugin with a
   // payment provider; the storefront shows the React checkout.
   {
@@ -565,30 +598,6 @@ const FRAMEWORKS = [
       databases: "Magento's MySQL or MariaDB and BTCPay Server's own PostgreSQL",
       secrets:
         "The wallet code in BTCPay's OpenReceive settings; Magento keeps only a BTCPay API key limited to invoices and webhooks",
-      refunds:
-        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
-      mobile: STORE_MOBILE,
-    },
-  },
-  {
-    id: "prestashop",
-    label: "PrestaShop",
-    type: "via-btcpay",
-    family: "btcpay",
-    quickstart_slug: "prestashop",
-    agent_stack: "btcpay",
-    adapter_package: "btcpayserver/prestashop-plugin",
-    install: "Upload btcpay.zip from btcpayserver/prestashop-plugin in Modules → Module Manager",
-    requires: "PrestaShop 8 or 9, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
-    demo: null,
-    example_path: null,
-    video: null,
-    shared_checkout_demo: false,
-    capabilities: {
-      runtime: "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3, on BTCPay Server 2.4.5",
-      databases: "PrestaShop's MySQL or MariaDB and BTCPay Server's own PostgreSQL",
-      secrets:
-        "The wallet code in BTCPay's OpenReceive settings; PrestaShop keeps only a BTCPay API key limited to one store's settings, invoices and webhooks",
       refunds:
         "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
       mobile: STORE_MOBILE,
@@ -926,8 +935,10 @@ const passed = new Map(
       ) {
         throw new Error(`${TARGET}: invalid trials/passed.json entry ${JSON.stringify(entry)}`);
       }
+      // Its own key: a store can have a BTCPay-route run and an agent
+      // trial under the same name (PrestaShop has both routes).
       return [
-        entry.trial,
+        `btcpay-route/${entry.trial}`,
         {
           date: entry.date,
           release: entry.release,
@@ -1069,12 +1080,8 @@ const frameworks = FRAMEWORKS.map((framework) => {
       CAPABILITY_FIELDS.map((field) => [field, capabilities[field]]),
     ),
     tested: viaBtcpay
-      ? passed.get(row.id)?.via === "btcpay-route"
-        ? passed.get(row.id)
-        : null
-      : ((row.agent_stack && passed.get(row.agent_stack)?.via === undefined
-          ? passed.get(row.agent_stack)
-          : null) ?? null),
+      ? (passed.get(`btcpay-route/${row.id}`) ?? null)
+      : ((row.agent_stack && passed.get(row.agent_stack)) ?? null),
   };
 });
 

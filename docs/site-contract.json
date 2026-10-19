@@ -175,7 +175,7 @@
       "slug": "how-we-test-platforms",
       "title": "How We Test Platforms",
       "category": "guide",
-      "bytes": 5871
+      "bytes": 6287
     },
     {
       "path": "/guides/quickstart-rails",
@@ -759,6 +759,16 @@
       "bytes": 11280
     },
     {
+      "path": "/guides/quickstart-prestashop",
+      "markdown_path": "/guides/quickstart-prestashop.md",
+      "source": "docs/guides/quickstart-prestashop.md",
+      "kind": "guide",
+      "slug": "quickstart-prestashop",
+      "title": "PrestaShop Quickstart",
+      "category": "quickstart",
+      "bytes": 11611
+    },
+    {
       "path": "/guides/wordpress-hosting",
       "markdown_path": "/guides/wordpress-hosting.md",
       "source": "docs/guides/wordpress-hosting.md",
@@ -819,6 +829,16 @@
       "bytes": 24526
     },
     {
+      "path": "/guides/agent-directions-prestashop",
+      "markdown_path": "/guides/agent-directions-prestashop.md",
+      "source": "docs/agents/prestashop.md",
+      "kind": "agent-directions",
+      "slug": "agent-directions-prestashop",
+      "title": "Agent directions (PrestaShop)",
+      "category": "agents",
+      "bytes": 24949
+    },
+    {
       "path": "/api_docs",
       "markdown_path": "/api_docs.md",
       "source": "docs/guides/api-reference.md",
@@ -837,7 +857,7 @@
       "slug": "agents",
       "title": "Using OpenReceive with coding agents",
       "category": "agents",
-      "bytes": 5127
+      "bytes": 5204
     },
     {
       "path": "/wordpress",
@@ -1177,6 +1197,27 @@
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
       "bytes": 24526,
+      "copy_button": true,
+      "self_contained": true
+    },
+    {
+      "path": "/agent-directions/prestashop.md",
+      "source": "docs/agents/cover/prestashop.md",
+      "kind": "agent-directions-cover",
+      "stack": "prestashop",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 297,
+      "copy_button": false,
+      "self_contained": false,
+      "full_path": "/agent-directions/prestashop/full.md"
+    },
+    {
+      "path": "/agent-directions/prestashop/full.md",
+      "source": "docs/agents/prestashop.md",
+      "kind": "agent-directions-payload",
+      "stack": "prestashop",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 24949,
       "copy_button": true,
       "self_contained": true
     },
@@ -1727,6 +1768,35 @@
       }
     },
     {
+      "id": "prestashop",
+      "label": "PrestaShop",
+      "family": "php",
+      "type": "plugin",
+      "heading": "Accept Bitcoin & Stablecoin Payments With PrestaShop",
+      "quickstart_slug": "quickstart-prestashop",
+      "quickstart_path": "/guides/quickstart-prestashop",
+      "quickstart_title": "PrestaShop Quickstart",
+      "agent_stack": "prestashop",
+      "agent_payload_path": "/agent-directions/prestashop.md",
+      "agent_full_path": "/agent-directions/prestashop/full.md",
+      "adapter_package": "openreceive-prestashop",
+      "install": "Upload openreceive-prestashop-<version>.zip in Modules → Module Manager → Upload a module, or unzip it into modules/ and run php bin/console prestashop:module install openreceive",
+      "requires": "PrestaShop ≥ 9, PHP ≥ 8.2, GMP and sodium",
+      "example_path": "packages/php/prestashop",
+      "example_url": "https://github.com/OpenReceive/openreceive/tree/master/packages/php/prestashop",
+      "demo_port": null,
+      "video": null,
+      "shared_checkout_demo": false,
+      "capabilities": {
+        "runtime": "PrestaShop 9.2.0, its official Docker image with GMP added, on PHP 8.5",
+        "databases": "MySQL or MariaDB, PrestaShop's own database",
+        "secrets": "The module's configuration, encrypted by PrestaShop with the shop's own key",
+        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A customer reclaims a swap deposit that never converted from the order's page.",
+        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
+      },
+      "tested": null
+    },
+    {
       "id": "medusa",
       "label": "Medusa",
       "family": "node",
@@ -1822,41 +1892,6 @@
         "release": "0.4.13",
         "via": "btcpay-route",
         "store": "Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin 2.0.12",
-        "btcpay": "2.4.5"
-      }
-    },
-    {
-      "id": "prestashop",
-      "label": "PrestaShop",
-      "family": "btcpay",
-      "type": "via-btcpay",
-      "heading": "Accept Bitcoin & Stablecoin Payments With PrestaShop",
-      "quickstart_slug": "prestashop",
-      "quickstart_path": "/guides/prestashop",
-      "quickstart_title": "PrestaShop via BTCPay Server",
-      "agent_stack": "btcpay",
-      "agent_payload_path": "/agent-directions/btcpay.md",
-      "agent_full_path": "/agent-directions/btcpay/full.md",
-      "adapter_package": "btcpayserver/prestashop-plugin",
-      "install": "Upload btcpay.zip from btcpayserver/prestashop-plugin in Modules → Module Manager",
-      "requires": "PrestaShop 8 or 9, and BTCPay Server ≥ 2.4.4 with the OpenReceive plugin",
-      "example_path": null,
-      "example_url": null,
-      "demo_port": null,
-      "video": null,
-      "shared_checkout_demo": false,
-      "capabilities": {
-        "runtime": "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3, on BTCPay Server 2.4.5",
-        "databases": "PrestaShop's MySQL or MariaDB and BTCPay Server's own PostgreSQL",
-        "secrets": "The wallet code in BTCPay's OpenReceive settings; PrestaShop keeps only a BTCPay API key limited to one store's settings, invoices and webhooks",
-        "refunds": "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only. A payer reclaims a swap deposit that never converted from the BTCPay invoice page.",
-        "mobile": "No app SDK. Payers pay on the store's web checkout, and an app that opens it follows the same app store rules as any web checkout."
-      },
-      "tested": {
-        "date": "2026-10-15",
-        "release": "0.4.13",
-        "via": "btcpay-route",
-        "store": "PrestaShop 9.2.0 with btcpayserver/prestashop-plugin 6.3.3",
         "btcpay": "2.4.5"
       }
     },
@@ -2789,7 +2824,7 @@
         "source": "docs/site/llms.txt",
         "content_type": "text/markdown; charset=utf-8",
         "kind": "llms-index",
-        "bytes": 9172
+        "bytes": 9404
       },
       {
         "path": "/openapi.yaml",

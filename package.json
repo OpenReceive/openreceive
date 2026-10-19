@@ -98,6 +98,8 @@
     "release:paymenter:build": "node tools/release/paymenter-extension.mjs build",
     "release:fossbilling:plan": "node tools/release/fossbilling-extension.mjs plan",
     "release:fossbilling:build": "node tools/release/fossbilling-extension.mjs build",
+    "release:prestashop:plan": "node tools/release/prestashop-module.mjs plan",
+    "release:prestashop:build": "node tools/release/prestashop-module.mjs build",
     "test:e2e:wordpress": "playwright test --config tests/e2e-wordpress/playwright.config.ts",
     "test:wordpress": "bash tools/ci/wordpress-tests.sh",
     "trial": "node --import tsx trials/harness/run.ts",
