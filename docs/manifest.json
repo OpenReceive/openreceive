@@ -754,6 +754,14 @@
       "public": true
     },
     {
+      "slug": "quickstart-vendure",
+      "title": "Vendure Quickstart",
+      "source_path": "docs/guides/quickstart-vendure.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "quickstart-fossbilling",
       "title": "FOSSBilling Quickstart",
       "source_path": "docs/guides/quickstart-fossbilling.md",
@@ -805,6 +813,14 @@
       "slug": "agent-directions-medusa",
       "title": "Agent directions (Medusa)",
       "source_path": "docs/agents/medusa.md",
+      "category": "agents",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "agent-directions-vendure",
+      "title": "Agent directions (Vendure)",
+      "source_path": "docs/agents/vendure.md",
       "category": "agents",
       "audience": "developer",
       "public": true

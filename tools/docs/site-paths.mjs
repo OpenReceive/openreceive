@@ -108,6 +108,7 @@ export const AGENT_PAYLOAD_PATHS = [
   "/agent-directions/fossbilling.md",
   "/agent-directions/prestashop.md",
   "/agent-directions/medusa.md",
+  "/agent-directions/vendure.md",
 ];
 
 /** The full directions behind a cover: what the copy button copies and the cover's curl fetches. */

@@ -23,6 +23,27 @@
   `openreceive:reconcile` (a cron line every five minutes, since PrestaShop
   has no scheduler) complete the commands. PrestaShop's integration page now
   shows this module; the BTCPay Server route stays as its own guide.
+- Added (Vendure): `@openreceive/vendure`, a plugin and payment method
+  handler for Vendure 3.3+ (Node 22.12+, PostgreSQL, MySQL or MariaDB). Add
+  `OpenReceivePlugin` from `@openreceive/vendure/plugin` to vendure-config.
+  The buyer pays at the storefront's checkout before the order is placed:
+  `POST /openreceive/order`, with the buyer's Vendure session, moves the
+  active order to ArrangingPayment and answers its reference, the order's
+  code, currency and amount due, so a changed cart gets a new invoice. Only
+  that session, or the signed-in customer who owns the order, may pay it.
+  Once the payment settles, the plugin adds a settled Vendure payment (the
+  payment hash as transaction id) under a lock on the order, and Vendure
+  places it; the Shop API's `addPaymentToOrder` cannot add one. A scheduled
+  task on the worker, every minute, places orders whose buyer left. The
+  plugin keeps its attempts in Vendure's database over Vendure's own
+  connection, and a migration creates the two tables when the server runs
+  its migrations. `dist/enable-openreceive.js` creates the payment method
+  through the Admin API. A refund made in the dashboard stays pending. Docs:
+  the Vendure quickstart with the code for Vendure's Next.js starter, and
+  agent directions (/agent-directions/vendure.md, `references/vendure.md`
+  in the skill). A trial platform (trials/platforms/vendure) runs Vendure
+  3.8, its worker and the Next.js starter, and a CI lane runs the plugin
+  against a real Vendure server on PostgreSQL.
 
 ## 0.4.29 - 2026-10-19
 

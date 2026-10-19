@@ -54,6 +54,10 @@ const GENERATED_REFERENCES = [
     source: "docs/agents/medusa.md",
     target: "skills/integrate-openreceive/references/medusa.md",
   },
+  {
+    source: "docs/agents/vendure.md",
+    target: "skills/integrate-openreceive/references/vendure.md",
+  },
   { source: "docs/agents/node.md", target: "skills/integrate-openreceive/references/node.md" },
   {
     source: "docs/agents/fastify.md",

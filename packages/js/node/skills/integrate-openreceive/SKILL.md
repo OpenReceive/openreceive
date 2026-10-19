@@ -6,7 +6,7 @@ description: >
   SvelteKit, Nuxt, Astro, React Router, TanStack Start, Rails,
   Python, Django, FastAPI, Flask, Laravel, plain PHP, WordPress/WooCommerce,
   Easy Digital Downloads,
-  Paymenter, FOSSBilling, PrestaShop, Medusa, Lovable, Bolt, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
+  Paymenter, FOSSBilling, PrestaShop, Medusa, Vendure, Lovable, Bolt, Supabase, React, Vue, Svelte, Angular, or plain HTML applications,
   mobile apps (React Native, Expo, Flutter, Swift, Kotlin) through their
   server, or connecting BTCPay Server to a receive-only NWC wallet. A configured swap provider
   converts these payments to BTC over Lightning in the merchant's connected
@@ -65,6 +65,9 @@ connected wallet; asset and network availability depends on the provider.
    - Medusa: [references/medusa.md](references/medusa.md) — the
      `@openreceive/medusa` plugin and payment provider in the Medusa server,
      and the React checkout in the storefront; no hooks to write.
+   - Vendure: [references/vendure.md](references/vendure.md) — the
+     `@openreceive/vendure` plugin and payment method handler in the Vendure
+     server, and the React checkout in the storefront; no hooks to write.
    - Lovable (TanStack Start on Cloudflare Workers, with Supabase):
      [references/lovable.md](references/lovable.md) — no terminal; codes are
      Lovable secrets and payments go through Supabase's HTTPS API.

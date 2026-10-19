@@ -261,6 +261,7 @@ test("every library payload ends with setup finished and keeps the agent in the 
         "fossbilling",
         "prestashop",
         "medusa",
+        "vendure",
         "btcpay",
         "lovable",
         "bolt",
@@ -307,6 +308,7 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
         "fossbilling",
         "prestashop",
         "medusa",
+        "vendure",
         "btcpay",
         "lovable",
         "bolt",
@@ -346,6 +348,7 @@ test("every library payload writes codes with the file tool, and Express, Fastif
         "fossbilling",
         "prestashop",
         "medusa",
+        "vendure",
         "btcpay",
         "lovable",
         "bolt",
@@ -564,6 +567,40 @@ test("the Medusa payload installs the plugin, offers it in the regions, proves t
   assert.match(text, /Do not add\s+containers, services, workers or cron jobs/);
   assert.match(text, /Never read or run anything from another\s+project/);
   assert.match(text, /Do not write your own payment provider/);
+});
+
+// Vendure takes Medusa's shape: the codes in the Vendure server's .env by
+// name with the file tool, a plugin from npm, a script that creates the
+// payment method, and no hooks. The storefront's route serves the checkout's
+// stylesheet and forwards its calls with the buyer's session, and the curl
+// through it must answer FORBIDDEN.
+test("the Vendure payload installs the plugin, creates the method, proves the routes and stops", () => {
+  const text = payloads.find(({ stack }) => stack === "vendure").text;
+  const step = stepZero(text);
+  assert.ok(
+    step.includes("`grep -E '^(NWC_URI|LSC_URI_PRIMARY)=.' .env | cut -d= -f1`"),
+    "Step 0 checks the Vendure server's .env by name",
+  );
+  assert.match(step, /with your file-editing\s+tool/);
+  assert.match(step, /Never write it with a shell command/);
+  assert.match(step, /this message IS the walkthrough/);
+  assert.match(step, /do not tell them to revoke or replace a\s+code because it was pasted here/);
+  assert.match(text, /npm install @openreceive\/vendure/);
+  assert.match(text, /import \{ OpenReceivePlugin \} from "@openreceive\/vendure\/plugin"/);
+  assert.match(text, /node node_modules\/@openreceive\/vendure\/dist\/enable-openreceive\.js/);
+  assert.match(text, /npx openreceive doctor --url http:\/\/localhost:3000/);
+  assert.match(text, /Do not import `@openreceive\/react\/styles\.css`/);
+  assert.match(text, /\/openreceive\/order/);
+  assert.match(text, /"code":"FORBIDDEN"/);
+  assert.match(text, /Never `pkill` or `killall` by name/);
+  assert.match(text, /You cannot pay an invoice/);
+  assert.match(
+    text,
+    /Your last message starts "Setup is finished" and has at most five short\s+lines/,
+  );
+  assert.match(text, /Do not add\s+containers, services, workers or cron jobs/);
+  assert.match(text, /Never read or run anything from another\s+project/);
+  assert.match(text, /Do not write your own payment handler/);
 });
 
 // Lovable's agent has no terminal and Lovable keeps codes as project secrets:

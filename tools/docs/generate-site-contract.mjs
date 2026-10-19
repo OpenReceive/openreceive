@@ -83,6 +83,11 @@ const AGENT_PAYLOADS = [
     source: "docs/agents/medusa.md",
     stack: "medusa",
   },
+  {
+    path: "/agent-directions/vendure.md",
+    source: "docs/agents/vendure.md",
+    stack: "vendure",
+  },
   { path: "/agent-directions/lovable.md", source: "docs/agents/lovable.md", stack: "lovable" },
   {
     path: "/agent-directions/sveltekit.md",
@@ -545,6 +550,33 @@ const FRAMEWORKS = [
         "NWC_URI, and LSC_URI_PRIMARY for swaps, in the Medusa server's environment or .env file, never in the storefront",
       refunds:
         "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, and a refund made in the Medusa admin is recorded only. A buyer reclaims a swap deposit that never converted from the same checkout.",
+      mobile: STORE_MOBILE,
+    },
+  },
+  // A Node commerce platform. The npm package is a Vendure plugin with a
+  // payment method handler; the storefront shows the React checkout.
+  {
+    id: "vendure",
+    label: "Vendure",
+    type: "plugin",
+    family: "node",
+    quickstart_slug: "quickstart-vendure",
+    agent_stack: "vendure",
+    adapter_package: "@openreceive/vendure",
+    install:
+      "npm install @openreceive/vendure, add OpenReceivePlugin to vendure-config, then restart the server and the worker",
+    requires: "Vendure ≥ 3.3, Node ≥ 22.12, PostgreSQL, MySQL or MariaDB",
+    demo: null,
+    example_path: "packages/js/vendure",
+    video: null,
+    shared_checkout_demo: false,
+    capabilities: {
+      runtime: "Vendure 3.8.0 on Node 22 with its worker, and Vendure's Next.js starter",
+      databases: "PostgreSQL, MySQL or MariaDB, Vendure's own database (PostgreSQL tested)",
+      secrets:
+        "NWC_URI, and LSC_URI_PRIMARY for swaps, in the Vendure server's environment or .env file, never in the storefront",
+      refunds:
+        "Refund a settled Lightning payment from your own wallet: the wallet code is receive-only, and a refund made in the Vendure dashboard stays pending. A buyer reclaims a swap deposit that never converted from the same checkout.",
       mobile: STORE_MOBILE,
     },
   },
