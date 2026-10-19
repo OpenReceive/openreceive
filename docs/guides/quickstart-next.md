@@ -19,8 +19,8 @@ stays the same.
 | Server   | `@openreceive/next`, `@openreceive/express`, `@openreceive/fastify`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Express: [quickstart-node.md](quickstart-node.md) · Fastify:
-[quickstart-fastify.md](quickstart-fastify.md). This page is the Next.js one.
+Express: [Express quickstart](quickstart-node.md) · Fastify:
+[Fastify quickstart](quickstart-fastify.md). This page is the Next.js one.
 An agent given the Express guide goes wrong on Next.js in three places: Next
 needs no `dotenv`, no `app.use`, and it needs a client component for the
 checkout.

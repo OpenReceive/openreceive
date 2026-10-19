@@ -30,7 +30,8 @@ On BTCPay Server, you paste the same codes into the plugin's setup page. The
 swap pays the BTCPay invoice's existing Lightning BOLT11. The provider states
 and reasons below are the same. The refund form, though, is on BTCPay's own
 checkout page ([BTCPay quickstart](quickstart-btcpay.md)). The rest of this
-guide covers the Node and Rails hosts.
+guide covers the code integrations (Node, Rails, Python and PHP); the store
+plugins follow the same rules with their own settings pages.
 
 OpenReceive quotes a small, fixed list of pay-in assets into Lightning. It does
 not merge in the provider's full market list.

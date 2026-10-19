@@ -1,5 +1,10 @@
 # Payment safety upgrade and repair
 
+How to upgrade the OpenReceive packages in a code integration without losing
+payment state, and how deadlines decide when an unpaid attempt closes. Store
+plugins (WooCommerce, Easy Digital Downloads, Paymenter, FOSSBilling, Medusa)
+upgrade with their platform's own update step instead.
+
 To upgrade:
 
 1. Stop the old workers.
@@ -15,8 +20,7 @@ version from a future release, the library fails closed instead of guessing. Do
 not delete payment rows or reset their statuses to make an upgrade run.
 
 BTCPay needs additive migrations and has its own
-[upgrade and recovery procedure](https://github.com/OpenReceive/openreceive/blob/main/packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md).
-This source change does not include a registry or BTCPay release.
+[upgrade and recovery procedure](https://github.com/OpenReceive/openreceive/blob/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md).
 
 ## Payment and instruction deadlines
 

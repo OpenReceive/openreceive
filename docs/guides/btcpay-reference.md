@@ -18,13 +18,13 @@ For a step-by-step setup, see the
 
 | Plugin | BTCPay Server | .NET | NNostr.Client |
 | --- | --- | --- | --- |
-| 0.4.11 | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
+| 0.4.13 | 2.4.4 or later (compiled against 2.4.4) | 10 | 0.0.55 |
 
 The plugin identifier is `BTCPayServer.Plugins.OpenReceive`. The plugin is
 versioned and published separately from the npm and gem releases.
 
-Upgrading to 0.4.11 needs planning. It adds database migrations and changes how
-existing rows are read. Before you install it over an earlier version, read
+Upgrading from a version before 0.4.11 needs planning: 0.4.11 added database
+migrations and changed how existing rows are read. Before you install it over an earlier version, read
 [the plugin's payment safety upgrade notes](https://github.com/OpenReceive/openreceive/blob/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md).
 
 ## The connection string
@@ -86,7 +86,8 @@ are never in the connection string.
 | `LastPreflight` | A non-secret snapshot of the last wallet test: when it ran, ok or the refusal code, methods, encryption, notifications, network, and relay round trip. |
 
 Turning swaps on raises the store's invoice expiration to 60 minutes if it is
-shorter. The plugin never lowers it.
+shorter; it never lowers it. Saving the wallet is what caps an expiration
+above 24 hours at 24 hours (see `CreateInvoice` below).
 
 ## Routes
 
@@ -390,7 +391,9 @@ plugin's rows only make sure a payment is found.
 
 ## Operations
 
-- **Rotating the NWC code**: paste the new code, click Test, then Use. The old
+- **Rotating the NWC code**: on the store's OpenReceive page, open **Change NWC
+  receive code**, paste the new code and click **Save NWC Code**; saving tests
+  the wallet first and keeps the old code if the test fails. The old
   connection's in-memory scan memo is dropped when BTCPay restarts. Until then
   it costs nothing.
 - **Rotating the LSC code**: save the new URI. Rows created under the old

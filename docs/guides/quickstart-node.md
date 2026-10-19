@@ -19,8 +19,8 @@ stays the same.
 | Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Fastify: [quickstart-fastify.md](quickstart-fastify.md) · Next.js:
-[quickstart-next.md](quickstart-next.md). This page is the Express one.
+Fastify: [Fastify quickstart](quickstart-fastify.md) · Next.js:
+[Next.js quickstart](quickstart-next.md). This page is the Express one.
 
 On a fresh project, also install what this guide assumes you already have: the
 framework and an env loader (`npm install express dotenv`). Install your ORM

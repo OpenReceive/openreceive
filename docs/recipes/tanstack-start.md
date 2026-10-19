@@ -140,7 +140,7 @@ npm install @openreceive/http @openreceive/react
    ) returns void language plpgsql as $$
    begin
      update public.orders set status = 'paid'
-      where id = p_reference::uuid and status = 'pending';
+      where id = p_reference::uuid and status = 'awaiting_payment'; -- your unpaid status
    end
    $$;
    ```
@@ -192,10 +192,14 @@ There is no `onPaid`: `openreceive_on_paid` is the fulfillment. `findOrder`
 reads the order with your server-side Supabase client; in a Lovable app that
 is `supabaseAdmin` from `@/integrations/supabase/client.server`.
 
-The checkout calls the payment routes from the browser with the page's
-cookies, and nothing else. A Lovable app keeps its Supabase sign-in in the
-browser, not in a cookie, so `authorize` cannot see who is signed in. Give
-the buyer a cookie of their own instead: create orders in a server function
+By default the checkout calls the payment routes from the browser with the
+page's cookies and nothing else. A Lovable app keeps its Supabase sign-in in
+the browser, not in a cookie, so `authorize` cannot see who is signed in from
+those cookies. Since 0.4.25 the React `<Checkout>` also takes a `fetch` that
+sends the access token
+([Use Supabase Auth in `authorize`](../guides/supabase.md#4-use-supabase-auth-in-authorize)), but
+this recipe keeps the simpler route that works with every checkout: give the
+buyer a cookie of their own. Create orders in a server function
 that sets an HttpOnly `buyer` cookie (a random value, kept across orders) and
 stores the same value on the order as `buyer_token`. `currentBuyer` reads it
 back from the request's `cookie` header.

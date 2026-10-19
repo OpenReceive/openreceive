@@ -223,4 +223,3 @@ workers or cron jobs: the module's scheduled action runs inside Odoo.
 - [Lightning Swap Connect URI](https://openreceive.org/guides/lightning-swap-connect.md)
 - [Security](https://openreceive.org/guides/security.md)
 - [Price Feeds](https://openreceive.org/guides/price-feeds.md)
-- [Payment Safety Upgrade](https://openreceive.org/guides/payment-safety-upgrade.md)

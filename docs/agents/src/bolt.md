@@ -106,7 +106,9 @@ explicitly declined.
 
 Add `@openreceive/react` at {{release}} or newer to the app's
 `package.json`. The function imports `npm:@openreceive/http@^{{release}}`
-and `npm:@supabase/supabase-js@2` directly; add nothing else. No `pg`, no
+and `npm:@supabase/supabase-js@2` directly; add nothing else. (The recipe
+below writes `^0.4.27`, the oldest release with the `cors` option; both
+resolve to the newest 0.4.x.) No `pg`, no
 Postgres driver, no OpenReceive scaffold.
 
 ## Step 2 — the migration

@@ -13,12 +13,20 @@ URLs, function timeouts, and why no cron job is needed.
 
 | Stack | Floor |
 | --- | --- |
-| Node (Express, Fastify, Next.js) | Node ≥ 22; the App Router on Next.js ≥ 15; PostgreSQL, SQLite, or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 (InnoDB) |
+| Node (Express, Fastify, Next.js, NestJS) | Node ≥ 22; the App Router on Next.js ≥ 15; NestJS ≥ 10 on its Express platform; PostgreSQL, SQLite, or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 (InnoDB) |
 | Rails | Ruby ≥ 3.2, Rails ≥ 8.0; PostgreSQL, SQLite or MySQL (`mysql2`/`trilogy`) |
 | FastAPI | Python ≥ 3.10, FastAPI ≥ 0.115 (Starlette ≥ 0.40), a sync SQLAlchemy 2 `Engine`; PostgreSQL, SQLite or MySQL |
 | Django | Python ≥ 3.10, Django ≥ 5.2; PostgreSQL, SQLite (`transaction_mode: IMMEDIATE`) or MySQL ≥ 8.0.16 / MariaDB ≥ 10.2.7 |
+| Flask | Python ≥ 3.10, Flask ≥ 3, a SQLAlchemy 2 `Engine`; PostgreSQL, SQLite or MySQL |
 | PHP (plain) | PHP ≥ 8.2, 64-bit, with `ext-gmp` (required by the NWC transport), `ext-sodium`, `ext-mbstring`, `ext-pdo` + `pdo_pgsql`/`pdo_sqlite`/`pdo_mysql`. PHP-FPM or Apache in front of one front controller. `php -S` is a development server only |
 | Laravel | PHP ≥ 8.2, 64-bit, Laravel ≥ 11, with `ext-gmp` (required by the NWC transport), `ext-sodium`, `ext-mbstring`, `ext-pdo` + `pdo_pgsql`/`pdo_mysql`/`pdo_sqlite`. PostgreSQL, MySQL/MariaDB or SQLite. PHP-FPM or Apache. `php artisan serve` is a development server only |
+| WordPress plugin (WooCommerce, Easy Digital Downloads) | WordPress ≥ 6.6 with WooCommerce ≥ 9 or Easy Digital Downloads ≥ 3; PHP ≥ 8.2, 64-bit, with `ext-gmp` and `ext-sodium`; WordPress's MySQL/MariaDB database |
+| Paymenter extension | Paymenter ≥ 1.5; PHP ≥ 8.3, 64-bit, with `ext-gmp` and `ext-sodium`; Paymenter's cron job running |
+| FOSSBilling module | FOSSBilling ≥ 0.8; PHP ≥ 8.3, 64-bit, with `ext-gmp` and `ext-sodium`; FOSSBilling's cron job running |
+| PrestaShop module | PrestaShop 9; PHP ≥ 8.2, 64-bit, with `ext-gmp` and `ext-sodium`; a cron line for the module's reconcile pass |
+| Odoo module | Odoo 19 or 20, self-hosted or on Odoo.sh, with the `openreceive` Python package installed at the module's version |
+| Medusa plugin | Medusa 2 on Node ≥ 22.12, with PostgreSQL; Medusa's scheduled jobs running |
+| Vendure plugin | Vendure ≥ 3.3 on Node ≥ 22.12, with PostgreSQL, MySQL or MariaDB; Vendure's worker running |
 | BTCPay Server plugin | BTCPay Server ≥ 2.4.4 |
 
 Every stack needs the same two things at runtime:
@@ -70,6 +78,9 @@ No background process is required. You can optionally add one:
 - **Laravel**: `php artisan openreceive:notifications`, one process in total.
   Compose runs it as a second service from the same image.
   `php artisan openreceive:reconcile` is the one-shot pass.
+- **Plain PHP**: `php bin/notifications`, one long-lived process in total,
+  built on `$engine->notificationsWorker()->run()`. `$engine->reconcile()` is
+  the one-shot pass.
 - **Python**: `openreceive notifications --app main:app`, one process in
   total. `--app` can point at the FastAPI app, the router, or an
   `OpenReceiveApp`. `openreceive
@@ -252,11 +263,13 @@ pass records it. If it is stuck, resolve it in the wallet.
 
 See [Payment storage](storage.md) and [Rate limiting](rate-limiting.md).
 
-## WordPress + WooCommerce
+## WordPress + WooCommerce or Easy Digital Downloads
 
-Build the plugin zip with `npm run release:wordpress:build` and upload it.
-The archive includes its PHP dependencies and browser assets. Configure the
-wallet in WooCommerce payment settings or in server-only constants. Attempts
+Install the plugin from the WordPress.org directory
+(`wp plugin install openreceive --activate`), or upload the
+`openreceive-wordpress-<version>.zip` attached to each GitHub release. The
+plugin includes its PHP dependencies and browser assets. Configure the wallet
+in the store's payment settings or in server-only constants. Attempts
 are stored in the existing WordPress MySQL/MariaDB database. On quiet shops,
 set up a system cron to run Action Scheduler. You can also run
 `wp openreceive notifications` as an optional separate process. See the [WooCommerce quickstart](quickstart-woocommerce.md).

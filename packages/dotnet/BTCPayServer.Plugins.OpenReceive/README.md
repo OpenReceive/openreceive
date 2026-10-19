@@ -99,4 +99,4 @@ Every setting, Greenfield route, swap state and health probe:
 https://openreceive.org/guides/btcpay-reference. MIT licensed; source at
 https://github.com/OpenReceive/openreceive (`packages/dotnet`).
 
-Payment recovery changes require a coordinated host/worker upgrade. See the [payment safety upgrade and historical recovery procedure](https://github.com/openreceive/openreceive/blob/main/packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md) for additive migrations, selected legacy-account repair, retired swap refunds, and the provider budget scope.
+Payment recovery changes require a coordinated host/worker upgrade. See the [payment safety upgrade and historical recovery procedure](https://github.com/OpenReceive/openreceive/blob/master/packages/dotnet/BTCPayServer.Plugins.OpenReceive/PAYMENT-SAFETY-UPGRADE.md) for additive migrations, selected legacy-account repair, retired swap refunds, and the provider budget scope.

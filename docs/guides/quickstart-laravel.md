@@ -1,6 +1,6 @@
 # Laravel quickstart
 
-Requires PHP ≥ 8.2 (64-bit) and Laravel ≥ 11 (12 current). You also need these
+Requires PHP ≥ 8.2 (64-bit) and Laravel 11, 12 or 13. You also need these
 PHP extensions:
 
 - `ext-gmp`, which is REQUIRED. The NWC transport's elliptic-curve math depends

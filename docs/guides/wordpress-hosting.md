@@ -1,6 +1,7 @@
 # WordPress hosting requirements
 
-The OpenReceive plugin for WooCommerce runs inside your WordPress site, so your
+The OpenReceive plugin for WooCommerce and Easy Digital Downloads runs inside
+your WordPress site, so your
 host's PHP setup decides whether it can run. Most hosts meet every requirement
 except one: the PHP **GMP** extension, which many hosts leave off and some
 cannot add at all. Check this before you install.
@@ -13,7 +14,7 @@ cannot add at all. Check this before you install.
   count.
 - MySQL 8 or MariaDB 10.5+, with InnoDB tables. WordPress on SQLite is not
   supported.
-- WordPress 6.6+ and WooCommerce 9+
+- WordPress 6.6+, and WooCommerce 9+ or Easy Digital Downloads 3+
 
 WP-CLI and SSH are optional. Every setup step also works in the WordPress admin.
 
@@ -33,7 +34,9 @@ Use one of these instead:
   extensions, for example Hostinger's hPanel (**Advanced → PHP Info**). Look
   for `gmp` and `sodium`.
 - **After activation,** open **WooCommerce → Settings → Payments →
-  OpenReceive**. The Doctor panel checks the PHP that serves your store.
+  OpenReceive**, or **Downloads → Settings → Payments → OpenReceive** on an
+  Easy Digital Downloads store. The Doctor panel checks the PHP that serves
+  your store.
 
 `php -m` and `wp eval` over SSH test the command-line PHP. On many hosts that
 is a different PHP from the one that serves your site, so a pass there proves
@@ -76,8 +79,10 @@ usually cannot.
 
 **Your own server or container:** see
 [Enable GMP in both PHP runtimes](quickstart-woocommerce.md#enable-gmp-in-both-php-runtimes)
-in the WooCommerce quickstart for Debian, Ubuntu, Alpine and the official
-WordPress Docker images.
+in the WooCommerce quickstart (the
+[Easy Digital Downloads quickstart](quickstart-edd.md#enable-gmp-in-both-php-runtimes)
+has the same section) for Debian, Ubuntu, Alpine and the official WordPress
+Docker images.
 
 ## If your host cannot enable GMP
 

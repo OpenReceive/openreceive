@@ -177,9 +177,8 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/lightning-swap-connect.md — what an LSC code actually is
 - https://openreceive.org/guides/automated-swaps.md — provider states, and what turning swaps on commits a merchant to
 - https://openreceive.org/guides/swap-refunds.md — the refund states; the route back is BTCPay's own invoice checkout page here
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the plugin itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts

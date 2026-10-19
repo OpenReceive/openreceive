@@ -167,14 +167,14 @@ checks the wallet, and requests get `503 WALLET_UNAVAILABLE` until the check
 passes.
 → [openreceive_router](api-reference.md#openreceive_router) ·
 [openreceive_lifespan](api-reference.md#openreceive_lifespan) ·
-[the authorize context](api-reference.md#the-authorize-context)
+[the authorize context](api-reference.md#host-python)
 
 `rate_limiting=True` is for public web shops. Leave it off for point-of-sale,
 where many payers share one IP. → [Rate limiting](rate-limiting.md)
 
 An optional worker, `openreceive notifications --app main:app`, listens for
 wallet payment notifications so settlement does not wait for the next page
-load. → [openreceive notifications](api-reference.md#openreceive-notifications)
+load. → [openreceive notifications](api-reference.md#openreceive-reconcile--openreceive-notifications)
 
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns the order id the page will pass as

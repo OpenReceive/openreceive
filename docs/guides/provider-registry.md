@@ -96,6 +96,10 @@ routes.
   `loadPayTutorialImages` and show only the caption until it loads. A custom UI
   should do the same.
 
+The rest of this section is for contributors to the OpenReceive repository:
+an app that installs the packages gets the images built in and runs none of
+it.
+
 Both provider tables are generated from the checked-in source images by
 `tools/package/generate-provider-images.mjs` (`npm run
 generate:provider-images`). `check:generated` fails when they are out of date.

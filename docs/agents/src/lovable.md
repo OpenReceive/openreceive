@@ -163,7 +163,7 @@ begin
   update public.orders
      set status = 'paid'
    where id = p_reference::uuid   -- or just p_reference, if the ids are text
-     and status = 'pending';
+     and status = 'awaiting_payment';  -- this app's own unpaid status
 end
 $$;
 ```

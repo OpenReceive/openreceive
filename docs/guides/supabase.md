@@ -279,7 +279,7 @@ begin
   update public.orders
      set status = 'paid'
    where id = p_reference::uuid   -- or just p_reference, if your ids are text
-     and status = 'pending';
+     and status = 'awaiting_payment';  -- your order's own unpaid status
 end
 $$;
 ```

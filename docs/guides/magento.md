@@ -20,7 +20,7 @@ An automated test runs this route end to end on one machine:
 `npm run trial:btcpay-route -- --store magento` in the OpenReceive
 repository. It starts a stock BTCPay Server 2.4.5, installs the OpenReceive
 plugin from BTCPay's Plugin Directory, and connects a test wallet. Then it
-installs Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-plugin
+installs Mage-OS 3.6 (Magento 2.4.9) with btcpayserver/magento2-btcpay-module
 2.0.12 and connects it the way this guide does. A guest checks out with
 **Pay with Bitcoin**. The checks: BTCPay's webhook to Magento exists, the
 module sends the buyer to a BTCPay invoice, BTCPay marks the invoice Settled

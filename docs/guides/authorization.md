@@ -100,14 +100,22 @@ on it. Identify the caller by session cookie, signed guest token, or
 logged-in user.
 
 **The library ships no default at all.** `authorize` is unset until you set
-it. Both stacks refuse to serve a checkout without it:
+it, and no engine serves a checkout without it:
 
 - The Node HTTP handler throws `TypeError: HTTP handler requires authorize; authentication belongs to
   the host.`
 - The Rails engine raises `ConfigurationError`.
+- The Python handler refuses to start: "authorize is required — authentication
+  belongs to the host application."
+- In PHP, `authorize` is a method of your `Host` class, so there is nothing to
+  leave unset: you write it.
 
-**The Rails install generator does ship a placeholder**, and it warns you
-about it. `bin/rails generate openreceive:install` writes:
+**The generators do ship a placeholder**, and they warn you about it. Django's
+`manage.py openreceive_install` writes `authorize = ALLOW_ALL_AUTHORIZE`
+(`openreceive.server`), and its system check `openreceive.W002` flags it.
+Laravel's generated host class uses the `OpenReceive\Hosts\AllowAllAuthorize`
+trait, and plain PHP can use the same trait; the PHP doctor reports it. The
+Rails install generator, `bin/rails generate openreceive:install`, writes:
 
 ```ruby
 config.authorize = OpenReceive::ALLOW_ALL_AUTHORIZE
@@ -129,8 +137,8 @@ It keeps logging this for as long as the placeholder is there.
 `bin/rails openreceive:doctor` reports it too. Replace it before anything
 real. If you keep it on purpose, know that your references are doing the
 whole job. The Node quickstart starts from a real check
-(`orders.viewerMay(...)`). Node has no generator to run. You write the config
-object yourself, so the example shows the honest version.
+(`orders.viewerMay(...)`). Node, FastAPI and Flask have no generator to run.
+You write the config yourself, so their examples show the honest version.
 
 After you return true, the library still checks that a requested
 `paymentHash` belongs to that `reference` before it loads server-only
@@ -223,7 +231,7 @@ described below, cover them.
 
 ## Cross-site requests
 
-In both engines, the handler itself protects every route that takes a body
+In every engine, the handler itself protects every route that takes a body
 against cross-site request forgery. It does this before `authorize` runs:
 
 - The body must be `application/json`, or the handler returns `415`. A

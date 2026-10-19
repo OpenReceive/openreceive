@@ -6,8 +6,10 @@ secret handling, pricing, and any custom repository.
 - Keep the receive-only NWC code and the payment attempt's
   [`swap_data`](automated-swaps.md) on the server. A receive-only code cannot
   spend your funds. But anyone who has it can create invoices against your
-  wallet and read your payment history. Scan your browser bundles
-  (`npm run scan:client-bundles`).
+  wallet and read your payment history. Before you deploy, search your built
+  browser bundles and their source maps for `nostr+walletconnect://` and
+  `lightning+swapconnect://`, and for the names `NWC_URI` and `LSC_URI_`: none
+  may appear there.
 - Wallet preflight refuses to start if the NWC connection advertises spend
   methods such as `pay_invoice`. Create a receive-only code. If the wallet
   cannot, and you accept the risk, set

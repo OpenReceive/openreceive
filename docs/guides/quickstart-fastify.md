@@ -19,8 +19,8 @@ stays the same.
 | Server   | `@openreceive/fastify`, `@openreceive/express`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Express: [quickstart-node.md](quickstart-node.md) · Next.js:
-[quickstart-next.md](quickstart-next.md). This page is the Fastify one.
+Express: [Express quickstart](quickstart-node.md) · Next.js:
+[Next.js quickstart](quickstart-next.md). This page is the Fastify one.
 
 On a fresh project, also install what this guide assumes you already have: the
 framework, a static-file plugin for the checkout page, and an env loader

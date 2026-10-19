@@ -64,6 +64,10 @@ is a one-product shop with checkout already wired.
 
    <img alt="The Neon database added, and the NWC_URI field above the Deploy button" width="560" src="../assets/vercel/3-nwc-and-deploy.webp">
 
+   The shop is now live on Vercel. The next three steps are only for
+   changing it with v0; with your own editor or another coding agent, clone
+   the new repository instead.
+
 4. In v0, start a new chat, open the **+** menu, choose **Import from…** →
    **Import from GitHub**, and pick the new repository.
 
@@ -80,6 +84,23 @@ is a one-product shop with checkout already wired.
    your orders.
 
    <img alt="The starter's home page after v0 redesigned it as a product card with a Buy button" width="320" src="../assets/vercel/7-starter-redesigned-by-v0.webp">
+
+## Add checkout to an existing Next.js app on Vercel
+
+No v0 needed: the [Next.js quickstart](quickstart-next.md) is the code, and
+Vercel only supplies the database and the environment.
+
+1. Add a Postgres database to the Vercel project, for example Neon from the
+   project's **Storage** tab. Use its pooled URL for the app and its direct
+   URL for creating the tables
+   ([serverless hosts](serverless.md) explains why).
+2. Add `NWC_URI` (and `LSC_URI_PRIMARY`) under the project's **Settings** →
+   **Environment Variables**, as **Secret**, for Production, Preview and
+   Development.
+3. Follow the [Next.js quickstart](quickstart-next.md), or hand a coding
+   agent the
+   [Next.js agent directions](https://openreceive.org/agent-directions/next/full.md),
+   then push: Vercel deploys it.
 
 ## Add checkout to an existing v0 app
 

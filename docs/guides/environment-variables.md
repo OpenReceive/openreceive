@@ -10,7 +10,9 @@ initializer.
 The libraries read `process.env` or `ENV`. They do not find or load a `.env`
 file themselves. Your app's entry point may load one for local development. In
 production, supply the same variables through your secret manager or process
-environment. Start from the `.env.example` file at the repository root.
+environment. A template with every variable and a placeholder for each code is
+[`.env.example`](https://github.com/OpenReceive/openreceive/blob/master/.env.example)
+in the OpenReceive repository.
 
 ## Required
 
