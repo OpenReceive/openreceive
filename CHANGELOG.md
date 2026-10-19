@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.30 - 2026-10-19
 
 - Added (PrestaShop): a native payment module for PrestaShop 9, built as a
   release ZIP, `openreceive-prestashop-<version>.zip`, with one `openreceive`
@@ -75,6 +75,16 @@
   `node:module` natively. Existing storefronts: replace the route file with
   the quickstart's. CI now runs `@openreceive/medusa` in a real Medusa 2 on
   every push, and the trials have a Medusa shop.
+- Docs: a review of openreceive.org corrected the guides. The WordPress
+  hosting page covers Easy Digital Downloads; the BTCPay plugin's safety
+  upgrade link works (branch `master`); the deploying guide installs the
+  WordPress plugin from WordPress.org and lists every integration's runtime;
+  the BTCPay plugin reference names version 0.4.13 and the setup page's real
+  buttons; the authorization and automated-swaps guides cover Python and PHP;
+  the FastAPI quickstart's API links land on their sections; the Security
+  guide says what to search browser bundles for; the Vercel guide has a path
+  for an existing Next.js app without v0, and v0 no longer carries a Tested
+  badge earned on Vercel; the guide index lists every integration.
 
 ## 0.4.29 - 2026-10-19
 

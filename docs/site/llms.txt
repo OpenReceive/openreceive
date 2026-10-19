@@ -8,7 +8,7 @@
 > provider converts to BTC over Lightning in the same wallet. OpenReceive never
 > holds funds, has no accounts or API keys, and connects through a
 > receive-only Nostr Wallet Connect (NWC) code. This index describes
-> OpenReceive 0.4.29.
+> OpenReceive 0.4.30.
 
 Every documentation link below is raw markdown — fetch it directly, no browser
 needed. Appending `.md` to any guide page URL returns the same document as

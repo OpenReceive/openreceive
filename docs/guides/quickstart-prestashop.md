@@ -36,9 +36,9 @@ install it with PrestaShop's own console, in the folder that holds `bin/console`
 
 ```sh
 cd /var/www/html
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.29/openreceive-prestashop-0.4.29.zip
-unzip -oq openreceive-prestashop-0.4.29.zip -d modules
-rm openreceive-prestashop-0.4.29.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-prestashop-0.4.30.zip
+unzip -oq openreceive-prestashop-0.4.30.zip -d modules
+rm openreceive-prestashop-0.4.30.zip
 chown -R www-data:www-data modules/openreceive
 sudo -u www-data php bin/console prestashop:module install openreceive
 ```
@@ -74,7 +74,7 @@ Run every command inside the container, in `/var/www/html`, as its web user
 `www-data`. Unpack the release there too:
 
 ```sh
-docker compose exec -T -u www-data prestashop sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.29/openreceive-prestashop-0.4.29.zip && unzip -oq openreceive-prestashop-0.4.29.zip -d modules && rm openreceive-prestashop-0.4.29.zip'
+docker compose exec -T -u www-data prestashop sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-prestashop-0.4.30.zip && unzip -oq openreceive-prestashop-0.4.30.zip -d modules && rm openreceive-prestashop-0.4.30.zip'
 docker compose exec -T -u www-data prestashop php bin/console prestashop:module install openreceive
 ```
 

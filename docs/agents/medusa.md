@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/medusa/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.29.
+These directions describe OpenReceive 0.4.30.
 
 Add OpenReceive to the Medusa store you are working in: a Medusa server, and
 usually a storefront in its own project (Medusa's Next.js starter or another).

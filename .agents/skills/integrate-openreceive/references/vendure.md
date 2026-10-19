@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/vendure/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.29.
+These directions describe OpenReceive 0.4.30.
 
 Add OpenReceive to the Vendure shop you are working in: a Vendure server with
 its worker, and usually a storefront in its own project (Vendure's Next.js

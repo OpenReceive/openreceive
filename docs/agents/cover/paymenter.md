@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Paymenter (0.4.29)
+# OpenReceive agent directions: Paymenter (0.4.30)
 
 These directions are 19 KB. Download them with your shell and follow them from Step 0:
 

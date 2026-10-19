@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/prestashop/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.29.
+These directions describe OpenReceive 0.4.30.
 
 Install and configure the OpenReceive payment module in the PrestaShop store
 you are working in. Preserve its theme, customers, products, orders and
@@ -123,7 +123,7 @@ With the Docker image, download and unpack it inside the container, as the
 web user, then install the module with PrestaShop's own console:
 
 ```sh
-docker compose exec -T -u www-data prestashop sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.29/openreceive-prestashop-0.4.29.zip && unzip -oq openreceive-prestashop-0.4.29.zip -d modules && rm openreceive-prestashop-0.4.29.zip'
+docker compose exec -T -u www-data prestashop sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-prestashop-0.4.30.zip && unzip -oq openreceive-prestashop-0.4.30.zip -d modules && rm openreceive-prestashop-0.4.30.zip'
 docker compose exec -T -u www-data prestashop php bin/console prestashop:module install openreceive
 ```
 
@@ -285,9 +285,9 @@ install it with PrestaShop's own console, in the folder that holds `bin/console`
 
 ```sh
 cd /var/www/html
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.29/openreceive-prestashop-0.4.29.zip
-unzip -oq openreceive-prestashop-0.4.29.zip -d modules
-rm openreceive-prestashop-0.4.29.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-prestashop-0.4.30.zip
+unzip -oq openreceive-prestashop-0.4.30.zip -d modules
+rm openreceive-prestashop-0.4.30.zip
 chown -R www-data:www-data modules/openreceive
 sudo -u www-data php bin/console prestashop:module install openreceive
 ```
@@ -323,7 +323,7 @@ Run every command inside the container, in `/var/www/html`, as its web user
 `www-data`. Unpack the release there too:
 
 ```sh
-docker compose exec -T -u www-data prestashop sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.29/openreceive-prestashop-0.4.29.zip && unzip -oq openreceive-prestashop-0.4.29.zip -d modules && rm openreceive-prestashop-0.4.29.zip'
+docker compose exec -T -u www-data prestashop sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-prestashop-0.4.30.zip && unzip -oq openreceive-prestashop-0.4.30.zip -d modules && rm openreceive-prestashop-0.4.30.zip'
 docker compose exec -T -u www-data prestashop php bin/console prestashop:module install openreceive
 ```
 

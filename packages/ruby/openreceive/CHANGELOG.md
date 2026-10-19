@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.30 - 2026-10-19
+
+Release with the complete 0.4.30 package family. The bundled agent skill adds the
+PrestaShop, Odoo and Vendure references and the guide corrections from a review of
+openreceive.org. No Ruby runtime changes from 0.4.29.
+
 ## 0.4.29 - 2026-10-19
 
 Release with the complete 0.4.29 package family. The bundled agent skill's

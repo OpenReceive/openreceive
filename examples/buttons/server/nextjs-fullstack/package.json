@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-buttons-nextjs-fullstack",
-  "version": "0.4.29",
+  "version": "0.4.30",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,13 +11,13 @@
   "dependencies": {
     "@mantine/core": "^9.5.2",
     "@mantine/hooks": "^9.7.2",
-    "@openreceive/browser": "0.4.29",
-    "@openreceive/core": "0.4.29",
-    "@openreceive/http": "0.4.29",
-    "@openreceive/next": "0.4.29",
-    "@openreceive/node": "0.4.29",
-    "@openreceive/provider-data": "0.4.29",
-    "@openreceive/react": "0.4.29",
+    "@openreceive/browser": "0.4.30",
+    "@openreceive/core": "0.4.30",
+    "@openreceive/http": "0.4.30",
+    "@openreceive/next": "0.4.30",
+    "@openreceive/node": "0.4.30",
+    "@openreceive/provider-data": "0.4.30",
+    "@openreceive/react": "0.4.30",
     "@tabler/icons-react": "^3.49.0",
     "mobx": "^6.15.0",
     "mobx-keystone": "^1.21.0",
