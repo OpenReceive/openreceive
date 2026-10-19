@@ -259,6 +259,33 @@
       "agents": ["claude/claude-opus-5-5", "codex/default"],
       "mode": "released",
       "directions": "2ed53101bf16"
+    },
+    {
+      "trial": "prestashop",
+      "date": "2026-10-19",
+      "release": "0.4.30",
+      "runs": 3,
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "mode": "released",
+      "directions": "e0f9624f2325"
+    },
+    {
+      "trial": "odoo",
+      "date": "2026-10-19",
+      "release": "0.4.30",
+      "runs": 3,
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "mode": "released",
+      "directions": "22ec4ea5c37c"
+    },
+    {
+      "trial": "vendure",
+      "date": "2026-10-19",
+      "release": "0.4.30",
+      "runs": 3,
+      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "mode": "released",
+      "directions": "f1cc6ca5bd4b"
     }
   ]
 }

@@ -90,6 +90,7 @@ and has a plain "Widget Shop" with five products and no OpenReceive:
 | 15 | `prestashop` | PrestaShop store (heavy) |
 | 16 | `vendure` | Vendure server, worker and its Next.js starter (heavy) |
 | 17 | `medusa` | Medusa server + Medusa's Next.js storefront (heavy) |
+| 18 | `odoo` | Odoo 19 with eCommerce (heavy) |
 
 Left out on purpose: Replit, Vercel, Lovable, v0 and Supabase need an account
 or a real project, BTCPay Server needs a synced Bitcoin node, and mobile apps
