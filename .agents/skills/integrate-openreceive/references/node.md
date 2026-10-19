@@ -428,12 +428,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/guides/sveltekit-recipe.md, https://openreceive.org/guides/nuxt-recipe.md, https://openreceive.org/guides/astro-recipe.md and https://openreceive.org/guides/react-router-recipe.md — the same handler as a SvelteKit, Nuxt, Astro or React Router route, if this app is one of those
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -463,8 +462,8 @@ stays the same.
 | Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Fastify: [quickstart-fastify.md](https://openreceive.org/guides/quickstart-fastify.md) · Next.js:
-[quickstart-next.md](https://openreceive.org/guides/quickstart-next.md). This page is the Express one.
+Fastify: [Fastify quickstart](https://openreceive.org/guides/quickstart-fastify.md) · Next.js:
+[Next.js quickstart](https://openreceive.org/guides/quickstart-next.md). This page is the Express one.
 
 On a fresh project, also install what this guide assumes you already have: the
 framework and an env loader (`npm install express dotenv`). Install your ORM

@@ -474,12 +474,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/guides/quickstart-next.md — each hook explained step by step, on Next.js; they are the same here
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -600,12 +599,12 @@ export async function handleOpenReceive(request: Request): Promise<Response> {
 ```
 
 `authorize` sees the incoming request with its cookies, so check it with
-the session your app already has. The Next.js quickstart
+the session your app already has. The [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md)
 explains each hook. They are the same here.
 
 Create OpenReceive's two tables with your migrations, or run
 `paymentsSchemaSql("postgres")` from `@openreceive/http` once. It is
-idempotent. See Payment storage.
+idempotent. See [Payment storage](https://openreceive.org/guides/storage.md).
 
 ### On Supabase (Lovable)
 
@@ -630,7 +629,7 @@ npm install @openreceive/http @openreceive/react
    ) returns void language plpgsql as $$
    begin
      update public.orders set status = 'paid'
-      where id = p_reference::uuid and status = 'pending';
+      where id = p_reference::uuid and status = 'awaiting_payment'; -- your unpaid status
    end
    $$;
    ```
@@ -682,17 +681,21 @@ There is no `onPaid`: `openreceive_on_paid` is the fulfillment. `findOrder`
 reads the order with your server-side Supabase client; in a Lovable app that
 is `supabaseAdmin` from `@/integrations/supabase/client.server`.
 
-The checkout calls the payment routes from the browser with the page's
-cookies, and nothing else. A Lovable app keeps its Supabase sign-in in the
-browser, not in a cookie, so `authorize` cannot see who is signed in. Give
-the buyer a cookie of their own instead: create orders in a server function
+By default the checkout calls the payment routes from the browser with the
+page's cookies and nothing else. A Lovable app keeps its Supabase sign-in in
+the browser, not in a cookie, so `authorize` cannot see who is signed in from
+those cookies. Since 0.4.25 the React `<Checkout>` also takes a `fetch` that
+sends the access token
+([Use Supabase Auth in `authorize`](https://openreceive.org/guides/supabase.md#4-use-supabase-auth-in-authorize)), but
+this recipe keeps the simpler route that works with every checkout: give the
+buyer a cookie of their own. Create orders in a server function
 that sets an HttpOnly `buyer` cookie (a random value, kept across orders) and
 stores the same value on the order as `buyer_token`. `currentBuyer` reads it
 back from the request's `cookie` header.
 
 Before it serves, the server checks the database, and the payment routes
 answer 503 until the migration is applied and `openreceive_on_paid` is
-yours; the log names the fix. More: Supabase over HTTPS.
+yours; the log names the fix. More: [Supabase over HTTPS](https://openreceive.org/guides/supabase.md#supabase-over-https).
 
 ### The checkout page
 

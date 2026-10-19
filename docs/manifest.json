@@ -173,7 +173,7 @@
       "slug": "odoo",
       "title": "Odoo via BTCPay Server",
       "source_path": "docs/guides/odoo.md",
-      "category": "quickstart",
+      "category": "btcpay",
       "audience": "developer",
       "public": true
     },
@@ -181,7 +181,7 @@
       "slug": "magento",
       "title": "Magento via BTCPay Server",
       "source_path": "docs/guides/magento.md",
-      "category": "quickstart",
+      "category": "btcpay",
       "audience": "developer",
       "public": true
     },
@@ -189,7 +189,7 @@
       "slug": "prestashop",
       "title": "PrestaShop via BTCPay Server",
       "source_path": "docs/guides/prestashop.md",
-      "category": "quickstart",
+      "category": "btcpay",
       "audience": "developer",
       "public": true
     },
@@ -205,7 +205,7 @@
       "slug": "node-orms",
       "title": "Node ORM Recipes",
       "source_path": "docs/guides/node-orms.md",
-      "category": "quickstart",
+      "category": "recipe",
       "audience": "developer",
       "public": true
     },
@@ -229,7 +229,7 @@
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "source_path": "docs/guides/frontend-checkout.md",
-      "category": "quickstart",
+      "category": "guide",
       "audience": "developer",
       "public": true
     },
@@ -573,7 +573,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "source_path": "docs/agents/node.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -581,7 +581,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "source_path": "docs/agents/fastify.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -589,7 +589,7 @@
       "slug": "agent-directions-fastapi",
       "title": "Agent Directions: FastAPI",
       "source_path": "docs/agents/fastapi.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -597,7 +597,7 @@
       "slug": "agent-directions-django",
       "title": "Agent Directions: Django",
       "source_path": "docs/agents/django.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -605,7 +605,7 @@
       "slug": "agent-directions-flask",
       "title": "Agent Directions: Flask",
       "source_path": "docs/agents/flask.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -613,7 +613,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "source_path": "docs/agents/next.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -621,7 +621,7 @@
       "slug": "agent-directions-nestjs",
       "title": "Agent Directions: NestJS",
       "source_path": "docs/agents/nestjs.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -629,7 +629,7 @@
       "slug": "agent-directions-rails",
       "title": "Agent Directions: Rails",
       "source_path": "docs/agents/rails.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -637,7 +637,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "source_path": "docs/agents/php.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -645,7 +645,7 @@
       "slug": "agent-directions-laravel",
       "title": "Agent Directions: Laravel",
       "source_path": "docs/agents/laravel.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -653,7 +653,7 @@
       "slug": "agent-directions-btcpay",
       "title": "Agent Directions: BTCPay Server",
       "source_path": "docs/agents/btcpay.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -661,7 +661,7 @@
       "slug": "agent-directions-lovable",
       "title": "Agent Directions: Lovable",
       "source_path": "docs/agents/lovable.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -669,7 +669,7 @@
       "slug": "agent-directions-bolt",
       "title": "Agent Directions: Bolt",
       "source_path": "docs/agents/bolt.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -677,7 +677,7 @@
       "slug": "agent-directions-sveltekit",
       "title": "Agent Directions: SvelteKit",
       "source_path": "docs/agents/sveltekit.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -685,7 +685,7 @@
       "slug": "agent-directions-nuxt",
       "title": "Agent Directions: Nuxt",
       "source_path": "docs/agents/nuxt.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -693,7 +693,7 @@
       "slug": "agent-directions-astro",
       "title": "Agent Directions: Astro",
       "source_path": "docs/agents/astro.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -701,7 +701,7 @@
       "slug": "agent-directions-react-router",
       "title": "Agent Directions: React Router",
       "source_path": "docs/agents/react-router.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -709,7 +709,7 @@
       "slug": "agent-directions-tanstack-start",
       "title": "Agent Directions: TanStack Start",
       "source_path": "docs/agents/tanstack-start.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -717,7 +717,7 @@
       "slug": "agent-directions-mobile",
       "title": "Agent Directions: Mobile Apps",
       "source_path": "docs/agents/mobile.md",
-      "category": "quickstart",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -797,7 +797,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "source_path": "docs/agents/woocommerce.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -805,7 +805,7 @@
       "slug": "agent-directions-edd",
       "title": "Agent directions (Easy Digital Downloads)",
       "source_path": "docs/agents/edd.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -813,7 +813,7 @@
       "slug": "agent-directions-paymenter",
       "title": "Agent directions (Paymenter)",
       "source_path": "docs/agents/paymenter.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -821,7 +821,7 @@
       "slug": "agent-directions-medusa",
       "title": "Agent directions (Medusa)",
       "source_path": "docs/agents/medusa.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -829,7 +829,7 @@
       "slug": "agent-directions-vendure",
       "title": "Agent directions (Vendure)",
       "source_path": "docs/agents/vendure.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -837,7 +837,7 @@
       "slug": "agent-directions-fossbilling",
       "title": "Agent directions (FOSSBilling)",
       "source_path": "docs/agents/fossbilling.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -845,7 +845,7 @@
       "slug": "agent-directions-prestashop",
       "title": "Agent directions (PrestaShop)",
       "source_path": "docs/agents/prestashop.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },
@@ -853,7 +853,7 @@
       "slug": "agent-directions-odoo",
       "title": "Agent directions (Odoo)",
       "source_path": "docs/agents/odoo.md",
-      "category": "agents",
+      "category": "agent-directions",
       "audience": "developer",
       "public": true
     },

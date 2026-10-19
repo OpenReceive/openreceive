@@ -86,12 +86,23 @@ function firstHeading(markdown) {
   return heading ? heading.replace(/^#\s+/, "").trim() : "";
 }
 
+// The site shows the start of this as a guide's card excerpt, so it keeps the
+// words a reader sees: link text stays, markdown marks go only where they are
+// marks (a heading's #, a quote's >, a list bullet, emphasis), and generator
+// comments go.
 function searchText(markdown) {
   return markdown
+    .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[[^\]]+\]\([^)]+\)/g, " ")
-    .replace(/[#>*_-]/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s{0,3}>\s?/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/^\s*\|?\s*:?-{3,}.*$/gm, " ")
+    .replace(/\|/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

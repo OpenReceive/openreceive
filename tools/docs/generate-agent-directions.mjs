@@ -136,7 +136,7 @@ const BTCPAY_BRIEF = [
   "Check first: BTCPay Server 2.4.4 or later, and the plugin installed from Plugins → Plugin Directory.",
   "Unless the store already uses OpenReceive, stop and ask the user for a receive-only NWC code.",
   "Save it via Store → OpenReceive or the Greenfield API, never BTCPay's Lightning node screen. Never echo it.",
-  "If the user wants USDT, USDC, ETH or SOL, ask for an LSC code too, but do not wait for it.",
+  ASK_LSC_NEXT,
   "Never tick the spend-capable override to make a save succeed.",
   NO_ROTATION,
 ];
@@ -460,6 +460,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "react-material-ui-recipe",
       ].map((slug) => [
         slug,
@@ -485,6 +486,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "react-material-ui-recipe",
       ].map((slug) => [
         slug,
@@ -511,6 +513,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "react-material-ui-recipe",
         "node-orms",
       ].map((slug) => [
@@ -538,6 +541,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "react-material-ui-recipe",
         "node-orms",
       ].map((slug) => [
@@ -565,6 +569,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "react-material-ui-recipe",
         "node-orms",
       ].map((slug) => [
@@ -592,6 +597,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "react-material-ui-recipe",
         "node-orms",
       ].map((slug) => [
@@ -615,6 +621,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "node-orms",
       ].map((slug) => [
         slug,
@@ -642,6 +649,7 @@ const UNLISTED_GUIDES_BY_STACK = {
         "environment-variables",
         "deploying",
         "api-reference",
+        "payment-safety-upgrade",
         "node-orms",
       ].map((slug) => [
         slug,
@@ -793,6 +801,15 @@ export function inlineGuide(markdown, publicSlugs) {
         const slug = publicSlugs.has(file) ? file : `${file}-recipe`;
         return publicSlugs.has(slug) ? `](${GUIDE_MARKDOWN_URL(slug)}${anchor ?? ""})` : whole;
       })
+      // A recipe links the guides one folder up (`../guides/serverless.md`);
+      // those are published pages too, so they get the same site URL.
+      .replace(
+        /\]\(\.\.\/(guides|recipes)\/([a-z0-9-]+)\.md(#[a-z0-9_-]+)?\)/g,
+        (whole, folder, file, anchor) => {
+          const slug = folder === "recipes" && !publicSlugs.has(file) ? `${file}-recipe` : file;
+          return publicSlugs.has(slug) ? `](${GUIDE_MARKDOWN_URL(slug)}${anchor ?? ""})` : whole;
+        },
+      )
       // A path into the repository (the demo app, a contributor doc) is dead
       // once the file has been pasted somewhere else, and cloning is not the
       // shape of this integration. Keep the name, drop the link.

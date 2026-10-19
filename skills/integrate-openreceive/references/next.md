@@ -438,12 +438,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/guides/tanstack-start-recipe.md — the same handler as a TanStack Start server route, if this app is TanStack Start after all
 - https://openreceive.org/guides/sveltekit-recipe.md, https://openreceive.org/guides/nuxt-recipe.md, https://openreceive.org/guides/astro-recipe.md and https://openreceive.org/guides/react-router-recipe.md — the same handler as a SvelteKit, Nuxt, Astro or React Router route, if this app is one of those
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -473,8 +472,8 @@ stays the same.
 | Server   | `@openreceive/next`, `@openreceive/express`, `@openreceive/fastify`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Express: [quickstart-node.md](https://openreceive.org/guides/quickstart-node.md) · Fastify:
-[quickstart-fastify.md](https://openreceive.org/guides/quickstart-fastify.md). This page is the Next.js one.
+Express: [Express quickstart](https://openreceive.org/guides/quickstart-node.md) · Fastify:
+[Fastify quickstart](https://openreceive.org/guides/quickstart-fastify.md). This page is the Next.js one.
 An agent given the Express guide goes wrong on Next.js in three places: Next
 needs no `dotenv`, no `app.use`, and it needs a client component for the
 checkout.

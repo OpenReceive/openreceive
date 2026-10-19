@@ -13,7 +13,7 @@ curl -fsSL https://openreceive.org/agent-directions/btcpay/full.md
 - Check first: BTCPay Server 2.4.4 or later, and the plugin installed from Plugins → Plugin Directory.
 - Unless the store already uses OpenReceive, stop and ask the user for a receive-only NWC code.
 - Save it via Store → OpenReceive or the Greenfield API, never BTCPay's Lightning node screen. Never echo it.
-- If the user wants USDT, USDC, ETH or SOL, ask for an LSC code too, but do not wait for it.
+- Next ask for the LSC code. If the user wants stablecoins, USDT, USDC, ETH, SOL or crypto, do not ask yes/no first.
 - Never tick the spend-capable override to make a save succeed.
 - Do not suggest rotating or revoking a code because it was pasted here.
 
@@ -196,12 +196,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/lightning-swap-connect.md — what an LSC code actually is
 - https://openreceive.org/guides/automated-swaps.md — provider states, and what turning swaps on commits a merchant to
 - https://openreceive.org/guides/swap-refunds.md — the refund states; the route back is BTCPay's own invoice checkout page here
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the plugin itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 

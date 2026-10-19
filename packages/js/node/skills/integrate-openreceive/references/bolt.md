@@ -125,7 +125,9 @@ explicitly declined.
 
 Add `@openreceive/react` at 0.4.29 or newer to the app's
 `package.json`. The function imports `npm:@openreceive/http@^0.4.29`
-and `npm:@supabase/supabase-js@2` directly; add nothing else. No `pg`, no
+and `npm:@supabase/supabase-js@2` directly; add nothing else. (The recipe
+below writes `^0.4.27`, the oldest release with the `cors` option; both
+resolve to the newest 0.4.x.) No `pg`, no
 Postgres driver, no OpenReceive scaffold.
 
 ## Step 2 — the migration
@@ -353,7 +355,7 @@ Use `@openreceive/*` 0.4.27 or newer: the function needs the `cors` option.
 
 ### 1. The migration
 
-Save the SQL from Supabase migration,
+Save the SQL from [Supabase migration](https://openreceive.org/guides/supabase-migration.md),
 unchanged, as a new migration (`supabase/migrations/<timestamp>_openreceive.sql`)
 and apply it. It creates OpenReceive's tables with row level security on and
 every grant revoked from `anon` and `authenticated`, and the functions the
@@ -502,7 +504,7 @@ is. OpenReceive never allows credentials across sites, so no cookie reaches
 the function, and a page on any listed origin can only send the tokens it
 holds. `authorize` decides with the token, on every request. Never answer
 these routes with CORS headers of your own, and never remove the token check.
-More: Cross-site requests.
+More: [Cross-site requests](https://openreceive.org/guides/authorization.md#cross-site-requests).
 
 ### 6. The secrets
 
@@ -573,7 +575,7 @@ page, as the payer's receipt.
 OpenReceive's CI runs both storage routes in Supabase's edge-runtime under
 the hosted limits, including a cross-site page with a bearer token. The trial
 harness runs coding agents through a Bolt-shaped shop on a local Supabase
-stack (see How we test platforms). We
+stack (see [How we test platforms](https://openreceive.org/guides/how-we-test-platforms.md)). We
 have not deployed to Supabase's hosted platform: its own API gateway, its
 `verify_jwt` check and its handling of preflights are untested. If something
 there does not work as this recipe says,

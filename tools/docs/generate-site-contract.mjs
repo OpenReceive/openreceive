@@ -1175,10 +1175,15 @@ const platforms = JSON.parse(
   ) {
     fail("starter needs https url and source_url");
   }
-  if (!existsSync(path.join(root, "trials/platforms", row.trial, "platform.json"))) {
+  // `trial: null` is a platform no trial runs on: v0 needs a paid plan, and the
+  // Vercel trial does not drive v0's agent, so v0 carries no Tested badge.
+  if (
+    row.trial !== null &&
+    !existsSync(path.join(root, "trials/platforms", row.trial, "platform.json"))
+  ) {
     fail(`names trial ${row.trial}, which has no trials/platforms/${row.trial}/platform.json`);
   }
-  const tested = passed.get(row.trial) ?? null;
+  const tested = row.trial === null ? null : (passed.get(row.trial) ?? null);
   return {
     ...base,
     status: tested === null ? "guide" : "tested",

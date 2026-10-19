@@ -429,12 +429,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/api-reference.md — every route, option and error code
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -464,8 +463,8 @@ stays the same.
 | Server   | `@openreceive/fastify`, `@openreceive/express`, `@openreceive/next`                                                           |
 | Frontend | `@openreceive/react`, `@openreceive/vue`, `@openreceive/svelte`, `@openreceive/angular`, `@openreceive/elements` (plain HTML) |
 
-Express: [quickstart-node.md](https://openreceive.org/guides/quickstart-node.md) · Next.js:
-[quickstart-next.md](https://openreceive.org/guides/quickstart-next.md). This page is the Fastify one.
+Express: [Express quickstart](https://openreceive.org/guides/quickstart-node.md) · Next.js:
+[Next.js quickstart](https://openreceive.org/guides/quickstart-next.md). This page is the Fastify one.
 
 On a fresh project, also install what this guide assumes you already have: the
 framework, a static-file plugin for the checkout page, and an env loader

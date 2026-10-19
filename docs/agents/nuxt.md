@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Nuxt)
 
 ```sh
-# READ THIS FIRST: this file is 33 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 34 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/nuxt/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -419,12 +419,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/guides/quickstart-next.md — each hook explained step by step, on Next.js; they are the same here
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -464,7 +463,7 @@ npm install @openreceive/http @openreceive/vue pg
 On Node, with Nitro's default `node-server` preset. The wallet connection and
 your database driver need Node, so the route cannot run on an edge runtime.
 The Vercel, Netlify and AWS Lambda presets deploy Node functions: read
-Bitcoin checkout on serverless hosts first. For
+[Bitcoin checkout on serverless hosts](https://openreceive.org/guides/serverless.md) first. For
 Cloudflare Workers, the [TanStack Start recipe](https://openreceive.org/guides/tanstack-start-recipe.md#where-it-runs)
 explains what a Worker needs. This recipe was not run on those hosts.
 
@@ -529,24 +528,24 @@ export default defineEventHandler((event) => handleOpenReceive(event));
 Put it in `server/routes/`, not `server/api/`, which would add `/api` to
 the path. `native` is the request's `H3Event`, so `authorize` can check the
 session your app already has: its cookies, or the user your session module
-reads from the event. The Next.js quickstart
+reads from the event. The [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md)
 explains each hook. They are the same here.
 
 One stack serves the whole server process. `getRequestIP` returns the socket
 address. Behind your own reverse proxy, `{ xForwardedFor: true }` reads the
 first address in `x-forwarded-for`, which is safe only when that proxy sets
-the header (Rate limiting).
+the header ([Rate limiting](https://openreceive.org/guides/rate-limiting.md)).
 
 ### Your database
 
 `db` is a `pg` Pool, `node:sqlite` or `better-sqlite3`, or one of the
-adapters in Node ORM recipes. With Drizzle, pass
+adapters in [Node ORM recipes](https://openreceive.org/guides/node-orms.md). With Drizzle, pass
 the `pg` Pool underneath it.
 
 Create OpenReceive's two tables with your migrations
 (`npx openreceive scaffold payments --orm <your orm>`), or run
 `paymentsSchemaSql("postgres")` from `@openreceive/http` once. It is
-idempotent. See Payment storage.
+idempotent. See [Payment storage](https://openreceive.org/guides/storage.md).
 
 ### The checkout page
 
@@ -585,7 +584,7 @@ if (error.value) {
 The page renders on the server and starts the checkout in the browser. The
 payer picks Bitcoin and gets the invoice. Keep it at the order's own URL: a
 payer with a swap deposit in flight comes back to it
-(Swap refunds).
+([Swap refunds](https://openreceive.org/guides/swap-refunds.md)).
 
 ### Settings
 

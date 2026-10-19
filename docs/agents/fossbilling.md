@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (FOSSBilling)
 
 ```sh
-# READ THIS FIRST: this file is 25 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 24 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/fossbilling/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -235,7 +235,6 @@ FOSSBilling's cron has never run, say so in one line of that message.
 - [Lightning Swap Connect URI](https://openreceive.org/guides/lightning-swap-connect.md)
 - [Security](https://openreceive.org/guides/security.md)
 - [Price Feeds](https://openreceive.org/guides/price-feeds.md)
-- [Payment Safety Upgrade](https://openreceive.org/guides/payment-safety-upgrade.md)
 
 ---
 

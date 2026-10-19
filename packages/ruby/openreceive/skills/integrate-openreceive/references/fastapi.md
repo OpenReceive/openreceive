@@ -444,12 +444,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/agent-directions/flask.md — the same engine as a Flask Blueprint: follow those directions instead if this app is Flask after all
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -625,14 +624,14 @@ checks the wallet, and requests get `503 WALLET_UNAVAILABLE` until the check
 passes.
 → [openreceive_router](https://openreceive.org/guides/api-reference.md#openreceive_router) ·
 [openreceive_lifespan](https://openreceive.org/guides/api-reference.md#openreceive_lifespan) ·
-[the authorize context](https://openreceive.org/guides/api-reference.md#the-authorize-context)
+[the authorize context](https://openreceive.org/guides/api-reference.md#host-python)
 
 `rate_limiting=True` is for public web shops. Leave it off for point-of-sale,
 where many payers share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
 
 An optional worker, `openreceive notifications --app main:app`, listens for
 wallet payment notifications so settlement does not wait for the next page
-load. → [openreceive notifications](https://openreceive.org/guides/api-reference.md#openreceive-notifications)
+load. → [openreceive notifications](https://openreceive.org/guides/api-reference.md#openreceive-reconcile--openreceive-notifications)
 
 Your app also needs an ordinary order-creation route that validates the cart,
 prices with exact decimal math, and returns the order id the page will pass as

@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (SvelteKit)
 
 ```sh
-# READ THIS FIRST: this file is 35 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 36 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/sveltekit/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -429,12 +429,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/guides/quickstart-next.md — each hook explained step by step, on Next.js; they are the same here
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -474,7 +473,7 @@ npm install @openreceive/http @openreceive/svelte pg
 On Node, with `@sveltejs/adapter-node`. The wallet connection and your
 database driver need Node, so the route cannot run on an edge runtime. The
 Vercel and Netlify adapters deploy Node functions: read
-Bitcoin checkout on serverless hosts first. For
+[Bitcoin checkout on serverless hosts](https://openreceive.org/guides/serverless.md) first. For
 Cloudflare Workers, the [TanStack Start recipe](https://openreceive.org/guides/tanstack-start-recipe.md#where-it-runs)
 explains what a Worker needs. This recipe was not run on those hosts.
 
@@ -570,13 +569,13 @@ export const POST: RequestHandler = (event) => handleOpenReceive(event);
 
 `native` is the request's `RequestEvent`, so `authorize` can check the
 session your app already has: its cookies, or the `event.locals.user` your
-`hooks.server.ts` sets. The Next.js quickstart
+`hooks.server.ts` sets. The [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md)
 explains each hook. They are the same here.
 
 One stack serves the whole server process. Behind a reverse proxy, set
 adapter-node's `ADDRESS_HEADER` (and `XFF_DEPTH`), so that
 `getClientAddress()` returns the payer's address and not the proxy's
-(Rate limiting).
+([Rate limiting](https://openreceive.org/guides/rate-limiting.md)).
 
 On SvelteKit 2, import the secret as `env.NWC_URI` from
 `$env/dynamic/private`, and import server modules from `$lib/server/`, with
@@ -586,7 +585,7 @@ only.
 ### Your database
 
 `db` is a `pg` Pool, `node:sqlite` or `better-sqlite3`, or one of the
-adapters in Node ORM recipes. With Drizzle, pass
+adapters in [Node ORM recipes](https://openreceive.org/guides/node-orms.md). With Drizzle, pass
 the driver underneath it. `sv add drizzle` sets up Postgres through
 postgres.js or Neon, which OpenReceive does not take directly. Then give
 OpenReceive its own small `pg` Pool on the same `DATABASE_URL`. It is the same
@@ -595,7 +594,7 @@ database, not a second one.
 Create OpenReceive's two tables with your migrations
 (`npx openreceive scaffold payments --orm drizzle` writes the Drizzle
 schema), or run `paymentsSchemaSql("postgres")` from `@openreceive/http`
-once. It is idempotent. See Payment storage.
+once. It is idempotent. See [Payment storage](https://openreceive.org/guides/storage.md).
 
 ### The checkout page
 
@@ -628,7 +627,7 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 The page renders on the server and starts the checkout in the browser. The
 payer picks Bitcoin and gets the invoice. Keep it at the order's own URL: a
 payer with a swap deposit in flight comes back to it
-(Swap refunds).
+([Swap refunds](https://openreceive.org/guides/swap-refunds.md)).
 
 ### Settings
 

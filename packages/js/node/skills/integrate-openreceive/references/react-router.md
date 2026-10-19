@@ -421,12 +421,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/guides/quickstart-next.md — each hook explained step by step, on Next.js; they are the same here
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -467,7 +466,7 @@ npm install @openreceive/http @openreceive/react pg
 On Node, with `react-router-serve` or your own Express server. The wallet
 connection and your database driver need Node, so the route cannot run on an
 edge runtime. On Vercel or Netlify, read
-Bitcoin checkout on serverless hosts first. For
+[Bitcoin checkout on serverless hosts](https://openreceive.org/guides/serverless.md) first. For
 Cloudflare Workers, the [TanStack Start recipe](https://openreceive.org/guides/tanstack-start-recipe.md#where-it-runs)
 explains what a Worker needs. This recipe was not run on those hosts.
 
@@ -550,23 +549,23 @@ export default [
 `authorize` sees the incoming request with its cookies, so check it with the
 session your app already has. With `createCookieSessionStorage`,
 `currentVisitor` is `(await getSession(request.headers.get("cookie"))).get("visitor")`.
-The Next.js quickstart explains each hook.
+The [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md) explains each hook.
 They are the same here.
 
 One stack serves the whole server process. A loader cannot see the
 connection, so the client address comes from a header. Without a proxy that
-sets it, the limit does not apply (Rate limiting).
+sets it, the limit does not apply ([Rate limiting](https://openreceive.org/guides/rate-limiting.md)).
 
 ### Your database
 
 `db` is a `pg` Pool, `node:sqlite` or `better-sqlite3`, or one of the
-adapters in Node ORM recipes. With Drizzle, pass
+adapters in [Node ORM recipes](https://openreceive.org/guides/node-orms.md). With Drizzle, pass
 the `pg` Pool underneath it.
 
 Create OpenReceive's two tables with your migrations
 (`npx openreceive scaffold payments --orm <your orm>`), or run
 `paymentsSchemaSql("postgres")` from `@openreceive/http` once. It is
-idempotent. See Payment storage.
+idempotent. See [Payment storage](https://openreceive.org/guides/storage.md).
 
 ### The checkout page
 
@@ -596,7 +595,7 @@ into your Tailwind entry (`app/app.css`); the checkout styles are compiled
 already. The page renders on the server and starts the checkout in the
 browser. The payer picks Bitcoin and gets the invoice. Keep it at the order's
 own URL: a payer with a swap deposit in flight comes back to it
-(Swap refunds).
+([Swap refunds](https://openreceive.org/guides/swap-refunds.md)).
 
 ### Settings
 

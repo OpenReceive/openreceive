@@ -84,8 +84,8 @@ alone. Plain PHP, non-Rails Ruby, and WordPress projects can use
 `npx skills add OpenReceive/openreceive`. Installing a library alone does not
 make its bundled skills discoverable.
 
-A **debug-openreceive-payment** skill ships alongside: boot failures, 403/404/
-409 semantics, settlement timing, swap refunds, each with its fix.
+A **debug-openreceive-payment** skill ships alongside: boot failures,
+403/404/409 semantics, settlement timing, swap refunds, each with its fix.
 
 ## Working on OpenReceive itself?
 

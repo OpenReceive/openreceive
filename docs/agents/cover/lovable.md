@@ -1,6 +1,6 @@
 # OpenReceive agent directions: Lovable (0.4.29)
 
-These directions are 26 KB. Fetch the full file and follow it from Step 0:
+These directions are 27 KB. Fetch the full file and follow it from Step 0:
 
     https://openreceive.org/agent-directions/lovable/full.md
 

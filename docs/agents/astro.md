@@ -434,12 +434,11 @@ enough; drop the `.md` for the same page a person would read.
 - https://openreceive.org/guides/custom-checkout-route.md — advanced: replacing the shipped adapter's routes with your own
 - https://openreceive.org/guides/react-material-ui-recipe.md — a worked custom UI on a component library
 - https://openreceive.org/guides/quickstart-next.md — each hook explained step by step, on Next.js; they are the same here
+- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 - https://openreceive.org/guides.md — the index, if what you need is not above
 
 Questions, or a problem with the library itself:
 https://openreceive.org/contact
-
-- https://openreceive.org/guides/payment-safety-upgrade.md — coordinated upgrades and reviewed repair of existing attempts
 
 ---
 
@@ -481,7 +480,7 @@ On Node, with `@astrojs/node`. The payment route and the checkout page render
 on demand (`prerender = false`); the rest of the site can stay static. The
 wallet connection and your database driver need Node, so the route cannot run
 on an edge runtime. The Vercel and Netlify adapters deploy Node functions:
-read Bitcoin checkout on serverless hosts first.
+read [Bitcoin checkout on serverless hosts](https://openreceive.org/guides/serverless.md) first.
 For Cloudflare Workers, the [TanStack Start recipe](https://openreceive.org/guides/tanstack-start-recipe.md#where-it-runs)
 explains what a Worker needs. This recipe was not run on those hosts.
 
@@ -572,25 +571,25 @@ export const POST: APIRoute = (context) => handleOpenReceive(context);
 
 `native` is the endpoint's `APIContext`, so `authorize` can check the
 session your app already has: its cookies, or the user your middleware puts
-in `context.locals`. The Next.js quickstart
+in `context.locals`. The [Next.js quickstart](https://openreceive.org/guides/quickstart-next.md)
 explains each hook. They are the same here.
 
 One stack serves the whole server process. Astro's origin check refuses
 cross-site form posts. The checkout sends JSON, which it lets through.
 `clientAddress` is the socket address. Behind your own reverse proxy, list
 your domain in `security.allowedDomains`: Astro then takes the payer's
-address from `x-forwarded-for` (Rate limiting).
+address from `x-forwarded-for` ([Rate limiting](https://openreceive.org/guides/rate-limiting.md)).
 
 ### Your database
 
 `db` is a `pg` Pool, `node:sqlite` or `better-sqlite3`, or one of the
-adapters in Node ORM recipes. With Drizzle, pass
+adapters in [Node ORM recipes](https://openreceive.org/guides/node-orms.md). With Drizzle, pass
 the `pg` Pool underneath it.
 
 Create OpenReceive's two tables with your migrations
 (`npx openreceive scaffold payments --orm <your orm>`), or run
 `paymentsSchemaSql("postgres")` from `@openreceive/http` once. It is
-idempotent. See Payment storage.
+idempotent. See [Payment storage](https://openreceive.org/guides/storage.md).
 
 ### The checkout page
 
@@ -630,7 +629,7 @@ if (!order || order.visitor !== Astro.cookies.get("visitor")?.value) {
 
 The element starts the checkout in the browser. The payer picks Bitcoin and
 gets the invoice. Keep it at the order's own URL: a payer with a swap deposit
-in flight comes back to it (Swap refunds).
+in flight comes back to it ([Swap refunds](https://openreceive.org/guides/swap-refunds.md)).
 
 ### Settings
 
