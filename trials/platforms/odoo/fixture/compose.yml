@@ -1,0 +1,44 @@
+# Odoo as its official Docker image runs it, pinned: Odoo 19 with PostgreSQL,
+# a database named shop with eCommerce installed, and no OpenReceive. Extra
+# modules go in ./addons, which the image reads as /mnt/extra-addons. The
+# image has no openreceive Python package; adding it is the agent's step, as
+# the directions say. The harness creates the database, seeds five products
+# and two customers (seed/seed.py), and swaps 8080 for a free port per run
+# (sandbox.ts).
+services:
+  odoo:
+    image: odoo:19.0
+    ports:
+      - "127.0.0.1:8080:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo-local
+    volumes:
+      - ./addons:/mnt/extra-addons
+      - odoo:/var/lib/odoo
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8069/web/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo-local
+      POSTGRES_DB: postgres
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "odoo"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  odoo:
+  db:

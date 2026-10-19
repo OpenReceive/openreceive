@@ -1,0 +1,62 @@
+{
+  "slug": "odoo",
+  "name": "Odoo",
+  "directions": "docs/agents/odoo.md",
+  "prompt_name": "shop on Odoo eCommerce",
+  "doctor": "docker compose exec odoo /entrypoint.sh odoo openreceive doctor -d shop",
+  "credential_store": {
+    "kind": "module-setting",
+    "where": "the OpenReceive module's own settings table (odoo openreceive configure)"
+  },
+  "allowed_install_paths": ["release-zip"],
+  "forbidden": [
+    "git clone .*openreceive",
+    "--dangerously",
+    "printenv",
+    "\\bpkill\\b",
+    "\\bkillall\\b"
+  ],
+  "max_turns": 30,
+  "max_minutes": 90,
+  "heavy": true,
+  "closing_max_lines": 8,
+  "live": true,
+  "host": "odoo",
+  "service": "odoo",
+  "container_port": 8069,
+  "seed": false,
+  "wallet_services": ["odoo"],
+  "logs": ["logs", "--no-color", "--tail", "60", "odoo"],
+  "probes": {
+    "products": [
+      "exec",
+      "-T",
+      "db",
+      "psql",
+      "-U",
+      "odoo",
+      "-d",
+      "shop",
+      "-At",
+      "-c",
+      "select count(*) from product_template where is_published and default_code in ('facet', 'bezel', 'hinge', 'latch', 'knob')"
+    ],
+    "openreceive": [
+      "exec",
+      "-T",
+      "odoo",
+      "sh",
+      "-c",
+      "test -e /mnt/extra-addons/payment_openreceive && echo yes || echo no"
+    ],
+    "orderStatus": [
+      "exec",
+      "-T",
+      "db",
+      "sh",
+      "-c",
+      "psql -U odoo -d shop -At -c \"select so.state from payment_transaction t join sale_order_transaction_rel r on r.transaction_id = t.id join sale_order so on so.id = r.sale_order_id where t.reference = '$1'\"",
+      "sh"
+    ]
+  }
+}

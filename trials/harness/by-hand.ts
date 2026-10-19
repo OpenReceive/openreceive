@@ -5,6 +5,7 @@ import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
 import { liveShopChecks } from "./live.ts";
 import { openingFor } from "./loop.ts";
+import { liveOdooChecks } from "./odoo.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
 import { livePrestashopChecks } from "./prestashop.ts";
 import {
@@ -51,6 +52,7 @@ const BY_HAND_PLATFORMS = [
   "fossbilling",
   "prestashop",
   "vendure",
+  "odoo",
 ] as const;
 
 interface State {
@@ -176,7 +178,9 @@ async function checkShop(argv: readonly string[]): Promise<void> {
             ? await livePrestashopChecks(state.baseUrl, options)
             : platform.host === "vendure"
               ? await liveVendureChecks(directory, state.baseUrl, options)
-              : await liveShopChecks(state.baseUrl, options)),
+              : platform.host === "odoo"
+                ? await liveOdooChecks(state.baseUrl, options)
+                : await liveShopChecks(state.baseUrl, options)),
     );
   } else {
     console.log(

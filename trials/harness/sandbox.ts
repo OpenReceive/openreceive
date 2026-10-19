@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { inspectBtcpay, removeBtcpayState, setupBtcpay } from "./btcpay.ts";
 import { compose, InfraError, platformOverrideFile, walletOverrideFile } from "./docker.ts";
 import { setupFossbilling } from "./fossbilling.ts";
+import { setupOdoo } from "./odoo.ts";
 import { setupPaymenter } from "./paymenter.ts";
 import { setupPrestashop } from "./prestashop.ts";
 import type { Check, Platform } from "./types.ts";
@@ -232,6 +233,8 @@ export async function startShop(
     if (platform.host === "fossbilling") await setupFossbilling(directory, baseUrl, seedDir);
     // A PrestaShop merchant has run its installer and has customers and products.
     if (platform.host === "prestashop") await setupPrestashop(directory, baseUrl, seedDir);
+    // An Odoo merchant has a database with eCommerce, products and customers.
+    if (platform.host === "odoo") await setupOdoo(directory, seedDir);
     if (platform.seed === false) {
       return {
         id,

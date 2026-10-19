@@ -136,8 +136,18 @@ export interface Platform {
    * `vendure`: a Vendure server, worker and its Next.js storefront starter;
    * vendure.ts fills a guest's cart through the Shop API, and the guest pays
    * at the storefront's checkout in Chromium.
+   * `odoo`: an Odoo eCommerce shop that odoo.ts creates and seeds with two
+   * customers and five products; the customer checks out through Odoo's
+   * shop and pays on the module's checkout page in Chromium.
    */
-  readonly host?: "btcpay" | "bolt" | "paymenter" | "fossbilling" | "prestashop" | "vendure";
+  readonly host?:
+    | "btcpay"
+    | "bolt"
+    | "paymenter"
+    | "fossbilling"
+    | "prestashop"
+    | "vendure"
+    | "odoo";
   /** The WordPress post type the five seeded products are: WooCommerce's `product` when omitted, `download` for Easy Digital Downloads. */
   readonly wordpress_post_type?: string;
   /** Compose service that publishes the shop. WordPress when omitted. */
