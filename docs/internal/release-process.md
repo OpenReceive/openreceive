@@ -336,7 +336,7 @@ Run from the repo root on a clean, current `master`.
 
    The artifact tool derives filenames from the public npm and gem lists and
    registry version conversions. It refuses to create the draft when any of the
-   29 required assets is missing: 17 npm tarballs, 3 gems, Python wheel and sdist,
+   29 required assets is missing: 16 npm tarballs, 3 gems, Python wheel and sdist,
    standalone checkout, WordPress ZIP, Paymenter ZIP, the two FOSSBilling ZIPs
    (the whole extension, and the module alone that FOSSBilling's extension
    directory installs), PrestaShop ZIP, Odoo module ZIP, and docs bundle. It never
