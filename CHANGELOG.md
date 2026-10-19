@@ -68,6 +68,13 @@
 - Changed (Python): `openreceive` accepts `cryptography` 41 and newer (was 42),
   so it installs beside the system packages of Odoo's official Docker image,
   whose Ubuntu ships 41. The library uses nothing newer.
+- Fixed (Medusa): the quickstart's storefront route for the Next.js starter
+  now serves the checkout's stylesheet in a production build. Next's webpack
+  build replaced the route's imported `createRequire`, so `next build` gave a
+  route that answered 500 and an unstyled checkout; the route now imports
+  `node:module` natively. Existing storefronts: replace the route file with
+  the quickstart's. CI now runs `@openreceive/medusa` in a real Medusa 2 on
+  every push, and the trials have a Medusa shop.
 
 ## 0.4.29 - 2026-10-19
 
