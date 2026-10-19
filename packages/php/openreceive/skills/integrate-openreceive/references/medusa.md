@@ -321,13 +321,14 @@ starter's Tailwind build:
 
 ```ts
 import { readFile } from "node:fs/promises"
-import { createRequire } from "node:module"
 import path from "node:path"
 import { NextRequest } from "next/server"
 
 const BACKEND_URL = process.env.MEDUSA_BACKEND_URL ?? "http://localhost:9000"
 
 async function stylesheet() {
+  // Node's own createRequire: Next's bundler would replace an imported one.
+  const { createRequire } = await import(/* webpackIgnore: true */ "node:module")
   const resolve = createRequire(path.join(process.cwd(), "package.json")).resolve
   const css = await readFile(resolve("@openreceive/react/styles.css"))
   return new Response(css, {
