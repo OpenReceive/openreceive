@@ -2,6 +2,7 @@
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { root } from "../shared/root.mjs";
 import { STYLE_ROOT_ATTRIBUTE, scopeStyles } from "./scope-styles.mjs";
@@ -43,7 +44,14 @@ const wrapperCssTargets = [
 mkdirSync(path.dirname(distCss), { recursive: true });
 mkdirSync(generatedDir, { recursive: true });
 
-const cli = path.join(root, "node_modules/@tailwindcss/cli/dist/index.mjs");
+// Resolved from the browser package, not the repo root: npm hoists the CLI to the
+// root only when no other workspace needs a different Tailwind version.
+const cli = path.join(
+  path.dirname(
+    createRequire(path.join(browserRoot, "package.json")).resolve("@tailwindcss/cli/package.json"),
+  ),
+  "dist/index.mjs",
+);
 const result = spawnSync(process.execPath, [cli, "-i", input, "-o", distCss, "--minify"], {
   cwd: browserRoot,
   encoding: "utf8",
