@@ -23,6 +23,13 @@
   expiry plus the 900-second grace, as a pass that read on to the empty page
   did. A new `spec/test-vectors/reconcile-progress.json` vector pins both in
   all four engines.
+- Changed (Rails): `openreceive-rails` now requires `nwc-ruby ~> 0.4`.
+  nwc-ruby 0.4.0 derives a connection's encryption key once per client
+  instead of on every wallet call and notification; the pure-Ruby derivation
+  took about 33 ms on a laptop, more on a server vCPU, twice per call. The
+  engine keeps one client per process, so reconcile passes, wallet history
+  pages and the `openreceive:notifications` worker all reuse that key. The
+  client API and the wire format are unchanged.
 
 ## 0.4.30 - 2026-10-19
 

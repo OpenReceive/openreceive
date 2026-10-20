@@ -45,7 +45,9 @@ Gem::Specification.new do |spec|
   # deliberately not one of openreceive-server (framework-agnostic Rack, host
   # injects its own client). config.nwc_client remains the supported override.
   # 0.3 bounds every call (connect, info fetch, make_invoice) by request_timeout.
-  spec.add_dependency "nwc-ruby", "~> 0.3"
+  # 0.4 derives the connection's encryption key once per client instead of on
+  # every call and notification; the engine memoizes one client per process.
+  spec.add_dependency "nwc-ruby", "~> 0.4"
 
   # Test-only: the engine-owned model tests run against in-memory SQLite.
   spec.add_development_dependency "sqlite3", ">= 2.1"

@@ -8,6 +8,12 @@ waits on an unpaid invoice, a pass reads two pages of wallet history instead
 of three. An invoice the wallet still lists as pending after expiry plus the
 grace still closes.
 
+Requires `nwc-ruby ~> 0.4`. nwc-ruby 0.4.0 derives a connection's encryption
+key once per client instead of on every wallet call and notification (about
+33 ms of pure-Ruby work each time, twice per call). The engine keeps one
+client per process, so every reconcile pass, wallet history page and the
+`openreceive:notifications` worker reuses it. No API or wire-format change.
+
 ## 0.4.30 - 2026-10-19
 
 Release with the complete 0.4.30 package family. No runtime changes from
