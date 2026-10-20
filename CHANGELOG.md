@@ -84,6 +84,14 @@
   crypto in WooCommerce or Easy Digital Downloads: Bitcoin, USDT and USDC, paid
   to your own wallet in Bitcoin. No account, no API key." USDT and USDC still
   arrive only through a configured swap provider, as BTC over Lightning.
+- Added (Odoo): the module is ready for the Odoo Apps store. It has a store
+  page (`static/description/index.html`) that names the outside services it
+  contacts, a cover image, and a 256-pixel icon. The provider form now says
+  what the module contacts once a code is saved: the wallet through the relay
+  in its code, the BTC price feeds, and, with a swap code, the swap provider.
+  `npm run release:odoo-apps:publish` pushes each release's module to the
+  `19.0` and `20.0` branches of `OpenReceive/odoo`, the repository the store
+  scans, with the version under each Odoo series (`19.0.<version>`).
 
 ## 0.4.31 - 2026-10-20
 

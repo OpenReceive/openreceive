@@ -47,7 +47,11 @@
                 />
                 <div colspan="2" class="text-muted" invisible="code != 'openreceive'" groups="base.group_system">
                     Saving a code asks the wallet first: only a receive-only code is kept,
-                    and it is never shown again.
+                    and it is never shown again. Once a wallet code is saved, the module
+                    connects to your wallet through the relay in that code and fetches BTC
+                    prices from CoinGecko, or from openreceive.org if CoinGecko does not
+                    answer. With a swap code, a customer who picks a stablecoin has the
+                    amount, the invoice and their refund address sent to that swap provider.
                     <a href="https://openreceive.org/get_a_nwc_code_to_receive_payments" target="_blank">Get a receive-only code</a>
                     ·
                     <a href="https://openreceive.org/guides/quickstart-odoo" target="_blank">Guide</a>

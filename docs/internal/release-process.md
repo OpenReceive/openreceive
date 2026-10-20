@@ -49,7 +49,7 @@ publish the plugin. A bump to the plugin's source version is not a request to
 publish it. Submit or publish a BTCPay build only when the maintainer explicitly
 asks for a BTCPay release.
 
-Five registries, five publishers:
+Six destinations, six publishers:
 
 | Registry | Who publishes | Credential |
 | --- | --- | --- |
@@ -58,6 +58,7 @@ Five registries, five publishers:
 | PyPI (1 distribution) | GitHub Actions, `.github/workflows/publish-pypi.yml` | none stored: OIDC Trusted Publishing, approved per run in the `pypi` environment |
 | Packagist (2 packages) | GitHub Actions, `.github/workflows/publish-composer.yml`. It pushes the split repositories that Packagist watches. | separate write-enabled deploy keys: `COMPOSER_OPENRECEIVE_SSH_KEY` for `OpenReceive/openreceive-php`, `COMPOSER_LARAVEL_SSH_KEY` for `OpenReceive/openreceive-laravel`, both in the protected `packagist` environment |
 | GitHub release | the maintainer's machine, `gh release create` | `gh` login for the OpenReceive account (`GH_CONFIG_DIR` from `.env.release`) |
+| Odoo Apps store (1 module) | the maintainer's machine, `npm run release:odoo-apps:publish`. It pushes the branches of `OpenReceive/odoo` that the store scans. | the same SSH access that pushes `master` (the host of this checkout's `origin`) |
 
 ## One-time setup
 
@@ -98,6 +99,27 @@ create accounts or enforce environment reviewer settings.
   On GitHub, the `wordpress-org` environment is set up like `rubygems`: a
   required reviewer, no administrator bypass, and `v*` tags only. It stores
   that password as `WPORG_SVN_PASSWORD`.
+- The Odoo Apps store (apps.odoo.com) scans a public Git repository, one
+  branch per Odoo series, for module folders at the top of the branch. It
+  charges nothing for a free module and does not review it. Set it up once:
+  1. Create the empty public repository `OpenReceive/odoo`. Nobody commits
+     to it by hand; each release pushes it.
+  2. After a release, run `npm run release:odoo-apps:publish` (step 9). The
+     first run creates the branches `19.0` and `20.0`.
+  3. Signed in to apps.odoo.com with the maintainer's Odoo account, register
+     both branches at https://apps.odoo.com/apps/upload:
+     `ssh://git@github.com/OpenReceive/odoo#19.0` and
+     `ssh://git@github.com/OpenReceive/odoo#20.0`.
+
+  The store reads the listing from the module: the manifest, `icon.png`, the
+  cover image in the manifest's `images`, and
+  `static/description/index.html`. That page may link only to the module's
+  own files, YouTube, Teams, `mailto:` and `skype:`, and may run no
+  JavaScript; `tests/odoo-apps.test.mjs` checks it. A manifest error
+  unpublishes every module in the repository. When Odoo ships a new series
+  and the `odoo-module` CI lane tests it, add it to `ODOO_SERIES` in
+  `tools/release/odoo-apps.mjs`, and register its branch after the next
+  release.
 - Packagist has no upload API and cannot read a monorepo. So each Composer
   package lives in its own read-only split repository:
   `OpenReceive/openreceive-php` for `openreceive/openreceive`, and
@@ -359,6 +381,18 @@ Run from the repo root on a clean, current `master`.
    WordPress ZIP to the plugin directory and waits until wordpress.org lists
    the version.
 
+   Then update the Odoo Apps store. It downloads the Odoo ZIP from the
+   published release, so run it once the release is public:
+
+   ```sh
+   npm run release:odoo-apps:publish
+   ```
+
+   It pushes branches `19.0` and `20.0` of `OpenReceive/odoo`, each holding
+   the release's module with its version under that series (`19.0.<x.y.z>`).
+   The store rescans registered branches by itself. The tool refuses a
+   prerelease, which does not go to the store.
+
    Registry indexes can lag; retry missing downloads rather than substituting
    a different version or a locally rebuilt registry artifact.
 
@@ -373,6 +407,7 @@ Run from the repo root on a clean, current `master`.
     composer show -a openreceive/laravel
     gh release view v<x.y.z> --repo OpenReceive/openreceive
     curl -s 'https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=openreceive' | jq -r .version
+    git ls-remote --heads https://github.com/OpenReceive/odoo
     ```
 
     Run `npm run release:artifacts -- github` from the release checkout. Download
@@ -548,6 +583,8 @@ The release owner checks, before tagging:
 - WordPress ZIP matches the release version and passes Docker integration, browser tests and plugin audit.
 - After the GitHub release is published and Publish WordPress.org is approved,
   the wordpress.org plugin API lists the release version.
+- After the GitHub release is published, `npm run release:odoo-apps:publish`
+  pushed both Odoo Apps branches.
 - Agent skills describe the current public API. A release that changes the
   public API updates `skills/*/SKILL.md` in the same change. Run
   `npm run generate:skills` so `.agents/skills/` and the four ecosystem bundles

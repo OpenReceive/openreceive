@@ -1,0 +1,145 @@
+<section class="container py-4">
+    <div class="row">
+        <div class="col-12 text-center mb-4">
+            <h2 class="mb-2">Bitcoin Lightning payments, straight into your own wallet</h2>
+            <p class="lead text-muted">
+                A payment provider for Odoo's shop and invoices. Customers pay a Lightning invoice
+                on a checkout page of your own site, and Odoo confirms the order or marks the
+                invoice paid, as with any other provider.
+            </p>
+        </div>
+        <div class="col-12 text-center mb-4">
+            <img src="cover.png" class="img-fluid border" alt="The OpenReceive checkout on an Odoo shop"/>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4 text-center">
+            <img src="payment-step.png" class="img-fluid border" alt="OpenReceive on Odoo's payment step"/>
+            <p class="text-muted mt-2">Odoo's own payment step. With a swap code saved, the method
+                reads "Bitcoin &amp; stablecoins".</p>
+        </div>
+        <div class="col-md-6 mb-4 text-center">
+            <img src="invoice.png" class="img-fluid border" alt="A Lightning invoice on the checkout page"/>
+            <p class="text-muted mt-2">The checkout page on your own site, with the Lightning
+                invoice.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <h3>What it does</h3>
+            <ul>
+                <li>Adds the payment provider <b>OpenReceive</b>, with the payment method
+                    <b>Bitcoin Lightning</b>, to Odoo's payment step: in the shop's checkout and on
+                    an invoice's payment link.</li>
+                <li>Payments go to your own Lightning wallet, connected with a receive-only Nostr
+                    Wallet Connect (NWC) code: a code that can create invoices and read payments,
+                    but cannot spend. The module refuses a code that can spend.</li>
+                <li>Optional USDT, USDC, SOL and ETH: with a swap provider you configure, the same
+                    checkout takes them, and the provider converts them to BTC over Lightning into
+                    the same wallet. Available assets and networks depend on the provider.</li>
+                <li>Charges the transaction's amount in its currency, converted to sats at the
+                    current BTC price.</li>
+                <li>Keeps payment attempts in two tables of Odoo's own PostgreSQL database. A
+                    settled payment marks Odoo's payment transaction done in the same database
+                    transaction, then Odoo's own post-processing confirms the order or pays the
+                    invoice and sends Odoo's usual emails.</li>
+                <li>A scheduled action records, within a minute, a payment whose customer closed
+                    the page before it settled.</li>
+                <li>Only the browser session that started a payment can see its checkout page.</li>
+                <li>Command-line tools: <code>odoo openreceive configure</code>,
+                    <code>doctor</code>, <code>test-invoice</code> and <code>reconcile</code>.</li>
+            </ul>
+        </div>
+        <div class="col-md-6 mb-4">
+            <h3>What it is not</h3>
+            <ul>
+                <li>Not a payment company. OpenReceive is free, MIT-licensed software that runs on
+                    your own Odoo. There is no OpenReceive account, no API key and no fee, and it
+                    never holds your funds.</li>
+                <li>No refunds from Odoo: a receive-only wallet cannot send. Send a refund from
+                    your own wallet, then record it in Odoo.</li>
+                <li>No subscriptions or saved payment tokens: Lightning cannot pull a payment.</li>
+            </ul>
+            <h3>Requirements</h3>
+            <ul>
+                <li>Odoo 19 or 20, self-hosted or on Odoo.sh. Odoo Online cannot install modules,
+                    so it cannot run this one.</li>
+                <li>The <code>openreceive</code> Python package at the module's version:
+                    <code>pip install openreceive==0.4.31</code></li>
+                <li>A Lightning wallet that gives receive-only NWC codes.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-4">
+            <h3>Set it up</h3>
+            <ol>
+                <li>Install the Python package where Odoo's Python finds it, restart Odoo, and
+                    install <b>Payment Provider: OpenReceive</b> under Apps.</li>
+                <li>In <b>Invoicing</b> (or <b>Website</b>) → <b>Configuration</b> →
+                    <b>Payment Providers</b>, open <b>OpenReceive</b>. Paste a receive-only NWC code
+                    into <b>Receive-only NWC code</b> and save. Saving asks the wallet first and
+                    keeps the code only when the wallet answers as receive-only. The form never
+                    shows a saved code again.</li>
+                <li>For stablecoins, paste a swap provider code into <b>Swap provider code</b>.
+                    Skip it for Bitcoin-only checkout.</li>
+                <li>Publish the provider (Odoo 19: State <b>Enabled</b>; Odoo 20: <b>Live</b> and
+                    <b>Published</b>).</li>
+                <li>Check it from a terminal: <code>odoo openreceive doctor -d &lt;database&gt;</code>
+                    and <code>odoo openreceive test-invoice --new -d &lt;database&gt;</code>.</li>
+            </ol>
+            <p>The full guide, with Docker and Odoo.sh steps:
+                openreceive.org/guides/quickstart-odoo</p>
+            <div class="text-center">
+                <img src="provider.png" class="img-fluid border" alt="The OpenReceive provider form in Odoo"/>
+                <p class="text-muted mt-2">The provider form: it says only whether each code is
+                    saved, never the code.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-4">
+            <h3>Outside services and your data</h3>
+            <p>The module sends no telemetry. Until you save a wallet code, it contacts no outside
+                service on its own. After that, it connects to:</p>
+            <ul>
+                <li><b>Your Lightning wallet</b>, through the Nostr relay named in the NWC code you
+                    save: to create an invoice when a customer checks out and to check for incoming
+                    payments. It sends invoice amounts and descriptions to your wallet. You or your
+                    wallet provider choose and run the relay and the wallet.</li>
+                <li><b>BTC price feeds</b>, to convert an amount to sats: CoinGecko, and the
+                    OpenReceive price mirror at openreceive.org if CoinGecko does not answer. The
+                    request carries only a fixed list of currency codes, no order or customer
+                    details.</li>
+                <li><b>A swap provider, only if you save a swap code.</b> When a customer chooses
+                    USDT, USDC, SOL or ETH, the module sends the amount, the Lightning invoice to
+                    be paid and the customer's refund address to the provider named in that code,
+                    and later checks the swap's status. Review that provider's terms first.</li>
+            </ul>
+            <p>The checkout page lists wallets, exchanges and swap services, and links swap
+                transactions to public block explorers. These are ordinary links: the checkout
+                never contacts those sites, and all its icons are bundled with the module.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <h3>Tested</h3>
+            <p>On Odoo 19 and Odoo 20 from their official Docker images with PostgreSQL 17: install,
+                configuration from the form and from a terminal, the doctor, and a signed-in
+                customer ordering in the shop and paying by Lightning and by USDT on Solana, after
+                which the sale order is confirmed. Not tested yet: Odoo.sh, paying from an invoice's
+                payment link, and multi-company databases.</p>
+        </div>
+        <div class="col-md-6 mb-4">
+            <h3>Help</h3>
+            <p>Questions and bug reports: GitHub issues in the OpenReceive/openreceive repository,
+                or <a href="mailto:info@openreceive.org">info@openreceive.org</a>. The source code
+                is MIT-licensed and public in the same repository.</p>
+        </div>
+    </div>
+</section>

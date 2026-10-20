@@ -423,12 +423,14 @@ function updateTextVersionReferences(root, currentVersion, targetVersion) {
     }
   }
 
-  // The Odoo module's manifest, and the pip pin its README and quickstart give.
+  // The Odoo module's manifest, and the pip pin its README, store page and
+  // quickstart give.
   // Odoo takes a module version of digits only.
   const odooFrom = currentVersion.split("-")[0];
   const odooTo = targetVersion.split("-")[0];
   for (const file of [
     "packages/python/odoo/payment_openreceive/__manifest__.py",
+    "packages/python/odoo/payment_openreceive/static/description/index.html",
     "packages/python/odoo/README.md",
     "docs/guides/quickstart-odoo.md",
   ]) {
@@ -539,6 +541,7 @@ function dryRunPrepare(root, targetVersion) {
       "packages/php/prestashop/openreceive/src/Runtime.php",
       "packages/php/prestashop/openreceive/openreceive.php",
       "packages/python/odoo/payment_openreceive/__manifest__.py",
+      "packages/python/odoo/payment_openreceive/static/description/index.html",
       "packages/python/odoo/README.md",
       "CHANGELOG.md",
       "docs/internal/release-process.md",

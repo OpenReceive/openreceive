@@ -18,6 +18,7 @@
     ],
     "post_init_hook": "post_init_hook",
     "uninstall_hook": "uninstall_hook",
+    "images": ["static/description/cover.png"],
     "license": "Other OSI approved licence",
     "installable": True,
 }
