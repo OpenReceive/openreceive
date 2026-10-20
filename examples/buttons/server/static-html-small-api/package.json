@@ -18,7 +18,7 @@
     "@openreceive/node": "0.4.31",
     "@openreceive/provider-data": "0.4.31",
     "express": "^5.2.1",
-    "vite": "^6.4.3"
+    "vite": "^6.4.4"
   },
   "devDependencies": {
     "@openreceive/testkit": "0.4.31",
