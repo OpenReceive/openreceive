@@ -9,7 +9,21 @@
     "source": "https://github.com/OpenReceive/openreceive",
     "docs": "https://openreceive.org/guides/quickstart-laravel"
   },
-  "keywords": ["laravel", "lightning", "nwc", "nostr", "payments", "bitcoin", "checkout"],
+  "keywords": [
+    "laravel",
+    "lightning",
+    "nwc",
+    "nostr",
+    "payments",
+    "bitcoin",
+    "checkout",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
+  ],
   "require": {
     "php": "^8.2",
     "illuminate/console": "^11.0 || ^12.0 || ^13.0",

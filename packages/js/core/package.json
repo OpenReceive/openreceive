@@ -8,7 +8,13 @@
     "payments",
     "nwc",
     "bolt11",
-    "openreceive"
+    "openreceive",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
   ],
   "type": "module",
   "main": "./dist/index.js",

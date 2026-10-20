@@ -5,7 +5,7 @@ require_relative "lib/openreceive/server/version"
 Gem::Specification.new do |spec|
   spec.name = "openreceive-server"
   spec.version = OpenReceive::Server::VERSION
-  spec.summary = "Accept Bitcoin Lightning payments in Ruby and Rack. Your app, your wallet."
+  spec.summary = "Accept Bitcoin Lightning payments in Ruby and Rack, plus USDT and USDC through optional swaps. Your app, your wallet."
   spec.description = <<~TEXT
     Accept Bitcoin Lightning payments directly into a wallet you control, from your
     Ruby or Rack application. OpenReceive provides invoice creation, payment checks,

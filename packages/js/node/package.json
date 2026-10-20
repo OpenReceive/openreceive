@@ -9,7 +9,13 @@
     "nwc",
     "bolt11",
     "openreceive",
-    "cli"
+    "cli",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
   ],
   "type": "module",
   "sideEffects": false,

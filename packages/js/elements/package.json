@@ -11,7 +11,13 @@
     "openreceive",
     "web-components",
     "custom-elements",
-    "checkout"
+    "checkout",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
   ],
   "type": "module",
   "sideEffects": [

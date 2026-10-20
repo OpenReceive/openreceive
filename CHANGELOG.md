@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Changed (registries): registry metadata only, no code changes. Every
+  published npm package and the `openreceive/openreceive` and
+  `openreceive/laravel` Composer packages add the keywords `stablecoin`,
+  `usdt`, `usdc`, `payment-gateway`, `self-hosted` and `bitcoin-payments`.
+  `@openreceive/medusa` adds `medusa-v2` and `medusa-plugin-integration`,
+  the keywords Medusa's integrations page lists plugins by. The Python
+  package names Flask in its description, adds the `Framework :: Flask`
+  classifier and the keywords `flask`, `payment-gateway` and `self-hosted`.
+  The gem summaries name the optional USDT and USDC swaps, and the core gem
+  names Rails. USDT and USDC still arrive only through a configured swap
+  provider, as BTC over Lightning in the merchant's wallet.
+
 ## 0.4.30 - 2026-10-19
 
 - Added (PrestaShop): a native payment module for PrestaShop 9, built as a

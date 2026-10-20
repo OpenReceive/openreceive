@@ -18,7 +18,13 @@
     "bolt11",
     "payments",
     "providers",
-    "openreceive"
+    "openreceive",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
   ],
   "type": "module",
   "sideEffects": false,

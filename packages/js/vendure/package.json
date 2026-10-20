@@ -11,7 +11,13 @@
     "openreceive",
     "vendure",
     "vendure-plugin",
-    "payment-method"
+    "payment-method",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
   ],
   "type": "module",
   "sideEffects": false,

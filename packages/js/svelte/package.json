@@ -10,7 +10,13 @@
     "bolt11",
     "openreceive",
     "svelte",
-    "checkout"
+    "checkout",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
   ],
   "type": "module",
   "sideEffects": [

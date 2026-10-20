@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "openreceive"
 dynamic = ["version"]
-description = "Bitcoin Lightning checkout for Django, FastAPI and Python apps, with receive-only wallet access and optional USDT, USDC, ETH and SOL swaps."
+description = "Bitcoin Lightning checkout for Django, FastAPI, Flask and Python apps, with receive-only wallet access and optional USDT, USDC, ETH and SOL swaps."
 readme = { file = "README.md", content-type = "text/markdown" }
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "OpenReceive", email = "info@openreceive.org" }]
-keywords = ["lightning", "bitcoin", "nwc", "nostr", "payments", "django", "fastapi", "usdt", "usdc", "stablecoin"]
+keywords = ["lightning", "bitcoin", "nwc", "nostr", "payments", "django", "fastapi", "flask", "usdt", "usdc", "stablecoin", "payment-gateway", "self-hosted"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -22,6 +22,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Framework :: Django",
   "Framework :: FastAPI",
+  "Framework :: Flask",
   "Topic :: Office/Business :: Financial",
 ]
 dependencies = [

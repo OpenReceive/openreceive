@@ -5,7 +5,7 @@ require_relative "lib/openreceive/rails/version"
 Gem::Specification.new do |spec|
   spec.name = "openreceive-rails"
   spec.version = OpenReceive::Rails::VERSION
-  spec.summary = "Accept Bitcoin Lightning payments in Rails. Your app, your wallet."
+  spec.summary = "Accept Bitcoin Lightning payments in Rails, plus USDT and USDC through optional swaps. Your app, your wallet."
   spec.description = <<~TEXT
     Add Bitcoin Lightning checkout to your Rails app and receive payments directly
     into a wallet you control. Mount the engine, connect a receive-only Nostr Wallet

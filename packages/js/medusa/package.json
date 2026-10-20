@@ -11,7 +11,15 @@
     "openreceive",
     "medusa",
     "medusa-plugin",
-    "medusa-plugin-payment"
+    "medusa-plugin-payment",
+    "medusa-v2",
+    "medusa-plugin-integration",
+    "stablecoin",
+    "usdt",
+    "usdc",
+    "payment-gateway",
+    "self-hosted",
+    "bitcoin-payments"
   ],
   "type": "module",
   "sideEffects": false,
