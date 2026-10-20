@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.31 - 2026-10-20
+
+Release with the complete 0.4.31 package family. The gem's summary names
+Rails and the optional USDT and USDC swaps. No Ruby runtime changes from
+0.4.30.
+
 ## 0.4.30 - 2026-10-19
 
 Release with the complete 0.4.30 package family. The bundled agent skill adds the

@@ -1,4 +1,4 @@
-# OpenReceive agent directions: mobile apps (0.4.30)
+# OpenReceive agent directions: mobile apps (0.4.31)
 
 These directions are 26 KB. Download them with your shell and follow them from Step 0:
 

@@ -1,8 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.4.31 - 2026-10-20
 
-- Changed (registries): registry metadata only, no code changes. Every
+- Fixed (Ruby, Python, PHP): a reconcile pass now stops once the wallet has
+  listed every invoice it is looking for, unpaid ones included, as the Node
+  engine and the BTCPay Server plugin already did. While a payer waited on an
+  unpaid invoice, each pass read three pages of wallet history: the empty
+  settled view, the unpaid page that lists the invoice, and an empty page
+  after it. It now reads two, one wallet call fewer per pass. A pass that
+  stops there still closes an invoice the wallet lists as pending after
+  expiry plus the 900-second grace, as a pass that read on to the empty page
+  did. A new `spec/test-vectors/reconcile-progress.json` vector pins both in
+  all four engines. The WordPress, PrestaShop, FOSSBilling and Paymenter
+  plugins bundle the PHP engine, so their 0.4.31 ZIPs carry the fix; the
+  Odoo module gets it from the `openreceive` Python package.
+- Changed (Rails): `openreceive-rails` now requires `nwc-ruby ~> 0.4`.
+  nwc-ruby 0.4.0 derives a connection's encryption key once per client
+  instead of on every wallet call and notification; the pure-Ruby derivation
+  took about 33 ms on a laptop, more on a server vCPU, twice per call. The
+  engine keeps one client per process, so reconcile passes, wallet history
+  pages and the `openreceive:notifications` worker all reuse that key. The
+  client API and the wire format are unchanged.
+- Changed (registries): new keywords and descriptions, metadata only. Every
   published npm package and the `openreceive/openreceive` and
   `openreceive/laravel` Composer packages add the keywords `stablecoin`,
   `usdt`, `usdc`, `payment-gateway`, `self-hosted` and `bitcoin-payments`.
@@ -13,23 +32,6 @@
   The gem summaries name the optional USDT and USDC swaps, and the core gem
   names Rails. USDT and USDC still arrive only through a configured swap
   provider, as BTC over Lightning in the merchant's wallet.
-- Fixed (Ruby, Python, PHP): a reconcile pass now stops once the wallet has
-  listed every invoice it is looking for, unpaid ones included, as the Node
-  engine and the BTCPay Server plugin already did. While a payer waited on an
-  unpaid invoice, each pass read three pages of wallet history: the empty
-  settled view, the unpaid page that lists the invoice, and an empty page
-  after it. It now reads two, one wallet call fewer per pass. A pass that
-  stops there still closes an invoice the wallet lists as pending after
-  expiry plus the 900-second grace, as a pass that read on to the empty page
-  did. A new `spec/test-vectors/reconcile-progress.json` vector pins both in
-  all four engines.
-- Changed (Rails): `openreceive-rails` now requires `nwc-ruby ~> 0.4`.
-  nwc-ruby 0.4.0 derives a connection's encryption key once per client
-  instead of on every wallet call and notification; the pure-Ruby derivation
-  took about 33 ms on a laptop, more on a server vCPU, twice per call. The
-  engine keeps one client per process, so reconcile passes, wallet history
-  pages and the `openreceive:notifications` worker all reuse that key. The
-  client API and the wire format are unchanged.
 
 ## 0.4.30 - 2026-10-19
 

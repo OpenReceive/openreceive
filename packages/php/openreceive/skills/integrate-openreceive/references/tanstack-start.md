@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/tanstack-start/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.30.
+These directions describe OpenReceive 0.4.31.
 
 Add OpenReceive to a TanStack Start application on Node — the app you are
 already working in, with its own Postgres. OpenReceive ships no TanStack

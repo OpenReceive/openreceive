@@ -1,18 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.4.31 - 2026-10-20
 
-A reconcile pass now stops once the wallet has listed every invoice it is
-looking for, unpaid ones included, as the Node engine does. While a payer
-waits on an unpaid invoice, a pass reads two pages of wallet history instead
-of three. An invoice the wallet still lists as pending after expiry plus the
-grace still closes.
+Release with the complete 0.4.31 package family. A reconcile pass now stops
+once the wallet has listed every invoice it is looking for, unpaid ones
+included, as the Node engine does. While a payer waits on an unpaid invoice,
+a pass reads two pages of wallet history instead of three. An invoice the
+wallet still lists as pending after expiry plus the grace still closes.
 
 Requires `nwc-ruby ~> 0.4`. nwc-ruby 0.4.0 derives a connection's encryption
 key once per client instead of on every wallet call and notification (about
 33 ms of pure-Ruby work each time, twice per call). The engine keeps one
 client per process, so every reconcile pass, wallet history page and the
 `openreceive:notifications` worker reuses it. No API or wire-format change.
+
+The gem's summary names the optional USDT and USDC swaps.
 
 ## 0.4.30 - 2026-10-19
 

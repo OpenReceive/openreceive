@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/svelte",
-  "version": "0.4.30",
+  "version": "0.4.31",
   "description": "Svelte component for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -26,8 +26,8 @@
   "types": "./dist/index.d.ts",
   "svelte": "./dist/index.js",
   "dependencies": {
-    "@openreceive/browser": "0.4.30",
-    "@openreceive/elements": "0.4.30"
+    "@openreceive/browser": "0.4.31",
+    "@openreceive/elements": "0.4.31"
   },
   "peerDependencies": {
     "svelte": ">=5.0.0"

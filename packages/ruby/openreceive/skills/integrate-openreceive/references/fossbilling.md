@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/fossbilling/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Setup is done only when the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.30.
+These directions describe OpenReceive 0.4.31.
 
 Install and configure the OpenReceive payment method in the FOSSBilling
 billing panel you are working in. Preserve its theme, clients, products,
@@ -121,7 +121,7 @@ Docker image, download and unpack it inside the container, as the web user,
 then activate the module:
 
 ```sh
-docker compose exec -T -u www-data fossbilling sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-fossbilling-0.4.30.zip && unzip -oq openreceive-fossbilling-0.4.30.zip && rm openreceive-fossbilling-0.4.30.zip'
+docker compose exec -T -u www-data fossbilling sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.31/openreceive-fossbilling-0.4.31.zip && unzip -oq openreceive-fossbilling-0.4.31.zip && rm openreceive-fossbilling-0.4.31.zip'
 docker compose exec -T -u www-data fossbilling php modules/Openreceive/activate.php
 ```
 
@@ -276,9 +276,9 @@ routes, console commands and cron hook), and
 
 ```sh
 cd /var/www/fossbilling
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-fossbilling-0.4.30.zip
-unzip -oq openreceive-fossbilling-0.4.30.zip
-rm openreceive-fossbilling-0.4.30.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.31/openreceive-fossbilling-0.4.31.zip
+unzip -oq openreceive-fossbilling-0.4.31.zip
+rm openreceive-fossbilling-0.4.31.zip
 chown -R www-data:www-data modules/Openreceive library/Payment/Adapter/OpenReceive
 sudo -u www-data php modules/Openreceive/activate.php
 ```
@@ -330,7 +330,7 @@ Run every command inside the container, in `/var/www/html`, as its web user
 `www-data`. Unpack the release there too:
 
 ```sh
-docker compose exec -T -u www-data fossbilling sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-fossbilling-0.4.30.zip && unzip -oq openreceive-fossbilling-0.4.30.zip && rm openreceive-fossbilling-0.4.30.zip'
+docker compose exec -T -u www-data fossbilling sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.31/openreceive-fossbilling-0.4.31.zip && unzip -oq openreceive-fossbilling-0.4.31.zip && rm openreceive-fossbilling-0.4.31.zip'
 docker compose exec -T -u www-data fossbilling php modules/Openreceive/activate.php
 ```
 

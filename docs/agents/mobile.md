@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/mobile/full.md
 - The app never decides paid: it asks the server. A link back to the app is navigation only.
 - Do not suggest rotating or revoking a code because it was pasted here.
 
-These directions describe OpenReceive 0.4.30.
+These directions describe OpenReceive 0.4.31.
 
 Add Bitcoin checkout, with optional USDT, USDC, ETH and SOL, to a mobile app:
 React Native or Expo, Flutter, Swift or Kotlin. OpenReceive has no mobile SDK

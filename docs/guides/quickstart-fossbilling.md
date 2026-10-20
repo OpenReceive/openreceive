@@ -31,9 +31,9 @@ routes, console commands and cron hook), and
 
 ```sh
 cd /var/www/fossbilling
-curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-fossbilling-0.4.30.zip
-unzip -oq openreceive-fossbilling-0.4.30.zip
-rm openreceive-fossbilling-0.4.30.zip
+curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.31/openreceive-fossbilling-0.4.31.zip
+unzip -oq openreceive-fossbilling-0.4.31.zip
+rm openreceive-fossbilling-0.4.31.zip
 chown -R www-data:www-data modules/Openreceive library/Payment/Adapter/OpenReceive
 sudo -u www-data php modules/Openreceive/activate.php
 ```
@@ -85,7 +85,7 @@ Run every command inside the container, in `/var/www/html`, as its web user
 `www-data`. Unpack the release there too:
 
 ```sh
-docker compose exec -T -u www-data fossbilling sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.30/openreceive-fossbilling-0.4.30.zip && unzip -oq openreceive-fossbilling-0.4.30.zip && rm openreceive-fossbilling-0.4.30.zip'
+docker compose exec -T -u www-data fossbilling sh -c 'curl -fsSLO https://github.com/OpenReceive/openreceive/releases/download/v0.4.31/openreceive-fossbilling-0.4.31.zip && unzip -oq openreceive-fossbilling-0.4.31.zip && rm openreceive-fossbilling-0.4.31.zip'
 docker compose exec -T -u www-data fossbilling php modules/Openreceive/activate.php
 ```
 

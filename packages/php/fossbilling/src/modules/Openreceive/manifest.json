@@ -8,6 +8,6 @@
   "author": "OpenReceive",
   "author_url": "https://openreceive.org",
   "license": "MIT",
-  "version": "0.4.30",
+  "version": "0.4.31",
   "minimum_fossbilling_version": "0.8.0"
 }

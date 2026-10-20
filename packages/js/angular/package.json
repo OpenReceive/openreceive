@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/angular",
-  "version": "0.4.30",
+  "version": "0.4.31",
   "description": "Angular component for Bitcoin Lightning checkout and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -26,8 +26,8 @@
   "module": "./dist/fesm2022/openreceive-angular.mjs",
   "types": "./dist/types/openreceive-angular.d.ts",
   "dependencies": {
-    "@openreceive/browser": "0.4.30",
-    "@openreceive/elements": "0.4.30"
+    "@openreceive/browser": "0.4.31",
+    "@openreceive/elements": "0.4.31"
   },
   "peerDependencies": {
     "@angular/core": ">=17.0.0"

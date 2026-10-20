@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/vendure",
-  "version": "0.4.30",
+  "version": "0.4.31",
   "description": "Accept Bitcoin Lightning payments in Vendure with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -31,8 +31,8 @@
     }
   },
   "dependencies": {
-    "@openreceive/http": "0.4.30",
-    "@openreceive/node": "0.4.30"
+    "@openreceive/http": "0.4.31",
+    "@openreceive/node": "0.4.31"
   },
   "peerDependencies": {
     "@nestjs/common": ">=10",

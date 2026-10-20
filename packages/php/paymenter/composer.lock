@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "174d8587f43414bdfa66bab0f6e6f333",
+    "content-hash": "f48caf2b249858cab6d9ec7cb4f7d446",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -706,11 +706,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.30",
+            "version": "0.4.31",
             "dist": {
                 "type": "path",
                 "url": "../openreceive",
-                "reference": "151dedbef6e53b04d842a5e9cd4bcd4604f5195c"
+                "reference": "80b3268a03e11493cd0ab00152ad09baac4e4e85"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
@@ -764,11 +764,17 @@
             "homepage": "https://openreceive.org/integrations/php",
             "keywords": [
                 "bitcoin",
+                "bitcoin-payments",
                 "checkout",
                 "lightning",
                 "nostr",
                 "nwc",
-                "payments"
+                "payment-gateway",
+                "payments",
+                "self-hosted",
+                "stablecoin",
+                "usdc",
+                "usdt"
             ],
             "support": {
                 "issues": "https://github.com/OpenReceive/openreceive/issues",

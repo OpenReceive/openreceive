@@ -17,7 +17,7 @@ curl -fsSL https://openreceive.org/agent-directions/react-router/full.md
 - Do not suggest rotating or revoking a code because it was pasted here.
 - Start the quickstart only once the NWC code is saved, and the LSC code is saved or the user said "Bitcoin only".
 
-These directions describe OpenReceive 0.4.30.
+These directions describe OpenReceive 0.4.31.
 
 Add OpenReceive to a React Router application in framework mode — the app
 you are already working in, on Node. OpenReceive ships no React Router

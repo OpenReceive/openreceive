@@ -30,10 +30,10 @@ addons path, install the Python package, restart Odoo, and install
 **Payment Provider: OpenReceive** under Apps.
 
 - **Odoo.sh**: commit the module folder to your repository and add
-  `openreceive==0.4.30` to the repository's `requirements.txt`.
+  `openreceive==0.4.31` to the repository's `requirements.txt`.
 - **Odoo's Docker image**: build your own image on top of it; the quickstart
   has the Dockerfile.
-- **A source install with a virtualenv**: `pip install openreceive==0.4.30` in
+- **A source install with a virtualenv**: `pip install openreceive==0.4.31` in
   Odoo's virtualenv.
 
 ## Configure

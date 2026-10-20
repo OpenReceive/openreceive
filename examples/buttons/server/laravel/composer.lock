@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "40718b97f731cd8fd013c1210a3143aa",
+    "content-hash": "9f1bfbda5716c6e085d0cfa8523d1a03",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -2726,11 +2726,11 @@
         },
         {
             "name": "openreceive/laravel",
-            "version": "0.4.30",
+            "version": "0.4.31",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/laravel",
-                "reference": "8e6925deae7234b02493cc90c4fd6da6d61e0f91"
+                "reference": "e1b02657f7ca98a3790301bf94cc514a991a8eb7"
             },
             "require": {
                 "illuminate/console": "^11.0 || ^12.0 || ^13.0",
@@ -2740,7 +2740,7 @@
                 "illuminate/routing": "^11.0 || ^12.0 || ^13.0",
                 "illuminate/support": "^11.0 || ^12.0 || ^13.0",
                 "nyholm/psr7": "^1.8",
-                "openreceive/openreceive": "~0.4.30",
+                "openreceive/openreceive": "~0.4.31",
                 "php": "^8.2",
                 "symfony/psr-http-message-bridge": "^7.0 || ^8.0"
             },
@@ -2782,12 +2782,18 @@
             "homepage": "https://openreceive.org/integrations/laravel",
             "keywords": [
                 "bitcoin",
+                "bitcoin-payments",
                 "checkout",
                 "laravel",
                 "lightning",
                 "nostr",
                 "nwc",
-                "payments"
+                "payment-gateway",
+                "payments",
+                "self-hosted",
+                "stablecoin",
+                "usdc",
+                "usdt"
             ],
             "support": {
                 "issues": "https://github.com/OpenReceive/openreceive/issues",
@@ -2801,11 +2807,11 @@
         },
         {
             "name": "openreceive/openreceive",
-            "version": "0.4.30",
+            "version": "0.4.31",
             "dist": {
                 "type": "path",
                 "url": "../../../../packages/php/openreceive",
-                "reference": "c383da8fbb205ed53d25c3955284b50cd7a962f0"
+                "reference": "408843881c7908e4c515899f93eebb36c0faa28a"
             },
             "require": {
                 "brick/math": "^0.14.2 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
@@ -2859,11 +2865,17 @@
             "homepage": "https://openreceive.org/integrations/php",
             "keywords": [
                 "bitcoin",
+                "bitcoin-payments",
                 "checkout",
                 "lightning",
                 "nostr",
                 "nwc",
-                "payments"
+                "payment-gateway",
+                "payments",
+                "self-hosted",
+                "stablecoin",
+                "usdc",
+                "usdt"
             ],
             "support": {
                 "issues": "https://github.com/OpenReceive/openreceive/issues",

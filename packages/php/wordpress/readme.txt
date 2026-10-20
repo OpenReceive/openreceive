@@ -4,7 +4,7 @@ Tags: bitcoin, lightning, woocommerce, easy digital downloads, payment gateway
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.4.30
+Stable tag: 0.4.31
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
