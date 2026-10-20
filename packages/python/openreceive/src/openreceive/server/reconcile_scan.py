@@ -59,6 +59,28 @@ def scan_slice(
             window["anchor_offset"] = None
         return list(results.values()), False, False
 
+    def complete() -> tuple[list[dict[str, Any]], bool, bool]:
+        # A fresh sweep certifies, from its start, every expected hash it saw
+        # pending or did not see at all: the proof that closes one after expiry.
+        if window["absence_safe"]:
+            for payment_hash in expected:
+                if payment_hash in results or window["observations"].get(payment_hash, {}).get(
+                    "status"
+                ) in ("settled", "expired", "failed"):
+                    continue
+                observation = window["observations"].get(payment_hash)
+                result = {
+                    "payment_hash": payment_hash,
+                    "status": "not_found" if observation is None else observation["status"],
+                    "_coverage_started_at": window["started_at"],
+                }
+                if observation is not None:
+                    result["details"] = {
+                        "transaction": {"transaction_state": observation["transaction_state"]}
+                    }
+                results[payment_hash] = result
+        return list(results.values()), True, False
+
     while used < max_pages and time.monotonic() < deadline:
         offset = int(anchor) if replaying_anchor and anchor is not None else int(window["offset"])
         request = {"type": "incoming", "limit": 20, "offset": offset, "from": window["from"]}
@@ -122,33 +144,15 @@ def scan_slice(
                 window.update(view="inclusive", offset=0, anchor_offset=None, fingerprint=None)
                 previous = None
                 continue
-            if window["absence_safe"]:
-                for payment_hash in expected:
-                    if payment_hash in results or window["observations"].get(payment_hash, {}).get(
-                        "status"
-                    ) in ("settled", "expired", "failed"):
-                        continue
-                    observation = window["observations"].get(payment_hash)
-                    result = {
-                        "payment_hash": payment_hash,
-                        "status": "not_found" if observation is None else observation["status"],
-                        "_coverage_started_at": window["started_at"],
-                    }
-                    if observation is not None:
-                        result["details"] = {
-                            "transaction": {"transaction_state": observation["transaction_state"]}
-                        }
-                    results[payment_hash] = result
-            return list(results.values()), True, False
+            return complete()
         if fingerprint == previous:
             return list(results.values()), False, True
         window["anchor_offset"] = offset
         window["fingerprint"] = fingerprint
         window["offset"] = int(offset) + physical
         previous = fingerprint
-        if all(
-            window["observations"].get(h, {}).get("status") in ("settled", "expired", "failed")
-            for h in expected
-        ):
-            return list(results.values()), True, False
+        # Every expected hash has been seen, pending ones too: a wallet lists
+        # each invoice once, so later pages cannot change what this walk found.
+        if all(h in window["observations"] for h in expected):
+            return complete()
     return continued()

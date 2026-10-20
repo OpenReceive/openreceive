@@ -61,6 +61,9 @@ def test_durable_progress_vectors(case, repository, clock):
     if "mixed_clock_sources" in case:
         mixed_batches_cannot_skip_a_host_timed_attempt(case, repository, clock)
         return
+    if "seen_pending" in case:
+        a_seen_pending_invoice_ends_the_walk(case, repository, clock)
+        return
     if "lease_seconds" in case:
         old = repository.claim_reconcile_gate(
             now=now, interval_seconds=2, lease_seconds=case["lease_seconds"]
@@ -300,6 +303,40 @@ def mixed_batches_cannot_skip_a_host_timed_attempt(case, repository, clock):
     assert claim is not None
     assert len(claim["scheduler"]["windows"]) <= PROGRESS["max_windows"]
     assert len(json.dumps(claim).encode()) <= PROGRESS["max_checkpoint_bytes"]
+
+
+def a_seen_pending_invoice_ends_the_walk(case, repository, clock):
+    saved = checkout("seen-pending", H1, case["created_at"], case["expires_at"])
+    saved["created_at_source"] = "wallet"
+    repository.commit_attempt(PaymentInsert("seen-pending", H1, saved))
+    row = {
+        "type": "incoming",
+        "payment_hash": H1,
+        "created_at": case["created_at"],
+        "transaction_state": "pending",
+    }
+    wallet = HistoryWallet([])
+
+    def honors_unpaid(request):
+        wallet.calls.append(dict(request))
+        visible = [row] if request.get("unpaid") else []
+        offset = request.get("offset", 0)
+        return {"transactions": visible[offset : offset + 20]}
+
+    wallet.list_transactions = honors_unpaid
+    paid = []
+    for at, status in (
+        (case["first_scan_at"], "pending"),
+        (case["last_scan_at"], case["status_after_grace"]),
+    ):
+        clock["now"] = at
+        wallet.calls.clear()
+        reconciler(repository, clock, wallet, paid).reconcile()
+        # The settled view, then the unpaid page, and no page after it.
+        assert len(wallet.calls) == case["calls_per_pass"]
+        assert [call.get("unpaid") is True for call in wallet.calls] == [False, True]
+        assert repository.find_by_payment_hash(H1).status == status
+    assert paid == []
 
 
 @pytest.mark.parametrize(

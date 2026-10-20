@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+A reconcile pass now stops once the wallet has listed every invoice it is
+looking for, unpaid ones included, as the Node engine does. While a payer
+waits on an unpaid invoice, a pass reads two pages of wallet history instead
+of three. An invoice the wallet still lists as pending after expiry plus the
+grace still closes.
+
 ## 0.4.30 - 2026-10-19
 
 Release with the complete 0.4.30 package family. No runtime changes from

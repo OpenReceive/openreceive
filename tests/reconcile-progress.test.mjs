@@ -481,3 +481,50 @@ test(spec.vectors[9].name, async () => {
     db.close();
   });
 }
+
+{
+  const scenario = spec.vectors.find((vector) => vector.seen_pending);
+  test(scenario.name, async () => {
+    const db = memoryPaymentsDb();
+    let now = scenario.first_scan_at;
+    const clock = () => now;
+    const host = createHost({
+      db,
+      clock,
+      amountFor: () => ({ sats: 1 }),
+      onPaid: () => assert.fail("no payment"),
+    });
+    const attempt = snapshot(1, scenario.created_at);
+    attempt.checkout.expiresAt = scenario.expires_at;
+    await host.payments.commitAttempt(attempt);
+    const row = {
+      payment_hash: hash(1),
+      created_at: scenario.created_at,
+      transaction_state: "pending",
+    };
+    const calls = [];
+    const client = {
+      async listTransactions(request) {
+        calls.push(request);
+        const visible = request.unpaid === true ? [row] : [];
+        return { transactions: visible.slice(request.offset, request.offset + 20) };
+      },
+    };
+    for (const [at, status] of [
+      [scenario.first_scan_at, "pending"],
+      [scenario.last_scan_at, scenario.status_after_grace],
+    ]) {
+      now = at;
+      calls.length = 0;
+      await maybeReconcilePayments({ host, service: service(client, clock), clock });
+      // The settled view, then the unpaid page, and no page after it.
+      assert.equal(calls.length, scenario.calls_per_pass);
+      assert.deepEqual(
+        calls.map((call) => call.unpaid === true),
+        [false, true],
+      );
+      assert.equal((await host.payments.findByPaymentHash(hash(1))).status, status);
+    }
+    db.close();
+  });
+}

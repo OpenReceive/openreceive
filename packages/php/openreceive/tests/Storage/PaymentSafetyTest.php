@@ -87,7 +87,7 @@ final class PaymentSafetyTest extends DatabaseCase
         $family = self::vector('reconcile-progress');
         foreach ($family['vectors'] as $vector) {
             // Dedicated tests below drive the deadline-cut and host-clock rules.
-            if (isset($vector['pages_before_deadline']) || isset($vector['host_created_at']) || isset($vector['mixed_clock_sources'])) continue;
+            if (isset($vector['pages_before_deadline']) || isset($vector['host_created_at']) || isset($vector['mixed_clock_sources']) || isset($vector['seen_pending'])) continue;
             $this->now = 5000;
             $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
             if (isset($vector['lease_seconds'])) {
@@ -153,6 +153,32 @@ final class PaymentSafetyTest extends DatabaseCase
             self::assertLessThanOrEqual($family['max_checkpoint_bytes'], strlen($checkpoint));
             self::assertStringNotContainsString('preimage', $checkpoint);
         }
+    }
+
+    #[DataProvider('dialects')]
+    public function testASeenPendingInvoiceEndsTheWalk(string $dialect): void
+    {
+        $vector = self::progressVector('seen_pending');
+        $this->now = $vector['first_scan_at'];
+        $repo = new SqlPaymentRepository(self::freshDatabase($dialect), fn (): int => $this->now);
+        $hash = self::hash('seen-pending');
+        $repo->commitAttempt('seen-pending', $hash, [...self::checkout('seen-pending', $hash, $vector['created_at'], $vector['expires_at']), 'created_at_source' => 'wallet']);
+        $row = ['type' => 'incoming', 'payment_hash' => $hash, 'created_at' => $vector['created_at'], 'transaction_state' => 'pending'];
+        $calls = [];
+        $engine = $this->reconciler($repo, static function (array $request) use ($row, &$calls): array {
+            $calls[] = $request;
+            return ['transactions' => array_slice(($request['unpaid'] ?? false) === true ? [$row] : [], $request['offset'], 20)];
+        });
+        foreach ([[$vector['first_scan_at'], 'pending'], [$vector['last_scan_at'], $vector['status_after_grace']]] as [$at, $status]) {
+            $this->now = $at;
+            $calls = [];
+            $engine->reconcile();
+            // The settled view, then the unpaid page, and no page after it.
+            self::assertCount($vector['calls_per_pass'], $calls);
+            self::assertSame([false, true], array_map(static fn (array $call): bool => ($call['unpaid'] ?? false) === true, $calls));
+            self::assertSame($status, $repo->findByPaymentHash($hash)->status);
+        }
+        self::assertSame(0, $this->fulfilled);
     }
 
     /** Each deadline-cut vector, once per clock source, on every dialect. */

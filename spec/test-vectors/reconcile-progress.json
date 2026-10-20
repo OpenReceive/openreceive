@@ -1,5 +1,5 @@
 {
-  "description": "Durable gated progress acceptance scenarios. Consumers construct real repositories/scanners and assert finite discovery, bounded RPCs, and no absence from resumed coverage. Times are seconds; every history page advances by its physical row count and ends only at empty or all expected found.",
+  "description": "Durable gated progress acceptance scenarios. Consumers construct real repositories/scanners and assert finite discovery, bounded RPCs, and no absence from resumed coverage. Times are seconds; every history page advances by its physical row count and ends only at an empty page or once every expected hash has been seen, settled or not.",
   "version": 1,
   "max_cohort": 200,
   "max_windows": 2,
@@ -100,6 +100,17 @@
       "pages_before_deadline": 1,
       "created_at_sources": ["wallet", "host"],
       "max_passes": 5
+    },
+    {
+      "name": "a seen pending invoice ends the walk",
+      "rule": "One wallet-timed attempt, created at created_at and expiring at expires_at. The wallet honors from, until, unpaid and offset, and still lists the invoice unpaid, with transaction_state pending. Each pass reads the empty settled view, then the unpaid page that lists the invoice, and stops there after calls_per_pass calls: every expected hash has been seen, so a later page cannot change the result. A fresh walk stopped this way is complete, and it closes what it saw pending exactly as a walk that read on to the empty page would: the attempt stays pending at first_scan_at, before expires_at plus the 900-second grace, and moves to status_after_grace at last_scan_at.",
+      "seen_pending": true,
+      "created_at": 1000,
+      "expires_at": 1600,
+      "first_scan_at": 1700,
+      "last_scan_at": 2501,
+      "calls_per_pass": 2,
+      "status_after_grace": "attention"
     }
   ]
 }

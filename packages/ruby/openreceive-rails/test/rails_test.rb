@@ -1913,6 +1913,29 @@ class PaymentSafetyProgressTest < Minitest::Test
     assert_equal count - 1, OpenReceivePayment.where(status: "pending").count
   end
 
+  def run_seen_pending_vector(vector)
+    hash = format("%064x", 1)
+    checkout = build_checkout(reference: "seen-pending", hash: hash, created_at: vector.fetch("created_at"), expires_at: vector.fetch("expires_at"))
+    checkout["created_at_source"] = "wallet"
+    OpenReceivePayment.commit_attempt!(reference: "seen-pending", payment_hash: hash, checkout: checkout)
+    row = { "type" => "incoming", "payment_hash" => hash, "created_at" => vector.fetch("created_at"), "transaction_state" => "pending" }
+    calls = []
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      calls << request
+      visible = request["unpaid"] ? [row] : []
+      { "transactions" => visible.slice(request.fetch("offset", 0), 20) || [] }
+    end
+    [[vector.fetch("first_scan_at"), "pending"], [vector.fetch("last_scan_at"), vector.fetch("status_after_grace")]].each do |at, status|
+      calls.clear
+      OpenReceive.reconcile!(now: at)
+      # The settled view, then the unpaid page, and no page after it.
+      assert_equal vector.fetch("calls_per_pass"), calls.length
+      assert_equal [false, true], calls.map { |call| call["unpaid"] == true }
+      assert_equal status, OpenReceivePayment.find_by!(payment_hash: hash).status
+    end
+    assert_empty @paid
+  end
+
   def test_first_page_cut_by_the_deadline_still_fails_the_pass
     now = Time.now.to_i
     hash = format("%064x", 1)
@@ -1938,6 +1961,7 @@ class PaymentSafetyProgressTest < Minitest::Test
     define_method("test_progress_vector_#{index}") do
       next run_host_clock_cohort_vector(vector) if vector.key?("host_created_at")
       next run_mixed_clock_sources_vector(vector) if vector.key?("mixed_clock_sources")
+      next run_seen_pending_vector(vector) if vector.key?("seen_pending")
 
       now = Time.now.to_i
       if vector.key?("lease_seconds")

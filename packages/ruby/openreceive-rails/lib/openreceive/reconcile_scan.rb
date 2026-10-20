@@ -36,6 +36,21 @@ module OpenReceive
         window["anchor_offset"] = nil if overlap_only
         [results.values, false, false]
       end
+      # A fresh sweep certifies, from its start, every expected hash it saw
+      # pending or did not see at all: the proof that closes one after expiry.
+      complete = lambda do
+        if window.fetch("absence_safe")
+          expected.each do |hash|
+            observation = window.fetch("observations")[hash]
+            next if results.key?(hash) || %w[settled expired failed].include?(observation&.fetch("status"))
+
+            result = { "payment_hash" => hash, "status" => observation.nil? ? "not_found" : observation.fetch("status"), "_coverage_started_at" => window.fetch("started_at") }
+            result["details"] = { "transaction" => { "transaction_state" => observation["transaction_state"] } } unless observation.nil?
+            results[hash] = result
+          end
+        end
+        [results.values, true, false]
+      end
       max_pages.times do |page_number|
         break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
@@ -94,23 +109,15 @@ module OpenReceive
             previous = nil
             next
           end
-          if window.fetch("absence_safe")
-            expected.each do |hash|
-              observation = window.fetch("observations")[hash]
-              next if results.key?(hash) || %w[settled expired failed].include?(observation&.fetch("status"))
-
-              result = { "payment_hash" => hash, "status" => observation.nil? ? "not_found" : observation.fetch("status"), "_coverage_started_at" => window.fetch("started_at") }
-              result["details"] = { "transaction" => { "transaction_state" => observation["transaction_state"] } } unless observation.nil?
-              results[hash] = result
-            end
-          end
-          return [results.values, true, false]
+          return complete.call
         end
         return [results.values, false, true] if fingerprint == previous
 
         window.merge!("anchor_offset" => offset, "fingerprint" => fingerprint, "offset" => offset + physical)
         previous = fingerprint
-        return [results.values, true, false] if expected.all? { |hash| %w[settled expired failed].include?(window.fetch("observations").dig(hash, "status")) }
+        # Every expected hash has been seen, pending ones too: a wallet lists
+        # each invoice once, so later pages cannot change what this walk found.
+        return complete.call if expected.all? { |hash| window.fetch("observations").key?(hash) }
       end
       continued.call
     end

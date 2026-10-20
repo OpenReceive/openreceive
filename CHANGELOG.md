@@ -13,6 +13,16 @@
   The gem summaries name the optional USDT and USDC swaps, and the core gem
   names Rails. USDT and USDC still arrive only through a configured swap
   provider, as BTC over Lightning in the merchant's wallet.
+- Fixed (Ruby, Python, PHP): a reconcile pass now stops once the wallet has
+  listed every invoice it is looking for, unpaid ones included, as the Node
+  engine and the BTCPay Server plugin already did. While a payer waited on an
+  unpaid invoice, each pass read three pages of wallet history: the empty
+  settled view, the unpaid page that lists the invoice, and an empty page
+  after it. It now reads two, one wallet call fewer per pass. A pass that
+  stops there still closes an invoice the wallet lists as pending after
+  expiry plus the 900-second grace, as a pass that read on to the empty page
+  did. A new `spec/test-vectors/reconcile-progress.json` vector pins both in
+  all four engines.
 
 ## 0.4.30 - 2026-10-19
 

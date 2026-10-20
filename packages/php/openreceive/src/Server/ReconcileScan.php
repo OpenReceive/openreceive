@@ -104,26 +104,38 @@ final class ReconcileScan
                     $previous = null;
                     continue;
                 }
-                if ($window['absence_safe']) {
-                    foreach (array_keys($expected) as $hash) {
-                        $observation = $window['observations'][$hash] ?? null;
-                        if (isset($results[$hash]) || in_array($observation['status'] ?? null, ['settled', 'expired', 'failed'], true)) continue;
-                        $checked = ['payment_hash' => $hash, 'status' => $observation['status'] ?? 'not_found', '_coverage_started_at' => $window['started_at']];
-                        if ($observation !== null) $checked['details'] = ['transaction' => ['transaction_state' => $observation['transaction_state']]];
-                        $results[$hash] = $checked;
-                    }
-                }
-                return ['checks' => array_values($results), 'complete' => true, 'stalled' => false];
+                return self::complete($window, $expected, $results);
             }
             if ($fingerprint === $previous) return ['checks' => array_values($results), 'complete' => false, 'stalled' => true];
             $window['anchor_offset'] = $offset;
             $window['fingerprint'] = $fingerprint;
             $window['offset'] = $offset + $physical;
             $previous = $fingerprint;
-            $outstanding = array_filter(array_keys($expected), static fn (string $hash): bool => !in_array($window['observations'][$hash]['status'] ?? null, ['settled', 'expired', 'failed'], true));
-            if ($outstanding === []) return ['checks' => array_values($results), 'complete' => true, 'stalled' => false];
+            // Every expected hash has been seen, pending ones too: a wallet lists
+            // each invoice once, so later pages cannot change what this walk found.
+            if (array_diff_key($expected, $window['observations']) === []) return self::complete($window, $expected, $results);
         }
         return self::continued($window, $results, $overlapOnly);
+    }
+
+    /**
+     * A fresh sweep certifies, from its start, every expected hash it saw
+     * pending or did not see at all: the proof that closes one after expiry.
+     *
+     * @return array{checks: list<array<string, mixed>>, complete: bool, stalled: bool}
+     */
+    private static function complete(array $window, array $expected, array $results): array
+    {
+        if ($window['absence_safe']) {
+            foreach (array_keys($expected) as $hash) {
+                $observation = $window['observations'][$hash] ?? null;
+                if (isset($results[$hash]) || in_array($observation['status'] ?? null, ['settled', 'expired', 'failed'], true)) continue;
+                $checked = ['payment_hash' => $hash, 'status' => $observation['status'] ?? 'not_found', '_coverage_started_at' => $window['started_at']];
+                if ($observation !== null) $checked['details'] = ['transaction' => ['transaction_state' => $observation['transaction_state']]];
+                $results[$hash] = $checked;
+            }
+        }
+        return ['checks' => array_values($results), 'complete' => true, 'stalled' => false];
     }
 
     /** @return array{checks: list<array<string, mixed>>, complete: bool, stalled: bool} */

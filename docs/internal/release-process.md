@@ -184,8 +184,8 @@ Run from the repo root on a clean, current `master`.
 
 4. Write the release notes under `## <x.y.z> - Unreleased` in `CHANGELOG.md`
    and in each gem's `CHANGELOG.md`. Prepare inserts the empty sections. If the
-   root changelog already had a bare `## Unreleased` section, merge it into the
-   versioned heading. Keep the heading text exact: `release:stamp` and
+   root changelog or a gem's already had a bare `## Unreleased` section, merge
+   it into the versioned heading. Keep the heading text exact: `release:stamp` and
    `check:release` both match it literally. Then run:
 
    ```sh
