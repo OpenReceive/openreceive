@@ -121,8 +121,8 @@
   },
   "overrides": {
     "@angular/common": "22.2.2",
-    "@angular/compiler": "22.2.2",
-    "@angular/core": "22.2.2",
+    "@angular/compiler": "22.2.3",
+    "@angular/core": "22.2.3",
     "@angular/platform-browser": "22.2.2",
     "mysql2": "^3.22.0",
     "uuid": "^11.1.1",
@@ -132,9 +132,9 @@
     }
   },
   "devDependencies": {
-    "@angular/compiler": "22.2.2",
+    "@angular/compiler": "22.2.3",
     "@angular/compiler-cli": "22.2.2",
-    "@angular/core": "22.2.2",
+    "@angular/core": "22.2.3",
     "@biomejs/biome": "^2.5.15",
     "@happy-dom/global-registrator": "^20.14.5",
     "@playwright/test": "1.64.0",
