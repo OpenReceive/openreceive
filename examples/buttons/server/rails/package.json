@@ -23,7 +23,7 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@swc/core": "^1.16.18",
+    "@swc/core": "^1.16.20",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.3.0",
     "css-loader": "^7.1.5",
@@ -35,7 +35,7 @@
     "swc-loader": "^0.2.7",
     "terser-webpack-plugin": "^5.3.16",
     "typescript": "^6.0.3",
-    "webpack": "^5.111.1",
+    "webpack": "^5.112.2",
     "webpack-assets-manifest": "^5.2.1",
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.0",
