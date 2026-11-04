@@ -104,7 +104,7 @@ GEM
       fiber-annotation
       fiber-local (~> 1.1)
       json
-    crass (1.0.7)
+    crass (1.0.8)
     date (3.5.1)
     drb (2.2.3)
     ecdsa (1.2.0)
