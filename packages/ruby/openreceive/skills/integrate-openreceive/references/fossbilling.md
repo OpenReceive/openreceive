@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (FOSSBilling)
 
 ```sh
-# READ THIS FIRST: this file is 24 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 25 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/fossbilling/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -304,10 +304,13 @@ installable extension.
 
 Each release also attaches `openreceive-fossbilling-module-<version>.zip`:
 the module alone, with its files at the top of the ZIP rather than inside
-`modules/Openreceive`. That is the package FOSSBilling's extension directory
-installs. Its **Install** button unpacks the ZIP into `modules/Openreceive`,
-and activating OpenReceive under **Extensions** then writes the payment
-gateway, as above. Both ZIPs hold the same module.
+`modules/Openreceive`. That is the package
+[FOSSBilling's extension directory](https://extensions.fossbilling.org/extension/openreceive)
+lists and installs. Its **Install** button unpacks the ZIP into
+`modules/Openreceive`, and activating OpenReceive under **Extensions** then
+writes the payment gateway, as above. Both ZIPs hold the same module. The
+directory gets a new version only when a release matters to FOSSBilling
+sites, so it can list an older version than the latest release.
 
 #### FOSSBilling in Docker
 

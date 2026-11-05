@@ -766,7 +766,7 @@
       "slug": "quickstart-fossbilling",
       "title": "FOSSBilling Quickstart",
       "category": "quickstart",
-      "bytes": 11280
+      "bytes": 11490
     },
     {
       "path": "/guides/quickstart-prestashop",
@@ -856,7 +856,7 @@
       "slug": "agent-directions-fossbilling",
       "title": "Agent directions (FOSSBilling)",
       "category": "agent-directions",
-      "bytes": 24441
+      "bytes": 24651
     },
     {
       "path": "/guides/agent-directions-prestashop",
@@ -1236,7 +1236,7 @@
       "kind": "agent-directions-payload",
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 24441,
+      "bytes": 24651,
       "copy_button": true,
       "self_contained": true
     },
