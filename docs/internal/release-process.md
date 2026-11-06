@@ -167,7 +167,7 @@ Run from the repo root on a clean, current `master`.
    - the Python `_version.py` (PEP 440)
    - the PHP `OpenReceive\Version::VERSION`
    - the Laravel package's `~X.Y.Z` constraint on the engine
-   - the root and per-gem changelog headings (`## <x.y.z> - Unreleased`)
+   - the root, per-gem and `packages/js/vendure` changelog headings (`## <x.y.z> - Unreleased`)
    - the path-gem `Gemfile.lock` of the Rails example
    - the WordPress plugin version, Composer constraint/lock and pinned quickstart ZIP URL
    - the version references in this document
@@ -182,10 +182,11 @@ Run from the repo root on a clean, current `master`.
    npm run build:docs
    ```
 
-4. Write the release notes under `## <x.y.z> - Unreleased` in `CHANGELOG.md`
-   and in each gem's `CHANGELOG.md`. Prepare inserts the empty sections. If the
-   root changelog or a gem's already had a bare `## Unreleased` section, merge
-   it into the versioned heading. Keep the heading text exact: `release:stamp` and
+4. Write the release notes under `## <x.y.z> - Unreleased` in `CHANGELOG.md`,
+   in each gem's `CHANGELOG.md` and in `packages/js/vendure/CHANGELOG.md`
+   (Vendure entries only; Vendure's plugin directory shows that file). Prepare
+   inserts the empty sections. If one of them already had a bare
+   `## Unreleased` section, merge it into the versioned heading. Keep the heading text exact: `release:stamp` and
    `check:release` both match it literally. Then run:
 
    ```sh
@@ -201,7 +202,7 @@ Run from the repo root on a clean, current `master`.
    create the new tag and push:
 
    ```sh
-   npm run release:stamp -- --version <x.y.z>   # must report 4 changelogs
+   npm run release:stamp -- --version <x.y.z>   # must report 5 changelogs
    git add -A && git commit -m "release: v<x.y.z>"
    npm run test:ci
    git diff --exit-code && test -z "$(git status --porcelain)"

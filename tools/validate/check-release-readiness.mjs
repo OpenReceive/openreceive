@@ -448,6 +448,24 @@ expect(
 // Structural checks only: pinning literal changelog prose broke release
 // checks whenever an entry was reworded for no release-safety reason.
 
+// A package that keeps its own CHANGELOG.md must ship it and carry the release
+// section, as the gem changelogs do.
+for (const { relativePath, manifest } of packages) {
+  const packageChangelog = path.join(path.dirname(relativePath), "CHANGELOG.md");
+  if (!existsSync(path.join(root, packageChangelog))) continue;
+  expect(
+    manifest.files?.includes("CHANGELOG.md"),
+    `${relativePath}: files must include CHANGELOG.md`,
+  );
+  expect(
+    new RegExp(
+      `^## ${releaseVersion.replace(/\./g, "\\.")} - (Unreleased|\\d{4}-\\d{2}-\\d{2})$`,
+      "m",
+    ).test(read(packageChangelog)),
+    `${packageChangelog}: missing ${releaseVersion} section`,
+  );
+}
+
 for (const { manifest } of packages) {
   expect(
     releaseDocs.includes(`\`${manifest.name}\``),

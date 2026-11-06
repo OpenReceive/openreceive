@@ -176,6 +176,8 @@ decorate([Controller(OPENRECEIVE_VENDURE_ROUTE_PREFIX.slice(1))], OpenReceiveCon
 /**
  * OpenReceive for Vendure. Codes come from the server's environment:
  * NWC_URI, and LSC_URI_PRIMARY for swaps.
+ *
+ * @category Plugin
  */
 export class OpenReceivePlugin {}
 

@@ -271,6 +271,7 @@ function updateVersions(root, targetVersion) {
   }
 
   changed.push(...updateRubyGemVersions(root, currentVersion, targetVersion));
+  changed.push(...updatePackageChangelogs(root, currentVersion, targetVersion));
   // The PyPI distribution reads its version from _version.py (PEP 440 at the
   // boundary: 0.5.0-alpha.1 → 0.5.0a1); uv.lock records no version for the
   // editable project, so nothing else in packages/python moves.
@@ -309,6 +310,30 @@ function updateRubyGemVersions(root, currentVersion, targetVersion) {
         writeFileSync(changelogPath, updated);
         changed.push(path.relative(root, changelogPath));
       }
+    }
+  }
+  return changed;
+}
+
+// An npm package that ships its own CHANGELOG.md (Vendure's plugin directory
+// displays the one in @openreceive/vendure) gets the gem changelogs' headings:
+// prepare opens the new version's section and stamp dates it.
+function packageChangelogPaths(root) {
+  const packagesRoot = path.join(root, "packages/js");
+  return workspaceDirs(root)
+    .filter((dir) => path.dirname(dir) === packagesRoot)
+    .map((dir) => path.join(dir, "CHANGELOG.md"))
+    .filter((changelogPath) => existsSync(changelogPath));
+}
+
+function updatePackageChangelogs(root, currentVersion, targetVersion) {
+  const changed = [];
+  for (const changelogPath of packageChangelogPaths(root)) {
+    const source = readFileSync(changelogPath, "utf8");
+    const updated = bumpChangelogHeading(source, currentVersion, targetVersion);
+    if (updated !== source) {
+      writeFileSync(changelogPath, updated);
+      changed.push(path.relative(root, changelogPath));
     }
   }
   return changed;
@@ -494,6 +519,7 @@ function dryRunPrepare(root, targetVersion) {
     files: [
       ...files,
       ...gemFiles,
+      ...packageChangelogPaths(root).map((changelogPath) => path.relative(root, changelogPath)),
       PYTHON_VERSION_FILE,
       PHP_VERSION_FILE,
       LARAVEL_COMPOSER_JSON,
@@ -698,6 +724,7 @@ async function main() {
     const changelogPaths = [
       path.join(root, "CHANGELOG.md"),
       ...GEM_NAMES.map((name) => path.join(gemDir(root, name), "CHANGELOG.md")),
+      ...packageChangelogPaths(root),
     ];
     const stamped = [];
     for (const changelogPath of changelogPaths) {

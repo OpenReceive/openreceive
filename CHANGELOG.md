@@ -71,6 +71,11 @@
   build steps, the Node guides say `node:sqlite` needs Node 22.13, and the
   API reference names the `pay_in_asset` / `pay_asset` difference on
   `/swaps/quote`.
+- Added (Vendure): `@openreceive/vendure` now ships its own `CHANGELOG.md`
+  (Vendure entries only), which Vendure's plugin directory requires and
+  displays, and the plugin class carries the `@category Plugin` tag the
+  directory builds its docs from. `release:prepare` and `release:stamp`
+  handle its headings with the gem changelogs, and `check:release` checks it.
 
 ## 0.4.31 - 2026-10-20
 
