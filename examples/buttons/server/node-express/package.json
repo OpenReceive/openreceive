@@ -12,7 +12,7 @@
   "dependencies": {
     "@angular/compiler": "^22.2.4",
     "@angular/core": "^22.2.4",
-    "@angular/platform-browser": "^22.2.1",
+    "@angular/platform-browser": "^22.2.4",
     "@mantine/core": "^9.7.3",
     "@mantine/hooks": "^9.7.3",
     "@openreceive/angular": "0.4.31",
