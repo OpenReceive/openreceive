@@ -76,6 +76,14 @@
   displays, and the plugin class carries the `@category Plugin` tag the
   directory builds its docs from. `release:prepare` and `release:stamp`
   handle its headings with the gem changelogs, and `check:release` checks it.
+- Changed (WordPress): the WordPress.org listing says what store owners search
+  for. The plugin is now "OpenReceive – Crypto Payments for WooCommerce & Easy
+  Digital Downloads (Bitcoin, USDT, USDC)", in both the readme and the plugin
+  header; its tags are crypto, bitcoin, usdt, woocommerce and payment gateway;
+  and the short description and the Plugins screen's description read "Accept
+  crypto in WooCommerce or Easy Digital Downloads: Bitcoin, USDT and USDC, paid
+  to your own wallet in Bitcoin. No account, no API key." USDT and USDC still
+  arrive only through a configured swap provider, as BTC over Lightning.
 
 ## 0.4.31 - 2026-10-20
 

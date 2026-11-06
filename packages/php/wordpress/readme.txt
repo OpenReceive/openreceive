@@ -1,6 +1,6 @@
-=== OpenReceive – Bitcoin Lightning Payments for WooCommerce & Easy Digital Downloads ===
+=== OpenReceive – Crypto Payments for WooCommerce & Easy Digital Downloads (Bitcoin, USDT, USDC) ===
 Contributors: openreceive
-Tags: bitcoin, lightning, woocommerce, easy digital downloads, payment gateway
+Tags: crypto, bitcoin, usdt, woocommerce, payment gateway
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
@@ -8,7 +8,7 @@ Stable tag: 0.4.31
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Accept Bitcoin Lightning payments in WooCommerce or Easy Digital Downloads, straight into your own wallet. Optional stablecoin swaps settle as BTC.
+Accept crypto in WooCommerce or Easy Digital Downloads: Bitcoin, USDT and USDC, paid to your own wallet in Bitcoin. No account, no API key.
 
 == Description ==
 OpenReceive adds a Bitcoin Lightning payment method to WooCommerce and to Easy Digital Downloads. Customers pay a Lightning invoice, and the payment lands directly in a wallet you control. There is no OpenReceive account, no sign-up, and no processor in the middle.
