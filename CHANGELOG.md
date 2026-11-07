@@ -1,5 +1,77 @@
 # Changelog
 
+## Unreleased
+
+- Fixed (Node): one failed wallet check at start-up no longer takes payments
+  down until the process restarts. `createStack` (and so every
+  `@openreceive/express`, `/fastify` and `/next` mount built from an `nwc`
+  code) kept the first boot's failure for the life of the process: after one
+  relay timeout every request answered `503 WALLET_UNAVAILABLE` in no time,
+  although the relay was fine seconds later. Now the first request after a
+  short wait boots again and is served if the wallet answers. The wait starts
+  at 1 s and doubles after each failure, up to 60 s; there is no timer, so an
+  idle process makes no wallet calls. `ready` still reports the first boot. A
+  service the host passes in is the host's promise and is not retried.
+  `createOpenReceive` now closes the wallet client it built when the wallet
+  check fails, so a retry leaves no relay socket open, and it reads every
+  local setting before it touches the relay.
+- Fixed (PHP): one slow relay handshake no longer fails a checkout, a swap
+  address or a settings save. Each handshake had at most 1 s and each relay
+  one try, so a wallet code naming one relay (Rizful's) failed whenever its
+  handshake took longer; from a shop container, two of eight took 1.71 s and
+  3.24 s. A handshake now gets up to 4 s, never more than a fair share of
+  the request's 8 s budget, and a failed one is retried, cycling the relays,
+  after a short pause that doubles each round, until too little time is left
+  to use. Nothing reaches the wallet before a handshake succeeds, so the
+  retry is safe for an invoice too. A relay that is down now takes about 6 s
+  to fail instead of about 1 s. The WordPress, PrestaShop, FOSSBilling and
+  Paymenter plugins bundle the PHP engine and carry the fix.
+- Fixed (WordPress): a failed price or wallet lookup no longer hides
+  OpenReceive from checkout. WooCommerce's `is_available` and Easy Digital
+  Downloads' gateway filter called the price feed (and, with a cold cache,
+  the wallet) on every page that lists payment methods, and dropped the
+  method on any error, so a store with no other gateway said "There are no
+  payment methods available" for a while. They now check only local state:
+  a wallet code is saved and parses, the payment tables exist, and the store
+  currency is one the price feeds quote. A failure at pay time shows the
+  payer the error with Try again.
+- Fixed (WordPress): a settings save the wallet's relay did not answer says
+  so: "OpenReceive settings were not saved: the wallet's relay did not answer
+  in time. Your codes were not checked. Press Save again." It used to tell
+  the shop owner to check codes that were fine. Other save failures now add
+  the redacted reason, as Easy Digital Downloads already did.
+- Fixed (checkout): a failed Bitcoin invoice shows a Try again button. The
+  element showed the error as bare text over the method list, with no way
+  forward; React showed nothing at all. Both now show the message and a Try
+  again that requests the invoice again. When the wallet or its relay did not
+  answer (`WALLET_UNAVAILABLE`, `TIMEOUT`), the payer reads "The payment
+  service did not answer in time. Please try again." instead of the engine's
+  own text ("Configured NWC relays are unavailable."), on the invoice, the
+  swap address and the "Could not start checkout." screens. Every other
+  server message is kept. `payerErrorMessage` is exported from
+  `@openreceive/browser/headless` for custom UIs.
+- Fixed (checkout): the swap breakdown's first row reads "Total", not "Cart
+  total", which was wrong for a donation or an invoice, and shows the
+  checkout's own fiat amount. It showed the swap provider's valuation of the
+  payout, rounded on the provider's rate, so a $49.00 order could read
+  $48.99. The fee is measured from the same total. The provider's figure is
+  still used when the checkout's amount is in another currency. The
+  `cartTotal` field and label key keep their names.
+- Changed (checkout): a settled payment reads "Payment received / Thank you.
+  Your payment is confirmed." instead of "Backend settlement verified.".
+- Fixed (doctor): `openreceive doctor --db <file.sqlite>` on Node 22.5 to
+  22.12, where `node:sqlite` is behind a flag, reads the file with the app's
+  own better-sqlite3 instead of failing a check the app passes.
+- Docs (agent directions): a donations and pay-what-you-want rule in every
+  library stack's directions. The amount enters through the host's own route
+  and is saved on a row before checkout, with a floor, a cap and two decimal
+  places, refused rather than rounded. "Both codes set, skip to step 5" no
+  longer skips covering `.env` in `.gitignore`. The Node quickstart says a
+  plain-HTML page installs `@openreceive/elements` and links its standalone
+  build steps, the Node guides say `node:sqlite` needs Node 22.13, and the
+  API reference names the `pay_in_asset` / `pay_asset` difference on
+  `/swaps/quote`.
+
 ## 0.4.31 - 2026-10-20
 
 - Fixed (Ruby, Python, PHP): a reconcile pass now stops once the wallet has
