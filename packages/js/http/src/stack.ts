@@ -69,10 +69,12 @@ export interface CreateStackOptions<Transaction = unknown>
 export interface Stack {
   /**
    * Handler that boots lazily: the first request (and `ready`) awaits service
-   * construction. Boot failures surface on `ready` and on every request.
+   * construction. A failed boot answers 503 `WALLET_UNAVAILABLE`; with an
+   * `nwc` wallet, the first request after a short wait (1 s, doubling to 60 s)
+   * boots again and is served if the wallet answers.
    */
   readonly handler: HttpHandler;
-  /** Resolves when the service and handler are up. */
+  /** Resolves when the first boot is up; rejects if the first boot failed. */
   readonly ready: Promise<void>;
   /** Closes the service if the stack created it. */
   close(): Promise<void>;
@@ -93,35 +95,47 @@ export function createStack<Transaction = unknown>(
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
 
   let ownedService: OpenReceive | undefined;
-  const boot: Promise<HttpHandler> = (async () => {
-    const resolved =
-      wallet.service !== undefined
-        ? await wallet.service
-        : await createOpenReceive({ nwc: wallet.nwc });
-    if (wallet.service === undefined) ownedService = resolved;
-    return createHttpHandler({
-      ...handlerOptions,
-      ...compact({ clock }),
-      service: resolved,
-      host,
-    });
-  })();
-  // Fail loud at boot even if the host never awaits ready or sends a request;
-  // the rejection still surfaces on ready and on every request. The message
-  // only: a boot-time wallet error object carries its raw cause, which has
-  // passed through none of the redaction the host wired for every other line.
-  boot.catch((error: unknown) => {
-    const message = `OpenReceive stack failed to start: ${redactSecrets(
-      error instanceof Error ? error.message : String(error),
-    )}`;
-    if (onBootFailure === undefined) console.error(message);
-    else onBootFailure(message);
-  });
+  const boot = createRetryingBoot(
+    async () => {
+      const resolved =
+        wallet.service !== undefined
+          ? await wallet.service
+          : await createOpenReceive({ nwc: wallet.nwc });
+      if (wallet.service === undefined) ownedService = resolved;
+      return createHttpHandler({
+        ...handlerOptions,
+        ...compact({ clock }),
+        service: resolved,
+        host,
+      });
+    },
+    {
+      // A service the host passed in is the host's promise, so its failure
+      // stays as it is; a boot the stack owns (an `nwc` code) is retried.
+      retries: wallet.service === undefined,
+      // Fail loud at boot even if the host never awaits ready or sends a
+      // request; the rejection still surfaces on ready and on every request.
+      // The message only: a boot-time wallet error object carries its raw
+      // cause, which has passed through none of the redaction the host wired
+      // for every other line.
+      onFailure(error, retryAfterMs) {
+        const retry =
+          retryAfterMs === undefined
+            ? ""
+            : ` The first request after ${retryAfterMs / 1000} s tries again.`;
+        const message = `OpenReceive stack failed to start: ${redactSecrets(
+          error instanceof Error ? error.message : String(error),
+        )}${retry}`;
+        if (onBootFailure === undefined) console.error(message);
+        else onBootFailure(message);
+      },
+    },
+  );
 
   const handle = async (request: Request, extras?: { native?: unknown }): Promise<Response> => {
     let booted: HttpHandler;
     try {
-      booted = await boot;
+      booted = await boot.current();
     } catch {
       // A boot failure is the wallet being unavailable, not this request being
       // wrong. Rethrowing hands express/fastify a raw error whose text bypasses
@@ -148,8 +162,9 @@ export function createStack<Transaction = unknown>(
 
   // `ready` is a promise of its own: a host that never awaits it must not get
   // an unhandled rejection when boot fails, which ends a Node process and a
-  // Deno isolate. Requests already answer that failure with a 503.
-  const ready = boot.then(() => undefined);
+  // Deno isolate. Requests already answer that failure with a 503. It reports
+  // the first boot; requests keep retrying after it.
+  const ready = boot.first.then(() => undefined);
   ready.catch(() => {});
 
   return {
@@ -158,8 +173,84 @@ export function createStack<Transaction = unknown>(
     async close() {
       // An in-flight boot finishes constructing the service after a bare close
       // would have returned; wait for it so the relay socket never leaks.
-      await boot.catch(() => {});
+      await boot.stop();
       await ownedService?.close();
+    },
+  };
+}
+
+/** Wait after a failed boot before a request may start the next attempt. */
+export const BOOT_RETRY_FIRST_MS = 1_000;
+/** The wait doubles after each failed attempt, up to this. */
+export const BOOT_RETRY_MAX_MS = 60_000;
+
+export interface RetryingBoot<T> {
+  /** The first attempt, which `ready` reports. */
+  readonly first: Promise<T>;
+  /** The latest attempt, after starting a new one when a failed one has waited long enough. */
+  current(): Promise<T>;
+  /** No further attempts; resolves once the latest one has settled. */
+  stop(): Promise<void>;
+}
+
+/**
+ * A boot that a failure does not end. One slow relay handshake at start-up
+ * must not take payments down until a restart. There is no timer: a call to
+ * `current()` once the wait is over starts the next attempt, so the request
+ * that made it is served by that attempt. The wait starts at
+ * `BOOT_RETRY_FIRST_MS` and doubles after each failure up to
+ * `BOOT_RETRY_MAX_MS`; a success resets it. Exported for tests.
+ */
+export function createRetryingBoot<T>(
+  start: () => Promise<T>,
+  options: {
+    readonly retries: boolean;
+    /** Called once per failed attempt; `retryAfterMs` is undefined when no retry follows. */
+    readonly onFailure: (error: unknown, retryAfterMs: number | undefined) => void;
+    readonly now?: () => number;
+  },
+): RetryingBoot<T> {
+  const now = options.now ?? Date.now;
+  let stopped = false;
+  let failedAt: number | undefined;
+  let retryAfterMs = BOOT_RETRY_FIRST_MS;
+  const attempt = (): Promise<T> => {
+    const promise = start();
+    promise.then(
+      () => {
+        failedAt = undefined;
+        retryAfterMs = BOOT_RETRY_FIRST_MS;
+      },
+      (error: unknown) => {
+        failedAt = now();
+        options.onFailure(error, options.retries ? retryAfterMs : undefined);
+      },
+    );
+    return promise;
+  };
+  const first = attempt();
+  let latest = first;
+  return {
+    first,
+    current() {
+      if (
+        options.retries &&
+        !stopped &&
+        failedAt !== undefined &&
+        now() - failedAt >= retryAfterMs
+      ) {
+        failedAt = undefined;
+        retryAfterMs = Math.min(retryAfterMs * 2, BOOT_RETRY_MAX_MS);
+        latest = attempt();
+      }
+      return latest;
+    },
+    async stop() {
+      stopped = true;
+      await latest.then(
+        () => {},
+        () => {},
+      );
     },
   };
 }

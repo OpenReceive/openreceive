@@ -58,7 +58,6 @@ export async function createOpenReceive(
       allowSpendCapableWallet,
       logger: nwcLogger,
     });
-  await preflight(client);
 
   const priceCurrencies = readPriceCurrencies(options.priceCurrencies);
   // Fiat pricing defaults to the LIVE feed (priceFetch defaults to global
@@ -112,6 +111,18 @@ export async function createOpenReceive(
         summarizeSwapProviderApiResponse(entry),
       ),
     );
+  }
+
+  // The wallet check runs last, after every local setting has been read, so a
+  // bad setting fails without touching the relay. A failed check closes the
+  // client this call built: a caller that retries (createStack does) would
+  // otherwise leave one relay socket open per attempt. A client the caller
+  // passed in stays the caller's to close.
+  try {
+    await preflight(client);
+  } catch (error) {
+    if (options.client === undefined) await Promise.resolve(client.close?.()).catch(() => {});
+    throw error;
   }
 
   const context: ServiceContext = {
