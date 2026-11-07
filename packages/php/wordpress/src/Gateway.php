@@ -91,14 +91,10 @@ final class Gateway extends \WC_Payment_Gateway
         return true;
     }
 
+    /** No network call: see Plugin::checkoutAvailable. */
     public function is_available()
     {
-        if (!parent::is_available()) { return false; }
-        try {
-            Plugin::repository();
-            Plugin::engine()->service()->listRates(['currencies' => [get_woocommerce_currency()]]);
-            return true;
-        } catch (\Throwable) { return false; }
+        return parent::is_available() && Plugin::checkoutAvailable((string) get_woocommerce_currency());
     }
 
     public function process_payment($order_id)
@@ -154,7 +150,7 @@ final class Gateway extends \WC_Payment_Gateway
     public function admin_options()
     {
         // WooCommerce's Payments list offers Enable before any code is saved;
-        // checkout leaves the method out until the wallet answers.
+        // checkout leaves the method out until a code is saved.
         try { $unset = Secrets::environment($this->settings)['NWC_URI'] === '' && !Plugin::testkit(); } catch (\Throwable) { $unset = false; }
         if ($unset) { $this->form_fields['enabled']['description'] = __('Enter your NWC code below first. Checkout offers this method once a code is saved.', 'openreceive'); }
         parent::admin_options();

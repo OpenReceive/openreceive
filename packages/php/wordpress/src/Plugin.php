@@ -5,6 +5,8 @@ defined('ABSPATH') || exit;
 
 use Nyholm\Psr7\ServerRequest;
 use OpenReceive\Nwc\NostrPhpNwcReceiveClient;
+use OpenReceive\Nwc\Uri;
+use OpenReceive\Rates\Rates;
 use OpenReceive\Server\Engine;
 use OpenReceive\Server\Psr15Handler;
 use OpenReceive\Server\RequestHandler;
@@ -204,6 +206,27 @@ final class Plugin
     public static function testkit(): bool
     {
         return defined('OPENRECEIVE_DEMO_WALLET') && OPENRECEIVE_DEMO_WALLET === 'testkit' && class_exists(DemoWallet::class);
+    }
+
+    /**
+     * Whether checkout offers OpenReceive. Stores ask on every page that lists
+     * payment methods, so this makes no network call: a relay or price feed
+     * that is slow for a moment must not hide the method from an order that
+     * worked minutes before. Paying then shows the payer the error with Try
+     * again. Only local state counts: a wallet code is set (or the testkit
+     * runs), the tables are there, and the price feeds quote the currency. The
+     * plugin always uses the default feeds, which are asked for
+     * Rates::PRICE_FEED_VS_CURRENCIES only.
+     */
+    public static function checkoutAvailable(string $currency): bool
+    {
+        try {
+            $code = trim(Secrets::environment()['NWC_URI']);
+            if ($code === '' && !self::testkit()) { return false; }
+            if ($code !== '') { Uri::parse($code); }
+            self::repository();
+        } catch (\Throwable) { return false; }
+        return in_array(strtolower(trim($currency)), explode(',', Rates::PRICE_FEED_VS_CURRENCIES), true);
     }
 
     public static function repository(): SqlPaymentRepository

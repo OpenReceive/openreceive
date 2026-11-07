@@ -44,7 +44,24 @@ $dispatch = static function (string $route, array $body) {
 
 $check(StoreHost::woocommerce() && StoreHost::edd(), 'both stores are active');
 $check(in_array('OpenReceive', array_map(static fn ($gateway) => $gateway['admin_label'] === 'OpenReceive (Bitcoin Lightning)' ? 'OpenReceive' : '', edd_get_payment_gateways()), true), 'Easy Digital Downloads lists the gateway');
-$check(isset(edd_get_enabled_payment_gateways()[EddGateway::ID]), 'checkout offers the gateway once the wallet answers');
+$check(isset(edd_get_enabled_payment_gateways()[EddGateway::ID]), 'checkout offers the gateway once a wallet code is set');
+// As in integration.php: offering the gateway makes no network call, so a
+// failing price lookup cannot hide it. The testkit's static prices have no EUR.
+$currency = edd_get_option('currency', 'USD');
+try {
+    edd_update_option('currency', 'EUR');
+    Plugin::resetEngine();
+    try { Plugin::engine()->service()->listRates(['currencies' => ['EUR']]); $priced = true; } catch (Throwable) { $priced = false; }
+    $check(!$priced, 'the EUR price lookup fails');
+    Plugin::resetEngine();
+    $check(isset(edd_get_enabled_payment_gateways()[EddGateway::ID]), 'a failing price lookup leaves the gateway offered');
+    $check((new ReflectionProperty(Plugin::class, 'engine'))->getValue() === null, 'offering the gateway builds no engine: no wallet preflight, no price feed');
+    edd_update_option('currency', 'KES');
+    $check(!isset(edd_get_enabled_payment_gateways()[EddGateway::ID]), 'a currency the price feeds never quote is not offered');
+} finally {
+    edd_update_option('currency', $currency);
+    Plugin::resetEngine();
+}
 $check(str_contains(implode("\n", Plugin::diagnostics()), 'Store: WooCommerce and Easy Digital Downloads active'), 'doctor names both stores');
 
 $orderId = $makeOrder();

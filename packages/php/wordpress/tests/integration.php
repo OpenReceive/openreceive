@@ -140,6 +140,23 @@ $check($refund->get_status() === 200, 'provider-refreshed refund route');
 $check($dispatch('/rates', [], 'GET')->get_status() === 200, 'rates route');
 $gateway = new Gateway();
 $check($gateway->is_available(), 'gateway available for USD');
+// Availability makes no network call, so a price lookup (or wallet) that fails
+// for a moment cannot hide the method. The testkit's static prices have no EUR.
+$currency = get_option('woocommerce_currency');
+try {
+    update_option('woocommerce_currency', 'EUR');
+    Plugin::resetEngine();
+    try { Plugin::engine()->service()->listRates(['currencies' => ['EUR']]); $priced = true; } catch (Throwable) { $priced = false; }
+    $check(!$priced, 'the EUR price lookup fails');
+    Plugin::resetEngine();
+    $check($gateway->is_available(), 'a failing price lookup leaves the gateway available');
+    $check((new ReflectionProperty(Plugin::class, 'engine'))->getValue() === null, 'availability builds no engine: no wallet preflight, no price feed');
+    update_option('woocommerce_currency', 'KES');
+    $check(!$gateway->is_available(), 'a currency the price feeds never quote hides the gateway');
+} finally {
+    update_option('woocommerce_currency', $currency);
+    Plugin::resetEngine();
+}
 ob_start(); $gateway->receipt_page($order->get_id()); $markup = ob_get_clean();
 $check(str_contains($markup, 'csrf-header="X-WP-Nonce"') && str_contains($markup, 'resume-payment-hash='), 'receipt nonce and resume attributes');
 $check(str_contains($markup, 'resume-payment-rail="swap"'), 'swap receipt retains historical recovery');

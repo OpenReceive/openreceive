@@ -41,19 +41,15 @@ final class EddGateway
     }
 
     /**
-     * Checkout offers the method only once the wallet code is saved and the
-     * price feed answers for the store currency, as the WooCommerce gateway does.
+     * Checkout offers the method once the wallet code is saved, as the
+     * WooCommerce gateway does, with no network call: see Plugin::checkoutAvailable.
      *
      * @param array<string, mixed> $gateways
      */
     public static function available(array $gateways): array
     {
         if (!isset($gateways[self::ID]) || is_admin()) { return $gateways; }
-        try {
-            if (Secrets::environment()['NWC_URI'] === '' && !Plugin::testkit()) { throw new \RuntimeException('No wallet code.'); }
-            Plugin::repository();
-            Plugin::engine()->service()->listRates(['currencies' => [strtoupper((string) edd_get_currency())]]);
-        } catch (\Throwable) { unset($gateways[self::ID]); }
+        if (!Plugin::checkoutAvailable((string) edd_get_currency())) { unset($gateways[self::ID]); }
         return $gateways;
     }
 
