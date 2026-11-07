@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.32 - 2026-11-07
+
+Release with the complete 0.4.32 package family. No Ruby runtime changes
+from 0.4.31. The checkout fixes of 0.4.32 (a Try again button on a failed
+Bitcoin invoice, one plain sentence when the wallet did not answer, a
+"Total" row with the order's own amount) come with
+`@openreceive/elements` and `@openreceive/react` 0.4.32 on the page.
+
 ## 0.4.31 - 2026-10-20
 
 Release with the complete 0.4.31 package family. A reconcile pass now stops

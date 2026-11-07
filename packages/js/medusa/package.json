@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/medusa",
-  "version": "0.4.31",
+  "version": "0.4.32",
   "description": "Accept Bitcoin Lightning payments in Medusa with your own wallet and optional USDT, USDC, SOL and ETH swaps.",
   "keywords": [
     "bitcoin",
@@ -26,8 +26,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@openreceive/http": "0.4.31",
-    "@openreceive/node": "0.4.31"
+    "@openreceive/http": "0.4.32",
+    "@openreceive/node": "0.4.32"
   },
   "peerDependencies": {
     "@medusajs/framework": "^2.0.0",

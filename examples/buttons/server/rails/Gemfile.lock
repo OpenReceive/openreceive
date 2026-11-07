@@ -1,22 +1,22 @@
 PATH
   remote: ../../../../packages/ruby/openreceive-rails
   specs:
-    openreceive-rails (0.4.31)
+    openreceive-rails (0.4.32)
       nwc-ruby (~> 0.4)
-      openreceive (= 0.4.31)
-      openreceive-server (= 0.4.31)
+      openreceive (= 0.4.32)
+      openreceive-server (= 0.4.32)
       rails (>= 8.0)
 
 PATH
   remote: ../../../../packages/ruby/openreceive-server
   specs:
-    openreceive-server (0.4.31)
-      openreceive (= 0.4.31)
+    openreceive-server (0.4.32)
+      openreceive (= 0.4.32)
 
 PATH
   remote: ../../../../packages/ruby/openreceive
   specs:
-    openreceive (0.4.31)
+    openreceive (0.4.32)
       bigdecimal
 
 GEM

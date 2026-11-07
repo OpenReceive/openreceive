@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.32 - 2026-11-07
 
 - Fixed (Node): one failed wallet check at start-up no longer takes payments
   down until the process restarts. `createStack` (and so every

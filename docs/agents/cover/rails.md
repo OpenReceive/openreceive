@@ -1,4 +1,4 @@
-# OpenReceive agent directions: Rails (0.4.31)
+# OpenReceive agent directions: Rails (0.4.32)
 
 These directions are 44 KB. Download them with your shell and follow them from Step 0:
 

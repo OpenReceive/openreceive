@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.4.32 - 2026-11-07
 
 - Added: this changelog now ships in the npm package, for Vendure's plugin
   directory, and the plugin class carries the `@category Plugin` tag the
   directory builds its docs from.
+- Fixed: a wallet that was down when the plugin started no longer leaves a
+  relay connection open on each retry. The wallet check now closes the client
+  it built when it fails.
+- Fixed (checkout): a failed Bitcoin invoice shows a Try again button, a
+  wallet that did not answer shows the payer one plain sentence, and the swap
+  breakdown's first row reads "Total" with the order's own amount.
 
 ## 0.4.31 - 2026-10-20
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.32 - 2026-11-07
+
+Release with the complete 0.4.32 package family. No runtime changes from
+0.4.31.
+
 ## 0.4.31 - 2026-10-20
 
 Release with the complete 0.4.31 package family. The gem's summary names
