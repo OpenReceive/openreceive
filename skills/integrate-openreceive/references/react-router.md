@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (React Router)
 
 ```sh
-# READ THIS FIRST: this file is 34 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 35 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/react-router/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -64,8 +64,9 @@ Before anything else, check one file: the project's `.env`, if it exists.
 `grep -E '^(NWC_URI|LSC_URI_PRIMARY)=.' .env | cut -d= -f1` names the codes
 it sets without printing them. Check with that, here and after each write,
 not by reading the file, and never print the values. A code that is already
-set is not asked for again; if both are set, skip to step 5 (making the
-server load the file), then the quickstart.
+set is not asked for again; if both are set, make sure `.gitignore` covers
+`.env` (and `.dockerignore`, if the app has one), then skip to step 5
+(making the server load the file), then the quickstart.
 
 On a hosted builder (v0, Vercel, Replit, Lovable), the user may say instead
 that both codes are already set as the project's environment variables or
@@ -219,7 +220,8 @@ itself, and they hold for every integration.
   environment (`printenv`, `env`, `docker compose config`), even filtered to
   names.
 - The host owns the price. `amountFor` reads it from your own data; reject
-  payer-supplied amounts.
+  payer-supplied amounts. A donation is no exception: its amount is saved
+  by your own route first (Donations, below).
 - `authorize` runs on every request, and the `resource` it receives is a CLAIM
   the payer made, not proof. Read a framework session; never trust a body field.
 - `onPaid` must be idempotent. Its database fulfillment commits once per `reference` — your order id, one
@@ -304,6 +306,15 @@ products, and you do not join them.
   live catalog lookup that could re-price a cart already placed. Return
   `{ currency, value }` as a decimal STRING, plus a `description` of what they
   are buying.
+- **Donations and pay-what-you-want are fine.** The amount is the payer's
+  choice, so it enters through YOUR route, never OpenReceive's: the donate form
+  posts it to your own handler, which checks it and saves it on a new donation
+  row, made like an order. That row's id is the `reference`, and `amountFor`
+  reads the amount from the row, as it does for an order. Check it in that
+  handler: a floor and a cap ($1 and $10,000 unless the owner gave others) and
+  at most two decimal places. Refuse an amount outside them with a message;
+  never round it. Small amounts may be Lightning-only for some coins: the
+  checkout says which coins an amount is too small for.
 - **Users own the order; OpenReceive never sees them.** `authorize` uses the
   same ownership check this app already uses on the order show / pay page —
   `getSession(request.headers.get("cookie"))`, a cookie, whatever it is.

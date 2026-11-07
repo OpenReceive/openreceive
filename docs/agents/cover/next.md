@@ -1,6 +1,6 @@
 # OpenReceive agent directions: Next.js (0.4.31)
 
-These directions are 44 KB. Download them with your shell and follow them from Step 0:
+These directions are 45 KB. Download them with your shell and follow them from Step 0:
 
     curl -fsSL https://openreceive.org/agent-directions/next/full.md
 

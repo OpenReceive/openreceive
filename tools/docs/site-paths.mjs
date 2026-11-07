@@ -32,6 +32,10 @@ export const SITE_OWNED_PATHS = [
 // Integration aliases share the canonical framework row and agent payload.
 // The Rails site imports these obligations from docs/site-contract.json.
 export const SITE_REDIRECTS = [
+  // There is no integrations index page: someone trimming
+  // /integrations/<id> back to /integrations got a 404. The home page's
+  // framework grid lists every integration.
+  { from: "/integrations", to: "/", status: 301 },
   { from: "/integrations/wordpress", to: "/integrations/woocommerce", status: 301 },
   // The Vercel and v0 guide was published at /guides/v0 in 0.4.19.
   { from: "/guides/v0", to: "/guides/vercel", status: 301 },

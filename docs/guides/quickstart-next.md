@@ -56,6 +56,8 @@ there is nothing else to generate. Details:
 
 No ORM? You can pass a bare driver handle (`pg`, `node:sqlite`,
 `better-sqlite3`) as the `db` in step 4. The scaffold has no flavor for it.
+`node:sqlite` needs Node 22.13 or newer: before that it sits behind
+`--experimental-sqlite`.
 Instead of scaffolding, run the same DDL once yourself, using
 `paymentsSchemaSql(dialect)` from `@openreceive/http`. Your adapter already
 pulls that package in, but this import is yours, so install it too:

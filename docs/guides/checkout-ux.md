@@ -75,8 +75,10 @@ tell which one to type into their wallet.
 
 `swap.deposit_amount` is the only amount a payer is ever told to send. It is in
 the pay-in token. `swap.fee.pay_in_fiat` and `payout_fiat` are valuations. They
-explain why the deposit is larger than the cart total, and they are not
-instructions.
+explain why the deposit is larger than the total, and they are not
+instructions. The Total row is the checkout's own fiat amount when it is in the
+fee's currency: `payout_fiat` is the provider's valuation, rounded on its own
+rate, so a $49.00 order can come back as $48.99.
 
 Some stablecoins are pegged to the fee currency. The shared asset table marks
 this with `pegged_to`: USDT and USDC are pegged to USD. For these coins:
@@ -85,7 +87,7 @@ this with `pegged_to`: USDT and USDC are pegged to USD. For these coins:
   1.05 USDC (2.1%)".
 - `pay_in_fiat` is never rendered, neither in the breakdown nor in the
   transaction details.
-- The cart total stays in fiat.
+- The total stays in fiat.
 
 Floating assets (SOL, ETH) keep the fiat breakdown. There, "$50.03" cannot be
 mistaken for "0.71 SOL".

@@ -14,6 +14,11 @@ wallet client, HTTP handler, and contracts come along as dependencies. The
 install. On a different stack, swap the two packages; the rest of this guide
 stays the same.
 
+Plain HTML pages with no React and no JS build step install
+`@openreceive/elements` in place of `@openreceive/react`, and serve its
+standalone build: two files and two tags, in
+[Without a bundler](https://openreceive.org/guides/frontend-checkout.md#without-a-bundler).
+
 |          | Packages                                                                                                                      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Server   | `@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`                                                           |
@@ -53,6 +58,8 @@ there is nothing else to generate. Details:
 
 No ORM? You can pass a bare driver handle (`pg`, `node:sqlite`,
 `better-sqlite3`) as the `db` in step 4. The scaffold has no flavor for it.
+`node:sqlite` needs Node 22.13 or newer: before that it sits behind
+`--experimental-sqlite`.
 Instead of scaffolding, run the same DDL once yourself, using
 `paymentsSchemaSql(dialect)` from `@openreceive/http`. Your adapter already
 pulls that package in, but this import is yours, so install it too:

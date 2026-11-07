@@ -16,7 +16,7 @@ You never write a payment repository by hand. OpenReceive owns the
 | ---------------------- | ----------------------------------------------------------- |
 | pg (node-postgres)     | the `Pool` or `Client` directly                             |
 | mysql2 (MySQL, MariaDB) | the `Pool` or `Connection` directly                        |
-| node:sqlite            | the `DatabaseSync` directly                                 |
+| node:sqlite (Node ≥ 22.13) | the `DatabaseSync` directly                            |
 | better-sqlite3         | the `Database` directly                                     |
 | Drizzle                | the underlying driver (`pg` Pool, mysql2 Pool or better-sqlite3) directly |
 | Prisma                 | `prismaDb(prisma, dialect)` from `@openreceive/http`        |

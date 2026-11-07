@@ -489,7 +489,7 @@ A swap snapshot that is safe to show the payer. It has no provider tokens or cre
 | `depositReceivedAmount` | `string?` | Amount actually received on the deposit transaction, when the provider reports it. The payer UI compares it with `depositAmount` to explain an underpayment. |
 | `emergencyRepeat` | `boolean?` | A second deposit hit the same provider order. Extra funds may sit at the provider even though the attempt looks like an ordinary refund. |
 | `providerOrderId` | `string?` | The provider's order reference, shown to the payer for support. |
-| `fee` | `SwapFee?` | Fiat values that explain why the payer sends more than the cart total. Never use it as the price. The invoice amount is the price. See [SwapFee](#swapfee). |
+| `fee` | `SwapFee?` | Fiat values that explain why the payer sends more than the total. Never use it as the price. The invoice amount is the price. See [SwapFee](#swapfee). |
 
 #### SwapFee
 
@@ -502,7 +502,7 @@ provider's wire shape.
 | --- | --- | --- |
 | `currency` | `string` | Fiat currency the equivalents are expressed in, e.g. `"USD"`. |
 | `pay_in_fiat` | `string` | Fiat value of the crypto the payer sends. It explains the spread. It is never an amount to send. |
-| `payout_fiat` | `string` | Fiat value delivered to the merchant, which is the cart total. |
+| `payout_fiat` | `string` | The provider's fiat valuation of what the merchant receives. It is rounded on the provider's rate, so it can be a cent off the price; the checkout shows its own fiat amount as the total when the currencies match. |
 
 `depositAmount`, in the pay-in token, is the only amount a payer is ever told
 to send. The fee figures are values that explain why it is more than the cart
@@ -1114,7 +1114,9 @@ How the bodies map to the Node objects above:
   the handler, so status polls every ~3s do not walk the provider catalog on
   every request.
 - `POST …/swaps/quote` returns the snake_case quote (`provider`, `pay_asset`,
-  `available`, `pay_amount?`, limits).
+  `available`, `pay_amount?`, limits). Mind the one name that changes: the
+  request sends the asset as `pay_in_asset`, and the quote names it
+  `pay_asset`. Every other route uses `pay_in_asset` both ways.
 - `POST …/swaps` returns [PublicSwap](#publicswap) plus a nested `checkout`,
   with `swap_data` removed.
 - `…/swaps/status` and `…/swaps/refunds` return the bare snake_case
