@@ -55,13 +55,14 @@ final class RelayFailoverTest extends TestCase
     public function testFirstRelayRefusesAndHistoryRpcUsesAuthenticatedSecondRelay(): void
     {
         $calls = [];
+        $timeouts = [];
         $socket = new ScriptedRelaySocket(function (array $message): string {
             return $message[0] === 'EVENT' ? $this->response($message[1], 'list_transactions', ['transactions' => [['payment_hash' => str_repeat('a', 64), 'settled_at' => 1234]]]) : '';
         });
         $connection = $this->connection();
-        $connector = new RelayConnector($connection['relays'], function (string $relay, float $timeout) use (&$calls, $socket) {
+        $connector = new RelayConnector($connection['relays'], function (string $relay, float $timeout) use (&$calls, &$timeouts, $socket) {
             $calls[] = $relay;
-            self::assertLessThanOrEqual(1.0, $timeout);
+            $timeouts[] = $timeout;
             if (count($calls) === 1) throw new \RuntimeException('connection refused');
             return $socket;
         });
@@ -69,6 +70,11 @@ final class RelayFailoverTest extends TestCase
         $result = $rpc->execute(new Nip47Command('list_transactions', ['limit' => 20]));
         self::assertSame(1234, $result->transactions[0]->settled_at);
         self::assertSame($connection['relays'], $calls);
+        // Of the 8 s deadline the first of two relays may take a third: the second relay and the request share the rest.
+        self::assertEqualsWithDelta(8.0 / 3, $timeouts[0], 0.1);
+        // The first refused at once, so the second gets the full handshake and still leaves half for the request.
+        self::assertEqualsWithDelta(RelayConnector::HANDSHAKE_SECONDS, $timeouts[1], 0.1);
+        self::assertLessThanOrEqual(RelayConnector::HANDSHAKE_SECONDS, $timeouts[1]);
         self::assertSame(1, $socket->dispatches);
         self::assertFalse($socket->closed, 'kept open for the next history page');
         self::assertNotEmpty($socket->sent[1][1]['sig'], 'the request is signed');
@@ -160,11 +166,112 @@ final class RelayFailoverTest extends TestCase
     {
         $calls = 0;
         $connector = new RelayConnector($this->connection()['relays'], static function () use (&$calls) { $calls++; throw new \RuntimeException('offline'); });
+        // One second is too short for a second round after the pause: each relay is tried once.
         try { $connector->open(microtime(true) + 1); self::fail('offline'); } catch (WalletUnavailableError) { }
         self::assertSame(2, $calls);
         $calls = 0;
         try { $connector->open(microtime(true) + 1, cancelled: static function () use (&$calls): bool { return $calls > 0; }); self::fail('cancelled'); } catch (WalletUnavailableError) { }
         self::assertSame(1, $calls);
+
+        // Cancellation also ends the pause before a retry at once.
+        $calls = 0;
+        $only = new RelayConnector(['wss://only.invalid'], static function () use (&$calls) { $calls++; throw new \RuntimeException('offline'); });
+        $started = microtime(true);
+        try { $only->open($started + 8, cancelled: static function () use (&$calls): bool { return $calls > 0; }); self::fail('cancelled'); } catch (WalletUnavailableError) { }
+        self::assertSame(1, $calls);
+        self::assertLessThan(RelayConnector::RETRY_PAUSE_SECONDS, microtime(true) - $started);
+    }
+
+    public function testTheOnlyRelayGetsAHandshakeLongEnoughForASlowHost(): void
+    {
+        // Handshakes to a one-relay wallet measured up to 3.24 s from a shop container; one second failed them.
+        $timeouts = [];
+        $socket = new ScriptedRelaySocket(static fn (): string => '');
+        $connector = new RelayConnector(['wss://only.invalid'], static function (string $relay, float $timeout) use (&$timeouts, $socket) {
+            $timeouts[] = $timeout;
+            return $socket;
+        });
+        self::assertSame($socket, $connector->open(microtime(true) + 8.0));
+        self::assertCount(1, $timeouts);
+        self::assertGreaterThanOrEqual(3.5, $timeouts[0]);
+        self::assertLessThanOrEqual(RelayConnector::HANDSHAKE_SECONDS, $timeouts[0]);
+    }
+
+    public function testTheOnlyRelayIsTriedAgainAfterAFailedHandshake(): void
+    {
+        $calls = [];
+        $socket = new ScriptedRelaySocket(static fn (): string => '');
+        $connector = new RelayConnector(['wss://only.invalid'], static function (string $relay, float $timeout) use (&$calls, $socket) {
+            $calls[] = [$relay, $timeout, microtime(true)];
+            // The first handshake ends as a timed-out one does: with an exception.
+            if (count($calls) === 1) throw new \RuntimeException('Connection timed out');
+            return $socket;
+        });
+        self::assertSame($socket, $connector->open(microtime(true) + 8.0));
+        self::assertCount(2, $calls);
+        self::assertSame('wss://only.invalid', $calls[1][0]);
+        self::assertGreaterThanOrEqual(RelayConnector::MIN_RETRY_SECONDS, $calls[1][1]);
+        self::assertGreaterThanOrEqual(RelayConnector::RETRY_PAUSE_SECONDS - 0.01, $calls[1][2] - $calls[0][2], 'paused before the retry');
+    }
+
+    public function testAMintThroughTheOnlyRelaySurvivesAFailedHandshake(): void
+    {
+        $connection = [...$this->connection(), 'relays' => ['wss://only.invalid']];
+        $socket = new ScriptedRelaySocket(fn (array $message): string => $message[0] === 'EVENT'
+            ? $this->response($message[1], 'make_invoice', ['invoice' => 'lnbc1test', 'payment_hash' => str_repeat('b', 64)]) : '');
+        $calls = 0;
+        $connector = new RelayConnector($connection['relays'], static function () use (&$calls, $socket) {
+            if (++$calls === 1) throw new \RuntimeException('Connection timed out');
+            return $socket;
+        });
+        $result = (new RelayRpcClient($connection, $connector))->execute(new Nip47Command('make_invoice', ['amount' => 1000]));
+        self::assertSame(str_repeat('b', 64), $result->payment_hash);
+        self::assertSame(2, $calls);
+        self::assertSame(1, $socket->dispatches, 'nothing was dispatched before the handshake succeeded');
+    }
+
+    public function testADeadFirstRelayLeavesTheSecondAHandshakeAndTimeForTheRequest(): void
+    {
+        $timeouts = [];
+        $socket = new ScriptedRelaySocket(static fn (): string => '');
+        $connector = new RelayConnector($this->connection()['relays'], static function (string $relay, float $timeout) use (&$timeouts, $socket) {
+            $timeouts[] = $timeout;
+            if (count($timeouts) === 1) {
+                // A black-holed relay uses its whole handshake budget.
+                usleep((int) ($timeout * 1_000_000));
+                throw new \RuntimeException('Connection timed out');
+            }
+            return $socket;
+        });
+        $deadline = microtime(true) + 1.5;
+        self::assertSame($socket, $connector->open($deadline));
+        self::assertEqualsWithDelta(0.5, $timeouts[0], 0.05);
+        self::assertEqualsWithDelta(0.5, $timeouts[1], 0.05);
+        // Had the second handshake used all of its budget, as much again is left for the request.
+        self::assertGreaterThanOrEqual($timeouts[1] - 0.05, $deadline - microtime(true) - $timeouts[1]);
+    }
+
+    public function testARelayThatRefusesAtOnceIsRetriedWithPausesUntilTheDeadline(): void
+    {
+        $times = [];
+        $ticks = 0;
+        $connector = new RelayConnector(['wss://only.invalid'], static function () use (&$times) {
+            $times[] = microtime(true);
+            throw new \RuntimeException('connection refused');
+        });
+        $started = microtime(true);
+        try {
+            $connector->open($started + 3.0, static function () use (&$ticks): void { $ticks++; });
+            self::fail('offline');
+        } catch (WalletUnavailableError $error) {
+            self::assertSame('Configured NWC relays are unavailable.', $error->getMessage());
+        }
+        // 0 s, then after 0.25 s and 0.5 s pauses; after a 1 s pause the retry's share would be under MIN_RETRY_SECONDS.
+        self::assertCount(3, $times);
+        self::assertSame(3, $ticks, 'the idle tick runs on every attempt');
+        self::assertGreaterThanOrEqual(RelayConnector::RETRY_PAUSE_SECONDS - 0.01, $times[1] - $times[0]);
+        self::assertGreaterThanOrEqual(2 * RelayConnector::RETRY_PAUSE_SECONDS - 0.01, $times[2] - $times[1]);
+        self::assertLessThan($started + 1.0, microtime(true), 'gave up without sleeping out the deadline');
     }
 
     public function testNotificationsFailOverAuthenticateAndCloseOnStop(): void
