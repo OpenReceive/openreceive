@@ -193,6 +193,51 @@ test("a failed Lightning mint clears the loading status and lets the payer retry
   }
 });
 
+// Video 11 (2026-11-06): a shopper picking Bitcoin saw the bare line
+// "Configured NWC relays are unavailable." over the method list, with no way
+// forward. The payer reads one sentence they can act on, and Try again mints.
+test("a mint the wallet did not answer shows payer words and a Try again that mints", async () => {
+  let failMint = true;
+  const stub = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-wallet-down", 21_000),
+    "/checkouts": () => checkoutBody("order-wallet-down", 21_000, "d".repeat(64)),
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = async (input, init) => {
+    const path = new URL(String(input), "http://elements.local").pathname;
+    if (failMint && path.endsWith("/checkouts")) {
+      return jsonResponse(
+        {
+          code: "WALLET_UNAVAILABLE",
+          message: "Configured NWC relays are unavailable.",
+          retryable: true,
+        },
+        503,
+      );
+    }
+    return stub(input, init);
+  };
+  const element = mount({ reference: "order-wallet-down", prefix: "/openreceive" });
+  try {
+    (
+      await untilLocal(() => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'))
+    ).click();
+    const alert = await untilLocal(() => element.shadowRoot.querySelector('[part="wizard-error"]'));
+    assert.equal(alert.getAttribute("role"), "alert");
+    assert.match(alert.textContent, /The payment service did not answer in time/);
+    assert.doesNotMatch(element.shadowRoot.textContent, /NWC|relays/);
+
+    failMint = false;
+    element.shadowRoot.querySelector('[part="wizard-retry"]').click();
+    await untilLocal(() => element.shadowRoot.querySelector('[part="copy"]'), {
+      label: "minted invoice after Try again",
+    });
+    assert.equal(element.shadowRoot.querySelector('[part="wizard-error"]'), null);
+  } finally {
+    element.remove();
+  }
+});
+
 // The in-flight guard above is only half of the mint's double-POST story. The
 // other half is the payer whose bolt11 has ALREADY landed: they walk back to
 // the method grid and pick Bitcoin again. `mintingLightning` is false by then,

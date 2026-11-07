@@ -442,6 +442,35 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
     {
       className: joinClassNames(orClasses.wizard, props.className),
     },
+    // The Lightning mint failed. Try again picks Bitcoin again, as the method
+    // button does, so the payer does not have to walk back to the list first.
+    props.lightningMintError === undefined
+      ? null
+      : React.createElement(
+          "div",
+          { key: "wizard-error", role: "alert", className: orClasses.paymentStatus },
+          React.createElement(
+            "div",
+            { className: orClasses.paymentStatusBody },
+            React.createElement(
+              "p",
+              { className: orClasses.paymentStatusDetail },
+              props.lightningMintError,
+            ),
+            React.createElement(
+              "button",
+              {
+                className: orClasses.btn,
+                type: "button",
+                onClick: () => {
+                  updateWizardSelection((controller) => controller.selectMethod("bitcoin"));
+                  void props.onRequestLightning?.();
+                },
+              },
+              checkoutLabels.tryAgain,
+            ),
+          ),
+        ),
     selection.selectedMethod === null
       ? renderCompactPaymentMethodSelector({
           swapAssetOptions,

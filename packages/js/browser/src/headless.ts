@@ -130,6 +130,9 @@ export type {
 // subtly different create flow beside it. `startSwapRequest` IS published
 // below, for a headless integration that drives a swap start itself.
 export { createCheckoutSession } from "./internal/checkout-session.ts";
+// The payer's text for a failed request, shared by both renderers' error
+// screens so an operator-facing wallet message never reaches a payer.
+export { payerErrorMessage } from "./internal/checkout-session.ts";
 // Mounting the element: the attribute/listener factories every wrapper binding
 // is built from, the standalone shell, and the theme-toggle element.
 export {

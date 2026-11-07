@@ -200,7 +200,20 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
       ${
         view.wizardError === undefined
           ? ""
-          : `<p part="wizard-error" role="alert" class="${orClasses.paymentStatusDetail}">${escapeHtml(view.wizardError)}</p>`
+          : // The Lightning mint failed. Try again picks Bitcoin again, through
+            // the method button's own handler, so the payer does not have to
+            // walk back to the method list first.
+            `<div part="wizard-error" role="alert" class="${orClasses.paymentStatus}">
+              <div class="${orClasses.paymentStatusBody}">
+                <p class="${orClasses.paymentStatusDetail}">${escapeHtml(view.wizardError)}</p>
+                <button
+                  part="wizard-retry"
+                  class="${orClasses.btn}"
+                  type="button"
+                  ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method}="bitcoin"
+                >${escapeHtml(checkoutLabels.tryAgain)}</button>
+              </div>
+            </div>`
       }
       ${methodPicker}
       ${

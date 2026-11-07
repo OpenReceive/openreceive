@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  BrowserRequestError,
+  checkoutLabels,
   createCheckoutController,
   createCheckoutState,
   createCheckoutElementAttributes,
   createStatusFetcher,
+  createSwapDisplayModel,
   normalizeSwapStartInvoice,
+  payerErrorMessage,
   postJson,
   prepareCheckout,
   requestCheckout,
@@ -673,6 +677,78 @@ test("a USD stablecoin's fee breakdown is in the token and never shows the pay-i
     ),
     { cartTotal: "45.00 EUR", youSend: "46.10 EUR", fee: "1.10 EUR", feePercent: "2.4%" },
   );
+});
+
+// Video 10 (2026-11-06): a $49.00 order showed "Cart total $48.99". The row
+// was FixedFloat's own USD valuation of the payout (`to.usd`), rounded on its
+// rate. The total is the host's amount whenever the attempt carries it in the
+// fee's currency, and the fee is measured from it.
+test("the Total row is the host's amount, not the provider's rounding of it", () => {
+  const fee = { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "48.99" };
+  const host = { currency: "USD", value: "49.00" };
+  assert.deepEqual(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "USDT_SOL", deposit_amount: "50.05" }, host),
+    { cartTotal: "$49.00", youSend: "50.05 USDT", fee: "1.05 USDT", feePercent: "2.1%" },
+  );
+  assert.deepEqual(
+    createSwapFeeBreakdown(fee, { pay_in_asset: "SOL_SOL", deposit_amount: "0.71" }, host),
+    { cartTotal: "$49.00", youSend: "$50.03", fee: "$1.03", feePercent: "2.1%" },
+  );
+  // A host amount in another currency than the provider's valuation cannot be
+  // compared with it, so the provider's figure stays.
+  assert.equal(
+    createSwapFeeBreakdown(
+      fee,
+      { pay_in_asset: "SOL_SOL", deposit_amount: "0.71" },
+      { currency: "EUR", value: "45.00" },
+    )?.cartTotal,
+    "$48.99",
+  );
+  // The row reads "Total": a donation has no cart.
+  assert.equal(checkoutLabels.cartTotal, "Total");
+});
+
+test("the swap start keeps the checkout's fiat amount for the Total row", () => {
+  const invoice = normalizeSwapStartInvoice({
+    swap: {
+      payment_hash: "c".repeat(64),
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_SOL",
+      deposit_address: "So1anaDepositAddress1111111111111111111111111",
+      deposit_amount: "50.05",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: 2_000_000_000,
+      fee: { currency: "USD", pay_in_fiat: "50.03", payout_fiat: "48.99" },
+      checkout: { fiat_quote: { fiat: { currency: "USD", value: "49.00" } } },
+    },
+  });
+  assert.deepEqual(invoice.fiat_quote, { fiat: { currency: "USD", value: "49.00" } });
+  assert.equal(
+    createSwapDisplayModel(invoice, { now: 1_999_999_000 })?.feeBreakdown?.cartTotal,
+    "$49.00",
+  );
+});
+
+test("a payer never reads the wallet's operator-facing failure text", () => {
+  const fallback = "Could not create the Lightning invoice. Please try again.";
+  for (const [code, message] of [
+    ["WALLET_UNAVAILABLE", "Configured NWC relays are unavailable."],
+    ["TIMEOUT", "NWC wallet service request timed out."],
+  ]) {
+    assert.equal(
+      payerErrorMessage(new BrowserRequestError(message, { status: 503, code }), fallback),
+      checkoutLabels.paymentServiceUnavailable,
+    );
+  }
+  // Text the server wrote for the payer is kept, INTERNAL included: the rate
+  // outage is an INTERNAL with a sentence meant for them.
+  const rates = "Exchange rates are temporarily unavailable — please try again in a moment.";
+  assert.equal(
+    payerErrorMessage(new BrowserRequestError(rates, { status: 503, code: "INTERNAL" }), fallback),
+    rates,
+  );
+  assert.equal(payerErrorMessage(new Error(""), fallback), fallback);
+  assert.equal(payerErrorMessage(undefined, fallback), fallback);
 });
 
 /** Every string value in a log entry, at any nesting depth. */

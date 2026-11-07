@@ -335,6 +335,12 @@ export interface PaymentWizardProps {
    */
   readonly onRequestLightning?: () => void | Promise<void>;
   /**
+   * Why the last `onRequestLightning` mint failed, in words for the payer. The
+   * wizard shows it above the methods with a Try again button that requests
+   * Lightning again. Create mode passes it; snapshot mode has no mint.
+   */
+  readonly lightningMintError?: string;
+  /**
    * Called after a swap deposit attempt is created or reused so create-mode can poll
    * the shadow Lightning payment_hash for settlement.
    */

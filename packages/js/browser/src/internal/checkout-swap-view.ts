@@ -49,7 +49,11 @@ export function swapFeeInTokenUnits(fee: CheckoutInvoiceSwapFee, payInAsset: str
 
 /**
  * Turn the provider's fiat equivalents into a display-ready fee breakout. The
- * merchant receives `payout_fiat` (the cart total); the payer sends more, and the
+ * total is the amount the host asked for: `total` (the attempt's own fiat
+ * quote) when it is in the fee's currency, else the provider's `payout_fiat`,
+ * its valuation of what the merchant receives. The provider rounds that
+ * valuation on its own rate, so a $49.00 order can come back as $48.99; the
+ * host's figure is the one the payer saw. The payer sends more, and the
  * difference is the swap fee (exchange spread + network fees).
  *
  * Two renderings, one rule ({@link swapFeeInTokenUnits}):
@@ -65,6 +69,7 @@ export function swapFeeInTokenUnits(fee: CheckoutInvoiceSwapFee, payInAsset: str
 export function createSwapFeeBreakdown(
   fee: CheckoutInvoiceSwapFee | undefined,
   swap?: SwapFeeBreakdownContext,
+  total?: { readonly currency?: string; readonly value?: string },
 ): SwapFeeBreakdown | undefined {
   if (fee === undefined) return undefined;
   // Exact decimal math on the shared money engine — never binary floats, even
@@ -72,7 +77,12 @@ export function createSwapFeeBreakdown(
   // Hiding the fee row on an unreadable figure is a PRODUCT choice — a
   // breakdown that cannot be computed is worse than no breakdown — so the
   // parse is caught here, at the row boundary, and nowhere else.
-  const payout = parseFeeDecimal(fee.payout_fiat);
+  const hostTotal =
+    total?.currency === fee.currency && total.value !== undefined
+      ? parseFeeDecimal(total.value)
+      : undefined;
+  const payout =
+    hostTotal !== undefined && hostTotal.units > 0n ? hostTotal : parseFeeDecimal(fee.payout_fiat);
   // Distinct from the parse: this one guards our own division below.
   if (payout === undefined || payout.units <= 0n) return undefined;
   const fiat = (units: bigint, scale: number): string => {
@@ -200,7 +210,7 @@ export function createSwapDisplayModel(
   // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
   const settled = invoice.transaction_state === "settled";
   const instructionsExpired = expiresInSeconds === 0 && swap.provider_state === "awaiting_deposit";
-  const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap);
+  const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap, invoice.fiat_quote?.fiat);
 
   return {
     provider: swap.provider,

@@ -203,6 +203,7 @@
         "parsePaymentMethod",
         "parseResolvedTheme",
         "parseThemePreference",
+        "payerErrorMessage",
         "paymentAccentId",
         "paymentIconSvgs",
         "paymentIconUrls",

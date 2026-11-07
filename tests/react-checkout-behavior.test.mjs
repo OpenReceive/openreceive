@@ -489,6 +489,43 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
 // clicking Bitcoin mints exactly one Lightning invoice" / "double-clicking a
 // swap asset starts exactly one swap"). React had NO guard on the mint at all
 // before the flows were merged.
+// React used to drop a failed Lightning mint on the floor: the payer stayed on
+// the Bitcoin step with no invoice and no message. It shows what happened, in
+// words for the payer, with a Try again that mints.
+test("a failed Lightning mint shows payer words and a Try again that mints", async () => {
+  const stack = await createLifecycleStack();
+  stack.addOrder("order-mint-retry", 2000);
+  let failMint = true;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
+    if (failMint && url.pathname === "/openreceive/checkouts") {
+      return new Response(
+        JSON.stringify({
+          code: "WALLET_UNAVAILABLE",
+          message: "Configured NWC relays are unavailable.",
+          retryable: true,
+        }),
+        { status: 503, headers: { "content-type": "application/json" } },
+      );
+    }
+    return stack.fetchStub(input, init);
+  };
+  const handle = mount(React.createElement(Checkout, { reference: "order-mint-retry" }));
+  try {
+    (await until(() => handle.button("Bitcoin"), { label: "method grid" })).click();
+    await until(() => handle.text().includes(checkoutLabels.paymentServiceUnavailable), {
+      label: "mint failure",
+    });
+    assert.doesNotMatch(handle.text(), /NWC|relays/);
+    failMint = false;
+    (await until(() => handle.button(checkoutLabels.tryAgain), { label: "Try again" })).click();
+    await until(() => handle.button(checkoutLabels.copyInvoice), { label: "minted invoice" });
+    assert.doesNotMatch(handle.text(), new RegExp(checkoutLabels.paymentServiceUnavailable));
+  } finally {
+    handle.unmount();
+  }
+});
+
 test("a second Bitcoin selection during the mint does not POST a second checkout", async () => {
   const stack = await createLifecycleStack();
   stack.addOrder("order-double-mint", 2000);

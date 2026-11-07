@@ -19,7 +19,7 @@ export const checkoutLabels = {
     waitingTitle: "Waiting for payment",
     waitingDetail: "Keep this page open while we verify settlement.",
     settledTitle: "Payment received",
-    settledDetail: "Backend settlement verified.",
+    settledDetail: "Thank you. Your payment is confirmed.",
     expiredTitle: "Invoice expired",
     expiredDetail: "Create a fresh invoice to keep going.",
   },
@@ -69,6 +69,15 @@ export const checkoutLabels = {
   // line.
   swapStartFailedTitle: "Could not prepare the payment address",
   tryAgain: "Try again",
+  /**
+   * Shown instead of the server's text when the wallet or its relay did not
+   * answer (`WALLET_UNAVAILABLE`, `TIMEOUT`). Those messages are written for
+   * the shop's operator ("Configured NWC relays are unavailable."), and mean
+   * nothing to a payer. See `payerErrorMessage`.
+   */
+  paymentServiceUnavailable: "The payment service did not answer in time. Please try again.",
+  /** Under "Could not start checkout." when the server sent nothing a payer can use. */
+  startCheckoutFailedDetail: "Please try again.",
   payWithLightningInstead: "Pay with Lightning instead",
   supportReviewNeeded: "This payment needs support review.",
   // The heading already carries `supportReviewNeeded`; a banner repeating it
@@ -80,7 +89,12 @@ export const checkoutLabels = {
   preparingPaymentAddressDetail: "Getting your {asset} payment address…",
   createPaymentAddress: "Create {asset} ({network}) payment address",
   paymentBreakdown: "Payment breakdown",
-  cartTotal: "Cart total",
+  /**
+   * The amount the host asked for. It reads "Total", not "Cart total": a
+   * donation or an invoice has no cart. The key keeps its old name, which
+   * hosts already read.
+   */
+  cartTotal: "Total",
   youSend: "You send",
   swapAndNetworkFees: "Swap + network fees",
   refundAddressPlaceholder: "{network} refund address",

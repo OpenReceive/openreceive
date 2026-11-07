@@ -10,6 +10,7 @@ import {
   OPENRECEIVE_DEFAULT_PREFIX,
   OPENRECEIVE_STYLE_ROOT_ATTRIBUTE,
   orClasses,
+  payerErrorMessage,
   prepareCheckout,
   requestCheckout,
   resumeCheckoutAttempt,
@@ -264,9 +265,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         onErrorRef.current?.(error);
         setCreated({
           status: "error",
-          ...(error instanceof Error && error.message.length > 0
-            ? { errorMessage: error.message }
-            : {}),
+          errorMessage: payerErrorMessage(error, checkoutLabels.startCheckoutFailedDetail),
         });
       });
     return () => {
@@ -296,6 +295,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       checkout: created.checkout,
       prefix: resolvedPrefix,
       mintingLightning: session.mintingLightning,
+      ...(session.wizardError === undefined ? {} : { lightningMintError: session.wizardError }),
       onRequestLightning: session.ensureLightning,
       onSwapStarted,
     });
@@ -323,7 +323,9 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         { className: orClasses.creating },
         React.createElement("p", { role: "alert" }, "Could not start checkout."),
         // The thrown error carries the server's payer-facing text (e.g. the
-        // rate-limit message or "Exchange rates are temporarily unavailable").
+        // rate-limit message or "Exchange rates are temporarily unavailable");
+        // payerErrorMessage swaps an operator-facing wallet message for one
+        // the payer can act on.
         created.errorMessage === undefined
           ? null
           : React.createElement("p", null, created.errorMessage),
@@ -372,6 +374,8 @@ function CheckoutView(
     readonly onSwapStarted?: (invoice: CheckoutInvoiceSnapshot) => void;
     /** Create-mode: true while a deferred Lightning mint is in flight. */
     readonly mintingLightning?: boolean;
+    /** Create-mode: why the last Lightning mint failed, for the payer. */
+    readonly lightningMintError?: string;
   },
 ) {
   const {
@@ -401,6 +405,7 @@ function CheckoutView(
     onRequestLightning,
     onSwapStarted,
     mintingLightning = false,
+    lightningMintError,
     qrEncoder,
     logger,
     decodeLinkUrl,
@@ -753,6 +758,7 @@ function CheckoutView(
               onProviderCopy,
               onCopy,
               onRequestLightning,
+              ...(lightningMintError === undefined ? {} : { lightningMintError }),
               onSwapStarted,
               // Whether a payer who closes the tab has a URL to come back
               // to. Explicit wins — only the host knows about a per-order

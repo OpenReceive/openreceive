@@ -157,13 +157,17 @@ export interface CheckoutInvoiceSwapSnapshot {
 
 /**
  * Formatted fee breakout for the deposit panel, explaining why the payer sends more
- * than the cart total. All figures are display-ready strings. `cartTotal` is
+ * than the total the host asked for. All figures are display-ready strings. `cartTotal` is
  * always fiat; `youSend` and `fee` are fiat for a floating asset and token
  * amounts ("50.05 USDC") for a stablecoin pegged to the fee currency, where a
  * fiat valuation would read as the deposit amount with a typo.
  */
 export interface SwapFeeBreakdown {
-  /** Cart total delivered to the merchant, e.g. "$10.00". */
+  /**
+   * The total the host asked for, e.g. "$10.00": the checkout's own fiat
+   * amount when it is in the provider's currency, else the provider's
+   * valuation of what the merchant receives. Shown as "Total".
+   */
   readonly cartTotal: string;
   /** What the payer sends: its fiat value ("$10.59") or, for a pegged stablecoin, the deposit amount itself ("10.59 USDC"). */
   readonly youSend: string;

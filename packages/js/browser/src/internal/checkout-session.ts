@@ -33,6 +33,7 @@ import {
   mergeAttemptIntoSnapshot,
   mergeMintedCheckout,
 } from "./checkout-merge.ts";
+import { checkoutLabels } from "./labels.ts";
 import { postJson, startSwapRequest } from "./swap-http.ts";
 import type {
   BrowserLoggerOption,
@@ -181,8 +182,20 @@ function normalizeSwapQuote(body: unknown): CheckoutPaymentMethod | undefined {
     : undefined;
 }
 
-/** The server's payer-facing text travels on the thrown error; keep it. */
-function payerFacingMessage(error: unknown, fallback: string): string {
+/**
+ * What a payer reads for a failed request. The server's text travels on the
+ * thrown error and is kept ("Exchange rates are temporarily unavailable — …",
+ * a host's own refusal), with one exception. A wallet or relay that did not
+ * answer (`WALLET_UNAVAILABLE`, `TIMEOUT`) carries text written for the shop's
+ * operator, which differs by engine ("Configured NWC relays are
+ * unavailable.", "NWC wallet service request timed out."), so the payer gets
+ * one sentence that says to try again.
+ */
+export function payerErrorMessage(error: unknown, fallback: string): string {
+  const { code } = (error ?? {}) as { code?: unknown };
+  if (code === "WALLET_UNAVAILABLE" || code === "TIMEOUT") {
+    return checkoutLabels.paymentServiceUnavailable;
+  }
   return error instanceof Error && error.message.length > 0 ? error.message : fallback;
 }
 
@@ -271,7 +284,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
       if (!action.isCurrent()) return;
       // Surface the mint failure inline instead of silently returning to the
       // method picker.
-      wizardError = payerFacingMessage(error, MINT_FAILED);
+      wizardError = payerErrorMessage(error, MINT_FAILED);
       options.onError(error);
     } finally {
       if (action.isCurrent()) {
@@ -425,7 +438,7 @@ export function createCheckoutSession(options: CheckoutSessionOptions): Checkout
   }
 
   function failSwapStart(error: unknown): void {
-    swapStartError = payerFacingMessage(error, SWAP_START_FAILED);
+    swapStartError = payerErrorMessage(error, SWAP_START_FAILED);
     options.onError(error);
     options.onChange();
   }

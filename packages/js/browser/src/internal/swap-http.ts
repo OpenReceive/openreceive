@@ -88,11 +88,19 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
   }
   // Optional echo of the checkout's own amount, which the client already knows.
   const amountMsats = optionalSafeInteger(checkout.amount_msats, "amount_msats");
+  // The host's fiat amount, which the deposit panel's Total row shows rather
+  // than the provider's own rounding of it.
+  const fiat = recordOrEmpty(recordOrEmpty(checkout.fiat_quote).fiat);
+  const fiatCurrency = nonEmptyString(fiat.currency);
+  const fiatValue = nonEmptyString(fiat.value);
   return {
     invoice_id: paymentHash,
     rail: "swap",
     payment_hash: paymentHash,
     ...(amountMsats === undefined ? {} : { amount_msats: amountMsats }),
+    ...(fiatCurrency === undefined || fiatValue === undefined
+      ? {}
+      : { fiat_quote: { fiat: { currency: fiatCurrency, value: fiatValue } } }),
     transaction_state: "pending",
     workflow_state: "invoice_created",
     expires_at: swap.provider_expires_at,

@@ -413,7 +413,7 @@ test("characterization: lightning settled", () => {
     phase: "settled",
     waiting: false,
     title: "Payment received",
-    detail: "Backend settlement verified.",
+    detail: "Thank you. Your payment is confirmed.",
     countdownPrefix: "Invoice expires in",
   });
 });

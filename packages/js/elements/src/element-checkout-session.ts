@@ -24,11 +24,13 @@ import {
   type BrowserLoggerOption,
   type CheckoutPaymentMethod,
   type CheckoutSnapshot,
+  checkoutLabels,
   createCheckoutElementAttributes,
   createCheckoutSession,
   mergeAttemptIntoCheckout,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
+  payerErrorMessage,
   prepareCheckout,
   requestCheckout,
   resumeCheckoutAttempt,
@@ -295,10 +297,7 @@ export function createElementCheckoutSession(
       // Leave createdKey set so theme sync / host error DOM updates cannot retry-storm.
       // The payer sees an inline error with a retry button instead of an
       // infinite "Creating checkout…" spinner.
-      createError =
-        error instanceof Error && error.message.length > 0
-          ? error.message
-          : "Could not start checkout.";
+      createError = payerErrorMessage(error, checkoutLabels.startCheckoutFailedDetail);
       host.dispatchError(error);
       host.render();
     } finally {

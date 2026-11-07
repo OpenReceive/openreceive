@@ -124,9 +124,9 @@ export function createTransactionDetails(input: TransactionDetailsInput): Transa
     push("Lightning payout", swap.payout_tx_id);
     push("Refund address", swap.refund_address, undefined, "address");
     push("Refund transaction", swap.refund_tx_id, undefined, "tx");
-    const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap);
+    const feeBreakdown = createSwapFeeBreakdown(swap.fee, swap, input.fiat_quote?.fiat);
     if (feeBreakdown !== undefined) {
-      push("Cart total", feeBreakdown.cartTotal);
+      push("Total", feeBreakdown.cartTotal);
       push("You send", feeBreakdown.youSend);
       push(
         "Swap + network fees",
