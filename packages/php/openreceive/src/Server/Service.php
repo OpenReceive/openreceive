@@ -496,7 +496,7 @@ final class Service
         } catch (NwcUriParseError $e) {
             throw $e;
         } catch (\Throwable $e) {
-            throw new WalletPreflightError('could not read wallet info (' . (new \ReflectionClass($e))->getShortName() . ": {$e->getMessage()}).");
+            throw new WalletPreflightError('could not read wallet info (' . (new \ReflectionClass($e))->getShortName() . ": {$e->getMessage()}).", $e);
         }
         $summary = Info::summarize($rawInfo);
         if (!$summary['receive_checkout_ready']) {

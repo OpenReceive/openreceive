@@ -211,7 +211,8 @@ final class EddGateway
             if (isset($posted['title']) && is_string($posted['title'])) { $settings['title'] = sanitize_text_field($posted['title']); }
             Configuration::save($settings);
         } catch (\Throwable $error) {
-            add_settings_error('edd-notices', 'openreceive', __('OpenReceive settings were not saved:', 'openreceive') . ' ' . Configuration::errorMessage($error, $values));
+            // Easy Digital Downloads prints settings errors as HTML (through wp_kses); the reason is plain text.
+            add_settings_error('edd-notices', 'openreceive', esc_html(Configuration::saveFailure($error, $values, __('OpenReceive settings were not saved:', 'openreceive'))));
         }
         return $input;
     }

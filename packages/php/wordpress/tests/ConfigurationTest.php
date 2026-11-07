@@ -3,7 +3,9 @@ declare(strict_types=1);
 namespace OpenReceive\WP;
 
 use OpenReceive\ConfigurationError;
+use OpenReceive\Nwc\WalletUnavailableError;
 use OpenReceive\Server\Errors\SpendCapableWalletError;
+use OpenReceive\Server\Errors\WalletPreflightError;
 use PHPUnit\Framework\TestCase;
 
 // These tests load source classes without WordPress; capture writes so a
@@ -16,6 +18,7 @@ function update_option(string $name, mixed $value, mixed $autoload = null): bool
 }
 function wp_salt(string $scheme): string { return 'unit-test-salt-' . $scheme; }
 function get_transient(string $name): mixed { return ConfigurationTest::$transients[$name] ?? false; }
+function __(string $text, string $domain = 'default'): string { return $text; }
 
 final class ConfigurationTest extends TestCase
 {
@@ -69,6 +72,25 @@ final class ConfigurationTest extends TestCase
         $this->cacheWalletInfo(['make_invoice', 'list_transactions', 'pay_invoice']);
         $this->expectException(SpendCapableWalletError::class);
         Plugin::service(['nwc_uri' => Secrets::encrypt(self::CODE)], live: false);
+    }
+
+    public function testASaveTheRelayDidNotAnswerDoesNotBlameTheCodes(): void
+    {
+        // The service's preflight wraps the relay failure; the notice reads the cause.
+        $error = new WalletPreflightError('could not read wallet info (WalletUnavailableError: Configured NWC relays are unavailable.).',
+            new WalletUnavailableError('Configured NWC relays are unavailable.'));
+        $notice = Configuration::saveFailure($error, [], 'Check the codes.');
+        self::assertSame("OpenReceive settings were not saved: the wallet's relay did not answer in time. Your codes were not checked. Press Save again.", $notice);
+        self::assertSame($notice, Configuration::saveFailure(new WalletUnavailableError('NWC response timed out.'), [], 'Check the codes.'));
+    }
+
+    public function testAnyOtherSaveFailureNamesTheCauseAndTheRedactedReason(): void
+    {
+        $notice = Configuration::saveFailure(new WalletPreflightError('the wallet does not advertise make_invoice and list_transactions.'), [], 'Check the codes.');
+        self::assertStringStartsWith('Check the codes. OpenReceive wallet preflight failed: the wallet does not advertise make_invoice', $notice);
+        $notice = Configuration::saveFailure(new \RuntimeException('Rejected ' . self::CODE), [self::CODE], 'Check the codes.');
+        self::assertStringNotContainsString(self::HEX, $notice);
+        self::assertStringStartsWith('Check the codes. Rejected ', $notice);
     }
 
     private function cacheWalletInfo(array $methods): void

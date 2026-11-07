@@ -4,6 +4,7 @@ namespace OpenReceive\WP;
 defined('ABSPATH') || exit;
 
 use OpenReceive\Nwc\Errors;
+use OpenReceive\Nwc\WalletUnavailableError;
 
 /** The admin form and CLI share the same validate-before-save path. */
 final class Configuration
@@ -38,6 +39,22 @@ final class Configuration
             if (is_string($value) && strlen($value) > 4) { $message = str_replace($value, '[REDACTED]', $message); }
         }
         return Errors::redactErrorText($message);
+    }
+
+    /**
+     * The notice for a settings save that failed. A relay that did not answer
+     * in time says nothing about the codes, so that notice asks for another
+     * try instead of blaming them. Any other failure gets $cause and the
+     * redacted reason.
+     */
+    public static function saveFailure(\Throwable $error, array $values, string $cause): string
+    {
+        for ($reason = $error; $reason !== null; $reason = $reason->getPrevious()) {
+            if ($reason instanceof WalletUnavailableError) {
+                return __('OpenReceive settings were not saved: the wallet\'s relay did not answer in time. Your codes were not checked. Press Save again.', 'openreceive');
+            }
+        }
+        return $cause . ' ' . self::errorMessage($error, $values);
     }
 
     /** The merchant's own checkout title, or '' when the setting is empty or holds a default. */

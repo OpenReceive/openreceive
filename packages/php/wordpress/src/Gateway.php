@@ -83,8 +83,11 @@ final class Gateway extends \WC_Payment_Gateway
         try {
             foreach ($this->form_fields as $key => $field) { $next[$key] = $this->get_field_value($key, $field, $this->get_post_data()); }
             Configuration::save($next);
-        } catch (\Throwable) {
-            \WC_Admin_Settings::add_error(__('OpenReceive settings were not saved. Check the receive-only NWC code, relay access and optional LSC codes. Spend-capable wallets require the explicit override.', 'openreceive'));
+        } catch (\Throwable $error) {
+            // The codes as entered, so the reason never shows them.
+            try { $values = array_values(Secrets::environment($next)); } catch (\Throwable) { $values = []; }
+            \WC_Admin_Settings::add_error(Configuration::saveFailure($error, $values,
+                __('OpenReceive settings were not saved. Check the receive-only NWC code, relay access and optional LSC codes. Spend-capable wallets require the explicit override.', 'openreceive')));
             return false;
         }
         $this->settings = $next;

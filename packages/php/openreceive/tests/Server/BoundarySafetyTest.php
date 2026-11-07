@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace OpenReceive\Tests\Server;
 
 use OpenReceive\Nwc\ReceiveNwcClient;
+use OpenReceive\Nwc\WalletUnavailableError;
 use OpenReceive\Server\Errors\HttpError;
+use OpenReceive\Server\Errors\WalletPreflightError;
 use OpenReceive\Server\RequestHandler;
 use OpenReceive\Server\Service;
 use OpenReceive\Testing\FakeSwapProvider;
@@ -41,6 +43,24 @@ final class BoundarySafetyTest extends TestCase
         self::assertCount(1, $logger->events);
         self::assertStringNotContainsString('invalid-secret', json_encode($logger->events));
         self::assertSame([], $logger->events[0][1], 'no raw exception attached to the host logger');
+    }
+
+    public function testAPreflightTheRelayDidNotAnswerKeepsThatCause(): void
+    {
+        $wallet = new class implements ReceiveNwcClient {
+            public function preflight(): array { throw new WalletUnavailableError('Configured NWC relays are unavailable.'); }
+            public function makeInvoice(array $request): array { throw new \LogicException('must not mint'); }
+            public function listTransactions(array $request): array { return ['transactions' => []]; }
+            public function subscribeNotifications(callable $handler, ?callable $onIdle = null): void {}
+        };
+        try {
+            new Service($wallet, false, []);
+            self::fail('a wallet that cannot be read must fail preflight');
+        } catch (WalletPreflightError $error) {
+            // A host tells "the relay did not answer" from "the code is wrong" by the cause, not the text.
+            self::assertInstanceOf(WalletUnavailableError::class, $error->getPrevious());
+            self::assertStringContainsString('could not read wallet info (WalletUnavailableError: Configured NWC relays are unavailable.)', $error->getMessage());
+        }
     }
 
     public function testInvalidHostAmountsAre500BeforeAnyWalletMint(): void
