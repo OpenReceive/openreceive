@@ -529,13 +529,38 @@ async function listPresentTables(input: {
       `no SQLite database at ${sqlitePath}. Pass the file your app opens, or a postgres:// / mysql:// URL.`,
     );
   }
-  const { DatabaseSync } = await import("node:sqlite").catch((error: unknown) => {
+  const sqlite = await import("node:sqlite").catch((error: unknown) => {
     // Node 22.5–22.12 ship node:sqlite behind a flag.
     if ((error as { code?: string }).code !== "ERR_UNKNOWN_BUILTIN_MODULE") throw error;
-    throw new Error(
-      `Node ${process.version} keeps node:sqlite behind a flag. Rerun as \`NODE_OPTIONS=--experimental-sqlite npx openreceive doctor …\`, or upgrade to Node 22.13 or newer.`,
-    );
+    return undefined;
   });
+  if (sqlite === undefined) {
+    // An app on such a Node that works uses better-sqlite3, so read the file
+    // with the app's own driver rather than failing a check the app passes.
+    const BetterSqlite = await importFromHostProject<
+      new (
+        file: string,
+        options: { readonly readonly: boolean; readonly fileMustExist: boolean },
+      ) => {
+        prepare(sql: string): { all(...values: string[]): unknown[] };
+        close(): void;
+      }
+    >("better-sqlite3", input.cwd).catch(() => {
+      throw new Error(
+        `Node ${process.version} keeps node:sqlite behind a flag, and this app has no better-sqlite3 to read the file with. Rerun as \`NODE_OPTIONS=--experimental-sqlite npx openreceive doctor …\`, or upgrade to Node 22.13 or newer.`,
+      );
+    });
+    const database = new BetterSqlite(sqlitePath, { readonly: true, fileMustExist: true });
+    try {
+      const rows = database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?)")
+        .all(...tables) as { name: string }[];
+      return rows.map((row) => row.name);
+    } finally {
+      database.close();
+    }
+  }
+  const { DatabaseSync } = sqlite;
   const database = new DatabaseSync(sqlitePath, { readOnly: true });
   try {
     const rows = database

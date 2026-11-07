@@ -205,6 +205,60 @@ test("doctor --db reports migrated tables and missing ones", async () => {
   }
 });
 
+// Video 12 (2026-11-06): on Node 22.12 node:sqlite sits behind a flag, so an
+// app there uses better-sqlite3, and doctor failed a check the app passed.
+// Doctor reads the file with the app's own better-sqlite3 instead. Node
+// 22.13+ turns node:sqlite off with --no-experimental-sqlite, which stands in
+// for the older Node here.
+test("doctor --db reads SQLite with the app's better-sqlite3 when node:sqlite is off", async (t) => {
+  const { execFileSync } = await import("node:child_process");
+  const probe = execFileSync(
+    process.execPath,
+    [
+      "--no-experimental-sqlite",
+      "--input-type=module",
+      "-e",
+      'import("node:sqlite").then(() => console.log("on"), () => console.log("off"))',
+    ],
+    { encoding: "utf8" },
+  ).trim();
+  if (probe !== "off") {
+    t.skip("this Node cannot turn node:sqlite off");
+    return;
+  }
+  const dir = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-"));
+  try {
+    const migrated = path.join(dir, "migrated.sqlite");
+    const database = new DatabaseSync(migrated);
+    database.exec(paymentsSchemaSql("sqlite"));
+    database.close();
+    const cli = new URL("../packages/js/node/src/cli.ts", import.meta.url).href;
+    const script = `
+      const { runCli } = await import(${JSON.stringify(cli)});
+      const out = [];
+      const code = await runCli({
+        argv: ["doctor", "--offline", "--db", ${JSON.stringify(migrated)}],
+        env: { NWC_URI: ${JSON.stringify(VALID_NWC)} },
+        cwd: process.cwd(),
+        stdout: { write: (message) => out.push(message) },
+        stderr: { write: () => {} },
+      });
+      console.log(JSON.stringify({ code, out: out.join("") }));
+    `;
+    const result = JSON.parse(
+      execFileSync(
+        process.execPath,
+        ["--no-experimental-sqlite", "--import", "tsx", "--input-type=module", "-e", script],
+        { encoding: "utf8" },
+      ),
+    );
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /database: openreceive_payments and openreceive_meta present/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("doctor --url recognizes the OpenReceive router's own 404", async () => {
   const mounted = http.createServer((_request, response) => {
     response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
