@@ -82,7 +82,7 @@
   header; its tags are crypto, bitcoin, usdt, woocommerce and payment gateway;
   and the short description and the Plugins screen's description read "Accept
   crypto in WooCommerce or Easy Digital Downloads: Bitcoin, USDT and USDC, paid
-  to your own wallet in Bitcoin. No account, no API key." USDT and USDC still
+  to your wallet in Bitcoin. No approval necessary, no API key." USDT and USDC still
   arrive only through a configured swap provider, as BTC over Lightning.
 - Added (Odoo): the module is ready for the Odoo Apps store. It has a store
   page (`static/description/index.html`) that names the outside services it

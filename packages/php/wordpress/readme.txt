@@ -8,7 +8,7 @@ Stable tag: 0.4.31
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Accept crypto in WooCommerce or Easy Digital Downloads: Bitcoin, USDT and USDC, paid to your own wallet in Bitcoin. No account, no API key.
+Accept crypto in WooCommerce or Easy Digital Downloads: Bitcoin, USDT and USDC, paid to your wallet in Bitcoin. No approval necessary, no API key.
 
 == Description ==
 OpenReceive adds a Bitcoin Lightning payment method to WooCommerce and to Easy Digital Downloads. Customers pay a Lightning invoice, and the payment lands directly in a wallet you control. There is no OpenReceive account, no sign-up, and no processor in the middle.
