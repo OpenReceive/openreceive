@@ -84,8 +84,6 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapRefundError: "data-or-swap-refund-error",
   providerCopy: "data-or-provider-copy",
   providerTutorial: "data-or-provider-tutorial",
-  tutorialStep: "data-or-tutorial-step",
-  tutorialImage: "data-or-tutorial-image",
 } as const;
 export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = attributeSelectors(
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,

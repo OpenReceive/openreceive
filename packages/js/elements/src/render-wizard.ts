@@ -316,7 +316,6 @@ export function renderPaymentWizardHtml(view: ElementsWizardView = {}): string {
       ${renderTutorialModalHtml(
         routeDisplays,
         view.activeTutorialProviderId ?? null,
-        view.activeTutorialIndex ?? 0,
         view.activeTutorialCopied ?? false,
         view.lightningInvoice,
         view.decodeLinkUrl,

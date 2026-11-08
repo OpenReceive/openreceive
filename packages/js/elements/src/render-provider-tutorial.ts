@@ -30,7 +30,7 @@ function renderCopyStepHtml(copied: boolean): string {
     <li>
       <button
         part="tutorial-copy"
-        class="${copied ? orClasses.tutorialStepDone : orClasses.tutorialStepBig}"
+        class="${copied ? orClasses.tutorialCopyStepDone : orClasses.tutorialCopyStep}"
         type="button"
       ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">1</span><span part="tutorial-copy-label">${escapeHtml(copied ? checkoutLabels.tutorialInvoiceCopied : checkoutLabels.copyInvoice)}</span></button>
     </li>
@@ -39,10 +39,8 @@ function renderCopyStepHtml(copied: boolean): string {
 
 function renderTutorialStepHtml(
   tutorial: WizardProviderDisplay["tutorials"][number],
-  index: number,
-  active: boolean,
+  stepNumber: number,
   locked: boolean,
-  upNext: boolean,
 ): string {
   // No `<img>` until the lazily loaded screenshot is in hand: an empty src
   // requests the page itself.
@@ -52,15 +50,8 @@ function renderTutorialStepHtml(
       : `<img part="tutorial-image" class="${orClasses.tutorialImage}" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}">`;
   return `
     <li>
-      <button
-        part="${active ? "tutorial-step-active" : "tutorial-step"}"
-        class="${active ? orClasses.tutorialStepActive : upNext ? orClasses.tutorialStepBig : orClasses.tutorialStep}"
-        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep}="${index}"
-        ${active ? 'aria-current="step"' : ""}
-        ${locked ? "disabled" : ""}
-        type="button"
-      ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">${index + 1}</span><span>${escapeHtml(tutorial.caption)}</span></button>
-      <div part="tutorial-frame" class="${orClasses.tutorialFrame}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage}="${index}" ${active ? "" : "hidden"}>${image}</div>
+      <div part="tutorial-step" class="${locked ? orClasses.tutorialStepLocked : orClasses.tutorialStep}"><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">${stepNumber}</span><span>${escapeHtml(tutorial.caption)}</span></div>
+      ${locked ? "" : `<div part="tutorial-frame" class="${orClasses.tutorialFrame}">${image}</div>`}
     </li>
   `;
 }
@@ -68,7 +59,6 @@ function renderTutorialStepHtml(
 export function renderTutorialModalHtml(
   routes: readonly WizardRouteDisplay[],
   activeProviderId: string | null,
-  activeStep: number,
   copied: boolean,
   lightningInvoice?: string,
   decodeLinkUrl?: string,
@@ -81,12 +71,11 @@ export function renderTutorialModalHtml(
 
   const hasInvoice = lightningInvoice !== undefined && lightningInvoice.trim() !== "";
   // Copying comes first whenever there is an invoice to copy: the wallet steps
-  // end with pasting it, so they stay greyed out until the copy has worked.
+  // end with pasting it, so they stay greyed out until the copy has worked. Then
+  // the whole route shows at once, because a payer on one phone can't flip
+  // between this page and the wallet for each step.
   const copySteps = hasInvoice ? 1 : 0;
-  const stepCount = copySteps + provider.tutorials.length;
-  const step = Math.max(0, Math.min(stepCount - 1, activeStep));
   const copyPending = hasInvoice && !copied;
-  const lastStep = step === stepCount - 1;
   const decodeHref = hasInvoice
     ? createLightningInvoiceDecodeUrl(lightningInvoice, decodeLinkUrl)
     : undefined;
@@ -114,24 +103,16 @@ export function renderTutorialModalHtml(
           ${hasInvoice ? renderCopyStepHtml(copied) : ""}
           ${provider.tutorials
             .map((tutorial, index) =>
-              renderTutorialStepHtml(
-                tutorial,
-                index + copySteps,
-                index + copySteps === step,
-                copyPending,
-                !copyPending && index + copySteps === step + 1,
-              ),
+              renderTutorialStepHtml(tutorial, index + copySteps + 1, copyPending),
             )
             .join("")}
         </ol>
         ${decodeButton}
-        <button
-          part="tutorial-done"
-          class="${orClasses.tutorialDone}"
-          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}=""
-          type="button"
-          ${lastStep ? "" : "hidden"}
-        >${escapeHtml(checkoutLabels.tutorialDone)}</button>
+        ${
+          copyPending
+            ? ""
+            : `<button part="tutorial-done" class="${orClasses.tutorialDone}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="" type="button">${escapeHtml(checkoutLabels.tutorialDone)}</button>`
+        }
       </div>
     </div>
   `;

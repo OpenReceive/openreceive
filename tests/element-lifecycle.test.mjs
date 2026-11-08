@@ -1205,7 +1205,7 @@ test("opening a tutorial loads the screenshots, then draws them as data URIs", a
       label: "tutorial dialog",
     });
     await untilLocal(
-      () => element.shadowRoot?.querySelector('[part="tutorial-step-active"]')?.textContent?.trim(),
+      () => element.shadowRoot?.querySelector('[part="tutorial-step"]')?.textContent?.trim(),
       { label: "the steps draw before the chunk" },
     );
     const image = await untilLocal(
@@ -1225,7 +1225,7 @@ test("opening a tutorial loads the screenshots, then draws them as data URIs", a
   }
 });
 
-test("the tutorial's first step is the copy, and each step points at the next", async (t) => {
+test("the tutorial's first step is the copy, and then the whole route shows", async (t) => {
   const written = [];
   const clipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
   Object.defineProperty(globalThis.navigator, "clipboard", {
@@ -1244,7 +1244,7 @@ test("the tutorial's first step is the copy, and each step points at the next", 
   });
   const element = mount({ reference: "order-tutorial-copy", prefix: "/openreceive" });
   const part = (name) => element.shadowRoot?.querySelector(`[part="${name}"]`);
-  const activeStep = () => part("tutorial-step-active")?.textContent?.trim() ?? "";
+  const all = (name) => [...element.shadowRoot.querySelectorAll(`[part="${name}"]`)];
 
   try {
     const tile = await untilLocal(
@@ -1260,12 +1260,10 @@ test("the tutorial's first step is the copy, and each step points at the next", 
     await untilLocal(() => part("tutorial-copy"), { label: "the Copy invoice button" });
     assert.deepEqual(written, [], "opening the tutorial copies nothing");
 
-    const walletSteps = () => [...element.shadowRoot.querySelectorAll("[data-or-tutorial-step]")];
-    assert.equal(walletSteps().length, 4);
-    assert.ok(walletSteps().every((button) => button.hasAttribute("disabled")));
-    assert.ok(!part("tutorial-next"), "there is no Next button");
-    assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
-    assert.equal(part("tutorial-frame").hasAttribute("hidden"), true);
+    assert.equal(all("tutorial-step").length, 4);
+    assert.ok(all("tutorial-step").every((row) => row.className.includes("opacity-40")));
+    assert.equal(all("tutorial-frame").length, 0);
+    assert.ok(!part("tutorial-done"), "Done waits for the copy");
 
     part("tutorial-copy").click();
     await untilLocal(() => written.length === 1, { label: "the copy" });
@@ -1273,21 +1271,17 @@ test("the tutorial's first step is the copy, and each step points at the next", 
     await untilLocal(() => part("tutorial-copy-label").textContent === "✓ Invoice copied", {
       label: "the copied note",
     });
-    assert.ok(walletSteps().every((button) => !button.hasAttribute("disabled")));
-    // The copy drops back to row size and the first wallet step takes over.
-    assert.doesNotMatch(part("tutorial-copy").className, /btn-lg/);
-    assert.match(walletSteps()[0].className, /btn-lg/);
 
-    for (const [offset, button] of walletSteps().entries()) {
-      assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
-      button.click();
-      assert.match(activeStep(), new RegExp(`^${offset + 2}`));
-      // The screenshot opens directly under its own step, and the following step is big.
-      assert.equal(part("tutorial-step-active").nextElementSibling.hasAttribute("hidden"), false);
-      assert.doesNotMatch(walletSteps()[offset].className, /btn-lg/);
-      if (offset < 3) assert.match(walletSteps()[offset + 1].className, /btn-lg/);
-    }
-    assert.equal(part("tutorial-done").hasAttribute("hidden"), false);
+    // The whole route shows at once, each step directly above its own picture.
+    assert.doesNotMatch(part("tutorial-copy").className, /btn-lg/);
+    assert.ok(all("tutorial-step").every((row) => !row.className.includes("opacity-40")));
+    assert.equal(all("tutorial-frame").length, 4);
+    assert.ok(
+      all("tutorial-step").every(
+        (row) => row.nextElementSibling?.getAttribute("part") === "tutorial-frame",
+      ),
+    );
+    assert.ok(part("tutorial-done"), "Done appears once the steps do");
   } finally {
     element.remove();
   }

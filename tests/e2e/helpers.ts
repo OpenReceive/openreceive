@@ -125,9 +125,8 @@ async function expectInlineTutorialImage(page: Page): Promise<void> {
     .click();
   const dialog = page.getByRole("dialog", { name: /Pay a Lightning invoice with Strike/ });
   await expect(dialog).toBeVisible();
-  // The first step is the copy; tapping the second opens the first screenshot.
+  // The screenshots show once the invoice is copied.
   await dialog.getByRole("button", { name: "Copy invoice" }).click();
-  await dialog.locator("ol button").nth(1).click();
 
   const screenshot = dialog.locator('img:not([alt=""]):visible').first();
   await expect(screenshot).toBeVisible();

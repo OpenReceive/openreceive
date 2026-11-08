@@ -267,21 +267,26 @@
         {
           "index": 1,
           "path": "assets/pay_tutorials/cashapp-1.webp",
-          "caption": "Tap your balance at the bottom left, then Bitcoin"
+          "caption": "Tap the $ at the bottom left"
         },
         {
           "index": 2,
           "path": "assets/pay_tutorials/cashapp-2.webp",
-          "caption": "Tap the QR button at the top right"
+          "caption": "Tap Bitcoin"
         },
         {
           "index": 3,
           "path": "assets/pay_tutorials/cashapp-3.webp",
-          "caption": "Tap Paste address"
+          "caption": "Tap the QR button at the top right"
         },
         {
           "index": 4,
           "path": "assets/pay_tutorials/cashapp-4.webp",
+          "caption": "Tap Paste address"
+        },
+        {
+          "index": 5,
+          "path": "assets/pay_tutorials/cashapp-5.webp",
           "caption": "Tap Confirm and pay"
         }
       ]

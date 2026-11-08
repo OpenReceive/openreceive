@@ -9,7 +9,6 @@ import {
   createCheckoutActionEvent,
   createCheckoutController,
   createCheckoutErrorEvent,
-  checkoutLabels,
   createCheckoutProviderCopyEvent,
   createCheckoutSnapshotFromInvoice,
   createCheckoutStateEvent,
@@ -124,7 +123,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
   class CheckoutElement extends HTMLElementCtor {
     private selection = createPaymentWizardSelection();
     private activeTutorialProviderId: string | null = null;
-    private activeTutorialIndex = 0;
     private activeTutorialCopied = false;
     private swapOptions: readonly ElementsSwapOption[] = [];
     private swapOptionsLoaded = false;
@@ -397,68 +395,7 @@ export function defineElements(options: DefineElementsOptions = {}): void {
 
     private resetTutorial(): void {
       this.activeTutorialProviderId = null;
-      this.activeTutorialIndex = 0;
       this.activeTutorialCopied = false;
-    }
-
-    /** Touches only the nodes that change, so a step change keeps the dialog's focus. */
-    private showTutorialStep(index: number): void {
-      this.activeTutorialIndex = index;
-      const root = this.shadowRoot;
-      if (root === null) return;
-      root
-        .querySelectorAll<HTMLElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialImage)
-        .forEach((frame) => {
-          const step = frame.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage);
-          frame.hidden = Number(step) !== index;
-        });
-      this.syncTutorialSteps(root);
-      this.syncTutorialDone(root);
-    }
-
-    private showTutorialCopied(): void {
-      const root = this.shadowRoot;
-      if (root === null) return;
-      const copy = root.querySelector<HTMLElement>('[part="tutorial-copy"]');
-      if (copy !== null) copy.className = orClasses.tutorialStepDone;
-      const label = root.querySelector('[part="tutorial-copy-label"]');
-      if (label !== null) label.textContent = checkoutLabels.tutorialInvoiceCopied;
-      this.syncTutorialSteps(root);
-    }
-
-    /** Greys the wallet steps until the copy has worked; after that the next one is big. */
-    private syncTutorialSteps(root: ShadowRoot): void {
-      const index = this.activeTutorialIndex;
-      const locked =
-        root.querySelector('[part="tutorial-copy"]') !== null && !this.activeTutorialCopied;
-      root
-        .querySelectorAll<HTMLButtonElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep)
-        .forEach((button) => {
-          const step = Number(
-            button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep),
-          );
-          const active = step === index;
-          const upNext = !locked && step === index + 1;
-          button.disabled = locked;
-          button.className = active
-            ? orClasses.tutorialStepActive
-            : upNext
-              ? orClasses.tutorialStepBig
-              : orClasses.tutorialStep;
-          button.setAttribute("part", active ? "tutorial-step-active" : "tutorial-step");
-          if (active) button.setAttribute("aria-current", "step");
-          else button.removeAttribute("aria-current");
-        });
-    }
-
-    /** Done appears once the last step is open. */
-    private syncTutorialDone(root: ShadowRoot): void {
-      const done = root.querySelector<HTMLElement>('[part="tutorial-done"]');
-      if (done === null) return;
-      const stepCount =
-        root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep).length +
-        (root.querySelector('[part="tutorial-copy"]') === null ? 0 : 1);
-      done.hidden = this.activeTutorialIndex !== stepCount - 1;
     }
 
     // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element
@@ -688,7 +625,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
               }),
           swapInvoice: this.currentSwapInvoice(),
           activeTutorialProviderId: this.activeTutorialProviderId,
-          activeTutorialIndex: this.activeTutorialIndex,
           activeTutorialCopied: this.activeTutorialCopied,
           ...(this.session.swapStartError === undefined
             ? {}
@@ -1236,7 +1172,9 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         this.dispatchEvent(createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy));
         if (this.activeTutorialProviderId !== providerId) return;
         this.activeTutorialCopied = true;
-        this.showTutorialCopied();
+        this.render();
+        // The rebuild dropped the dialog's focus.
+        this.shadowRoot?.querySelector<HTMLElement>('[part="tutorial"]')?.focus();
       };
 
       root
@@ -1253,7 +1191,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
               return;
             }
             this.activeTutorialProviderId = providerId;
-            this.activeTutorialIndex = 0;
             this.activeTutorialCopied = false;
             this.loadTutorialImages();
             this.render();
@@ -1265,14 +1202,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         copyTutorialInvoice(this.activeTutorialProviderId).catch((error) =>
           this.dispatchError(error),
         );
-      });
-
-      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep).forEach((button) => {
-        button.addEventListener("click", () => {
-          this.showTutorialStep(
-            Number(button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep)),
-          );
-        });
       });
 
       const tutorial = root.querySelector('[part="tutorial"]');

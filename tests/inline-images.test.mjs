@@ -65,7 +65,6 @@ test("the element tutorial renders no <img> before the screenshots load", () => 
   const html = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
-    activeTutorialIndex: 2,
   });
   assert.match(html, /<span>Choose Bitcoin wallet<\/span>/);
   assert.doesNotMatch(html, /part="tutorial-image"/);
@@ -86,7 +85,7 @@ test("the React tutorial renders no <img> before the screenshots load, then a da
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  root.render(React.createElement(PaymentWizard, { invoice: "lnbc1test" }));
+  root.render(React.createElement(PaymentWizard, {}));
   const buttons = () => [...container.querySelectorAll("button")];
   try {
     (
@@ -139,7 +138,6 @@ test("loadPayTutorialImages resolves once and payTutorialImage answers every reg
   const html = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
-    activeTutorialIndex: 2,
   });
   assert.match(
     html,

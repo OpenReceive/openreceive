@@ -46,11 +46,11 @@ export function ProviderTutorialModal(options: {
 }): React.ReactElement | null {
   const { provider } = options;
   // Copying comes first whenever there is an invoice to copy: the wallet steps
-  // end with pasting it, so they stay greyed out until the copy has worked.
+  // end with pasting it, so they stay greyed out until the copy has worked. Then
+  // the whole route shows at once, because a payer on one phone can't flip
+  // between this page and the wallet for each step.
   const copySteps = options.invoice === "" ? 0 : 1;
-  const stepCount = copySteps + provider.tutorials.length;
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
-  const [step, setStep] = React.useState(0);
   // Modal dialog contract: focus moves into the dialog on open, Tab is
   // trapped inside it, and focus returns to the opener on close.
   React.useEffect(() => {
@@ -88,7 +88,6 @@ export function ProviderTutorialModal(options: {
   };
   if (provider.tutorials.length === 0) return null;
   const copyPending = copySteps === 1 && !options.copied;
-  const lastStep = step >= stepCount - 1;
   const decodeHref = createLightningInvoiceDecodeUrl(options.invoice, options.decodeLinkUrl);
 
   return React.createElement(
@@ -152,8 +151,8 @@ export function ProviderTutorialModal(options: {
                 "button",
                 {
                   className: options.copied
-                    ? orClasses.tutorialStepDone
-                    : orClasses.tutorialStepBig,
+                    ? orClasses.tutorialCopyStepDone
+                    : orClasses.tutorialCopyStep,
                   onClick: () => void options.onCopy(),
                   type: "button",
                 },
@@ -177,19 +176,8 @@ export function ProviderTutorialModal(options: {
             "li",
             { key: tutorial.path },
             React.createElement(
-              "button",
-              {
-                "aria-current": index + copySteps === step ? "step" : undefined,
-                className:
-                  index + copySteps === step
-                    ? orClasses.tutorialStepActive
-                    : !copyPending && index + copySteps === step + 1
-                      ? orClasses.tutorialStepBig
-                      : orClasses.tutorialStep,
-                disabled: copyPending,
-                onClick: () => setStep(index + copySteps),
-                type: "button",
-              },
+              "div",
+              { className: copyPending ? orClasses.tutorialStepLocked : orClasses.tutorialStep },
               React.createElement(
                 "span",
                 { "aria-hidden": true, className: orClasses.tutorialStepNumber },
@@ -197,23 +185,21 @@ export function ProviderTutorialModal(options: {
               ),
               React.createElement("span", null, tutorial.caption),
             ),
-            // The screenshot opens directly under its own step. No `<img>` until
-            // the lazily loaded screenshot is in hand: an empty src is a request
-            // for the page itself.
-            React.createElement(
-              "div",
-              {
-                className: orClasses.tutorialFrame,
-                hidden: index + copySteps !== step,
-              },
-              tutorial.image === undefined
-                ? null
-                : React.createElement("img", {
-                    alt: tutorial.caption,
-                    className: orClasses.tutorialImage,
-                    src: tutorial.image,
-                  }),
-            ),
+            // No `<img>` until the lazily loaded screenshot is in hand: an empty
+            // src is a request for the page itself.
+            copyPending
+              ? null
+              : React.createElement(
+                  "div",
+                  { className: orClasses.tutorialFrame },
+                  tutorial.image === undefined
+                    ? null
+                    : React.createElement("img", {
+                        alt: tutorial.caption,
+                        className: orClasses.tutorialImage,
+                        src: tutorial.image,
+                      }),
+                ),
           ),
         ),
       ),
@@ -229,13 +215,13 @@ export function ProviderTutorialModal(options: {
             },
             checkoutLabels.decodeInvoice,
           ),
-      lastStep
-        ? React.createElement(
+      copyPending
+        ? null
+        : React.createElement(
             "button",
             { className: orClasses.tutorialDone, onClick: options.onClose, type: "button" },
             checkoutLabels.tutorialDone,
-          )
-        : null,
+          ),
     ),
   );
 }

@@ -258,21 +258,19 @@ export const orClasses = {
   tutorialClose: "btn btn-sm btn-square btn-ghost",
   tutorialCopy: "btn btn-outline btn-sm justify-self-start",
   /** Step 1 is the biggest thing in the dialog: a payer who skips it has nothing to paste. */
-  tutorialStepBig:
+  tutorialCopyStep:
     "btn btn-primary btn-lg h-auto min-h-14 py-2 w-full justify-start gap-2 text-left whitespace-normal",
-  /** A finished step drops back to row size, with green text so it reads as done. */
-  tutorialStepDone:
+  /** A finished copy drops back to row size, with green text so it reads as done. */
+  tutorialCopyStepDone:
     "btn btn-ghost btn-sm h-auto min-h-8 py-1 w-full justify-start gap-2 text-left font-semibold whitespace-normal text-success",
-  /** A fixed height, so the steps below it stay put as the screenshots change. */
+  /** A fixed height, so every step's picture takes the same room. */
   tutorialFrame:
     "relative overflow-hidden rounded-box border border-base-content/20 bg-base-200 h-[min(30vh,260px)] mt-1",
   tutorialImage: "absolute inset-0 size-full object-contain",
-  tutorialSteps: "m-0 p-0 grid gap-0.5 list-none",
-  tutorialStep:
-    "btn btn-ghost btn-sm h-auto min-h-8 py-1 w-full justify-start gap-2 text-left font-normal whitespace-normal",
-  /** The current step: a callout in the Bitcoin accent so it reads as the instruction. */
-  tutorialStepActive:
-    "btn btn-sm h-auto min-h-8 py-1 w-full justify-start gap-2 text-left font-bold whitespace-normal border-warning/40 bg-warning/10",
+  tutorialSteps: "m-0 p-0 grid gap-2 list-none",
+  tutorialStep: "flex items-center gap-2 py-1 font-semibold text-sm",
+  /** The wallet steps wait for the copy. */
+  tutorialStepLocked: "flex items-center gap-2 py-1 text-sm opacity-40",
   tutorialStepNumber:
     "inline-grid place-items-center size-5 shrink-0 rounded-full bg-base-content/10 text-xs font-semibold",
   tutorialDone: "btn btn-primary w-full",

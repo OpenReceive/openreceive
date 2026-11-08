@@ -111,18 +111,16 @@ export const WalletSuggestions: React.FC<{ checkout: ShopCheckout }> = observer(
   );
 });
 
-// One screen, because the payer leaves this page to act on it: every step is
-// visible at once and tapping one opens its screenshot under it.
+// One screen, because a payer on one phone leaves this page to act on it and
+// can't flip back for each step: once the invoice is copied, every step shows
+// at once with its screenshot.
 const ProviderWalkthrough: React.FC<{
   provider: WizardProviderDisplay | null;
   copied: boolean;
   onCopy: () => void;
   onClose: () => void;
 }> = ({ provider, copied, onCopy, onClose }) => {
-  const [step, setStep] = useState(0);
   const [images, setImages] = useState<Readonly<Record<string, string>>>();
-  // Step 1 is the copy, so step N shows screenshot N - 1.
-  const lastStep = step >= (provider?.tutorials.length ?? 0);
 
   // Load-then-render: a step shows its caption alone until the chunk arrives
   // (or if it never does), never an <img> with an empty src.
@@ -141,11 +139,6 @@ const ProviderWalkthrough: React.FC<{
       live = false;
     };
   }, [provider, images]);
-
-  // Every walkthrough starts at its first step.
-  useEffect(() => {
-    if (provider !== null) setStep(0);
-  }, [provider]);
 
   return (
     <Modal
@@ -184,33 +177,28 @@ const ProviderWalkthrough: React.FC<{
             </li>
             {provider.tutorials.map((tutorial, index) => (
               <li key={tutorial.path}>
-                <UnstyledButton
-                  className="or-shop-tutorial-step"
-                  data-active={index + 1 === step || undefined}
-                  data-up-next={(copied && index === step) || undefined}
-                  aria-current={index + 1 === step ? "step" : undefined}
-                  disabled={!copied}
-                  onClick={() => setStep(index + 1)}
-                >
+                <div className="or-shop-tutorial-step" data-locked={!copied || undefined}>
                   <span className="or-shop-tutorial-number" aria-hidden="true">
                     {index + 2}
                   </span>
                   <span>{tutorial.caption}</span>
-                </UnstyledButton>
-                <div className="or-shop-tutorial-frame" hidden={index + 1 !== step}>
-                  {images?.[tutorial.path] === undefined ? null : (
-                    <img
-                      className="or-shop-tutorial-image"
-                      src={images[tutorial.path]}
-                      alt={tutorial.caption}
-                    />
-                  )}
                 </div>
+                {copied ? (
+                  <div className="or-shop-tutorial-frame">
+                    {images?.[tutorial.path] === undefined ? null : (
+                      <img
+                        className="or-shop-tutorial-image"
+                        src={images[tutorial.path]}
+                        alt={tutorial.caption}
+                      />
+                    )}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ol>
 
-          {lastStep ? <Button onClick={onClose}>{checkoutLabels.tutorialDone}</Button> : null}
+          {copied ? <Button onClick={onClose}>{checkoutLabels.tutorialDone}</Button> : null}
         </Stack>
       ) : null}
     </Modal>

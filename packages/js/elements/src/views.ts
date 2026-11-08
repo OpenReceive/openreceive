@@ -95,7 +95,6 @@ export interface ElementsWizardView {
   readonly paymentHash?: string;
   readonly swapInvoice?: CheckoutInvoiceSnapshot;
   readonly activeTutorialProviderId?: string | null;
-  readonly activeTutorialIndex?: number;
   readonly activeTutorialCopied?: boolean;
   /** Swap-start failure rendered inline in the deposit slot with a retry button. */
   readonly swapStartError?: string;

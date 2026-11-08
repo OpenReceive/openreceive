@@ -13,11 +13,11 @@
 - Changed (provider data): Cash App is now first in the Lightning wallet list,
   above Rizful, so its copy-and-paste walkthrough is the first one payers see.
 - Changed (Browser, React, Vue, Svelte, Angular): a wallet's pay tutorial is now
-  one dialog with numbered steps and the screenshot for the current one. Step 1
-  is a large **Copy invoice** button at the top whenever there is an invoice,
-  and the wallet's steps stay greyed out until it has worked. The step to tap
-  next is always the large one, each screenshot opens under its own step, and
-  **Done** appears on the last. `checkoutLabels` loses `tutorialIntroPrefix`,
+  one dialog with numbered steps. Step 1 is a large **Copy invoice** button at
+  the top whenever there is an invoice, and the wallet's steps stay greyed out
+  until it has worked. Then every step shows at once with its screenshot,
+  because a payer on one phone can't flip between the page and the wallet for
+  each step. `checkoutLabels` loses `tutorialIntroPrefix`,
   `tutorialIntroCopy`, `tutorialCopiedContinue`, `tutorialExit` and
   `tutorialNext`, and `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES` loses
   `providerTutorialIndex`.

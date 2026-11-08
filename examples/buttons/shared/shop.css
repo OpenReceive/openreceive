@@ -537,7 +537,7 @@ body {
 
 .or-shop-tutorial-steps {
   display: grid;
-  gap: 2px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -552,33 +552,18 @@ body {
   border: 1px solid transparent;
   border-radius: 8px;
   font-size: 14px;
-}
-
-.or-shop-tutorial-step[data-active] {
-  border-color: var(--or-line);
-  background: var(--or-paper);
-  font-weight: 700;
-}
-
-/* A finished step drops back to row size, with green text so it reads as done. */
-.or-shop-tutorial-step[data-done] {
-  color: var(--or-accent);
   font-weight: 600;
 }
 
-/* The next thing to tap is big and green. */
-.or-shop-tutorial-step[data-up-next] {
-  padding: 12px;
-  background: var(--mantine-primary-color-filled);
-  color: #fff;
-  font-size: 17px;
-  font-weight: 700;
+/* A finished copy drops back to row size, with green text so it reads as done. */
+.or-shop-tutorial-step[data-done] {
+  color: var(--or-accent);
 }
 
 /* The wallet steps wait for the copy. */
-.or-shop-tutorial-step:disabled {
+.or-shop-tutorial-step[data-locked] {
+  font-weight: 400;
   opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .or-shop-tutorial-number {

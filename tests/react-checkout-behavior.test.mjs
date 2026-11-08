@@ -192,7 +192,7 @@ test("the default checkout wires controller actions into its buttons", async () 
   }
 });
 
-test("the tutorial's first step is the copy, and each step points at the next", async () => {
+test("the tutorial's first step is the copy, and then the whole route shows", async () => {
   const written = [];
   const handle = mount(
     React.createElement(PaymentWizard, {
@@ -219,43 +219,31 @@ test("the tutorial's first step is the copy, and each step points at the next", 
     });
     const inDialog = (label) =>
       [...dialog.querySelectorAll("button")].find((button) => button.textContent === label);
-    const activeStep = () => dialog.querySelector("[aria-current='step']")?.textContent ?? "";
     await flush();
     assert.deepEqual(written, [], "opening the tutorial copies nothing");
 
-    const steps = () => [...dialog.querySelectorAll("ol button")];
-    assert.equal(steps()[0].textContent, `1${checkoutLabels.copyInvoice}`);
-    assert.ok(
-      steps()
-        .slice(1)
-        .every((button) => button.disabled),
-    );
-    assert.ok(inDialog("Next") === undefined, "there is no Next button");
+    const copy = () => dialog.querySelector("ol button");
+    const walletRows = () => [...dialog.querySelectorAll("ol > li > div:first-child")];
+    const frames = () => dialog.querySelectorAll("ol > li > div + div").length;
+    assert.equal(copy().textContent, `1${checkoutLabels.copyInvoice}`);
+    assert.equal(walletRows().length, 4);
+    assert.ok(walletRows().every((row) => row.className.includes("opacity-40")));
+    assert.equal(frames(), 0);
     assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
 
-    steps()[0].click();
+    copy().click();
     await until(() => written.length === 1, { label: "the copy" });
     assert.deepEqual(written, ["lnbc-tutorial"]);
-    await until(() => steps()[0].textContent === `1${checkoutLabels.tutorialInvoiceCopied}`, {
+    await until(() => copy().textContent === `1${checkoutLabels.tutorialInvoiceCopied}`, {
       label: "the copied note",
     });
-    assert.ok(
-      steps()
-        .slice(1)
-        .every((button) => !button.disabled),
-    );
-    // The copy drops back to row size and the first wallet step takes over.
-    assert.doesNotMatch(steps()[0].className, /btn-lg/);
-    assert.match(steps()[1].className, /btn-lg/);
 
-    for (const step of [2, 3, 4, 5]) {
-      assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
-      steps()[step - 1].click();
-      await until(() => activeStep().startsWith(String(step)), { label: `step ${step}` });
-      assert.doesNotMatch(steps()[step - 1].className, /btn-lg/);
-      if (step < 5) assert.match(steps()[step].className, /btn-lg/);
-    }
+    // The whole route shows at once.
+    assert.doesNotMatch(copy().className, /btn-lg/);
+    assert.ok(walletRows().every((row) => !row.className.includes("opacity-40")));
+    assert.equal(frames(), 4);
     assert.ok(inDialog(checkoutLabels.tutorialDone) !== undefined);
+    assert.ok(inDialog("Next") === undefined, "there is no Next button");
   } finally {
     handle.unmount();
   }
