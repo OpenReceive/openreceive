@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -413,4 +414,226 @@ test("doctor --help prints the usage and exits 0", async () => {
     assert.equal(code, 0, flag);
     assert.match(out.join(""), /--offline/, flag);
   }
+});
+
+// A Nuxt trial agent checked its build for leaks by passing 16-character
+// prefixes of both codes to grep, which put them in the shell history and the
+// process list. Every code here is random and built at runtime from parts.
+function fakeCodes() {
+  const hex = () => randomBytes(32).toString("hex");
+  const nwcSecret = hex();
+  const lscKey = hex();
+  const lscSecret = hex();
+  return {
+    nwcSecret,
+    lscKey,
+    lscSecret,
+    nwc: [
+      "nostr+wallet",
+      "connect://",
+      hex(),
+      "?relay=wss%3A%2F%2Frelay.example.com&",
+      "secret=",
+      nwcSecret,
+    ].join(""),
+    lsc: [
+      "lightning+swap",
+      "connect://swap.example.com/v1?",
+      `key=${lscKey}&`,
+      "secret=",
+      lscSecret,
+    ].join(""),
+  };
+}
+
+async function withBuild(files, run) {
+  const dir = await mkdtemp(path.join(tmpdir(), "openreceive-doctor-scan-"));
+  try {
+    for (const [name, content] of Object.entries(files)) {
+      await mkdir(path.dirname(path.join(dir, name)), { recursive: true });
+      await writeFile(path.join(dir, name), content);
+    }
+    return await run(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+const scan = (cwd, env, target = ".output") => doctor({ argv: ["--scan-build", target], env, cwd });
+const JS_FILE = ".output/public/_nuxt/abc.js";
+
+test("doctor --scan-build finds a whole code and names only the code and the file", async () => {
+  const codes = fakeCodes();
+  await withBuild(
+    { [JS_FILE]: `const a="${codes.nwc}";`, ".output/public/ok.js": "1" },
+    async (cwd) => {
+      const { code, out } = await scan(cwd, { NWC_URI: codes.nwc, LSC_URI_PRIMARY: codes.lsc });
+      assert.equal(code, 1);
+      assert.deepEqual(out.trim().split("\n").slice(0, -1), [`NWC_URI found in ${JS_FILE}`]);
+      assert.match(out, /keep these codes out of browser code/);
+    },
+  );
+});
+
+test("doctor --scan-build finds a credential value that was split from its URI", async () => {
+  const codes = fakeCodes();
+  const hit = async (env, content) => withBuild({ [JS_FILE]: content }, (cwd) => scan(cwd, env));
+  const secret = await hit({ NWC_URI: codes.nwc }, `const s="${codes.nwcSecret}"`);
+  assert.equal(secret.code, 1);
+  assert.match(secret.out, /^NWC_URI found in /);
+  // A serializer that escapes `&` breaks the whole URI but not the value after it.
+  const escaped = await hit({ NWC_URI: codes.nwc }, codes.nwc.replace("&", "\\u0026"));
+  assert.equal(escaped.code, 1);
+  assert.match(escaped.out, /^NWC_URI found in /);
+  const percent = await hit({ NWC_URI: codes.nwc }, encodeURIComponent(codes.nwc));
+  assert.equal(percent.code, 1);
+  const key = await hit({ LSC_URI_BACKUP: codes.lsc }, `k="${codes.lscKey}"`);
+  assert.equal(key.code, 1);
+  assert.match(key.out, /^LSC_URI_BACKUP found in /);
+  const bare = await hit({ LSC_URI: codes.lsc }, `k="${codes.lscSecret}"`);
+  assert.equal(bare.code, 1);
+  assert.match(bare.out, /^LSC_URI found in /);
+});
+
+test("doctor --scan-build searches source maps, external and inline", async () => {
+  const codes = fakeCodes();
+  const map = JSON.stringify({ version: 3, sourcesContent: [`x="${codes.nwc}"`] });
+  await withBuild({ ".output/public/_nuxt/abc.js.map": map }, async (cwd) => {
+    const { code, out } = await scan(cwd, { NWC_URI: codes.nwc });
+    assert.equal(code, 1);
+    assert.match(out, /^NWC_URI found in \.output\/public\/_nuxt\/abc\.js\.map\n/);
+  });
+  // The secret lands at every base64 offset across these three prefixes.
+  for (const prefix of ["", "x", "xy"]) {
+    const inline = Buffer.from(`${prefix}"${codes.nwcSecret}"`).toString("base64");
+    await withBuild(
+      { [JS_FILE]: `//# sourceMappingURL=data:application/json;base64,${inline}` },
+      async (cwd) => {
+        const { code } = await scan(cwd, { NWC_URI: codes.nwc });
+        assert.equal(code, 1, `prefix ${JSON.stringify(prefix)}`);
+      },
+    );
+  }
+});
+
+test("doctor --scan-build passes a clean build with one plain line", async () => {
+  const codes = fakeCodes();
+  await withBuild({ [JS_FILE]: "const a=1;", ".output/public/a.css": "a{}" }, async (cwd) => {
+    const { code, out } = await scan(cwd, { NWC_URI: codes.nwc, LSC_URI_PRIMARY: codes.lsc });
+    assert.equal(code, 0);
+    assert.equal(
+      out,
+      "scan-build: no code found in 2 files under .output (NWC_URI, LSC_URI_PRIMARY)\n",
+    );
+  });
+});
+
+test("doctor --scan-build fails when there is no code, no directory, or an empty one", async () => {
+  await withBuild({ [JS_FILE]: "const a=1;" }, async (cwd) => {
+    const none = await scan(cwd, {});
+    assert.equal(none.code, 1);
+    assert.match(none.out, /no NWC_URI or LSC_URI_\* code is set here/);
+
+    const codes = fakeCodes();
+    const missing = await scan(cwd, { NWC_URI: codes.nwc }, "nope");
+    assert.equal(missing.code, 1);
+    assert.match(missing.out, /no directory at nope\./);
+
+    await mkdir(path.join(cwd, "empty"));
+    const empty = await scan(cwd, { NWC_URI: codes.nwc }, "empty");
+    assert.equal(empty.code, 1);
+    assert.match(empty.out, /no files in empty\./);
+
+    // A code passed by mistake where the directory goes is not echoed back.
+    const misuse = await scan(cwd, { NWC_URI: codes.nwc }, codes.nwc);
+    assert.equal(misuse.code, 1);
+    assert.equal(misuse.out.includes(codes.nwcSecret), false);
+  });
+});
+
+test("doctor --scan-build reads codes from every env file, in either mode", async () => {
+  const codes = fakeCodes();
+  const other = fakeCodes();
+  await withBuild(
+    {
+      ".env.development.local": `NWC_URI=${other.nwc}\n`,
+      ".env.production": `NWC_URI=${codes.nwc}\nLSC_URI_PRIMARY=${codes.lsc}\n`,
+      [JS_FILE]: `a="${codes.nwcSecret}";b="${codes.lscSecret}"`,
+    },
+    async (cwd) => {
+      const { code, out } = await scan(cwd, {});
+      assert.equal(code, 1);
+      assert.match(out, /^LSC_URI_PRIMARY found in .*\nNWC_URI found in /);
+    },
+  );
+});
+
+test("doctor --scan-build skips node_modules and symlinks, and reads binary files", async () => {
+  const codes = fakeCodes();
+  const secret = `s="${codes.nwcSecret}"`;
+  await withBuild(
+    {
+      "outside.js": secret,
+      ".output/public/a.js": "1",
+      ".output/server/node_modules/x.js": secret,
+    },
+    async (cwd) => {
+      await symlink(path.join(cwd, "outside.js"), path.join(cwd, ".output/public/link.js"));
+      const { code, out } = await scan(cwd, { NWC_URI: codes.nwc });
+      assert.equal(code, 0, out);
+    },
+  );
+  await withBuild(
+    {
+      ".output/public/a.bin": Buffer.concat([
+        Buffer.from([0xff, 0xfe, 0x00, 0xc3]),
+        Buffer.from(codes.nwcSecret),
+        Buffer.from([0x00, 0xff]),
+      ]),
+    },
+    async (cwd) => assert.equal((await scan(cwd, { NWC_URI: codes.nwc })).code, 1),
+  );
+});
+
+test("doctor --scan-build finds a value that straddles two read chunks", async () => {
+  const codes = fakeCodes();
+  const before = Buffer.alloc(1024 * 1024 - 10, 0x20);
+  await withBuild(
+    { [JS_FILE]: Buffer.concat([before, Buffer.from(codes.nwcSecret), before]) },
+    async (cwd) => assert.equal((await scan(cwd, { NWC_URI: codes.nwc })).code, 1),
+  );
+});
+
+test("doctor --scan-build never prints a code or a piece of one", async () => {
+  const codes = fakeCodes();
+  const env = { NWC_URI: codes.nwc, LSC_URI_PRIMARY: codes.lsc };
+  const files = { [JS_FILE]: `${codes.nwc}\n${codes.lsc}`, ".output/a.js.map": codes.nwcSecret };
+  await withBuild(files, async (cwd) => {
+    const runs = [await scan(cwd, env), await scan(cwd, env, "nope"), await scan(cwd, {})];
+    assert.equal(runs[0].code, 1);
+    const printed = runs.map((run) => run.out + run.err).join("");
+    for (const value of [codes.nwc, codes.lsc, codes.nwcSecret, codes.lscKey, codes.lscSecret]) {
+      for (let start = 0; start + 8 <= value.length; start += 1) {
+        const piece = value.slice(start, start + 8);
+        if (/^[0-9a-f]{8}$/.test(piece)) assert.equal(printed.includes(piece), false);
+      }
+    }
+    assert.doesNotMatch(printed, /secret=|walletconnect|swapconnect/);
+  });
+});
+
+test("doctor --scan-build runs alone and only under doctor", async () => {
+  const report = [];
+  const code = await runCli({
+    argv: ["debug-report", "--scan-build", "x"],
+    env: {},
+    cwd: EMPTY_CWD,
+    stdout: { write: () => {} },
+    stderr: { write: (message) => report.push(message) },
+  });
+  assert.equal(code, 1);
+  assert.match(report.join(""), /--scan-build runs alone/);
+  const withDb = await doctor({ argv: ["--scan-build", "x", "--db", "y"], env: {} });
+  assert.equal(withDb.code, 1);
+  assert.match(withDb.err, /--scan-build runs alone/);
 });

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added (Node): `openreceive doctor --scan-build <dir>` searches a production
+  build, source maps included, for the `NWC_URI` and `LSC_URI_*` codes in the
+  environment and env files. It prints only the code's name and the relative
+  file, never any part of a value, and exits 1 on a hit.
 - Fixed (Node, PHP): a new invoice's first wallet check no longer waits for
   the older invoices' slower pace. When only invoices older than five minutes
   were pending, the checkout's own reconcile pass ran just before the new

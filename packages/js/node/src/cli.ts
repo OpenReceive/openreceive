@@ -12,6 +12,7 @@ import {
 import { createNwcReceiveClient } from "./alby-nwc.ts";
 import { LSC_ENV_NAMES, readLscConnectionsFromEnvironment } from "./lsc-uri.ts";
 import { runScaffoldPayments, SCAFFOLD_PAYMENTS_HELP } from "./scaffold/index.ts";
+import { scanBuild } from "./scan-build.ts";
 import { redactSecrets } from "./service/logging.ts";
 
 export interface CliIo {
@@ -78,6 +79,10 @@ Doctor options:
   --table-name <name>       Payments table for --db (default openreceive_payments).
   --meta-table-name <name>  Reconcile-gate table for --db (default openreceive_meta).
   --offline                 Skip the wallet relay probe.
+  --scan-build <dir>        Run alone, after a production build: search <dir>
+                            for NWC_URI and LSC_URI_* codes read from the
+                            environment and env files. Prints code names and
+                            relative paths only; exits 1 on a hit.
 `.trim();
 
 export async function runCli(options: CliOptions): Promise<number> {
@@ -97,9 +102,26 @@ export async function runCli(options: CliOptions): Promise<number> {
         stdout.write(`${HELP}\n`);
         return 0;
       }
+      const flags = parseDiagnosticsArgv(args);
+      if (flags.scanBuild !== undefined) {
+        if (command !== "doctor" || flags.db !== undefined || flags.url !== undefined) {
+          throw new Error("--scan-build runs alone: `openreceive doctor --scan-build <dir>`.");
+        }
+        const scan = scanBuild({
+          dir: flags.scanBuild,
+          cwd,
+          env,
+          // Both modes: this runs after a production build, often with no NODE_ENV set.
+          envFiles: [
+            ...new Set([...envFileNames({ NODE_ENV: "production" }), ...envFileNames({})]),
+          ],
+        });
+        stdout.write(`${scan.lines.join("\n")}\n`);
+        return scan.ok ? 0 : 1;
+      }
       return await runDiagnostics({
         command,
-        flags: parseDiagnosticsArgv(args),
+        flags,
         env,
         cwd,
         stdout,
@@ -173,6 +195,7 @@ interface DiagnosticsFlags {
   readonly tableName: string;
   readonly metaTableName: string;
   readonly offline: boolean;
+  readonly scanBuild?: string;
 }
 
 function parseDiagnosticsArgv(args: readonly string[]): DiagnosticsFlags {
@@ -183,6 +206,7 @@ function parseDiagnosticsArgv(args: readonly string[]): DiagnosticsFlags {
     tableName: "openreceive_payments",
     metaTableName: "openreceive_meta",
     offline: false,
+    scanBuild: undefined as string | undefined,
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -200,6 +224,7 @@ function parseDiagnosticsArgv(args: readonly string[]): DiagnosticsFlags {
     else if (arg === "--table-name") flags.tableName = valueFor("--table-name");
     else if (arg === "--meta-table-name") flags.metaTableName = valueFor("--meta-table-name");
     else if (arg === "--offline") flags.offline = true;
+    else if (arg === "--scan-build") flags.scanBuild = valueFor("--scan-build");
     else throw new Error(`Unexpected option: ${arg}. See \`openreceive --help\`.`);
   }
   if (!flags.prefix.startsWith("/")) flags.prefix = `/${flags.prefix}`;
