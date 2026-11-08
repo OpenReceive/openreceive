@@ -440,22 +440,23 @@ module OpenReceive
 
       # Redacting an unexpected exception must not also swallow it: the host's
       # error reporter (Rails.error, which feeds Sentry/Honeybadger/the Rails
-      # error subscribers) or logger receives it before the opaque 500 goes on
-      # the wire. The fallback log line carries class and origin only — never
-      # the message, which could quote request bodies, NWC URIs, invoices, or
-      # preimages.
+      # error subscribers) receives it, and the log gets a line, before the
+      # opaque 500 goes on the wire. The log line is written even when
+      # Rails.error exists: a default app subscribes nothing to it, and a
+      # trial's Rails shop logged only "Completed 500 Internal Server Error".
+      # The line carries class and origin only — never the message, which
+      # could quote request bodies, NWC URIs, invoices, or preimages.
       def report_unexpected_error(error, request_id)
         if defined?(::Rails) && ::Rails.respond_to?(:error) && ::Rails.error
           # Detached diagnostic: no cause, stack or attached provider configuration.
           safe_error = RuntimeError.new(OpenReceive::Nwc.redact_error_text(error.message))
           ::Rails.error.report(safe_error, handled: true, source: "openreceive")
-        else
-          origin = Array(error.backtrace).first
-          line = "[openreceive] unexpected #{error.class} (request_id=#{request_id})" \
-                 "#{origin.nil? ? '' : " at #{origin}"}"
-          logger = defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
-          logger.nil? ? warn(line) : logger.error(line)
         end
+        origin = Array(error.backtrace).first
+        line = "[openreceive] unexpected #{error.class} (request_id=#{request_id})" \
+               "#{origin.nil? ? '' : " at #{origin}"}"
+        logger = defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
+        logger.nil? ? warn(line) : logger.error(line)
       rescue StandardError
         nil
       end

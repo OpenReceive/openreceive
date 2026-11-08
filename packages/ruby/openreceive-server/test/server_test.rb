@@ -1149,15 +1149,22 @@ class StorageFreeServerTest < Minitest::Test
     error = RuntimeError.new("boom LSC:invalid-fixture?secret=test-private")
     status = nil
     body = nil
+    logged = nil
     without_rails_constant do
       Object.const_set(:Rails, fake_rails)
-      status, _headers, body = create_checkout_response(build_raising_handler(error))
+      _out, logged = capture_io do
+        status, _headers, body = create_checkout_response(build_raising_handler(error), request_id: "req-both")
+      end
     ensure
       Object.send(:remove_const, :Rails) if Object.const_defined?(:Rails)
     end
     assert_equal 500, status
     assert_equal "Internal server error.", body.fetch("message")
     assert_equal 1, reports.length
+    # A default Rails app subscribes nothing to Rails.error: the log line is
+    # written as well, class and request id only.
+    assert_includes logged, "[openreceive] unexpected RuntimeError (request_id=req-both)"
+    refute_includes logged, "test-private"
     refute_same error, reports.first.first
     refute_includes reports.first.first.message, "test-private"
     assert_includes error.message, "test-private"

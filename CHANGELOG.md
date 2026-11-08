@@ -100,6 +100,12 @@
   own filter gets system check warning `openreceive.W003` while `DEBUG` is on
   until that filter subclasses OpenReceive's.
 
+- Fixed (Rails): an unexpected error inside OpenReceive's routes now leaves a
+  line in the Rails log, "[openreceive] unexpected <class> (request_id=…) at
+  <file:line>", as it did without Rails. With `Rails.error` present the engine
+  reported only there, and a default app subscribes nothing to it, so the log
+  showed "Completed 500 Internal Server Error" and nothing else. The report to
+  `Rails.error` is unchanged; neither carries the error's message.
 - Fixed (Node): an `onPaid` that throws on every retry is now visible in
   the shop's log. The opportunistic reconcile warned only "One or more
   settlement transactions failed; pending attempts will be retried.", so a
