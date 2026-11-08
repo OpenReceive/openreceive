@@ -7,6 +7,7 @@ repository and a host.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -348,15 +349,18 @@ class Service:
         scan_until = to_int(data.get("until") or (self._clock() + overlap))
         max_pages = data.get("max_pages")
         deadline = data.get("deadline")
-        settled_scan = self._scan(list(expected), scan_from, scan_until, False, max_pages, deadline)
-        by_hash = dict(settled_scan.rows)
-        missing = [payment_hash for payment_hash in expected if payment_hash not in by_hash]
-        truncated = False
-        if missing:
-            inclusive = self._scan(missing, scan_from, scan_until, True, max_pages, deadline)
-            truncated = settled_scan.truncated or inclusive.truncated
-            for payment_hash, row in inclusive.rows.items():
-                by_hash.setdefault(payment_hash, row)
+        with self.reusing_wallet_connection():
+            settled_scan = self._scan(
+                list(expected), scan_from, scan_until, False, max_pages, deadline
+            )
+            by_hash = dict(settled_scan.rows)
+            missing = [payment_hash for payment_hash in expected if payment_hash not in by_hash]
+            truncated = False
+            if missing:
+                inclusive = self._scan(missing, scan_from, scan_until, True, max_pages, deadline)
+                truncated = settled_scan.truncated or inclusive.truncated
+                for payment_hash, row in inclusive.rows.items():
+                    by_hash.setdefault(payment_hash, row)
         results: list[dict[str, Any]] = []
         for payment_hash in expected:
             if payment_hash in by_hash:
@@ -737,6 +741,11 @@ class Service:
             max_pages=MAX_PAGES if max_pages is None else to_int(max_pages),
             include_unpaid=unpaid,
         )
+
+    def reusing_wallet_connection(self) -> contextlib.AbstractContextManager[None]:
+        """Read-only wallet calls in this block share one relay connection."""
+        reuse = getattr(self._nwc, "reusing_connection", None)
+        return contextlib.nullcontext() if reuse is None else reuse()
 
     def _call_nwc(self, method: str, params: dict[str, Any]) -> Any:
         self.ensure_wallet()

@@ -255,3 +255,78 @@ def test_tls13_session_tickets_never_stall_a_request(
         for _ in range(40):
             reply = transport.request("get_info", {}, deadline_seconds=3.0)
             assert reply["result_type"] == "get_info"
+
+
+# -- one connection for a reconcile pass's history pages ------------------------
+
+
+def test_history_pages_in_a_block_share_one_connection(relay: FakeRelay) -> None:
+    transport = _transport(relay)
+    transport.info()
+    before = relay.connections_opened
+    with transport.reusing_connection():
+        transport.request("list_transactions", {"offset": 0})
+        transport.request("list_transactions", {"offset": 10})
+        transport.request("list_transactions", {"offset": 20})
+        assert relay.connections_opened == before + 1
+        _wait(lambda: relay.subscription_count() == 0)  # each page closes its subscription
+    _wait(lambda: relay.open_connection_count() == 0)
+
+
+def test_a_mint_never_rides_the_kept_connection(relay: FakeRelay) -> None:
+    transport = _transport(relay)
+    transport.info()
+    before = relay.connections_opened
+    with transport.reusing_connection():
+        transport.request("list_transactions", {"offset": 0})
+        transport.request("make_invoice", {"amount": 1000})
+        assert relay.connections_opened == before + 2
+        transport.request("list_transactions", {"offset": 10})
+        assert relay.connections_opened == before + 2, "the mint left the kept connection alone"
+
+
+def test_outside_a_block_every_request_gets_its_own_connection(relay: FakeRelay) -> None:
+    transport = _transport(relay)
+    transport.info()
+    before = relay.connections_opened
+    transport.request("list_transactions", {"offset": 0})
+    transport.request("list_transactions", {"offset": 10})
+    assert relay.connections_opened == before + 2
+
+
+def test_a_dropped_connection_is_replaced_for_the_next_page(relay: FakeRelay) -> None:
+    transport = _transport(relay)
+    transport.info()
+    before = relay.connections_opened
+    with transport.reusing_connection():
+        transport.request("list_transactions", {"offset": 0})
+        relay.close_connections()
+        _wait(lambda: relay.open_connection_count() == 0)
+        answer = transport.request("list_transactions", {"offset": 10})
+        assert answer["result"] == {"echo": {"offset": 10}}
+    assert relay.connections_opened == before + 2
+
+
+def test_threads_do_not_share_a_kept_connection(relay: FakeRelay) -> None:
+    transport = _transport(relay)
+    transport.info()
+    before = relay.connections_opened
+    barrier = threading.Barrier(2, timeout=5)
+    errors: list[BaseException] = []
+
+    def walk() -> None:
+        try:
+            with transport.reusing_connection():
+                transport.request("list_transactions", {"offset": 0})
+                barrier.wait()
+                transport.request("list_transactions", {"offset": 10})
+        except BaseException as exc:  # reported on the main thread
+            errors.append(exc)
+
+    threads = [threading.Thread(target=walk) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    assert errors == []
+    assert relay.connections_opened == before + 2

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import secrets
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from openreceive._generated.tables import NWC_ENCRYPTION_MODES
@@ -26,6 +27,10 @@ NIP44 = "nip44_v2"
 NIP04 = "nip04"
 _NOTIFICATION_KIND = {NIP44: KIND_NOTIFICATION_NIP44, NIP04: KIND_NOTIFICATION_NIP04}
 _STOP_POLL_SECONDS = 0.25
+# Only calls that change nothing at the wallet may share a connection. A failure
+# on a socket that was already open does not say whether the request got through,
+# so make_invoice always gets a connection of its own.
+_REUSABLE_METHODS = frozenset({"list_transactions"})
 
 NotificationHandler = Callable[[dict[str, Any]], None]
 
@@ -36,7 +41,8 @@ class NwcTransport:
     Every RPC is one short websocket session: connect, REQ for the reply,
     publish the request, wait for the reply e-tagged to our event id, close.
     Relays are tried in order; a relay that refuses the connection is skipped,
-    any other failure is raised as ``TransportError``.
+    any other failure is raised as ``TransportError``. The history pages of one
+    reconcile pass share a session: see ``reusing_connection``.
     """
 
     def __init__(
@@ -60,6 +66,7 @@ class NwcTransport:
         self._info: dict[str, Any] | None = None
         self._subscription: RelaySession | None = None
         self._lock = threading.Lock()
+        self._reuse = threading.local()
 
     @property
     def pubkey(self) -> str:
@@ -119,6 +126,7 @@ class NwcTransport:
             tags.append(["encryption", NIP44])
         content = self._encrypt(json.dumps({"method": method, "params": params}), mode)
         event = sign_event(self._keys, KIND_REQUEST, tags, content)
+        reusing = method in _REUSABLE_METHODS and getattr(self._reuse, "active", False)
 
         def exchange(session: RelaySession, deadline_at: float) -> dict[str, Any]:
             sub_id = _sub_id("rsp")
@@ -141,14 +149,42 @@ class NwcTransport:
                         and reply.get("kind") == KIND_RESPONSE
                         and tag_value(reply, "e") == event["id"]
                     ):
-                        return self._decrypt_json(reply, tag_value(reply, "encryption") or mode)
+                        answer = self._decrypt_json(reply, tag_value(reply, "encryption") or mode)
+                        if reusing:
+                            # Relays cap subscriptions per socket; this one stays open.
+                            with contextlib.suppress(TransportError):
+                                session.send(["CLOSE", sub_id])
+                        return answer
                 elif frame[0] == "OK" and frame[1] == event["id"] and frame[2] is False:
                     raise TransportError("protocol", f"relay rejected the request: {frame[3:]}")
                 elif frame[0] == "CLOSED" and frame[1] == sub_id:
                     raise TransportError("protocol", f"relay closed the subscription: {frame[2:]}")
 
-        reply: dict[str, Any] = self._with_relay(deadline_at, exchange)
+        reply: dict[str, Any] = (
+            self._with_kept_relay(deadline_at, exchange)
+            if reusing
+            else self._with_relay(deadline_at, exchange)
+        )
         return reply
+
+    @contextlib.contextmanager
+    def reusing_connection(self) -> Iterator[None]:
+        """Read-only requests in this block share one connection, closed when it ends.
+
+        It belongs to the calling thread, because the transport is shared by
+        worker threads and one websocket cannot serve two at once.
+        """
+        reuse = self._reuse
+        if getattr(reuse, "active", False):
+            yield
+            return
+        reuse.active, reuse.session = True, None
+        try:
+            yield
+        finally:
+            session, reuse.active, reuse.session = reuse.session, False, None
+            if session is not None:
+                session.close()
 
     # -- notifications ----------------------------------------------------------
 
@@ -232,6 +268,34 @@ class NwcTransport:
                     session.close()
         assert last is not None
         raise last
+
+    def _with_kept_relay(
+        self,
+        deadline_at: float,
+        action: Callable[[RelaySession, float], dict[str, Any]],
+    ) -> dict[str, Any]:
+        """``action`` on the connection this block already holds, else on a new one it keeps."""
+        reuse = self._reuse
+        kept: RelaySession | None = reuse.session
+        if kept is not None:
+            try:
+                return action(kept, deadline_at)
+            except TransportError as exc:
+                reuse.session = None
+                kept.close()
+                # The relay dropped it since the last page. The call is read-only,
+                # so asking again on a new connection cannot do anything twice.
+                if exc.kind != "closed":
+                    raise
+        answers: list[dict[str, Any]] = []
+
+        def exchange_and_keep(session: RelaySession, deadline_at: float) -> RelaySession:
+            answers.append(action(session, deadline_at))
+            reuse.session = session
+            return session  # `_with_relay` leaves open the session its action returns
+
+        self._with_relay(deadline_at, exchange_and_keep)
+        return answers[0]
 
     def _authentic(self, event: Any) -> bool:
         return (

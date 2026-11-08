@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed (Python): the wallet-history pages of one reconcile pass now share one
+  relay connection instead of opening one each, so a checkout costs two
+  connections, not three to six. With every relay handshake delayed by 3.24 s,
+  a FastAPI checkout answered in about 8.3 s instead of 12 s. The connection
+  belongs to one thread and closes when the pass ends. Only `list_transactions`
+  shares it: `make_invoice` always opens its own.
+- Fixed (React): `<Checkout checkout={...}>` with a snapshot from
+  `prepareCheckout` now mints when the payer picks Bitcoin. It showed a wallet
+  list with no invoice and no QR, because a snapshot with no payer invoice ran
+  as an already-minted checkout. It now runs as create mode, as the element does.
 - Added (Node): `openreceive doctor --scan-build <dir>` searches a production
   build, source maps included, for the `NWC_URI` and `LSC_URI_*` codes in the
   environment and env files. It prints only the code's name and the relative

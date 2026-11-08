@@ -223,13 +223,14 @@ class Reconciler:
                     self._record_transition(by_hash[hash_value], checked, observed_at)
                     delivered[hash_value] = True
 
-            checks, complete, stalled = scan_slice(
-                self.service,
-                window,
-                max_pages=RECONCILE_SCAN_MAX_PAGES,
-                deadline=time.monotonic() + RECONCILE_SCAN_TIMEOUT_SECONDS,
-                on_finality=deliver_finality,
-            )
+            with self.service.reusing_wallet_connection():
+                checks, complete, stalled = scan_slice(
+                    self.service,
+                    window,
+                    max_pages=RECONCILE_SCAN_MAX_PAGES,
+                    deadline=time.monotonic() + RECONCILE_SCAN_TIMEOUT_SECONDS,
+                    on_finality=deliver_finality,
+                )
             lease_owned = self.repository.checkpoint_reconcile_gate(
                 claim, before_scan, now=self._clock() if now is None else observed_at
             )

@@ -9,6 +9,7 @@ tests never load websockets/coincurve.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from typing import Any
@@ -56,6 +57,11 @@ class NwcReceiveClient:
                 deadline_seconds=self._deadline_seconds,
             )
         return self._transport
+
+    def reusing_connection(self) -> contextlib.AbstractContextManager[None]:
+        """Read-only wallet calls in this block share one relay connection."""
+        reuse = getattr(self.transport, "reusing_connection", None)
+        return contextlib.nullcontext() if reuse is None else reuse()
 
     def preflight(self) -> dict[str, Any]:
         info = self._guard(lambda: self.transport.info())

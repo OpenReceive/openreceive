@@ -145,6 +145,7 @@ class FakeRelay:
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._subscriptions: dict[ServerConnection, dict[str, list[dict[str, Any]]]] = {}
+        self.connections_opened = 0
         self.url = ""
 
     def __enter__(self) -> FakeRelay:
@@ -192,6 +193,10 @@ class FakeRelay:
                 if kind is None or any(kind in f.get("kinds", []) for f in filters)
             )
 
+    def open_connection_count(self) -> int:
+        with self._lock:
+            return len(self._subscriptions)
+
     def close_connections(self) -> None:
         with self._lock:
             connections = list(self._subscriptions)
@@ -220,6 +225,7 @@ class FakeRelay:
     def _serve_connection(self, connection: ServerConnection) -> None:
         with self._lock:
             self._subscriptions[connection] = {}
+            self.connections_opened += 1
         try:
             for raw in connection:
                 if self.silent:

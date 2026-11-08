@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +16,7 @@ from openreceive.nwc.receive_client import NwcReceiveClient
 from openreceive.nwc.transport import NwcTransport
 from openreceive.server.service import Service
 from tests.nwc.fake_relay import CLIENT_SECRET, WALLET_SECRET, FakeRelay, FakeWallet
+from tests.server.test_app import REFERENCE, Harness
 
 HASH = "ab" * 32
 
@@ -190,3 +192,52 @@ def test_notifications_reach_the_handler_until_stopped() -> None:
         assert received and received[0]["notification_type"] == "payment_received"
         assert received[0]["notification"]["payment_hash"] == HASH
         client.close()
+
+
+def test_a_reconcile_pass_walks_on_one_connection_and_a_mint_opens_its_own() -> None:
+    wallet = FakeWallet(WALLET_SECRET, handler=wallet_handler)
+    with FakeRelay(wallet) as relay:
+        client = client_for(relay, wallet)
+        client.transport.info()
+        service = Service(client, price_provider=False, swap_providers=[], clock=lambda: 1000)
+        before = relay.connections_opened
+        # The wallet does not list this hash, so the pass walks settled, then unpaid.
+        service.reconcile_payments({"attempts": [{"payment_hash": "cd" * 32, "created_at": 1000}]})
+        walks = [method for method, _ in wallet.requests if method == "list_transactions"]
+        assert len(walks) >= 2
+        assert relay.connections_opened == before + 1
+        client.make_invoice({"amount_msats": 1000})
+        assert relay.connections_opened == before + 2
+
+
+def test_the_pass_a_route_runs_uses_one_connection(tmp_path: Path) -> None:
+    harness = Harness(tmp_path, swaps=False)
+
+    def handler(method: str, params: dict[str, Any]) -> dict[str, Any]:
+        if method == "make_invoice":
+            return {
+                "result_type": method,
+                "result": {
+                    "invoice": "lnbcfake",
+                    "payment_hash": HASH,
+                    "amount": params["amount"],
+                    "created_at": harness.now,
+                    "expires_at": harness.now + 600,
+                },
+            }
+        # Never lists the invoice, so the pass walks the default view, then the unpaid one.
+        return {"result_type": method, "result": {"transactions": []}}
+
+    wallet = FakeWallet(WALLET_SECRET, handler=handler)
+    with FakeRelay(wallet) as relay:
+        client = client_for(relay, wallet)
+        client.transport.info()
+        harness.service._nwc = client
+        assert harness.call("POST", "/checkouts", {"reference": REFERENCE})[0] == 201
+        harness.now += 30
+        before = relay.connections_opened
+        wallet.requests.clear()
+        assert harness.app.maybe_reconcile()["reason"] != "gate_busy"
+        walks = [method for method, _ in wallet.requests if method == "list_transactions"]
+        assert len(walks) >= 2
+        assert relay.connections_opened == before + 1
