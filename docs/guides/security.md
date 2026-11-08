@@ -71,6 +71,8 @@ and skip NWC entirely.
 - The code is still a secret. If it leaks, revoke it at the wallet and create a
   new one. The library redacts it from its own logs. `npx openreceive doctor`
   only reports whether it is present or missing, never the value.
+  `npx openreceive doctor --scan-build <dir>` checks that no code reached a
+  production build, and prints only file names.
 - The wallet service holds custody of the funds.
 - The relay can delay or drop traffic. It cannot fake a settlement, because
   responses are encrypted between your client key and the wallet.

@@ -406,7 +406,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 135494
+      "bytes": 136475
     },
     {
       "path": "/guides/security",
@@ -416,7 +416,7 @@
       "slug": "security",
       "title": "Security",
       "category": "security",
-      "bytes": 4284
+      "bytes": 4408
     },
     {
       "path": "/guides/provider-registry",
@@ -576,7 +576,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "agent-directions",
-      "bytes": 45019
+      "bytes": 45134
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -656,7 +656,7 @@
       "slug": "agent-directions-sveltekit",
       "title": "Agent Directions: SvelteKit",
       "category": "agent-directions",
-      "bytes": 37159
+      "bytes": 37274
     },
     {
       "path": "/guides/agent-directions-nuxt",
@@ -666,7 +666,7 @@
       "slug": "agent-directions-nuxt",
       "title": "Agent Directions: Nuxt",
       "category": "agent-directions",
-      "bytes": 34836
+      "bytes": 34953
     },
     {
       "path": "/guides/agent-directions-astro",
@@ -676,7 +676,7 @@
       "slug": "agent-directions-astro",
       "title": "Agent Directions: Astro",
       "category": "agent-directions",
-      "bytes": 36499
+      "bytes": 36613
     },
     {
       "path": "/guides/agent-directions-react-router",
@@ -686,7 +686,7 @@
       "slug": "agent-directions-react-router",
       "title": "Agent Directions: React Router",
       "category": "agent-directions",
-      "bytes": 35503
+      "bytes": 35618
     },
     {
       "path": "/guides/agent-directions-tanstack-start",
@@ -696,7 +696,7 @@
       "slug": "agent-directions-tanstack-start",
       "title": "Agent Directions: TanStack Start",
       "category": "agent-directions",
-      "bytes": 40647
+      "bytes": 40764
     },
     {
       "path": "/guides/agent-directions-mobile",
@@ -886,7 +886,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 135494,
+      "bytes": 136475,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -1026,7 +1026,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 45019,
+      "bytes": 45134,
       "copy_button": true,
       "self_contained": true
     },
@@ -1362,7 +1362,7 @@
       "kind": "agent-directions-payload",
       "stack": "sveltekit",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 37159,
+      "bytes": 37274,
       "copy_button": true,
       "self_contained": true
     },
@@ -1383,7 +1383,7 @@
       "kind": "agent-directions-payload",
       "stack": "nuxt",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 34836,
+      "bytes": 34953,
       "copy_button": true,
       "self_contained": true
     },
@@ -1404,7 +1404,7 @@
       "kind": "agent-directions-payload",
       "stack": "astro",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 36499,
+      "bytes": 36613,
       "copy_button": true,
       "self_contained": true
     },
@@ -1425,7 +1425,7 @@
       "kind": "agent-directions-payload",
       "stack": "react-router",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 35503,
+      "bytes": 35618,
       "copy_button": true,
       "self_contained": true
     },
@@ -1446,7 +1446,7 @@
       "kind": "agent-directions-payload",
       "stack": "tanstack-start",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 40647,
+      "bytes": 40764,
       "copy_button": true,
       "self_contained": true
     },

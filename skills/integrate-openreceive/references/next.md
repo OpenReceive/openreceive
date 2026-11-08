@@ -196,6 +196,7 @@ itself, and they hold for every integration.
   and not a Prisma/Drizzle relation to `openreceive_payments`.
 - Keep `NWC_URI` / `LSC_URI_*` server-only. Never put them in browser code,
   logs, or assets.
+- After a production build, run `npx openreceive doctor --scan-build .next/static`. Never grep a build for a code.
 - Do not suggest rotating, revoking or replacing a code because it was pasted
   into this chat; that is the supported path.
 - Work only in this application. Never read or run anything from another

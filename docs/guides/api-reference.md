@@ -1745,6 +1745,21 @@ secrets hidden, and always exits `0`.
 | `--prefix <path>` | Route prefix for `--url` (default `/openreceive`). |
 | `--table-name <name>`, `--meta-table-name <name>` | Table names for `--db`, when the scaffold was run with overrides. |
 | `--offline` | Skip the wallet relay probe. |
+| `--scan-build <dir>` | Run alone, after a production build: search `<dir>` for wallet and swap codes. See below. |
+
+`npx openreceive doctor --scan-build <dir>` answers one question: did a code
+reach this build? It reads `NWC_URI` and `LSC_URI_*` from the environment and
+from every env file above, in either mode, and takes no code as an argument.
+It searches each file under `<dir>` as bytes, source maps included, for the
+whole code and for each credential value alone, and skips symlinks and
+`node_modules`. Point it at the folder the browser is served from
+(`.next/static`, `.output/public`, `build/client` or `dist/client`), not the
+project root, where it would find your own env files.
+
+It prints only the code's name and a relative file path, never any part of a
+value. It exits `1` on a hit, when no code is set, when the folder is missing
+or empty, or when a file cannot be read. Use it instead of searching a build by
+hand, which puts part of a code on a command line.
 
 ## Rails
 

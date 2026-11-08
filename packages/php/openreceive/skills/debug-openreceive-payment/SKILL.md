@@ -19,6 +19,7 @@ URL below is raw markdown — fetch it when the step needs it.
 npx openreceive doctor                     # Node version, NWC_URI, swap config, wallet probe
 npx openreceive doctor --db <db>           # + are openreceive_payments/openreceive_meta migrated?
 npx openreceive doctor --url http://localhost:3000   # + are the routes actually mounted?
+npx openreceive doctor --scan-build <dir>  # alone, after a production build: did a code reach it?
 bin/rails openreceive:doctor               # Rails
 manage.py openreceive_doctor               # Django
 openreceive doctor --app main:app           # FastAPI

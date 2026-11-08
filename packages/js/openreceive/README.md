@@ -38,6 +38,8 @@ npx openreceive doctor
   schema/migration for your ORM plus a wiring guide; it never touches a
   database.
 - `doctor` checks the environment and the receive-only NWC connection.
+- `doctor --scan-build <dir>` searches a production build for wallet and swap
+  codes and prints only file names.
 
 The command is implemented in `@openreceive/node` (`@openreceive/node/cli`).
 This package exists so that `npx openreceive` resolves under every package

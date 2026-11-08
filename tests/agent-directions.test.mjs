@@ -335,6 +335,31 @@ test("every library payload's Step 0 sends the swap walkthrough, checks codes by
   }
 });
 
+// A Nuxt trial agent grepped its build with prefixes of both codes on the
+// command line. Only stacks that ship a client bundle get the line.
+test("the client-bundle payloads name doctor's build scan and its folder", () => {
+  const folders = {
+    next: ".next/static",
+    nuxt: ".output/public",
+    sveltekit: "build/client",
+    astro: "dist/client",
+    "react-router": "build/client",
+    "tanstack-start": ".output/public",
+  };
+  for (const { stack, text } of payloads) {
+    const named = text.includes("--scan-build");
+    assert.equal(named, stack in folders, `${stack}: --scan-build`);
+    if (named) {
+      assert.ok(
+        text.includes(
+          `- After a production build, run \`npx openreceive doctor --scan-build ${folders[stack]}\`. Never grep a build for a code.\n`,
+        ),
+        stack,
+      );
+    }
+  }
+});
+
 // In the 2026-10-09 trials Cursor wrote the swap code into .env with
 // `python3 -c` in all three Fastify runs, putting the code on the command
 // line; only the WooCommerce directions named the file-editing tool. One

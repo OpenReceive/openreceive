@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Astro)
 
 ```sh
-# READ THIS FIRST: this file is 36 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 37 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/astro/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/astro/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -202,6 +202,7 @@ itself, and they hold for every integration.
   and not a Prisma/Drizzle relation to `openreceive_payments`.
 - Keep `NWC_URI` / `LSC_URI_*` server-only. Never put them in browser code,
   logs, or assets.
+- After a production build, run `npx openreceive doctor --scan-build dist/client`. Never grep a build for a code.
 - Do not suggest rotating, revoking or replacing a code because it was pasted
   into this chat; that is the supported path.
 - Work only in this application. Never read or run anything from another
