@@ -99,6 +99,13 @@ On Node, the adapters check the wallet on the first request. Await that check
 in a deploy health check. Express and Next expose a `ready` promise. On
 Fastify, use `await fastify.ready()`.
 
+Never await `ready` before `app.listen()`, or at the top level of the server
+file. `ready` rejects when the first check fails, and a relay that is slow for
+a moment at start would then crash the whole shop, its own pages included,
+until someone restarts it. Unawaited, a failed first check only answers
+checkout requests with a retryable 503, and the adapter checks the wallet again
+on the next request (1 s, doubling to 60 s), so payments come back on their own.
+
 The Rails engine checks the wallet when the app boots in production. So a bad
 `NWC_URI` stops the deploy instead of showing customers a 500. Asset
 precompilation skips that check, because secrets are not mounted yet. For any
