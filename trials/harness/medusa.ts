@@ -83,11 +83,21 @@ async function checkOut(page: Page, base: string, product: number): Promise<void
   for (let index = 0; index < (await options.count()); index += 1) {
     await options.nth(index).locator('[data-testid="option-button"]').first().click();
   }
+  const added = awaitedLater(
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.request().headers()["next-action"] !== undefined,
+      { timeout: 30_000 },
+    ),
+  );
   await page.locator('[data-testid="add-product-button"]').first().click();
-  await page
-    .locator('[data-testid="nav-cart-link"]')
-    .filter({ hasText: /\(1\)/ })
-    .waitFor({ timeout: 30_000 });
+  await added;
+  // The cart page, not the nav's count: since the storefront's Next 15.5 bump
+  // the nav keeps "Cart (0)" after the add until a reload, while the cart
+  // already holds the item (2026-11-08, all three Medusa trials).
+  await page.goto(`${base}/${REGION}/cart`);
+  await page.locator('[data-testid="product-row"]').first().waitFor({ timeout: 30_000 });
   await page.goto(`${base}/${REGION}/checkout?step=address`);
   await page.locator('[data-testid="shipping-first-name-input"]').fill("Widget");
   await page.locator('[data-testid="shipping-last-name-input"]').fill("Buyer");
