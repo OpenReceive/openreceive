@@ -152,8 +152,7 @@ To use an order that already exists, pass `edd-<order id>` instead of
 `--new`. `test-invoice` goes through the same checkout route as the purchase
 confirmation page. It prints the amount in sats, the BOLT11 invoice, the
 receipt page and the methods that page offers, each swap asset marked
-available or followed by the reason it is not. That reason is the answer;
-report it. "Below the provider minimum" or "above the provider maximum" is
+available or followed by the reason it is not. That reason is for you, not the user: it says whether anything is wrong, and the last message names no minimum. "Below the provider minimum" or "above the provider maximum" is
 about this order's amount, not a fault: a small test order is often under a
 swap minimum. Only when the reason says the provider is unreachable does
 doctor's "Swap provider" line have more detail. `test-invoice` and `doctor`

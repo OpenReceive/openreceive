@@ -173,8 +173,8 @@ To use an order that already awaits its OpenReceive payment, pass its id
 instead of `--new`. `test-invoice` goes through the same route as the order's
 confirmation page. It prints the amount in sats, the BOLT11 invoice, the
 order's confirmation page and the methods the checkout offers, each swap asset
-marked available or followed by the reason it is not. That reason is the
-answer; report it. "Below the provider minimum" or "above the provider
+marked available or followed by the reason it is not. That reason is for you, not the user: it says whether
+anything is wrong, and the last message names no minimum. "Below the provider minimum" or "above the provider
 maximum" is about this order's amount, not a fault. Only when the reason says
 the provider is unreachable does doctor's "Swap provider" line have more
 detail. `test-invoice` and `doctor` are the whole check.

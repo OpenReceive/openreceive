@@ -806,7 +806,7 @@
       "slug": "agent-directions-woocommerce",
       "title": "Agent directions (WordPress + WooCommerce)",
       "category": "agent-directions",
-      "bytes": 23323
+      "bytes": 23397
     },
     {
       "path": "/guides/agent-directions-edd",
@@ -816,7 +816,7 @@
       "slug": "agent-directions-edd",
       "title": "Agent directions (Easy Digital Downloads)",
       "category": "agent-directions",
-      "bytes": 20785
+      "bytes": 20859
     },
     {
       "path": "/guides/agent-directions-paymenter",
@@ -826,7 +826,7 @@
       "slug": "agent-directions-paymenter",
       "title": "Agent directions (Paymenter)",
       "category": "agent-directions",
-      "bytes": 18812
+      "bytes": 18886
     },
     {
       "path": "/guides/agent-directions-medusa",
@@ -856,7 +856,7 @@
       "slug": "agent-directions-fossbilling",
       "title": "Agent directions (FOSSBilling)",
       "category": "agent-directions",
-      "bytes": 24651
+      "bytes": 24725
     },
     {
       "path": "/guides/agent-directions-prestashop",
@@ -866,7 +866,7 @@
       "slug": "agent-directions-prestashop",
       "title": "Agent directions (PrestaShop)",
       "category": "agent-directions",
-      "bytes": 24864
+      "bytes": 24938
     },
     {
       "path": "/guides/agent-directions-odoo",
@@ -876,7 +876,7 @@
       "slug": "agent-directions-odoo",
       "title": "Agent directions (Odoo)",
       "category": "agent-directions",
-      "bytes": 22557
+      "bytes": 22631
     },
     {
       "path": "/api_docs",
@@ -942,7 +942,7 @@
       "kind": "agent-directions-payload",
       "stack": "woocommerce",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 23323,
+      "bytes": 23397,
       "copy_button": true,
       "self_contained": true
     },
@@ -963,7 +963,7 @@
       "kind": "agent-directions-payload",
       "stack": "edd",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 20785,
+      "bytes": 20859,
       "copy_button": true,
       "self_contained": true
     },
@@ -1215,7 +1215,7 @@
       "kind": "agent-directions-payload",
       "stack": "paymenter",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 18812,
+      "bytes": 18886,
       "copy_button": true,
       "self_contained": true
     },
@@ -1236,7 +1236,7 @@
       "kind": "agent-directions-payload",
       "stack": "fossbilling",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 24651,
+      "bytes": 24725,
       "copy_button": true,
       "self_contained": true
     },
@@ -1257,7 +1257,7 @@
       "kind": "agent-directions-payload",
       "stack": "prestashop",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 24864,
+      "bytes": 24938,
       "copy_button": true,
       "self_contained": true
     },
@@ -1278,7 +1278,7 @@
       "kind": "agent-directions-payload",
       "stack": "odoo",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 22557,
+      "bytes": 22631,
       "copy_button": true,
       "self_contained": true
     },

@@ -147,7 +147,7 @@ To use an invoice that already exists, pass its id instead of `--new`.
 `test-invoice` goes through the same route as the invoice's payment dialog. It
 prints the amount in sats, the BOLT11 invoice, the invoice page and the
 methods the dialog offers, each swap asset marked available or followed by
-the reason it is not. That reason is the answer; report it. "Below the
+the reason it is not. That reason is for you, not the user: it says whether anything is wrong, and the last message names no minimum. "Below the
 provider minimum" or "above the provider maximum" is about this invoice's
 amount, not a fault. Only when the reason says the provider is unreachable
 does doctor's "Swap provider" line have more detail. `test-invoice` and

@@ -184,7 +184,7 @@ To use a transaction that already exists, pass `--reference <its reference>`
 instead of `--new`. `test-invoice` goes through the same route as the
 checkout page. It prints the amount in sats, the BOLT11 invoice and the
 methods the checkout offers, each swap asset marked available or followed by
-the reason it is not. That reason is the answer; report it. A reason about the
+the reason it is not. That reason is for you, not the user: it says whether anything is wrong, and the last message names no minimum. A reason about the
 provider's minimum or maximum is about this amount, not a fault. `test-invoice`
 and `doctor` are the whole check.
 
