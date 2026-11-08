@@ -235,6 +235,31 @@ WordPress shop, `wp plugin install <release zip> --force` through the shop's
 `--phases` also takes `payer` (the browser walk below, framework shops only)
 and `leaks`.
 
+## Soak
+
+`npm run trial:soak -- --dir <kept shop> [--minutes 120]` keeps a shop an
+agent built busy for hours: a buyer every 2 minutes, each invoice settled
+through the trial wallet, and every 20 minutes a relay fault through the
+interceptor (down for 45 s, then 3.2 s handshakes for 2 minutes). It fails when
+a checkout outside a fault (and the minute after) fails or never turns paid
+(`soak_checkouts`), when the container's memory ends more than 50% (or 64 MiB)
+above where it started (`soak_memory_flat`), or when a process holds 32 more
+file descriptors at the end (`soak_fds_flat`, sockets included).
+`soak_latency_flat` (polish) watches checkouts slowing down. Two minutes, not
+one, because a shop with `rateLimiting` on takes 60 invoices an hour from one
+address. The record lands in `trials/reports/soak/`.
+
+## Review
+
+`npm run trial:review -- --dir trials/reports/<day>-released/<slug>` has
+reviewer agents (Claude Code, Codex and Cursor by default, `--agent` to pick)
+read a platform's finished reports the way a video maker watched a take: as
+the shopper on the checkout, the merchant who asked, and the developer who
+reads the code. Each answer is saved beside the reports as
+`review-<agent>.md`, a list of problems in the video problems file's form.
+The checks catch what someone thought to check; the 2026-11-06 videos found
+eleven problems no check covered.
+
 ## Payer walk
 
 On a framework shop, after the live checks, Chromium walks the shop the way a

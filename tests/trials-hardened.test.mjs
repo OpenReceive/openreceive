@@ -222,3 +222,43 @@ test("each merchant scenario pastes the code its own way, and mix deals them out
     "Bitcoin only",
   );
 });
+
+test("the review step runs Claude, Codex and Cursor unless told otherwise", async () => {
+  const { REVIEW_PROMPT, reviewersOf } = await import("../trials/harness/review.ts");
+  assert.deepEqual(reviewersOf(undefined), ["claude", "codex", "cursor"]);
+  assert.deepEqual(reviewersOf("codex"), ["codex"]);
+  assert.throws(() => reviewersOf("gemini"), /Unknown reviewer "gemini"/);
+  for (const file of ["transcript.md", "friction.md", "result.json", "payer/", "shop.log"]) {
+    assert.ok(REVIEW_PROMPT.includes(file), `the prompt names ${file}`);
+  }
+  assert.match(REVIEW_PROMPT, /Do not change any file/);
+});
+
+test("the soak fails a checkout outside a fault, growing memory or piling sockets", async () => {
+  const { drift, soakChecks } = await import("../trials/harness/soak.ts");
+  assert.deepEqual(drift([1, 1, 1, 1, 1, 9, 9, 9, 9, 9]), { start: 1, end: 9 });
+  const ok = (at, inFault = false) => ({ at, status: 201, ms: 500, inFault, settled: true });
+  const flat = Array.from({ length: 10 }, (_, at) => ({ at, memoryMiB: 120, fds: 30 }));
+  const healthy = soakChecks(
+    [ok(1), ok(2), { at: 3, status: 503, ms: 5, inFault: true }, ok(4)],
+    flat,
+  );
+  assert.deepEqual(
+    healthy.map((item) => [item.id, item.pass]),
+    [
+      ["soak_checkouts", true],
+      ["soak_memory_flat", true],
+      ["soak_fds_flat", true],
+      ["soak_latency_flat", true],
+    ],
+  );
+  const leaking = Array.from({ length: 10 }, (_, at) => ({
+    at,
+    memoryMiB: 120 + at * 40,
+    fds: 30 + at * 10,
+  }));
+  const broken = soakChecks([ok(1), { at: 2, status: 502, ms: 3000, inFault: false }], leaking);
+  assert.equal(broken[0].pass, false);
+  assert.equal(broken[1].pass, false);
+  assert.equal(broken[2].pass, false);
+});
