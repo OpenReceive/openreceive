@@ -381,7 +381,7 @@ function renderElementCompactPaymentSelectorHtml(
     ...(limitContext === undefined ? {} : { checkout: limitContext }),
   });
   const currenciesLoading = view.currenciesLoading === true && swapAssetOptions.length === 0;
-  const { gridBusy, networkRequired, selectedGroup, continueTarget } = display;
+  const { gridBusy, networkRequired, selectedGroup, continueTarget, offersChoice } = display;
 
   const continueButton = (className: string) =>
     renderElementMethodConfirmHtml({
@@ -447,7 +447,7 @@ function renderElementCompactPaymentSelectorHtml(
   return `
       <header class="${orClasses.wizardHeader}">
         <h2 id="payment-method-heading" class="${orClasses.wizardHeaderTitle}">${escapeHtml(checkoutLabels.wizardTitle)}</h2>
-        <p class="${orClasses.wizardHeaderSubtitle}">${escapeHtml(checkoutLabels.wizardSubtitle)}</p>
+        ${offersChoice || currenciesLoading ? `<p class="${orClasses.wizardHeaderSubtitle}">${escapeHtml(checkoutLabels.wizardSubtitle)}</p>` : ""}
       </header>
       <div class="${orClasses.methodBody}" aria-labelledby="payment-method-heading">
         <div part="method-grid" role="group" aria-label="${escapeHtml(checkoutLabels.paymentMethod)}" class="${orClasses.methodGrid}">

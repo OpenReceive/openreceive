@@ -59,6 +59,15 @@ import { formatCountdown } from "../packages/js/browser/src/internal/checkout-fo
 import { getProvider } from "@openreceive/provider-data";
 import { PaymentWizard, ThemeScope, ThemeToggle } from "@openreceive/react";
 
+test("React payment wizard does not ask the payer to choose when only Lightning is on offer", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PaymentWizard, { invoice: "lnbc-test", checkout: { payment_methods: [], invoices: [] } }),
+  );
+  assert.match(html, /Pay this invoice/);
+  assert.doesNotMatch(html, /Loading currencies/);
+  assert.doesNotMatch(html, /Choose how you want to pay/);
+});
+
 test("React payment wizard server-renders the package-owned first choices", () => {
   const html = renderToStaticMarkup(
     React.createElement(PaymentWizard, {

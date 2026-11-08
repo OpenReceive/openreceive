@@ -76,6 +76,17 @@ test("a method key resolves to select_method", () => {
   );
 });
 
+test("a grid of one tile offers no choice, so the payer is not asked to make one", () => {
+  const withSwaps = createMethodGridDisplay({ entries: entriesOf([USDT_TRON]) });
+  assert.equal(withSwaps.offersChoice, true);
+  const lightningOnly = createMethodGridDisplay({ entries: entriesOf([]) });
+  assert.deepEqual(
+    lightningOnly.entries.map((entry) => entry.kind),
+    ["method"],
+  );
+  assert.equal(lightningOnly.offersChoice, false);
+});
+
 test("the grid display model carries the rule as data", () => {
   const display = createMethodGridDisplay({
     entries: entriesOf([USDT_TRON, USDT_ETH, SOL]),

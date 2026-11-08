@@ -891,6 +891,8 @@ export interface MethodGridDisplay<T extends { readonly label: string }> {
   readonly entries: readonly MethodGridDisplayEntry<T>[];
   /** A swap start is in flight, so every tile is inert. */
   readonly gridBusy: boolean;
+  /** False when one tile is all there is, so "choose" would be asking nothing. */
+  readonly offersChoice: boolean;
   /** The open tile has more than one network, so a choice is still owed. */
   readonly networkRequired: boolean;
   readonly selectedGroup?: MethodGridGroupDisplay<T>;
@@ -1007,6 +1009,7 @@ export function createMethodGridDisplay<
   return {
     entries,
     gridBusy,
+    offersChoice: entries.length > 1,
     networkRequired,
     ...(selectedGroup === undefined ? {} : { selectedGroup }),
     ...(continueTarget === undefined ? {} : { continueTarget }),

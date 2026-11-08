@@ -749,7 +749,8 @@ function renderCompactPaymentMethodSelector(options: {
   });
   const currenciesLoading =
     options.currenciesLoading === true && options.swapAssetOptions.length === 0;
-  const { gridBusy, networkRequired, selectedGroup, continueTarget, canContinue } = display;
+  const { gridBusy, networkRequired, selectedGroup, continueTarget, canContinue, offersChoice } =
+    display;
   const continueStarting = continueTarget?.starting === true;
 
   const continueButton = (className: string) =>
@@ -914,11 +915,13 @@ function renderCompactPaymentMethodSelector(options: {
         },
         checkoutLabels.wizardTitle,
       ),
-      React.createElement(
-        "p",
-        { className: orClasses.wizardHeaderSubtitle },
-        checkoutLabels.wizardSubtitle,
-      ),
+      offersChoice || currenciesLoading
+        ? React.createElement(
+            "p",
+            { className: orClasses.wizardHeaderSubtitle },
+            checkoutLabels.wizardSubtitle,
+          )
+        : null,
     ),
     React.createElement(
       "div",

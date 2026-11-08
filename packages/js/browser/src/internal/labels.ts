@@ -195,7 +195,8 @@ export const checkoutLabels = {
    * payer to keep a link that goes nowhere is worse than saying nothing.
    */
   keepOrderTitle: "Keep this order id",
-  keepOrderBody: "It is the way back to this payment. The link is already in your address bar.",
+  keepOrderBody:
+    "The shop can find this payment with it if anything goes wrong. The link in your address bar brings you back on this browser.",
   keepOrderIdLabel: "Order id",
   keepOrderUrlLabel: "Checkout link",
   /** The refund form's own heading, and the two lines above its input. */

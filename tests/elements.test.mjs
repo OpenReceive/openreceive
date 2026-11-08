@@ -349,6 +349,15 @@ test("elements show the method grid without an existing Lightning invoice pane",
   assert.doesNotMatch(html, /Copy invoice/);
 });
 
+test("a shop with only Lightning opens on one button and does not ask the payer to choose", () => {
+  const lightningOnly = renderPaymentWizardHtml({ swapOptions: [] });
+  assert.match(lightningOnly, /data-or-method="bitcoin"/);
+  assert.match(lightningOnly, /Pay this invoice/);
+  assert.doesNotMatch(lightningOnly, /Choose how you want to pay/);
+  // While the list is still loading there may yet be something to choose.
+  assert.match(renderPaymentWizardHtml({ currenciesLoading: true }), /Choose how you want to pay/);
+});
+
 test("the invoice decode link is off until the host names a decoder", () => {
   const withoutDecoder = renderCheckoutHtml({ payment_wizard: false, invoice: "lnbc-decode-test" });
   assert.doesNotMatch(withoutDecoder, />Decode</);
