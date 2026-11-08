@@ -1,4 +1,6 @@
+import type { Page } from "@playwright/test";
 import type { ChaosBuyer } from "./chaos.ts";
+import type { PlacedOrder } from "./payer.ts";
 import { compose } from "./docker.ts";
 import {
   type Answer,
@@ -63,6 +65,11 @@ export class CookieJar {
 
   names(): string[] {
     return [...this.cookies.keys()];
+  }
+
+  /** Every cookie, as name and value. */
+  entries(): [string, string][] {
+    return [...this.cookies];
   }
 
   header(): Record<string, string> {
@@ -964,4 +971,47 @@ export function wordpressKind(platform: {
 }): "woocommerce" | "edd" | undefined {
   const stack = platform.directions_slug ?? platform.slug;
   return stack === "woocommerce" || stack === "edd" ? stack : undefined;
+}
+
+/**
+ * The seeded catalog's prices, in cents: WooCommerce's Facet and Bezel, EDD's
+ * Widget Pack Nano and Micro (trials/platforms/<slug>/seed). The payer walk
+ * checks the checkout shows the store's own amount.
+ */
+const SEEDED_PRICES: Readonly<Record<"woocommerce" | "edd", readonly [number, number]>> = {
+  woocommerce: [700, 1200],
+  edd: [700, 1250],
+};
+
+/**
+ * The payer walk's way to a WordPress checkout: a guest buys product 1 or 2
+ * through the store's own checkout (as the live checks do), and the browser
+ * opens the order page with that guest's cookies.
+ */
+export function wordpressPayerOrders(
+  slug: "woocommerce" | "edd",
+  base: string,
+): (page: Page, productId: number) => Promise<PlacedOrder> {
+  const store = slug === "edd" ? EDD : WOOCOMMERCE;
+  return async (page, productId) => {
+    const index = productId === 1 ? 0 : 1;
+    const product = store.products[index];
+    const guest = new Guest(75_000);
+    const placed = await store.order(guest, base, product, () => {});
+    const url = new URL(placed.page);
+    await page.context().addCookies(
+      guest.jar.entries().map(([name, value]) => ({
+        name,
+        value,
+        domain: url.hostname,
+        path: "/",
+      })),
+    );
+    await page.goto(placed.page, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    return {
+      price: SEEDED_PRICES[slug][index],
+      listing: `${product}, as seeded`,
+      url: placed.page,
+    };
+  };
 }

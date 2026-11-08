@@ -39,6 +39,13 @@ export interface PayerTarget {
   readonly reportDir: string;
   /** False when the merchant gave no swap code: the swap steps are left out. True when omitted. */
   readonly swaps?: boolean;
+  /**
+   * How a buyer reaches the checkout for product 1 or 2 (SWAP_PRODUCT). The
+   * framework fixtures' home-page form when omitted; a WordPress store places
+   * the order through its own checkout and opens the order page
+   * (wordpressPayerOrders in wordpress.ts).
+   */
+  readonly placeOrder?: (page: Page, productId: number) => Promise<PlacedOrder>;
 }
 
 /** Product 1 is the cheapest in every fixture; product 2 clears the test provider's minimum. */
@@ -80,6 +87,9 @@ const BANNED: readonly (readonly [string, RegExp])[] = [
   ["relay", /\brelay/i],
   ["backend", /\bback-?end\b/i],
   ["settlement verified", /settlement\s+verified/i],
+  // The engine's own words for a paid invoice (2026-11-08 reviews).
+  ["settled", /\bsettled\b/i],
+  ["settlement", /\bsettlement\b/i],
   ["Internal server error", /internal\s+server\s+error/i],
   ["exception", /exceptions?\b/i],
   ["traceback", /\btraceback\b/i],
@@ -507,7 +517,7 @@ const invoiceQr = (page: Page): Locator =>
 const tryAgain = (page: Page): Locator =>
   page.getByRole("button", { name: /try again|retry/i }).filter({ visible: true });
 
-interface PlacedOrder {
+export interface PlacedOrder {
   /** The product's price on the shop's listing, in cents. */
   readonly price: number | undefined;
   /** The listing text the price came from. */
@@ -516,6 +526,11 @@ interface PlacedOrder {
 }
 
 /** Order one product through the shop's own listing, as a buyer clicks Buy. */
+/** The buyer's way to the checkout: the target's own, or the fixture's home-page form. */
+function order(target: PayerTarget, page: Page, productId: number): Promise<PlacedOrder> {
+  return target.placeOrder?.(page, productId) ?? placeOrder(page, target.baseUrl, productId);
+}
+
 async function placeOrder(page: Page, baseUrl: string, productId: number): Promise<PlacedOrder> {
   await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT_MS });
   const near = await page.evaluate<string | null>(listingScript(productId));
@@ -755,8 +770,8 @@ async function happyPath(browser: Browser, target: PayerTarget, walk: Walk): Pro
   await visit(browser, async (state) => {
     const { page } = state;
     try {
-      const order = await placeOrder(page, target.baseUrl, PRODUCT);
-      stage = `the checkout on ${new URL(order.url).pathname}`;
+      const placed = await order(target, page, PRODUCT);
+      stage = `the checkout on ${new URL(placed.url).pathname}`;
       const first = await checkoutRendered(page);
       if (first === "error") throw new Error("the checkout opened on an error");
       if (first === "picker") await walk.capture(page, "happy-picker");
@@ -766,12 +781,12 @@ async function happyPath(browser: Browser, target: PayerTarget, walk: Walk): Pro
       const shown = checkoutFiatCents(invoice.text);
       outcome.record(
         IDS.amount,
-        order.price !== undefined && shown === order.price,
-        order.price === undefined
+        placed.price !== undefined && shown === placed.price,
+        placed.price === undefined
           ? `no price beside product ${PRODUCT}'s form on the home page`
           : shown === undefined
-            ? `the invoice screen shows no dollar amount; the shop's price is ${formatCents(order.price)}`
-            : `checkout ${formatCents(shown)}, shop ${formatCents(order.price)} ("${order.listing}")`,
+            ? `the invoice screen shows no dollar amount; the shop's price is ${formatCents(placed.price)}`
+            : `checkout ${formatCents(shown)}, shop ${formatCents(placed.price)} ("${placed.listing}")`,
       );
 
       stage = "the paid screen";
@@ -846,7 +861,7 @@ async function invoiceFailure(browser: Browser, target: PayerTarget, walk: Walk)
     let ruled = false;
     try {
       stage = "the home page";
-      await placeOrder(page, target.baseUrl, PRODUCT);
+      await order(target, page, PRODUCT);
       stage = "the checkout's first screen";
       const first = await checkoutRendered(page);
       let from = api.length;
@@ -857,7 +872,7 @@ async function invoiceFailure(browser: Browser, target: PayerTarget, walk: Walk)
         ruled = true;
         await silenceRelay(target, relays);
         from = api.length;
-        await placeOrder(page, target.baseUrl, PRODUCT);
+        await order(target, page, PRODUCT);
         await checkoutRendered(page).catch(() => undefined);
       } else {
         if (first === "error") throw new Error("the checkout opened on an error before any rule");
@@ -980,7 +995,7 @@ async function swapTotal(browser: Browser, target: PayerTarget, walk: Walk): Pro
   await visit(browser, async (state) => {
     const { page, api } = state;
     try {
-      const order = await placeOrder(page, target.baseUrl, SWAP_PRODUCT);
+      const placed = await order(target, page, SWAP_PRODUCT);
       stage = "the checkout's first screen";
       if ((await checkoutRendered(page)) !== "picker") {
         throw new Error("the checkout did not open on its method picker");
@@ -1005,12 +1020,12 @@ async function swapTotal(browser: Browser, target: PayerTarget, walk: Walk): Pro
       const wordingOk = !/cart/i.test(label);
       outcome.record(
         IDS.swapTotal,
-        order.price !== undefined && shown === order.price && wordingOk,
+        placed.price !== undefined && shown === placed.price && wordingOk,
         [
           `"${label}: ${value}"`,
-          order.price === undefined
+          placed.price === undefined
             ? `no price beside product ${SWAP_PRODUCT}'s form on the home page`
-            : `shop ${formatCents(order.price)} ("${order.listing}")`,
+            : `shop ${formatCents(placed.price)} ("${placed.listing}")`,
           ...(wordingOk ? [] : ["the row names a cart, which a donation or an invoice has not"]),
           `rows: ${rows
             .filter(([, text]) => text !== "")
@@ -1052,7 +1067,7 @@ async function swapFailure(browser: Browser, target: PayerTarget, walk: Walk): P
     let forced = false;
     try {
       stage = "the home page";
-      await placeOrder(page, target.baseUrl, SWAP_PRODUCT);
+      await order(target, page, SWAP_PRODUCT);
       stage = "the checkout's first screen";
       if ((await checkoutRendered(page)) !== "picker") {
         throw new Error("the checkout did not open on its method picker");

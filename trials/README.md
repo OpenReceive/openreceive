@@ -272,10 +272,11 @@ eleven problems no check covered.
 
 ## Payer walk
 
-On a framework shop, after the live checks, Chromium walks the shop the way a
-buyer does (`payer.ts`) and reads what the checkout puts on the screen. Every
-screen is saved in the report's `payer/` folder as a screenshot and its
-visible text.
+On a framework or WordPress shop, after the live checks, Chromium walks the
+shop the way a buyer does (`payer.ts`) and reads what the checkout puts on the
+screen. On WooCommerce and EDD the walk places a guest order first and opens
+its order page (`wordpressPayerOrders`). Every screen is saved in the report's
+`payer/` folder as a screenshot and its visible text.
 
 - `payer_paid_on_screen`, `payer_paid_wording`: after the wallet settles, the
   paid screen appears without a reload and speaks to the payer ("Payment
@@ -291,8 +292,9 @@ visible text.
 - `payer_swap_failure_has_way_forward`: the test provider refuses the create
   (`/__testkit/force-create-error`, scoped to this shop's containers by
   Docker's DNS), and the checkout says so with Try again.
-- `payer_words`: no screen names NWC, nostr, a relay or the backend, shows a
-  server error, an exception, `undefined`, `NaN` or `[object Object]`.
+- `payer_words`: no screen names NWC, nostr, a relay or the backend, says
+  "settled" or "settlement", shows a server error, an exception, `undefined`,
+  `NaN` or `[object Object]`.
   "swap service" is allowed in the product (that ban is for videos).
 
 A candidate run (`--serve-directions`) tests this tree's directions against

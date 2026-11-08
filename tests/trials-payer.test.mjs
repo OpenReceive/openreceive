@@ -16,6 +16,12 @@ test("the words check flags what the 0.4.32 videos showed the payer", () => {
   assert.deepEqual(bannedPayerWords("Payment received\nBackend settlement verified."), [
     "backend",
     "settlement verified",
+    "settlement",
+  ]);
+  // 0.4.32's badge and waiting line (2026-11-08 reviews).
+  assert.deepEqual(bannedPayerWords("Payment received\nsettled"), ["settled"]);
+  assert.deepEqual(bannedPayerWords("Keep this page open while we verify settlement."), [
+    "settlement",
   ]);
   assert.deepEqual(
     bannedPayerWords("Could not prepare the payment address\nInternal server error."),
@@ -44,7 +50,8 @@ test("the words check passes the checkout's own payer copy", () => {
   for (const text of [
     "Payment received\nThank you. Your payment is confirmed.",
     "The payment service did not answer in time. Please try again.",
-    "Waiting for payment\nKeep this page open while we verify settlement.",
+    "Waiting for payment\nKeep this page open while we confirm your payment.",
+    "Payment received\nThank you. Your payment is confirmed.\nPaid",
     // The wallet list names swap services; only the videos avoid the words.
     "Boltz\nswap service\nHow To Pay\nFixedFloat\nswap service",
     "Could not prepare the payment address\nThe swap provider refused this request.\nTry again",

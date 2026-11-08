@@ -41,6 +41,7 @@ import {
   liveWoocommerceChecks,
   wordpressChaosBuyers,
   wordpressKind,
+  wordpressPayerOrders,
 } from "./wordpress.ts";
 import { loadVercelConfig, vercelChecks, vercelCodeChecks } from "./vercel.ts";
 import { type TrialWallet, trialWalletOverride } from "./wallet.ts";
@@ -488,12 +489,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       // What the payer sees: the shop's own pages in Chromium, every state of
       // the checkout read for developer words, failures forced through the
       // interceptor and the test provider. The framework fixtures only.
-      if (
-        !donation &&
-        request.wallet !== undefined &&
-        platform.host === undefined &&
-        wordpress === undefined
-      ) {
+      if (!donation && request.wallet !== undefined && platform.host === undefined) {
         log("payer: the checkout in Chromium, paid and failing");
         checks.push(
           ...(await payerWalkChecks({
@@ -504,6 +500,9 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
             client: clientPrefix(directory),
             reportDir,
             swaps: scenario.swaps && platform.swap_provider !== "live",
+            ...(wordpress === undefined
+              ? {}
+              : { placeOrder: wordpressPayerOrders(wordpress, sandbox.baseUrl) }),
           })),
         );
       }

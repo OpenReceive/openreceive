@@ -14,6 +14,7 @@ import {
   liveWoocommerceChecks,
   wordpressChaosBuyers,
   wordpressKind,
+  wordpressPayerOrders,
 } from "./wordpress.ts";
 
 // Re-run the harness's checks on a shop an earlier trial kept (`--keep`):
@@ -106,7 +107,7 @@ async function main(): Promise<void> {
           : await liveShopChecks(baseUrl, options)),
     );
   }
-  if (phases.includes("payer") && wordpress === undefined) {
+  if (phases.includes("payer")) {
     console.log(`payer: ${baseUrl}`);
     checks.push(
       ...(await payerWalkChecks({
@@ -116,6 +117,9 @@ async function main(): Promise<void> {
         wallet,
         client: clientPrefix(directory),
         reportDir: path.join(trialsRoot, "reports", "recheck", path.basename(directory)),
+        ...(wordpress === undefined
+          ? {}
+          : { placeOrder: wordpressPayerOrders(wordpress, baseUrl) }),
       })),
     );
   }
