@@ -333,10 +333,16 @@ The custom element uses a named slot:
 `<TransactionDetails>` is the collapsible panel that shows the payment hash and
 deposit txid. `@openreceive/elements` offers the same panel as
 `renderTransactionDetailsHtml` / `createTransactionDetailsElement`.
-`<Checkout>` already renders it. You can also mount it on your order page:
+`<Checkout>` already renders it. You can also mount it on your order page,
+from the order's settled attempt in your `openreceive_payments` table (the
+row whose `reference` is the order's and whose `status` is `settled`):
 
 ```tsx
-<TransactionDetails state={await loadCheckoutState(order.id)} />
+// paid: SELECT reference, payment_hash, paid_at FROM openreceive_payments
+//       WHERE reference = ? AND status = 'settled'
+<TransactionDetails
+  state={{ reference: paid.reference, payment_hash: paid.payment_hash, settled_at: paid.paid_at }}
+/>
 ```
 
 ## Building your own UI
