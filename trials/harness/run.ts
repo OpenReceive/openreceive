@@ -53,7 +53,8 @@ one real Supabase project. Only one trial process runs at once.
 --keep               leave the containers and the shop directory in place
 --no-chaos           skip the chaos phase (relay and price-feed faults after the live checks)
 --scenario           the merchant: canonical (default), bitcoin-only, quoted-paste, env-line-paste,
-                     wrapped-paste, or mix (each run of a platform gets the next one)
+                     wrapped-paste, directions-cut (needs --serve-directions), or mix (each run
+                     of a platform gets the next one)
 
 Without --smoke, the agent integrates its own copy of the shop for each trial. That spends model usage and takes
 several minutes. Reports land in trials/reports/ and are not committed.
