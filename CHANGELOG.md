@@ -115,6 +115,13 @@
   `nostr+walletconnect:` or `lightning+swapconnect:` code. A project with its
   own filter gets system check warning `openreceive.W003` while `DEBUG` is on
   until that filter subclasses OpenReceive's.
+- Fixed (Django): `manage.py openreceive_install` prints `"RATE_LIMITING":
+  True` under "Recommended for public web shops", not `False`, and says to set
+  it to `False` for point-of-sale and to put a trusted-proxy middleware first
+  behind a reverse proxy. It no longer prints `export NWC_URI=<receive-only
+  NWC code>`, a code on a shell line: it says to write `NWC_URI` into the
+  project's `.env` with a file editor and load that file (django-environ, or
+  Compose's `env_file`), or to set it in the server's environment.
 
 - Fixed (Rails): an unexpected error inside OpenReceive's routes now leaves a
   line in the Rails log, "[openreceive] unexpected <class> (request_id=…) at

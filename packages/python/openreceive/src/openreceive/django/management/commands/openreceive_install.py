@@ -149,9 +149,11 @@ Add to settings.py:
         "HOST": "{app_label}.openreceive_host.Host",
         "PRICE_CURRENCIES": ["USD"],
         # Recommended for public web shops: cap invoice creation per client IP,
-        # counted from the engine-owned openreceive_payments rows. Leave it off
-        # for point-of-sale deployments where many payers share one IP.
-        "RATE_LIMITING": False,
+        # counted from the engine-owned openreceive_payments rows. Set it to
+        # False for point-of-sale deployments where many payers share one IP.
+        # Behind a reverse proxy, put a trusted-proxy middleware first, so
+        # REMOTE_ADDR is the payer and not the proxy.
+        "RATE_LIMITING": True,
         # Settlement discovery is opportunistic by default: every OpenReceive
         # request first runs one reconcile pass through the durable
         # openreceive_meta gate (shared by every worker; min 3s between real
@@ -164,13 +166,17 @@ Add to urls.py:
     from django.urls import include, path
     urlpatterns += [path("openreceive/", include("openreceive.django.urls"))]
 
+Secrets load from NWC_URI, LSC_URI_PRIMARY and LSC_URI_BACKUP in os.environ.
+Write NWC_URI=<receive-only NWC code> into the project's .env with a file editor,
+never on a command line, and load that file: Django reads no .env on its own
+(django-environ's Env.read_env() in settings.py, or env_file under Docker
+Compose). In production, set them in the server's environment instead.
+
 Then:
 
     manage.py migrate                      # creates openreceive_payments + openreceive_meta
-    export NWC_URI=<receive-only NWC code> # Django loads no .env; the server environment must carry it
     manage.py openreceive_doctor           # reports the install state, never prints a secret
 
-Secrets load from NWC_URI, LSC_URI_PRIMARY and LSC_URI_BACKUP in os.environ.
 Optional push settlement: run `manage.py openreceive_notifications` as one long-lived process.
 """
 

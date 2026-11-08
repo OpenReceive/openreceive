@@ -48,6 +48,13 @@ def test_install_writes_the_host_module_and_prints_the_wiring(tmp_path: Path) ->
     assert '"HOST": "testapp.openreceive_host.Host"' in printed
     assert 'path("openreceive/", include("openreceive.django.urls"))' in printed
     assert "manage.py migrate" in printed
+    # The line under "Recommended for public web shops" is that recommendation.
+    recommended = printed.index("Recommended for public web shops")
+    assert printed.index('"RATE_LIMITING": True,', recommended) > recommended
+    assert '"RATE_LIMITING": False' not in printed
+    # A code goes into .env with a file editor, never onto a shell line.
+    assert "export NWC_URI" not in printed and "NWC_URI=<" in printed
+    assert "into the project's .env with a file editor" in printed
     # Refuses to overwrite without --force.
     with pytest.raises(Exception, match="already exists"):
         call_command("openreceive_install", "testapp", path=str(tmp_path), stdout=StringIO())
