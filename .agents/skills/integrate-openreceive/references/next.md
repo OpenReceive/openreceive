@@ -580,7 +580,9 @@ export const { GET, POST } = openReceiveNextHandlers({
       // yours (admin action, replayed job) updates zero rows and does nothing.
       // Use `query` here, not your ORM's other connection. `?` on sqlite and
       // mysql, `$1` on postgres. MySQL has no RETURNING: after the UPDATE,
-      // `SELECT ROW_COUNT() AS claimed` tells you the same thing.
+      // `SELECT ROW_COUNT() AS claimed` tells you the same thing. `paidAt` is
+      // Unix seconds: for a timestamp column write `to_timestamp($1)` on
+      // postgres or `FROM_UNIXTIME(?)` on mysql in place of its placeholder.
       const claimed = await query(
         "UPDATE orders SET state = 'paid', paid_at = ? WHERE id = ? AND state = 'awaiting_payment' RETURNING id",
         [paidAt, reference],

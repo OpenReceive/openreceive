@@ -23,7 +23,7 @@
       "slug": "quickstart-node",
       "title": "Express Quickstart (Node)",
       "category": "quickstart",
-      "bytes": 14232
+      "bytes": 14396
     },
     {
       "path": "/guides/quickstart-fastify",
@@ -33,7 +33,7 @@
       "slug": "quickstart-fastify",
       "title": "Fastify Quickstart",
       "category": "quickstart",
-      "bytes": 14931
+      "bytes": 15095
     },
     {
       "path": "/guides/quickstart-nestjs",
@@ -83,7 +83,7 @@
       "slug": "quickstart-next",
       "title": "Next.js Quickstart",
       "category": "quickstart",
-      "bytes": 16657
+      "bytes": 16821
     },
     {
       "path": "/guides/vercel",
@@ -195,7 +195,7 @@
       "slug": "quickstart-php",
       "title": "PHP Quickstart (plain PHP)",
       "category": "quickstart",
-      "bytes": 16826
+      "bytes": 16983
     },
     {
       "path": "/guides/quickstart-laravel",
@@ -526,7 +526,7 @@
       "slug": "agent-directions-node",
       "title": "Agent Directions: Node.js",
       "category": "agent-directions",
-      "bytes": 41369
+      "bytes": 41533
     },
     {
       "path": "/guides/agent-directions-fastify",
@@ -536,7 +536,7 @@
       "slug": "agent-directions-fastify",
       "title": "Agent Directions: Fastify",
       "category": "agent-directions",
-      "bytes": 41741
+      "bytes": 41905
     },
     {
       "path": "/guides/agent-directions-fastapi",
@@ -576,7 +576,7 @@
       "slug": "agent-directions-next",
       "title": "Agent Directions: Next.js",
       "category": "agent-directions",
-      "bytes": 44557
+      "bytes": 44721
     },
     {
       "path": "/guides/agent-directions-nestjs",
@@ -606,7 +606,7 @@
       "slug": "agent-directions-php",
       "title": "Agent Directions: PHP",
       "category": "agent-directions",
-      "bytes": 43371
+      "bytes": 43528
     },
     {
       "path": "/guides/agent-directions-laravel",
@@ -984,7 +984,7 @@
       "kind": "agent-directions-payload",
       "stack": "node",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41369,
+      "bytes": 41533,
       "copy_button": true,
       "self_contained": true
     },
@@ -1005,7 +1005,7 @@
       "kind": "agent-directions-payload",
       "stack": "fastify",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 41741,
+      "bytes": 41905,
       "copy_button": true,
       "self_contained": true
     },
@@ -1026,7 +1026,7 @@
       "kind": "agent-directions-payload",
       "stack": "next",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 44557,
+      "bytes": 44721,
       "copy_button": true,
       "self_contained": true
     },
@@ -1152,7 +1152,7 @@
       "kind": "agent-directions-payload",
       "stack": "php",
       "content_type": "text/markdown; charset=utf-8",
-      "bytes": 43371,
+      "bytes": 43528,
       "copy_button": true,
       "self_contained": true
     },

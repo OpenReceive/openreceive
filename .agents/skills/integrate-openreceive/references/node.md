@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Node.js)
 
 ```sh
-# READ THIS FIRST: this file is 41 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 42 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/node/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -567,7 +567,9 @@ const openreceive = openReceiveExpress({
       // yours (admin action, replayed job) updates zero rows and does nothing.
       // Use `query` here, not your ORM's other connection. `?` on sqlite and
       // mysql, `$1` on postgres. MySQL has no RETURNING: after the UPDATE,
-      // `SELECT ROW_COUNT() AS claimed` tells you the same thing.
+      // `SELECT ROW_COUNT() AS claimed` tells you the same thing. `paidAt` is
+      // Unix seconds: for a timestamp column write `to_timestamp($1)` on
+      // postgres or `FROM_UNIXTIME(?)` on mysql in place of its placeholder.
       const claimed = await query(
         "UPDATE orders SET state = 'paid', paid_at = ? WHERE id = ? AND state = 'awaiting_payment' RETURNING id",
         [paidAt, reference],

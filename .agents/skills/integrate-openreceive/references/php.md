@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (PHP)
 
 ```sh
-# READ THIS FIRST: this file is 43 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 44 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/php/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -577,6 +577,8 @@ $host = new class($orders) implements Host {
     // same commit as the payment record. The WHERE clause is the lock: a second
     // fulfillment path of yours updates zero rows. Database writes only here;
     // emails and webhooks go after commit (implement Hosts\AfterPaid for that).
+    // `paidAt` is Unix seconds: for a timestamp column write `FROM_UNIXTIME(?)`
+    // (MySQL) or `to_timestamp(?)` (Postgres) in place of its placeholder.
     public function onPaid(PaymentSettlement $settlement): void
     {
         $settlement->connection->execute(
