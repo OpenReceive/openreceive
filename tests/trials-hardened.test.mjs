@@ -282,3 +282,21 @@ test("the donation merchant opens with the video-12 ask, not the shop's checkout
   assert.equal(own, `Own ${url}`);
   assert.match(await openingFor(platform, url), /Enable Bitcoin and stablecoin payments/);
 });
+
+test("a Bitcoin only closing is not the choice question, and a repeated closing ends the run", async () => {
+  const { classify } = await import("../trials/harness/merchant.ts");
+  const { repeatedClosing } = await import("../trials/harness/loop.ts");
+  const closing = "Bitcoin only is already set. Open http://127.0.0.1:42495 and click Buy to pay.";
+  assert.notEqual(classify(closing), "bitcoin_choice");
+  assert.equal(classify("Do you want stablecoins too, or Bitcoin only?"), "bitcoin_choice");
+  assert.equal(classify("Reply Bitcoin only or stablecoins too."), "bitcoin_choice");
+  const agent = (text, tools = []) => ({ role: "agent", text, tools });
+  const merchant = { role: "merchant", text: "Yes, go ahead." };
+  assert.equal(repeatedClosing([agent(closing), merchant, agent(` ${closing}\n`)]), true);
+  assert.equal(
+    repeatedClosing([agent(closing), merchant, agent(closing, [{ type: "shell", command: "ls" }])]),
+    false,
+  );
+  assert.equal(repeatedClosing([agent(closing), merchant, agent("Something new.")]), false);
+  assert.equal(repeatedClosing([agent(closing)]), false);
+});

@@ -53,6 +53,19 @@ const PROMPT_BLOCK =
   /<!-- platform-prompt:begin -->\s*```text\n([\s\S]*?)\n```\s*<!-- platform-prompt:end -->/;
 
 /** The first message: a guide's published prompt, or the platform's own template. */
+/**
+ * The agent said the same thing again without running anything: it is done,
+ * whatever words it closed with. Without this, a closing the merchant script
+ * does not recognize runs the trial to its turn limit.
+ */
+export function repeatedClosing(turns: readonly Turn[]): boolean {
+  const agents = turns.filter((turn) => turn.role === "agent");
+  const [before, last] = agents.slice(-2);
+  if (before === undefined || last === undefined) return false;
+  const words = (text: string) => text.replace(/\s+/g, " ").trim().toLowerCase();
+  return (last.tools ?? []).length === 0 && words(last.text) === words(before.text);
+}
+
 export async function openingFor(
   platform: Platform,
   directionsUrl: string,
@@ -333,7 +346,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
         break;
       }
       let reply = merchantReply(response.text, scenario, wallet, platformCodes);
-      if (reply === null) {
+      if (reply === null || repeatedClosing(turns)) {
         done = true;
         break;
       }

@@ -69,6 +69,20 @@ function asksPrimaryLsc(text: string): boolean {
 const CHOICE =
   /bitcoin only|stablecoins too|pay with (?:usdt|usdc|eth|sol)|whether .{0,40}(?:stablecoin|swap)/i;
 
+/**
+ * The choice is asked, not reported. "Bitcoin only is already set. Open the
+ * shop and click Buy." is a closing: answering it "Bitcoin only" kept three
+ * 2026-11-08 trials going until their 30th turn.
+ */
+function asksChoice(text: string): boolean {
+  return sentences(withoutUrls(text)).some(
+    (sentence) =>
+      CHOICE.test(sentence) &&
+      (/\?/.test(sentence) ||
+        /\b(?:whether|or say|reply|answer|tell me|let me know|choose|pick)\b/i.test(sentence)),
+  );
+}
+
 /** Classify the agent's latest message. Imperatives aimed at the merchant win over a code question. */
 export function classify(text: string): Intent {
   const message = text.trim();
@@ -78,7 +92,7 @@ export function classify(text: string): Intent {
   if (asksNwc(message)) return "nwc";
   if (asksPrimaryLsc(message)) return "lsc";
   if (asksBackup(message)) return "lsc_backup";
-  if (CHOICE.test(message)) return "bitcoin_choice";
+  if (asksChoice(message)) return "bitcoin_choice";
   if (withoutUrls(message).includes("?") === false && DONE.test(message)) return "done";
   return "other";
 }
