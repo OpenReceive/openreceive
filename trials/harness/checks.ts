@@ -170,9 +170,14 @@ const OPENRECEIVE_COMMAND = new RegExp(
 const PACKAGE_PATH =
   /(?:site|dist)-packages\/openreceive\/|node_modules\/@?openreceive|vendor\/openreceive\/|gems\/openreceive[-\w]*-\d/;
 
-/** Writing into the installed package, from a command or a file such as a Dockerfile. */
+/**
+ * Writing into the installed package, from a command or a file such as a
+ * Dockerfile. A shell redirect's `>` is not an arrow function's `=>` or `->`:
+ * a react-router agent's `fs => console.log(fs.existsSync('/app/node_modules/…'))`
+ * only looked.
+ */
 const MUTATION =
-  /write_text\(|writeFileSync\(|writeFile\(|sed\s+-i|file_put_contents\(|File\.write|\bpatch\s+-p|>>?\s*\S*(?:site-packages|node_modules|vendor|gems)\//;
+  /write_text\(|writeFileSync\(|writeFile\(|sed\s+-i|file_put_contents\(|File\.write|\bpatch\s+-p|(?<![=\-<>])>>?\s*["']?[^\s()'"]*(?:site-packages|node_modules|vendor|gems)\//;
 
 /**
  * A class patched so the package imports: `ModelAdmin.__class_getitem__ = …`

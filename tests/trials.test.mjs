@@ -826,6 +826,15 @@ test("rewriting OpenReceive's installed package is a blocker; serving its files 
       "import django.contrib.admin.options as _admin_options\n_admin_options.ModelAdmin.__class_getitem__ = classmethod(lambda cls, _item: cls)\n",
   };
   assert.equal(commandCheckWith("no_package_patch", [], [settings]).pass, false);
+  // A react-router agent only looked: an arrow function's `=>` is not a redirect.
+  const looked = shell(
+    "docker compose exec web node --input-type=module -e \"import('node:fs').then(fs => console.log(fs.existsSync('/app/node_modules/@openreceive/http') ? 'present' : 'missing'))\"",
+  );
+  assert.equal(commandCheckWith("no_package_patch", [looked]).pass, true);
+  const redirected = shell("echo 'export {}' > node_modules/@openreceive/http/dist/index.js");
+  assert.equal(commandCheckWith("no_package_patch", [redirected]).pass, false);
+  const quoted = shell('cat fix.js >> "/app/node_modules/@openreceive/node/dist/index.js"');
+  assert.equal(commandCheckWith("no_package_patch", [quoted]).pass, false);
   const plain = { path: "/tmp/shop/views.py", content: 'if __name__ == "__main__":\n    main()\n' };
   assert.equal(commandCheckWith("no_package_patch", [], [plain]).pass, true);
   // A 0.4.23 Lovable agent appended to .gitignore from a heredoc, then read a
