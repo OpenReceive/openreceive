@@ -123,8 +123,6 @@ const ProviderWalkthrough: React.FC<{
   const [images, setImages] = useState<Readonly<Record<string, string>>>();
   // Step 1 is the copy, so step N shows screenshot N - 1.
   const lastStep = step >= (provider?.tutorials.length ?? 0);
-  const copyPending = step === 0 && !copied;
-  const copyHint = copied ? checkoutLabels.tutorialCopiedHint : checkoutLabels.tutorialCopyHint;
 
   // Load-then-render: a step shows its caption alone until the chunk arrives
   // (or if it never does), never an <img> with an empty src.
@@ -159,17 +157,42 @@ const ProviderWalkthrough: React.FC<{
     >
       {provider ? (
         <Stack gap="xs">
-          <div className="or-shop-tutorial-frame">
-            {step === 0 ? (
-              <div className="or-shop-tutorial-copy">
-                <Text size="lg" fw={700} {...(copied ? { c: "orGreen" } : {})}>
-                  {copied ? checkoutLabels.tutorialInvoiceCopied : checkoutLabels.tutorialCopyStep}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  {copyHint.replace("{wallet}", provider.name)}
-                </Text>
-              </div>
-            ) : null}
+          <ol className="or-shop-tutorial-steps">
+            <li>
+              <Button
+                fullWidth
+                size="lg"
+                justify="flex-start"
+                variant={copied ? "light" : "filled"}
+                leftSection={
+                  <span className="or-shop-tutorial-number" aria-hidden="true">
+                    1
+                  </span>
+                }
+                onClick={onCopy}
+              >
+                {copied ? checkoutLabels.tutorialInvoiceCopied : checkoutLabels.copyInvoice}
+              </Button>
+            </li>
+            {provider.tutorials.map((tutorial, index) => (
+              <li key={tutorial.path}>
+                <UnstyledButton
+                  className="or-shop-tutorial-step"
+                  data-active={index + 1 === step || undefined}
+                  aria-current={index + 1 === step ? "step" : undefined}
+                  disabled={!copied}
+                  onClick={() => setStep(index + 1)}
+                >
+                  <span className="or-shop-tutorial-number" aria-hidden="true">
+                    {index + 2}
+                  </span>
+                  <span>{tutorial.caption}</span>
+                </UnstyledButton>
+              </li>
+            ))}
+          </ol>
+
+          <div className="or-shop-tutorial-frame" hidden={step === 0}>
             {provider.tutorials.map((tutorial, index) =>
               images?.[tutorial.path] === undefined ? null : (
                 <img
@@ -183,37 +206,12 @@ const ProviderWalkthrough: React.FC<{
             )}
           </div>
 
-          <ol className="or-shop-tutorial-steps">
-            {[
-              checkoutLabels.tutorialCopyStep,
-              ...provider.tutorials.map((tutorial) => tutorial.caption),
-            ].map((caption, index) => (
-              <li key={caption}>
-                <UnstyledButton
-                  className="or-shop-tutorial-step"
-                  data-active={index === step || undefined}
-                  aria-current={index === step ? "step" : undefined}
-                  onClick={() => setStep(index)}
-                >
-                  <span className="or-shop-tutorial-number" aria-hidden="true">
-                    {index + 1}
-                  </span>
-                  <span>{caption}</span>
-                </UnstyledButton>
-              </li>
-            ))}
-          </ol>
-
           <Text size="sm" c="dimmed" ta="center">
             {checkoutLabels.tutorialComeBack}
           </Text>
 
-          <Button onClick={copyPending ? onCopy : lastStep ? onClose : () => setStep(step + 1)}>
-            {copyPending
-              ? checkoutLabels.copyInvoice
-              : lastStep
-                ? checkoutLabels.tutorialDone
-                : checkoutLabels.tutorialNext}
+          <Button disabled={!copied} onClick={lastStep ? onClose : () => setStep(step + 1)}>
+            {lastStep ? checkoutLabels.tutorialDone : checkoutLabels.tutorialNext}
           </Button>
         </Stack>
       ) : null}

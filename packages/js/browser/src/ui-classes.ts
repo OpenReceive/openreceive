@@ -256,13 +256,10 @@ export const orClasses = {
     "flex items-center gap-2.5 min-w-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold",
   tutorialHeaderLogo: "size-7 rounded shrink-0",
   tutorialClose: "btn btn-sm btn-square btn-ghost",
-  tutorialCopied: "m-0 text-success font-bold text-lg",
   tutorialCopy: "btn btn-outline btn-sm justify-self-start",
-  /** Step 1 fills the frame, so no screenshot competes with it. */
-  tutorialCopyPanel: "absolute inset-0 grid place-items-center p-4 text-center bg-warning/10",
-  tutorialCopyMessage: "grid gap-1",
-  tutorialCopyHeading: "m-0 font-bold text-lg",
-  tutorialCopyHint: "m-0 text-sm text-base-content/70",
+  /** Step 1 is the biggest thing in the dialog: a payer who skips it has nothing to paste. */
+  tutorialCopyStep: "btn btn-primary btn-lg w-full justify-start gap-2",
+  tutorialCopyStepDone: "btn btn-outline btn-success btn-lg w-full justify-start gap-2",
   /** A fixed height, so the steps below it stay put as the screenshots change. */
   tutorialFrame:
     "relative overflow-hidden rounded-box border border-base-content/20 bg-base-200 h-[min(30vh,260px)]",

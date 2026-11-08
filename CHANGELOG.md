@@ -14,8 +14,9 @@
   above Rizful, so its copy-and-paste walkthrough is the first one payers see.
 - Changed (Browser, React, Vue, Svelte, Angular): a wallet's pay tutorial is now
   one dialog with numbered steps and the screenshot for the current one. Step 1
-  is **Copy invoice** whenever there is an invoice; **Next** then walks the
-  wallet's steps and becomes **Done** on the last. `checkoutLabels` loses
+  is a large **Copy invoice** button at the top whenever there is an invoice,
+  and the wallet's steps stay greyed out until it has worked. **Next** then
+  walks them and becomes **Done** on the last. `checkoutLabels` loses
   `tutorialIntroPrefix`, `tutorialIntroCopy`, `tutorialCopiedContinue` and
   `tutorialExit`, and `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES` loses
   `providerTutorialIndex`.

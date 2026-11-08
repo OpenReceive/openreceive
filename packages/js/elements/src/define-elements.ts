@@ -9,6 +9,7 @@ import {
   createCheckoutActionEvent,
   createCheckoutController,
   createCheckoutErrorEvent,
+  checkoutLabels,
   createCheckoutProviderCopyEvent,
   createCheckoutSnapshotFromInvoice,
   createCheckoutStateEvent,
@@ -411,8 +412,10 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           const frame = image.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage);
           image.hidden = Number(frame) !== index;
         });
-      const copyStep = root.querySelector<HTMLElement>('[part="tutorial-copy-step"]');
-      if (copyStep !== null) copyStep.hidden = index !== 0;
+      const frame = root.querySelector<HTMLElement>('[part="tutorial-frame"]');
+      if (frame !== null) {
+        frame.hidden = root.querySelector('[part="tutorial-copy"]') !== null && index === 0;
+      }
       root
         .querySelectorAll<HTMLElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep)
         .forEach((button) => {
@@ -429,29 +432,33 @@ export function defineElements(options: DefineElementsOptions = {}): void {
     private showTutorialCopied(): void {
       const root = this.shadowRoot;
       if (root === null) return;
-      root.querySelector<HTMLElement>('[part="tutorial-copy-prompt"]')?.setAttribute("hidden", "");
-      root.querySelector<HTMLElement>('[part="tutorial-copied"]')?.removeAttribute("hidden");
+      const copy = root.querySelector<HTMLElement>('[part="tutorial-copy"]');
+      if (copy !== null) copy.className = orClasses.tutorialCopyStepDone;
+      const label = root.querySelector('[part="tutorial-copy-label"]');
+      if (label !== null) label.textContent = checkoutLabels.tutorialInvoiceCopied;
+      root
+        .querySelectorAll<HTMLButtonElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep)
+        .forEach((button) => {
+          button.disabled = false;
+        });
       this.syncTutorialAction(root);
     }
 
-    /** Exactly one of Copy invoice, Next and Done shows, and it inherits the focus. */
+    /** Next waits for the copy, and gives way to Done on the last step. */
     private syncTutorialAction(root: ShadowRoot): void {
-      const copy = root.querySelector<HTMLElement>('[part="tutorial-copy"]');
-      const next = root.querySelector<HTMLElement>('[part="tutorial-next"]');
+      const next = root.querySelector<HTMLButtonElement>('[part="tutorial-next"]');
       const done = root.querySelector<HTMLElement>('[part="tutorial-done"]');
       if (next === null || done === null) return;
-      const stepCount = root.querySelectorAll(
-        OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep,
-      ).length;
-      const index = this.activeTutorialIndex;
-      let shown = index === stepCount - 1 ? done : next;
-      if (copy !== null && index === 0 && !this.activeTutorialCopied) shown = copy;
-      shown.hidden = false;
-      for (const button of [copy, next, done]) {
-        if (button === null || button === shown) continue;
-        if (root.activeElement === button) shown.focus();
-        button.hidden = true;
-      }
+      const copy = root.querySelector('[part="tutorial-copy"]');
+      const stepCount =
+        root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep).length +
+        (copy === null ? 0 : 1);
+      const lastStep = this.activeTutorialIndex === stepCount - 1;
+      next.disabled = copy !== null && !this.activeTutorialCopied;
+      done.hidden = !lastStep;
+      // Hiding the focused Next would drop focus out of the dialog.
+      if (lastStep && root.activeElement === next) done.focus();
+      next.hidden = lastStep;
     }
 
     // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element

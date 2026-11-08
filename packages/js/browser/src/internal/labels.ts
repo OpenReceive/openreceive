@@ -42,10 +42,6 @@ export const checkoutLabels = {
   openProvider: "How To Pay",
   tutorialTitlePrefix: "Pay a Lightning invoice with",
   tutorialInvoiceCopied: "✓ Invoice copied",
-  /** The first step of a tutorial, whenever there is an invoice to copy. */
-  tutorialCopyStep: "Copy the invoice first",
-  tutorialCopyHint: "Do this before you open {wallet}. You'll paste it there.",
-  tutorialCopiedHint: "Now open {wallet} and follow the steps.",
   tutorialComeBack: "Then come back here. This page updates by itself.",
   tutorialDone: "Done",
   lightningNetwork: "Lightning Network",

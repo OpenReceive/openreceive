@@ -25,7 +25,24 @@ export function renderProviderOpenActionHtml(provider: WizardProviderDisplay): s
   `;
 }
 
-function renderTutorialStepHtml(caption: string, index: number, active: boolean): string {
+function renderCopyStepHtml(copied: boolean): string {
+  return `
+    <li>
+      <button
+        part="tutorial-copy"
+        class="${copied ? orClasses.tutorialCopyStepDone : orClasses.tutorialCopyStep}"
+        type="button"
+      ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">1</span><span part="tutorial-copy-label">${escapeHtml(copied ? checkoutLabels.tutorialInvoiceCopied : checkoutLabels.copyInvoice)}</span></button>
+    </li>
+  `;
+}
+
+function renderTutorialStepHtml(
+  caption: string,
+  index: number,
+  active: boolean,
+  locked: boolean,
+): string {
   return `
     <li>
       <button
@@ -33,6 +50,7 @@ function renderTutorialStepHtml(caption: string, index: number, active: boolean)
         class="${active ? orClasses.tutorialStepActive : orClasses.tutorialStep}"
         ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep}="${index}"
         ${active ? 'aria-current="step"' : ""}
+        ${locked ? "disabled" : ""}
         type="button"
       ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">${index + 1}</span><span>${escapeHtml(caption)}</span></button>
     </li>
@@ -55,11 +73,11 @@ export function renderTutorialModalHtml(
 
   const hasInvoice = lightningInvoice !== undefined && lightningInvoice.trim() !== "";
   // Copying comes first whenever there is an invoice to copy: the wallet steps
-  // end with pasting it.
+  // end with pasting it, so they stay greyed out until the copy has worked.
   const copySteps = hasInvoice ? 1 : 0;
   const stepCount = copySteps + provider.tutorials.length;
   const step = Math.max(0, Math.min(stepCount - 1, activeStep));
-  const copyPending = hasInvoice && step === 0 && !copied;
+  const copyPending = hasInvoice && !copied;
   const lastStep = step === stepCount - 1;
   const decodeHref = hasInvoice
     ? createLightningInvoiceDecodeUrl(lightningInvoice, decodeLinkUrl)
@@ -68,26 +86,6 @@ export function renderTutorialModalHtml(
     decodeHref === undefined
       ? ""
       : `<a part="tutorial-decode" class="${orClasses.tutorialCopy}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(checkoutLabels.decodeInvoice)}</a>`;
-  // The prompt and the confirmation are both drawn and one is hidden, so a
-  // finished copy flips them without a rebuild that would drop the dialog's focus.
-  const copyPanel = hasInvoice
-    ? `
-      <div part="tutorial-copy-step" class="${orClasses.tutorialCopyPanel}" ${step === 0 ? "" : "hidden"}>
-        <div part="tutorial-copy-prompt" class="${orClasses.tutorialCopyMessage}" ${copied ? "hidden" : ""}>
-          <p class="${orClasses.tutorialCopyHeading}">${escapeHtml(checkoutLabels.tutorialCopyStep)}</p>
-          <p class="${orClasses.tutorialCopyHint}">${escapeHtml(checkoutLabels.tutorialCopyHint.replace("{wallet}", provider.name))}</p>
-        </div>
-        <div part="tutorial-copied" class="${orClasses.tutorialCopyMessage}" ${copied ? "" : "hidden"}>
-          <p class="${orClasses.tutorialCopied}">${escapeHtml(checkoutLabels.tutorialInvoiceCopied)}</p>
-          <p class="${orClasses.tutorialCopyHint}">${escapeHtml(checkoutLabels.tutorialCopiedHint.replace("{wallet}", provider.name))}</p>
-        </div>
-      </div>
-    `
-    : "";
-  const captions = [
-    ...(hasInvoice ? [checkoutLabels.tutorialCopyStep] : []),
-    ...provider.tutorials.map((tutorial) => tutorial.caption),
-  ];
   // Every frame is drawn and a step change toggles `hidden`. No `<img>` until the
   // lazily loaded screenshot is in hand: an empty src requests the page itself.
   const frames = provider.tutorials
@@ -114,22 +112,28 @@ export function renderTutorialModalHtml(
             aria-label="${escapeHtml(checkoutLabels.tutorialClose)}"
           >X</button>
         </div>
-        ${decodeButton}
-        <div part="tutorial-frame" class="${orClasses.tutorialFrame}">${copyPanel}${frames}</div>
         <ol part="tutorial-steps" class="${orClasses.tutorialSteps}">
-          ${captions.map((caption, index) => renderTutorialStepHtml(caption, index, index === step)).join("")}
+          ${hasInvoice ? renderCopyStepHtml(copied) : ""}
+          ${provider.tutorials
+            .map((tutorial, index) =>
+              renderTutorialStepHtml(
+                tutorial.caption,
+                index + copySteps,
+                index + copySteps === step,
+                copyPending,
+              ),
+            )
+            .join("")}
         </ol>
+        ${decodeButton}
+        <div part="tutorial-frame" class="${orClasses.tutorialFrame}" ${hasInvoice && step === 0 ? "hidden" : ""}>${frames}</div>
         <p part="tutorial-come-back" class="${orClasses.tutorialComeBack}">${escapeHtml(checkoutLabels.tutorialComeBack)}</p>
-        ${
-          hasInvoice
-            ? `<button part="tutorial-copy" class="${orClasses.tutorialDone}" type="button" ${copyPending ? "" : "hidden"}>${escapeHtml(checkoutLabels.copyInvoice)}</button>`
-            : ""
-        }
         <button
           part="tutorial-next"
           class="${orClasses.tutorialDone}"
           type="button"
-          ${copyPending || lastStep ? "hidden" : ""}
+          ${lastStep ? "hidden" : ""}
+          ${copyPending ? "disabled" : ""}
         >${escapeHtml(checkoutLabels.tutorialNext)}</button>
         <button
           part="tutorial-done"

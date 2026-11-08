@@ -46,7 +46,7 @@ export function ProviderTutorialModal(options: {
 }): React.ReactElement | null {
   const { provider } = options;
   // Copying comes first whenever there is an invoice to copy: the wallet steps
-  // end with pasting it.
+  // end with pasting it, so they stay greyed out until the copy has worked.
   const copySteps = options.invoice === "" ? 0 : 1;
   const stepCount = copySteps + provider.tutorials.length;
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
@@ -87,17 +87,9 @@ export function ProviderTutorialModal(options: {
     }
   };
   if (provider.tutorials.length === 0) return null;
-  const onCopyStep = copySteps === 1 && step === 0;
-  const copyPending = onCopyStep && !options.copied;
+  const copyPending = copySteps === 1 && !options.copied;
   const lastStep = step >= stepCount - 1;
   const decodeHref = createLightningInvoiceDecodeUrl(options.invoice, options.decodeLinkUrl);
-  const captions = [
-    ...(copySteps === 1 ? [checkoutLabels.tutorialCopyStep] : []),
-    ...provider.tutorials.map((tutorial) => tutorial.caption),
-  ];
-  const copyHint = options.copied
-    ? checkoutLabels.tutorialCopiedHint
-    : checkoutLabels.tutorialCopyHint;
 
   return React.createElement(
     "div",
@@ -149,6 +141,63 @@ export function ProviderTutorialModal(options: {
           "X",
         ),
       ),
+      React.createElement(
+        "ol",
+        { className: orClasses.tutorialSteps },
+        copySteps === 1
+          ? React.createElement(
+              "li",
+              { key: "copy" },
+              React.createElement(
+                "button",
+                {
+                  className: options.copied
+                    ? orClasses.tutorialCopyStepDone
+                    : orClasses.tutorialCopyStep,
+                  onClick: () => void options.onCopy(),
+                  type: "button",
+                },
+                React.createElement(
+                  "span",
+                  { "aria-hidden": true, className: orClasses.tutorialStepNumber },
+                  1,
+                ),
+                React.createElement(
+                  "span",
+                  null,
+                  options.copied
+                    ? checkoutLabels.tutorialInvoiceCopied
+                    : checkoutLabels.copyInvoice,
+                ),
+              ),
+            )
+          : null,
+        provider.tutorials.map((tutorial, index) =>
+          React.createElement(
+            "li",
+            { key: tutorial.path },
+            React.createElement(
+              "button",
+              {
+                "aria-current": index + copySteps === step ? "step" : undefined,
+                className:
+                  index + copySteps === step
+                    ? orClasses.tutorialStepActive
+                    : orClasses.tutorialStep,
+                disabled: copyPending,
+                onClick: () => setStep(index + copySteps),
+                type: "button",
+              },
+              React.createElement(
+                "span",
+                { "aria-hidden": true, className: orClasses.tutorialStepNumber },
+                index + copySteps + 1,
+              ),
+              React.createElement("span", null, tutorial.caption),
+            ),
+          ),
+        ),
+      ),
       decodeHref === undefined
         ? null
         : React.createElement(
@@ -165,33 +214,8 @@ export function ProviderTutorialModal(options: {
         "div",
         {
           className: orClasses.tutorialFrame,
+          hidden: copySteps === 1 && step === 0,
         },
-        onCopyStep
-          ? React.createElement(
-              "div",
-              { className: orClasses.tutorialCopyPanel },
-              React.createElement(
-                "div",
-                { className: orClasses.tutorialCopyMessage },
-                React.createElement(
-                  "p",
-                  {
-                    className: options.copied
-                      ? orClasses.tutorialCopied
-                      : orClasses.tutorialCopyHeading,
-                  },
-                  options.copied
-                    ? checkoutLabels.tutorialInvoiceCopied
-                    : checkoutLabels.tutorialCopyStep,
-                ),
-                React.createElement(
-                  "p",
-                  { className: orClasses.tutorialCopyHint },
-                  copyHint.replace("{wallet}", provider.name),
-                ),
-              ),
-            )
-          : null,
         // No `<img>` until the lazily loaded screenshot is in hand: an empty
         // src is a request for the page itself.
         provider.tutorials.map((tutorial, index) =>
@@ -207,52 +231,20 @@ export function ProviderTutorialModal(options: {
         ),
       ),
       React.createElement(
-        "ol",
-        { className: orClasses.tutorialSteps },
-        captions.map((caption, index) =>
-          React.createElement(
-            "li",
-            { key: caption },
-            React.createElement(
-              "button",
-              {
-                "aria-current": index === step ? "step" : undefined,
-                className: index === step ? orClasses.tutorialStepActive : orClasses.tutorialStep,
-                onClick: () => setStep(index),
-                type: "button",
-              },
-              React.createElement(
-                "span",
-                { "aria-hidden": true, className: orClasses.tutorialStepNumber },
-                index + 1,
-              ),
-              React.createElement("span", null, caption),
-            ),
-          ),
-        ),
-      ),
-      React.createElement(
         "p",
         { className: orClasses.tutorialComeBack },
         checkoutLabels.tutorialComeBack,
       ),
-      // One button for Copy invoice, Next and Done, so each change keeps its focus.
+      // One button for Next and Done, so reaching the last step keeps its focus.
       React.createElement(
         "button",
         {
           className: orClasses.tutorialDone,
-          onClick: copyPending
-            ? () => void options.onCopy()
-            : lastStep
-              ? options.onClose
-              : () => setStep(step + 1),
+          disabled: copyPending,
+          onClick: lastStep ? options.onClose : () => setStep(step + 1),
           type: "button",
         },
-        copyPending
-          ? checkoutLabels.copyInvoice
-          : lastStep
-            ? checkoutLabels.tutorialDone
-            : checkoutLabels.tutorialNext,
+        lastStep ? checkoutLabels.tutorialDone : checkoutLabels.tutorialNext,
       ),
     ),
   );

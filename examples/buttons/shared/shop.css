@@ -526,17 +526,6 @@ body {
   background: var(--or-paper);
 }
 
-/* Step 1 fills the frame, so no screenshot competes with it. */
-.or-shop-tutorial-copy {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  gap: 4px;
-  padding: 16px;
-  text-align: center;
-}
-
 .or-shop-tutorial-image {
   position: absolute;
   inset: 0;
@@ -570,6 +559,12 @@ body {
   font-weight: 700;
 }
 
+/* The wallet steps wait for the copy. */
+.or-shop-tutorial-step:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .or-shop-tutorial-number {
   display: inline-grid;
   flex: none;
@@ -578,6 +573,7 @@ body {
   height: 20px;
   border-radius: 50%;
   background: var(--or-line);
+  color: var(--or-ink);
   font-size: 12px;
   font-weight: 600;
 }

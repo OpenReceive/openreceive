@@ -246,6 +246,7 @@ test("elements render payment wizard route choices and providers from browser st
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 2,
+    activeTutorialCopied: true,
     lightningInvoice: "lnbc1elementtutorial",
   });
   assert.match(tutorial, /Pay a Lightning invoice with Strike/);
@@ -253,11 +254,11 @@ test("elements render payment wizard route choices and providers from browser st
     tutorial,
     /part="tutorial-header-logo" alt="" src="data:image\/webp;base64,[A-Za-z0-9+/=]+"/,
   );
-  assert.match(tutorial, /part="tutorial-copied"[^>]*hidden/);
-  assert.match(tutorial, /part="tutorial-copy"[^>]*hidden/);
   // One screen: the copy, then every wallet step, the current one marked, and
   // Next to move on.
-  assert.equal(tutorial.match(/data-or-tutorial-step="/g)?.length, 5);
+  assert.equal(tutorial.match(/data-or-tutorial-step="/g)?.length, 4);
+  assert.doesNotMatch(tutorial, /part="tutorial-frame"[^>]*"\s+hidden/);
+  assert.doesNotMatch(tutorial, /part="tutorial-next"[^>]*disabled/);
   assert.match(
     tutorial,
     /part="tutorial-step-active"[^>]*data-or-tutorial-step="2"\s+aria-current="step"/,
@@ -276,22 +277,28 @@ test("elements render payment wizard route choices and providers from browser st
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 4,
+    activeTutorialCopied: true,
     lightningInvoice: "lnbc1elementtutorial",
   });
   assert.match(lastStepTutorial, /part="tutorial-next"[^>]*hidden/);
   assert.doesNotMatch(lastStepTutorial, /part="tutorial-done"[^>]*hidden/);
 
-  // Step 1: the copy is the only action, and no screenshot competes with it.
+  // Step 1: Copy invoice leads the dialog, with the wallet steps greyed out
+  // beneath it and no screenshot yet.
   const copyStepTutorial = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     lightningInvoice: "lnbc1elementtutorial",
   });
-  assert.match(copyStepTutorial, /<span>Copy the invoice first<\/span>/);
-  assert.match(copyStepTutorial, /Do this before you open Strike\./);
-  assert.doesNotMatch(copyStepTutorial, /part="tutorial-copy-step"[^>]*hidden/);
-  assert.doesNotMatch(copyStepTutorial, /part="tutorial-copy"[^>]*hidden/);
-  assert.match(copyStepTutorial, /part="tutorial-next"[^>]*hidden/);
+  assert.match(copyStepTutorial, /<span part="tutorial-copy-label">Copy invoice<\/span>/);
+  assert.ok(
+    copyStepTutorial.indexOf('part="tutorial-copy"') <
+      copyStepTutorial.indexOf("data-or-tutorial-step="),
+    "Copy invoice sits above the wallet steps",
+  );
+  assert.equal(copyStepTutorial.match(/data-or-tutorial-step="\d"\s+disabled/g)?.length, 4);
+  assert.match(copyStepTutorial, /part="tutorial-frame"[^>]*"\s+hidden/);
+  assert.match(copyStepTutorial, /part="tutorial-next"[^>]*disabled/);
   assert.match(copyStepTutorial, /part="tutorial-done"[^>]*hidden/);
 
   const copiedTutorial = renderPaymentWizardHtml({
@@ -300,19 +307,19 @@ test("elements render payment wizard route choices and providers from browser st
     activeTutorialCopied: true,
     lightningInvoice: "lnbc1elementtutorial",
   });
-  assert.doesNotMatch(copiedTutorial, /part="tutorial-copied"[^>]*hidden/);
-  assert.match(copiedTutorial, /✓ Invoice copied/);
-  assert.match(copiedTutorial, /part="tutorial-copy"[^>]*hidden/);
-  assert.doesNotMatch(copiedTutorial, /part="tutorial-next"[^>]*hidden/);
+  assert.match(copiedTutorial, /<span part="tutorial-copy-label">✓ Invoice copied<\/span>/);
+  assert.doesNotMatch(copiedTutorial, /data-or-tutorial-step="\d"\s+disabled/);
+  assert.doesNotMatch(copiedTutorial, /part="tutorial-next"[^>]*disabled/);
 
   // A swap-route provider can open with no invoice to copy, so no copy step.
   const noInvoiceTutorial = renderPaymentWizardHtml({
     selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
   });
-  assert.doesNotMatch(noInvoiceTutorial, /part="tutorial-copied"/);
   assert.doesNotMatch(noInvoiceTutorial, /part="tutorial-copy/);
   assert.equal(noInvoiceTutorial.match(/data-or-tutorial-step="/g)?.length, 4);
+  assert.doesNotMatch(noInvoiceTutorial, /data-or-tutorial-step="\d"\s+disabled/);
+  assert.doesNotMatch(noInvoiceTutorial, /part="tutorial-frame"[^>]*"\s+hidden/);
 });
 
 test("elements render package-owned theme toggle HTML", () => {

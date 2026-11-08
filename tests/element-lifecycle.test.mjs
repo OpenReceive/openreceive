@@ -1260,24 +1260,28 @@ test("the tutorial's first step is the copy, and Next then walks the wallet step
     await untilLocal(() => part("tutorial-copy"), { label: "the Copy invoice button" });
     assert.deepEqual(written, [], "opening the tutorial copies nothing");
 
-    assert.match(activeStep(), /^1 ?Copy the invoice first/);
-    assert.equal(part("tutorial-next").hasAttribute("hidden"), true);
+    const walletSteps = () => [...element.shadowRoot.querySelectorAll("[data-or-tutorial-step]")];
+    assert.equal(walletSteps().length, 4);
+    assert.ok(walletSteps().every((button) => button.hasAttribute("disabled")));
+    assert.equal(part("tutorial-next").hasAttribute("disabled"), true);
     assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
+    assert.equal(part("tutorial-frame").hasAttribute("hidden"), true);
 
     part("tutorial-copy").click();
     await untilLocal(() => written.length === 1, { label: "the copy" });
     assert.deepEqual(written, [`lnbc-${paymentHash}`]);
-    await untilLocal(() => !part("tutorial-copied").hasAttribute("hidden"), {
+    await untilLocal(() => part("tutorial-copy-label").textContent === "✓ Invoice copied", {
       label: "the copied note",
     });
-    assert.equal(part("tutorial-copy").hasAttribute("hidden"), true);
+    assert.ok(walletSteps().every((button) => !button.hasAttribute("disabled")));
+    assert.equal(part("tutorial-next").hasAttribute("disabled"), false);
 
     for (const step of [2, 3, 4, 5]) {
       assert.equal(part("tutorial-next").hasAttribute("hidden"), false);
       assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
       part("tutorial-next").click();
       assert.match(activeStep(), new RegExp(`^${step}`));
-      assert.equal(part("tutorial-copy-step").hasAttribute("hidden"), true);
+      assert.equal(part("tutorial-frame").hasAttribute("hidden"), false);
     }
     assert.equal(part("tutorial-next").hasAttribute("hidden"), true);
     assert.equal(part("tutorial-done").hasAttribute("hidden"), false);

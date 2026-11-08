@@ -223,17 +223,28 @@ test("the tutorial's first step is the copy, and Next then walks the wallet step
     await flush();
     assert.deepEqual(written, [], "opening the tutorial copies nothing");
 
-    assert.match(activeStep(), new RegExp(`^1${checkoutLabels.tutorialCopyStep}`));
-    assert.ok(inDialog(checkoutLabels.tutorialNext) === undefined);
+    const steps = () => [...dialog.querySelectorAll("ol button")];
+    assert.equal(steps()[0].textContent, `1${checkoutLabels.copyInvoice}`);
+    assert.ok(
+      steps()
+        .slice(1)
+        .every((button) => button.disabled),
+    );
+    assert.equal(inDialog(checkoutLabels.tutorialNext).disabled, true);
     assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
 
-    inDialog(checkoutLabels.copyInvoice).click();
+    steps()[0].click();
     await until(() => written.length === 1, { label: "the copy" });
     assert.deepEqual(written, ["lnbc-tutorial"]);
-    await until(() => dialog.textContent?.includes(checkoutLabels.tutorialInvoiceCopied), {
+    await until(() => steps()[0].textContent === `1${checkoutLabels.tutorialInvoiceCopied}`, {
       label: "the copied note",
     });
-    assert.ok(inDialog(checkoutLabels.copyInvoice) === undefined);
+    assert.ok(
+      steps()
+        .slice(1)
+        .every((button) => !button.disabled),
+    );
+    assert.equal(inDialog(checkoutLabels.tutorialNext).disabled, false);
 
     for (const step of [2, 3, 4, 5]) {
       assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
