@@ -37,6 +37,8 @@ export async function sourceTexts(directory: string): Promise<Map<string, string
  */
 export class Visitor implements CheckoutClient {
   private readonly cookies = new Map<string, string>();
+  /** Each order's page, as the shop's redirect named it. */
+  private readonly orderPaths = new Map<string, string>();
   /** The last CSRF token a page carried, in a meta tag or a form field. */
   private token: string | undefined;
   /**
@@ -104,16 +106,27 @@ export class Visitor implements CheckoutClient {
     });
     this.remember(response);
     // The fixture redirects to /orders/<id>; an integration may send the buyer
-    // straight to its checkout page instead. Either way the id ends the path:
-    // a number, or a uuid on a Supabase shop.
+    // straight to its checkout page instead, or add a guest token after the id
+    // (a Laravel agent's /orders/<id>/<token>). The id is the path's last
+    // number, or uuid on a Supabase shop.
     const location = response.headers.get("location") ?? "";
-    const id = new URL(location, this.base).pathname.match(
-      /\/(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i,
-    )?.[1];
+    const pathname = new URL(location, this.base).pathname;
+    const id = pathname
+      .split("/")
+      .reverse()
+      .find((segment) =>
+        /^(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(segment),
+      );
     if (id === undefined) {
       throw new Error(`POST /orders answered ${response.status} without an order to go to`);
     }
+    this.orderPaths.set(id, pathname);
     return id;
+  }
+
+  /** The order's page: where the shop sent the buyer, or /orders/<id>. */
+  orderPage(id: string): string {
+    return this.orderPaths.get(id) ?? `/orders/${id}`;
   }
 
   /**
@@ -352,7 +365,7 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
   try {
     const buyer = visitor();
     const order = await buyer.placeOrder();
-    const page = `/orders/${order}`;
+    const page = buyer.orderPage(order);
     const own = await buyer.createCheckout(order, page);
     const bolt11 = own.body.match(/"bolt11"\s*:\s*"(ln[a-z0-9]+)"/i)?.[1];
     checks.push(
@@ -377,7 +390,7 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
         `${theirs.status} ${theirs.body.slice(0, 200)}`,
       ),
     );
-    if (options.bitcoinOnly === true) checks.push(await bitcoinOnlyCheck(buyer, order, page));
+    if (options.bitcoinOnly === true) checks.push(await bitcoinOnlyCheck(buyer));
     const paymentHash = own.body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
     if (paymentHash !== undefined) {
       checks.push(await backToBackCheck(buyer, order, page, paymentHash));
@@ -405,23 +418,28 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
 }
 
 /** The pay-in assets a prepare answer marks available. */
-export function availableMethods(body: string): string[] {
+export function availableMethods(body: string, includeUnavailable = false): string[] {
   try {
     const parsed = JSON.parse(body) as {
       payment_methods?: { pay_in_asset: string; available: boolean }[];
     };
     return (parsed.payment_methods ?? [])
-      .filter((method) => method.available)
+      .filter((method) => includeUnavailable || method.available)
       .map((method) => method.pay_in_asset);
   } catch {
     return [];
   }
 }
 
-/** A merchant who said "Bitcoin only" gets a checkout that offers no swap. */
-async function bitcoinOnlyCheck(buyer: Visitor, order: string, page: string): Promise<Check> {
-  const prepared = await buyer.prepareCheckout(order, page);
-  const offered = prepared.status === 200 ? availableMethods(prepared.body) : [];
+/**
+ * A merchant who said "Bitcoin only" gets a checkout that offers no swap. On
+ * the $12 order, and counting a method listed as unavailable: on the $7 one
+ * every swap is under its minimum, so a shop with swaps on passed.
+ */
+async function bitcoinOnlyCheck(buyer: Visitor): Promise<Check> {
+  const order = await buyer.placeOrder(SWAP_PRODUCT);
+  const prepared = await buyer.prepareCheckout(order, buyer.orderPage(order));
+  const offered = prepared.status === 200 ? availableMethods(prepared.body, true) : [];
   return check(
     "live_bitcoin_only",
     prepared.status === 200 && offered.length === 0,
@@ -535,7 +553,7 @@ export const SWAP_PRODUCT = 2;
 
 async function swapChecks(buyer: Visitor, swap: SwapPath, options: LiveOptions): Promise<Check[]> {
   const order = await buyer.placeOrder(SWAP_PRODUCT);
-  return swapOrderChecks(buyer, order, `/orders/${order}`, swap, options);
+  return swapOrderChecks(buyer, order, buyer.orderPage(order), swap, options);
 }
 
 /** The swap checks on an order the buyer already placed: the $12.50 product, by SWAP_PRODUCT. */

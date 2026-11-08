@@ -211,7 +211,13 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
     {
       ...platform.platform_env,
       ...supabase?.env,
-      ...(platformCodes ? { NWC_URI: shopNwc, LSC_URI_PRIMARY: request.codes.lsc } : {}),
+      // A Bitcoin-only merchant's project has no swap code to find.
+      ...(platformCodes
+        ? {
+            NWC_URI: shopNwc,
+            ...(request.scenario?.swaps === false ? {} : { LSC_URI_PRIMARY: request.codes.lsc }),
+          }
+        : {}),
     },
     platform.platform_env_service ?? platform.service,
     // The test swap provider is the only part of the trial wallet the shop

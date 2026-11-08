@@ -167,7 +167,7 @@ function brief(answer: Answer): string {
 export async function fixtureBuyer(baseUrl: string): Promise<ChaosBuyer> {
   const buyer = new Visitor(baseUrl, 3_000, 75_000);
   const order = await buyer.placeOrder();
-  const page = `/orders/${order}`;
+  const page = buyer.orderPage(order);
   return {
     order,
     createOnce: () => buyer.createCheckoutOnce(order, page),

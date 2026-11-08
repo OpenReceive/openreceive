@@ -300,3 +300,35 @@ test("a Bitcoin only closing is not the choice question, and a repeated closing 
   assert.equal(repeatedClosing([agent(closing), merchant, agent("Something new.")]), false);
   assert.equal(repeatedClosing([agent(closing)]), false);
 });
+
+test("the visitor finds the order id before a guest token, keeps the page, and sends Origin", async () => {
+  const { createServer } = await import("node:http");
+  const { Visitor } = await import("../trials/harness/live.ts");
+  const seen = [];
+  let next = "/orders/7/Qx81kTokenAbc";
+  const server = createServer((request, response) => {
+    seen.push({ method: request.method, url: request.url, origin: request.headers.origin });
+    if (request.method === "POST" && request.url === "/orders") {
+      response.statusCode = 302;
+      response.setHeader("location", next);
+      return response.end();
+    }
+    response.end("<form></form>");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const visitor = new Visitor(base);
+    assert.equal(await visitor.placeOrder(), "7");
+    assert.equal(visitor.orderPage("7"), "/orders/7/Qx81kTokenAbc");
+    next = "/checkout/12";
+    assert.equal(await visitor.placeOrder(2), "12");
+    assert.equal(visitor.orderPage("12"), "/checkout/12");
+    assert.equal(visitor.orderPage("99"), "/orders/99");
+    const posts = seen.filter((item) => item.method === "POST");
+    assert.ok(posts.length >= 2);
+    for (const post of posts) assert.equal(post.origin, base);
+  } finally {
+    server.close();
+  }
+});
