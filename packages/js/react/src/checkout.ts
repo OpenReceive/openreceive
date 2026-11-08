@@ -12,6 +12,7 @@ import {
   orClasses,
   payerErrorMessage,
   prepareCheckout,
+  selectCheckoutDisplayInvoice,
   requestCheckout,
   resumeCheckoutAttempt,
   validateCheckoutProps,
@@ -63,8 +64,10 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
     resumePaymentHash: props.resumePaymentHash,
     resumePaymentRail: props.resumePaymentRail,
   });
-  const { checkout } = props;
-  if (checkout !== undefined) {
+  const { checkout, ...createProps } = props;
+  // A snapshot with no payer invoice yet (from `prepareCheckout`) still has its
+  // Lightning mint ahead of it, so it runs as create mode, as the element does.
+  if (checkout !== undefined && selectCheckoutDisplayInvoice(checkout) !== undefined) {
     // Resolve the prefix once here (default when none is given), matching the
     // element's snapshot-mode polling behavior.
     return React.createElement(CheckoutSnapshotMode, {
@@ -78,12 +81,13 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
     });
   }
   // No snapshot: the validator above already rejected a missing/empty reference.
+  const reference = checkout?.reference ?? props.reference;
+  const prefix = props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX;
   return React.createElement(CheckoutCreateMode, {
-    ...props,
-    key: JSON.stringify([
-      props.reference,
-      (props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, ""),
-    ]),
+    ...createProps,
+    reference,
+    prefix,
+    key: JSON.stringify([reference, prefix.replace(/\/+$/, "")]),
   });
 }
 

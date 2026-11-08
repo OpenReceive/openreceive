@@ -405,6 +405,28 @@ test("create mode keeps one checkout view across the deferred Lightning mint", a
   }
 });
 
+test("a prepared snapshot mints on the Bitcoin click, as the element does", async () => {
+  const stack = await createLifecycleStack();
+  globalThis.fetch = stack.fetchStub;
+  stack.addOrder("order-prepared", 2000);
+  const { prepareCheckout } = await import("../packages/js/browser/src/headless.ts");
+  const prepared = await prepareCheckout({
+    prefix: "/openreceive",
+    reference: "order-prepared",
+    fetch: stack.fetchStub,
+  });
+  const handle = mount(React.createElement(Checkout, { checkout: prepared }));
+  try {
+    (await until(() => handle.button("Bitcoin"), { label: "method grid" })).click();
+    await until(() => handle.button(checkoutLabels.copyInvoice), {
+      label: "minted Lightning invoice",
+    });
+  } finally {
+    handle.unmount();
+    await stack.close();
+  }
+});
+
 test("the order description survives the deferred Lightning mint", async () => {
   // The description arrives twice in two different shapes — beside the price on
   // /checkouts/prepare, and as a sibling of `checkout` on /checkouts — so the
