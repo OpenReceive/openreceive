@@ -120,6 +120,16 @@ fails, it stops the process, so the deploy fails instead of the first payer.
 build steps without secrets. Until the wallet passes, requests get
 `503 WALLET_UNAVAILABLE`.
 
+On Rails, FastAPI and Flask, a relay that does not answer at boot does not
+stop the app. That says nothing about the code, and a relay that is down for a
+moment would otherwise keep the whole shop down until someone restarts it. The
+app starts and logs one line ("OpenReceive could not reach the wallet's relay
+at start-up (…). The first checkout after 1 s tries again."). Checkouts answer
+a retryable `503 WALLET_UNAVAILABLE` until the wallet answers, and the first
+checkout after the wait (1 s, doubling to 60 s) checks again, so payments come
+back on their own. A code that is wrong, missing or able to spend still stops
+the boot.
+
 On Django, the wallet client is built lazily on the first request. It is
 NEVER built in `AppConfig.ready()`. That method runs for `migrate`,
 `collectstatic` and shells, and a relay probe there would break steps that
@@ -131,8 +141,9 @@ production, put the preflight in your deploy pipeline:
   or can spend funds.
 - `manage.py openreceive_doctor` runs the same probe for a person to read.
 
-Until the first request passes, the mounted routes answer
-`503 WALLET_UNAVAILABLE`.
+Until a wallet check passes, checkouts answer `503 WALLET_UNAVAILABLE`. A
+relay that does not answer the first request's check is retried the same way
+as on Rails, FastAPI and Flask.
 
 ### Where boot failures go
 

@@ -261,15 +261,16 @@ For public web shops, turn on the per-IP invoice cap with
 `config.rate_limiting = true`. Leave it off (the default) when many payers
 share one IP. → [Rate limiting](rate-limiting.md#rails)
 
-<!-- shared:begin eager-preflight -->
 In production, the engine builds the wallet client when your app boots. It
 also runs the receive-only preflight right away: it reaches the wallet and
-checks that the code cannot spend. A missing `NWC_URI`, a dead relay, or a
-spend-capable wallet then stops the deploy. Otherwise those problems would
-show up as 500 errors for customers on the first checkout. Outside production
-(tests, consoles), the engine builds the client lazily, on first use, so no
-live wallet is needed.
-<!-- shared:end eager-preflight -->
+checks that the code cannot spend. A missing `NWC_URI` or a spend-capable
+wallet then stops the deploy. Otherwise those problems would show up as errors
+for customers on the first checkout. A relay that does not answer at boot does
+not stop it: the app boots, logs one line, and checkouts get a retryable
+`503 WALLET_UNAVAILABLE` until the wallet answers. The first checkout after a
+short wait (1 s, doubling to 60 s) checks again, so payments come back without
+a restart. Outside production (tests, consoles), the engine builds the client
+lazily, on first use, so no live wallet is needed.
 
 ## Render the checkout
 

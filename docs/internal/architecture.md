@@ -69,11 +69,17 @@ list only when a client has no `get_info`, which is logged as
    continues after an `nwc.spend_capability_advertised` error log and a loud
    console warning.
 
-A wallet that cannot answer `get_info` also stops the application from
-starting. Node reports this as `ConfigError` (`WALLET_PREFLIGHT_FAILED`)
-before `createOpenReceive()` resolves. Framework adapters run preflight
-lazily, so the first request awaits it. The Rails engine runs it eagerly in
-production. See [Deployment state](deployment-storage.md).
+A wallet that answers `get_info` with something wrong also stops the
+application from starting. A relay that cannot be reached is different: it
+says nothing about the code. Node's `createOpenReceive()` rejects with
+`ConfigError` (`WALLET_PREFLIGHT_FAILED`) and a message that says the relay
+was not reached; the framework adapters built from an `nwc` code run preflight
+lazily and boot again on a later request. The Python and Ruby services start
+without the wallet, answer wallet calls with a retryable
+`503 WALLET_UNAVAILABLE`, and run the check again on the first wallet call
+after the wait. All engines wait 1 s, doubling to 60 s, and run no timer. The
+Rails engine runs the check eagerly in production. See
+[Deployment state](deployment-storage.md).
 
 The relay only carries messages. Security never depends on it. A hostile or dead relay
 can delay or drop traffic. It cannot forge settlement, because responses are

@@ -615,7 +615,8 @@ class OpenReceiveFlask:
 
     def start(self):
         """Build the stack once. Raises ConfigurationError when NWC_URI is
-        missing, unreachable or able to spend."""
+        missing or able to spend. A relay that does not answer is not raised:
+        checkouts answer 503 until a later one reaches the wallet."""
         with self._lock:
             if self._app is None:
                 nwc = os.environ.get("NWC_URI", "").strip()
@@ -733,10 +734,15 @@ payments_engine = create_engine(os.environ["DATABASE_URL"])
 openreceive = OpenReceiveFlask(host, payments_engine, rate_limiting=True)
 app.register_blueprint(openreceive.blueprint())  # serves /openreceive/...
 
-# The receive-only wallet check, where the app boots: a missing, unreachable
-# or spend-capable code stops the server here instead of failing the first payer.
+# The receive-only wallet check, where the app boots: a missing or
+# spend-capable code stops the server here instead of failing the first payer.
 openreceive.start()
 ```
+
+A relay that does not answer when the app boots does not stop it. The worker
+starts, logs one line, and checkouts get a retryable `503 WALLET_UNAVAILABLE`
+until the wallet answers. The first checkout after a short wait (1 s, doubling
+to 60 s) checks again, so payments come back without a restart.
 
 `openreceive.start()` runs once per process. A command that imports the app
 with no wallet access, such as a build step, can skip it: the first payment

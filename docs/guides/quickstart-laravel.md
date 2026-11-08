@@ -300,7 +300,6 @@ For public web shops, turn on the per-IP invoice cap with
 one IP. The client IP is `$request->ip()`, so behind a proxy Laravel's
 `TrustProxies` decides who the payer is. → [Rate limiting](rate-limiting.md)
 
-<!-- shared:begin eager-preflight -->
 In production, the engine builds the wallet client when your app boots. It
 also runs the receive-only preflight right away: it reaches the wallet and
 checks that the code cannot spend. A missing `NWC_URI`, a dead relay, or a
@@ -308,7 +307,6 @@ spend-capable wallet then stops the deploy. Otherwise those problems would
 show up as 500 errors for customers on the first checkout. Outside production
 (tests, consoles), the engine builds the client lazily, on first use, so no
 live wallet is needed.
-<!-- shared:end eager-preflight -->
 
 PHP builds the whole engine again on every request. Under PHP-FPM or Apache,
 that same preflight would then run per request. To avoid that, the package

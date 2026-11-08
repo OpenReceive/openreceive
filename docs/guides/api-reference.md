@@ -48,6 +48,11 @@ it refuses to start rather than run on a bad setup. It throws `ConfigError`
 - the encryption is unsupported, or
 - the wallet advertises a spend method and you did not set the override.
 
+A relay that does not answer also rejects with `WALLET_PREFLIGHT_FAILED`, but
+its message says the relay was not reached rather than advising a different
+code. The framework adapters built from an `nwc` code try again on a later
+request; a direct caller calls `createOpenReceive` again.
+
 The connection string never appears in logs or errors.
 
 **Parameters**
@@ -2060,10 +2065,16 @@ That covers no sign that the payment is final, an unknown hash, or a failed
 direct settlement. The worker's periodic pass is the safety net for
 notifications missed while offline. It raises `OpenReceive::ConfigurationError`
 when the client cannot send notifications. Blocking clients do not return until
-the subscription ends.
+the subscription ends. A worker that started while the wallet's relay was down
+subscribes only once the wallet check passes; until then the call raises the
+retryable `WalletFailureError` and the worker backs off.
 
 The built-in `nwc-ruby` client is already wired up. `openreceive-rails` declares
 it as a runtime dependency, so it is installed with the engine.
+`OpenReceive::NwcRubyReceiveClient.from_uri(uri)` builds it with a 12 s budget
+per wallet call (the gem's default is 30 s), which is how long a checkout waits
+on a relay that accepts the connection and never answers. A Rack host can pass
+the same client to `OpenReceive::Server::Service`.
 `OpenReceive::NwcRubyReceiveClient` forwards `subscribe_notifications` to that
 gem's `subscribe_to_notifications`. It turns the notification object the gem
 yields back into the NWC-02 wire payload. So the settlement rule reads
@@ -2149,9 +2160,11 @@ app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine, lazy=False))
 Runs the receive-only wallet preflight when the server starts. Passing the same
 `host` + `engine=` as the router gives the same binding. You can also pass the
 router itself. On failure it raises `ConfigurationError` so uvicorn exits. A
-missing `NWC_URI`, an unreachable relay, or a spend-capable code stops the
-deploy. `lazy=True` delays the check to the first request, which answers
-`503 WALLET_UNAVAILABLE` until the check passes. Startup also sets
+missing `NWC_URI` or a spend-capable code stops the deploy. A relay that does
+not answer does not: the app starts, logs one line, and checkouts answer a
+retryable `503 WALLET_UNAVAILABLE` until the first checkout after a short wait
+(1 s, doubling to 60 s) reaches the wallet. `lazy=True` delays the check to the
+first request, which answers `503 WALLET_UNAVAILABLE` until the check passes. Startup also sets
 `app.state.openreceive`. Shutdown closes the wallet client the binding built.
 
 ### OpenReceiveApp (Python)
@@ -2169,7 +2182,10 @@ views and the Flask quickstart's Blueprint mount.
 
 - `Service(nwc_client, price_provider=…, swap_providers=…, price_currencies=…, env=…)`
   is the wallet, rates and swaps half. Its constructor IS the preflight, and it
-  refuses to start on a bad setup.
+  refuses to start on a bad setup. A relay it cannot reach is not a bad setup:
+  the service starts, `service.wallet_pending` says why the check has not
+  passed, and wallet calls answer a retryable `503 WALLET_UNAVAILABLE` until
+  the first one after the wait (1 s, doubling to 60 s) checks again and passes.
 - `repository` is `openreceive.storage.sql.SqlPaymentRepository(engine)` or the
   Django ORM repository.
 - `app.reconciler` (`settle`, `handle_notification`, `attempt_status`) is what

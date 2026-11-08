@@ -42,6 +42,9 @@ NWC connection advertises spend methods (`pay_invoice`, `multi_pay_invoice`,
 `pay_keysend`, `multi_pay_keysend`) unless
 `allow_spend_capable_wallet` or `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC` overrides it; the
 shared reconciliation decision table lives in `OpenReceive::Server::Reconciliation`.
+A wallet whose relay does not answer at start-up does not stop the service: it
+logs one line, wallet calls answer a retryable `503 WALLET_UNAVAILABLE`, and the
+first one after a short wait (1 s, doubling to 60 s) checks the wallet again.
 
 ## Minimal Rack example
 
@@ -49,7 +52,10 @@ shared reconciliation decision table lives in `OpenReceive::Server::Reconciliati
 # config.ru — run with: rackup
 require "openreceive/server"
 
-service = OpenReceive::Server::Service.new(nwc_client: MyNwcClient.new)
+# With `gem "nwc-ruby"` in the Gemfile; or pass your own NWC client.
+service = OpenReceive::Server::Service.new(
+  nwc_client: OpenReceive::NwcRubyReceiveClient.from_uri(ENV.fetch("NWC_URI"))
+)
 
 run OpenReceive::Server::RackApp.new(
   service: service,

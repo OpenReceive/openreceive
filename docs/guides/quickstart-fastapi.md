@@ -160,11 +160,14 @@ old browser, is not refused. So `authorize` stays the actual boundary.
 [Security](security.md) has the full account.
 
 `openreceive_lifespan` runs the receive-only wallet preflight when uvicorn
-starts. It stops the process if the code is missing, unreachable, or able to
-spend. That way the deploy fails instead of the first payer. Pass `lazy=True`
-for tests and for build steps that have no secrets. The first request then
-checks the wallet, and requests get `503 WALLET_UNAVAILABLE` until the check
-passes.
+starts. It stops the process if the code is missing or able to spend. That way
+the deploy fails instead of the first payer. A relay that does not answer at
+start does not stop it: the app starts, logs one line, and checkouts get a
+retryable `503 WALLET_UNAVAILABLE` until the wallet answers. The first
+checkout after a short wait (1 s, doubling to 60 s) checks again, so payments
+come back without a restart. Pass `lazy=True` for tests and for build steps
+that have no secrets. The first request then checks the wallet, and requests
+get `503 WALLET_UNAVAILABLE` until the check passes.
 → [openreceive_router](api-reference.md#openreceive_router) ·
 [openreceive_lifespan](api-reference.md#openreceive_lifespan) ·
 [the authorize context](api-reference.md#host-python)

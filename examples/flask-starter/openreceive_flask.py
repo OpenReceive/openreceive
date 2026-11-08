@@ -37,7 +37,8 @@ class OpenReceiveFlask:
 
     def start(self):
         """Build the stack once. Raises ConfigurationError when NWC_URI is
-        missing, unreachable or able to spend."""
+        missing or able to spend. A relay that does not answer is not raised:
+        checkouts answer 503 until a later one reaches the wallet."""
         with self._lock:
             if self._app is None:
                 nwc = os.environ.get("NWC_URI", "").strip()

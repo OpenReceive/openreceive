@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+- Fixed (Python): a FastAPI or Flask shop restarted while its wallet's relay
+  refused connections now starts. The wallet check at start-up raised
+  `WalletPreflightError` ("could not read wallet info …"), so Uvicorn logged
+  "Application startup failed. Exiting." and gunicorn's worker exited with
+  code 3, and the shop stayed down although the relay was back seconds later.
+  Now a relay that refuses, drops or does not answer the check does not stop
+  the start: the service logs one line, checkouts answer `503
+  WALLET_UNAVAILABLE`, retryable, "The payment service is not available.
+  Please try again shortly.", and the first checkout after a short wait checks
+  the wallet again and is served if it answers. The wait starts at 1 s and
+  doubles after each failure, up to 60 s; there is no timer or thread, so an
+  idle process makes no wallet calls. A code that is wrong still stops the
+  start: a malformed code, a wallet that does not advertise `make_invoice` and
+  `list_transactions` or speaks no supported encryption, and a spend-capable
+  wallet without the override. A later check that finds such a wallet refuses
+  it the same way and takes no payments. Django, which builds the service on
+  the first request, now follows the same schedule instead of checking again
+  on every request. `openreceive reconcile` still exits 1 when it cannot reach
+  the wallet, `OPENRECEIVE_PREFLIGHT=1 manage.py check` still reports it as
+  `openreceive.E002`, and the `openreceive notifications` worker subscribes
+  only once the check passes. Found by the agent trials' new restart check.
+- Fixed (Ruby): the same for the Rails engine and `openreceive-server`. A
+  production boot with the relay refusing connections raised
+  `WalletPreflightError` (`NwcRuby::NotSentError: not sent: relay … failed
+  before the request was written`) from the engine's eager preflight, and the
+  app never answered. It now boots and behaves as above.
+  `bin/rails openreceive:doctor` still reports the relay as FAILED, and
+  `bin/rails openreceive:notifications` subscribes once the check passes.
+- Fixed (Ruby): a relay that accepts the connection and never answers costs a
+  Rails checkout 12 s before its 503, not 30 s. The engine built its nwc-ruby
+  client with the gem's default budget of 30 s per call, which covers the info
+  fetch, the relay handshake and the wallet's reply. It now passes 12 s
+  (`OpenReceive::NwcRubyReceiveClient::REQUEST_TIMEOUT_SECONDS`), which still
+  leaves a slow wallet room: relay handshakes measured 0.6 to 3.2 s, and the
+  wallet's `make_invoice` reply takes a few seconds more. Python gives up at
+  10 s, Node at 8 s and PHP at about 6 s.
+  `OpenReceive::NwcRubyReceiveClient.from_uri` builds the same client for a
+  Rack host.
+- Fixed (Node, Python, Ruby): the start-up error for a relay that could not be
+  reached no longer says "Use a receive-only NWC connection advertising
+  make_invoice and list_transactions", which sent operators after a code that
+  was never checked. Node's `createOpenReceive` now rejects with
+  `WALLET_PREFLIGHT_FAILED`, "OpenReceive could not reach the wallet's relay
+  at start-up (Failed to connect to wss://…).", and a hint that the code was
+  not checked; the stack's boot line still adds when it tries again. Python
+  and Ruby log "wallet.unreachable: OpenReceive could not reach the wallet's
+  relay at start-up (…). The first checkout after 1 s tries again." The
+  receive-only advice stays on real capability failures.
 - Fixed (Node): a wallet relay that accepts the connection and then never
   answers (or refuses new connections while the app runs) now reaches the
   buyer as `503 WALLET_UNAVAILABLE`, retryable, so the checkout shows its

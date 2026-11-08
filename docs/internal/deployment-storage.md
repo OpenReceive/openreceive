@@ -34,6 +34,12 @@ deploy health check. Express and Next expose a `ready` promise. On Fastify,
 `await fastify.ready()` covers it. The Rails engine builds the wallet client and runs
 preflight eagerly in production.
 
+A relay that cannot be reached at boot is not a refusal on any engine. The Node adapters
+boot again on a later request; the Python and Ruby services start, answer wallet calls
+with a retryable `503 WALLET_UNAVAILABLE`, and check again on the first wallet call after
+the wait (1 s, doubling to 60 s). No engine runs a timer for it, so an idle process makes
+no wallet calls.
+
 ### Asset builds are not deploys
 
 `rails assets:precompile` inside an image build counts as a production boot by
