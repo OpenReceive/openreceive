@@ -8,6 +8,7 @@ use OpenReceive\ConfigurationError;
 use OpenReceive\Host;
 use OpenReceive\Hosts\AfterPaid;
 use OpenReceive\PaymentSettlement;
+use OpenReceive\Server\Errors\ConflictError;
 use OpenReceive\Server\Errors\NotFoundError;
 use OpenReceive\Storage\PaymentRepository;
 use OpenReceive\Support\Records;
@@ -223,6 +224,26 @@ final class Engine
     {
         $action = (string) $args['action'];
         $reference = (string) $args['reference'];
+        // Before the host is asked for a price: a host may well answer null for an
+        // order it already knows is paid, and "unknown order" is the wrong thing to
+        // tell the payer who paid it.
+        if (in_array($action, ['checkout.prepare', 'checkout.create', 'swap.create'], true)) {
+            foreach ($this->repository->listForReference($reference) as $record) {
+                if ($record->status !== 'settled') {
+                    continue;
+                }
+                if ($action !== 'checkout.prepare') {
+                    throw new ConflictError('This reference is already paid.');
+                }
+                return Records::compact([
+                    'payment_hash' => $record->paymentHash,
+                    'checkout' => $record->checkout,
+                    'paid' => true,
+                    'paid_at' => $record->paidAt,
+                    'swap' => $record->swapData !== null,
+                ]);
+            }
+        }
         $pricing = in_array($action, ['checkout.prepare', 'swap.quote', 'checkout.create', 'swap.create'], true);
         $price = $pricing ? $this->host->amountFor($reference) : null;
         if ($pricing && $price === null) {

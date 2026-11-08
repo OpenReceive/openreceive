@@ -2321,6 +2321,7 @@ class RepositoryHttpGoldenTest < Minitest::Test
     raw = JSON.generate(request.fetch("body"))
     controller, action = case request.fetch("path")
     when "/openreceive/payments/check" then [OpenReceive::PaymentsController, :check]
+    when "/openreceive/checkouts/prepare" then [OpenReceive::CheckoutsController, :prepare]
     when "/openreceive/checkouts" then [OpenReceive::CheckoutsController, :create]
     when "/openreceive/swaps/status" then [OpenReceive::SwapsController, :status]
     when "/openreceive/swaps/refunds" then [OpenReceive::SwapsController, :refund]

@@ -103,6 +103,9 @@ final class RequestHandler
             $reference = $this->requiredReference($body);
             $this->guard('checkout.prepare', $request, ['reference' => $reference]);
             $resolved = $this->resolveHost('checkout.prepare', $request, $reference, $body);
+            if (($resolved['paid'] ?? false) === true) {
+                return $this->success(200, self::paidPrepare($reference, $resolved), $requestId);
+            }
             $prepared = $this->service->prepareCheckout(['amount' => $this->requiredAmount($resolved)]);
             $out = [...$prepared, 'reference' => $reference];
             $description = $this->resolvedDescription($resolved);
@@ -111,6 +114,32 @@ final class RequestHandler
             }
             return $this->success(200, $out, $requestId);
         });
+    }
+
+    /**
+     * The prepare answer for a reference that is already paid, built from its row.
+     *
+     * @param array<string, mixed> $resolved
+     * @return array<string, mixed>
+     */
+    private static function paidPrepare(string $reference, array $resolved): array
+    {
+        $checkout = $resolved['checkout'];
+        $swap = ($resolved['swap'] ?? false) === true;
+        $paid = ['payment_hash' => $resolved['payment_hash'], 'rail' => $swap ? 'swap' : 'lightning'];
+        if (!$swap) {
+            $paid['bolt11'] = $checkout['bolt11'];
+        }
+        if (isset($resolved['paid_at'])) {
+            $paid['paid_at'] = $resolved['paid_at'];
+        }
+        return [
+            'reference' => $reference,
+            'amount_msats' => $checkout['amount_msats'],
+            'fiat_quote' => $checkout['fiat_quote'] ?? null,
+            'payment_methods' => [],
+            'paid' => $paid,
+        ];
     }
 
     /** @return array{0: int, 1: array<string, string>, 2: array<string, mixed>} */

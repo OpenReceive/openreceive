@@ -269,6 +269,8 @@ class RequestHandler:
             reference = self._required_reference(body)
             self._guard("checkout.prepare", request, {"reference": reference})
             resolved = self._resolve_host("checkout.prepare", request, reference, body)
+            if resolved.get("paid"):
+                return self._success(200, _paid_prepare(reference, resolved), request_id)
             prepared = self._service.prepare_checkout({"amount": self._required_amount(resolved)})
             payload = {**prepared, "reference": reference}
             description = self._resolved_description(resolved)
@@ -865,3 +867,24 @@ class RequestHandler:
     @staticmethod
     def _headers(request_id: str) -> dict[str, str]:
         return {"content-type": "application/json; charset=utf-8", "x-request-id": request_id}
+
+
+def _paid_prepare(reference: str, resolved: Mapping[str, Any]) -> dict[str, Any]:
+    """The prepare answer for a reference that is already paid, built from its row."""
+    checkout = resolved["checkout"]
+    swap = bool(resolved.get("swap"))
+    paid: dict[str, Any] = {
+        "payment_hash": resolved["payment_hash"],
+        "rail": "swap" if swap else "lightning",
+    }
+    if not swap:
+        paid["bolt11"] = checkout["bolt11"]
+    if resolved.get("paid_at") is not None:
+        paid["paid_at"] = resolved["paid_at"]
+    return {
+        "reference": reference,
+        "amount_msats": checkout["amount_msats"],
+        "fiat_quote": checkout.get("fiat_quote"),
+        "payment_methods": [],
+        "paid": paid,
+    }

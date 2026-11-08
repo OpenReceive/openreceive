@@ -431,6 +431,9 @@ async function dispatch(
       reference,
       body,
     );
+    if (resolved.attemptStatus?.status === "settled") {
+      return jsonResponse(200, paidPrepareBody(reference, resolved), requestId);
+    }
     const prepared = await runtime.service.prepareCheckout({
       amount: requireResolvedAmount(resolved),
     });
@@ -697,6 +700,32 @@ async function commitNewAttempt<T>(
     ...(clientIp === undefined ? {} : { clientIp }),
   });
   return minted;
+}
+
+/**
+ * The prepare answer for a reference that is already paid: what the attempt
+ * cost, and enough of it for the checkout to open on its receipt. Built from
+ * the row alone, so it never asks the host to price an order it may have closed.
+ */
+function paidPrepareBody(
+  reference: string,
+  resolved: ResolvedHostCheckout,
+): Readonly<Record<string, unknown>> {
+  const checkout = requireResolvedCheckout(resolved);
+  const swap = resolved.swapData !== undefined && resolved.swapData !== null;
+  const paidAt = resolved.attemptStatus?.paidAt;
+  return {
+    reference,
+    amount_msats: checkout.amountMsats,
+    fiat_quote: checkout.fiatQuote == null ? null : toSnakeCase(checkout.fiatQuote),
+    payment_methods: [],
+    paid: {
+      payment_hash: checkout.paymentHash,
+      rail: swap ? "swap" : "lightning",
+      ...(swap ? {} : { bolt11: checkout.bolt11 }),
+      ...(paidAt == null ? {} : { paid_at: paidAt }),
+    },
+  };
 }
 
 async function resolveHostCheckout(

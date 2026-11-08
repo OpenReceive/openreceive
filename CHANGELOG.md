@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed (all engines, checkout): a checkout reopened for an order that is
+  already paid now opens on its receipt. `POST /checkouts/prepare` used to
+  answer the price and the payment methods, so a payer on another device was
+  offered to pay again, and the method they picked answered an error. Prepare
+  now answers a `paid` object for a paid reference, without asking the host for
+  a price, and the checkout shows the receipt and fires its settled event.
+  `POST /checkouts` and `POST /swaps` now refuse a paid reference with 409
+  before asking for a price, so a host whose `amountFor` returns null for paid
+  orders no longer turns it into 404 "Unknown reference.". Reported in issue
+  #122.
 - Fixed (Python): the wallet-history pages of one reconcile pass now share one
   relay connection instead of opening one each, so a checkout costs two
   connections, not three to six. With every relay handshake delayed by 3.24 s,

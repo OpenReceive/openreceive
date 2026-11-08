@@ -203,3 +203,31 @@ def test_no_swap_provider_rates_answer_so_a_checkout_cannot_hang(shop: NoSwapSho
     status, body = shop.rates()
     assert status == 200, body
     assert body["bitcoin"]["usd"]
+
+
+def test_a_paid_reference_answers_its_receipt_and_refuses_a_new_attempt(
+    shop: NoSwapShop, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, created = shop.post("/checkouts", {"reference": "order-no-swap"})
+    payment_hash = created["checkout"]["payment_hash"]
+    shop.wallet.settle_invoice(payment_hash, settled_at=shop.now + 1)
+    shop.now += 30
+    # The host closes an order once it is paid: its price hook answers None.
+    monkeypatch.delitem(ORDERS, "order-no-swap")
+
+    status, prepared = shop.post("/checkouts/prepare", {"reference": "order-no-swap"})
+    assert status == 200, prepared
+    assert prepared["amount_msats"] == 2_100_000
+    assert prepared["payment_methods"] == []
+    assert prepared["paid"]["payment_hash"] == payment_hash
+    assert prepared["paid"]["rail"] == "lightning"
+    assert [settlement.reference for settlement in shop.paid] == ["order-no-swap"]
+
+    for route, body in (
+        ("/checkouts", {"reference": "order-no-swap"}),
+        ("/swaps", {"reference": "order-no-swap", "pay_in_asset": "USDT_TRON"}),
+    ):
+        status, refused = shop.post(route, body)
+        assert status == 409, refused
+        assert refused["message"] == "This reference is already paid."
+    assert len(shop.minted()) == 1, "nothing new was minted"

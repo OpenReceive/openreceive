@@ -97,6 +97,10 @@ final class NoSwapProviderTest extends TestCase
 
             public function amountFor(string $reference): ?array
             {
+                // Like a host that closes an order once it is paid.
+                if (in_array($reference, $this->paid, true)) {
+                    return null;
+                }
                 return isset(NoSwapProviderTest::ORDERS[$reference]) ? ['sats' => NoSwapProviderTest::ORDERS[$reference]] : null;
             }
 
@@ -138,6 +142,31 @@ final class NoSwapProviderTest extends TestCase
     {
         $this->shop($env);
         self::assertSame([], $this->providerComplaints());
+    }
+
+    public function testAPaidReferenceAnswersItsReceiptAndRefusesANewAttempt(): void
+    {
+        $engine = $this->shop([]);
+        $created = self::json($this->call($engine, 'POST', '/checkouts', ['reference' => 'order-no-swap']));
+        $hash = $created['checkout']['payment_hash'];
+        $this->wallet->settleInvoice($hash, $this->now + 1);
+        $this->now += 30;
+
+        $response = $this->call($engine, 'POST', '/checkouts/prepare', ['reference' => 'order-no-swap']);
+        self::assertSame(200, $response->getStatusCode());
+        $prepared = self::json($response);
+        self::assertSame(2_100_000, $prepared['amount_msats']);
+        self::assertSame([], $prepared['payment_methods']);
+        self::assertSame($hash, $prepared['paid']['payment_hash']);
+        self::assertSame('lightning', $prepared['paid']['rail']);
+        self::assertSame(['order-no-swap'], $this->paid);
+
+        foreach ([['/checkouts', []], ['/swaps', ['pay_in_asset' => 'USDT_TRON']]] as [$route, $extra]) {
+            $refused = $this->call($engine, 'POST', $route, ['reference' => 'order-no-swap', ...$extra]);
+            self::assertSame(409, $refused->getStatusCode(), $route);
+            self::assertSame('This reference is already paid.', self::json($refused)['message']);
+        }
+        self::assertCount(1, $this->wallet->listInvoices(), 'nothing new was minted');
     }
 
     /** The quickstart entry point reads the environment itself, so a blank code must not raise. */

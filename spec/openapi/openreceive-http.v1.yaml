@@ -16,7 +16,8 @@ paths:
         Resolves the trusted host price to amount_msats and returns swap
         payment_methods. Does not mint a bolt11 or commit an openreceive_payments
         row. Clients show the method picker first; POST /checkouts mints Lightning
-        only after the payer selects Bitcoin.
+        only after the payer selects Bitcoin. A reference that is already paid
+        answers `paid` instead, and the host is not asked for a price.
       requestBody:
         required: true
         content:
@@ -269,6 +270,16 @@ components:
         payment_methods:
           type: array
           items: { $ref: '#/components/schemas/PaymentMethod' }
+        paid:
+          description: Present when the reference is already paid. The client shows the receipt.
+          type: object
+          additionalProperties: false
+          required: [payment_hash, rail]
+          properties:
+            payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+            rail: { type: string, enum: [lightning, swap] }
+            bolt11: { type: string, minLength: 1 }
+            paid_at: { type: integer, minimum: 0 }
     CreateCheckoutRequest:
       type: object
       additionalProperties: false
