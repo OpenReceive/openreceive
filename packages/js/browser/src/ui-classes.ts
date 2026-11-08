@@ -258,8 +258,11 @@ export const orClasses = {
   tutorialClose: "btn btn-sm btn-square btn-ghost",
   tutorialCopy: "btn btn-outline btn-sm justify-self-start",
   /** Step 1 is the biggest thing in the dialog: a payer who skips it has nothing to paste. */
-  tutorialCopyStep: "btn btn-primary btn-lg w-full justify-start gap-2",
-  tutorialCopyStepDone: "btn btn-outline btn-success btn-lg w-full justify-start gap-2",
+  tutorialStepBig:
+    "btn btn-primary btn-lg h-auto min-h-14 py-2 w-full justify-start gap-2 text-left whitespace-normal",
+  /** A finished step drops back to row size, with green text so it reads as done. */
+  tutorialStepDone:
+    "btn btn-ghost btn-sm h-auto min-h-8 py-1 w-full justify-start gap-2 text-left font-semibold whitespace-normal text-success",
   /** A fixed height, so the steps below it stay put as the screenshots change. */
   tutorialFrame:
     "relative overflow-hidden rounded-box border border-base-content/20 bg-base-200 h-[min(30vh,260px)] mt-1",
@@ -272,6 +275,5 @@ export const orClasses = {
     "btn btn-sm h-auto min-h-8 py-1 w-full justify-start gap-2 text-left font-bold whitespace-normal border-warning/40 bg-warning/10",
   tutorialStepNumber:
     "inline-grid place-items-center size-5 shrink-0 rounded-full bg-base-content/10 text-xs font-semibold",
-  tutorialComeBack: "m-0 text-base-content/70 text-sm text-center",
   tutorialDone: "btn btn-primary w-full",
 } as const;

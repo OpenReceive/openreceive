@@ -112,7 +112,7 @@ export const WalletSuggestions: React.FC<{ checkout: ShopCheckout }> = observer(
 });
 
 // One screen, because the payer leaves this page to act on it: every step is
-// visible at once and Next moves through the screenshots.
+// visible at once and tapping one opens its screenshot under it.
 const ProviderWalkthrough: React.FC<{
   provider: WizardProviderDisplay | null;
   copied: boolean;
@@ -159,26 +159,35 @@ const ProviderWalkthrough: React.FC<{
         <Stack gap="xs">
           <ol className="or-shop-tutorial-steps">
             <li>
-              <Button
-                fullWidth
-                size="lg"
-                justify="flex-start"
-                variant={copied ? "light" : "filled"}
-                leftSection={
+              {copied ? (
+                <UnstyledButton className="or-shop-tutorial-step" data-done onClick={onCopy}>
                   <span className="or-shop-tutorial-number" aria-hidden="true">
                     1
                   </span>
-                }
-                onClick={onCopy}
-              >
-                {copied ? checkoutLabels.tutorialInvoiceCopied : checkoutLabels.copyInvoice}
-              </Button>
+                  <span>{checkoutLabels.tutorialInvoiceCopied}</span>
+                </UnstyledButton>
+              ) : (
+                <Button
+                  fullWidth
+                  size="lg"
+                  justify="flex-start"
+                  leftSection={
+                    <span className="or-shop-tutorial-number" aria-hidden="true">
+                      1
+                    </span>
+                  }
+                  onClick={onCopy}
+                >
+                  {checkoutLabels.copyInvoice}
+                </Button>
+              )}
             </li>
             {provider.tutorials.map((tutorial, index) => (
               <li key={tutorial.path}>
                 <UnstyledButton
                   className="or-shop-tutorial-step"
                   data-active={index + 1 === step || undefined}
+                  data-up-next={(copied && index === step) || undefined}
                   aria-current={index + 1 === step ? "step" : undefined}
                   disabled={!copied}
                   onClick={() => setStep(index + 1)}
@@ -201,13 +210,7 @@ const ProviderWalkthrough: React.FC<{
             ))}
           </ol>
 
-          <Text size="sm" c="dimmed" ta="center">
-            {checkoutLabels.tutorialComeBack}
-          </Text>
-
-          <Button disabled={!copied} onClick={lastStep ? onClose : () => setStep(step + 1)}>
-            {lastStep ? checkoutLabels.tutorialDone : checkoutLabels.tutorialNext}
-          </Button>
+          {lastStep ? <Button onClick={onClose}>{checkoutLabels.tutorialDone}</Button> : null}
         </Stack>
       ) : null}
     </Modal>

@@ -15,10 +15,11 @@
 - Changed (Browser, React, Vue, Svelte, Angular): a wallet's pay tutorial is now
   one dialog with numbered steps and the screenshot for the current one. Step 1
   is a large **Copy invoice** button at the top whenever there is an invoice,
-  and the wallet's steps stay greyed out until it has worked. **Next** then
-  walks them and becomes **Done** on the last. `checkoutLabels` loses
-  `tutorialIntroPrefix`, `tutorialIntroCopy`, `tutorialCopiedContinue` and
-  `tutorialExit`, and `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES` loses
+  and the wallet's steps stay greyed out until it has worked. The step to tap
+  next is always the large one, each screenshot opens under its own step, and
+  **Done** appears on the last. `checkoutLabels` loses `tutorialIntroPrefix`,
+  `tutorialIntroCopy`, `tutorialCopiedContinue`, `tutorialExit` and
+  `tutorialNext`, and `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES` loses
   `providerTutorialIndex`.
 - Changed (Odoo): the Lightning invoice memo is now only the order reference.
   It also carried the Odoo company name, which every payer's wallet app saw.

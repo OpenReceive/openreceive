@@ -42,7 +42,6 @@ export const checkoutLabels = {
   openProvider: "How To Pay",
   tutorialTitlePrefix: "Pay a Lightning invoice with",
   tutorialInvoiceCopied: "✓ Invoice copied",
-  tutorialComeBack: "Then come back here. This page updates by itself.",
   tutorialDone: "Done",
   lightningNetwork: "Lightning Network",
   chooseNetwork: "Choose network",
@@ -131,7 +130,6 @@ export const checkoutLabels = {
   confirmRefundTo: "Confirm refund to {address}.",
   submitting: "Submitting...",
   tutorialBack: "Back",
-  tutorialNext: "Next",
   tutorialClose: "Close",
   /**
    * The deposit panel's copy rows. Every value the payer has to REPRODUCE gets a

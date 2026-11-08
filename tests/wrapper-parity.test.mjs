@@ -475,7 +475,6 @@ test("both renderers read the shared payer-facing strings, not copies", () => {
     "reviewRefundAddress",
     "confirmRefund",
     "confirmRefundTo",
-    "tutorialNext",
     "tutorialClose",
   ];
   const reactSource = [

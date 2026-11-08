@@ -266,15 +266,15 @@ test("elements render payment wizard route choices and providers from browser st
   assert.ok(
     tutorial.indexOf('data-or-tutorial-image="2"') < tutorial.indexOf('data-or-tutorial-step="3"'),
   );
-  assert.doesNotMatch(tutorial, /part="tutorial-next"[^>]*disabled/);
+  // No Next button: the following step is the big one to tap.
+  assert.doesNotMatch(tutorial, /part="tutorial-next"/);
+  assert.match(tutorial, /class="[^"]*btn-lg[^"]*"\s+data-or-tutorial-step="3"/);
   assert.match(
     tutorial,
     /part="tutorial-step-active"[^>]*data-or-tutorial-step="2"\s+aria-current="step"/,
   );
   assert.match(tutorial, /Choose Bitcoin wallet/);
-  assert.match(tutorial, /Then come back here\. This page updates by itself\./);
-  assert.match(tutorial, />Next<\/button>/);
-  assert.doesNotMatch(tutorial, /part="tutorial-next"[^>]*hidden/);
+  assert.doesNotMatch(tutorial, />Next<\/button>/);
   assert.match(tutorial, /part="tutorial-done"[^>]*hidden/);
   assert.doesNotMatch(tutorial, />Back<\/button>/);
   assert.doesNotMatch(tutorial, /Step \d of \d/);
@@ -288,7 +288,6 @@ test("elements render payment wizard route choices and providers from browser st
     activeTutorialCopied: true,
     lightningInvoice: "lnbc1elementtutorial",
   });
-  assert.match(lastStepTutorial, /part="tutorial-next"[^>]*hidden/);
   assert.doesNotMatch(lastStepTutorial, /part="tutorial-done"[^>]*hidden/);
 
   // Step 1: Copy invoice leads the dialog, with the wallet steps greyed out
@@ -306,7 +305,7 @@ test("elements render payment wizard route choices and providers from browser st
   );
   assert.equal(copyStepTutorial.match(/data-or-tutorial-step="\d"\s+disabled/g)?.length, 4);
   assert.equal(copyStepTutorial.match(/part="tutorial-frame"[^>]*"\s+hidden/g)?.length, 4);
-  assert.match(copyStepTutorial, /part="tutorial-next"[^>]*disabled/);
+  assert.doesNotMatch(copyStepTutorial, /btn-lg[^"]*"\s+data-or-tutorial-step=/);
   assert.match(copyStepTutorial, /part="tutorial-done"[^>]*hidden/);
 
   const copiedTutorial = renderPaymentWizardHtml({
@@ -317,7 +316,10 @@ test("elements render payment wizard route choices and providers from browser st
   });
   assert.match(copiedTutorial, /<span part="tutorial-copy-label">✓ Invoice copied<\/span>/);
   assert.doesNotMatch(copiedTutorial, /data-or-tutorial-step="\d"\s+disabled/);
-  assert.doesNotMatch(copiedTutorial, /part="tutorial-next"[^>]*disabled/);
+  // The copy drops back to row size and the first wallet step takes over.
+  assert.doesNotMatch(copiedTutorial, /part="tutorial-copy"\s+class="[^"]*btn-lg/);
+  assert.match(copiedTutorial, /class="[^"]*btn-lg[^"]*"\s+data-or-tutorial-step="1"/);
+  assert.doesNotMatch(copiedTutorial, /class="[^"]*btn-lg[^"]*"\s+data-or-tutorial-step="2"/);
 
   // A swap-route provider can open with no invoice to copy, so no copy step.
   const noInvoiceTutorial = renderPaymentWizardHtml({

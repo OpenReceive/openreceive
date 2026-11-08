@@ -192,7 +192,7 @@ test("the default checkout wires controller actions into its buttons", async () 
   }
 });
 
-test("the tutorial's first step is the copy, and Next then walks the wallet steps", async () => {
+test("the tutorial's first step is the copy, and each step points at the next", async () => {
   const written = [];
   const handle = mount(
     React.createElement(PaymentWizard, {
@@ -230,7 +230,7 @@ test("the tutorial's first step is the copy, and Next then walks the wallet step
         .slice(1)
         .every((button) => button.disabled),
     );
-    assert.equal(inDialog(checkoutLabels.tutorialNext).disabled, true);
+    assert.ok(inDialog("Next") === undefined, "there is no Next button");
     assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
 
     steps()[0].click();
@@ -244,14 +244,17 @@ test("the tutorial's first step is the copy, and Next then walks the wallet step
         .slice(1)
         .every((button) => !button.disabled),
     );
-    assert.equal(inDialog(checkoutLabels.tutorialNext).disabled, false);
+    // The copy drops back to row size and the first wallet step takes over.
+    assert.doesNotMatch(steps()[0].className, /btn-lg/);
+    assert.match(steps()[1].className, /btn-lg/);
 
     for (const step of [2, 3, 4, 5]) {
       assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
-      inDialog(checkoutLabels.tutorialNext).click();
+      steps()[step - 1].click();
       await until(() => activeStep().startsWith(String(step)), { label: `step ${step}` });
+      assert.doesNotMatch(steps()[step - 1].className, /btn-lg/);
+      if (step < 5) assert.match(steps()[step].className, /btn-lg/);
     }
-    assert.ok(inDialog(checkoutLabels.tutorialNext) === undefined);
     assert.ok(inDialog(checkoutLabels.tutorialDone) !== undefined);
   } finally {
     handle.unmount();

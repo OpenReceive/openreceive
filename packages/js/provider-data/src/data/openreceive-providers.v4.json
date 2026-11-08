@@ -277,7 +277,12 @@
         {
           "index": 3,
           "path": "assets/pay_tutorials/cashapp-3.webp",
-          "caption": "Tap Paste address, then Confirm and pay"
+          "caption": "Tap Paste address"
+        },
+        {
+          "index": 4,
+          "path": "assets/pay_tutorials/cashapp-4.webp",
+          "caption": "Tap Confirm and pay"
         }
       ]
     },

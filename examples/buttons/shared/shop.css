@@ -560,6 +560,21 @@ body {
   font-weight: 700;
 }
 
+/* A finished step drops back to row size, with green text so it reads as done. */
+.or-shop-tutorial-step[data-done] {
+  color: var(--or-accent);
+  font-weight: 600;
+}
+
+/* The next thing to tap is big and green. */
+.or-shop-tutorial-step[data-up-next] {
+  padding: 12px;
+  background: var(--mantine-primary-color-filled);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+}
+
 /* The wallet steps wait for the copy. */
 .or-shop-tutorial-step:disabled {
   opacity: 0.4;

@@ -1225,7 +1225,7 @@ test("opening a tutorial loads the screenshots, then draws them as data URIs", a
   }
 });
 
-test("the tutorial's first step is the copy, and Next then walks the wallet steps", async (t) => {
+test("the tutorial's first step is the copy, and each step points at the next", async (t) => {
   const written = [];
   const clipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
   Object.defineProperty(globalThis.navigator, "clipboard", {
@@ -1263,7 +1263,7 @@ test("the tutorial's first step is the copy, and Next then walks the wallet step
     const walletSteps = () => [...element.shadowRoot.querySelectorAll("[data-or-tutorial-step]")];
     assert.equal(walletSteps().length, 4);
     assert.ok(walletSteps().every((button) => button.hasAttribute("disabled")));
-    assert.equal(part("tutorial-next").hasAttribute("disabled"), true);
+    assert.ok(!part("tutorial-next"), "there is no Next button");
     assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
     assert.equal(part("tutorial-frame").hasAttribute("hidden"), true);
 
@@ -1274,17 +1274,19 @@ test("the tutorial's first step is the copy, and Next then walks the wallet step
       label: "the copied note",
     });
     assert.ok(walletSteps().every((button) => !button.hasAttribute("disabled")));
-    assert.equal(part("tutorial-next").hasAttribute("disabled"), false);
+    // The copy drops back to row size and the first wallet step takes over.
+    assert.doesNotMatch(part("tutorial-copy").className, /btn-lg/);
+    assert.match(walletSteps()[0].className, /btn-lg/);
 
-    for (const step of [2, 3, 4, 5]) {
-      assert.equal(part("tutorial-next").hasAttribute("hidden"), false);
+    for (const [offset, button] of walletSteps().entries()) {
       assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
-      part("tutorial-next").click();
-      assert.match(activeStep(), new RegExp(`^${step}`));
-      // The screenshot opens directly under its own step.
+      button.click();
+      assert.match(activeStep(), new RegExp(`^${offset + 2}`));
+      // The screenshot opens directly under its own step, and the following step is big.
       assert.equal(part("tutorial-step-active").nextElementSibling.hasAttribute("hidden"), false);
+      assert.doesNotMatch(walletSteps()[offset].className, /btn-lg/);
+      if (offset < 3) assert.match(walletSteps()[offset + 1].className, /btn-lg/);
     }
-    assert.equal(part("tutorial-next").hasAttribute("hidden"), true);
     assert.equal(part("tutorial-done").hasAttribute("hidden"), false);
   } finally {
     element.remove();

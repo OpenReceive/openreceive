@@ -152,8 +152,8 @@ export function ProviderTutorialModal(options: {
                 "button",
                 {
                   className: options.copied
-                    ? orClasses.tutorialCopyStepDone
-                    : orClasses.tutorialCopyStep,
+                    ? orClasses.tutorialStepDone
+                    : orClasses.tutorialStepBig,
                   onClick: () => void options.onCopy(),
                   type: "button",
                 },
@@ -183,7 +183,9 @@ export function ProviderTutorialModal(options: {
                 className:
                   index + copySteps === step
                     ? orClasses.tutorialStepActive
-                    : orClasses.tutorialStep,
+                    : !copyPending && index + copySteps === step + 1
+                      ? orClasses.tutorialStepBig
+                      : orClasses.tutorialStep,
                 disabled: copyPending,
                 onClick: () => setStep(index + copySteps),
                 type: "button",
@@ -227,22 +229,13 @@ export function ProviderTutorialModal(options: {
             },
             checkoutLabels.decodeInvoice,
           ),
-      React.createElement(
-        "p",
-        { className: orClasses.tutorialComeBack },
-        checkoutLabels.tutorialComeBack,
-      ),
-      // One button for Next and Done, so reaching the last step keeps its focus.
-      React.createElement(
-        "button",
-        {
-          className: orClasses.tutorialDone,
-          disabled: copyPending,
-          onClick: lastStep ? options.onClose : () => setStep(step + 1),
-          type: "button",
-        },
-        lastStep ? checkoutLabels.tutorialDone : checkoutLabels.tutorialNext,
-      ),
+      lastStep
+        ? React.createElement(
+            "button",
+            { className: orClasses.tutorialDone, onClick: options.onClose, type: "button" },
+            checkoutLabels.tutorialDone,
+          )
+        : null,
     ),
   );
 }

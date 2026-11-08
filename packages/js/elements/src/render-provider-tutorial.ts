@@ -30,7 +30,7 @@ function renderCopyStepHtml(copied: boolean): string {
     <li>
       <button
         part="tutorial-copy"
-        class="${copied ? orClasses.tutorialCopyStepDone : orClasses.tutorialCopyStep}"
+        class="${copied ? orClasses.tutorialStepDone : orClasses.tutorialStepBig}"
         type="button"
       ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">1</span><span part="tutorial-copy-label">${escapeHtml(copied ? checkoutLabels.tutorialInvoiceCopied : checkoutLabels.copyInvoice)}</span></button>
     </li>
@@ -42,6 +42,7 @@ function renderTutorialStepHtml(
   index: number,
   active: boolean,
   locked: boolean,
+  upNext: boolean,
 ): string {
   // No `<img>` until the lazily loaded screenshot is in hand: an empty src
   // requests the page itself.
@@ -53,7 +54,7 @@ function renderTutorialStepHtml(
     <li>
       <button
         part="${active ? "tutorial-step-active" : "tutorial-step"}"
-        class="${active ? orClasses.tutorialStepActive : orClasses.tutorialStep}"
+        class="${active ? orClasses.tutorialStepActive : upNext ? orClasses.tutorialStepBig : orClasses.tutorialStep}"
         ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep}="${index}"
         ${active ? 'aria-current="step"' : ""}
         ${locked ? "disabled" : ""}
@@ -118,19 +119,12 @@ export function renderTutorialModalHtml(
                 index + copySteps,
                 index + copySteps === step,
                 copyPending,
+                !copyPending && index + copySteps === step + 1,
               ),
             )
             .join("")}
         </ol>
         ${decodeButton}
-        <p part="tutorial-come-back" class="${orClasses.tutorialComeBack}">${escapeHtml(checkoutLabels.tutorialComeBack)}</p>
-        <button
-          part="tutorial-next"
-          class="${orClasses.tutorialDone}"
-          type="button"
-          ${lastStep ? "hidden" : ""}
-          ${copyPending ? "disabled" : ""}
-        >${escapeHtml(checkoutLabels.tutorialNext)}</button>
         <button
           part="tutorial-done"
           class="${orClasses.tutorialDone}"

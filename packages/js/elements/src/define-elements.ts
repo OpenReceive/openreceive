@@ -412,49 +412,53 @@ export function defineElements(options: DefineElementsOptions = {}): void {
           const step = frame.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage);
           frame.hidden = Number(step) !== index;
         });
-      root
-        .querySelectorAll<HTMLElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep)
-        .forEach((button) => {
-          const step = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep);
-          const active = Number(step) === index;
-          button.className = active ? orClasses.tutorialStepActive : orClasses.tutorialStep;
-          button.setAttribute("part", active ? "tutorial-step-active" : "tutorial-step");
-          if (active) button.setAttribute("aria-current", "step");
-          else button.removeAttribute("aria-current");
-        });
-      this.syncTutorialAction(root);
+      this.syncTutorialSteps(root);
+      this.syncTutorialDone(root);
     }
 
     private showTutorialCopied(): void {
       const root = this.shadowRoot;
       if (root === null) return;
       const copy = root.querySelector<HTMLElement>('[part="tutorial-copy"]');
-      if (copy !== null) copy.className = orClasses.tutorialCopyStepDone;
+      if (copy !== null) copy.className = orClasses.tutorialStepDone;
       const label = root.querySelector('[part="tutorial-copy-label"]');
       if (label !== null) label.textContent = checkoutLabels.tutorialInvoiceCopied;
+      this.syncTutorialSteps(root);
+    }
+
+    /** Greys the wallet steps until the copy has worked; after that the next one is big. */
+    private syncTutorialSteps(root: ShadowRoot): void {
+      const index = this.activeTutorialIndex;
+      const locked =
+        root.querySelector('[part="tutorial-copy"]') !== null && !this.activeTutorialCopied;
       root
         .querySelectorAll<HTMLButtonElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep)
         .forEach((button) => {
-          button.disabled = false;
+          const step = Number(
+            button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep),
+          );
+          const active = step === index;
+          const upNext = !locked && step === index + 1;
+          button.disabled = locked;
+          button.className = active
+            ? orClasses.tutorialStepActive
+            : upNext
+              ? orClasses.tutorialStepBig
+              : orClasses.tutorialStep;
+          button.setAttribute("part", active ? "tutorial-step-active" : "tutorial-step");
+          if (active) button.setAttribute("aria-current", "step");
+          else button.removeAttribute("aria-current");
         });
-      this.syncTutorialAction(root);
     }
 
-    /** Next waits for the copy, and gives way to Done on the last step. */
-    private syncTutorialAction(root: ShadowRoot): void {
-      const next = root.querySelector<HTMLButtonElement>('[part="tutorial-next"]');
+    /** Done appears once the last step is open. */
+    private syncTutorialDone(root: ShadowRoot): void {
       const done = root.querySelector<HTMLElement>('[part="tutorial-done"]');
-      if (next === null || done === null) return;
-      const copy = root.querySelector('[part="tutorial-copy"]');
+      if (done === null) return;
       const stepCount =
         root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep).length +
-        (copy === null ? 0 : 1);
-      const lastStep = this.activeTutorialIndex === stepCount - 1;
-      next.disabled = copy !== null && !this.activeTutorialCopied;
-      done.hidden = !lastStep;
-      // Hiding the focused Next would drop focus out of the dialog.
-      if (lastStep && root.activeElement === next) done.focus();
-      next.hidden = lastStep;
+        (root.querySelector('[part="tutorial-copy"]') === null ? 0 : 1);
+      done.hidden = this.activeTutorialIndex !== stepCount - 1;
     }
 
     // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element
@@ -1269,10 +1273,6 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             Number(button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep)),
           );
         });
-      });
-
-      root.querySelector('[part="tutorial-next"]')?.addEventListener("click", () => {
-        this.showTutorialStep(this.activeTutorialIndex + 1);
       });
 
       const tutorial = root.querySelector('[part="tutorial"]');
