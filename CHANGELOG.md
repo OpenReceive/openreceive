@@ -87,8 +87,8 @@
   "The payment service is not available. Please try again shortly.", like the
   Node mounts. It answered Django's own HTML "Server Error (500)" page, which
   the checkout cannot read, and nothing was logged. The same holds for a
-  missing or malformed `NWC_URI`. The cause goes to the log once per request,
-  redacted, and the next request tries to start again.
+  missing or malformed `NWC_URI`. The cause goes to the log, redacted, and a
+  later request tries again (on the schedule above for a relay that is down).
 - Fixed (Django): with `DEBUG = True`, Django's error page no longer prints
   `NWC_URI`, `LSC_URI_PRIMARY` and `LSC_URI_BACKUP` in full. `manage.py
   runserver` copies the environment into `request.META`, and Django's filter
