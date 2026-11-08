@@ -54,6 +54,10 @@ const NWC_ERROR_CODE_ALIASES: Readonly<Record<string, ErrorCode>> = {
   METHOD_NOT_FOUND: "UNSUPPORTED_METHOD",
   NETWORK_ERROR: "WALLET_UNAVAILABLE",
   NIP47_NETWORK_ERROR: "WALLET_UNAVAILABLE",
+  NIP47_PUBLISH_ERROR: "WALLET_UNAVAILABLE",
+  NIP47_PUBLISH_TIMEOUT_ERROR: "TIMEOUT",
+  NIP47_REPLY_TIMEOUT_ERROR: "TIMEOUT",
+  NIP47_TIMEOUT_ERROR: "TIMEOUT",
   NOSTR_NETWORK_ERROR: "WALLET_UNAVAILABLE",
   NOT_AUTHORIZED: "UNAUTHORIZED",
   NOT_SENT_ERROR: "WALLET_UNAVAILABLE",
@@ -143,10 +147,33 @@ function errorCodeFromRecords(records: readonly Record<string, unknown>[]): Erro
 
     const nameCode = normalizeNwcErrorCode(record.name);
     if (nameCode !== undefined && nameCode !== "OTHER") return nameCode;
+    for (const className of classNames(record)) {
+      const classCode = normalizeNwcErrorCode(className);
+      if (classCode !== undefined && classCode !== "OTHER") return classCode;
+    }
     if (directCode !== undefined) return directCode;
   }
 
   return undefined;
+}
+
+/**
+ * The classes an error was thrown as, most specific first. @getalby/sdk's
+ * Nip47 errors never set `name` (it stays "Error"), and a relay that never
+ * connected comes as `Nip47NetworkError("Failed to connect to …", "OTHER")`,
+ * so the class is the only part that says the wallet was unreachable. Without
+ * it the buyer got a 502 OTHER, not retryable, with the relay URL as the text.
+ */
+function classNames(value: Record<string, unknown>): string[] {
+  const names: string[] = [];
+  let prototype: unknown = Object.getPrototypeOf(value);
+  while (typeof prototype === "object" && prototype !== null && names.length < 8) {
+    const name = (prototype as { constructor?: { name?: unknown } }).constructor?.name;
+    if (name === "Error" || name === "Object") break;
+    if (typeof name === "string" && name.length > 0) names.push(name);
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return names;
 }
 
 function normalizeNwcErrorCode(value: unknown): ErrorCode | undefined {

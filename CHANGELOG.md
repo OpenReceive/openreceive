@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fixed (Node): a wallet relay that accepts the connection and then never
+  answers (or refuses new connections while the app runs) now reaches the
+  buyer as `503 WALLET_UNAVAILABLE`, retryable, so the checkout shows its
+  payer sentence and Try again. It answered `502 OTHER`, not retryable, with
+  "Failed to connect to wss://…" as the text: @getalby/sdk throws
+  `Nip47NetworkError` with code `OTHER` and never sets the error's name, so
+  the engine now reads the error's class. SDK reply and publish timeouts are
+  `TIMEOUT` the same way. Found by the agent trials' new chaos phase.
+
 ## 0.4.32 - 2026-11-07
 
 - Fixed (Node): one failed wallet check at start-up no longer takes payments
