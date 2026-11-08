@@ -184,12 +184,14 @@ payment as received, and `onPaid` marks the order paid.
   `pg`, Knex, Prisma (`@prisma/adapter-pg`) and TypeORM.
 - **Node runtime.** The payment route runs on Node (`runtime = "nodejs"`),
   never the Edge runtime.
-- **Rate limiting.** Keep `rateLimiting: true` with `trustProxyIpHeader: true`.
-  Vercel sets `x-forwarded-for`, so the limit applies per payer.
+- **Rate limiting.** Turn on `rateLimiting: true` with
+  `trustProxyIpHeader: true`. Vercel sets `x-forwarded-for`, so the limit
+  applies per payer.
 - **Keep order pages reachable.** A payer with a swap in progress comes back
   through `/checkout/<order id>` to claim a refund. Keep the swap's payment
-  hash too, and pass it back as `resumePaymentHash`: without it, the page
-  opens on the payment methods instead of the refund. See
+  hash on the order row too, and pass it back as `resumePaymentHash`: without
+  it, the page opens on the payment methods instead of the refund. Sign a
+  guest cookie with the app's own secret, never `NWC_URI`. See
   [swap refunds](swap-refunds.md).
 
 More detail: [Next.js quickstart](quickstart-next.md),

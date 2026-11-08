@@ -269,13 +269,13 @@ shape onto the models in THIS app.
 ## 6. Verify
 
 ```sh
-dotenv -f .env run -- openreceive doctor --app main:app
+openreceive doctor --app main:app
 ```
 
-Doctor reads the process environment. `dotenv -f .env run --` loads `.env`
-into it, as `uvicorn --env-file .env` does for the server. The `dotenv`
-command comes with python-dotenv, which `uvicorn --env-file` needs anyway; if
-it is missing, run `pip install "python-dotenv[cli]"`. Never `source` or
+Doctor reads `.env` from the working directory for the variables the
+environment does not set, as `uvicorn --env-file .env` does. Under Docker
+Compose, run it inside the service, which has the variables from `env_file`:
+`docker compose exec web openreceive doctor …`. Never `source` or
 `export` `.env` in a shell: the codes contain `&`, and the shell splits the
 line and prints the pieces.
 

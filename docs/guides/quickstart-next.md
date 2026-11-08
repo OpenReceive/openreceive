@@ -158,16 +158,14 @@ export const { GET, POST } = openReceiveNextHandlers({
       resource.reference,
       action,
     ),
-  // Recommended for public web shops: caps invoice creation at 60 per client IP
-  // per hour. A web Request has no socket IP, so on Next this ALSO needs an
-  // IP source: `trustProxyIpHeader: true` reads the first hop of
-  // x-forwarded-for, which is safe only when YOUR reverse proxy or hosting
-  // platform sets it (Vercel, Cloudflare and most load balancers do). Without
-  // an IP source the adapter refuses to construct rather than run an
-  // inactive limiter. Leave both off for point-of-sale deployments, where
-  // many payers share the terminal's IP.
-  rateLimiting: true,
-  trustProxyIpHeader: true,
+  // Caps invoice creation at 60 per client IP per hour. A web Request has no
+  // socket IP, so on Next the cap reads x-forwarded-for's first hop: turn
+  // both on only behind Vercel or a reverse proxy you run that replaces that
+  // header. Anywhere else a client sends its own, so leave both off, as they
+  // are by default (`rateLimiting` alone refuses to construct). Off for
+  // point-of-sale too, where many payers share the terminal's IP.
+  // rateLimiting: true,
+  // trustProxyIpHeader: true,
 });
 ```
 
@@ -194,8 +192,8 @@ pending invoices, so a payer who closes the tab is still covered.
 → [openReceiveNextHandlers](api-reference.md#openreceivenexthandlers) ·
 [authorize context](api-reference.md#the-authorize-context)
 
-`rateLimiting: true` is for public web shops. Leave it off for point-of-sale,
-where many payers share one IP. → [Rate limiting](rate-limiting.md)
+`rateLimiting: true` is for public web shops behind such a proxy. Leave it off
+for point-of-sale, where many payers share one IP. → [Rate limiting](rate-limiting.md)
 
 An optional worker, `startNotificationWorker({ service, host })`, listens for
 wallet payment notifications so settlement does not wait for the next page

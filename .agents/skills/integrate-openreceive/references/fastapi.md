@@ -125,15 +125,15 @@ you store it. Ask one question per message.
 5. **Make the server load the file — yourself.** OpenReceive reads
    `os.environ`, and a `.env` file on disk is not in it. Start the dev server
    with `uvicorn --env-file .env` (update the app's run script or Procfile, not
-   just your own command). When it is started with Docker Compose, give the
-   service `env_file: .env`. Restart the server after writing the file.
+   just your own command). Under Docker Compose, give the service
+   `env_file: .env` instead, with no `--env-file` in its command: the image
+   has no `.env`. Restart the server after writing the file.
    Under Compose, recreate the container with `docker compose up -d`:
    `docker compose restart` keeps its old environment.
-   Doctor needs the file too: run it as
-   `dotenv -f .env run -- openreceive doctor …`. The `dotenv` command comes
-   with python-dotenv, which `uvicorn --env-file` already needs; if it is
-   missing, `pip install "python-dotenv[cli]"`. Never `source`, `export` or
-   `cat` the file: the codes contain `&`, and the shell prints the pieces.
+   Doctor reads `.env` from its working directory by itself. Under Compose,
+   run it in the service (`docker compose exec`), which already has the codes:
+   never copy `.env` into a container. Never `source`, `export` or `cat` the
+   file: the codes contain `&`, and the shell prints the pieces.
 
 Do not invent placeholder URIs. Start the quickstart only once `NWC_URI` is
 saved and `LSC_URI_PRIMARY` is saved or explicitly declined. The first boot
@@ -142,7 +142,7 @@ runs the receive-only preflight: if it reports spend methods such as
 again. Never set the spend-capable override to get past it.
 
 After the router is wired, run
-`dotenv -f .env run -- openreceive doctor --app <module>:app`. It reports
+`openreceive doctor --app <module>:app`. It reports
 `NWC_URI` presence without printing it, probes the wallet, and names
 any hook still on a placeholder and whether the migration ran. Exit code 1 is a
 finding to fix, not a reason to skip the check.
@@ -161,8 +161,7 @@ Only then start the quickstart.
 ## After the quickstart — hand over, then stop
 
 The quickstart is done when
-`dotenv -f .env run -- openreceive doctor --app <module>:app --url <app url>`
-is clean and this app
+`openreceive doctor --app <module>:app --url <app url>` is clean and this app
 serves the checkout page for one of its orders. Doctor names any failed check
 and exits nonzero; fix it before going on.
 
@@ -733,13 +732,13 @@ shape onto the models in THIS app.
 ### 6. Verify
 
 ```sh
-dotenv -f .env run -- openreceive doctor --app main:app
+openreceive doctor --app main:app
 ```
 
-Doctor reads the process environment. `dotenv -f .env run --` loads `.env`
-into it, as `uvicorn --env-file .env` does for the server. The `dotenv`
-command comes with python-dotenv, which `uvicorn --env-file` needs anyway; if
-it is missing, run `pip install "python-dotenv[cli]"`. Never `source` or
+Doctor reads `.env` from the working directory for the variables the
+environment does not set, as `uvicorn --env-file .env` does. Under Docker
+Compose, run it inside the service, which has the variables from `env_file`:
+`docker compose exec web openreceive doctor …`. Never `source` or
 `export` `.env` in a shell: the codes contain `&`, and the shell splits the
 line and prints the pieces.
 

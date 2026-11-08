@@ -200,8 +200,11 @@ list each coin's availability, mention a minimum, or say a coin will not work:
 a provider minimum depends on the invoice total, and real invoices will
 differ. Do not list what you changed or what doctor checked. Send nothing
 after it. Do not add containers, services, workers or cron jobs:
-FOSSBilling's own cron job runs the extension's pass. If doctor says
-FOSSBilling's cron has never run, say so in one line of that message.
+FOSSBilling's own cron job runs the extension's pass, and the official Docker
+image runs it every five minutes. If doctor says FOSSBilling's cron has never
+run and this is not that image, give the user, in one line of that message,
+the entry for the web user's crontab, with this install's folder:
+`*/5 * * * * php /path/to/fossbilling/cron.php`.
 
 ## Non-negotiables
 

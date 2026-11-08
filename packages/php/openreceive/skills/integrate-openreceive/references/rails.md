@@ -302,7 +302,8 @@ not replace your orders, users, or products, and you do not join them.
   settled (409).
 - **A paid order's page says it is paid and shows no checkout.** Nothing is left
   to pay, and a checkout cannot start a new payment for a paid order. Mount the
-  checkout only while the order is unpaid. When it settles on the page, update
+  checkout, and any line about coming back to pay or for a refund, only while
+  the order is unpaid. When it settles on the page, update
   the page's status line from the `openreceive-settled` event on
   `<openreceive-checkout>`: `on_paid` has already marked the order paid. Keep
   that checkout mounted, because it is the payer's receipt.

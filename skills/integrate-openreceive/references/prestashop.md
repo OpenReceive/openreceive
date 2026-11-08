@@ -195,17 +195,20 @@ pay from the order's page with their own wallet; afterwards the order reads
 Setup ends here. Once doctor is clean and the user has the link, your last
 message starts "Setup is finished" and has at most six short lines: the
 order's page, the methods the checkout offers (Bitcoin, plus USDT, USDC, ETH
-and SOL when the swap code is saved), the cron line below, and one line of
+and SOL when the swap code is saved), the crontab entry below, and one line of
 what to look at. Do not list each coin's availability, mention a minimum, or
 say a coin will not work: a provider minimum depends on the order total, and
 real orders will differ. Do not list what you changed or what doctor checked.
 Send nothing after it.
 
 PrestaShop has no scheduler, so the module's pass for customers who leave the
-page before their payment settles needs one cron line, every five minutes:
-`php bin/console openreceive:reconcile` as the web user. Give the user that
-line in your last message; do not add it yourself, and do not add containers,
-services or workers.
+page before their payment settles needs one crontab entry. Give the user the
+whole entry in your last message, with this shop's real folder, and
+do not add it yourself, or any containers, services or workers. Under Docker,
+for the host's crontab:
+`*/5 * * * * cd /path/to/shop && docker compose exec -T -u www-data prestashop php bin/console openreceive:reconcile`.
+Otherwise, for the web user's crontab:
+`*/5 * * * * php /path/to/prestashop/bin/console openreceive:reconcile`.
 
 ## Non-negotiables
 
@@ -381,9 +384,12 @@ from cron, as the web server's user:
 
 That line goes in `/etc/cron.d/`; in the web user's own crontab, leave out
 `www-data`. On hosting with a control panel, add a cron job with the same
-`php …/bin/console openreceive:reconcile` command. With Docker, the host's cron
-runs `docker compose exec -T -u www-data prestashop php bin/console openreceive:reconcile`
-from the Compose project's folder.
+`php …/bin/console openreceive:reconcile` command. With Docker, add this to
+the host's crontab, with your Compose project's folder:
+
+```cron
+*/5 * * * * cd /path/to/shop && docker compose exec -T -u www-data prestashop php bin/console openreceive:reconcile
+```
 
 Each pass also finishes any order whose payment settled but which did not
 move to "Payment accepted", and every checkout request runs one pass too.

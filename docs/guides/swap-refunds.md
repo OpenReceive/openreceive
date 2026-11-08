@@ -109,13 +109,15 @@ URL, keep a copy in sessionStorage for the same tab, and call your fetch.
 Authorize that endpoint the way you authorize everything else. Having an
 order id is a claim, not proof. See [Authorization](authorization.md). If a
 guest shop scopes orders to a signed visitor cookie, then only the browser
-that placed the order can resume it. Say so on the screen.
+that placed the order can resume it. Say so on the order's page while it is
+unpaid; a paid order's page drops that line.
 
 Ownership must also last as long as the refund does. A payer can come back
 hours later. If your check reads a session that has expired by then, your
 routes answer `403` and the deposit is stranded. On a guest shop, tie the
-order to a long-lived signed cookie. Or put a secret per-order token in the
-order URL, and have your page trade it for that cookie.
+order to a long-lived cookie, signed with your app's own secret (such as
+`SESSION_SECRET`), never a wallet or swap code. Or put a secret per-order
+token in the order URL, and have your page trade it for that cookie.
 
 ### 3. The attempt, restored
 
@@ -127,7 +129,8 @@ method grid.
 attempt again. After it expires, the same click creates a **new** deposit
 address, and the refund is no longer on screen.
 
-**Keep the payment hash.** `POST …/swaps/status` with
+**Keep the payment hash** on your order row, not in browser storage, which
+another browser does not have. `POST …/swaps/status` with
 `{ reference, payment_hash }` finds one specific attempt, even a day later.
 
 On a drop-in, that is one prop:

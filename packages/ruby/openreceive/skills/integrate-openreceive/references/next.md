@@ -242,15 +242,17 @@ itself, and they hold for every integration.
   (`POST /swaps`) re-serves the committed attempt — but only while it is live,
   and the shadow invoice behind a swap lasts about half an hour, after which the
   same click mints a NEW deposit address and the refund is off-screen. Keep the
-  `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
-  such window. On the drop-ins: `resumePaymentHash`, fed from `onState`, on
-  `<Checkout>`; the `resume-payment-hash` attribute, fed from the
+  `payment_hash` on your order row, not in browser storage, and reopen the
+  attempt with `POST /swaps/status`, which has no such window. On the
+  drop-ins: `resumePaymentHash`, fed from `onState`, on `<Checkout>`; the
+  `resume-payment-hash` attribute, fed from the
   `openreceive-state` event (`event.detail.state.payment_hash`), on
   `<openreceive-checkout>`.
   That visit can come hours later, and `authorize` must still know the payer:
   a session that expired in between answers 403 and strands the deposit. On a
-  guest shop, tie the order to a long-lived signed cookie, or put a secret
-  per-order token in its URL that your page trades for that cookie.
+  guest shop, tie the order to a long-lived cookie signed with the app's own
+  secret (such as `SESSION_SECRET`, never a wallet or swap code), or put a
+  secret per-order token in its URL that your page trades for that cookie.
   https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amountFor` and both drop-ins render it above the amount.
@@ -271,9 +273,9 @@ itself, and they hold for every integration.
   imported from a client component. `<Checkout>` is a CLIENT component: it
   lives in a `"use client"` file, which also imports `styles.css`. Render it
   at `app/checkout/[reference]/page.tsx`, the order's own resumable URL.
-- `rateLimiting` on Next needs an IP source (`trustProxyIpHeader: true` behind
-  your own proxy or platform); a web Request has no socket IP and the adapter
-  refuses to construct without one.
+- Set `rateLimiting` with `trustProxyIpHeader: true` only behind Vercel or a
+  reverse proxy you run that replaces `x-forwarded-for`; elsewhere a client
+  sends its own, so leave both off (`rateLimiting` alone refuses to construct).
 - HTTP JSON is snake_case; TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
 
@@ -318,7 +320,8 @@ products, and you do not join them.
   settled (409).
 - **A paid order's page says it is paid and shows no checkout.** Nothing is left
   to pay, and a checkout cannot start a new payment for a paid order. Mount the
-  checkout only while the order is unpaid. When it settles on the page, update
+  checkout, and any line about coming back to pay or for a refund, only while
+  the order is unpaid. When it settles on the page, update
   the page's status line from `onSettled` on `<Checkout>`: `onPaid` has already
   marked the order paid. Keep that checkout mounted, because it is the payer's
   receipt.
@@ -616,16 +619,14 @@ export const { GET, POST } = openReceiveNextHandlers({
       resource.reference,
       action,
     ),
-  // Recommended for public web shops: caps invoice creation at 60 per client IP
-  // per hour. A web Request has no socket IP, so on Next this ALSO needs an
-  // IP source: `trustProxyIpHeader: true` reads the first hop of
-  // x-forwarded-for, which is safe only when YOUR reverse proxy or hosting
-  // platform sets it (Vercel, Cloudflare and most load balancers do). Without
-  // an IP source the adapter refuses to construct rather than run an
-  // inactive limiter. Leave both off for point-of-sale deployments, where
-  // many payers share the terminal's IP.
-  rateLimiting: true,
-  trustProxyIpHeader: true,
+  // Caps invoice creation at 60 per client IP per hour. A web Request has no
+  // socket IP, so on Next the cap reads x-forwarded-for's first hop: turn
+  // both on only behind Vercel or a reverse proxy you run that replaces that
+  // header. Anywhere else a client sends its own, so leave both off, as they
+  // are by default (`rateLimiting` alone refuses to construct). Off for
+  // point-of-sale too, where many payers share the terminal's IP.
+  // rateLimiting: true,
+  // trustProxyIpHeader: true,
 });
 ```
 
@@ -652,8 +653,8 @@ pending invoices, so a payer who closes the tab is still covered.
 → [openReceiveNextHandlers](https://openreceive.org/guides/api-reference.md#openreceivenexthandlers) ·
 [authorize context](https://openreceive.org/guides/api-reference.md#the-authorize-context)
 
-`rateLimiting: true` is for public web shops. Leave it off for point-of-sale,
-where many payers share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
+`rateLimiting: true` is for public web shops behind such a proxy. Leave it off
+for point-of-sale, where many payers share one IP. → [Rate limiting](https://openreceive.org/guides/rate-limiting.md)
 
 An optional worker, `startNotificationWorker({ service, host })`, listens for
 wallet payment notifications so settlement does not wait for the next page

@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (SvelteKit)
 
 ```sh
-# READ THIS FIRST: this file is 36 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 37 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/sveltekit/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
 ```
@@ -247,15 +247,17 @@ itself, and they hold for every integration.
   (`POST /swaps`) re-serves the committed attempt — but only while it is live,
   and the shadow invoice behind a swap lasts about half an hour, after which the
   same click mints a NEW deposit address and the refund is off-screen. Keep the
-  `payment_hash` and reopen the attempt with `POST /swaps/status`, which has no
-  such window. On the drop-ins: `resumePaymentHash`, fed from `onState`, on
-  `<Checkout>`; the `resume-payment-hash` attribute, fed from the
+  `payment_hash` on your order row, not in browser storage, and reopen the
+  attempt with `POST /swaps/status`, which has no such window. On the
+  drop-ins: `resumePaymentHash`, fed from `onState`, on `<Checkout>`; the
+  `resume-payment-hash` attribute, fed from the
   `openreceive-state` event (`event.detail.state.payment_hash`), on
   `<openreceive-checkout>`.
   That visit can come hours later, and `authorize` must still know the payer:
   a session that expired in between answers 403 and strands the deposit. On a
-  guest shop, tie the order to a long-lived signed cookie, or put a secret
-  per-order token in its URL that your page trades for that cookie.
+  guest shop, tie the order to a long-lived cookie signed with the app's own
+  secret (such as `SESSION_SECRET`, never a wallet or swap code), or put a
+  secret per-order token in its URL that your page trades for that cookie.
   https://openreceive.org/guides/swap-refunds.md
 - Show the payer WHAT THEY ARE BUYING. Return an optional `description` beside
   the price from `amountFor` and both drop-ins render it above the amount.
@@ -287,8 +289,14 @@ itself, and they hold for every integration.
   `ADDRESS_HEADER` and `XFF_DEPTH`, or every payer shares the proxy's address.
 - `<Checkout>` comes from `@openreceive/svelte/checkout.svelte`, with
   `@openreceive/svelte/styles.css`, on the order's own page: its resumable
-  URL. SvelteKit's CSRF check refuses cross-site form posts; the checkout
-  posts JSON, which it lets through, so leave the check on.
+  URL. The checkout posts JSON, which SvelteKit's CSRF check lets through.
+  SvelteKit 3 checks a form's Origin against `paths.origin`, else `https://`
+  plus the Host header (`ORIGIN` is SvelteKit 2's). If the shop's own forms
+  answer 403 (plain HTTP, no proxy), set
+  `paths: { origin: process.env.ORIGIN || undefined }` and pass the deploy's
+  public URL as `ORIGIN` at `vite build`, never a literal host:port. Never
+  widen the check (`trustedOrigins: ['*']`, `checkOrigin: false`); replace a
+  widening the app has with that origin.
 - HTTP JSON is snake_case; TypeScript APIs are camelCase.
 - Money is integers or decimal strings — never binary floats.
 

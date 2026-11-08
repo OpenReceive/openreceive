@@ -143,6 +143,16 @@
   now says it rejects when the first wallet check fails and must not be
   awaited before `listen()`, as the deploying guide does. An agent that read
   only the type awaited it and a relay blip at start stopped its shop.
+- Docs (agent directions), from the 2026-11-08 trial reviews: SvelteKit 3
+  takes the shop's origin from `paths.origin`, set from `ORIGIN` at build
+  time, never a literal host:port and never a widened CSRF check. The Next.js
+  quickstart's `rateLimiting` and `trustProxyIpHeader` are commented out:
+  only behind Vercel or a proxy that replaces `x-forwarded-for`. FastAPI's
+  doctor runs without `dotenv run`, inside the container under Compose. The
+  PrestaShop and FOSSBilling closings hand over a whole crontab entry. Node
+  guest cookies are signed with the app's own secret, never a wallet or swap
+  code, and a swap's `payment_hash` stays on the order row. A line about
+  coming back to pay or for a refund shows only while the order is unpaid.
 
 - Changed (checkout): the paid screen's badge reads "Paid" (and "Expired"),
   not the engine's "settled", and the waiting screen says "Keep this page

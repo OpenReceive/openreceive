@@ -129,9 +129,12 @@ from cron, as the web server's user:
 
 That line goes in `/etc/cron.d/`; in the web user's own crontab, leave out
 `www-data`. On hosting with a control panel, add a cron job with the same
-`php …/bin/console openreceive:reconcile` command. With Docker, the host's cron
-runs `docker compose exec -T -u www-data prestashop php bin/console openreceive:reconcile`
-from the Compose project's folder.
+`php …/bin/console openreceive:reconcile` command. With Docker, add this to
+the host's crontab, with your Compose project's folder:
+
+```cron
+*/5 * * * * cd /path/to/shop && docker compose exec -T -u www-data prestashop php bin/console openreceive:reconcile
+```
 
 Each pass also finishes any order whose payment settled but which did not
 move to "Payment accepted", and every checkout request runs one pass too.
