@@ -1,8 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentAdapter } from "./agents.ts";
 import { liveBoltChecks } from "./bolt.ts";
+import { chaosChecks, clientPrefix } from "./chaos.ts";
 import { asksPluginInstall, btcpayChecks, installPlugin, liveBtcpayChecks } from "./btcpay.ts";
 import {
   blockersFailed,
@@ -18,6 +19,8 @@ import type { MerchantCodes } from "./codes.ts";
 import { cursorEnv, type SeenWrite } from "./cursor.ts";
 import { compose, InfraError, shopComposeEnv } from "./docker.ts";
 import { liveFossbillingChecks } from "./fossbilling.ts";
+import { debugPageChecks } from "./leaks.ts";
+import { payerWalkChecks } from "./payer.ts";
 import { liveShopChecks } from "./live.ts";
 import { localPublishChecks } from "./local-publish.ts";
 import { classify, GO_AHEAD, merchantReply } from "./merchant.ts";
@@ -26,12 +29,19 @@ import { liveOdooChecks } from "./odoo.ts";
 import { livePaymenterChecks } from "./paymenter.ts";
 import { livePrestashopChecks } from "./prestashop.ts";
 import { redact } from "./redact.ts";
+import { scenarioFor } from "./scenarios.ts";
 import { summaryMarkdown, writeRunReport } from "./report.ts";
 import { inspectShop, orderStatus, prepareShop, shopChecks, startShop } from "./sandbox.ts";
 import { scanTrackedSecrets } from "./scan.ts";
 import { loadSupabaseProject, resetSupabase, supabaseChecks } from "./supabase.ts";
 import type { Check, Platform, Scenario, Turn } from "./types.ts";
 import { liveVendureChecks } from "./vendure.ts";
+import {
+  liveEddChecks,
+  liveWoocommerceChecks,
+  wordpressChaosBuyers,
+  wordpressKind,
+} from "./wordpress.ts";
 import { loadVercelConfig, vercelChecks, vercelCodeChecks } from "./vercel.ts";
 import { type TrialWallet, trialWalletOverride } from "./wallet.ts";
 
@@ -60,6 +70,10 @@ export async function openingFor(platform: Platform, directionsUrl: string): Pro
   );
 }
 
+/** Asked after the trial is checked; the answer goes to friction.md, never into a check. */
+export const FRICTION_QUESTION =
+  "Thanks, that is everything I needed. One last question, and please do not run anything or change any files: what in the OpenReceive directions was wrong, missing or confusing while you did this? Answer in at most five short bullets, or say nothing was.";
+
 export interface LoopRequest {
   readonly platform: Platform;
   readonly directionsUrl: string;
@@ -74,6 +88,10 @@ export interface LoopRequest {
   /** The test wallet the codes belong to; it can pay an invoice. */
   readonly wallet?: TrialWallet;
   readonly registerStop?: (stop: () => Promise<void>) => void;
+  /** Run the chaos phase after the live checks (default true; `--no-chaos` turns it off). */
+  readonly chaos?: boolean;
+  /** Who the merchant is (scenarios.ts); canonical when omitted. */
+  readonly scenario?: Scenario;
 }
 
 export interface LoopResult {
@@ -247,12 +265,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       };
     }
 
-    const scenario: Scenario = {
-      id: "canonical",
-      prompt: "",
-      swaps: true,
-      choice: "Yes, stablecoins too.",
-    };
+    const scenario: Scenario = request.scenario ?? scenarioFor("canonical", 0);
     const opening = await openingFor(platform, request.directionsUrl);
     console.log(`${sandbox.id} ${sandbox.baseUrl}`);
     console.log(`${sandbox.id} directions ${request.directionsUrl}`);
@@ -392,6 +405,7 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       const prepared = await beforeLive(directory, platform, log);
       if (prepared !== undefined) checks.push(prepared);
       log("live: the shop's own order, a checkout, a stranger");
+      const wordpress = wordpressKind(platform);
       const live =
         platform.host === "btcpay"
           ? await liveBtcpayChecks(directory, request.wallet?.settle)
@@ -415,10 +429,17 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
                             paid,
                             ...(swap ? { swap } : {}),
                           })
-                        : await liveShopChecks(sandbox.baseUrl, {
-                            paid,
-                            ...(swap ? { swap } : {}),
-                          });
+                        : wordpress !== undefined
+                          ? await (wordpress === "edd" ? liveEddChecks : liveWoocommerceChecks)(
+                              directory,
+                              sandbox.baseUrl,
+                              { paid, ...(swap ? { swap } : {}), bitcoinOnly: !scenario.swaps },
+                            )
+                          : await liveShopChecks(sandbox.baseUrl, {
+                              paid,
+                              ...(swap ? { swap } : {}),
+                              bitcoinOnly: !scenario.swaps,
+                            });
       // A 500 page says nothing; the shop's own log says why.
       const logs = live.every((item) => item.pass)
         ? ""
@@ -442,6 +463,52 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
           item.pass ? item : { ...item, evidence: `${item.evidence ?? ""}\n${logs}`.trim() },
         ),
       );
+      // What the payer sees: the shop's own pages in Chromium, every state of
+      // the checkout read for developer words, failures forced through the
+      // interceptor and the test provider. The framework fixtures only.
+      if (request.wallet !== undefined && platform.host === undefined && wordpress === undefined) {
+        log("payer: the checkout in Chromium, paid and failing");
+        checks.push(
+          ...(await payerWalkChecks({
+            baseUrl: sandbox.baseUrl,
+            directory,
+            platform,
+            wallet: request.wallet,
+            client: clientPrefix(directory),
+            reportDir,
+            swaps: scenario.swaps && platform.swap_provider !== "live",
+          })),
+        );
+      }
+      // A framework's debug page can show the codes however well the agent
+      // kept them out of its own code.
+      checks.push(...(await debugPageChecks(directory, platform)));
+      // The chaos phase needs the shop on the trial network, where the
+      // interceptor stands in for its relay and price feeds.
+      if (
+        request.chaos !== false &&
+        platform.host === undefined &&
+        request.wallet !== undefined &&
+        platform.swap_provider !== "live"
+      ) {
+        log("chaos: the relay and price feeds fail under the shop");
+        checks.push(
+          ...(await chaosChecks({
+            directory,
+            platform,
+            baseUrl: sandbox.baseUrl,
+            interceptor: request.wallet.interceptor,
+            paid,
+            log,
+            ...(wordpress === undefined
+              ? {}
+              : {
+                  newBuyer: wordpressChaosBuyers(wordpress, directory, sandbox.baseUrl),
+                  healthPath: "/",
+                }),
+          })),
+        );
+      }
     }
     if (supabase !== undefined && done) checks.push(await supabaseChecks(supabase));
     if (vercel !== undefined && done) {
@@ -457,9 +524,39 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       evidence: check.evidence === undefined ? undefined : hide(check.evidence, uris),
       summary: hide(check.summary, uris),
     }));
+    // One question after everything is checked, so its answer cannot change
+    // what was checked: where the directions fell short. The 2026-11-06 video
+    // agent's answer named three gaps its passing trial never showed.
+    const friction =
+      done && sessionId !== undefined
+        ? await request.agent
+            .turn({
+              workspace: directory,
+              prompt: FRICTION_QUESTION,
+              resume: sessionId,
+              model: request.model,
+              timeoutMs: 5 * 60_000,
+              env,
+            })
+            .then((response) => {
+              usage.inputTokens += response.usage.inputTokens;
+              usage.outputTokens += response.usage.outputTokens;
+              const ran = response.tools.filter((tool) => tool.type !== "fetch").length;
+              return `${response.lastText || response.text}${ran === 0 ? "" : `\n\n(The agent used ${ran} tool(s) while answering.)`}`;
+            })
+            .catch((error: unknown) => `(no answer: ${String(error)})`)
+        : undefined;
+    // Every service's whole log, kept with the report whatever the result: a
+    // 5xx a buyer saw must be findable there, as a merchant would look for it.
+    const shopLog = await compose(directory, ["logs", "--no-color", "--timestamps"], 60_000, {
+      quiet: true,
+    })
+      .then((result) => `${result.stdout}\n${result.stderr}`.trim())
+      .catch((error: unknown) => `docker compose logs failed: ${String(error)}`);
     await writeRunReport({
       directory: reportDir,
       slug: platform.slug,
+      scenario: scenario.id,
       agent: request.agent.name,
       id: sandbox.id,
       baseUrl: sandbox.baseUrl,
@@ -474,6 +571,13 @@ export async function runDirections(request: LoopRequest): Promise<LoopResult> {
       checks: redacted,
       uris,
     });
+    await writeFile(path.join(reportDir, "shop.log"), `${hide(shopLog, uris)}\n`);
+    if (friction !== undefined) {
+      await writeFile(
+        path.join(reportDir, "friction.md"),
+        `# What the agent says the directions got wrong\n\n> ${FRICTION_QUESTION}\n\n${hide(friction, uris)}\n`,
+      );
+    }
     const failed = redacted.filter((check) => check.severity === "blocker" && check.pass === false);
     const message =
       failed.length === 0

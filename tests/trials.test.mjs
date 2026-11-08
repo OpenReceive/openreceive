@@ -1144,6 +1144,8 @@ test("the live check orders and pays through a CSRF-protected shop, as a browser
         ["live_refuses_stranger", true],
         ["live_one_scan_back_to_back", true],
         ["live_reload", true],
+        ["live_no_buyer_503", true],
+        ["live_no_server_error", true],
       ],
     );
   } finally {

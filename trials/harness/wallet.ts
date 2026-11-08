@@ -14,7 +14,9 @@ import { compose, InfraError } from "./docker.ts";
 // without the merchant's real wallet. The NWC code works from anywhere; the
 // swap provider is local, so a shop joins the stack's network and trusts its
 // private CA through trialWalletOverride. The harness marks an invoice paid
-// with settle().
+// with settle(). A shop on that network also reaches the relay and the price
+// feeds through the stack's interceptor (chaos.ts), which passes everything
+// through until the chaos phase sets a rule for that shop.
 
 const walletDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../wallet");
 const certsDir = path.join(walletDir, "certs");
@@ -23,6 +25,8 @@ const NETWORK = "openreceive-trial";
 /** Both control ports are published on 127.0.0.1 only. */
 const TESTKIT = "http://127.0.0.1:17890";
 const FAKE_LSC = "https://127.0.0.1:17888";
+const INTERCEPTOR = "http://127.0.0.1:17891";
+const INTERCEPTOR_CONTAINER = "openreceive-trial-wallet-interceptor-1";
 /** The swap provider as a shop on the trial network reaches it. */
 const FAKE_LSC_HOST = "fake-lsc:7788";
 const UP_TIMEOUT_MS = 15 * 60 * 1000;
@@ -55,6 +59,15 @@ export interface TrialWallet {
   completeSwap: (bolt11: string) => Promise<void>;
   /** Every invoice the wallet holds, paid or not, without preimages. */
   invoices: () => Promise<unknown>;
+  /** The interceptor's address on the trial network, and the host names it answers for. */
+  readonly interceptor: TrialInterceptor;
+}
+
+export interface TrialInterceptor {
+  readonly ip: string;
+  readonly hosts: readonly string[];
+  /** The control API, on 127.0.0.1. */
+  readonly control: string;
 }
 
 /** The CA the certs service minted into the stack's volume. */
@@ -117,6 +130,49 @@ function fakeLscJson(pathname: string, ca: string, body?: unknown): Promise<unkn
     call.on("error", (error) => reject(new InfraError(`fake-lsc: ${error.message}`)));
     call.end(body === undefined ? undefined : JSON.stringify(body));
   });
+}
+
+/** The interceptor's host list when it answers; undefined when it needs `up`. */
+async function interceptorHosts(): Promise<string[] | undefined> {
+  try {
+    const response = await fetch(`${INTERCEPTOR}/health`, { signal: AbortSignal.timeout(3_000) });
+    if (!response.ok) return undefined;
+    const body = (await response.json()) as { hosts?: unknown };
+    return Array.isArray(body.hosts) ? body.hosts.map(String) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The interceptor, started on its own when the rest of the stack is already
+ * up: `up` for one service leaves testkit-nwc alone, so its code and its
+ * invoices survive.
+ */
+async function startInterceptor(): Promise<TrialInterceptor> {
+  let hosts = await interceptorHosts();
+  if (hosts === undefined) {
+    await compose(walletDir, [...COMPOSE_ARGS, "up", "-d", "--wait", "interceptor"], 10 * 60_000);
+    hosts = await interceptorHosts();
+  }
+  if (hosts === undefined || hosts.length === 0) {
+    throw new InfraError("The trial interceptor did not answer on its control port.");
+  }
+  const { stdout } = await execFileAsync(
+    "docker",
+    [
+      "inspect",
+      INTERCEPTOR_CONTAINER,
+      "--format",
+      `{{(index .NetworkSettings.Networks "${NETWORK}").IPAddress}}`,
+    ],
+    { timeout: 30_000 },
+  );
+  const ip = stdout.trim();
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) {
+    throw new InfraError(`The trial interceptor has no address on ${NETWORK}: ${ip || "(none)"}.`);
+  }
+  return { ip, hosts, control: INTERCEPTOR };
 }
 
 /** The CA when every service already answers; undefined when the stack needs `up`. */
@@ -228,7 +284,9 @@ async function invoices(): Promise<unknown> {
 export async function startTrialWallet(): Promise<TrialWallet> {
   const ca = (await healthyCa()) ?? (await bringUp());
   const { caFile, caBundle } = await writeTrust(ca);
+  const interceptor = await startInterceptor();
   return {
+    interceptor,
     nwc: await nwcUri(),
     lsc: await lscUri(ca),
     network: NETWORK,
@@ -251,11 +309,15 @@ export async function stopTrialWallet(): Promise<void> {
  * private CA. Node reads
  * NODE_EXTRA_CA_CERTS; OpenSSL (Python, PHP, Ruby, curl) reads the bundle,
  * mounted over the Debian path and named by SSL_CERT_FILE; Deno (Supabase's
- * edge-runtime) reads that bundle only with DENO_TLS_CA_STORE=system.
+ * edge-runtime) reads that bundle only with DENO_TLS_CA_STORE=system. With an
+ * interceptor, each service also resolves the relay and price-feed host
+ * names to it, through extra_hosts.
  */
 export function trialWalletOverride(
   services: readonly string[],
-  wallet: Pick<TrialWallet, "network" | "caFile" | "caBundle">,
+  wallet: Pick<TrialWallet, "network" | "caFile" | "caBundle"> & {
+    readonly interceptor?: Pick<TrialInterceptor, "ip" | "hosts">;
+  },
 ): string {
   const names = [...new Set(services)];
   if (names.length === 0) throw new InfraError("trialWalletOverride needs at least one service.");
@@ -289,6 +351,13 @@ export function trialWalletOverride(
       `      CURL_CA_BUNDLE: ${BUNDLE_IN_SHOP}`,
       "      DENO_TLS_CA_STORE: system",
     );
+    if (wallet.interceptor !== undefined && wallet.interceptor.hosts.length > 0) {
+      lines.push("    extra_hosts:");
+      for (const host of wallet.interceptor.hosts) {
+        if (!/^[a-z0-9.-]+$/.test(host)) throw new InfraError(`Not a host name: ${host}`);
+        lines.push(`      - ${quote(`${host}:${wallet.interceptor.ip}`)}`);
+      }
+    }
   }
   lines.push("networks:", `  ${wallet.network}:`, "    external: true", "");
   return lines.join("\n");

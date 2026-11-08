@@ -20,6 +20,7 @@ import {
 import { scanTrackedSecrets } from "./scan.ts";
 import type { Check, Platform } from "./types.ts";
 import { liveVendureChecks } from "./vendure.ts";
+import { liveEddChecks, liveWoocommerceChecks, wordpressKind } from "./wordpress.ts";
 import { startTrialWallet, trialWalletOverride } from "./wallet.ts";
 
 // A trial run by hand: any coding agent integrates the shop itself, following
@@ -184,7 +185,11 @@ async function checkShop(argv: readonly string[]): Promise<void> {
                 ? await liveOdooChecks(state.baseUrl, options)
                 : platform.host === "medusa"
                   ? await liveMedusaChecks(directory, state.baseUrl, options)
-                  : await liveShopChecks(state.baseUrl, options)),
+                  : wordpressKind(platform) === "woocommerce"
+                    ? await liveWoocommerceChecks(directory, state.baseUrl, options)
+                    : wordpressKind(platform) === "edd"
+                      ? await liveEddChecks(directory, state.baseUrl, options)
+                      : await liveShopChecks(state.baseUrl, options)),
     );
   } else {
     console.log(

@@ -47,6 +47,8 @@ export function compose(
   cwd: string,
   args: readonly string[],
   timeoutMs: number,
+  /** Keep the output off the console (a shop's whole log). */
+  options: { readonly quiet?: boolean } = {},
 ): Promise<CommandResult> {
   const label = path.basename(cwd);
   return new Promise((resolve, reject) => {
@@ -61,11 +63,11 @@ export function compose(
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       stdout += chunk;
-      process.stdout.write(chunk);
+      if (options.quiet !== true) process.stdout.write(chunk);
     });
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
-      process.stderr.write(`[${label}] ${chunk}`);
+      if (options.quiet !== true) process.stderr.write(`[${label}] ${chunk}`);
     });
     child.on("error", (error) => {
       clearTimeout(timer);

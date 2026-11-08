@@ -133,7 +133,7 @@ video takes kept finding after a pass:
 - `secret_not_in_command_output`: no command printed a code (`cat .env`, an
   unfiltered grep).
 - `pkill`, `killall` and `source .env` are forbidden.
-- On the framework shops (`"live": true`), after the agent finishes: the shop's
+- On the framework shops and the WordPress stores (`"live": true`), after the agent finishes: the shop's
   own order form makes an order, its buyer gets a real Lightning invoice, and a
   second visitor with a session and CSRF token of their own is refused. So
   the check fails when the allow-all `authorize` placeholder is left in place.
@@ -151,6 +151,114 @@ video takes kept finding after a pass:
   scanned on every request: 3 s a click, 15 s a reload. The evidence lists
   each call's time, so a slow shop shows up even when the check passes.
 - `failed_commands` (polish) lists every command that exited nonzero.
+- `friction_signals` (polish): something the agent ran suggests the
+  directions left it to work around a gap: a `NODE_OPTIONS` or
+  `--experimental` flag, a forced or pinned install, `sudo`, `chmod 777`,
+  the same failing command three times, the directions fetched three times.
+  The 2026-11-06 video agent pinned better-sqlite3 and set
+  `NODE_OPTIONS=--experimental-sqlite`, and its run would have passed.
+- `live_no_buyer_503`: no buyer request answered 503. The live buyer still
+  retries a retryable 503, as the browser checkout does, so the other checks
+  finish, but the payer would have seen the error, so the run fails (the
+  maintainer's rule, 2026-11-07). The retry once hid the 0.4.31 PHP
+  handshake bug. `live_no_server_error`: no other 5xx, and no request that
+  went unanswered.
+- `live_bitcoin_only`: in the `bitcoin-only` scenario, the checkout offers no
+  swap method.
+- `debug_page_hides_codes` (Django): with DEBUG on, the framework's error page
+  would not print the codes. `manage.py runserver` copies the environment into
+  `request.META`, and Django hides only names like `KEY` or `SECRET`. The probe
+  renders that page inside the shop's container through the shop's own
+  exception reporter filter.
+
+Each run's report also keeps `shop.log` (every service's whole log, codes
+redacted) and `friction.md`: after everything is checked, the harness asks the
+agent what in the directions was wrong, missing or confusing. The answer is
+never a check; it is where the directions' next fix usually is.
+
+## Chaos
+
+After the live checks, a framework shop's relay and price feeds fail on
+purpose (`chaos.ts`). The trial wallet's `interceptor` service is a TLS proxy:
+the shop's override maps `relay-nwc.rizful.com`, `api.coingecko.com` and
+`openreceive.org` to it (`extra_hosts`), and the shop trusts the trial CA, so
+the shop connects to the interceptor as if to the real host. With no rule a
+connection passes through. A rule names the shop's Compose project, so a trial
+beside it keeps a healthy network. The wallet's own connection never goes
+through it.
+
+- `chaos_slow_handshakes`: eight checkouts, each on a fresh relay connection
+  whose handshake takes one of the eight times measured from a shop container
+  on 2026-11-06 (0.6 s to 3.24 s). 0.4.31's PHP engine gave a handshake 1 s.
+- `chaos_relay_flaps`: the relay cuts every connection after 4 s; four checkouts
+  5 s apart all get an invoice.
+- `chaos_silent_wallet_answers`, `chaos_silent_wallet_recovers`: the relay
+  accepts and never answers. The buyer gets a structured 503 (a JSON `code`)
+  within 30 s, and a checkout works again once the relay answers.
+- `chaos_relay_down_answers_503`, `chaos_relay_down_recovers`: the same, with
+  the relay refusing connections while the shop runs.
+- `chaos_price_feed_down`: both price feeds refuse; a checkout uses a cached
+  rate or fails closed with a structured error.
+- `chaos_outage_answers_503`, `chaos_boot_recovers`: the shop restarts while
+  the relay is down, and must take a checkout within 60 s of the relay coming
+  back, with no second restart. 0.4.31's `createStack` kept the failed boot for
+  the life of the process.
+- `chaos_pending_across_restart`: an invoice minted before a restart settles
+  after it, and the order turns paid.
+
+`--no-chaos` skips the phase. It takes a few minutes and spends no tokens.
+
+## Scenarios
+
+`--scenario` picks the merchant: `canonical` (stablecoins, clean pastes),
+`bitcoin-only`, `quoted-paste` (the code in quotes, as copied from an `.env`
+file), `env-line-paste` (`NWC_URI=…`, name and all) or `wrapped-paste` (a chat
+app broke the code over two lines; the secret stays whole). `--scenario mix`
+gives each run of a platform the next one, so `--runs 3` covers canonical, a
+wrapped paste and Bitcoin only.
+
+## Recheck
+
+`npm run trial:recheck -- --dir <kept shop> [--phases live,leaks,chaos]`
+runs the checks again on a shop a trial kept (`--keep`), without an agent. It
+writes the shop's wallet override again first, so a shop kept before the
+interceptor existed goes through it too. This is how a new check is proved:
+pin the kept shop to the release whose bug the check targets, and the check
+must fail; put the fixed release back, and it must pass. On 2026-11-08 an
+Express shop pinned to 0.4.31 failed `chaos_boot_recovers` (503 in 2 ms for
+60 s) and passed on 0.4.32, and a WooCommerce shop with the 0.4.31 plugin
+failed `chaos_slow_handshakes` (3 of 8: "Configured NWC relays are
+unavailable." at 1.1 s, video 10's error) and passed with 0.4.32. For a
+WordPress shop, `wp plugin install <release zip> --force` through the shop's
+`cli` service swaps the plugin.
+
+`--phases` also takes `payer` (the browser walk below, framework shops only)
+and `leaks`.
+
+## Payer walk
+
+On a framework shop, after the live checks, Chromium walks the shop the way a
+buyer does (`payer.ts`) and reads what the checkout puts on the screen. Every
+screen is saved in the report's `payer/` folder as a screenshot and its
+visible text.
+
+- `payer_paid_on_screen`, `payer_paid_wording`: after the wallet settles, the
+  paid screen appears without a reload and speaks to the payer ("Payment
+  received", not "Backend settlement verified"). `payer_paid_latency`
+  (polish) wants it within 10 s.
+- `payer_amount_matches`: the invoice screen shows the shop's own price.
+- `payer_invoice_failure_has_way_forward`, `payer_recovers_after_try_again`:
+  with the relay silent (through the interceptor), the checkout says what
+  happened in a sentence and offers Try again, which gets an invoice once the
+  relay is back.
+- `payer_swap_total_matches`: the USDT-on-Solana breakdown's first row reads
+  Total and shows the shop's price to the cent.
+- `payer_swap_failure_has_way_forward`: the test provider refuses the create
+  (`/__testkit/force-create-error`, scoped to this shop's containers by
+  Docker's DNS), and the checkout says so with Try again.
+- `payer_words`: no screen names NWC, nostr, a relay or the backend, shows a
+  server error, an exception, `undefined`, `NaN` or `[object Object]`.
+  "swap service" is allowed in the product (that ban is for videos).
 
 A candidate run (`--serve-directions`) tests this tree's directions against
 the packages the registries serve, which is the latest release. A fix in a

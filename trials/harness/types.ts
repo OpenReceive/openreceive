@@ -35,6 +35,8 @@ export interface Scenario {
   /** When true, the merchant wants USDT, USDC, SOL, and ETH as well as Bitcoin. */
   readonly swaps: boolean;
   readonly choice: string;
+  /** How the merchant pastes a code (scenarios.ts); plain when omitted. */
+  readonly paste?: "quoted" | "env-line" | "wrapped";
 }
 
 export interface Platform {

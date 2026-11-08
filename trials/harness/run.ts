@@ -13,6 +13,7 @@ import { runPool } from "./pool.ts";
 import { platformSummaryMarkdown } from "./report.ts";
 import { startTrialWallet, type TrialWallet } from "./wallet.ts";
 import { inspectShop, prepareShop, shopChecks, startShop } from "./sandbox.ts";
+import { scenarioFor } from "./scenarios.ts";
 import { serveDirectory } from "./serve.ts";
 import { loadSupabaseProject, resetSupabase } from "./supabase.ts";
 import type { Check, Platform } from "./types.ts";
@@ -29,7 +30,7 @@ function value(argv: readonly string[], name: string): string | undefined {
 
 function help(): void {
   console.log(`Usage: npm run trial -- --platform woocommerce|edd|node|fastify|next|nestjs|sveltekit|nuxt|astro|react-router|tanstack-start|vercel|replit|lovable|bolt|supabase|rails|django|fastapi|flask|php|laravel|btcpay|paymenter|fossbilling|prestashop|odoo|medusa|vendure [--smoke] [--runs 1] [--parallel 1] [--keep]
-       [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions]
+       [--agent random|cursor|codex|claude|<a>,<b>] [--model <id>] [--directions-url <url> | --serve-directions] [--no-chaos] [--scenario <name>|mix]
 
 Boots a plain shop in its own Compose project. Each run gets its own directory,
 network, and published port, so --parallel can start several at once.
@@ -50,6 +51,9 @@ one real Supabase project. Only one trial process runs at once.
                      list: agent --list-models; Codex and Claude: their CLI default)
 --deploy             deploy a Vercel trial's shop to Vercel (default: check it where it runs)
 --keep               leave the containers and the shop directory in place
+--no-chaos           skip the chaos phase (relay and price-feed faults after the live checks)
+--scenario           the merchant: canonical (default), bitcoin-only, quoted-paste, env-line-paste,
+                     wrapped-paste, or mix (each run of a platform gets the next one)
 
 Without --smoke, the agent integrates its own copy of the shop for each trial. That spends model usage and takes
 several minutes. Reports land in trials/reports/ and are not committed.
@@ -152,6 +156,9 @@ async function main(): Promise<void> {
   const keep = argv.includes("--keep");
   const deploy = argv.includes("--deploy");
   const smoke = argv.includes("--smoke");
+  const chaos = !argv.includes("--no-chaos");
+  const scenarioSpec = value(argv, "--scenario") ?? "canonical";
+  scenarioFor(scenarioSpec, 0);
   const pool = agentPool(value(argv, "--agent") ?? "random", value(argv, "--model"));
   const explicitUrl = value(argv, "--directions-url");
   const serve = argv.includes("--serve-directions");
@@ -245,6 +252,8 @@ async function main(): Promise<void> {
               })(),
               keep,
               deploy,
+              chaos,
+              scenario: scenarioFor(scenarioSpec, index),
               codes:
                 liveSwap(platform) && liveLsc !== undefined ? { ...codes, lsc: liveLsc } : codes,
               wallet,

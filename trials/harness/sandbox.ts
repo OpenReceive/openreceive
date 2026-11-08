@@ -35,7 +35,7 @@ function serviceOf(platform: Platform): string {
   return platform.service ?? "wordpress";
 }
 
-function containerPortOf(platform: Platform): number {
+export function containerPortOf(platform: Platform): number {
   return platform.container_port ?? 80;
 }
 

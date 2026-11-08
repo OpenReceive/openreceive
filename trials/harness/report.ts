@@ -6,6 +6,8 @@ import type { Check, Turn } from "./types.ts";
 export interface ReportInput {
   readonly directory: string;
   readonly slug: string;
+  /** The merchant scenario (scenarios.ts), when the run had one. */
+  readonly scenario?: string;
   readonly id: string;
   readonly baseUrl: string;
   readonly directionsUrl: string;
@@ -37,6 +39,7 @@ export async function writeRunReport(input: ReportInput): Promise<void> {
     `${JSON.stringify(
       {
         slug: input.slug,
+        scenario: input.scenario,
         id: input.id,
         baseUrl: input.baseUrl,
         directionsUrl: input.directionsUrl,

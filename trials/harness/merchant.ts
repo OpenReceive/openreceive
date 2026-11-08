@@ -1,4 +1,5 @@
 import type { MerchantCodes } from "./codes.ts";
+import { pasted } from "./scenarios.ts";
 import type { Intent, Scenario } from "./types.ts";
 
 const DELEGATE =
@@ -121,20 +122,22 @@ export function merchantReply(
       return PLATFORM_CODES_REPLY;
     if (intent === "delegate") return "I'd rather not run commands or edit files. Can you do it?";
   }
+  const paste = (code: string | undefined): string | undefined =>
+    code === undefined || code.length === 0 ? code : pasted(code, scenario);
   if (intent === "delegate") {
     const handed =
       (asksNwc(text) ? codes.nwc : undefined) ??
       (asksPrimaryLsc(text) ? codes.lsc : undefined) ??
       (asksBackup(text) ? codes.lscBackup : undefined);
-    return withCode(handed) ?? "I'd rather not run commands or edit files. Can you do it?";
+    return withCode(paste(handed)) ?? "I'd rather not run commands or edit files. Can you do it?";
   }
   if ((intent === "lsc" || intent === "bitcoin_choice") && scenario.swaps === false) {
     return "Bitcoin only";
   }
   if (intent === "lsc_backup" && scenario.swaps === false) return "Bitcoin only";
-  if (intent === "nwc") return codes.nwc;
-  if (intent === "lsc") return codes.lsc;
-  if (intent === "lsc_backup") return codes.lscBackup ?? "I don't have a backup code.";
+  if (intent === "nwc") return paste(codes.nwc) ?? codes.nwc;
+  if (intent === "lsc") return paste(codes.lsc) ?? codes.lsc;
+  if (intent === "lsc_backup") return paste(codes.lscBackup) ?? "I don't have a backup code.";
   if (intent === "bitcoin_choice") return scenario.choice;
   return GO_AHEAD;
 }

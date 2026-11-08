@@ -39,10 +39,17 @@ export class Visitor implements CheckoutClient {
   private readonly cookies = new Map<string, string>();
   /** The last CSRF token a page carried, in a meta tag or a form field. */
   private token: string | undefined;
+  /**
+   * Every OpenReceive API answer this visitor got, retried ones included, so
+   * a 503 the retry hid still shows (buyerErrorChecks).
+   */
+  readonly answers: RecordedAnswer[] = [];
 
   constructor(
     private readonly base: string,
     private readonly retryDelayMs = 5_000,
+    /** Longer than any honest request; the chaos phase's silent wallet needs it bounded. */
+    private readonly requestTimeoutMs = 60_000,
   ) {}
 
   private remember(response: Response): void {
@@ -102,13 +109,18 @@ export class Visitor implements CheckoutClient {
    * the browser checkout does, so a network blip is not a directions result.
    */
   async createCheckout(reference: string, pagePath: string): Promise<Answer> {
-    let result = await this.post("/openreceive/checkouts", { reference }, pagePath);
+    let result = await this.createCheckoutOnce(reference, pagePath);
     for (let retry = 0; retry < 2 && result.status === 503; retry += 1) {
       if (!/"retryable"\s*:\s*true/.test(result.body)) break;
       await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
-      result = await this.post("/openreceive/checkouts", { reference }, pagePath);
+      result = await this.createCheckoutOnce(reference, pagePath);
     }
     return result;
+  }
+
+  /** One POST /openreceive/checkouts, with no retry: what the chaos phase measures. */
+  createCheckoutOnce(reference: string, pagePath: string): Promise<Answer> {
+    return this.post("/openreceive/checkouts", { reference }, pagePath);
   }
 
   /** POST /openreceive/checkouts/prepare: the amount and the swap methods the picker shows. */
@@ -168,10 +180,79 @@ export class Visitor implements CheckoutClient {
       method: "POST",
       headers,
       body: JSON.stringify(body),
-    });
+      signal: AbortSignal.timeout(this.requestTimeoutMs),
+    }).catch((error: unknown) => error);
+    if (!(response instanceof Response)) {
+      // A request that hung or broke is what a buyer sees as a spinner that
+      // never ends: status 0, kept in the record like any other answer.
+      const answer = {
+        status: 0,
+        body: String(response),
+        ms: Math.round(performance.now() - started),
+      };
+      this.answers.push({ route, ...answer });
+      return answer;
+    }
     const text = await response.text();
-    return { status: response.status, body: text, ms: Math.round(performance.now() - started) };
+    const answer = {
+      status: response.status,
+      body: text,
+      ms: Math.round(performance.now() - started),
+    };
+    this.answers.push({ route, ...answer });
+    return answer;
   }
+}
+
+/** One answer as a visitor recorded it: the route, and the answer. */
+export interface RecordedAnswer extends Answer {
+  readonly route: string;
+}
+
+/**
+ * A buyer never sees a wallet outage on a healthy day. A 503 the visitor
+ * retried past still fails `live_no_buyer_503`: the payer would have seen the
+ * error and pressed Try again (the maintainer's rule, 2026-11-07). Any other
+ * 5xx, or a request that never answered, fails `live_no_server_error`.
+ */
+export function buyerAnswerChecks(answers: readonly RecordedAnswer[]): Check[] {
+  const unavailable = answers.filter((answer) => answer.status === 503);
+  const broken = answers.filter(
+    (answer) => answer.status === 0 || (answer.status >= 500 && answer.status !== 503),
+  );
+  const listed = (list: readonly RecordedAnswer[]) =>
+    list
+      .slice(0, 5)
+      .map(
+        (answer) =>
+          `${answer.route} ${answer.status} in ${answer.ms} ms: ${answer.body.slice(0, 160)}`,
+      )
+      .join("\n");
+  return [
+    check(
+      "live_no_buyer_503",
+      unavailable.length === 0,
+      "No buyer request answered 503: the wallet was reachable for every checkout call.",
+      unavailable.length === 0
+        ? `${answers.length} answers`
+        : `${unavailable.length} of ${answers.length} answers were 503\n${listed(unavailable)}`,
+    ),
+    check(
+      "live_no_server_error",
+      broken.length === 0,
+      "No buyer request failed with a server error or went unanswered.",
+      broken.length === 0
+        ? `${answers.length} answers`
+        : `${broken.length} of ${answers.length} answers\n${listed(broken)}`,
+    ),
+  ];
+}
+
+/** buyerAnswerChecks over every answer the visitors got. */
+export function buyerErrorChecks(
+  visitors: readonly { readonly answers: readonly RecordedAnswer[] }[],
+): Check[] {
+  return buyerAnswerChecks(visitors.flatMap((visitor) => visitor.answers));
 }
 
 /** One OpenReceive API answer, and how long the POST took (the page fetch before it excluded). */
@@ -236,6 +317,8 @@ export interface LiveOptions {
   readonly swap?: SwapPath;
   /** How long the shop has to see the settlement. */
   readonly settleTimeoutMs?: number;
+  /** The merchant asked for Bitcoin only: the checkout must offer no swap method. */
+  readonly bitcoinOnly?: boolean;
 }
 
 export async function liveShopChecks(base: string, options: LiveOptions = {}): Promise<Check[]> {
@@ -245,9 +328,15 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
     .then((response) => response.status)
     .catch(() => 0);
   checks.push(check("live_health", health === 200, "The shop answers GET /health.", `${health}`));
+  const visitors: Visitor[] = [];
+  const visitor = (): Visitor => {
+    const made = new Visitor(base, retryDelayMs);
+    visitors.push(made);
+    return made;
+  };
 
   try {
-    const buyer = new Visitor(base, retryDelayMs);
+    const buyer = visitor();
     const order = await buyer.placeOrder();
     const page = `/orders/${order}`;
     const own = await buyer.createCheckout(order, page);
@@ -264,7 +353,7 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
     );
     // A second visitor with a session of their own, so a CSRF refusal cannot
     // pass for the host's authorize hook refusing them.
-    const stranger = new Visitor(base, retryDelayMs);
+    const stranger = visitor();
     const theirs = await stranger.createCheckout(order, "/");
     checks.push(
       check(
@@ -274,6 +363,7 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
         `${theirs.status} ${theirs.body.slice(0, 200)}`,
       ),
     );
+    if (options.bitcoinOnly === true) checks.push(await bitcoinOnlyCheck(buyer, order, page));
     const paymentHash = own.body.match(/"payment_hash"\s*:\s*"([0-9a-f]{64})"/)?.[1];
     if (paymentHash !== undefined) {
       checks.push(await backToBackCheck(buyer, order, page, paymentHash));
@@ -289,14 +379,43 @@ export async function liveShopChecks(base: string, options: LiveOptions = {}): P
   }
   if (options.swap !== undefined) {
     try {
-      checks.push(...(await swapChecks(base, options.swap, options)));
+      checks.push(...(await swapChecks(visitor(), options.swap, options)));
     } catch (error) {
       checks.push(
         check("live_swap_paid", false, "The buyer paid an order by swap.", String(error)),
       );
     }
   }
+  checks.push(...buyerErrorChecks(visitors));
   return checks;
+}
+
+/** The pay-in assets a prepare answer marks available. */
+export function availableMethods(body: string): string[] {
+  try {
+    const parsed = JSON.parse(body) as {
+      payment_methods?: { pay_in_asset: string; available: boolean }[];
+    };
+    return (parsed.payment_methods ?? [])
+      .filter((method) => method.available)
+      .map((method) => method.pay_in_asset);
+  } catch {
+    return [];
+  }
+}
+
+/** A merchant who said "Bitcoin only" gets a checkout that offers no swap. */
+async function bitcoinOnlyCheck(buyer: Visitor, order: string, page: string): Promise<Check> {
+  const prepared = await buyer.prepareCheckout(order, page);
+  const offered = prepared.status === 200 ? availableMethods(prepared.body) : [];
+  return check(
+    "live_bitcoin_only",
+    prepared.status === 200 && offered.length === 0,
+    "The merchant asked for Bitcoin only, and the checkout offers no swap pay-in method.",
+    prepared.status === 200
+      ? `swap methods on offer: ${offered.join(", ") || "none"}`
+      : `${prepared.status} ${prepared.body.slice(0, 200)}`,
+  );
 }
 
 /**
@@ -400,8 +519,7 @@ export async function backToBackCheck(
 const SWAP_ASSET = "USDT_SOL";
 export const SWAP_PRODUCT = 2;
 
-async function swapChecks(base: string, swap: SwapPath, options: LiveOptions): Promise<Check[]> {
-  const buyer = new Visitor(base, options.retryDelayMs ?? 5_000);
+async function swapChecks(buyer: Visitor, swap: SwapPath, options: LiveOptions): Promise<Check[]> {
   const order = await buyer.placeOrder(SWAP_PRODUCT);
   return swapOrderChecks(buyer, order, `/orders/${order}`, swap, options);
 }

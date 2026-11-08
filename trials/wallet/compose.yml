@@ -7,6 +7,7 @@
 #                marks one paid through the control API. Receive-only grants.
 #   certs        mints a private CA and fake-lsc's certificate (the BTCPay stack's script)
 #   fake-lsc     FixedFloat-compatible swap provider over HTTPS; nothing pays out
+#   interceptor  TLS proxy for the relay and price feeds, for the chaos phase
 #
 # A shop that uses swaps joins the `openreceive-trial` network as
 # `external: true` to reach fake-lsc, and trusts the private CA.
@@ -93,6 +94,36 @@ services:
       interval: 2s
       timeout: 3s
       retries: 60
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+
+  # A TLS proxy for the public hosts a shop reaches: the NWC relay and the
+  # price feeds. A shop's override maps those names to this container
+  # (extra_hosts) and trusts the trial CA; with no rule a connection passes
+  # through, and the harness's chaos phase makes one shop's hosts slow, down
+  # or silent through the control port. testkit-nwc keeps its own direct
+  # connection, so the wallet side never goes through it.
+  interceptor:
+    build:
+      context: ./interceptor
+      network: host
+    restart: unless-stopped
+    environment:
+      INTERCEPT_HOSTS: relay-nwc.rizful.com,api.coingecko.com,openreceive.org
+    volumes:
+      - certs:/certs:ro
+    ports:
+      - "127.0.0.1:17891:7791"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:7791/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 2s
+      timeout: 3s
+      retries: 30
     depends_on:
       certs:
         condition: service_completed_successfully

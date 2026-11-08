@@ -175,9 +175,11 @@ checkout offers swap methods, and that no code ended up in a git-tracked
 file. Paste every PASS/FAIL line into your results. A failure prints the
 shop's log; quote the lines that explain it.
 
-WooCommerce has no scripted live checks. Instead, run its doctor, and open
-the shop URL in a browser if you have one: add a product to the cart, pick
-OpenReceive at checkout and confirm a Lightning QR appears.
+On WooCommerce and Easy Digital Downloads, `check` buys as a guest through
+the store's own checkout: the product goes in the cart, checkout must offer
+OpenReceive, and the order page's checkout must get an invoice, refuse a
+stranger, resume on reload, and turn the order paid (`processing` or
+`complete`) once the wallet pays it, by Lightning and by a swap.
 
 If you have a browser tool, also do this on any shop: open the order page,
 pick Bitcoin and see a QR, pick USDT on Solana and see a deposit address,

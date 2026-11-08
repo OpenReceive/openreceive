@@ -251,6 +251,57 @@ const WORKAROUND =
   /--skip-checks\b|--legacy-peer-deps\b|--no-verify\b|--break-system-packages\b|--ignore-platform-reqs?\b|OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC/;
 
 /**
+ * Signs the directions left the agent to work something out: a runtime flag,
+ * a forced or pinned install, root powers, the same failing command again and
+ * again, the directions fetched over and over. None fails a trial on its own
+ * (the work may still be right), but each is a place the directions could say
+ * more. The 2026-11-06 video agent pinned better-sqlite3 and set
+ * NODE_OPTIONS=--experimental-sqlite, and its trial would have passed.
+ */
+const FRICTION: readonly (readonly [string, RegExp])[] = [
+  ["a NODE_OPTIONS flag", /\bNODE_OPTIONS=\S+/],
+  ["an --experimental flag", /--experimental-[\w-]+/],
+  [
+    "a forced install",
+    /\b(?:npm|pnpm|yarn)\s+(?:i|install|add)\b[^\n]*\s--force\b|--force-reinstall\b|\bpip3?\s+install\b[^\n]*--no-deps\b/,
+  ],
+  [
+    "a pinned package version",
+    /\b(?:npm|pnpm|yarn)\s+(?:i|install|add)\b[^\n]*\s(?:@[\w-]+\/)?[\w.-]+@\d[\w.-]*/,
+  ],
+  ["sudo", /(?:^|[;&|]\s*)sudo\s/],
+  ["chmod 777", /\bchmod\s+(?:-R\s+)?777\b/],
+];
+
+export function frictionSignals(turns: readonly Turn[]): string[] {
+  const ran = shells(turns);
+  const found: string[] = [];
+  for (const [label, pattern] of FRICTION) {
+    const hit = ran.find((event) => pattern.test(event.command));
+    if (hit !== undefined) found.push(`${label}: ${quote(hit.command)}`);
+  }
+  const failures = new Map<string, number>();
+  for (const event of ran) {
+    if (event.exitCode === undefined || event.exitCode === 0) continue;
+    failures.set(event.command, (failures.get(event.command) ?? 0) + 1);
+  }
+  for (const [command, times] of failures) {
+    if (times >= 3) found.push(`the same command failed ${times} times: ${quote(command)}`);
+  }
+  const fetches = turns
+    .flatMap((turn) => turn.tools ?? [])
+    .filter((tool) => tool.type === "fetch" && /agent-directions|docs\/agents/.test(tool.url));
+  const perUrl = new Map<string, number>();
+  for (const fetch of fetches) {
+    if (fetch.type === "fetch") perUrl.set(fetch.url, (perUrl.get(fetch.url) ?? 0) + 1);
+  }
+  for (const [url, times] of perUrl) {
+    if (times >= 3) found.push(`fetched ${url} ${times} times`);
+  }
+  return found;
+}
+
+/**
  * Our own commands do not fail in our own code, the last doctor run is clean,
  * nothing was forced past a failure, and nothing rewrote the installed package.
  * A platform with no terminal (Lovable) has no doctor to run, so `doctor`
@@ -327,6 +378,16 @@ export function commandChecks(
       `${failed.length} command(s) exited nonzero.`,
       failed.length === 0 ? undefined : failed.slice(0, 5).map(failedRun).join("\n"),
     ),
+    (() => {
+      const signals = frictionSignals(turns);
+      return check(
+        "friction_signals",
+        "polish",
+        signals.length === 0,
+        "Nothing the agent ran suggests the directions left it to work around a gap.",
+        signals.length === 0 ? undefined : signals.join("\n"),
+      );
+    })(),
   ];
 }
 
