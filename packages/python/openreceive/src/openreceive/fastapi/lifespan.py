@@ -3,12 +3,15 @@ startup, as a FastAPI lifespan.
 
     app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine))
 
-The Fastify/Express precedent: a dead relay or a spend-capable code stops
-the deploy instead of becoming a customer-facing 500 — uvicorn logs the
-`ConfigurationError` and exits. `lazy=True` (tests, a secretless build step)
-defers the check to the first request, which then answers 503
-WALLET_UNAVAILABLE until the wallet is reachable. Either way the binding
-lands on `app.state.openreceive` for the host and the CLI.
+A missing NWC_URI or a code that is wrong (cannot receive, or can spend)
+stops the deploy instead of becoming a customer-facing 500 — uvicorn logs the
+`ConfigurationError` and exits. A relay that does not answer at startup does
+not: the app starts, logs one line, checkouts answer 503 WALLET_UNAVAILABLE,
+and the first checkout after a short wait (1 s, doubling to 60 s) checks
+again. `lazy=True` (tests, a secretless build step) defers the whole check to
+the first request, which then answers 503 WALLET_UNAVAILABLE until it passes.
+Either way the binding lands on `app.state.openreceive` for the host and the
+CLI.
 """
 
 from __future__ import annotations

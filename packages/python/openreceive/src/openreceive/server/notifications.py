@@ -70,12 +70,18 @@ def run_notifications_worker(
                 "openreceive notifications handler failed: %s", sanitize_failure_message(error)
             )
 
+    # A worker started while the wallet's relay was down subscribes only once
+    # the wallet check passes; until then each try fails like a dropped
+    # subscription and backs off.
+    ensure_wallet = getattr(reconciler.service, "ensure_wallet", None)
     backoff: int | None = None
     try:
         while not stop.is_set():
             subscribed_at = time.monotonic()
             failure: BaseException | None = None
             try:
+                if callable(ensure_wallet):
+                    ensure_wallet()
                 subscribe(handler, stop=stop)
             except Exception as error:
                 failure = error

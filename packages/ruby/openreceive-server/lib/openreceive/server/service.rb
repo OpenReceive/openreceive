@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "socket"
+require "timeout"
 require "openreceive"
 require "openreceive/server/errors"
 require "openreceive/server/wallet_info"
@@ -30,7 +32,48 @@ module OpenReceive
       SWAP_PROVIDER_RATE_LIMITED_MESSAGE = "The swap provider is rate limited. Please try again shortly."
       SWAP_PROVIDER_UNREACHABLE_MESSAGE = "The swap provider is temporarily unreachable. Please try again shortly."
 
+      # A wallet check that could not reach the relay runs again on the first
+      # wallet call after this wait. The wait doubles after each failure up to
+      # the cap, and a pass resets it. There is no timer or thread, so an idle
+      # process makes no wallet calls. The schedule of the Node stack's
+      # createRetryingBoot.
+      WALLET_RETRY_FIRST_SECONDS = 1
+      WALLET_RETRY_MAX_SECONDS = 60
+      # What the payer reads until the wallet check passes: the Node stack's
+      # words for a stack that did not start.
+      WALLET_NOT_READY_MESSAGE = "The payment service is not available. Please try again shortly."
+      # The canonical codes of a wallet that could not be reached at all, as
+      # opposed to one that answered with something wrong.
+      UNREACHABLE_WALLET_CODES = %w[WALLET_UNAVAILABLE TIMEOUT].freeze
+
+      # The wallet check could not reach the relay. Never a refusal: the service
+      # starts and checks again later. The message is redacted.
+      class WalletUnreachable < StandardError; end
+      private_constant :WalletUnreachable
+
+      # Whether a wallet call failed before reaching the wallet: the relay
+      # refused, dropped or never answered the connection, or the call ran out
+      # of time. A malformed code, a wallet that answers without the receive
+      # methods, an encryption mismatch, and a relay that answers but holds no
+      # info event for the wallet (a wrong relay or pubkey) are not this.
+      def self.wallet_unreachable?(error)
+        # nwc-ruby's InfoUnavailableError subclasses its NotSentError, but the
+        # relay answered. Read by name, as the error normalizer reads names:
+        # this gem does not load nwc-ruby.
+        return false if error.class.ancestors.any? { |klass| klass.name.to_s.end_with?("InfoUnavailableError") }
+        return true if error.is_a?(SystemCallError) || error.is_a?(SocketError) ||
+                       error.is_a?(IOError) || error.is_a?(Timeout::Error)
+        return true if defined?(::OpenSSL::SSL::SSLError) && error.is_a?(::OpenSSL::SSL::SSLError)
+
+        UNREACHABLE_WALLET_CODES.include?(OpenReceive::Nwc.normalize_wallet_error(error)["code"])
+      end
+
       attr_reader :price_currencies
+
+      # nil once the wallet check has passed. Otherwise why it has not,
+      # redacted: the relay could not be reached, or a later check reached a
+      # wallet that fails it.
+      attr_reader :wallet_pending
 
       # `swap_providers: nil` (the default) auto-builds FixedFloat-compatible
       # providers from LSC_URI_PRIMARY / LSC_URI_BACKUP, exactly like the JS
@@ -42,11 +85,21 @@ module OpenReceive
       # and GET /rates then fail with their not-configured errors.
       # `logger:` is an optional standard Logger-shaped sink (debug/info/
       # warn/error) for operational events such as swap-provider API calls.
+      #
+      # The constructor is the wallet check, and it refuses a wallet that is
+      # wrong: one that cannot receive, speaks no supported encryption, or can
+      # spend without the override. A wallet whose relay cannot be reached is
+      # not refused: the service starts, logs one line, and every wallet call
+      # answers the retryable 503 WALLET_UNAVAILABLE until the check passes.
+      # The first wallet call after the wait (WALLET_RETRY_FIRST_SECONDS,
+      # doubling to WALLET_RETRY_MAX_SECONDS) checks again. `monotonic:` is the
+      # clock that wait reads, for tests.
       def initialize(nwc_client:, price_provider: nil, swap_providers: nil, price_currencies: ["USD"],
                      clock: -> { Time.now.to_i }, allow_spend_capable_wallet: false, env: ENV,
-                     logger: nil)
+                     logger: nil, monotonic: nil)
         @nwc = nwc_client
         @clock = clock
+        @monotonic = monotonic || -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
         @env = env
         @logger = logger
         @price_currencies = Array(price_currencies || ["USD"]).map { |value| value.to_s.upcase }
@@ -60,9 +113,37 @@ module OpenReceive
         attach_swap_provider_runtime!
         # The override relaxes only the spend refusal: receive-readiness and
         # encryption are still enforced, exactly as in the JS preflight.
-        wallet_preflight!(
-          allow_spend_capable: allow_spend_capable_wallet || spend_override_from_env?
-        )
+        @allow_spend_capable = allow_spend_capable_wallet || spend_override_from_env?
+        @wallet_lock = Mutex.new
+        @wallet_pending = nil
+        @wallet_failed_at = 0.0
+        @wallet_retry_seconds = WALLET_RETRY_FIRST_SECONDS
+        begin
+          wallet_preflight!(allow_spend_capable: @allow_spend_capable)
+        rescue WalletUnreachable => e
+          # A relay that is down, slow or refusing at start-up says nothing
+          # about the code, so the shop starts and the check waits.
+          @wallet_pending = e.message
+          @wallet_failed_at = @monotonic.call
+          log_wallet(
+            :error,
+            "wallet.unreachable: OpenReceive could not reach the wallet's relay at start-up " \
+            "(#{e.message}). The first checkout after #{@wallet_retry_seconds} s tries again."
+          )
+        end
+      end
+
+      # Returns once the wallet check has passed; every wallet call goes
+      # through here. Until then it raises the retryable 503
+      # WALLET_UNAVAILABLE, after checking again when the wait since the last
+      # failure is over: the call that finds the wait over runs the check,
+      # concurrent callers wait for its outcome, and on a pass the call goes on
+      # to the wallet. A later check refuses what the constructor refuses, so a
+      # wallet that cannot receive, or can spend, stays off.
+      def ensure_wallet!
+        return if @wallet_pending.nil?
+
+        @wallet_lock.synchronize { check_wallet_again! }
       end
 
       def prepare_checkout(input)
@@ -357,15 +438,14 @@ module OpenReceive
         )
       end
 
-      # Fail-closed boot preflight, mirroring the JS client preflight: a
+      # Fail-closed wallet check, mirroring the JS client preflight: a
       # connection that can report capabilities must be receive-ready and speak
       # an encryption mode we implement, and — unless the host overrides —
       # must not advertise spend methods.
       #
-      # A read failure is NOT treated as transient. Booting blind only defers
-      # the failure to the first customer checkout, where it costs a lost sale
-      # instead of a loud boot error, so an info method that cannot answer
-      # fails the boot.
+      # A read that could not reach the relay raises WalletUnreachable, which
+      # the callers defer: a relay that is down says nothing about the code.
+      # Any other read failure is a refusal.
       def wallet_preflight!(allow_spend_capable:)
         raw_info = read_wallet_info
         # The client exposes no info method at all: there is nothing to
@@ -404,7 +484,64 @@ module OpenReceive
         # surface it as itself rather than as a preflight failure.
         raise
       rescue StandardError => e
+        raise WalletUnreachable, redacted_failure(e) if self.class.wallet_unreachable?(e)
+
         raise WalletPreflightError, "could not read wallet info (#{e.class}: #{e.message})."
+      end
+
+      # ensure_wallet! under the lock.
+      def check_wallet_again!
+        # Read again under the lock: the call that held it may have passed.
+        return if @wallet_pending.nil?
+        raise wallet_not_ready if @monotonic.call - @wallet_failed_at < @wallet_retry_seconds
+
+        @wallet_retry_seconds = [@wallet_retry_seconds * 2, WALLET_RETRY_MAX_SECONDS].min
+        begin
+          wallet_preflight!(allow_spend_capable: @allow_spend_capable)
+        rescue WalletUnreachable => e
+          @wallet_pending = e.message
+          @wallet_failed_at = @monotonic.call
+          log_wallet(
+            :warn,
+            "wallet.unreachable: OpenReceive still cannot reach the wallet's relay " \
+            "(#{e.message}). The first checkout after #{@wallet_retry_seconds} s tries again."
+          )
+          raise wallet_not_ready
+        rescue StandardError => e
+          @wallet_pending = redacted_failure(e)
+          @wallet_failed_at = @monotonic.call
+          log_wallet(
+            :error,
+            "wallet.refused: OpenReceive reached the wallet's relay, but the wallet check " \
+            "failed, so checkouts stay off (#{@wallet_pending}). The first checkout after " \
+            "#{@wallet_retry_seconds} s checks again."
+          )
+          raise wallet_not_ready
+        end
+        @wallet_pending = nil
+        @wallet_retry_seconds = WALLET_RETRY_FIRST_SECONDS
+        log_wallet(:info, "wallet.reachable: OpenReceive reached the wallet's relay and the wallet check passed.")
+      end
+
+      def wallet_not_ready
+        WalletFailureError.new(
+          "code" => "WALLET_UNAVAILABLE", "message" => WALLET_NOT_READY_MESSAGE, "retryable" => true
+        )
+      end
+
+      # The wallet check's lines reach a log even when the host passed no
+      # logger: the shop runs on without its wallet until they are read.
+      def log_wallet(level, message)
+        if @logger
+          @logger.public_send(level, message)
+        else
+          warn "[openreceive] #{message}"
+        end
+      end
+
+      # One line, redacted: the spend refusal's own text runs over several.
+      def redacted_failure(error)
+        OpenReceive::Nwc.redact_error_text("#{error.class}: #{error.message}").gsub(/\s*\n\s*/, " ")
       end
 
       def spend_override_from_env?
@@ -732,15 +869,18 @@ module OpenReceive
       # create_swap) would invoke it a second time — two invoices for one
       # attempt. Wallet failures normalize to the shared error vocabulary.
       def call_nwc(method, input)
-        if keyword_style?(@nwc.method(method))
-          @nwc.public_send(method, **input.transform_keys(&:to_sym))
-        else
-          @nwc.public_send(method, input)
+        ensure_wallet!
+        begin
+          if keyword_style?(@nwc.method(method))
+            @nwc.public_send(method, **input.transform_keys(&:to_sym))
+          else
+            @nwc.public_send(method, input)
+          end
+        rescue ValidationError, WalletContractError, NotImplementedHttpError
+          raise
+        rescue StandardError => e
+          raise WalletFailureError, OpenReceive::Nwc.normalize_wallet_error(e)
         end
-      rescue ValidationError, WalletContractError, NotImplementedHttpError
-        raise
-      rescue StandardError => e
-        raise WalletFailureError, OpenReceive::Nwc.normalize_wallet_error(e)
       end
 
       # Run one outbound provider call, mapping its transport failures to the

@@ -355,6 +355,49 @@ def test_reconcile_runs_one_pass(host_module: Path) -> None:
     assert code == 2 and "needs --app" in err
 
 
+RELAY_DOWN_MODULE = """
+from fastapi import FastAPI
+from sqlalchemy import create_engine
+from openreceive.fastapi import openreceive_lifespan, openreceive_router
+from openreceive.nwc.errors import WalletError
+from openreceive.server import Host
+from openreceive.storage.sql import SqlPaymentRepository
+from openreceive.testing import FakeWallet, StaticPriceProvider
+
+
+class RelayDown(FakeWallet):
+    def preflight(self):
+        raise WalletError("WALLET_UNAVAILABLE", "connect: could not connect to wss://relay.test")
+
+
+engine = create_engine("sqlite:///{db}")
+SqlPaymentRepository(engine).create_tables()
+host = Host(amount_for=lambda reference: None, authorize=lambda ctx: True, on_paid=lambda s: None)
+router = openreceive_router(
+    host, engine=engine, nwc_client=RelayDown(), price_provider=StaticPriceProvider(),
+    swap_providers=[],
+)
+app = FastAPI(lifespan=openreceive_lifespan(host, engine=engine, lazy=True))
+app.include_router(router, prefix="/openreceive")
+"""
+
+
+def test_reconcile_exits_1_when_the_wallet_relay_does_not_answer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "relaydown.py").write_text(RELAY_DOWN_MODULE.format(db=tmp_path / "down.sqlite3"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("relaydown", None)
+    code, out, err = cli(["reconcile", "--app", "relaydown:app"], env={})
+    assert code == 1 and out == ""
+    assert err == (
+        "openreceive reconcile: the wallet check has not passed "
+        "(WalletError: connect: could not connect to wss://relay.test). "
+        "Nothing was checked; run it again once the wallet's relay answers.\n"
+    )
+
+
 def test_django_discovery_without_the_adapter_is_a_clear_error() -> None:
     # A subprocess: pytest-django has already configured Django in THIS process
     # (tests/django), and django.setup() ignores the env var once settings are

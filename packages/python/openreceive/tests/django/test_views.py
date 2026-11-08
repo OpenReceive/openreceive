@@ -262,9 +262,20 @@ def test_a_relay_down_at_first_use_answers_the_json_503_then_recovers(
         "retryable": True,
         "request_id": response["x-request-id"],
     }
-    assert "ConnectionRefusedError" in caplog.text and "could not start" in caplog.text
-    # The relay answers again: the next request builds the stack and is served.
+    assert (
+        "OpenReceive could not reach the wallet's relay at start-up "
+        "(ConnectionRefusedError: [Errno 111] Connection refused). "
+        "The first checkout after 1 s tries again."
+    ) in caplog.text
+    assert "Use a receive-only NWC connection" not in caplog.text
+    # The relay answers again. The stack started, so the next request waits out
+    # the 1 s before it checks the wallet again, then is served.
     monkeypatch.undo()
+    status, body = post(
+        client, "/checkouts", {"reference": test_host.REFERENCE}, x_test_user="alice"
+    )
+    assert status == 503 and body["code"] == "WALLET_UNAVAILABLE", body
+    state.monotonic += 1
     status, body = post(
         client, "/checkouts", {"reference": test_host.REFERENCE}, x_test_user="alice"
     )

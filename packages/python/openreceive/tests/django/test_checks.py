@@ -63,3 +63,23 @@ def test_wallet_preflight_runs_only_when_asked(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv(checks.PREFLIGHT_ENV, "1")
     assert run_checks(tags=[checks.TAG]) == []
     conf.reset()
+
+
+def test_wallet_preflight_reports_a_relay_it_could_not_reach(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tests.django import host as test_host
+
+    def relay_refused() -> dict[str, object]:
+        raise ConnectionRefusedError("[Errno 111] Connection refused")
+
+    monkeypatch.setattr(test_host.state.wallet, "preflight", relay_refused)
+    monkeypatch.setenv(checks.PREFLIGHT_ENV, "1")
+    messages = run_checks(tags=[checks.TAG])
+    assert ids(messages) == ["openreceive.E002"]
+    assert messages[0].msg == (
+        "OpenReceive could not reach the wallet's relay "
+        "(ConnectionRefusedError: [Errno 111] Connection refused)."
+    )
+    assert "receive-only" not in f"{messages[0].msg} {messages[0].hint}"
+    conf.reset()

@@ -835,6 +835,127 @@ class EngineHostIntegrationTest < Minitest::Test
   end
 end
 
+# The production boot (Engine after_initialize) builds config.service. With the
+# wallet's relay refusing connections, that boot used to raise
+# WalletPreflightError and the app never answered. Now it boots, checkouts get
+# the retryable 503, and the first checkout after the wait is served.
+class WalletUnreachableAtBootTest < Minitest::Test
+  include OpenReceivePaymentTestHelpers
+
+  # Shaped like nwc-ruby's NotSentError, which the engine reads by name.
+  class NotSentError < StandardError; end
+
+  class RelayWallet < FakeWallet
+    attr_accessor :down, :info
+    attr_reader :preflights
+
+    def initialize
+      super
+      @down = true
+      @info = { "methods" => %w[make_invoice list_transactions] }
+      @preflights = 0
+      @handler = nil
+    end
+
+    def get_info
+      @preflights += 1
+      if @down
+        raise NotSentError, "not sent: relay relay.test failed before the request was written " \
+                            "(OpenSSL::SSL::SSLError: unexpected eof while reading)"
+      end
+
+      @info
+    end
+
+    def subscribe_notifications(&handler)
+      @handler = handler
+      :subscribed
+    end
+  end
+
+  def setup
+    reset_tables!
+    @wallet = RelayWallet.new
+    OpenReceive.configure do |config|
+      config.authorize = ->(_context) { true }
+      config.nwc_client = @wallet
+      config.amount_for = ->(reference) { Order.exists?(reference) ? { "sats" => 100 } : nil }
+      config.on_paid = ->(_settlement) {}
+    end
+  end
+
+  def teardown
+    OpenReceive.reset_config!
+  end
+
+  def create_checkout(reference)
+    OpenReceive.config.request_handler.create_checkout(
+      raw_body: JSON.generate("reference" => reference), request: JSON_REQUEST, request_id: "req-test"
+    )
+  end
+
+  # Pretends the wait since the last failed check is over.
+  def wait_out_the_retry
+    service = OpenReceive.config.service
+    service.instance_variable_set(:@wallet_failed_at, service.instance_variable_get(:@wallet_failed_at) - 60)
+  end
+
+  def test_the_boot_survives_and_checkouts_are_served_once_the_relay_answers
+    _out, err = capture_io { OpenReceive.config.service }
+    assert_includes err, "[openreceive] wallet.unreachable: OpenReceive could not reach the wallet's relay at start-up"
+    assert_includes err, "The first checkout after 1 s tries again."
+    refute_includes err, "Use a receive-only NWC connection"
+    assert_match(/\AFAILED — the wallet check has not passed \(.*NotSentError: not sent/, OpenReceive.doctor_wallet_report)
+
+    order = create_order
+    status, _headers, body = create_checkout(order.id)
+    assert_equal 503, status
+    assert_equal ["WALLET_UNAVAILABLE", true], [body["code"], body["retryable"]]
+    assert_equal "The payment service is not available. Please try again shortly.", body["message"]
+    assert_equal 1, @wallet.preflights
+    assert_empty OpenReceivePayment.all
+
+    @wallet.down = false
+    wait_out_the_retry
+    capture_io do
+      status, _headers, body = create_checkout(order.id)
+    end
+    assert_equal 201, status, body.inspect
+    assert_equal 2, @wallet.preflights
+    assert_equal "ok — the wallet answered and is receive-only", OpenReceive.doctor_wallet_report
+  end
+
+  def test_a_later_check_refuses_a_spend_capable_wallet
+    capture_io { OpenReceive.config.service }
+    @wallet.down = false
+    @wallet.info = { "methods" => %w[make_invoice list_transactions pay_invoice] }
+    wait_out_the_retry
+    status = nil
+    _out, err = capture_io { status, = create_checkout(create_order.id) }
+    assert_equal 503, status
+    assert_includes err, "wallet.refused: OpenReceive reached the wallet's relay, but the wallet check failed"
+    assert_includes err, "NOT receive-only"
+    assert_empty OpenReceivePayment.all
+  end
+
+  def test_the_notifications_worker_does_not_subscribe_before_the_check_passes
+    capture_io { OpenReceive.config.service }
+    error = assert_raises(OpenReceive::Server::WalletFailureError) { OpenReceive.listen_for_notifications! }
+    assert_equal "WALLET_UNAVAILABLE", error.code
+    assert_nil @wallet.instance_variable_get(:@handler)
+
+    @wallet.down = false
+    wait_out_the_retry
+    capture_io { assert_equal :subscribed, OpenReceive.listen_for_notifications! }
+  end
+
+  def test_a_wallet_that_is_wrong_still_stops_the_boot
+    @wallet.down = false
+    @wallet.info = { "methods" => %w[make_invoice list_transactions pay_invoice] }
+    assert_raises(OpenReceive::Server::SpendCapableWalletError) { OpenReceive.config.service }
+  end
+end
+
 class ReconcileTest < Minitest::Test
   include OpenReceivePaymentTestHelpers
 
@@ -1194,6 +1315,11 @@ class NwcRubyAdapterNotificationsTest < Minitest::Test
     def initialize
       @list_transactions_calls = 0
       @handler = nil
+    end
+
+    # Receive-only: the worker runs the wallet check before it subscribes.
+    def get_info
+      { "methods" => %w[make_invoice list_transactions], "notifications" => %w[payment_received] }
     end
 
     def subscribe_to_notifications(since: Time.now.to_i, kinds: [23_196, 23_197], &block)

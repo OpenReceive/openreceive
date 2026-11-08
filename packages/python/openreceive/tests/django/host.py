@@ -22,6 +22,8 @@ SATS_REFERENCE = "order-sats"
 @dataclass
 class State:
     now: int = 1_700_000_000
+    # What the service's wallet-check wait reads.
+    monotonic: float = 100.0
     wallet: FakeWallet = field(default_factory=FakeWallet)
     provider: FakeSwapProvider = field(default_factory=FakeSwapProvider)
     paid: list[PaymentSettlement] = field(default_factory=list)
@@ -47,6 +49,7 @@ def build_service(_env: Mapping[str, str]) -> Service:
         price_provider=StaticPriceProvider(),
         swap_providers=[state.provider],
         clock=lambda: state.now,
+        monotonic=lambda: state.monotonic,
     )
 
 

@@ -205,6 +205,12 @@ module OpenReceive
               "keep polling with OpenReceive::ReconcileJob or " \
               "`bin/rails openreceive:reconcile`."
       end
+      # A worker started while the wallet's relay was down subscribes only once
+      # the wallet check passes; until then this raises the retryable
+      # WalletFailureError, which the worker's loop backs off from like a
+      # dropped subscription.
+      service = config.service
+      service.ensure_wallet! if service.respond_to?(:ensure_wallet!)
 
       client.subscribe_notifications do |notification|
         next unless payment_received_notification?(notification)

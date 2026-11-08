@@ -16,10 +16,12 @@ page — the Rails engine's `rescue_from InvalidAuthenticityToken` twin. A host
 with no CSRF middleware installed gets no CSRF check, exactly as before; the
 engine's own JSON-only and same-site gates still apply.
 
-A stack that cannot start (no NWC_URI, a malformed one, or a relay that does not
-answer the first request's wallet preflight) answers the shared 503
-`WALLET_UNAVAILABLE` contract, retryable, like the Node adapters: never Django's
-HTML 500 page, which a checkout cannot read. The next request tries again.
+A stack that cannot start (no NWC_URI, a malformed one, or a wallet the check
+refuses) answers the shared 503 `WALLET_UNAVAILABLE` contract, retryable, like
+the Node adapters: never Django's HTML 500 page, which a checkout cannot read.
+The next request tries again. A relay that does not answer the first request's
+wallet check does not stop the stack: the service starts, its wallet calls
+answer the same 503, and the first one after a short wait checks again.
 """
 
 from __future__ import annotations

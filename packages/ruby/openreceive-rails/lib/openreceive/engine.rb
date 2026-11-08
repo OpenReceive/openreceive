@@ -19,10 +19,13 @@ module OpenReceive
     end
 
     # Boot fails closed for real: in production the service — and its wallet
-    # preflight — is built eagerly, so a missing NWC_URI, a dead relay, or a
-    # spend-capable wallet stops the deploy instead of surfacing as
-    # customer-facing 500s on the first checkout. Skipped when the host never
-    # ran OpenReceive.configure (gem installed, installer not run yet), and
+    # preflight — is built eagerly, so a missing NWC_URI or a wallet that
+    # cannot receive or can spend stops the deploy instead of surfacing as
+    # customer-facing errors on the first checkout. A relay that does not
+    # answer does not stop it: the app boots, logs one line, checkouts answer
+    # 503 WALLET_UNAVAILABLE, and the first checkout after a short wait (1 s,
+    # doubling to 60 s) checks again. Skipped when the host never ran
+    # OpenReceive.configure (gem installed, installer not run yet), and
     # outside production so tests and consoles boot without a live wallet.
     #
     # `rails assets:precompile` is the one production boot that must NOT be

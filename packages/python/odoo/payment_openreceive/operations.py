@@ -206,6 +206,12 @@ def doctor(env: Any) -> tuple[bool, list[str]]:
         except Exception as error:
             lines.append(f"engine: {sanitize_failure_message(error)}")
             return False, lines
+        # The service starts without a relay it cannot reach and checks again
+        # on a later checkout; this report still says the wallet did not answer.
+        pending = getattr(service, "wallet_pending", None)
+        if pending is not None:
+            lines.append(f"engine: the wallet check has not passed ({pending})")
+            return False, lines
         price = service.price_provider
         for currency in runtime.company_currencies(env):
             try:

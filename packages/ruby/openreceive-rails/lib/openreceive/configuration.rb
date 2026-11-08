@@ -477,15 +477,20 @@ module OpenReceive
     #
     # It builds the service, which is the same eager preflight the engine runs
     # at production boot — a missing NWC_URI, a dead relay, or a SPEND-CAPABLE
-    # connection all answer here rather than on a payer's first checkout. The
-    # failure is reported, never raised: an operator running a doctor wants
-    # every other line too, and a doctor that dies at line six tells them less
-    # than one that finishes. Sanitized for the same reason the reconcile logs
-    # are — a connect failure can quote the NWC URI, secret and all.
+    # connection all answer here rather than on a payer's first checkout. A
+    # dead relay does not stop the boot (the service checks again on a later
+    # checkout), but the doctor still reports it. The failure is reported,
+    # never raised: an operator running a doctor wants every other line too,
+    # and a doctor that dies at line six tells them less than one that
+    # finishes. Sanitized for the same reason the reconcile logs are — a
+    # connect failure can quote the NWC URI, secret and all.
     def doctor_wallet_report
       return "skipped — OpenReceive.configure has not run" unless configured?
 
-      config.service
+      service = config.service
+      pending = service.respond_to?(:wallet_pending) ? service.wallet_pending : nil
+      return "FAILED — the wallet check has not passed (#{pending})" unless pending.nil?
+
       "ok — the wallet answered and is receive-only"
     rescue StandardError => error
       "FAILED — #{sanitize_failure_message(error)}"

@@ -78,6 +78,18 @@ def check_wallet_preflight(app_configs: Sequence[Any] | None, **kwargs: Any) -> 
     closer = getattr(service.nwc_client, "close", None)
     if callable(closer):
         closer()
+    # The service starts without a relay that does not answer (it checks
+    # again on a later checkout), but this probe was asked to prove the wallet.
+    pending = getattr(service, "wallet_pending", None)
+    if pending is not None:
+        return [
+            Error(
+                f"OpenReceive could not reach the wallet's relay ({pending}).",
+                hint="The relay may be down or slow; the code itself was not checked. "
+                "Run the check again once the relay answers.",
+                id="openreceive.E002",
+            )
+        ]
     return []
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
@@ -61,6 +62,20 @@ SWAP_PROVIDER_RATE_LIMITED_MESSAGE = "The swap provider is rate limited. Please 
 SWAP_PROVIDER_UNREACHABLE_MESSAGE = (
     "The swap provider is temporarily unreachable. Please try again shortly."
 )
+# A wallet check that could not reach the relay runs again on the first wallet
+# call after this wait. The wait doubles after each failure up to the cap, and a
+# pass resets it. There is no timer or thread, so an idle process makes no
+# wallet calls. The schedule of the Node stack's createRetryingBoot.
+WALLET_RETRY_FIRST_SECONDS = 1
+WALLET_RETRY_MAX_SECONDS = 60
+# What the payer reads until the wallet check passes: the Node stack's words
+# for a stack that did not start.
+WALLET_NOT_READY_MESSAGE = "The payment service is not available. Please try again shortly."
+# The canonical codes of a wallet that could not be reached at all, as opposed
+# to one that answered with something wrong.
+UNREACHABLE_WALLET_CODES = ("WALLET_UNAVAILABLE", "TIMEOUT")
+
+log = logging.getLogger("openreceive")
 
 Clock = Callable[[], int]
 
@@ -76,7 +91,16 @@ class Service:
     feed with OPENRECEIVE_PRICE_FEED_*_URL overrides; pass a provider, or
     `False` to run without rates (fiat amounts and GET /rates then fail with
     their not-configured errors). `logger` receives operator diagnostics that
-    are logged, never sent."""
+    are logged, never sent.
+
+    The constructor is the wallet check, and it refuses a wallet that is
+    wrong: one that cannot receive, speaks no supported encryption, or can
+    spend without the override. A wallet whose relay cannot be reached is not
+    refused: the service starts, logs one line, and every wallet call answers
+    the retryable 503 WALLET_UNAVAILABLE until the check passes. The first
+    wallet call after the wait (`WALLET_RETRY_FIRST_SECONDS`, doubling to
+    `WALLET_RETRY_MAX_SECONDS`) checks again. `monotonic` is the clock that
+    wait reads, for tests."""
 
     def __init__(
         self,
@@ -89,11 +113,13 @@ class Service:
         allow_spend_capable_wallet: bool = False,
         env: Mapping[str, str] | None = None,
         logger: logging.Logger | None = None,
+        monotonic: Callable[[], float] | None = None,
     ) -> None:
         import os
 
         self._nwc = nwc_client
         self._clock: Clock = clock or (lambda: int(time.time()))
+        self._monotonic: Callable[[], float] = monotonic or time.monotonic
         self._env: Mapping[str, str] = os.environ if env is None else env
         self._logger = logger
         self.price_currencies = [str(value).upper() for value in (price_currencies or ["USD"])]
@@ -111,11 +137,84 @@ class Service:
         self._attach_swap_provider_runtime()
         # The override relaxes only the spend refusal: receive-readiness and
         # encryption are still enforced.
-        self._wallet_preflight(allow_spend_capable_wallet or self._spend_override_from_env())
+        self._allow_spend_capable = allow_spend_capable_wallet or self._spend_override_from_env()
+        self._wallet_lock = threading.Lock()
+        self._wallet_pending: str | None = None
+        self._wallet_failed_at = 0.0
+        self._wallet_retry_seconds = WALLET_RETRY_FIRST_SECONDS
+        try:
+            self._wallet_preflight(self._allow_spend_capable)
+        except _WalletUnreachable as error:
+            # A relay that is down, slow or refusing at start-up says nothing
+            # about the code, so the shop starts and the check waits.
+            self._wallet_pending = error.reason
+            self._wallet_failed_at = self._monotonic()
+            self._log_wallet(
+                "error",
+                f"wallet.unreachable: OpenReceive could not reach the wallet's relay at start-up "
+                f"({error.reason}). The first checkout after {self._wallet_retry_seconds} s tries again.",
+            )
 
     @property
     def nwc_client(self) -> Any:
         return self._nwc
+
+    @property
+    def wallet_pending(self) -> str | None:
+        """None once the wallet check has passed. Otherwise why it has not,
+        redacted: the relay could not be reached, or a later check reached a
+        wallet that fails it."""
+        return self._wallet_pending
+
+    def ensure_wallet(self) -> None:
+        """Returns once the wallet check has passed; every wallet call goes
+        through here. Until then it raises the retryable 503
+        WALLET_UNAVAILABLE, after checking again when the wait since the last
+        failure is over: the call that finds the wait over runs the check,
+        concurrent callers wait for its outcome, and on a pass the call goes on
+        to the wallet. A later check refuses what the constructor refuses, so a
+        wallet that cannot receive, or can spend, stays off."""
+        if self._wallet_pending is None:
+            return
+        with self._wallet_lock:
+            self._check_wallet_again()
+
+    def _check_wallet_again(self) -> None:
+        """`ensure_wallet` under the lock."""
+        # Read again under the lock: the call that held it may have passed.
+        if self._wallet_pending is None:
+            return
+        if self._monotonic() - self._wallet_failed_at < self._wallet_retry_seconds:
+            raise self._wallet_not_ready()
+        self._wallet_retry_seconds = min(self._wallet_retry_seconds * 2, WALLET_RETRY_MAX_SECONDS)
+        try:
+            self._wallet_preflight(self._allow_spend_capable)
+        except _WalletUnreachable as error:
+            self._wallet_pending = error.reason
+            self._wallet_failed_at = self._monotonic()
+            self._log_wallet(
+                "warning",
+                f"wallet.unreachable: OpenReceive still cannot reach the wallet's relay "
+                f"({error.reason}). The first checkout after {self._wallet_retry_seconds} s tries again.",
+            )
+            raise self._wallet_not_ready() from None
+        except Exception as error:
+            reason = _one_line_failure(error)
+            self._wallet_pending = reason
+            self._wallet_failed_at = self._monotonic()
+            self._log_wallet(
+                "error",
+                f"wallet.refused: OpenReceive reached the wallet's relay, but the wallet check "
+                f"failed, so checkouts stay off ({reason}). The first checkout after "
+                f"{self._wallet_retry_seconds} s checks again.",
+            )
+            raise self._wallet_not_ready() from None
+        self._wallet_pending = None
+        self._wallet_retry_seconds = WALLET_RETRY_FIRST_SECONDS
+        self._log_wallet(
+            "info",
+            "wallet.reachable: OpenReceive reached the wallet's relay and the wallet check passed.",
+        )
 
     @property
     def swap_providers(self) -> list[Any]:
@@ -420,11 +519,11 @@ class Service:
             )
 
     def _wallet_preflight(self, allow_spend_capable: bool) -> None:
-        """Fail-closed boot preflight: a connection that can report capabilities
+        """Fail-closed wallet check: a connection that can report capabilities
         must be receive-ready and speak an encryption mode we implement, and —
         unless the host overrides — must not advertise spend methods. A read
-        failure is NOT transient: booting blind only defers it to the first
-        customer checkout."""
+        that could not reach the relay raises `_WalletUnreachable`, which the
+        callers defer; any other read failure is a refusal."""
         raw_info = self._read_wallet_info()
         if raw_info is None:
             return  # No info method at all: nothing to preflight.
@@ -459,6 +558,8 @@ class Service:
         except NwcUriParseError:
             raise
         except Exception as error:
+            if wallet_unreachable(error):
+                raise _WalletUnreachable(_one_line_failure(error)) from error
             raise WalletPreflightError(
                 f"could not read wallet info ({type(error).__name__}: {error})."
             )
@@ -638,6 +739,7 @@ class Service:
         )
 
     def _call_nwc(self, method: str, params: dict[str, Any]) -> Any:
+        self.ensure_wallet()
         try:
             return getattr(self._nwc, method)(params)
         except ServiceError:
@@ -792,6 +894,36 @@ class Service:
         if self._logger is not None:
             getattr(self._logger, level)(message)
 
+    def _log_wallet(self, level: str, message: str) -> None:
+        """The wallet check's lines reach a log even when the host passed no
+        logger: the shop runs on without its wallet until they are read."""
+        getattr(self._logger or log, level)(message)
+
+    @staticmethod
+    def _wallet_not_ready() -> WalletFailureError:
+        return WalletFailureError(
+            {"code": "WALLET_UNAVAILABLE", "message": WALLET_NOT_READY_MESSAGE, "retryable": True}
+        )
+
+
+class _WalletUnreachable(Exception):
+    """The wallet check could not reach the relay. Never a refusal: the
+    service starts and checks again later. `reason` is redacted."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def wallet_unreachable(error: BaseException) -> bool:
+    """Whether a wallet call failed before reaching the wallet: the relay
+    refused, dropped or never answered the connection, or the call ran out of
+    time. A malformed code, a wallet that answers without the receive methods,
+    and an encryption mismatch are not this."""
+    if isinstance(error, OSError):  # refused, reset, DNS, TLS and socket timeouts
+        return True
+    return normalize_wallet_error(error).get("code") in UNREACHABLE_WALLET_CODES
+
 
 class _ValidatingInput:
     """The payer-input parse boundary: a missing field (KeyError) or a malformed
@@ -842,6 +974,12 @@ def redact_secrets(text: str) -> str:
 
 def sanitize_failure_message(error: BaseException) -> str:
     return redact_secrets(f"{type(error).__name__}: {error}")
+
+
+def _one_line_failure(error: BaseException) -> str:
+    """The redacted failure on one log line: the spend refusal's own text runs
+    over several."""
+    return re.sub(r"\s*\n\s*", " ", sanitize_failure_message(error))
 
 
 def dumps(value: object) -> str:

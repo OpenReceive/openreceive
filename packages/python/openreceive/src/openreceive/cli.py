@@ -525,6 +525,14 @@ def run_reconcile(args: list[str], env: Mapping[str, str], io: CliIo, cwd: Path)
     if options.env_file is not None:  # a worker in production reads the platform's environment
         env, _ = load_env_file(options.env_file, env, cwd, required=True)
     app = _require_stack(options, env, "reconcile")
+    # One pass and out: a wallet the service could not reach at start-up would
+    # only make the pass fail quietly, so say so and exit 1, as before.
+    pending = getattr(app.service, "wallet_pending", None)
+    if pending is not None:
+        raise CliError(
+            f"openreceive reconcile: the wallet check has not passed ({pending}). "
+            "Nothing was checked; run it again once the wallet's relay answers."
+        )
     checks = app.reconcile(overlap_seconds=options.overlap_seconds)
     counts: dict[str, int] = {}
     for check in checks:

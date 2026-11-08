@@ -223,6 +223,33 @@ def test_lifespan_preflight_failure_stops_startup(tmp_path: Path) -> None:
             pass
 
 
+def test_lifespan_starts_with_the_relay_down_and_checkouts_answer_the_retryable_503(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    from openreceive.nwc.errors import WalletError
+
+    class RelayDown(FakeWallet):
+        def preflight(self) -> dict[str, Any]:
+            raise WalletError(
+                "WALLET_UNAVAILABLE", "connect: could not connect to wss://relay.test: refused"
+            )
+
+    app, _shop, wallet, _engine = build(tmp_path, wallet=RelayDown())
+    with TestClient(app) as client:
+        assert app.state.openreceive.started
+        alice(client)
+        response = post(client, "/checkouts", {"reference": REFERENCE})
+        assert response.status_code == 503
+        assert response.json()["code"] == "WALLET_UNAVAILABLE"
+        assert response.json()["retryable"] is True
+        assert response.json()["message"] == (
+            "The payment service is not available. Please try again shortly."
+        )
+        assert wallet.list_invoices() == []
+    assert "could not reach the wallet's relay at start-up" in caplog.text
+    assert "Use a receive-only NWC connection" not in caplog.text
+
+
 def test_missing_nwc_uri_fails_closed_and_never_prints_a_secret(tmp_path: Path) -> None:
     app, _shop, _wallet, _engine = build(tmp_path, inject_wallet=False, env={})
     with pytest.raises(ConfigurationError, match="NWC_URI is not set") as failure:

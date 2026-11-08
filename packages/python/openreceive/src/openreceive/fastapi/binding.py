@@ -111,8 +111,10 @@ class OpenReceiveBinding:
 
     def start(self) -> OpenReceiveApp:
         """Build the stack — the wallet preflight included — once. Raises
-        `ConfigurationError` (a missing NWC_URI, a spend-capable or unreachable
-        wallet) so a lifespan that calls this stops the process."""
+        `ConfigurationError` (a missing NWC_URI, a wallet that cannot receive
+        or can spend) so a lifespan that calls this stops the process. A relay
+        that does not answer is not raised: the service checks again on a
+        later checkout."""
         with self._lock:
             if self._app is None:
                 self._app = OpenReceiveApp(
