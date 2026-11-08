@@ -1,4 +1,4 @@
-import { Anchor, Button, Group, Image, Modal, Stack, Text, UnstyledButton } from "@mantine/core";
+import { Anchor, Button, Image, Modal, Stack, Text, UnstyledButton } from "@mantine/core";
 import {
   checkoutLabels,
   createWizardRouteDisplays,
@@ -10,7 +10,6 @@ import { observer } from "mobx-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { ShopCheckout } from "../stores/ShopCheckout.ts";
-import { ControllerCopyButton } from "./CopyRow.tsx";
 
 const PREVIEW_LIMIT = 8;
 
@@ -22,8 +21,8 @@ const PREVIEW_LIMIT = 8;
 // routes list exchanges that convert an asset INTO a Lightning payment, which is
 // a different path from the deposit address a swap provider already quoted.
 //
-// The walkthrough modal below belongs to a LIVE invoice — its own first step is
-// "copy the invoice" — so it lives inside the Lightning panel and goes away with
+// The walkthrough modal below belongs to a LIVE invoice — its Copy invoice button
+// copies that invoice — so it lives inside the Lightning panel and goes away with
 // it the moment the payer switches method.
 //
 // The wallet logos are `data:` URIs inside @openreceive/provider-data's main
@@ -32,6 +31,7 @@ const PREVIEW_LIMIT = 8;
 // is a file the host has to serve.
 export const WalletSuggestions: React.FC<{ checkout: ShopCheckout }> = observer(({ checkout }) => {
   const [walkthrough, setWalkthrough] = useState<WizardProviderDisplay | null>(null);
+  const [copied, setCopied] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
   // The registry ranks its providers, and `providerPreviewLimit` is the seam for
@@ -46,8 +46,20 @@ export const WalletSuggestions: React.FC<{ checkout: ShopCheckout }> = observer(
     [showAll],
   );
 
-  const providers = routes[0]?.providers ?? [];
-  if (!providers.length) return null;
+  const route = routes[0];
+  if (!route?.providers.length) return null;
+
+  // A refused copy just leaves the Copy invoice button showing.
+  const copy = () => {
+    checkout.copyInvoice().then(
+      () => setCopied(true),
+      () => undefined,
+    );
+  };
+  const open = (provider: WizardProviderDisplay) => {
+    setCopied(false);
+    setWalkthrough(provider);
+  };
 
   return (
     <div className="or-shop-wallets">
@@ -57,13 +69,13 @@ export const WalletSuggestions: React.FC<{ checkout: ShopCheckout }> = observer(
       </Text>
 
       <div className="or-shop-wallet-grid">
-        {providers.map((provider) => (
+        {route.providers.map((provider) => (
           <UnstyledButton
             key={provider.id}
             className="or-shop-wallet"
             component={provider.tutorials.length ? "button" : "a"}
             {...(provider.tutorials.length
-              ? { onClick: () => setWalkthrough(provider) }
+              ? { onClick: () => open(provider) }
               : {
                   href: provider.url,
                   target: "_blank",
@@ -91,22 +103,28 @@ export const WalletSuggestions: React.FC<{ checkout: ShopCheckout }> = observer(
 
       <ProviderWalkthrough
         provider={walkthrough}
-        checkout={checkout}
+        copied={copied}
+        onCopy={copy}
         onClose={() => setWalkthrough(null)}
       />
     </div>
   );
 });
 
-// The walkthrough's own first step is "copy the invoice", so it belongs to a
-// live invoice — the parent closes it whenever the payer changes method.
+// One screen, because the payer leaves this page to act on it: every step is
+// visible at once and Next moves through the screenshots.
 const ProviderWalkthrough: React.FC<{
   provider: WizardProviderDisplay | null;
-  checkout: ShopCheckout;
+  copied: boolean;
+  onCopy: () => void;
   onClose: () => void;
-}> = observer(({ provider, checkout, onClose }) => {
+}> = ({ provider, copied, onCopy, onClose }) => {
   const [step, setStep] = useState(0);
   const [images, setImages] = useState<Readonly<Record<string, string>>>();
+  // Step 1 is the copy, so step N shows screenshot N - 1.
+  const lastStep = step >= (provider?.tutorials.length ?? 0);
+  const copyPending = step === 0 && !copied;
+  const copyHint = copied ? checkoutLabels.tutorialCopiedHint : checkoutLabels.tutorialCopyHint;
 
   // Load-then-render: a step shows its caption alone until the chunk arrives
   // (or if it never does), never an <img> with an empty src.
@@ -126,70 +144,79 @@ const ProviderWalkthrough: React.FC<{
     };
   }, [provider, images]);
 
-  const steps = provider?.tutorials ?? [];
-  const total = steps.length + 1;
-  const current = Math.min(step, total - 1);
-
-  const close = () => {
-    setStep(0);
-    onClose();
-  };
+  // Every walkthrough starts at its first step.
+  useEffect(() => {
+    if (provider !== null) setStep(0);
+  }, [provider]);
 
   return (
     <Modal
       opened={Boolean(provider)}
-      onClose={close}
+      onClose={onClose}
       title={provider ? `${checkoutLabels.tutorialTitlePrefix} ${provider.name}` : ""}
       centered
       size="md"
     >
       {provider ? (
-        <Stack gap="sm">
-          {current === 0 ? (
-            <>
-              <Text size="sm">
-                {checkoutLabels.tutorialIntroPrefix} {provider.name}.{" "}
-                {checkoutLabels.tutorialIntroCopy}
-              </Text>
-              <ControllerCopyButton
-                onCopy={checkout.copyInvoice}
-                label={provider.copyLabel}
-                copiedLabel={checkoutLabels.tutorialCopiedContinue}
-              >
-                {({ label, onClick }) => (
-                  <Button onClick={onClick} variant="light">
-                    {label}
-                  </Button>
-                )}
-              </ControllerCopyButton>
-            </>
-          ) : (
-            <>
-              {images?.[steps[current - 1].path] === undefined ? null : (
-                <Image
-                  src={images[steps[current - 1].path]}
-                  alt={steps[current - 1].caption}
-                  radius="md"
+        <Stack gap="xs">
+          <div className="or-shop-tutorial-frame">
+            {step === 0 ? (
+              <div className="or-shop-tutorial-copy">
+                <Text size="lg" fw={700} {...(copied ? { c: "orGreen" } : {})}>
+                  {copied ? checkoutLabels.tutorialInvoiceCopied : checkoutLabels.tutorialCopyStep}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {copyHint.replace("{wallet}", provider.name)}
+                </Text>
+              </div>
+            ) : null}
+            {provider.tutorials.map((tutorial, index) =>
+              images?.[tutorial.path] === undefined ? null : (
+                <img
+                  key={tutorial.path}
+                  className="or-shop-tutorial-image"
+                  src={images[tutorial.path]}
+                  alt={tutorial.caption}
+                  hidden={index + 1 !== step}
                 />
-              )}
-              <Text size="sm">{steps[current - 1].caption}</Text>
-            </>
-          )}
-
-          <Group justify="space-between" mt="xs">
-            <Button variant="default" disabled={current === 0} onClick={() => setStep(current - 1)}>
-              {checkoutLabels.tutorialBack}
-            </Button>
-            {current < total - 1 ? (
-              <Button onClick={() => setStep(current + 1)}>{checkoutLabels.tutorialNext}</Button>
-            ) : (
-              <Button variant="default" onClick={close}>
-                {checkoutLabels.tutorialExit}
-              </Button>
+              ),
             )}
-          </Group>
+          </div>
+
+          <ol className="or-shop-tutorial-steps">
+            {[
+              checkoutLabels.tutorialCopyStep,
+              ...provider.tutorials.map((tutorial) => tutorial.caption),
+            ].map((caption, index) => (
+              <li key={caption}>
+                <UnstyledButton
+                  className="or-shop-tutorial-step"
+                  data-active={index === step || undefined}
+                  aria-current={index === step ? "step" : undefined}
+                  onClick={() => setStep(index)}
+                >
+                  <span className="or-shop-tutorial-number" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <span>{caption}</span>
+                </UnstyledButton>
+              </li>
+            ))}
+          </ol>
+
+          <Text size="sm" c="dimmed" ta="center">
+            {checkoutLabels.tutorialComeBack}
+          </Text>
+
+          <Button onClick={copyPending ? onCopy : lastStep ? onClose : () => setStep(step + 1)}>
+            {copyPending
+              ? checkoutLabels.copyInvoice
+              : lastStep
+                ? checkoutLabels.tutorialDone
+                : checkoutLabels.tutorialNext}
+          </Button>
         </Stack>
       ) : null}
     </Modal>
   );
-});
+};

@@ -3,7 +3,7 @@ This is the full file; follow it from Step 0.
 # OpenReceive agent directions (Rails)
 
 ```sh
-# READ THIS FIRST: this file is 44 KB and a summary drops required steps. Download it whole:
+# READ THIS FIRST: this file is 45 KB and a summary drops required steps. Download it whole:
 curl -fsSL https://openreceive.org/agent-directions/rails/full.md
 # If your tool cuts long output, save it and read it in parts: curl -fsSL -o /tmp/openreceive-directions.md https://openreceive.org/agent-directions/rails/full.md
 # Skip the download only if you already have all of it: pasted, read from disk or fetched raw.
@@ -356,7 +356,9 @@ built on `@openreceive/browser/headless`. Read that before writing components.
   are on `@openreceive/browser`, not `/headless`.
 - A refund replaces the deposit panel. On `refund_required` also drop
   "switch payment method".
-- No "Open wallet" button on desktop.
+- No "Open wallet" or "Pay in wallet" button, and no `lightning:` link. Cash
+  App cancels an invoice opened from a link and pays the same invoice scanned
+  or pasted. Show the QR code and a Copy invoice button.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
   `createWizardRouteDisplays`. Lightning only. Logos are data URIs; tutorial
   images load from a JavaScript chunk. For a custom headless UI, load it when

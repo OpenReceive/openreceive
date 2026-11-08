@@ -6,7 +6,6 @@ import {
   createQrSvgController,
   formatAmountCaption,
   checkoutLabels,
-  openWallet as openWalletHelper,
   orClasses,
   type CheckoutPhase,
   type CheckoutStatusModel,
@@ -16,7 +15,6 @@ import { joinClassNames } from "./utils.ts";
 import type {
   CopyInvoiceButtonProps,
   InvoiceSummaryProps,
-  OpenWalletButtonProps,
   PaymentStateProps,
   QRCodeProps,
   SatsDetailProps,
@@ -132,45 +130,6 @@ export function CopyInvoiceButton(props: CopyInvoiceButtonProps): React.ReactEle
         React.createElement(ClipboardIcon),
         copied ? copiedLabel : checkoutLabels.copyInvoice,
       ),
-  );
-}
-
-export function OpenWalletButton(props: OpenWalletButtonProps): React.ReactElement {
-  const {
-    invoice,
-    openWallet,
-    open,
-    logger,
-    onOpened,
-    onError,
-    onClick,
-    ButtonComponent = "button",
-    children = checkoutLabels.openWallet,
-    type = "button",
-    className,
-    ...buttonProps
-  } = props;
-
-  return React.createElement(
-    ButtonComponent,
-    {
-      ...buttonProps,
-      className: joinClassNames(orClasses.btn, className),
-      type,
-      onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
-        onClick?.(event);
-        if (event.defaultPrevented) return;
-
-        try {
-          const uri =
-            openWallet === undefined ? openWalletHelper({ invoice, open, logger }) : openWallet();
-          onOpened?.(uri);
-        } catch (error) {
-          onError?.(error);
-        }
-      },
-    },
-    children,
   );
 }
 

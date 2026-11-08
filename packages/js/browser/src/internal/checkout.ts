@@ -68,14 +68,13 @@ export {
   isReusableLightningInvoice,
   selectCheckoutDisplayInvoice,
 } from "./checkout-state.ts";
-// ./checkout-actions.ts — QR, copy, open wallet
+// ./checkout-actions.ts — QR, copy
 export {
   copyInvoice,
   createQrPayloadSvg,
   createQrPngDataUrl,
   createQrSvg,
   createQrSvgController,
-  openWallet,
 } from "./checkout-actions.ts";
 export type { QrSvgController, QrSvgControllerOptions } from "./checkout-actions.ts";
 // ./checkout-watcher.ts — polling loop + controller

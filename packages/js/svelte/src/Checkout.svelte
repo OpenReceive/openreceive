@@ -38,7 +38,6 @@ export let resumePaymentHash: string | undefined = undefined;
 export let resumePaymentRail: "lightning" | "swap" | undefined = undefined;
 export let resumable: boolean | undefined = undefined;
 export let onCopy: ((event: Event) => void) | undefined = undefined;
-export let onOpenWallet: ((event: Event) => void) | undefined = undefined;
 export let onState: ((event: Event) => void) | undefined = undefined;
 export let onSettled: ((event: Event) => void) | undefined = undefined;
 export let onProviderCopy: ((event: Event) => void) | undefined = undefined;
@@ -86,7 +85,6 @@ $: shell = createWrapperCheckoutShellBinding(checkout ?? null, {
   ...(resumePaymentRail === undefined ? {} : { resumePaymentRail }),
   ...(resumable === undefined ? {} : { resumable }),
   ...(onCopy === undefined ? {} : { onCopy }),
-  ...(onOpenWallet === undefined ? {} : { onOpenWallet }),
   ...(onState === undefined ? {} : { onState }),
   ...(onSettled === undefined ? {} : { onSettled }),
   ...(onProviderCopy === undefined ? {} : { onProviderCopy }),

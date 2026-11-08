@@ -7,7 +7,6 @@ import {
   createCheckoutState,
   createCheckoutStatusModel,
   deriveStatus,
-  openWallet as openWalletHelper,
 } from "@openreceive/browser/headless";
 import * as React from "react";
 import { useTransientValue } from "./hooks.ts";
@@ -54,8 +53,6 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   onErrorRef.current = options.onError;
   const onCopyRef = React.useRef(options.onCopy);
   onCopyRef.current = options.onCopy;
-  const onOpenWalletRef = React.useRef(options.onOpenWallet);
-  onOpenWalletRef.current = options.onOpenWallet;
   const settledAnnouncementRef = React.useRef<{
     readonly reference: string;
     readonly fired: boolean;
@@ -125,7 +122,6 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
         onErrorRef.current?.(error);
       },
       clipboard: options.clipboard,
-      open: options.open,
       onState: (nextState) => {
         setState(nextState);
         onStateRef.current?.(nextState);
@@ -187,26 +183,6 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       throw error;
     }
   }, [logContext, state.invoice, options.clipboard, options.logger, showCopied]);
-
-  const openWallet = React.useCallback(() => {
-    try {
-      const controller = controllerRef.current;
-      const uri =
-        controller === null
-          ? openWalletHelper({
-              invoice: state.invoice,
-              open: options.open,
-              logger: options.logger,
-              logContext,
-            })
-          : controller.openWallet();
-      onOpenWalletRef.current?.(uri);
-      return uri;
-    } catch (error) {
-      onErrorRef.current?.(error);
-      throw error;
-    }
-  }, [logContext, state.invoice, options.open, options.logger]);
 
   const reloadState = React.useCallback(async () => {
     try {
@@ -284,7 +260,6 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
     retry,
     cancel,
     copyInvoice,
-    openWallet,
     stageSwapRefund,
     confirmSwapRefund,
     clearSwapRefundStaging,

@@ -14,8 +14,9 @@ const { invoice } = await import("./helpers/react-fixtures.mjs");
 const React = (await import("react")).default;
 const { createRoot } = await import("react-dom/client");
 const { renderToStaticMarkup } = await import("react-dom/server");
-const { Checkout, CheckoutProvider, InvoiceSummary, OpenWalletButton, PaymentWizard, ThemeScope } =
-  await import("../packages/js/react/src/index.ts");
+const { Checkout, CheckoutProvider, InvoiceSummary, PaymentWizard, ThemeScope } = await import(
+  "../packages/js/react/src/index.ts"
+);
 const { useCheckoutSession } = await import("../packages/js/react/src/checkout-session.ts");
 const { OPENRECEIVE_THEME_STORAGE_KEY, checkoutLabels } = await import(
   "../packages/js/browser/src/headless.ts"
@@ -168,17 +169,13 @@ test("a bare snapshot Checkout polls status via the default prefix", async () =>
 
 test("the default checkout wires controller actions into its buttons", async () => {
   const written = [];
-  const opened = [];
   const copied = [];
-  const openedUris = [];
   let model;
   const handle = mount(
     React.createElement(CheckoutProvider, {
       checkout: invoice({ invoice_id: "or_inv_actions", invoice: "lnbc-actions" }),
       clipboard: { writeText: async (value) => void written.push(value) },
-      open: (uri) => void opened.push(uri),
       onCopy: () => copied.push(true),
-      onOpenWallet: (uri) => openedUris.push(uri),
       children: (checkout) => {
         model = checkout;
         return null;
@@ -190,10 +187,61 @@ test("the default checkout wires controller actions into its buttons", async () 
     await model.copyInvoice();
     assert.deepEqual(written, ["lnbc-actions"]);
     assert.deepEqual(copied, [true]);
-    const uri = model.openWallet();
-    assert.equal(uri, "lightning:lnbc-actions");
-    assert.deepEqual(opened, ["lightning:lnbc-actions"]);
-    assert.deepEqual(openedUris, ["lightning:lnbc-actions"]);
+  } finally {
+    handle.unmount();
+  }
+});
+
+test("the tutorial's first step is the copy, and Next then walks the wallet steps", async () => {
+  const written = [];
+  const handle = mount(
+    React.createElement(PaymentWizard, {
+      invoice: "lnbc-tutorial",
+      clipboard: { writeText: async (value) => void written.push(value) },
+    }),
+  );
+  try {
+    (await until(() => handle.button("Bitcoin"), { label: "method grid" })).click();
+    const open = await until(
+      () =>
+        handle
+          .buttons()
+          .find(
+            (button) =>
+              button.textContent === "How To Pay" &&
+              button.closest("article")?.querySelector("h4")?.textContent === "Strike",
+          ),
+      { label: "Strike's tutorial button" },
+    );
+    open.click();
+    const dialog = await until(() => handle.container.querySelector("[role='dialog']"), {
+      label: "tutorial dialog",
+    });
+    const inDialog = (label) =>
+      [...dialog.querySelectorAll("button")].find((button) => button.textContent === label);
+    const activeStep = () => dialog.querySelector("[aria-current='step']")?.textContent ?? "";
+    await flush();
+    assert.deepEqual(written, [], "opening the tutorial copies nothing");
+
+    assert.match(activeStep(), new RegExp(`^1${checkoutLabels.tutorialCopyStep}`));
+    assert.ok(inDialog(checkoutLabels.tutorialNext) === undefined);
+    assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
+
+    inDialog(checkoutLabels.copyInvoice).click();
+    await until(() => written.length === 1, { label: "the copy" });
+    assert.deepEqual(written, ["lnbc-tutorial"]);
+    await until(() => dialog.textContent?.includes(checkoutLabels.tutorialInvoiceCopied), {
+      label: "the copied note",
+    });
+    assert.ok(inDialog(checkoutLabels.copyInvoice) === undefined);
+
+    for (const step of [2, 3, 4, 5]) {
+      assert.ok(inDialog(checkoutLabels.tutorialDone) === undefined);
+      inDialog(checkoutLabels.tutorialNext).click();
+      await until(() => activeStep().startsWith(String(step)), { label: `step ${step}` });
+    }
+    assert.ok(inDialog(checkoutLabels.tutorialNext) === undefined);
+    assert.ok(inDialog(checkoutLabels.tutorialDone) !== undefined);
   } finally {
     handle.unmount();
   }
@@ -234,23 +282,13 @@ test("copy feedback appears on click and resets itself", async (t) => {
   }
 });
 
-test("the default checkout ships no wallet button and renders the slot when supplied", () => {
-  const snapshot = invoice({ invoice_id: "or_inv_wallet_slot", invoice: "lnbc-wallet-slot" });
-  const withoutSlot = renderToStaticMarkup(
+test("the checkout renders no link that opens a wallet", () => {
+  const snapshot = invoice({ invoice_id: "or_inv_no_wallet_link", invoice: "lnbc-no-wallet-link" });
+  const html = renderToStaticMarkup(
     React.createElement(Checkout, { checkout: snapshot, paymentWizard: false }),
   );
-  assert.doesNotMatch(withoutSlot, /Open Wallet/);
-
-  const withSlot = renderToStaticMarkup(
-    React.createElement(Checkout, {
-      checkout: snapshot,
-      paymentWizard: false,
-      components: { OpenWalletButton },
-      classNames: { openWalletButton: "host-wallet-button" },
-    }),
-  );
-  assert.match(withSlot, /Open Wallet/);
-  assert.match(withSlot, /host-wallet-button/);
+  assert.doesNotMatch(html, /Open Wallet/);
+  assert.doesNotMatch(html, /href="lightning:/);
 });
 
 test("the invoice summary renders the payment hash instead of leaking it as an attribute", () => {

@@ -267,32 +267,17 @@
         {
           "index": 1,
           "path": "assets/pay_tutorials/cashapp-1.webp",
-          "caption": "Tap your Bitcoin balance"
+          "caption": "Tap your balance at the bottom left, then Bitcoin"
         },
         {
           "index": 2,
           "path": "assets/pay_tutorials/cashapp-2.webp",
-          "caption": "Tap the transfer button"
+          "caption": "Tap the QR button at the top right"
         },
         {
           "index": 3,
           "path": "assets/pay_tutorials/cashapp-3.webp",
-          "caption": "Choose Send"
-        },
-        {
-          "index": 4,
-          "path": "assets/pay_tutorials/cashapp-4.webp",
-          "caption": "Tap the QR scanner"
-        },
-        {
-          "index": 5,
-          "path": "assets/pay_tutorials/cashapp-5.webp",
-          "caption": "Paste the invoice"
-        },
-        {
-          "index": 6,
-          "path": "assets/pay_tutorials/cashapp-6.webp",
-          "caption": "Confirm and pay"
+          "caption": "Tap Paste address, then Confirm and pay"
         }
       ]
     },
@@ -532,27 +517,27 @@
       "label": "Bitcoin Lightning",
       "providers": [
         {
-          "provider": "rizful",
+          "provider": "cashapp",
           "rank": 1
         },
         {
-          "provider": "getalby",
+          "provider": "rizful",
           "rank": 2
         },
         {
-          "provider": "zeus",
+          "provider": "getalby",
           "rank": 3
         },
         {
-          "provider": "phoenix",
+          "provider": "zeus",
           "rank": 4
         },
         {
-          "provider": "strike",
+          "provider": "phoenix",
           "rank": 5
         },
         {
-          "provider": "cashapp",
+          "provider": "strike",
           "rank": 6
         },
         {

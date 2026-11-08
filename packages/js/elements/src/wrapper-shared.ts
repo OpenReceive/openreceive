@@ -73,8 +73,8 @@ export { defineElements } from "./index.ts";
 /**
  * Every event the checkout element dispatches, in one place. `docs/internal/wrapper-parity.md`
  * is the conformance table: each wrapper exposes all of these as first-class props.
- * The browser listener factory covers the full set (including `openreceive-open-wallet`),
- * so this is the base handler surface under a wrapper-facing name.
+ * The browser listener factory covers the full set, so this is the base handler surface
+ * under a wrapper-facing name.
  */
 export type WrapperCheckoutEventHandlers = CheckoutElementEventHandlers;
 

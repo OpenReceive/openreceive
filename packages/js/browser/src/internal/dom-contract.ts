@@ -34,7 +34,6 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME = "openreceive-checkout" as c
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME = "openreceive-theme-toggle" as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS = {
   copy: "openreceive-copy",
-  openWallet: "openreceive-open-wallet",
   state: "openreceive-state",
   settled: "openreceive-settled",
   providerCopy: "openreceive-provider-copy",
@@ -85,7 +84,8 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapRefundError: "data-or-swap-refund-error",
   providerCopy: "data-or-provider-copy",
   providerTutorial: "data-or-provider-tutorial",
-  providerTutorialIndex: "data-or-provider-tutorial-index",
+  tutorialStep: "data-or-tutorial-step",
+  tutorialImage: "data-or-tutorial-image",
 } as const;
 export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = attributeSelectors(
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
@@ -173,7 +173,6 @@ export function createCheckoutProviderCopyEvent(
 export function createCheckoutActionEvent(
   eventName:
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy
-    | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver,
 ): CustomEvent {
   // Start over has a default action (create mode prepares the order again); a

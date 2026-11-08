@@ -411,7 +411,9 @@ components.
   are on `@openreceive/browser`, not `/headless`.
 - A refund replaces the deposit panel. On `refund_required` also drop
   "switch payment method".
-- No "Open wallet" button on desktop.
+- No "Open wallet" or "Pay in wallet" button, and no `lightning:` link. Cash
+  App cancels an invoice opened from a link and pays the same invoice scanned
+  or pasted. Show the QR code and a Copy invoice button.
 - Wallet suggestions: `getPaymentWizardRoutes()` +
   `createWizardRouteDisplays`. Lightning only. Logos are data URIs; tutorial
   images load from a JavaScript chunk. For a custom headless UI, load it when

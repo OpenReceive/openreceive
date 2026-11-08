@@ -372,22 +372,86 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       this.session.dispose();
       this.stopCheckoutController();
       this.stopThemeAncestorObserver();
+      this.resetTutorial();
     }
 
     /**
      * The tutorial screenshots are the one image set behind a dynamic import.
      * The first tutorial open fetches them and re-renders; until then (or if
-     * the chunk never arrives) the dialog draws the caption alone.
+     * the chunk never arrives) the dialog draws the steps alone.
      */
     private loadTutorialImages(): void {
       if (this.tutorialImagesRequested) return;
       this.tutorialImagesRequested = true;
       loadPayTutorialImages().then(
         () => {
-          if (this.isConnected) this.render();
+          if (!this.isConnected) return;
+          this.render();
+          // The rebuild dropped the focus the dialog took when it opened.
+          this.shadowRoot?.querySelector<HTMLElement>('[part="tutorial"]')?.focus();
         },
         () => undefined,
       );
+    }
+
+    private resetTutorial(): void {
+      this.activeTutorialProviderId = null;
+      this.activeTutorialIndex = 0;
+      this.activeTutorialCopied = false;
+    }
+
+    /** Touches only the nodes that change, so a step change keeps the dialog's focus. */
+    private showTutorialStep(index: number): void {
+      this.activeTutorialIndex = index;
+      const root = this.shadowRoot;
+      if (root === null) return;
+      root
+        .querySelectorAll<HTMLElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialImage)
+        .forEach((image) => {
+          const frame = image.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage);
+          image.hidden = Number(frame) !== index;
+        });
+      const copyStep = root.querySelector<HTMLElement>('[part="tutorial-copy-step"]');
+      if (copyStep !== null) copyStep.hidden = index !== 0;
+      root
+        .querySelectorAll<HTMLElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep)
+        .forEach((button) => {
+          const step = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep);
+          const active = Number(step) === index;
+          button.className = active ? orClasses.tutorialStepActive : orClasses.tutorialStep;
+          button.setAttribute("part", active ? "tutorial-step-active" : "tutorial-step");
+          if (active) button.setAttribute("aria-current", "step");
+          else button.removeAttribute("aria-current");
+        });
+      this.syncTutorialAction(root);
+    }
+
+    private showTutorialCopied(): void {
+      const root = this.shadowRoot;
+      if (root === null) return;
+      root.querySelector<HTMLElement>('[part="tutorial-copy-prompt"]')?.setAttribute("hidden", "");
+      root.querySelector<HTMLElement>('[part="tutorial-copied"]')?.removeAttribute("hidden");
+      this.syncTutorialAction(root);
+    }
+
+    /** Exactly one of Copy invoice, Next and Done shows, and it inherits the focus. */
+    private syncTutorialAction(root: ShadowRoot): void {
+      const copy = root.querySelector<HTMLElement>('[part="tutorial-copy"]');
+      const next = root.querySelector<HTMLElement>('[part="tutorial-next"]');
+      const done = root.querySelector<HTMLElement>('[part="tutorial-done"]');
+      if (next === null || done === null) return;
+      const stepCount = root.querySelectorAll(
+        OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep,
+      ).length;
+      const index = this.activeTutorialIndex;
+      let shown = index === stepCount - 1 ? done : next;
+      if (copy !== null && index === 0 && !this.activeTutorialCopied) shown = copy;
+      shown.hidden = false;
+      for (const button of [copy, next, done]) {
+        if (button === null || button === shown) continue;
+        if (root.activeElement === button) shown.focus();
+        button.hidden = true;
+      }
     }
 
     // Create mode: a `reference` is set but no `invoice` snapshot is provided. The element
@@ -1159,6 +1223,15 @@ export function defineElements(options: DefineElementsOptions = {}): void {
         });
       });
 
+      const copyTutorialInvoice = async (providerId: string): Promise<void> => {
+        await copyInvoice({ invoice, logger });
+        this.dispatchEvent(createCheckoutProviderCopyEvent(providerId));
+        this.dispatchEvent(createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy));
+        if (this.activeTutorialProviderId !== providerId) return;
+        this.activeTutorialCopied = true;
+        this.showTutorialCopied();
+      };
+
       root
         .querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial)
         .forEach((button) => {
@@ -1168,53 +1241,47 @@ export function defineElements(options: DefineElementsOptions = {}): void {
             );
             if (providerId === null) return;
             if (providerId === "") {
-              this.activeTutorialProviderId = null;
-              this.activeTutorialIndex = 0;
-              this.activeTutorialCopied = false;
+              this.resetTutorial();
               this.render();
               return;
             }
-            const index = Number(
-              button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex) ??
-                "0",
-            );
-            if (this.activeTutorialProviderId !== providerId) {
-              this.activeTutorialCopied = false;
-            }
             this.activeTutorialProviderId = providerId;
-            this.activeTutorialIndex = Number.isSafeInteger(index) && index >= 0 ? index : 0;
+            this.activeTutorialIndex = 0;
+            this.activeTutorialCopied = false;
             this.loadTutorialImages();
             this.render();
           });
         });
 
       root.querySelector('[part="tutorial-copy"]')?.addEventListener("click", () => {
-        void copyInvoice({ invoice, logger })
-          .then(() => {
-            this.activeTutorialCopied = true;
-            if (this.activeTutorialProviderId !== null) {
-              this.dispatchEvent(createCheckoutProviderCopyEvent(this.activeTutorialProviderId));
-            }
-            this.dispatchEvent(createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy));
-            this.render();
-          })
-          .catch((error) => this.dispatchError(error));
+        if (this.activeTutorialProviderId === null) return;
+        copyTutorialInvoice(this.activeTutorialProviderId).catch((error) =>
+          this.dispatchError(error),
+        );
+      });
+
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep).forEach((button) => {
+        button.addEventListener("click", () => {
+          this.showTutorialStep(
+            Number(button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep)),
+          );
+        });
+      });
+
+      root.querySelector('[part="tutorial-next"]')?.addEventListener("click", () => {
+        this.showTutorialStep(this.activeTutorialIndex + 1);
       });
 
       const tutorial = root.querySelector('[part="tutorial"]');
       tutorial?.addEventListener("click", (event) => {
         if (event.target !== event.currentTarget) return;
-        this.activeTutorialProviderId = null;
-        this.activeTutorialIndex = 0;
-        this.activeTutorialCopied = false;
+        this.resetTutorial();
         this.render();
       });
       tutorial?.addEventListener("keydown", (event) => {
         if (!(event instanceof KeyboardEvent)) return;
         if (event.key !== "Escape" || this.activeTutorialProviderId === null) return;
-        this.activeTutorialProviderId = null;
-        this.activeTutorialIndex = 0;
-        this.activeTutorialCopied = false;
+        this.resetTutorial();
         this.render();
       });
       // Focus the tutorial dialog only when it OPENS. Focusing on every

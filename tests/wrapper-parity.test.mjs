@@ -38,15 +38,7 @@ const SOURCES = {
   svelte: "packages/js/svelte/src/Checkout.svelte",
   angular: "packages/js/angular/src/openreceive-checkout.component.ts",
 };
-const HANDLERS = [
-  "onCopy",
-  "onOpenWallet",
-  "onState",
-  "onSettled",
-  "onProviderCopy",
-  "onStartOver",
-  "onError",
-];
+const HANDLERS = ["onCopy", "onState", "onSettled", "onProviderCopy", "onStartOver", "onError"];
 const SHARED_PROPS = [
   "checkout",
   "reference",
@@ -187,7 +179,7 @@ test("every wrapper exposes all seven event handlers as first-class props", () =
   }
 });
 
-test("the shared binding subscribes to every element event, including open-wallet", () => {
+test("the shared binding subscribes to every element event", () => {
   const handlers = Object.fromEntries(HANDLERS.map((handler) => [handler, () => undefined]));
   const shell = createWrapperCheckoutShellBinding(null, {
     reference: "order-parity",
@@ -483,7 +475,6 @@ test("both renderers read the shared payer-facing strings, not copies", () => {
     "reviewRefundAddress",
     "confirmRefund",
     "confirmRefundTo",
-    "tutorialBack",
     "tutorialNext",
     "tutorialClose",
   ];

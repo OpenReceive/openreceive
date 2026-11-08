@@ -246,14 +246,20 @@ is complete. Nothing checks that the grouping is right.
 behaviour: it handles storage and fetching the order. `/headless` carries only
 `enterCheckoutResumePath`, which does the History API write itself.
 
-## `openWallet` is `location.assign`
+## No link that opens a wallet
 
-By default it calls `location.assign("lightning:…")` on the **current**
-window. If no handler is registered for `lightning:`, the main button next to
-the QR does nothing. If one is registered, it takes the payer away from the
-page that was about to tell them they had paid. So the drop-in renders a wallet
-button only if you pass `components.OpenWalletButton`. Pass `open` to send the
-URI somewhere other than the checkout window.
+OpenReceive ships no `lightning:` link, wallet button or helper for one.
+`openWallet` and `components.OpenWalletButton` were removed because Cash App
+cancels an invoice opened from a link and pays the same invoice scanned or
+pasted. On an iPhone in November 2026, `lightning:`, uppercase,
+`bitcoin:?lightning=` and `cash.app/launch/lightning/` links were all cancelled,
+and sending or hiding the referrer made no difference. The QR code and Copy
+invoice are the payer's paths.
+
+If a wallet link ever comes back, it needs `rel="noreferrer"`. Chrome on Android
+and Safari on iOS both hand the app the page's referrer, following the page's
+`Referrer-Policy`, and `rel="noreferrer"` was the only control that held under
+every policy.
 
 ## Session `swap` option is all-or-nothing
 

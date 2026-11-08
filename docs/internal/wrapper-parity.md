@@ -227,7 +227,6 @@ event.
 | Handler | Element event | React payload |
 | --- | --- | --- |
 | `onCopy` | `openreceive-copy` | `()` |
-| `onOpenWallet` | `openreceive-open-wallet` [^open-wallet] | `(uri: string)` |
 | `onState` | `openreceive-state` | `(state: CheckoutState)` |
 | `onSettled` | `openreceive-settled` | `()` |
 | `onProviderCopy` | `openreceive-provider-copy` | `(providerId: string)` |
@@ -243,14 +242,6 @@ event is cancelable, and the Vue, Svelte and Angular wrappers call
 `preventDefault()` before a host `onStartOver`. A React snapshot checkout with
 no handler renders no Start over button.
 
-[^open-wallet]: Fires only from UI the host supplies. No shipped renderer draws
-    an open-wallet control. React's is the opt-in `OpenWalletButton` slot, and
-    the element has no built-in one. So a host that wants this event renders its
-    own control and calls `openWallet`, or, on the element, dispatches the event
-    itself. The element used to have a click handler for a `part="open"`
-    button that no renderer produced. We deleted it rather than leave a promise
-    the element could not keep.
-
 ## Server rendering
 
 No wrapper reads `localStorage` or `matchMedia` during its first render. The
@@ -264,6 +255,6 @@ chosen theme.
 ## Hook surface (React only)
 
 `useCheckout` drives an existing snapshot and takes no create options. Create
-mode belongs to `<Checkout>`. It accepts `checkout`, `clipboard`, `open`, `logger`,
+mode belongs to `<Checkout>`. It accepts `checkout`, `clipboard`, `logger`,
 `refreshStatus`, `prefix`, `csrfHeader`, `polling`, `pollIntervalMs`, and the `onCopy`,
-`onOpenWallet`, `onState`, `onSettled`, `onError` handlers.
+`onState`, `onSettled`, `onError` handlers.

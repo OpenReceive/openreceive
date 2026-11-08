@@ -1558,8 +1558,8 @@ working.
 
 Common props:
 
-- the seven handlers: `onCopy`, `onOpenWallet`, `onState`, `onSettled`,
-  `onProviderCopy`, `onStartOver`, `onError`
+- the six handlers: `onCopy`, `onState`, `onSettled`, `onProviderCopy`,
+  `onStartOver`, `onError`
 - `onStartOver` replaces the built-in **Start over** on an expired invoice.
   Without it, a create-mode checkout prepares the same `reference` again and
   shows the payment methods. A snapshot-mode checkout without it shows no
@@ -1632,14 +1632,7 @@ the snapshot without polling. Pass `fetch` (0.4.25 or newer) to send the poll
 and the swap refund calls through your own fetch, as `<Checkout fetch>` does.
 It returns the live snapshot, `status`, countdown labels,
 `statusTitle`/`statusDetail`, and
-`copyInvoice`/`openWallet`/`reloadState`/`retry`/`cancel`.
-
-`openWallet` is for **touch devices**. By default it calls `location.assign` on
-the current window. On desktop, a wallet button either does nothing or takes the
-payer away from a checkout that is still polling. That is why `<Checkout>`
-renders no wallet button and offers `components.OpenWalletButton` as an opt-in
-slot. See
-[Headless checkout](headless-checkout.md#the-openreceivebrowserheadless-surface).
+`copyInvoice`/`reloadState`/`retry`/`cancel`.
 
 ### PaymentWizard
 
@@ -1664,9 +1657,9 @@ From `@openreceive/elements`. The custom element behind the non-React wrappers.
   [Frontend checkout → The way back to a refund](frontend-checkout.md#the-way-back-to-a-refund).
 
 There is no asset attribute. Everything the element draws ships inside its
-JavaScript. It fires seven events: `openreceive-copy`,
-`openreceive-open-wallet`, `openreceive-state`, `openreceive-settled`,
-`openreceive-provider-copy`, `openreceive-start-over`, `openreceive-error`.
+JavaScript. It fires six events: `openreceive-copy`, `openreceive-state`,
+`openreceive-settled`, `openreceive-provider-copy`, `openreceive-start-over`,
+`openreceive-error`.
 `openreceive-state` and `openreceive-settled` carry the checkout snapshot at
 `event.detail.state`. `openreceive-start-over` is cancelable: on an element
 that created its checkout from `reference`, Start over prepares the same order

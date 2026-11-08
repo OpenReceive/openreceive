@@ -574,10 +574,6 @@ export class ShopCheckout extends Model({
     await this.controller?.copyInvoice();
   };
 
-  // `openWallet` navigates the CURRENT window at a `lightning:` URI, so it is
-  // offered on touch devices only — see LightningPanel.
-  openWallet = () => this.controller?.openWallet();
-
   @modelAction
   setRefundAddress(address: string) {
     this.refundAddress = address;

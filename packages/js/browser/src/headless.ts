@@ -89,7 +89,6 @@ export {
   formatUnixTime,
   getExplorerNetwork,
   isReusableLightningInvoice,
-  openWallet,
   prepareCheckout,
   requestCheckout,
   resolveTransactionDetailRows,

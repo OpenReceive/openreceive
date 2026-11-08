@@ -66,7 +66,6 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
   @Input() resumePaymentRail?: "lightning" | "swap";
   @Input() resumable?: boolean;
   @Input() onCopy?: (event: Event) => void;
-  @Input() onOpenWallet?: (event: Event) => void;
   @Input() onState?: (event: Event) => void;
   @Input() onSettled?: (event: Event) => void;
   @Input() onProviderCopy?: (event: Event) => void;
@@ -159,7 +158,6 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
         : { resumePaymentRail: this.resumePaymentRail }),
       ...(this.resumable === undefined ? {} : { resumable: this.resumable }),
       ...(this.onCopy === undefined ? {} : { onCopy: this.onCopy }),
-      ...(this.onOpenWallet === undefined ? {} : { onOpenWallet: this.onOpenWallet }),
       ...(this.onState === undefined ? {} : { onState: this.onState }),
       ...(this.onSettled === undefined ? {} : { onSettled: this.onSettled }),
       ...(this.onProviderCopy === undefined ? {} : { onProviderCopy: this.onProviderCopy }),

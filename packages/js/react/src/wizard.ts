@@ -70,7 +70,6 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
   );
   const [activeTutorial, setActiveTutorial] = React.useState<{
     readonly providerId: string;
-    readonly index: number;
     readonly copied: boolean;
   } | null>(null);
   const [startedSwapInvoice, setStartedSwapInvoice] =
@@ -269,6 +268,25 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
       : routeDisplays
           .flatMap((route) => route.providers)
           .find((provider) => provider.id === activeTutorial.providerId);
+  const copyTutorialInvoice = async (providerId: string): Promise<void> => {
+    if (!props.invoice) return;
+    await copyInvoiceHelper({
+      invoice: props.invoice,
+      clipboard: props.clipboard,
+      logger: props.logger,
+      logContext: props.logContext,
+    });
+    // Both handlers, matching the element (which dispatches both
+    // openreceive-provider-copy and openreceive-copy for one tutorial copy).
+    props.onProviderCopy?.(providerId);
+    props.onCopy?.();
+    setActiveTutorial((current) =>
+      current?.providerId === providerId ? { providerId, copied: true } : current,
+    );
+  };
+  const openTutorial = (providerId: string): void => {
+    setActiveTutorial({ providerId, copied: false });
+  };
   // Top-level swap coins, one per configured pay-in asset (e.g. ETH on Ethereum,
   // USDT on Tron). Only present once the order status reports swaps are enabled.
   const swapAssetOptions = swapOptions.enabled
@@ -665,13 +683,7 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
                                 {
                                   className: orClasses.providerActions,
                                 },
-                                renderProviderOpenAction(provider, () =>
-                                  setActiveTutorial({
-                                    providerId: provider.id,
-                                    index: 0,
-                                    copied: false,
-                                  }),
-                                ),
+                                renderProviderOpenAction(provider, () => openTutorial(provider.id)),
                               ),
                             ),
                           ),
@@ -687,39 +699,13 @@ function PaymentWizardSession(props: ResumableWizardProps): React.ReactElement {
       : React.createElement(ProviderTutorialModal, {
           key: "provider-tutorial",
           provider: activeTutorialProvider,
-          index: activeTutorial.index,
           copied: activeTutorial.copied,
           invoice: props.invoice ?? "",
           ...(props.decodeLinkUrl === undefined ? {} : { decodeLinkUrl: props.decodeLinkUrl }),
           onClose: () => setActiveTutorial(null),
-          onCopy: async () => {
-            try {
-              if (!props.invoice) return;
-              await copyInvoiceHelper({
-                invoice: props.invoice,
-                logger: props.logger,
-                logContext: props.logContext,
-              });
-              // Both handlers, matching the element (which dispatches both
-              // openreceive-provider-copy and openreceive-copy for one tutorial
-              // copy). The globalThis CustomEvent this used to dispatch had no
-              // listener anywhere and was never part of the contract.
-              props.onProviderCopy?.(activeTutorialProvider.id);
-              props.onCopy?.();
-              setActiveTutorial({
-                providerId: activeTutorialProvider.id,
-                index: 0,
-                copied: true,
-              });
-            } catch (error) {
+          onCopy: () =>
+            copyTutorialInvoice(activeTutorialProvider.id).catch((error) => {
               props.onError?.(error);
-            }
-          },
-          onStep: (index) =>
-            setActiveTutorial({
-              providerId: activeTutorialProvider.id,
-              index,
-              copied: activeTutorial.copied,
             }),
         }),
   );

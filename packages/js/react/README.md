@@ -46,8 +46,8 @@ a `checkout` snapshot to render one your server already created. Prop names,
 defaults, and the full surface are shared across the wrappers — see
 [frontend checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md).
 
-Event handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
-`onProviderCopy`, `onStartOver`, `onError`) are ordinary props. React receives
+Event handlers (`onCopy`, `onState`, `onSettled`, `onProviderCopy`,
+`onStartOver`, `onError`) are ordinary props. React receives
 framework values rather than DOM `CustomEvent`s — `onState` gets the
 `CheckoutState`, `onError` the thrown value.
 

@@ -1201,24 +1201,18 @@ test("opening a tutorial loads the screenshots, then draws them as data URIs", a
       { label: "Strike's tutorial button" },
     );
     open.click();
-    const dialog = await untilLocal(() => element.shadowRoot?.querySelector('[part="tutorial"]'), {
+    await untilLocal(() => element.shadowRoot?.querySelector('[part="tutorial"]'), {
       label: "tutorial dialog",
     });
-    // Step 2 is the first screenshot step.
-    dialog
-      .querySelector('[data-or-provider-tutorial="strike"][data-or-provider-tutorial-index="1"]')
-      .click();
     await untilLocal(
-      () =>
-        element.shadowRoot?.querySelector('[part="tutorial-caption"]')?.textContent === "Tap Send",
-      { label: "step 2 caption" },
+      () => element.shadowRoot?.querySelector('[part="tutorial-step-active"]')?.textContent?.trim(),
+      { label: "the steps draw before the chunk" },
     );
     const image = await untilLocal(
-      () => element.shadowRoot?.querySelector('[part="tutorial-image"]'),
+      () => element.shadowRoot?.querySelector('[part="tutorial-image"][alt="Tap Send"]'),
       { label: "tutorial image after the chunk resolves" },
     );
     assert.ok(image.getAttribute("src")?.startsWith("data:image/webp;base64,"));
-    assert.equal(image.getAttribute("alt"), "Tap Send");
     for (const img of element.shadowRoot.querySelectorAll("img")) {
       const src = img.getAttribute("src") ?? "";
       assert.ok(
@@ -1226,6 +1220,67 @@ test("opening a tutorial loads the screenshots, then draws them as data URIs", a
         `every <img> is a data URI, got "${src.slice(0, 40)}"`,
       );
     }
+  } finally {
+    element.remove();
+  }
+});
+
+test("the tutorial's first step is the copy, and Next then walks the wallet steps", async (t) => {
+  const written = [];
+  const clipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+  Object.defineProperty(globalThis.navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async (value) => void written.push(value) },
+  });
+  t.after(() => {
+    if (clipboard === undefined) delete globalThis.navigator.clipboard;
+    else Object.defineProperty(globalThis.navigator, "clipboard", clipboard);
+  });
+  const paymentHash = "c".repeat(64);
+  globalThis.fetch = createFetchStub({
+    "/checkouts/prepare": () => prepareBody("order-tutorial-copy", 21_000),
+    "/checkouts": () => checkoutBody("order-tutorial-copy", 21_000, paymentHash),
+    "/payments/check": () => ({ payment_hash: paymentHash, status: "pending" }),
+  });
+  const element = mount({ reference: "order-tutorial-copy", prefix: "/openreceive" });
+  const part = (name) => element.shadowRoot?.querySelector(`[part="${name}"]`);
+  const activeStep = () => part("tutorial-step-active")?.textContent?.trim() ?? "";
+
+  try {
+    const tile = await untilLocal(
+      () => element.shadowRoot?.querySelector('[data-or-method="bitcoin"]'),
+      { label: "method grid" },
+    );
+    tile.click();
+    const open = await untilLocal(
+      () => element.shadowRoot?.querySelector('[data-or-provider-tutorial="strike"]'),
+      { label: "Strike's tutorial button" },
+    );
+    open.click();
+    await untilLocal(() => part("tutorial-copy"), { label: "the Copy invoice button" });
+    assert.deepEqual(written, [], "opening the tutorial copies nothing");
+
+    assert.match(activeStep(), /^1 ?Copy the invoice first/);
+    assert.equal(part("tutorial-next").hasAttribute("hidden"), true);
+    assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
+
+    part("tutorial-copy").click();
+    await untilLocal(() => written.length === 1, { label: "the copy" });
+    assert.deepEqual(written, [`lnbc-${paymentHash}`]);
+    await untilLocal(() => !part("tutorial-copied").hasAttribute("hidden"), {
+      label: "the copied note",
+    });
+    assert.equal(part("tutorial-copy").hasAttribute("hidden"), true);
+
+    for (const step of [2, 3, 4, 5]) {
+      assert.equal(part("tutorial-next").hasAttribute("hidden"), false);
+      assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
+      part("tutorial-next").click();
+      assert.match(activeStep(), new RegExp(`^${step}`));
+      assert.equal(part("tutorial-copy-step").hasAttribute("hidden"), true);
+    }
+    assert.equal(part("tutorial-next").hasAttribute("hidden"), true);
+    assert.equal(part("tutorial-done").hasAttribute("hidden"), false);
   } finally {
     element.remove();
   }

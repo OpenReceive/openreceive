@@ -20,16 +20,29 @@ export function renderProviderOpenActionHtml(provider: WizardProviderDisplay): s
       part="provider-open"
       class="${orClasses.providerOpen}"
       ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
-      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="0"
       type="button"
     >${escapeHtml(provider.openLabel)}</button>
+  `;
+}
+
+function renderTutorialStepHtml(caption: string, index: number, active: boolean): string {
+  return `
+    <li>
+      <button
+        part="${active ? "tutorial-step-active" : "tutorial-step"}"
+        class="${active ? orClasses.tutorialStepActive : orClasses.tutorialStep}"
+        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialStep}="${index}"
+        ${active ? 'aria-current="step"' : ""}
+        type="button"
+      ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">${index + 1}</span><span>${escapeHtml(caption)}</span></button>
+    </li>
   `;
 }
 
 export function renderTutorialModalHtml(
   routes: readonly WizardRouteDisplay[],
   activeProviderId: string | null,
-  activeTutorialIndex: number,
+  activeStep: number,
   copied: boolean,
   lightningInvoice?: string,
   decodeLinkUrl?: string,
@@ -40,48 +53,50 @@ export function renderTutorialModalHtml(
     .find((candidate) => candidate.id === activeProviderId);
   if (provider === undefined || provider.tutorials.length === 0) return "";
 
-  const totalSteps = provider.tutorials.length + 1;
-  const stepIndex = Math.max(0, Math.min(provider.tutorials.length, activeTutorialIndex));
-  const tutorial = stepIndex === 0 ? undefined : provider.tutorials[stepIndex - 1];
-  const previousIndex = Math.max(0, stepIndex - 1);
-  const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
-  const isFinalStep = stepIndex === provider.tutorials.length;
-  const decodeHref =
-    lightningInvoice === undefined || lightningInvoice.trim() === ""
-      ? undefined
-      : createLightningInvoiceDecodeUrl(lightningInvoice, decodeLinkUrl);
+  const hasInvoice = lightningInvoice !== undefined && lightningInvoice.trim() !== "";
+  // Copying comes first whenever there is an invoice to copy: the wallet steps
+  // end with pasting it.
+  const copySteps = hasInvoice ? 1 : 0;
+  const stepCount = copySteps + provider.tutorials.length;
+  const step = Math.max(0, Math.min(stepCount - 1, activeStep));
+  const copyPending = hasInvoice && step === 0 && !copied;
+  const lastStep = step === stepCount - 1;
+  const decodeHref = hasInvoice
+    ? createLightningInvoiceDecodeUrl(lightningInvoice, decodeLinkUrl)
+    : undefined;
   const decodeButton =
     decodeHref === undefined
       ? ""
       : `<a part="tutorial-decode" class="${orClasses.tutorialCopy}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(checkoutLabels.decodeInvoice)}</a>`;
-  const body =
-    stepIndex === 0
-      ? `
-        <div part="tutorial-intro" class="${orClasses.tutorialIntro}">
-          <img part="tutorial-provider-logo" alt="" src="${escapeHtml(provider.icon)}" class="${orClasses.tutorialProviderLogo}">
-          <p>${escapeHtml(checkoutLabels.tutorialIntroPrefix)} ${escapeHtml(provider.name)}.</p>
-          <p>${escapeHtml(checkoutLabels.tutorialIntroCopy)}</p>
-          <button part="tutorial-copy" class="${orClasses.tutorialCopy}" type="button">${escapeHtml(checkoutLabels.copyInvoice)}</button>
-          ${decodeButton}
-          ${
-            copied
-              ? `<p part="tutorial-copy-message" class="${orClasses.tutorialCopyMessage}">${escapeHtml(checkoutLabels.tutorialCopiedContinue)}</p>`
-              : ""
-          }
+  // The prompt and the confirmation are both drawn and one is hidden, so a
+  // finished copy flips them without a rebuild that would drop the dialog's focus.
+  const copyPanel = hasInvoice
+    ? `
+      <div part="tutorial-copy-step" class="${orClasses.tutorialCopyPanel}" ${step === 0 ? "" : "hidden"}>
+        <div part="tutorial-copy-prompt" class="${orClasses.tutorialCopyMessage}" ${copied ? "hidden" : ""}>
+          <p class="${orClasses.tutorialCopyHeading}">${escapeHtml(checkoutLabels.tutorialCopyStep)}</p>
+          <p class="${orClasses.tutorialCopyHint}">${escapeHtml(checkoutLabels.tutorialCopyHint.replace("{wallet}", provider.name))}</p>
         </div>
-      `
-      : `
-        <div part="tutorial-frame" class="${orClasses.tutorialFrame}">
-          ${
-            // No `<img>` until the lazily loaded screenshot is in hand: an
-            // empty src is a request for the page itself.
-            tutorial?.image === undefined
-              ? ""
-              : `<img part="tutorial-image" class="${orClasses.tutorialImage}" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}">`
-          }
+        <div part="tutorial-copied" class="${orClasses.tutorialCopyMessage}" ${copied ? "" : "hidden"}>
+          <p class="${orClasses.tutorialCopied}">${escapeHtml(checkoutLabels.tutorialInvoiceCopied)}</p>
+          <p class="${orClasses.tutorialCopyHint}">${escapeHtml(checkoutLabels.tutorialCopiedHint.replace("{wallet}", provider.name))}</p>
         </div>
-        <p part="tutorial-caption" class="${orClasses.tutorialCaption}">${escapeHtml(tutorial?.caption ?? "")}</p>
-      `;
+      </div>
+    `
+    : "";
+  const captions = [
+    ...(hasInvoice ? [checkoutLabels.tutorialCopyStep] : []),
+    ...provider.tutorials.map((tutorial) => tutorial.caption),
+  ];
+  // Every frame is drawn and a step change toggles `hidden`. No `<img>` until the
+  // lazily loaded screenshot is in hand: an empty src requests the page itself.
+  const frames = provider.tutorials
+    .map((tutorial, index) =>
+      tutorial.image === undefined
+        ? ""
+        : `<img part="tutorial-image" class="${orClasses.tutorialImage}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage}="${index + copySteps}" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}" ${index + copySteps === step ? "" : "hidden"}>`,
+    )
+    .join("");
 
   return `
     <div part="tutorial" class="${orClasses.tutorialModal}" role="dialog" aria-modal="true" aria-label="${escapeHtml(checkoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
@@ -99,33 +114,30 @@ export function renderTutorialModalHtml(
             aria-label="${escapeHtml(checkoutLabels.tutorialClose)}"
           >X</button>
         </div>
-        ${body}
-        <div part="tutorial-steps" class="${orClasses.tutorialSteps}" aria-hidden="true">
-          ${Array.from(
-            { length: totalSteps },
-            (_, index) => `
-            <span part="${index === stepIndex ? "tutorial-step-active" : "tutorial-step"}" class="${index === stepIndex ? orClasses.tutorialStepActive : orClasses.tutorialStep}"></span>
-          `,
-          ).join("")}
-        </div>
-        <p part="tutorial-progress" class="${orClasses.tutorialProgress}">Step ${stepIndex + 1} of ${totalSteps}</p>
-        <div part="tutorial-controls" class="${orClasses.tutorialControls}">
-          <button
-            part="tutorial-nav"
-            class="${orClasses.btn}"
-            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
-            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${previousIndex}"
-            type="button"
-            ${stepIndex === 0 ? "disabled" : ""}
-          >${escapeHtml(checkoutLabels.tutorialBack)}</button>
-          <button
-            part="tutorial-nav"
-            class="${orClasses.btn}"
-            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${isFinalStep ? "" : escapeHtml(provider.id)}"
-            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${nextIndex}"
-            type="button"
-          >${escapeHtml(isFinalStep ? checkoutLabels.tutorialExit : checkoutLabels.tutorialNext)}</button>
-        </div>
+        ${decodeButton}
+        <div part="tutorial-frame" class="${orClasses.tutorialFrame}">${copyPanel}${frames}</div>
+        <ol part="tutorial-steps" class="${orClasses.tutorialSteps}">
+          ${captions.map((caption, index) => renderTutorialStepHtml(caption, index, index === step)).join("")}
+        </ol>
+        <p part="tutorial-come-back" class="${orClasses.tutorialComeBack}">${escapeHtml(checkoutLabels.tutorialComeBack)}</p>
+        ${
+          hasInvoice
+            ? `<button part="tutorial-copy" class="${orClasses.tutorialDone}" type="button" ${copyPending ? "" : "hidden"}>${escapeHtml(checkoutLabels.copyInvoice)}</button>`
+            : ""
+        }
+        <button
+          part="tutorial-next"
+          class="${orClasses.tutorialDone}"
+          type="button"
+          ${copyPending || lastStep ? "hidden" : ""}
+        >${escapeHtml(checkoutLabels.tutorialNext)}</button>
+        <button
+          part="tutorial-done"
+          class="${orClasses.tutorialDone}"
+          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}=""
+          type="button"
+          ${lastStep ? "" : "hidden"}
+        >${escapeHtml(checkoutLabels.tutorialDone)}</button>
       </div>
     </div>
   `;

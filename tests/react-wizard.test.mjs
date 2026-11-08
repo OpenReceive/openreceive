@@ -447,7 +447,7 @@ test("browser checkout wizard route displays carry provider entries", () => {
   assert.equal(bitcoinRouteDisplays[0].providers[0].copyLabel, checkoutLabels.copyInvoice);
   assert.equal(bitcoinRouteDisplays[0].providers[0].copiedLabel, checkoutLabels.copied);
   assert.equal(bitcoinRouteDisplays[0].providers[0].openLabel, "How To Pay");
-  assert.equal(bitcoinRouteDisplays[0].providers[0].kind, "browser wallet");
+  assert.equal(bitcoinRouteDisplays[0].providers[0].kind, "payments app");
   assert.equal(
     bitcoinRouteDisplays[0].providers.find((provider) => provider.id === "zeus")?.kind,
     "mobile wallet",

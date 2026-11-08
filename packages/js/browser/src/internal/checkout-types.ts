@@ -61,18 +61,6 @@ export interface CopyInvoiceOptions {
   logContext?: BrowserLogContext;
 }
 
-export interface OpenWalletOptions {
-  invoice: string;
-  /**
-   * Where to send the `lightning:` URI. Omitted, {@link openWallet} calls
-   * `location.assign` on the CURRENT window, which navigates the payer off a
-   * still-polling checkout on any device that has a handler registered.
-   */
-  open?: (uri: string) => void;
-  logger?: BrowserLoggerOption;
-  logContext?: BrowserLogContext;
-}
-
 export type BrowserLogLevel = "debug" | "info" | "warn" | "error";
 
 export interface BrowserLogEntry {
@@ -463,7 +451,6 @@ export type ThemeToggleElementAttributes = Partial<Record<ThemeToggleElementAttr
 
 export interface CheckoutElementEventHandlers {
   readonly onCopy?: (event: Event) => void;
-  readonly onOpenWallet?: (event: Event) => void;
   readonly onState?: (event: Event) => void;
   readonly onSettled?: (event: Event) => void;
   readonly onProviderCopy?: (event: Event) => void;
@@ -675,7 +662,6 @@ export interface CheckoutControllerOptions extends Omit<CheckoutWatcherOptions, 
    */
   readonly csrfHeader?: string;
   readonly clipboard?: Pick<Clipboard, "writeText">;
-  readonly open?: (uri: string) => void;
 }
 
 /**
@@ -721,7 +707,6 @@ export interface CheckoutController extends SwapRefundStaging {
    */
   cancel(): CheckoutState;
   copyInvoice(): Promise<void>;
-  openWallet(): string;
 }
 
 export interface CreateCheckoutStateOptions {

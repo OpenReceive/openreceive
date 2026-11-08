@@ -32,7 +32,7 @@ const importChecks = {
   "@openreceive/angular":
     "typeof mod.createWrapperCheckoutBinding === 'function' && typeof mod.createWrapperCheckoutShellBinding === 'function' && typeof mod.createWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutController === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.createThemeModel === 'function' && typeof mod.createStoredThemeModel === 'function' && typeof mod.defineElements === 'function' && typeof mod.validateCheckoutProps === 'function' && mod.createCheckoutElement === undefined && mod.createThemeToggleElement === undefined && mod.createWrapperCheckoutController === undefined && mod.createWrapperCheckoutShell === undefined && mod.createWrapperThemeBinding === undefined && mod.createWrapperStoredThemeBinding === undefined",
   "@openreceive/browser":
-    "typeof mod.requestCheckout === 'function' && typeof mod.deriveStatus === 'function' && typeof mod.createLightningUri === 'function' && typeof mod.createQrSvg === 'function' && typeof mod.createQrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function'",
+    "typeof mod.requestCheckout === 'function' && typeof mod.deriveStatus === 'function' && typeof mod.createLightningUri === 'function' && typeof mod.createQrSvg === 'function' && typeof mod.createQrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.createCheckoutController === 'function'",
   "@openreceive/core":
     "typeof mod.reconcilePaymentAttempts === 'function' && typeof mod.isTransactionSettled === 'function'",
   "@openreceive/elements":

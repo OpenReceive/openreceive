@@ -170,7 +170,6 @@ test("React checkout supports design-system component and class slots", () => {
     summary: "app-summary",
     paymentState: "app-state",
     copyButton: "app-copy",
-    openWalletButton: "app-open",
   };
 
   const html = renderToStaticMarkup(
@@ -193,7 +192,6 @@ test("React checkout supports design-system component and class slots", () => {
   assert.match(html, /data-slot-button=""/);
   assert.match(html, /app-copy/);
   assert.match(html, />Copy invoice</);
-  assert.doesNotMatch(html, /class="app-open"/);
   assert.doesNotMatch(html, />Open Wallet</);
   assert.doesNotMatch(html, /nostr\+walletconnect/);
 

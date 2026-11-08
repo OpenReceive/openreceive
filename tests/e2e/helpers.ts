@@ -108,7 +108,7 @@ function collectImages(root: Element): CheckoutImage[] {
 
 /**
  * Open Strike's tutorial (four screenshots, and it sits in every wallet list
- * the demos draw) and step to the first screenshot.
+ * the demos draw) and find the screenshot on show.
  *
  * Two renderers: the shop's own wallet grid on the React hosts (the wallet's
  * name is the button, the walkthrough is a Mantine modal in a portal) and the
@@ -125,9 +125,11 @@ async function expectInlineTutorialImage(page: Page): Promise<void> {
     .click();
   const dialog = page.getByRole("dialog", { name: /Pay a Lightning invoice with Strike/ });
   await expect(dialog).toBeVisible();
+  // The first step is the copy; the screenshots start at the second.
+  await dialog.getByRole("button", { name: "Copy invoice" }).click();
   await dialog.getByRole("button", { name: "Next" }).click();
 
-  const screenshot = dialog.locator('img:not([alt=""])').first();
+  const screenshot = dialog.locator('img:not([alt=""]):visible').first();
   await expect(screenshot).toBeVisible();
   await expect(screenshot).toHaveAttribute("src", /^data:image\/webp;base64,/);
   await expect

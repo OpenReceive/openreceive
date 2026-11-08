@@ -39,7 +39,6 @@ export interface CheckoutViewModel extends CheckoutState {
  */
 export interface CheckoutEventHandlers {
   readonly onCopy?: () => void;
-  readonly onOpenWallet?: (uri: string) => void;
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
   readonly onProviderCopy?: (providerId: string) => void;
@@ -56,7 +55,6 @@ export interface UseCheckoutOptions
   extends CheckoutData,
     Omit<CheckoutEventHandlers, "onProviderCopy" | "onStartOver"> {
   readonly clipboard?: Pick<Clipboard, "writeText">;
-  readonly open?: (uri: string) => void;
   readonly logger?: BrowserLoggerOption;
   readonly refreshStatus?: CheckoutStatusRefresh;
   /**
@@ -89,7 +87,6 @@ export interface UseCheckoutResult extends CheckoutViewModel, SwapRefundStaging 
   retry(): Promise<void>;
   cancel(): void;
   copyInvoice(): Promise<void>;
-  openWallet(): string;
 }
 
 export interface CheckoutProviderProps extends UseCheckoutOptions {
@@ -113,16 +110,6 @@ export interface CopyInvoiceButtonProps extends React.ButtonHTMLAttributes<HTMLB
   readonly onCopied?: () => void;
   readonly onError?: (error: unknown) => void;
   readonly copiedLabel?: React.ReactNode;
-  readonly ButtonComponent?: ButtonComponent;
-}
-
-export interface OpenWalletButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  readonly invoice: string;
-  readonly openWallet?: () => string;
-  readonly open?: (uri: string) => void;
-  readonly logger?: BrowserLoggerOption;
-  readonly onOpened?: (uri: string) => void;
-  readonly onError?: (error: unknown) => void;
   readonly ButtonComponent?: ButtonComponent;
 }
 
@@ -161,8 +148,6 @@ export interface CheckoutClassNames extends InvoiceSummaryClassNames {
   readonly summary?: string;
   readonly actions?: string;
   readonly copyButton?: string;
-  /** Applied to the `components.OpenWalletButton` slot, which renders only when supplied. */
-  readonly openWalletButton?: string;
   readonly wizard?: string;
   readonly themeToggle?: string;
 }
@@ -172,7 +157,6 @@ export interface CheckoutComponents {
   readonly QRCode?: React.ComponentType<QRCodeProps>;
   readonly InvoiceSummary?: React.ComponentType<InvoiceSummaryProps>;
   readonly CopyButton?: React.ComponentType<CopyInvoiceButtonProps>;
-  readonly OpenWalletButton?: React.ComponentType<OpenWalletButtonProps>;
   readonly PaymentState?: React.ComponentType<PaymentStateProps>;
 }
 

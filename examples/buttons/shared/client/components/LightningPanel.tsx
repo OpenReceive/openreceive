@@ -2,24 +2,16 @@ import { Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { checkoutLabels } from "@openreceive/browser/headless";
 import { observer } from "mobx-react";
 import type React from "react";
-import { useMemo } from "react";
 import type { ShopCheckout } from "../stores/ShopCheckout.ts";
 import { ControllerCopyButton, CopyRow } from "./CopyRow.tsx";
 import { useInvoiceQrSvg } from "./useQrSvg.ts";
 import { WalletSuggestions } from "./WalletSuggestions.tsx";
 
-// A desktop payer's payment path IS the QR code. There is deliberately no
-// "Open wallet" button here: `openWallet` is `location.assign("lightning:…")` on
-// the CURRENT window, and that window is a live checkout polling for
-// settlement — with no registered handler the button is inert, and with one it
-// walks the payer off the page that was about to tell them they had paid. On a
-// touch device it hands off to a real wallet app, so it appears there only.
-const isTouchDevice = (): boolean =>
-  typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
-
+// The payer's paths are the QR code and Copy invoice. There is deliberately no
+// link that opens a wallet: Cash App cancels an invoice opened from a link and
+// pays the same invoice scanned or pasted.
 export const LightningPanel: React.FC<{ checkout: ShopCheckout }> = observer(({ checkout }) => {
   const invoice = checkout.lightningInvoice;
-  const touch = useMemo(isTouchDevice, []);
   const qr = useInvoiceQrSvg(invoice);
 
   if (checkout.mintingLightning || !invoice || !qr) {
@@ -66,12 +58,6 @@ export const LightningPanel: React.FC<{ checkout: ShopCheckout }> = observer(({ 
                 </Button>
               )}
             </ControllerCopyButton>
-
-            {touch ? (
-              <Button variant="default" size="md" onClick={checkout.openWallet}>
-                {checkoutLabels.openWallet}
-              </Button>
-            ) : null}
           </Group>
 
           <WalletSuggestions checkout={checkout} />

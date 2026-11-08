@@ -250,24 +250,31 @@ export const orClasses = {
   swapRefundError: "m-0 text-error text-sm",
   swapRefundHint: "m-0 text-warning text-sm",
   tutorialModal: "modal modal-open",
-  tutorialBox: "modal-box grid gap-3 max-w-[min(440px,100%)]",
+  tutorialBox: "modal-box grid gap-2 p-4 max-w-[min(440px,100%)] max-h-[calc(100dvh-1rem)]",
   tutorialHeader: "flex gap-2 items-center justify-between",
-  tutorialTitle: "flex items-center gap-2.5 min-w-0",
-  tutorialHeaderLogo: "size-9 rounded shrink-0",
+  tutorialTitle:
+    "flex items-center gap-2.5 min-w-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold",
+  tutorialHeaderLogo: "size-7 rounded shrink-0",
   tutorialClose: "btn btn-sm btn-square btn-ghost",
+  tutorialCopied: "m-0 text-success font-bold text-lg",
+  tutorialCopy: "btn btn-outline btn-sm justify-self-start",
+  /** Step 1 fills the frame, so no screenshot competes with it. */
+  tutorialCopyPanel: "absolute inset-0 grid place-items-center p-4 text-center bg-warning/10",
+  tutorialCopyMessage: "grid gap-1",
+  tutorialCopyHeading: "m-0 font-bold text-lg",
+  tutorialCopyHint: "m-0 text-sm text-base-content/70",
+  /** A fixed height, so the steps below it stay put as the screenshots change. */
   tutorialFrame:
-    "flex items-center justify-center min-h-0 overflow-hidden rounded-box border border-base-content/20 bg-base-200",
-  tutorialImage: "block w-auto max-w-full h-auto max-h-[min(66vh,720px)] object-contain",
-  /** The step directive ("Tap Withdraw"): a callout in the Bitcoin accent so it reads as the instruction, not a label. */
-  tutorialCaption:
-    "m-0 rounded-box border border-warning/40 bg-warning/10 px-4 py-2.5 text-lg font-bold text-center",
-  tutorialIntro: "grid gap-3 p-4 text-center",
-  tutorialProviderLogo: "justify-self-center size-[52px] rounded",
-  tutorialCopy: "btn btn-outline justify-self-center min-w-[min(240px,100%)]",
-  tutorialCopyMessage: "text-success font-bold",
-  tutorialProgress: "m-0 text-base-content/60 text-xs text-center",
-  tutorialSteps: "flex gap-1.5 justify-center",
-  tutorialStep: "badge badge-xs badge-ghost size-2 p-0",
-  tutorialStepActive: "badge badge-xs badge-neutral size-2 p-0",
-  tutorialControls: "grid grid-cols-2 gap-2",
+    "relative overflow-hidden rounded-box border border-base-content/20 bg-base-200 h-[min(30vh,260px)]",
+  tutorialImage: "absolute inset-0 size-full object-contain",
+  tutorialSteps: "m-0 p-0 grid gap-0.5 list-none",
+  tutorialStep:
+    "btn btn-ghost btn-sm h-auto min-h-8 py-1 w-full justify-start gap-2 text-left font-normal whitespace-normal",
+  /** The current step: a callout in the Bitcoin accent so it reads as the instruction. */
+  tutorialStepActive:
+    "btn btn-sm h-auto min-h-8 py-1 w-full justify-start gap-2 text-left font-bold whitespace-normal border-warning/40 bg-warning/10",
+  tutorialStepNumber:
+    "inline-grid place-items-center size-5 shrink-0 rounded-full bg-base-content/10 text-xs font-semibold",
+  tutorialComeBack: "m-0 text-base-content/70 text-sm text-center",
+  tutorialDone: "btn btn-primary w-full",
 } as const;

@@ -13,7 +13,6 @@ import type {
 export const checkoutLabels = {
   copyInvoice: "Copy invoice",
   copied: "Copied!",
-  openWallet: "Open Wallet",
   bitcoinLightningInvoice: "Bitcoin Lightning invoice",
   paymentStatus: {
     waitingTitle: "Waiting for payment",
@@ -42,10 +41,13 @@ export const checkoutLabels = {
   emptyBitcoin: "Choose Bitcoin Lightning.",
   openProvider: "How To Pay",
   tutorialTitlePrefix: "Pay a Lightning invoice with",
-  tutorialIntroPrefix: "It's easy to make this payment using",
-  tutorialIntroCopy: "The first step is to copy the invoice to your clipboard.",
-  tutorialCopiedContinue: "Copied! Click next below to continue with tutorial.",
-  tutorialExit: "Exit",
+  tutorialInvoiceCopied: "✓ Invoice copied",
+  /** The first step of a tutorial, whenever there is an invoice to copy. */
+  tutorialCopyStep: "Copy the invoice first",
+  tutorialCopyHint: "Do this before you open {wallet}. You'll paste it there.",
+  tutorialCopiedHint: "Now open {wallet} and follow the steps.",
+  tutorialComeBack: "Then come back here. This page updates by itself.",
+  tutorialDone: "Done",
   lightningNetwork: "Lightning Network",
   chooseNetwork: "Choose network",
   selectNetwork: "Select network",

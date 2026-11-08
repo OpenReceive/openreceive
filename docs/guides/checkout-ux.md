@@ -122,12 +122,12 @@ caption alone. Never draw an `<img>` with an empty `src`. See
 On a short panel, pass `providerPreviewLimit` so the list does not push the
 QR off the screen.
 
-## No "Open wallet" button on desktop
+## Do not add an "Open wallet" button
 
-`openWallet` leaves the current page. On a phone, that hands off to a wallet
-app. On a desktop, it either does nothing or takes the payer away from a
-checkout that is still waiting for payment. The drop-in draws no wallet button
-unless you pass `components.OpenWalletButton`.
+Show the QR code and **Copy invoice**. Do not add a `lightning:` link or an
+"Open wallet" button. Cash App cancels an invoice opened from a link, whatever
+form the link takes, and pays the same invoice when it is scanned or pasted. A
+button like that fails, with no explanation, for every payer using Cash App.
 
 ## Use the packaged labels
 

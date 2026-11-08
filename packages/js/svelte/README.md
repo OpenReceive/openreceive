@@ -47,8 +47,8 @@ Pass `reference` to let the element create the checkout (create mode), or pass a
 defaults, and the full surface are shared across the wrappers — see
 [frontend checkout guide](https://github.com/openreceive/openreceive/blob/master/docs/guides/frontend-checkout.md).
 
-Event handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
-`onProviderCopy`, `onStartOver`, `onError`) are ordinary props, not
+Event handlers (`onCopy`, `onState`, `onSettled`, `onProviderCopy`,
+`onStartOver`, `onError`) are ordinary props, not
 framework-native events: pass them as props (`onSettled={handler}`), not with
 `on:settled`. Each receives the DOM `CustomEvent` the element dispatches.
 

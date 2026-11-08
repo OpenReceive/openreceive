@@ -19,7 +19,6 @@ export {
   createQrPngDataUrl,
   createQrSvg,
   BrowserRequestError,
-  openWallet,
   prepareCheckout,
   requestCheckout,
 } from "./internal/checkout.ts";
@@ -43,7 +42,6 @@ export type {
   BrowserLoggerOption,
   BrowserLogLevel,
   QrOptions,
-  OpenWalletOptions,
   PrepareCheckoutOptions,
   RequestCheckoutOptions,
   UnixSeconds,

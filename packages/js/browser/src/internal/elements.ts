@@ -205,9 +205,6 @@ export function createCheckoutElementListeners(
     ...(handlers.onCopy === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy]: handlers.onCopy }),
-    ...(handlers.onOpenWallet === undefined
-      ? {}
-      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet]: handlers.onOpenWallet }),
     ...(handlers.onState === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state]: handlers.onState }),

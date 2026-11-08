@@ -113,11 +113,11 @@ test("provider-data resolves crypto route providers in registry rank order", () 
     }
   }
 
-  // Sentinels: the flagship route covers the whole catalog and leads with the
-  // hosted browser wallet.
+  // Sentinels: the flagship route covers the whole catalog and leads with Cash
+  // App, the wallet most payers have.
   const btcLightning = listCryptoRouteProviders("btc-lightning");
   assert.equal(btcLightning.length, listProviders().length);
-  assert.equal(btcLightning[0].provider.id, "rizful");
+  assert.equal(btcLightning[0].provider.id, "cashapp");
   assert.equal(getAsset("btc")?.route, "btc-lightning");
 });
 
@@ -129,7 +129,7 @@ test("provider-data resolves payment wizard routes from asset and route inputs",
   assert.equal(cryptoRoutes[0].kind, "crypto");
   assert.equal(cryptoRoutes[0].route.id, "btc-lightning");
   assert.equal(cryptoRoutes[0].asset.symbol, "btc");
-  assert.equal(cryptoRoutes[0].providers[0].provider.id, "rizful");
+  assert.equal(cryptoRoutes[0].providers[0].provider.id, "cashapp");
 
   assert.equal(explicitRoutes.length, 1);
   assert.equal(explicitRoutes[0].route.id, "btc-lightning");
@@ -283,7 +283,7 @@ test("provider-data validation rejects duplicate route and provider entries", ()
   assert.equal(result.errors.includes("crypto route id btc-lightning is duplicated"), true);
   assert.equal(result.errors.includes("disqualified provider relai is duplicated"), true);
   assert.equal(
-    result.errors.includes("crypto route btc-lightning references provider rizful more than once"),
+    result.errors.includes("crypto route btc-lightning references provider cashapp more than once"),
     true,
   );
 });

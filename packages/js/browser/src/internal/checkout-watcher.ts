@@ -4,7 +4,7 @@
 // drive.
 
 import { unixSeconds } from "@openreceive/core";
-import { copyInvoice, openWallet } from "./checkout-actions.ts";
+import { copyInvoice } from "./checkout-actions.ts";
 import { checkoutLogFields, emitBrowserLog } from "./checkout-log.ts";
 import {
   createCheckoutState,
@@ -371,16 +371,6 @@ export class BrowserCheckoutController implements CheckoutController {
     await copyInvoice({
       invoice: state.invoice,
       clipboard: this.options.clipboard,
-      logger: this.options.logger,
-      logContext: checkoutLogFields(state),
-    });
-  }
-
-  openWallet(): string {
-    const state = this.currentState();
-    return openWallet({
-      invoice: state.invoice,
-      open: this.options.open,
       logger: this.options.logger,
       logContext: checkoutLogFields(state),
     });

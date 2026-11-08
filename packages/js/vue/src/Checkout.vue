@@ -75,7 +75,6 @@ const shell = computed(() => {
       : { resumePaymentRail: props.resumePaymentRail }),
     ...(props.resumable === undefined ? {} : { resumable: props.resumable }),
     ...(props.onCopy === undefined ? {} : { onCopy: props.onCopy }),
-    ...(props.onOpenWallet === undefined ? {} : { onOpenWallet: props.onOpenWallet }),
     ...(props.onState === undefined ? {} : { onState: props.onState }),
     ...(props.onSettled === undefined ? {} : { onSettled: props.onSettled }),
     ...(props.onProviderCopy === undefined ? {} : { onProviderCopy: props.onProviderCopy }),

@@ -1,7 +1,7 @@
-// Two small timer-driven value controllers the checkout UI shares: transient
-// feedback ("Copied!" reverting itself) and a value that re-derives on a tick
-// (the expiry countdown). Both are DOM-free so React, the custom element and
-// the headless engine can all drive them.
+// Small timer-driven controllers the checkout UI shares: transient feedback
+// ("Copied!" reverting itself) and a value that re-derives on a tick (the expiry
+// countdown). Both are DOM-free so React, the custom element and the headless
+// engine can all drive them.
 
 import { unixSeconds } from "@openreceive/core";
 import {

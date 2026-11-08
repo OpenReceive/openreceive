@@ -81,8 +81,8 @@ up front. If your Content-Security-Policy has a strict `img-src`, allow `data:`
 
 To use the same engine with your own layout, use `useCheckout`, the hook behind
 `<Checkout>`. It returns the live snapshot, status labels, and
-`copyInvoice` / `openWallet` / `retry`. Use `openWallet` on touch devices
-only. Use `checkoutLabels` for any string you put on the screen.
+`copyInvoice` / `retry`. Use `checkoutLabels` for any string you put on the
+screen.
 
 Importing `@openreceive/react` plus its `styles.css` adds roughly 530 kB
 minified (~150 kB gzipped) to a production chunk. If that size matters for the

@@ -421,7 +421,6 @@ function CheckoutView(
     logger,
     decodeLinkUrl,
     onCopy,
-    onOpenWallet,
     onError,
     refreshStatus,
     onState,
@@ -449,7 +448,6 @@ function CheckoutView(
     checkout,
     logger,
     onCopy,
-    onOpenWallet,
     onError,
     refreshStatus,
     prefix,
@@ -480,7 +478,6 @@ function CheckoutView(
   const QRCodeComponent = components?.QRCode ?? QRCode;
   const InvoiceSummaryComponent = components?.InvoiceSummary ?? InvoiceSummary;
   const CopyButton = components?.CopyButton ?? CopyInvoiceButton;
-  const OpenWalletButtonComponent = components?.OpenWalletButton;
   const ButtonComponent = components?.Button;
   const PaymentStateComponent = components?.PaymentState ?? PaymentState;
   const customChildren = typeof children === "function" ? children(checkoutModel) : children;
@@ -711,19 +708,6 @@ function CheckoutView(
                           ButtonComponent,
                           className: classNames?.copyButton,
                         }),
-                        // Opt-in slot: the default checkout ships no wallet button, so a
-                        // desktop payer is never sent to a handler that does not exist.
-                        OpenWalletButtonComponent === undefined
-                          ? null
-                          : React.createElement(OpenWalletButtonComponent, {
-                              key: "open-wallet",
-                              invoice: checkoutModel.invoice,
-                              openWallet: checkoutModel.openWallet,
-                              onError,
-                              logger,
-                              ButtonComponent,
-                              className: classNames?.openWalletButton,
-                            }),
                         decodeInvoiceHref === undefined
                           ? null
                           : React.createElement(

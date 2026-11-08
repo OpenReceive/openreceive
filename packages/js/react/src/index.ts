@@ -2,7 +2,6 @@ export { Checkout } from "./checkout.ts";
 export {
   CopyInvoiceButton,
   InvoiceSummary,
-  OpenWalletButton,
   PaymentState,
   QRCode,
   SatsDetail,
@@ -26,7 +25,6 @@ export type {
   CopyInvoiceButtonProps,
   InvoiceSummaryClassNames,
   InvoiceSummaryProps,
-  OpenWalletButtonProps,
   PaymentStateProps,
   PaymentWizardProps,
   QRCodeProps,

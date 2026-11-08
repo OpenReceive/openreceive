@@ -1,8 +1,8 @@
 /// <reference path="../qrcode.d.ts" />
 
 // What the payer can do with an invoice: render it as a QR (SVG or PNG data
-// URL), copy it, or hand it to a wallet. Each action logs what it did and
-// refuses anything `assertInvoice` rejects.
+// URL) or copy it. Each action refuses anything `assertInvoice` rejects, and a
+// copy logs what it did.
 
 import * as defaultQrEncoder from "qrcode";
 import {
@@ -13,7 +13,6 @@ import {
   OPENRECEIVE_QR_QUIET_ZONE_MODULES,
   type QrEncoder,
   type QrOptions,
-  type OpenWalletOptions,
 } from "./ui.ts";
 import { recordOrEmpty } from "@openreceive/core";
 import { assertInvoice, createLightningUri } from "./checkout-invoice.ts";
@@ -82,54 +81,6 @@ export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
     "Copied Lightning invoice to clipboard.",
     options.logContext,
   );
-}
-
-/**
- * Hand the invoice to the payer's wallet as a `lightning:` URI, and return the
- * URI. **Touch devices.**
- *
- * The default path is `location.assign` on the CURRENT window — the right
- * primitive for a custom-scheme deep link on a phone, and the wrong thing
- * anywhere else. With no registered `lightning:` handler the call does nothing
- * visible; with one, it navigates the payer off a checkout that is still
- * polling `/payments/check`. Pass `open` to route the URI somewhere that is not
- * the checkout window.
- *
- * This is why the shipped `<Checkout>` renders no wallet button of its own and
- * exposes `components.OpenWalletButton` as an opt-in slot instead: a desktop
- * payer is never sent to a handler that does not exist, next to the QR code
- * that IS the desktop payment path. A custom UI drawing its own button owns
- * that decision — see docs/guides/headless-checkout.md.
- */
-export function openWallet(options: OpenWalletOptions): string {
-  const uri = createLightningUri(options.invoice);
-
-  if (options.open !== undefined) {
-    options.open(uri);
-    emitBrowserLog(
-      options.logger,
-      "info",
-      "checkout.wallet.opened",
-      "Opened Lightning invoice URI.",
-      options.logContext,
-    );
-    return uri;
-  }
-
-  const location = globalThis.window?.location;
-  if (location === undefined) {
-    throw new Error("window.location is unavailable.");
-  }
-
-  location.assign(uri);
-  emitBrowserLog(
-    options.logger,
-    "info",
-    "checkout.wallet.opened",
-    "Opened Lightning invoice URI.",
-    options.logContext,
-  );
-  return uri;
 }
 
 /**
