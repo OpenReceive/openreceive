@@ -76,10 +76,27 @@ export async function createDefaultAlbyNwcClient(
   }) => AlbySdkClient;
 
   const client = new NWCClientConstructor({ nostrWalletConnectUrl: connectionString });
+  allowSlowRelayHandshakes(client);
   const receiveClient = client as unknown as AlbyNwcCompatibleClient;
   receiveClient.listTransactions = (request, options) =>
     historyRequest(client, request, options?.signal ?? AbortSignal.timeout(10_000));
   return receiveClient;
+}
+
+/**
+ * How long a relay connection may take to open. @getalby/sdk's pool gives it
+ * 3 s, and every request waits on the connection its subscription opened, so
+ * a slow handshake failed the buyer's checkout: from a shop container, one of
+ * eight handshakes to Rizful's relay took 3.24 s (2026-11-06). A relay that
+ * refuses still fails at once; only a slow one gets the extra time.
+ */
+const RELAY_CONNECT_TIMEOUT_MS = 8_000;
+
+function allowSlowRelayHandshakes(client: unknown): void {
+  const pool = (client as { pool?: { maxWaitForConnection?: unknown } }).pool;
+  if (pool !== undefined && typeof pool.maxWaitForConnection === "number") {
+    pool.maxWaitForConnection = RELAY_CONNECT_TIMEOUT_MS;
+  }
 }
 
 function ensureNodeWebSocket(): void {

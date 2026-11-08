@@ -180,22 +180,26 @@ function newBuyer(target: ChaosTarget): Promise<ChaosBuyer> {
 }
 
 /**
- * Eight checkouts, each on a fresh relay connection whose handshake takes one
- * of the eight times measured from a shop container on 2026-11-06. A shop that
- * gives a handshake 1 s, or the relay one try, answers 503 on some of them.
+ * Eight checkouts, each on a fresh relay connection whose handshake takes the
+ * next of the eight times measured from a shop container on 2026-11-06. A
+ * shop that gives a handshake 1 s (PHP 0.4.31) or 3 s (@getalby/sdk's pool)
+ * fails some of them.
  */
 async function slowHandshakes(target: ChaosTarget, control: InterceptorControl): Promise<Check> {
   const summary =
     "With the relay's handshakes as slow as measured from a shop (0.6 s to 3.24 s), every checkout still got an invoice.";
-  await control.rule(RELAY, "pass", { delayMs: MEASURED_HANDSHAKES_MS });
   const rounds: string[] = [];
   let failed = 0;
+  // One measured time per round, in order, so the 3.24 s handshake is tested
+  // every run rather than when a random draw lands on it.
   for (let round = 0; round < MEASURED_HANDSHAKES_MS.length; round += 1) {
+    const handshakeMs = MEASURED_HANDSHAKES_MS[round] ?? 0;
+    await control.rule(RELAY, "pass", { delayMs: [handshakeMs] });
     await control.drop(RELAY);
     const buyer = await newBuyer(target);
     const answer = await buyer.createOnce();
     if (answer.status !== 201) failed += 1;
-    rounds.push(`#${round + 1} ${brief(answer)}`);
+    rounds.push(`#${round + 1} handshake ${handshakeMs} ms: ${brief(answer)}`);
   }
   const stats = await control.stats();
   await control.reset();

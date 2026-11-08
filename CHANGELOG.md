@@ -10,6 +10,12 @@
   `Nip47NetworkError` with code `OTHER` and never sets the error's name, so
   the engine now reads the error's class. SDK reply and publish timeouts are
   `TIMEOUT` the same way. Found by the agent trials' new chaos phase.
+- Fixed (Node): a relay handshake slower than 3 s no longer fails the
+  checkout. @getalby/sdk's connection pool gave a relay connection 3 s and
+  every request waits on the one its subscription opened; from a shop
+  container, one of eight handshakes to Rizful's relay took 3.24 s. The
+  engine now gives it 8 s. A relay that refuses still fails at once. The PHP
+  engine got the same fix in 0.4.32.
 
 ## 0.4.32 - 2026-11-07
 

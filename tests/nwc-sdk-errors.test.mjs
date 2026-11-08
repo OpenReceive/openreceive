@@ -54,3 +54,22 @@ test("a wallet's own error keeps the wallet's code; an unknown one stays OTHER",
   );
   assert.equal(normalizeNwcWalletError(new Error("plain")).toJSON().code, "OTHER");
 });
+
+// Found by the trials' chaos phase (2026-11-08, chaos_slow_handshakes): the
+// SDK's pool gave a relay connection 3 s and every request waits on it, so a
+// 3.24 s handshake (measured from a shop container to Rizful's relay) failed
+// the buyer's checkout.
+test("the SDK client gives a slow relay handshake 8 s, not the pool's 3 s", async () => {
+  const { createDefaultAlbyNwcClient } = await import("../packages/js/node/src/nwc/transport.ts");
+  const uri =
+    "nostr+walletconnect://" +
+    "a".repeat(64) +
+    "?relay=wss%3A%2F%2Frelay.example%2Fv1&secret=" +
+    "1".repeat(64);
+  const client = await createDefaultAlbyNwcClient(uri);
+  try {
+    assert.equal(client.pool.maxWaitForConnection, 8_000);
+  } finally {
+    client.close?.();
+  }
+});
