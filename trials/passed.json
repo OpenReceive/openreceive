@@ -3,12 +3,12 @@
   "passed": [
     {
       "trial": "woocommerce",
-      "date": "2026-10-14",
-      "release": "0.4.26",
+      "date": "2026-11-08",
+      "release": "0.4.32",
       "runs": 3,
-      "agents": ["codex/default"],
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "ce0ed22bd6ce"
+      "directions": "122616efadff"
     },
     {
       "trial": "node",
@@ -235,48 +235,48 @@
     },
     {
       "trial": "fossbilling",
-      "date": "2026-10-18",
-      "release": "0.4.28",
+      "date": "2026-11-08",
+      "release": "0.4.32",
       "runs": 3,
-      "agents": ["codex/default"],
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "da23cb06a81c"
+      "directions": "8b0db84bcd1c"
     },
     {
       "trial": "edd",
-      "date": "2026-10-18",
-      "release": "0.4.28",
+      "date": "2026-11-08",
+      "release": "0.4.32",
       "runs": 3,
-      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "agents": ["codex/default"],
       "mode": "released",
-      "directions": "29544aedc08b"
+      "directions": "2d163647ad27"
     },
     {
       "trial": "medusa",
-      "date": "2026-10-19",
-      "release": "0.4.29",
+      "date": "2026-11-08",
+      "release": "0.4.32",
       "runs": 3,
-      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "2ed53101bf16"
+      "directions": "d35c8f025bdc"
     },
     {
       "trial": "prestashop",
-      "date": "2026-10-19",
-      "release": "0.4.30",
+      "date": "2026-11-08",
+      "release": "0.4.32",
       "runs": 3,
-      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "e0f9624f2325"
+      "directions": "fef7478a0f46"
     },
     {
       "trial": "odoo",
-      "date": "2026-10-19",
-      "release": "0.4.30",
+      "date": "2026-11-08",
+      "release": "0.4.32",
       "runs": 3,
-      "agents": ["claude/claude-opus-5-5", "codex/default"],
+      "agents": ["codex/default", "cursor/grok-4.7-medium-fast"],
       "mode": "released",
-      "directions": "22ec4ea5c37c"
+      "directions": "f5e2e3be0a00"
     },
     {
       "trial": "vendure",
