@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { checkoutLabels } from "../packages/js/browser/src/headless.ts";
 import {
   bannedPayerWords,
   bannedPayerWordsInContext,
@@ -39,6 +40,55 @@ test("the words check flags what the 0.4.32 videos showed the payer", () => {
   assert.deepEqual(bannedPayerWords("TypeError: x is not a function"), ["error class"]);
 });
 
+// 2026-11-08: a PrestaShop payer read the handler's 403 for the developer, and
+// other runs could have shown a field error or a 409's text the same way.
+test("the words check flags text written for the developer", () => {
+  assert.deepEqual(
+    bannedPayerWords(
+      "Could not start checkout.\nNot authorized for this action. The application's authorize " +
+        "hook denied it; if this is unexpected, check that the payer's session reaches the " +
+        "checkout routes. https://openreceive.org/guides/authorization.md",
+    ),
+    ["authorize hook", "hook denied", "payer's session", "checkout routes", "docs link"],
+  );
+  assert.deepEqual(bannedPayerWords("payment_hash is required."), ["field name"]);
+  assert.deepEqual(bannedPayerWords("pay_in_asset is not supported."), ["field name"]);
+  assert.deepEqual(
+    bannedPayerWords(
+      "The host did not accept this payment attempt; payer instructions were withheld.",
+    ),
+    ["payer instructions"],
+  );
+  for (const code of [
+    "FORBIDDEN",
+    "INVALID_REQUEST",
+    "CONFLICT",
+    "NOT_FOUND",
+    "WALLET_UNAVAILABLE",
+  ]) {
+    assert.deepEqual(bannedPayerWords(`Could not start checkout.\n${code}`), ["error code"], code);
+  }
+  assert.deepEqual(bannedPayerWords('{"code":"RATE_LIMITED","message":"Too many requests."}'), [
+    "error code",
+  ]);
+});
+
+test("the words check passes ordinary words near the developer phrases", () => {
+  for (const text of [
+    // A shop selling hooks, a session, routes: ordinary words on a shop page.
+    "Brass hook, 3 pack — $7.00\nAdd to cart",
+    "Your session expired. Sign in again to see your orders.",
+    "Delivery routes are updated daily.",
+    "Not found\nThat order is not yours.",
+    // CSS-capitalized headings that are English words, not codes.
+    "OTHER WAYS TO PAY\nINTERNAL REFERENCE 42\nTIMEOUT IN 10 MINUTES\nRESTRICTED CONTENT",
+    "Forbidden City tour — $49.00",
+    "Conflict-free minerals",
+  ]) {
+    assert.deepEqual(bannedPayerWords(text), [], text);
+  }
+});
+
 test("the words check flags values JavaScript failed to format", () => {
   assert.deepEqual(bannedPayerWords("Amount: undefined sats"), ["undefined"]);
   assert.deepEqual(bannedPayerWords("NaN sats / $7.00 USD"), ["NaN"]);
@@ -60,6 +110,25 @@ test("the words check passes the checkout's own payer copy", () => {
     "Error\nSomething went wrong. Please try again.",
   ]) {
     assert.deepEqual(bannedPayerWords(text), [], text);
+  }
+});
+
+test("every failure sentence the checkout shows passes the words check", () => {
+  // The sentences payerErrorMessage puts in front of a payer, under the
+  // headings the two renderers put above them.
+  for (const sentence of [
+    checkoutLabels.paymentServiceUnavailable,
+    checkoutLabels.paymentNotYours,
+    checkoutLabels.orderNotFound,
+    checkoutLabels.paymentChanged,
+    checkoutLabels.paymentRequestFailed,
+    checkoutLabels.startCheckoutFailedDetail,
+  ]) {
+    for (const heading of ["Could not start checkout.", checkoutLabels.swapStartFailedTitle]) {
+      const text = `${heading}\n${sentence}\n${checkoutLabels.tryAgain}`;
+      assert.deepEqual(bannedPayerWords(text), [], text);
+    }
+    assert.equal(isPayerSentence(sentence), true, sentence);
   }
 });
 

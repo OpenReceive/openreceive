@@ -77,7 +77,8 @@ const SWAP_TIMEOUT_MS = 45_000;
 
 /**
  * Words a payer must never read: the engine's own vocabulary, a server's
- * crash, and a value JavaScript failed to format. "swap service" is fine on
+ * crash, text written for the developer, and a value JavaScript failed to
+ * format. "swap service" is fine on
  * the page (the wallet list names Boltz and FixedFloat that way); only the
  * videos avoid it.
  */
@@ -99,6 +100,27 @@ const BANNED: readonly (readonly [string, RegExp])[] = [
   ["NaN", /\bNaN\b/],
   ["[object Object]", /\[object Object\]/],
   ["null", /\bnull\b/i],
+  // Text the server wrote for the shop's developer (2026-11-08 trials: a
+  // PrestaShop payer read the handler's 403, "The application's authorize hook
+  // denied it; … check that the payer's session reaches the checkout routes").
+  // Phrases, not the words: "hook", "session" and "route" are ordinary on a
+  // shop page.
+  ["authorize hook", /\bauthori[sz]e\s+hook\b/i],
+  ["hook denied", /\bhook\s+denied\b/i],
+  ["payer's session", /\bpayer['’]?s\s+session\b/i],
+  ["checkout routes", /\bcheckout\s+routes?\b/i],
+  ["payer instructions", /\bpayer\s+instructions\b/i],
+  ["docs link", /openreceive\.org\/guides/i],
+  // A wire field name: "payment_hash is required.", "pay_in_asset".
+  ["field name", /\b(?:payment_hash|pay_in_asset|amount_msats|swap_data|bolt11)\b/],
+  // A bare error code. Capitals only, and only the codes that are no English
+  // word in capitals a heading could show: INTERNAL, TIMEOUT, OTHER and
+  // RESTRICTED are left out, since CSS can capitalize an ordinary "Other" or
+  // "Restricted content".
+  [
+    "error code",
+    /\b(?:FORBIDDEN|UNAUTHORIZED|CONFLICT|NOT_FOUND|INVALID_REQUEST|RATE_LIMITED|QUOTA_EXCEEDED|WALLET_UNAVAILABLE|INVOICE_EXPIRED|UNSUPPORTED_METHOD|UNSUPPORTED_ENCRYPTION|NOT_IMPLEMENTED)\b/,
+  ],
 ];
 
 /** The banned terms `text` contains, in the list's order. */
@@ -1146,7 +1168,7 @@ function wordsCheck(states: readonly State[]): Check {
     severity: "blocker",
     pass: states.length > 0 && hits.length === 0,
     summary:
-      "No checkout screen the payer saw names NWC, nostr, a relay or the backend, shows a server error, an exception or a traceback, or prints undefined, NaN, null or [object Object].",
+      "No checkout screen the payer saw names NWC, nostr, a relay or the backend, shows a server error, an exception or a traceback, shows text written for the developer (the authorize hook, the payer's session, a field name, an error code), or prints undefined, NaN, null or [object Object].",
     evidence:
       states.length === 0
         ? "the walk reached no checkout screen"
