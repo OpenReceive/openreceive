@@ -1281,7 +1281,8 @@ test("the tutorial's first step is the copy, and Next then walks the wallet step
       assert.equal(part("tutorial-done").hasAttribute("hidden"), true);
       part("tutorial-next").click();
       assert.match(activeStep(), new RegExp(`^${step}`));
-      assert.equal(part("tutorial-frame").hasAttribute("hidden"), false);
+      // The screenshot opens directly under its own step.
+      assert.equal(part("tutorial-step-active").nextElementSibling.hasAttribute("hidden"), false);
     }
     assert.equal(part("tutorial-next").hasAttribute("hidden"), true);
     assert.equal(part("tutorial-done").hasAttribute("hidden"), false);

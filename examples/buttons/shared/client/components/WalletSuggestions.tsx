@@ -188,23 +188,18 @@ const ProviderWalkthrough: React.FC<{
                   </span>
                   <span>{tutorial.caption}</span>
                 </UnstyledButton>
+                <div className="or-shop-tutorial-frame" hidden={index + 1 !== step}>
+                  {images?.[tutorial.path] === undefined ? null : (
+                    <img
+                      className="or-shop-tutorial-image"
+                      src={images[tutorial.path]}
+                      alt={tutorial.caption}
+                    />
+                  )}
+                </div>
               </li>
             ))}
           </ol>
-
-          <div className="or-shop-tutorial-frame" hidden={step === 0}>
-            {provider.tutorials.map((tutorial, index) =>
-              images?.[tutorial.path] === undefined ? null : (
-                <img
-                  key={tutorial.path}
-                  className="or-shop-tutorial-image"
-                  src={images[tutorial.path]}
-                  alt={tutorial.caption}
-                  hidden={index + 1 !== step}
-                />
-              ),
-            )}
-          </div>
 
           <Text size="sm" c="dimmed" ta="center">
             {checkoutLabels.tutorialComeBack}

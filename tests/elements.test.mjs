@@ -257,7 +257,15 @@ test("elements render payment wizard route choices and providers from browser st
   // One screen: the copy, then every wallet step, the current one marked, and
   // Next to move on.
   assert.equal(tutorial.match(/data-or-tutorial-step="/g)?.length, 4);
-  assert.doesNotMatch(tutorial, /part="tutorial-frame"[^>]*"\s+hidden/);
+  // The current step's screenshot opens directly under it.
+  assert.equal(tutorial.match(/part="tutorial-frame"[^>]*"\s+hidden/g)?.length, 3);
+  assert.doesNotMatch(tutorial, /data-or-tutorial-image="2"\s+hidden/);
+  assert.ok(
+    tutorial.indexOf('data-or-tutorial-step="2"') < tutorial.indexOf('data-or-tutorial-image="2"'),
+  );
+  assert.ok(
+    tutorial.indexOf('data-or-tutorial-image="2"') < tutorial.indexOf('data-or-tutorial-step="3"'),
+  );
   assert.doesNotMatch(tutorial, /part="tutorial-next"[^>]*disabled/);
   assert.match(
     tutorial,
@@ -297,7 +305,7 @@ test("elements render payment wizard route choices and providers from browser st
     "Copy invoice sits above the wallet steps",
   );
   assert.equal(copyStepTutorial.match(/data-or-tutorial-step="\d"\s+disabled/g)?.length, 4);
-  assert.match(copyStepTutorial, /part="tutorial-frame"[^>]*"\s+hidden/);
+  assert.equal(copyStepTutorial.match(/part="tutorial-frame"[^>]*"\s+hidden/g)?.length, 4);
   assert.match(copyStepTutorial, /part="tutorial-next"[^>]*disabled/);
   assert.match(copyStepTutorial, /part="tutorial-done"[^>]*hidden/);
 
@@ -319,7 +327,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(noInvoiceTutorial, /part="tutorial-copy/);
   assert.equal(noInvoiceTutorial.match(/data-or-tutorial-step="/g)?.length, 4);
   assert.doesNotMatch(noInvoiceTutorial, /data-or-tutorial-step="\d"\s+disabled/);
-  assert.doesNotMatch(noInvoiceTutorial, /part="tutorial-frame"[^>]*"\s+hidden/);
+  assert.doesNotMatch(noInvoiceTutorial, /data-or-tutorial-image="0"\s+hidden/);
 });
 
 test("elements render package-owned theme toggle HTML", () => {

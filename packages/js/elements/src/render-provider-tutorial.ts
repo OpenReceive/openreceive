@@ -38,11 +38,17 @@ function renderCopyStepHtml(copied: boolean): string {
 }
 
 function renderTutorialStepHtml(
-  caption: string,
+  tutorial: WizardProviderDisplay["tutorials"][number],
   index: number,
   active: boolean,
   locked: boolean,
 ): string {
+  // No `<img>` until the lazily loaded screenshot is in hand: an empty src
+  // requests the page itself.
+  const image =
+    tutorial.image === undefined
+      ? ""
+      : `<img part="tutorial-image" class="${orClasses.tutorialImage}" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}">`;
   return `
     <li>
       <button
@@ -52,7 +58,8 @@ function renderTutorialStepHtml(
         ${active ? 'aria-current="step"' : ""}
         ${locked ? "disabled" : ""}
         type="button"
-      ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">${index + 1}</span><span>${escapeHtml(caption)}</span></button>
+      ><span class="${orClasses.tutorialStepNumber}" aria-hidden="true">${index + 1}</span><span>${escapeHtml(tutorial.caption)}</span></button>
+      <div part="tutorial-frame" class="${orClasses.tutorialFrame}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage}="${index}" ${active ? "" : "hidden"}>${image}</div>
     </li>
   `;
 }
@@ -86,16 +93,6 @@ export function renderTutorialModalHtml(
     decodeHref === undefined
       ? ""
       : `<a part="tutorial-decode" class="${orClasses.tutorialCopy}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(checkoutLabels.decodeInvoice)}</a>`;
-  // Every frame is drawn and a step change toggles `hidden`. No `<img>` until the
-  // lazily loaded screenshot is in hand: an empty src requests the page itself.
-  const frames = provider.tutorials
-    .map((tutorial, index) =>
-      tutorial.image === undefined
-        ? ""
-        : `<img part="tutorial-image" class="${orClasses.tutorialImage}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage}="${index + copySteps}" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}" ${index + copySteps === step ? "" : "hidden"}>`,
-    )
-    .join("");
-
   return `
     <div part="tutorial" class="${orClasses.tutorialModal}" role="dialog" aria-modal="true" aria-label="${escapeHtml(checkoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
       <div part="tutorial-dialog" class="${orClasses.tutorialBox}">
@@ -117,7 +114,7 @@ export function renderTutorialModalHtml(
           ${provider.tutorials
             .map((tutorial, index) =>
               renderTutorialStepHtml(
-                tutorial.caption,
+                tutorial,
                 index + copySteps,
                 index + copySteps === step,
                 copyPending,
@@ -126,7 +123,6 @@ export function renderTutorialModalHtml(
             .join("")}
         </ol>
         ${decodeButton}
-        <div part="tutorial-frame" class="${orClasses.tutorialFrame}" ${hasInvoice && step === 0 ? "hidden" : ""}>${frames}</div>
         <p part="tutorial-come-back" class="${orClasses.tutorialComeBack}">${escapeHtml(checkoutLabels.tutorialComeBack)}</p>
         <button
           part="tutorial-next"

@@ -195,6 +195,23 @@ export function ProviderTutorialModal(options: {
               ),
               React.createElement("span", null, tutorial.caption),
             ),
+            // The screenshot opens directly under its own step. No `<img>` until
+            // the lazily loaded screenshot is in hand: an empty src is a request
+            // for the page itself.
+            React.createElement(
+              "div",
+              {
+                className: orClasses.tutorialFrame,
+                hidden: index + copySteps !== step,
+              },
+              tutorial.image === undefined
+                ? null
+                : React.createElement("img", {
+                    alt: tutorial.caption,
+                    className: orClasses.tutorialImage,
+                    src: tutorial.image,
+                  }),
+            ),
           ),
         ),
       ),
@@ -210,26 +227,6 @@ export function ProviderTutorialModal(options: {
             },
             checkoutLabels.decodeInvoice,
           ),
-      React.createElement(
-        "div",
-        {
-          className: orClasses.tutorialFrame,
-          hidden: copySteps === 1 && step === 0,
-        },
-        // No `<img>` until the lazily loaded screenshot is in hand: an empty
-        // src is a request for the page itself.
-        provider.tutorials.map((tutorial, index) =>
-          tutorial.image === undefined
-            ? null
-            : React.createElement("img", {
-                alt: tutorial.caption,
-                className: orClasses.tutorialImage,
-                hidden: index + copySteps !== step,
-                key: tutorial.path,
-                src: tutorial.image,
-              }),
-        ),
-      ),
       React.createElement(
         "p",
         { className: orClasses.tutorialComeBack },

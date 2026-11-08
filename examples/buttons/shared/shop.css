@@ -520,6 +520,7 @@ body {
 .or-shop-tutorial-frame {
   position: relative;
   height: min(30vh, 260px);
+  margin-top: 4px;
   overflow: hidden;
   border: 1px solid var(--or-line);
   border-radius: 8px;

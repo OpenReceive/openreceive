@@ -408,14 +408,10 @@ export function defineElements(options: DefineElementsOptions = {}): void {
       if (root === null) return;
       root
         .querySelectorAll<HTMLElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialImage)
-        .forEach((image) => {
-          const frame = image.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage);
-          image.hidden = Number(frame) !== index;
+        .forEach((frame) => {
+          const step = frame.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.tutorialImage);
+          frame.hidden = Number(step) !== index;
         });
-      const frame = root.querySelector<HTMLElement>('[part="tutorial-frame"]');
-      if (frame !== null) {
-        frame.hidden = root.querySelector('[part="tutorial-copy"]') !== null && index === 0;
-      }
       root
         .querySelectorAll<HTMLElement>(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.tutorialStep)
         .forEach((button) => {

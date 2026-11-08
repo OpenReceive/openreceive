@@ -262,7 +262,7 @@ export const orClasses = {
   tutorialCopyStepDone: "btn btn-outline btn-success btn-lg w-full justify-start gap-2",
   /** A fixed height, so the steps below it stay put as the screenshots change. */
   tutorialFrame:
-    "relative overflow-hidden rounded-box border border-base-content/20 bg-base-200 h-[min(30vh,260px)]",
+    "relative overflow-hidden rounded-box border border-base-content/20 bg-base-200 h-[min(30vh,260px)] mt-1",
   tutorialImage: "absolute inset-0 size-full object-contain",
   tutorialSteps: "m-0 p-0 grid gap-0.5 list-none",
   tutorialStep:
