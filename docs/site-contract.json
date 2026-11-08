@@ -406,7 +406,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 136007
+      "bytes": 136014
     },
     {
       "path": "/guides/security",
@@ -886,7 +886,7 @@
       "slug": "api-reference",
       "title": "API Reference",
       "category": "reference",
-      "bytes": 136007,
+      "bytes": 136014,
       "alias_of": "/guides/api-reference"
     },
     {
@@ -2965,7 +2965,7 @@
         "source": "spec/openapi/openreceive-http.v1.yaml",
         "content_type": "application/yaml; charset=utf-8",
         "kind": "openapi",
-        "bytes": 23470
+        "bytes": 24041
       }
     ],
     "head_links": {

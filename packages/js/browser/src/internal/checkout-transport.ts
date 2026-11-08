@@ -387,6 +387,15 @@ function checkoutLockSnapshotFromPrepareBody(
       : { currency: fiatCurrency, value: fiatValue };
   const paymentMethods = normalizePaymentMethods(record.payment_methods);
   const description = nonEmptyString(record.description);
+  if (isRecord(record.paid)) {
+    return paidSnapshotFromPrepare(record.paid, {
+      reference,
+      amountMsats,
+      fiat,
+      paymentMethods,
+      description,
+    });
+  }
   return {
     checkout_id: lockId,
     reference: reference,
@@ -397,6 +406,48 @@ function checkoutLockSnapshotFromPrepareBody(
     invoices: [lockInvoice],
     ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
     ...(description === undefined ? {} : { description }),
+  };
+}
+
+/**
+ * The reference was paid on an earlier visit, so the checkout opens on the
+ * receipt. Without this the payer who already paid was offered the methods,
+ * and the first one they picked answered an error.
+ */
+function paidSnapshotFromPrepare(
+  paid: Record<string, unknown>,
+  order: {
+    readonly reference: string;
+    readonly amountMsats: number;
+    readonly fiat: CheckoutSnapshot["fiat"];
+    readonly paymentMethods: CheckoutSnapshot["payment_methods"];
+    readonly description: string | undefined;
+  },
+): CheckoutSnapshot {
+  const paymentHash = requiredString(paid.payment_hash, "paid.payment_hash");
+  const paidAt = optionalSafeInteger(paid.paid_at, "paid.paid_at");
+  const bolt11 = nonEmptyString(paid.bolt11);
+  const receipt: CheckoutInvoiceSnapshot = {
+    invoice_id: paymentHash,
+    rail: paid.rail === "swap" ? "swap" : "lightning",
+    payment_hash: paymentHash,
+    amount_msats: order.amountMsats,
+    transaction_state: "settled",
+    workflow_state: "paid",
+    ...(bolt11 === undefined ? {} : { invoice: bolt11 }),
+    ...(paidAt === undefined ? {} : { settled_at: paidAt }),
+  };
+  return {
+    checkout_id: paymentHash,
+    reference: order.reference,
+    status: "paid",
+    amount_msats: order.amountMsats,
+    ...(order.fiat === undefined ? {} : { fiat: order.fiat }),
+    ...(paidAt === undefined ? {} : { paid_at: paidAt }),
+    active: receipt,
+    invoices: [receipt],
+    ...(order.paymentMethods === undefined ? {} : { payment_methods: order.paymentMethods }),
+    ...(order.description === undefined ? {} : { description: order.description }),
   };
 }
 

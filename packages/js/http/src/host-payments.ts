@@ -251,13 +251,25 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
     return amount;
   };
   const resolveCheckout: ResolveCheckoutHook = async (context) => {
-    if (context.action === "swap.quote" || context.action === "checkout.prepare") {
+    if (context.action === "swap.quote") {
       return resolvedPrice(await priceFor(context));
     }
+    const attempts = normalizePayments(await payments.listForReference(context.reference));
+    // Before the host is asked for a price: a host may well answer null for an
+    // order it already knows is paid, and "unknown order" is the wrong thing to
+    // tell the payer who paid it.
+    const paid = attempts.find((payment) => payment.status === "settled");
+    if (context.action === "checkout.prepare") {
+      return paid === undefined
+        ? resolvedPrice(await priceFor(context))
+        : resolvedPayment(undefined, paid);
+    }
     const isCreate = context.action === "checkout.create" || context.action === "swap.create";
+    if (isCreate && paid !== undefined) {
+      throw hostError("This reference is already paid.", 409, "CONFLICT");
+    }
     const amount = isCreate ? await priceFor(context) : undefined;
 
-    const attempts = normalizePayments(await payments.listForReference(context.reference));
     const requestedHash = paymentHashHint(context.input);
 
     if (requestedHash !== undefined) {
@@ -273,10 +285,7 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
       // checkout.create / swap.create, so only a caller invoking this
       // resolveCheckout directly (not through the mounted handler) can get
       // here. Kept because such a caller can, not because the wire can.
-      if (context.action === "checkout.create" || context.action === "swap.create") {
-        if (attempts.some((payment) => payment.status === "settled")) {
-          throw hostError("This reference is already paid.", 409, "CONFLICT");
-        }
+      if (isCreate) {
         const now = clock();
         if (
           !isLivePaymentAttempt(selected, now) ||
@@ -293,11 +302,7 @@ export function createHost<Transaction = unknown>(options: CreateHostOptions<Tra
       return resolvedPayment(amount, selected);
     }
 
-    if (context.action === "checkout.create" || context.action === "swap.create") {
-      if (attempts.some((payment) => payment.status === "settled")) {
-        throw hostError("This reference is already paid.", 409, "CONFLICT");
-      }
-
+    if (isCreate) {
       const now = clock();
       const matching = attempts.filter(
         (payment) =>

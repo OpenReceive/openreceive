@@ -288,6 +288,18 @@ module OpenReceive
     # own rows and never wait for the host's price hook.
     def engine_resolve_checkout
       lambda do |action:, request:, reference:, input:, pay_in_asset: nil|
+        # Before the host is asked for a price: a host may well answer nil for an
+        # order it already knows is paid, and "unknown order" is the wrong thing
+        # to tell the payer who paid it.
+        if %w[checkout.prepare checkout.create swap.create].include?(action)
+          paid = OpenReceivePayment.where(reference: reference, status: "settled").order(:created_at).first
+          if paid
+            raise OpenReceive::Server::ConflictError, "This reference is already paid." unless action == "checkout.prepare"
+
+            next({ payment_hash: paid.payment_hash, checkout: paid.checkout_data, paid: true,
+                   paid_at: paid.paid_at&.to_i, swap: !paid.swap_data.nil? }.compact)
+          end
+        end
         pricing = %w[checkout.prepare swap.quote checkout.create swap.create].include?(action)
         price = pricing ? @amount_for.call(reference) : nil
         raise OpenReceive::Server::NotFoundError, "Unknown reference." if pricing && price.nil?

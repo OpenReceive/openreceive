@@ -1097,7 +1097,7 @@ authority. `…` is the mount prefix (default `/openreceive`).
 
 | Route | Status | Response body |
 | --- | --- | --- |
-| `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ reference, amount_msats, description?, fiat_quote?, payment_methods }` |
+| `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ reference, amount_msats, description?, fiat_quote?, payment_methods, paid? }` |
 | `POST …/checkouts` | 201 | `CreateCheckoutResponse` `{ checkout: Checkout, description?, payment_methods }` |
 | `POST …/payments/check` | 200 | `PaymentCheck` `{ payment_hash, status: PaymentStatus, paid_at?, details?: PaymentDetails, payment_methods }` |
 | `POST …/swaps/quote` | 200 | `SwapQuote` `{ provider, pay_asset: SwapPayInAsset, available, pay_amount?, minimum_pay_amount?, maximum_pay_amount?, minimum_invoice_amount_msats?, maximum_invoice_amount_msats?, unavailable_reason?, unavailable_message? }` |

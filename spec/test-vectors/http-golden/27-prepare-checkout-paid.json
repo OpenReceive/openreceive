@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts/prepare",
+    "body": {
+      "reference": "order-golden-settled"
+    }
+  },
+  "name": "prepare on an already paid reference answers its receipt",
+  "handler": "repository_gate_busy",
+  "expected": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "reference": "order-golden-settled",
+      "amount_msats": 1000,
+      "fiat_quote": null,
+      "payment_methods": [],
+      "paid": {
+        "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+        "rail": "lightning",
+        "bolt11": "<bolt11>",
+        "paid_at": 950
+      }
+    }
+  },
+  "note": "Exercise the real repository and request handler. Seed the deterministic settled-golden checkout/hash, already settled at 950."
+}

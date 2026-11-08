@@ -35,7 +35,10 @@ export async function createLifecycleStack(options = {}) {
   const settlements = [];
   const host = createHost({
     db,
-    amountFor: (reference) => orders.get(reference)?.amount ?? null,
+    amountFor: (reference) =>
+      options.nullPriceOncePaid && settlements.some((paid) => paid.reference === reference)
+        ? null
+        : (orders.get(reference)?.amount ?? null),
     onPaid: async (settlement) => {
       settlements.push(settlement);
     },
@@ -77,6 +80,14 @@ export async function createLifecycleStack(options = {}) {
       orders.set(reference, {
         amount: { sats, ...(description === undefined ? {} : { description }) },
       });
+    },
+    async postJson(path, body) {
+      const response = await fetchStub(`/openreceive${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return response.json();
     },
     checkCalls() {
       return requests.filter((entry) => entry.path.endsWith("/payments/check"));

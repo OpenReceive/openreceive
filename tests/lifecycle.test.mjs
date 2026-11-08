@@ -250,6 +250,85 @@ for (const surface of SURFACES) {
   });
 }
 
+// Issue 122: paid on an earlier visit, then reopened where no attempt is remembered
+// (another device). The checkout opens on the receipt, and nothing is minted.
+for (const surface of [reactSurface("create"), elementSurface("create")]) {
+  for (const hostPricesPaidOrders of [true, false]) {
+    test(`${surface.name}: a reopened paid order shows its receipt (amountFor ${hostPricesPaidOrders ? "prices it" : "answers null"})`, async () => {
+      const stack = await createLifecycleStack({
+        noSwapProvider: true,
+        ...(hostPricesPaidOrders ? {} : { nullPriceOncePaid: true }),
+      });
+      globalThis.fetch = stack.fetchStub;
+      stack.addOrder("order-reopened", 2100);
+      const { checkout } = await stack.postJson("/checkouts", { reference: "order-reopened" });
+      stack.wallet.settleInvoice({ payment_hash: checkout.payment_hash });
+      const handle = await surface.mount(stack, "order-reopened");
+      try {
+        await until(() => handle.settled() > 0, { label: `${surface.name} settled callback` });
+        await until(() => PAID_PANEL_PATTERN.test(handle.text()), {
+          label: `${surface.name} paid panel`,
+        });
+        assert.ok(!handle.bitcoinTile(), "the method chooser is gone");
+        assert.equal(handle.root().querySelector('[role="alert"]'), null, "no error on the page");
+        assert.equal(stack.wallet.listInvoices().length, 1, "nothing new was minted");
+        assert.equal(stack.settlements.length, 1, "onPaid fired once");
+      } finally {
+        handle.unmount();
+        await stack.close();
+      }
+    });
+  }
+}
+
+for (const surface of [reactSurface("create"), elementSurface("create")]) {
+  test(`${surface.name}: a reopened order paid by swap shows its receipt`, async () => {
+    const stack = await createLifecycleStack();
+    globalThis.fetch = stack.fetchStub;
+    stack.addOrder("order-reopened-swap", 2000);
+    await stack.postJson("/swaps", {
+      reference: "order-reopened-swap",
+      pay_in_asset: "USDT_TRON",
+    });
+    stack.wallet.settleInvoice({ payment_hash: stack.wallet.listInvoices().at(-1).payment_hash });
+    const handle = await surface.mount(stack, "order-reopened-swap");
+    try {
+      await until(() => handle.settled() > 0, { label: `${surface.name} settled callback` });
+      await until(() => PAID_PANEL_PATTERN.test(handle.text()), {
+        label: `${surface.name} paid panel`,
+      });
+      const prepared = stack.requests.find((entry) => entry.path.endsWith("/checkouts/prepare"));
+      assert.equal(prepared.responseBody.paid.rail, "swap");
+      assert.equal(prepared.responseBody.paid.bolt11, undefined, "a swap's invoice stays private");
+    } finally {
+      handle.unmount();
+      await stack.close();
+    }
+  });
+}
+
+test("a paid reference is refused before the host is asked for a price", async () => {
+  const stack = await createLifecycleStack({ nullPriceOncePaid: true });
+  globalThis.fetch = stack.fetchStub;
+  stack.addOrder("order-paid", 2000);
+  const { checkout } = await stack.postJson("/checkouts", { reference: "order-paid" });
+  stack.wallet.settleInvoice({ payment_hash: checkout.payment_hash });
+  const prepared = await stack.postJson("/checkouts/prepare", { reference: "order-paid" });
+  assert.equal(prepared.paid.payment_hash, checkout.payment_hash);
+  assert.equal(prepared.paid.rail, "lightning");
+  assert.deepEqual(prepared.payment_methods, []);
+  for (const [route, body] of [
+    ["/checkouts", { reference: "order-paid" }],
+    ["/swaps", { reference: "order-paid", pay_in_asset: "USDT_TRON" }],
+  ]) {
+    const refused = await stack.postJson(route, body);
+    assert.equal(refused.code, "CONFLICT", route);
+    assert.equal(refused.message, "This reference is already paid.");
+  }
+  assert.equal(stack.wallet.listInvoices().length, 1, "nothing new was minted");
+  await stack.close();
+});
+
 // A shop with no swap provider: the picker gets no swap methods, so the whole page
 // depends on the checkout finishing its load with nothing but Bitcoin to offer. The
 // mint is the payer's click, never the page view (element-checkout-session: "Bitcoin

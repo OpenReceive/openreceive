@@ -16,6 +16,12 @@ export type WirePrepareCheckoutResponse = {
   readonly description?: string;
   readonly fiat_quote?: null | WireFiatQuote;
   readonly payment_methods: readonly WirePaymentMethod[];
+  readonly paid?: {
+    readonly payment_hash: string;
+    readonly rail: "lightning" | "swap";
+    readonly bolt11?: string;
+    readonly paid_at?: number;
+  };
 };
 
 /** Wire shape of the OpenAPI `CreateCheckoutRequest` schema (snake_case JSON body). */

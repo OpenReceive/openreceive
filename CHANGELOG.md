@@ -15,11 +15,22 @@
 - Changed (Browser, React, Vue, Svelte, Angular): a wallet's pay tutorial is now
   one dialog with numbered steps and the screenshot for the current one. Step 1
   is **Copy invoice** whenever there is an invoice; **Next** then walks the
-  wallet's steps and becomes **Done** on the last. `checkoutLabels` loses `tutorialIntroPrefix`, `tutorialIntroCopy`,
-  `tutorialCopiedContinue` and `tutorialExit`, and
-  `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES` loses `providerTutorialIndex`.
+  wallet's steps and becomes **Done** on the last. `checkoutLabels` loses
+  `tutorialIntroPrefix`, `tutorialIntroCopy`, `tutorialCopiedContinue` and
+  `tutorialExit`, and `OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES` loses
+  `providerTutorialIndex`.
 - Changed (Odoo): the Lightning invoice memo is now only the order reference.
   It also carried the Odoo company name, which every payer's wallet app saw.
+- Fixed (all engines, checkout): a checkout reopened for an order that is
+  already paid now opens on its receipt. `POST /checkouts/prepare` used to
+  answer the price and the payment methods, so a payer on another device was
+  offered to pay again, and the method they picked answered an error. Prepare
+  now answers a `paid` object for a paid reference, without asking the host for
+  a price, and the checkout shows the receipt and fires its settled event.
+  `POST /checkouts` and `POST /swaps` now refuse a paid reference with 409
+  before asking for a price, so a host whose `amountFor` returns null for paid
+  orders no longer turns it into 404 "Unknown reference.". Reported in issue
+  #122.
 - Fixed (Python): the wallet-history pages of one reconcile pass now share one
   relay connection instead of opening one each, so a checkout costs two
   connections, not three to six. With every relay handshake delayed by 3.24 s,

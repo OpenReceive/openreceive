@@ -161,6 +161,32 @@ class NoSwapProviderRailsTest < Minitest::Test
   def create(reference) = dispatch(OpenReceive::CheckoutsController, :create, env_for("reference" => reference))
   def check(reference, hash) = dispatch(OpenReceive::PaymentsController, :check, env_for("reference" => reference, "payment_hash" => hash))
 
+  def test_a_paid_reference_answers_its_receipt_and_refuses_a_new_attempt
+    boot({})
+    _status, created = create("order-no-swap")
+    hash = created.fetch("checkout").fetch("payment_hash")
+    @wallet.settle!(hash, at: Time.now.to_i + 1)
+    travel 30.seconds
+    # The host closes an order once it is paid: its price hook answers nil.
+    OpenReceive.config.amount_for = ->(_reference) {}
+
+    status, prepared = prepare("order-no-swap")
+    assert_equal 200, status, prepared
+    assert_equal 2_100_000, prepared.fetch("amount_msats")
+    assert_equal [], prepared.fetch("payment_methods")
+    assert_equal hash, prepared.fetch("paid").fetch("payment_hash")
+    assert_equal "lightning", prepared.fetch("paid").fetch("rail")
+    assert_equal ["order-no-swap"], @paid
+
+    status, refused = create("order-no-swap")
+    assert_equal 409, status, refused
+    assert_equal "This reference is already paid.", refused.fetch("message")
+    status, refused = dispatch(OpenReceive::SwapsController, :create,
+                               env_for("reference" => "order-no-swap", "pay_in_asset" => "USDT_TRON"))
+    assert_equal 409, status, refused
+    assert_equal 1, @wallet.invoices.length, "nothing new was minted"
+  end
+
   ENVIRONMENTS.each do |label, env|
     tag = label.gsub(/\W+/, "_")
 

@@ -65,6 +65,8 @@ module OpenReceive
           reference = required_reference(body)
           guard("checkout.prepare", request, { reference: reference })
           resolved = resolve_host("checkout.prepare", request, reference, body)
+          next success(200, paid_prepare(reference, resolved), request_id) if resolved["paid"]
+
           prepared = @service.prepare_checkout("amount" => required_amount(resolved))
           body = prepared.merge("reference" => reference)
           description = resolved_description(resolved)
@@ -270,6 +272,19 @@ module OpenReceive
       end
 
       private
+
+      # The prepare answer for a reference that is already paid, built from its row.
+      def paid_prepare(reference, resolved)
+        checkout = resolved.fetch("checkout")
+        swap = resolved["swap"] == true
+        paid = { "payment_hash" => resolved.fetch("payment_hash"), "rail" => swap ? "swap" : "lightning" }
+        paid["bolt11"] = checkout.fetch("bolt11") unless swap
+        paid["paid_at"] = resolved["paid_at"] if resolved["paid_at"]
+        {
+          "reference" => reference, "amount_msats" => checkout.fetch("amount_msats"),
+          "fiat_quote" => checkout["fiat_quote"], "payment_methods" => [], "paid" => paid
+        }
+      end
 
       def public_checkout(checkout)
         checkout.reject { |key, _| key.to_s == "created_at_source" }

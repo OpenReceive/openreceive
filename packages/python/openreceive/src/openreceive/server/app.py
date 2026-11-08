@@ -148,6 +148,21 @@ class OpenReceiveApp:
         """The host is asked only where a price is minted or quoted. Status
         polls and refund recovery for committed attempts are answered from the
         engine's own rows and never wait for the host's price hook."""
+        records = [] if action == "swap.quote" else self.repository.list_for_reference(reference)
+        # Before the host is asked for a price: a host may well answer None for
+        # an order it already knows is paid, and "unknown order" is the wrong
+        # thing to tell the payer who paid it.
+        paid = next((record for record in records if record.status == "settled"), None)
+        if paid is not None and action == "checkout.prepare":
+            return {
+                "payment_hash": paid.payment_hash,
+                "checkout": dict(paid.checkout),
+                "paid": True,
+                "paid_at": paid.paid_at,
+                "swap": paid.swap_data is not None,
+            }
+        if paid is not None and action in ("checkout.create", "swap.create"):
+            raise ConflictError("This reference is already paid.")
         pricing = action in PRICING_ACTIONS
         price = self.host.amount_for(reference) if pricing else None
         if pricing and price is None:
@@ -161,7 +176,6 @@ class OpenReceiveApp:
         if action in QUOTE_ACTIONS:
             return resolved
         requested_hash = body.get("payment_hash") if isinstance(body, Mapping) else None
-        records = self.repository.list_for_reference(reference)
         try:
             payment = selected_for(
                 records,
